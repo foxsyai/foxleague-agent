@@ -1,0 +1,294 @@
+// Response shapes of the FoxLeague routes the agent reads (subset of the backend's ts-rs types,
+// frontend/src/types/generated; checked against live mainnet answers on 2026-09-28).
+
+export interface FoxConfig {
+  registration_fee_foxsy: number
+  registration_fee_wei: string
+  registration_fee_foxsy_wei?: string
+  relayer_v3_enabled: boolean
+  relays_remaining_today: number
+  relayer_max_gas_limit?: number
+  relayer_addresses: string[]
+  dex_swap_enabled: boolean
+  dex_swap_slippage_bps?: number
+  dex_swap_max_foxsy?: number
+  shop_prices_foxsy: { condition: number; xp_booster: number; training: number }
+  common_pack_price_foxsy: number
+  common_pack_per_wallet_per_week?: number
+  common_pack_available: boolean
+  common_pack_unavailable_reason?: string | null
+  common_pack_epoch_remaining?: number
+  sync_cost_foxsy: number
+  tournament_fee_bounds: { silver_min: number; silver_max: number; gold_min: number }
+  tournament_prize_split: { winner_percent: number; runner_up_percent: number; third_percent: number; platform_fee_percent: number }
+  one_v_one_prize_split: { winner_percent: number; platform_fee_percent: number }
+  tournament_defaults: {
+    match_stagger_minutes: number
+    deadline_grace_minutes: number
+    knockout_min_participants: number
+    swiss_min_participants: number
+    groups_knockout_group_size: number
+    one_v_one_max_active_per_user: number
+    one_v_one_prize_delivery_seconds: number
+  }
+  min_field_condition: number
+  condition_regen_points_per_day: number
+  condition_loss_per_match: number
+  condition_loss_per_match_ranked: number
+  fusion_costs_foxsy: number[]
+  fusion_min_matches?: number
+  auction_enabled: boolean
+  marketplace_min_list_price_foxsy?: number
+  transfer_cooldown_hours?: number
+  league_thresholds?: Record<string, number>
+  foxsy_token_id: string
+  [key: string]: unknown
+}
+
+export interface UserProfile {
+  id: number
+  wallet_address: string
+  username: string | null
+  elo_rating: number
+  league: string
+  matches_won: number
+  matches_lost: number
+  matches_drawn: number
+  team_name: string | null
+  badge: string | null
+  verified: boolean
+  tournament_wins: number
+  active_title: string | null
+  player_count: number
+}
+
+export interface Team {
+  id: number
+  user_id: number
+  name: string
+  coach_name: string | null
+  formation: string
+  lineup: number[]
+  substitutes: number[]
+  team_overall: number
+  badge: string | null
+  badge_ipfs_uri?: string | null
+}
+
+export const STATS = ['speed', 'accuracy', 'defense', 'power', 'control', 'vision', 'stamina'] as const
+export type Stat = (typeof STATS)[number]
+
+export type Rarity = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary'
+export type Position = 'GK' | 'DEF' | 'MID' | 'FWD'
+
+export const RARITY_CAP: Record<Rarity, number> = { Common: 30, Uncommon: 55, Rare: 75, Epic: 90, Legendary: 100 }
+
+export interface PlayerCard {
+  id: number
+  nft_nonce: number
+  owner_address: string
+  name: string
+  position: Position
+  rarity: Rarity
+  shirt_number: number
+  level: number
+  experience: number
+  speed: number
+  accuracy: number
+  defense: number
+  power: number
+  control: number
+  vision: number
+  stamina: number
+  speed_synced: number
+  accuracy_synced: number
+  defense_synced: number
+  power_synced: number
+  control_synced: number
+  vision_synced: number
+  stamina_synced: number
+  speed_xp: number
+  accuracy_xp: number
+  defense_xp: number
+  power_xp: number
+  control_xp: number
+  vision_xp: number
+  stamina_xp: number
+  condition: number
+  condition_updated_at: string
+  stats_dirty: boolean
+  matches_played: number
+  competitive_matches: number
+  fusion_match_credit: number
+  fusion_ready_at: string | null
+  goals: number
+  assists: number
+  listed_for_sale: boolean
+  sale_price: number | null
+  transferred_at: string | null
+  transfer_cooldown_hours: number | null
+  minted_at: string | null
+  created_at: string
+}
+
+export interface Tournament {
+  id: number
+  creator_user_id: number
+  title: string
+  description: string | null
+  format: 'knockout' | 'groups_knockout' | 'round_robin' | 'swiss'
+  tier: 'bronze' | 'silver' | 'gold'
+  featured: boolean
+  max_teams: number
+  min_teams: number
+  entry_fee_foxsy: number
+  status: string
+  deadline: string
+  starts_at: string
+  round_interval_minutes: number | null
+  has_third_place_match: boolean
+  sc_tournament_id: number | null
+  winner_user_id: number | null
+  runner_up_user_id: number | null
+  third_place_user_id: number | null
+  created_at: string
+  started_at: string | null
+  completed_at: string | null
+  cancelled_at: string | null
+  participant_count?: number
+  target_user_id: number | null
+  challenge_deadline_minutes: number | null
+  is_private: boolean
+  home_and_away: boolean
+  developer_mode: boolean
+}
+
+export interface TournamentDetail {
+  tournament: Tournament
+  participants: { user_id: number; team_name?: string; wallet_address?: string }[]
+  user_is_participant?: boolean
+  [key: string]: unknown
+}
+
+export interface LeaderboardPage {
+  users: UserProfile[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface PoolStatus {
+  total: number
+  available: number
+  allocated: number
+  by_rarity: { rarity: string; position: string; available: number; total: number }[]
+}
+
+export interface ShopStatus {
+  prices?: Record<string, number>
+  training?: { daily_free: number; premium_cap: number; used_today: number; premium_used_today: number; slots_banked: number }
+  xp_booster?: { active: boolean; expires_at?: string | null } | null
+  common_pack_available?: boolean
+  common_pack_remaining_this_week?: number
+  common_pack_epoch_remaining?: number
+  [key: string]: unknown
+}
+
+export interface DailyAllowance {
+  today_count: number
+  daily_limit: number
+  reset_hour_utc: number
+}
+
+export interface ActiveMatch {
+  match_id: number
+  kind: 'ranked' | 'challenge' | 'tournament'
+  status: string
+  tournament_id: number | null
+  created_at: string
+}
+
+export interface MyTournaments {
+  active: Tournament[]
+  completed: Tournament[]
+}
+
+export interface UpcomingMatch {
+  tournament_id: number
+  tournament_title: string
+  round_label: string | null
+  is_home: boolean
+  opponent_name: string | null
+  scheduled_at: string
+  strategy_locks_at: string
+  locked: boolean
+  phase: 'upcoming' | 'locked' | 'live' | 'finished'
+  match_id: number | null
+  home_score: number | null
+  away_score: number | null
+}
+
+export interface UpcomingMatches {
+  lead_minutes: number
+  my_team_name: string | null
+  matches: UpcomingMatch[]
+}
+
+export interface ChallengeForMe {
+  tournament_id: number
+  title: string
+  creator_user_id: number
+  creator_team_name: string
+  entry_fee_foxsy: number
+  deadline: string
+}
+
+/** GET /api/fusion/can-fuse?nonces=a,b,c (auth, advisory; docs 13.2). */
+export interface CanFuse {
+  can_fuse: boolean
+  reason?: string
+  cooldown_remaining?: number
+  cooldown_end?: string
+  dirty_players?: number[]
+  blocked_players?: number[]
+  min_matches_required?: number
+  match_floor_required?: number
+}
+
+/** GET /api/marketplace/can-list?nonce= (auth, advisory; docs 14.1). */
+export interface CanList {
+  can_list: boolean
+  reason?: string
+  can_relist_at?: string | null
+  cooldown_remaining_seconds?: number
+}
+
+/** A row of GET /api/marketplace/listings (marketplace.rs:99-160); prices in whole FOXSY. */
+export interface MarketListing {
+  nft_nonce: number
+  owner_address: string
+  name: string
+  position: Position
+  rarity: Rarity
+  level: number
+  speed: number
+  accuracy: number
+  defense: number
+  power: number
+  control: number
+  vision: number
+  stamina: number
+  condition: number
+  is_auction: boolean
+  min_price: number | null
+  highest_bid: number | null
+  ends_at: string | null
+  transferred_at: string | null
+  transfer_cooldown_hours: number | null
+}
+
+export interface FloorPrice {
+  rarity: Rarity
+  floor_price: number
+  count: number
+}

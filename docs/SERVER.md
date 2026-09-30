@@ -1,0 +1,57 @@
+# Running FoxLeague Agent on a server
+
+For most players the one-line local install in [INSTALL.md](../INSTALL.md) is the right choice. This guide is
+for running your agents on your own Linux server (Ubuntu with systemd), with the dashboard behind nginx and TLS.
+The files are in `deploy/`.
+
+## Layout
+
+| What | Where |
+|---|---|
+| Service user | `foxleague-agent` (no shell) |
+| Code | `/opt/foxleague-agent/app` |
+| Node.js (private copy, checksum verified) | `/opt/foxleague-agent/node` |
+| Env file (recovery words, keys, login; mode 600) | `/etc/foxleague-agent/env` |
+| Data (database, keys saved from the dashboard) | `/var/lib/foxleague-agent` |
+| systemd unit (sandboxed) | `foxleague-agent.service` |
+
+## First setup
+
+1. Copy the repository to the server and run, as root: `deploy/bootstrap.sh`. It creates the user, the folders,
+   the private Node.js and the systemd unit. It does not start anything.
+2. From your computer, ship the code: `DEPLOY_HOST=root@your-server ./deploy/deploy.sh --no-restart`
+   (or put `root@your-server` in `deploy/.host`, which git ignores, and run `./deploy/deploy.sh`).
+3. On the server, as root:
+   - `/opt/foxleague-agent/app/deploy/agentctl.sh setup` creates the wallet. Its recovery words are in the env
+     file: read them once in your own SSH session (`sudo grep AGENT_MNEMONIC /etc/foxleague-agent/env`), write
+     them on paper and never paste them anywhere. The agent refuses to print them on a server.
+   - `agentctl.sh configure` asks for the keys (hidden input) and links your Telegram chat with a 6-digit code.
+   - `agentctl.sh set-web-password` sets the dashboard login.
+   - `agentctl.sh check-keys` tests them.
+4. Start it: `systemctl enable --now foxleague-agent`. Logs: `journalctl -u foxleague-agent -f`.
+
+The service reads `/etc/foxleague-agent/env`. Useful entries (see `.env.example` for all):
+
+- `AGENT_LIVE_ENABLED=1`: this server may sign real transactions once you press Go LIVE.
+- `WEB_UI_TRUST_PROXY=1`: only behind your own nginx (it passes the client IP in `X-Real-IP`).
+- `MVX_GATEWAY_URL`: a private MultiversX observing squad if you run one; the public gateway otherwise.
+
+## Dashboard behind nginx
+
+`deploy/nginx-foxleague-agent.conf` is a template: replace `agent.example.com` with your domain, point its DNS at
+the server, get a certificate (for example `certbot --nginx`) and reload nginx. The dashboard listens on
+127.0.0.1:8870 only and sends its own security headers, including a per-page Content Security Policy.
+
+## Everyday
+
+| What | Command |
+|---|---|
+| Deploy a new version | `./deploy/deploy.sh` from your computer (restarts the service; check first that no plan is running, or its waiting actions are dropped) |
+| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys` |
+| Keys | the dashboard's Keys panel (saved in `/var/lib/foxleague-agent/secrets.json`, mode 600) or `agentctl.sh configure` |
+| Security score | `systemd-analyze security foxleague-agent` |
+
+PEM files are written on your own computer, never on the server. Keep a copy of the repository with the same
+recovery words in its `.env`, and run `./deploy/sync-pems.sh`: it asks the server which agents it runs, checks
+that your words give the same addresses and writes each missing `pem/agentN.pem`. `deploy.sh` runs it at the end,
+and the dashboard reminds you when you add an agent.

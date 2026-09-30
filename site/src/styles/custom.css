@@ -1,0 +1,52 @@
+/* FoxLeague brand — fox orange #ff6600 + Stadium palette
+ * Token mapping mirrors frontend/src/index.css (--color-fox + --color-pitch). */
+
+:root {
+	/* Fox orange accent — same as in-app */
+	--sl-color-accent-low: #4a1f08;
+	--sl-color-accent: #ff6600;
+	--sl-color-accent-high: #ffaa66;
+
+	/* Dark theme = Stadium Night (deep navy) */
+	--sl-color-bg: #080c14;
+	--sl-color-bg-nav: #0d1117;
+	--sl-color-bg-sidebar: #0d1117;
+
+	/* Broadcast font for headings — same Teko stack as the app */
+	--sl-font-system: ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--sl-font: var(--sl-font-system);
+	--sl-font-system-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+:root[data-theme='light'] {
+	/* Stadium Day cream */
+	--sl-color-accent-low: #ffe6cc;
+	--sl-color-accent: #c85100;
+	--sl-color-accent-high: #6e2c00;
+
+	--sl-color-bg: #faf7f0;
+	--sl-color-bg-nav: #ffffff;
+	--sl-color-bg-sidebar: #fffdf6;
+
+	--sl-color-text: #1a1510;
+	--sl-color-text-accent: #c85100;
+}
+
+/* Headings get the broadcast font + tighter tracking, like in-app titles */
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.starlight-h1,
+header h1 {
+	font-family: 'Teko', 'Impact', 'Arial Narrow', sans-serif;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+/* Agent site: the home title in the same broadcast font as the headings */
+.hero h1 {
+	font-family: 'Teko', 'Impact', 'Arial Narrow', sans-serif;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+	line-height: 0.95;
+}

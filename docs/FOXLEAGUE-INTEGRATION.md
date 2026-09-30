@@ -1,0 +1,1690 @@
+# FoxLeague integration reference (mainnet)
+
+How a self-hosted client that holds one player's own key can do, through the public HTTP API and
+the MultiversX chain, everything the FoxLeague web app does for that player. It describes what
+the web app does today; it adds no new interface.
+
+- **Snapshot:** branch `origin/release/mainnet-1.0` at commit `0800dce5` (rc.31, 2026-09-28). Every
+  `path:line` below points into that commit of the FoxLeague monorepo (see `SOURCES.md` for how to
+  read it). Read the live values at runtime: most numbers are admin-tunable and several deployed
+  values differ from code defaults (see `ECONOMY-AND-RULES.md`).
+- **Network:** MultiversX mainnet, chain id `1`, throughout.
+- **Scope:** public routes and the player-callable contract endpoints only. Admin routes, internal
+  jobs and anything the game hides before a reveal are named in one line and not documented.
+
+> **Read before you automate anything.** The Terms of Use prohibit "use of automated tools, bots or
+> scripts not expressly allowed by Foxsy" (`docs/manual/src/content/docs/legal/terms.md:65`) and the
+> Fair Play rules list "crafting, replaying or automating transactions, signatures or API calls that
+> the FoxLeague interface does not offer" as a breach (`docs/manual/src/content/docs/legal/fair-play.md:20`).
+> A tool published for all players needs that express allowance, in writing, in the Terms or the
+> manual. Until then every section below describes what the interface offers, so a client that stays
+> inside it does only what a player could do by hand.
+
+**Notation.**
+
+- Server error strings are quoted verbatim in backticks. Many backend strings still contain an em
+  dash character (`CHANGELOG.md:17`: backend messages were not restyled in rc.31). This document never
+  prints that character: it is written `{EM}` inside a quoted string. Match server errors on a
+  distinctive substring that has no dash in it.
+- `{x}` inside a quoted string is a value the server fills in. Quoted strings otherwise keep the
+  server's own wording and punctuation.
+- "Whole FOXSY" means a plain token count (5000). "Atomic" means the on-chain amount with 18
+  decimals (5000 x 10^18).
+
+---
+
+## Contents
+
+1. [Hosts, identifiers and conventions](#1-hosts-identifiers-and-conventions)
+2. [Login and sessions](#2-login-and-sessions)
+3. [Reading your own state](#3-reading-your-own-state)
+4. [Registration](#4-registration)
+5. [EGLD to FOXSY swap](#5-egld-to-foxsy-swap)
+6. [Training](#6-training)
+7. [Sync to chain](#7-sync-to-chain)
+8. [Tactics: formation and lineup](#8-tactics-formation-and-lineup)
+9. [Ranked and casual matches](#9-ranked-and-casual-matches)
+10. [Tournaments](#10-tournaments)
+11. [1v1 challenges](#11-1v1-challenges)
+12. [Shop](#12-shop)
+13. [Fusion](#13-fusion)
+14. [Marketplace (auctions)](#14-marketplace-auctions)
+15. [Leaderboard and match history](#15-leaderboard-and-match-history)
+16. [Relayed transactions and the new-wallet bonus](#16-relayed-transactions-and-the-new-wallet-bonus)
+17. [Rate limits](#17-rate-limits)
+18. [Contract reference](#18-contract-reference)
+19. [Routes a player client does not use](#19-routes-a-player-client-does-not-use)
+20. [Open questions](#20-open-questions)
+
+---
+
+## 1. Hosts, identifiers and conventions
+
+### 1.1 Hosts
+
+| What | URL | Source |
+|---|---|---|
+| FoxLeague API | `https://foxleague.ai/api/...` | domain `deploy/mainnet/inputs.example.env:9`; nginx proxies `/api/` to the backend (`deploy/mainnet/nginx/app.conf.template:106-110`) |
+| FoxLeague WebSockets | `wss://foxleague.ai/ws/...` | `deploy/mainnet/nginx/app.conf.template:112-121` |
+| MultiversX gateway | `https://gateway.multiversx.com` | `deploy/mainnet/chain.env:2` |
+| MultiversX API | `https://api.multiversx.com` | `deploy/mainnet/chain.env:3` |
+| Explorer | `https://explorer.multiversx.com` | `deploy/mainnet/chain.env:4` |
+| Player manual | `https://docs.foxleague.ai` | `deploy/mainnet/nginx/docs.conf.template:5` |
+
+During the preview week the web app lived under `https://foxleague.ai/new/`, but the API stayed at
+the domain root in both layouts (`deploy/mainnet/nginx/app-preview.conf.template:124-132`). The
+frontend client uses the relative base `/api` (`frontend/src/lib/api.ts:103-106`).
+
+Only `/api/` and `/ws/` reach the backend. The backend's `/health` and `/healthz/*` routes
+(`backend/src/routes/health.rs:13-22`) are not proxied at the edge; `GET /api/health` is.
+
+### 1.2 Chain identifiers
+
+| Name | Value | Source |
+|---|---|---|
+| Chain id | `1` | `deploy/mainnet/chain.env:5` |
+| Players contract (registration, shop, sync, fusion, auctions) | `erd1qqqqqqqqqqqqqpgq0r72lj3ja9xj78zf52x0etdk3tvxqd3lutes0058um` | `deploy/mainnet/chain.env:6` |
+| Players contract, hex (for `MultiESDTNFTTransfer` / `ESDTNFTTransfer` arguments) | `0000000000000000050078fcafca32e94d2f1c49a28cfcadb68ad860363fe2f3` | bech32-decoded from the line above |
+| Tournaments contract (seat escrow, prizes, refunds) | `erd1qqqqqqqqqqqqqpgqfw3nadv3z7hj6c2x7alndtw03y5ang43utesz8nmg9` | `deploy/mainnet/chain.env:7` |
+| FOXSY token | `FOXSY-5d5f3e`, 18 decimals; hex `464f5853592d356435663365` | `deploy/mainnet/chain.env:8`; decimals `contracts/foxleague-players/src/player_nft.rs:130`, `backend/src/chain_config.rs:21` |
+| Player NFT collection | `FXLP-6f28e5`; hex `46584c502d366632386535` | `deploy/mainnet/chain.env:9` |
+| Game server (signs sync payloads, distributes teams and prizes) | `erd1cnunps5g2x4crulxxn6fhje06yuwyepdtdm0pj2fps0s65jmcynqetfgz0` | `deploy/mainnet/chain.env:10` |
+| xExchange FOXSY/WEGLD pair | `erd1qqqqqqqqqqqqqpgq5jnjpsukhl295ry3wjrd3gtff0amrgux2jpsz3reum` | `frontend/src/lib/dexSwapAddresses.ts:54-63` |
+| xExchange Composable Tasks | `erd1qqqqqqqqqqqqqpgqsytkvnexypp7argk02l0rasnj57sxa542jpshkl7df` | same |
+| Wrapped EGLD | `WEGLD-bd4d79` | same |
+
+The registration relayer addresses are served live by `GET /api/config` (`relayer_addresses`) and are
+not listed here on purpose.
+
+### 1.3 HTTP conventions
+
+- **Envelope.** Nearly every JSON route answers `ApiResponse {success, data?, error?, code?}`; absent
+  fields are omitted, not null (`backend/src/models.rs:661-680`).
+- **A refusal is HTTP 200 with `success:false`.** Business errors do not use 4xx codes
+  (`backend/src/models.rs:692-694`). Always read `success`. Exceptions:
+  - the auth extractor answers **401 with a plain-text body** (section 2);
+  - `POST /api/onboarding/relay` uses real 4xx/5xx codes (section 4.4);
+  - `POST /api/tournaments/{id}/delete` uses real codes (section 10.6);
+  - `Idempotency-Key` header errors on tournament create are 400 (section 10.3);
+  - some handlers answer a bare 500 on a database fault (for example `backend/src/routes/teams.rs:23-43`);
+  - a malformed body fails JSON extraction before the handler runs (axum rejection, normally 4xx).
+- **Raw JSON routes (no envelope):** `GET /api/config` (`backend/src/routes/config.rs:421`), the health
+  routes (`backend/src/routes/health.rs`), `GET /api/public/match/{id}`
+  (`backend/src/routes/matches.rs:612-791`).
+- **`code: "tx_pending"`** (`backend/src/models.rs:670-685`): the payment was NOT refused, it could not
+  be verified yet (chain read timed out, throttled or chain not ready). Keep the transaction hash and
+  confirm THAT hash again later. Never sign a second payment on a `tx_pending` answer.
+- **Transaction hashes in request bodies** must be 64 hex characters; the server lower-cases them
+  and rejects anything else with `a transaction hash is 64 hexadecimal characters`
+  (`backend/src/tx_hash.rs:17-23`).
+- **Chain not ready.** Chain-dependent routes refuse with
+  `Chain is temporarily unavailable. Please retry shortly.` while the backend's liveness gate is
+  closed (`backend/src/readiness.rs:10-50`). Back off and retry.
+- **Wallet parameters.** Many bodies and queries carry `wallet_address`. Where a route checks it, it
+  must equal the session wallet (`Wallet mismatch {EM} sign with the correct wallet` or
+  `Wallet address mismatch`). Where a body struct declares it without reading it (formation, lineup,
+  rename, match play), it is still **required** for JSON parsing (`backend/src/models.rs:1115-1135`,
+  `backend/src/routes/matches.rs:793-797`). Send it everywhere the web app sends it.
+- **Caching.** Every response carries `Cache-Control: no-store` unless a route sets its own, bodies
+  are gzip-compressed on request and request bodies are capped at 5 MB by the backend
+  (`backend/src/lib.rs:2194-2217`) and at 2 MB by nginx (`deploy/mainnet/nginx/foxleague-zones.conf:15`).
+
+### 1.4 Transaction encoding conventions
+
+The web app builds every data field by hand. The helpers are in `frontend/src/lib/tournamentTxData.ts:7-27`:
+
+- a string argument is the hex of its UTF-8 bytes (`toHex`);
+- a number argument is minimal big-endian hex, left-padded to an even length (`numberToHex`);
+- a tournament id is a **16-character** zero-padded u64 (`idToHex64`, `tournamentTxData.ts:17-19`);
+- whole FOXSY becomes atomic as `x * 10^18` (`foxyToSmallest`, `tournamentTxData.ts:22-27`);
+- an NFT nonce is minimal hex with even length.
+
+Useful literals (computed from the ids above):
+
+| Value | Hex |
+|---|---|
+| `shopPay` | `73686f70506179` |
+| `registerAndPay` | `7265676973746572416e64506179` |
+| `syncMyStats` | `73796e634d795374617473` |
+| `fusion` | `667573696f6e` |
+| `payFusionCooldownWaiver` | `706179467573696f6e436f6f6c646f776e576169766572` |
+| `payFusionMatchWaiver` | `706179467573696f6e4d61746368576169766572` |
+| `auctionList` / `auctionBid` | `61756374696f6e4c697374` / `61756374696f6e426964` |
+| `auctionCancel` / `auctionSettle` | `61756374696f6e43616e63656c` / `61756374696f6e536574746c65` |
+| `joinTournament` / `claimRefund` | `6a6f696e546f75726e616d656e74` / `636c61696d526566756e64` |
+| 10 / 20 / 100 FOXSY atomic | `8ac7230489e80000` / `01158e460913d00000` / `056bc75e2d63100000` |
+| 500 / 1,000 / 2,000 FOXSY atomic | `1b1ae4d6e2ef500000` / `3635c9adc5dea00000` / `6c6b935b8bbd400000` |
+| 2,500 / 5,000 FOXSY atomic | `878678326eac900000` / `010f0cf064dd59200000` |
+
+**Four transaction shapes are used.** Getting the receiver wrong is the most common way to lose a
+fee to a revert.
+
+| Shape | Receiver | Used for |
+|---|---|---|
+| `ESDTTransfer@<token>@<amount>@<function>[@args]` | the contract | `registerAndPay`, `shopPay`, `auctionBid`, `joinTournament`, the WEGLD swap |
+| `MultiESDTNFTTransfer@<contract hex>@<count>@<token>@<nonce>@<amount>...@<function>[@args]` | **your own address** | `syncMyStats`, `fusion`, both fusion waivers |
+| `ESDTNFTTransfer@<collection>@<nonce>@01@<contract hex>@<function>[@args]` | **your own address** | `auctionList` |
+| plain call `<function>@<args>` | the contract | `auctionCancel`, `auctionSettle`, `claimRefund` |
+
+Common fields as the web app sets them: `value 0`, `gasPrice 1000000000`, `chainID "1"`. Version is
+`1` for the players-contract calls (for example `frontend/src/lib/foxsyPaymentTx.ts:67-78`) and `2`
+for the tournament calls (`frontend/src/lib/tournamentTx.ts:77-87`, `:195-205`), the relayed
+registration (`frontend/src/pages/Onboarding.tsx:842-876`) and the swaps
+(`frontend/src/lib/xexchangeSwapTx.ts:18-85`). Both versions are valid on mainnet.
+
+### 1.5 Sending a transaction from a headless client
+
+What the browser wallet does implicitly and an agent must do itself:
+
+1. **Nonce.** Read the account nonce from `GET {gateway}/address/{addr}` (`data.account.nonce`),
+   falling back to `GET {api}/accounts/{addr}` (`frontend/src/lib/chainBalance.ts:152-186`). The web
+   app refreshes the account right before building every transaction
+   (`frontend/src/pages/Onboarding.tsx:794-795`). Keep one transaction per nonce in flight.
+2. **Sign** with the wallet's ed25519 key over the canonical transaction bytes (any official
+   MultiversX SDK does this).
+3. **Broadcast** with `POST {gateway}/transaction/send`, the same route the backend uses
+   (`backend/src/chain.rs:5657`). The relayed registration is the exception: the backend broadcasts
+   it (section 4.4).
+4. **Wait for the outcome** (1.6), then call the backend confirm route of that flow, if it has one.
+
+### 1.6 Deciding whether a transaction succeeded
+
+This is load-bearing; the web app learned it through incidents (`frontend/src/lib/txFinality.ts:270-400`).
+
+- **A reverted contract call can report `success`.** `GET {api}/transactions/{hash}` and
+  `GET {gateway}/transaction/{hash}/status` report the network envelope. A revert on the contract's
+  shard (the common case when your wallet is on another shard) shows up only in the node's
+  **process status**. Live example cited in the source: a `payFusionMatchWaiver` from a shard-1 wallet
+  to the shard-2 contract reverted while `/status` said `success` (`txFinality.ts:352-362`).
+- **What the web app does** (`txFinality.ts:402-500`):
+  1. poll `GET {api}/transactions/{hash}?fields=status` every 1.5 s and, after 3 s, also
+     `GET {gateway}/transaction/{hash}/status`;
+  2. on any `success`, require `GET {gateway}/transaction/{hash}/process-status` to answer
+     `data.status == "success"`; `fail` or `invalid` is a failure and `data.reason` carries the
+     contract's message;
+  3. also scan `GET {gateway}/transaction/{hash}?withResults=true` for a `signalError` event: a revert
+     message sits in `topics[1]` (base64), while `data` holds only the generic `user error`
+     (`txFinality.ts:728-800`);
+  4. foreground window 45 s, background window 120 s (`txFinality.ts:108`, `:117`). A timeout is
+     "unconfirmed", not "failed": the chain may still settle and the backend reconciles.
+- An unknown hash makes `/process-status` answer HTTP 500 "transaction not found" (`txFinality.ts:360-362`).
+- The backend applies the same rule to every money path before crediting anything (`CHANGELOG.md:52-58`).
+
+### 1.7 Gas limits the web app signs
+
+The owner rule is about 1.5x the gas measured on mainnet, inside 1.1x to 1.8x. Above about 2x the
+processing part, MultiversX keeps the whole limit (`frontend/src/lib/gasLimits.ts:1-14`).
+
+| Transaction | Gas limit | Source |
+|---|---|---|
+| `fusion` (3 NFTs + FOXSY) | 21,000,000 | `gasLimits.ts:17` |
+| `payFusionMatchWaiver`, `payFusionCooldownWaiver` | 15,000,000 | `gasLimits.ts:21` |
+| `shopPay` (every shop product, the transfer-cooldown waiver, the paid badge) | 12,000,000 | `gasLimits.ts:26` |
+| `joinTournament` (every tournament and 1v1 seat) | 7,000,000 | `gasLimits.ts:30` |
+| `claimRefund` | 6,500,000 | `gasLimits.ts:34` |
+| `auctionList` / `auctionBid` / `auctionSettle` / `auctionCancel` | 15,000,000 / 13,500,000 / 13,500,000 / 12,000,000 | `gasLimits.ts:42-47` |
+| `registerAndPay` (relayed) | `min(12,000,000, relayer_max_gas_limit)` | `gasLimits.ts:51-69` |
+| `syncMyStats` | served by `/api/sync/prepare` as `gas_limit`: 15,000,000 + 3,000,000 per player, at most 600,000,000 | `backend/src/routes/sync.rs:36-38`, `:655` |
+| EGLD path swap (`composeTasks`) / WEGLD path swap | 40,000,000 / 24,000,000 | `frontend/src/lib/xexchangeSwapTx.ts:18-85` |
+
+Every contract upgrade adds about 100 gas per byte of wasm to every call, so these margins shrink
+after an upgrade (`gasLimits.ts:9-11`). The settle limit was sized before any mainnet settle was
+measured (`gasLimits.ts:36-41`).
+
+### 1.8 Where live values come from
+
+| Source | What it serves | Notes |
+|---|---|---|
+| `GET /api/config` (public, raw JSON) | Contract-mirrored prices and tunables (fusion, auctions, sync, shop, registration fee), registry values (splits, fee bounds, league floors, condition, aging, transfer cooldowns, pack), relayer and swap switches | `backend/src/routes/config.rs:36-360`, `:421-826`. Units are whole FOXSY unless the field ends in `_wei` (`config.rs:7-9`). Full field list in `ECONOMY-AND-RULES.md` |
+| Contract views through `POST {gateway}/vm-values/query` with `{"scAddress", "funcName", "args": [hex...]}` | The binding on-chain values: prices, cooldowns, per-card fusion state, auctions, seat escrow | The web app does this for `isRegistrationPaid` (`frontend/src/pages/Onboarding.tsx:370-393`). A result of `"AQ=="` is `true`; an empty list is `false`/0 |
+| `GET /api/shop/status` (auth) | Shop prices, booster state, training quota, pack quota | `backend/src/routes/shop.rs:730-910` |
+| `GET /api/matches/daily-allowance` (auth) | Match count today, cap, reset hour | `backend/src/routes/matches.rs:527-570` |
+
+Not public anywhere: ELO K factors, ELO decay parameters, the per-card daily XP cap, the training
+condition cost, the aging multiplier, the match and ranked cooldowns and the tournament strategy-lock
+lead. Use the documented values and treat the server's refusal as the truth.
+
+---
+
+## 2. Login and sessions
+
+**Purpose.** Exchange a signed message for an opaque session token (a UUID) used as a Bearer token.
+
+**How the web app does it** (`frontend/src/lib/auth.ts:32-59`, `frontend/src/lib/authMessage.ts:16-18`):
+
+1. `timestamp = floor(now_ms / 1000)` (Unix **seconds**).
+2. Message text: `foxleague:chain=1:auth-{timestamp}` (`backend/src/auth.rs:421-423`).
+3. Sign it as a **MultiversX signed message**: the signed bytes are
+   `keccak256("\x17Elrond Signed Message:\n" + len(message) + message)`, where `len` is the decimal
+   byte length (`backend/src/auth.rs:22-23`, `:438-469`). Any SDK's message signer produces this.
+4. `POST /api/auth/verify` with `{"address": "erd1...", "timestamp": <int>, "signature": "<128 hex chars>"}`.
+5. Response `{"success": true, "data": {"token": "<uuid>"}}` (`backend/src/routes/auth_routes.rs:279-281`).
+6. Send `Authorization: Bearer <uuid>` on every authed request (`frontend/src/lib/api.ts:165-171`).
+
+**A headless client does exactly the same** with its own key: no browser, captcha or origin check is
+involved (CORS binds browsers only). The first successful verify creates the user row
+(`is_whitelisted=false`, league from the seed ELO), so login is never gated on registration or on the
+whitelist (`backend/src/routes/auth_routes.rs:158-205`).
+
+**Rules.**
+
+- The timestamp must be within **300 s** of server time, in either direction (`backend/src/auth.rs:48`, `:73-75`).
+- Each signature is single-use inside that window (replay cache, `backend/src/routes/auth_routes.rs:84-96`).
+  Sign a fresh message for every login.
+- Session lifetime: `auth.session_ttl_seconds`, default 86,400 s, range 300 s to 30 days
+  (`backend/src/routes/auth_routes.rs:252-259`). There is no refresh route: sign again on a 401.
+  The web app re-signs once on a 401 and replays the request (`frontend/src/lib/api.ts:210-260`).
+- The legacy message `foxleague-auth-{ts}` is still accepted but logged as a warning; do not use it
+  (`backend/src/routes/auth_routes.rs:123-156`).
+
+**Other auth routes.**
+
+- `GET /api/auth/check` (auth) returns `{wallet_address}`: a cheap session ping (`auth_routes.rs:36-40`).
+- `POST /api/auth/revoke` (auth) deletes the session of the presented token and returns `{revoked}`
+  (`auth_routes.rs:24`, `:360-406`).
+
+**Failures.**
+
+| Where | Answer |
+|---|---|
+| verify, bad address | 200 `Invalid wallet address: {e}` (`auth_routes.rs:62-64`) |
+| verify, stale timestamp | 200 `Auth token expired` (`auth_routes.rs:70-73`) |
+| verify, reused signature | 200 `signature_replayed` (`auth_routes.rs:84-96`) |
+| verify, bad signature | 200 `Signature verification failed` (`auth_routes.rs:140`) |
+| verify, database | 200 `Internal error` / `Failed to create session` |
+| any authed route | **401 plain text**: `Missing Authorization header`, `Invalid Authorization format`, `Invalid session token`, `Session expired or invalid` (`backend/src/auth.rs:233-291`) |
+| any authed route, database | 500 `Session lookup failed` |
+
+Routes that take an optional session (`Option<AuthenticatedWallet>`) treat a bad token as anonymous
+without an error (`backend/src/auth.rs:392-412`).
+
+---
+
+## 3. Reading your own state
+
+### 3.1 Are you registered? `GET /api/users/{address}`
+
+Public (`backend/src/routes/leaderboard.rs:17`, `:437-477`). Returns `UserPublicProfileView`
+(`backend/src/models.rs:797-837`):
+
+| Field | Meaning |
+|---|---|
+| `id`, `wallet_address`, `username` | Identity |
+| `elo_rating`, `league` | ELO (new teams start at 1200) and league (`Bronze` to `Diamond`) |
+| `matches_won`, `matches_lost`, `matches_drawn` | Lifetime record |
+| `team_name`, `badge` | **`team_name` null means not registered** (`frontend/src/App.tsx:304-313`) |
+| `verified`, `tournament_wins`, `active_title`, `player_count` | Checkmark, titles, roster size |
+| `is_developer`, `developer_team_name` | Developer-mode team, if any |
+
+Errors: `User not found` (no login yet), `DB error`.
+
+### 3.2 Your team: `GET /api/teams/{address}`
+
+Public (`backend/src/routes/teams.rs:47`, `:109-131`). The address is matched exactly. Returns `Team`
+(`backend/src/models.rs:203-239`):
+
+| Field | Meaning |
+|---|---|
+| `id`, `user_id`, `name`, `coach_name` | Identity |
+| `formation` | One of the nine ids in section 8.1 |
+| `lineup` | 11 NFT nonces; index 0 is the goalkeeper slot |
+| `substitutes` | Up to 7 nonces (the server auto-fills to 7 on save) |
+| `team_overall` | Average live OVR of the lineup, computed only when the lineup is saved, so it goes stale (`teams.rs:396-408`) |
+| `badge`, `badge_ipfs_uri` | `ipfs://<cid>` (or a legacy base64 image) |
+| `verified`, `created_at` | |
+
+ELO, league and record live on the user (3.1), not on the team. Error: `Team not found`.
+
+### 3.3 Your players: `GET /api/players/{address}`
+
+Public (`backend/src/routes/players.rs:19`, `:35-49` via `backend/src/services/roster_chain_view.rs:170-187`).
+
+- The roster is **your on-chain holdings intersected with the backend cache**: cards that left the
+  wallet (including cards escrowed in an auction) are excluded; cards only on chain are imported
+  lazily (`roster_chain_view.rs:125-140`, `:233-310`). If the chain read fails it falls back to the
+  cache alone.
+- **30 s server cache per wallet, never invalidated** (`roster_chain_view.rs:57`, `:175-186`). Right
+  after a training, match or sync, read single cards with `GET /api/players/nonce/{nonce}`, which is
+  fresh (`players.rs:20`, `:52-70`).
+- Condition is regeneration-adjusted at read time (`roster_chain_view.rs:178-180`).
+
+`PlayerCache` fields (`backend/src/models.rs:250-380`), grouped:
+
+| Group | Fields | Notes |
+|---|---|---|
+| Identity | `nft_nonce`, `owner_address`, `name`, `position` (`GK`/`DEF`/`MID`/`FWD`), `rarity` (`Common`..`Legendary`), `shirt_number`, `country`, `portrait_uri` | |
+| Live stats (off chain) | `speed`, `accuracy`, `defense`, `power`, `control`, `vision`, `stamina`; `level`, `experience`; per-stat XP pools `speed_xp` .. `stamina_xp` | Grown by training and match XP. A stat gains +1 when its pool reaches `training.xp_threshold_per_level` (2000 on mainnet) |
+| Synced stats (on chain) | `*_synced`, `level_synced`, `experience_synced` | **Matches use only these**, capped by rarity (`backend/src/models.rs:508-531`) |
+| Sync flag | `stats_dirty` | True while live values differ from the on-chain snapshot. Set by every training and every match appearance, recomputed after a sync (`backend/src/db.rs:57-140`, `:680-744`) |
+| Condition | `condition` (0-100, already regenerated), `condition_updated_at` | Regeneration and drain in section 9.6 |
+| Career | `matches_played`, `goals`, `assists`, `passes`, `tackles`, `shots_on_target`, `catches` | Every appearance |
+| Fusion counters | `competitive_matches`, `fusion_match_credit`, `fusion_ready_at` (null = ready), `fused_at` | `competitive_matches` is what sync writes on chain as `matches_played` (section 7) |
+| Market | `listed_for_sale`, `sale_price` (whole FOXSY) | |
+| Transfers | `transferred_at`, `transfer_cooldown_hours` (null = the live default, 504) | The card cannot play until the cooldown ends |
+| Age | `minted_at`, `acquired_at` | Age is not served: `18 + days_since(minted_at) / 52` (`backend/src/db.rs:514-521`) |
+
+Whether a card is in your lineup is not a player field: derive it from `Team.lineup` and
+`Team.substitutes`.
+
+### 3.4 Balances and NFTs (read from the chain)
+
+There is no player-facing balance route; the web app reads the chain directly
+(`frontend/src/lib/chainBalance.ts:32-186`):
+
+| What | Primary | Fallback |
+|---|---|---|
+| FOXSY | `GET {gateway}/address/{addr}/esdt/FOXSY-5d5f3e` then `data.tokenData.balance` | `GET {api}/accounts/{addr}/tokens/FOXSY-5d5f3e` then `balance` (404 "not found" means 0) |
+| EGLD and nonce | `GET {gateway}/address/{addr}` then `data.account.balance` / `.nonce` | `GET {api}/accounts/{addr}` |
+| Player NFTs (how the backend reads them) | `GET {gateway}/address/{addr}/esdt`, keys starting with `FXLP-6f28e5-` (`backend/src/chain.rs:5954`) | `GET {api}/accounts/{addr}/nfts?collection=FXLP-6f28e5&size=10000` (`backend/src/chain.rs:6124`) |
+
+Both tokens have 18 decimals. The web app flags "low EGLD" under 0.01 EGLD
+(`chainBalance.ts:22-23`, `:204-206`). It polls the header balance every 20 s and after every spend
+(`frontend/src/components/Layout.tsx:53-211`).
+
+### 3.5 Other own-state reads
+
+| Route | Auth | Returns | Source |
+|---|---|---|---|
+| `GET /api/shop/status?wallet_address=` | auth, must match | booster state, shop prices, training quota (`daily_free`, `premium_cap`, `used_today`, `premium_used_today`, `slots_banked`), Common pack quota | `backend/src/routes/shop.rs:52-142`, `:730-910` |
+| `GET /api/matches/daily-allowance?wallet_address=` | auth, must match | `{today_count, daily_limit, reset_hour_utc}` | `backend/src/routes/matches.rs:527-570` |
+| `GET /api/matches/active?wallet_address=` | auth, must match | the match you are in right now or `null`: `{match_id, is_home, home_team_name, away_team_name, status, tm_game_id, created_at, kind ("ranked"/"challenge"/"tournament"), tournament_id, tournament_title, opponent_badge}` | `matches.rs:4471-4640` |
+| `GET /api/tournaments/my` | auth | `{active[], completed[]}` tournaments you play in or created | `backend/src/routes/tournaments.rs:6652-6907` |
+| `GET /api/tournaments/upcoming-matches` | auth | your scheduled tournament matches with `strategy_locks_at` (section 10.8) | `tournaments.rs:6320-6595` |
+| `GET /api/tournaments/my-squad` | auth | your CURRENT squad as a tournament would snapshot it (`null` if you cannot field a legal 11 + 7) | `tournaments.rs:6597-6650` |
+| `GET /api/shop/purchases?wallet_address=&limit=&offset=` | auth, must match | your shop history | `shop.rs:4004-4046` |
+| `GET /api/marketplace/fusion-history?limit=&offset=` | auth | your fusions | `backend/src/routes/marketplace.rs:2213-2317` |
+| `GET /api/notifications/challenges-for-me` | auth | open 1v1 challenges that target you | `backend/src/routes/leaderboard.rs:480-579` |
+| `GET /api/notifications?limit=&before_id=`, `GET /api/notifications/unread-count`, `POST /api/notifications/read {ids?, all?}` | auth | your notification feed; `limit` default 30, max 100 | `backend/src/routes/notifications.rs:35-236` |
+| `GET` / `PUT /api/notifications/preferences` | auth | per-category mute (`matches`, `challenges`, `tournaments`, `marketplace`, `fusion`, `transfers`) | `notifications.rs:39-42`, `:263-329` |
+| `POST /api/notifications/ws-ticket` then `wss://.../ws/notifications?ticket=` | auth | push feed: `{"type":"connected"}`, then `{"type":"notification", id, kind, title, body, href, created_at, unread_count}`; the ticket is single-use with a 30 s TTL | `notifications.rs:343-372`; `backend/src/notifications.rs:478-514` |
+
+
+---
+
+## 4. Registration
+
+**Purpose.** Pay the one-time fee on chain, create the team and receive an 18-card starter squad.
+
+### 4.1 Cost and what you get
+
+- **Fee: 5,000 FOXSY**, exact amount, once per wallet, **not refundable** once the team exists
+  (`deploy/mainnet/chain-config.mainnet.env:15`; `docs/manual/src/content/docs/legal/terms.md:43`).
+  Live: `/api/config` `registration_fee_wei` (contract view `getRegistrationFee`) and
+  `registration_fee_foxsy_wei` (the relay's cross-check key). They must be equal
+  (`backend/src/routes/config.rs:248-316`).
+- **Gas: none.** Registration is the one relayed transaction: a FoxLeague relayer pays its network
+  fee (section 16). The web app offers no self-paid registration (manual
+  `mechanics/economy-map.mdx:58`). The contract itself would accept the same `registerAndPay` sent and
+  paid by the wallet, but then the stock, whitelist and switch checks run only after the
+  non-refundable fee has moved; the relay runs them before anything is spent.
+- **Squad:** 18 cards drawn from a pre-minted pool: 10 Common, 4 Uncommon, 2 Rare, 1 Epic,
+  1 Legendary; positions 2 GK, 6 DEF, 6 MID, 4 FWD (`backend/src/routes/registration.rs:1227`, `:1350-1396`).
+  A missing rarity falls back to the next lower one. On chain one wallet gets one starter team,
+  18 cards for life (`contracts/foxleague-players/src/player_nft.rs:133-141`, `:1510-1514`).
+
+### 4.2 Preconditions and gates
+
+| Gate | How to check before paying | Source |
+|---|---|---|
+| Not yet registered | `GET /api/users/{addr}` has `team_name` null | `backend/src/routes/leaderboard.rs:437-477` |
+| Fee not already paid on chain | view `isRegistrationPaid(<pubkey hex>)` on the players contract | `frontend/src/pages/Onboarding.tsx:370-393` |
+| Registration open | `/api/config` `relayer_v3_enabled` true and `relays_remaining_today` > 0 | `backend/src/routes/config.rs:558-607` |
+| Starter stock | `GET /api/register/pool-status` (public): `{total, available, allocated, by_rarity:[{rarity, position, available, total}]}` | `registration.rs:1728-1777` |
+| Whitelist | `GET /api/whitelist/check?wallet_address=` (public) returns `{is_whitelisted}`; always true when the whitelist switch is off | `backend/src/routes/admin.rs:148`, `:5902-5957` |
+| FOXSY balance | at least the fee (section 3.4; buy it with section 5) | `Onboarding.tsx:818-830` |
+| Team name | see 4.3 | |
+
+The whitelist switch `registration.whitelist_required` defaults to `"true"` in code
+(`backend/src/config_registry.rs:1835-1839`) and is not seeded; the owner planned to switch it off in
+the admin panel for launch (`CHANGELOG.md:627-629`; launch moved to 28 September,
+`frontend/src/lib/launch.ts:1-6`). Read `/api/whitelist/check` at runtime.
+
+### 4.3 Team name rules and uniqueness
+
+- **Server rules** (`backend/src/routes/registration.rs:341-344`): trimmed, **3 to 15 bytes** (bytes,
+  not characters), Unicode letters or digits, space or `-`. An apostrophe is **refused** by the server
+  even though the web form's regex allows it (`frontend/src/pages/Onboarding.tsx:560-575`).
+  Safe choice: ASCII `[A-Za-z0-9 -]`, 3 to 15 long.
+- **Uniqueness ignores case, spaces and hyphens**: the database index is
+  `LOWER(REPLACE(REPLACE(name,' ',''),'-',''))` (`backend/migrations/087_team_name_normalized_unique.sql:13-14`).
+  `Fox League` and `fox-league` collide.
+- **No availability route exists.** `GET /api/users/search?q=` does a substring match on the raw name
+  and does not normalise, so it can miss a collision (`leaderboard.rs:358-418`). The name is checked
+  only by `POST /api/register`, **after** the fee is on chain.
+- **A taken name after paying costs nothing extra:** the payment stays recorded on chain
+  (`isRegistrationPaid`), so call `POST /api/register` again with another name. No second payment
+  and no refund are needed (`registration.rs:383-395`, `:745`). A simultaneous insert that races the
+  unique index answers HTTP 500 (`registration.rs:902-912`).
+- Rename later with `POST /api/teams/rename {wallet_address, name}` (auth): same rules, free, no
+  cooldown found (`backend/src/routes/teams.rs:459-541`). Errors: `Team name must be 3-15 characters`,
+  `Only letters, numbers, spaces and hyphens allowed`, `That team name is already taken`.
+- Coach name: `POST /api/teams/coach {coach_name}` (auth), at most 20 characters, letters, digits,
+  space, `-` and `.`; empty clears it (`teams.rs:55-104`).
+
+### 4.4 The sequence the web app runs
+
+Source: `frontend/src/pages/Onboarding.tsx:629-968`.
+
+1. `GET /api/config`: read `relayer_v3_enabled`, `relayer_addresses`, `relayer_max_gas_limit`,
+   `registration_fee_foxsy_wei`, `registration_fee_wei`, `foxsy_token_id`.
+2. (Optional) `POST /api/onboarding/generate-badge {team_name}` (4.6).
+3. `GET /api/onboarding/check-eligibility` (auth, always 200):
+   `{nft_count, can_skip_mint, nft_bypass_threshold: 18, has_existing_team, is_whitelisted, is_registration_paid}`
+   (`backend/src/routes/onboarding.rs:735-900`). If `can_skip_mint` (the wallet already holds 18 or
+   more `FXLP` cards and never paid), skip the payment and go to step 7: registration is free and no
+   cards are drawn (`registration.rs:88`, `:413-667`).
+4. Re-read `isRegistrationPaid`. If true, skip the payment and go to step 7 (`Onboarding.tsx:724-759`).
+5. **Build and sign the relayed transaction** (`Onboarding.tsx:798-876`):
+
+   | Field | Value |
+   |---|---|
+   | `sender` | your address |
+   | `receiver` | players contract |
+   | `value` | `0` |
+   | `data` | `ESDTTransfer@464f5853592d356435663365@<fee atomic hex>@7265676973746572416e64506179` (no further arguments). At 5,000 FOXSY: `ESDTTransfer@464f5853592d356435663365@010f0cf064dd59200000@7265676973746572416e64506179` |
+   | `gasLimit` | `min(12000000, relayer_max_gas_limit)`; 9,900,000 if the config has no ceiling (`frontend/src/lib/gasLimits.ts:51-69`) |
+   | `gasPrice` | `1000000000` (the relay refuses anything else) |
+   | `chainID`, `version`, `options` | `"1"`, `2`, `0` |
+   | `nonce` | your own account nonce |
+   | `relayer` | the `relayer_addresses` entry **on your shard** |
+
+   Shard rule (3 shards) used on both sides: take the last byte `b` of the public key; `s = b & 0b11`;
+   if `s > 2` then `s = b & 0b01` (`Onboarding.tsx:801-816`; `backend/src/relayer_pool.rs:183-203`).
+   Error when none matches: `No relayer available for shard {n}. Please try again in a moment.`
+
+6. `POST /api/onboarding/relay` (auth) with `{"signed_tx": <plain object>}`. Response
+   `{success:true, data:{tx_hash, relayer_shard, relayer_address}}` (`onboarding.rs:1335-1345`, `:2462-2471`).
+   The backend adds `relayerSignature` and broadcasts. Then wait for the outcome (1.6).
+7. `POST /api/register` (auth) with `{"team_name": "...", "badge_ipfs_uri": "ipfs://..."}` (badge
+   optional; alias `badge`). The web app also sends `wallet_address`, which is ignored
+   (`backend/src/models.rs:1140-1149`; `frontend/src/lib/api.ts:383-397`). Response
+   `{user_id, team_name, players, nonces[]}` (`models.rs:1154-1159`).
+8. `GET /api/players/{addr}` to load the squad.
+
+**The plain object for step 6.** The web app sends sdk-core's `toPlainObject()`; key order in the
+backend's fixture is `nonce, value, receiver, sender, gasPrice, gasLimit, data, chainID, version,
+relayer, signature, guardianSignature, relayerSignature`, with `gasPrice` and `gasLimit` as JSON
+numbers, `value` as a string, `data` base64 and `signature` hex (`onboarding.rs:1539-1545`,
+`:2947-2968`, fixture `:3761-3776`). The backend strips the three signature keys, serialises the rest
+**in the order received** and signs those bytes (`onboarding.rs:2336-2379`; `backend/src/chain.rs:14-80`).
+Build the object with an official SDK serializer, not by hand.
+
+**`POST /api/register` blocks.** It waits until the wallet holds 18 cards, polling each second for up
+to 30 s. It answers success even after that timeout (`registration.rs:1136-1197`). Give it an HTTP
+timeout above 35 s; after a client timeout, re-check `GET /api/users/{addr}` before retrying. The
+cards are delivered by the game server (`distributeTeam`) and the best eleven is picked in the
+background (`registration.rs:931-957`).
+
+### 4.5 Failure modes
+
+**Relay** (`backend/src/routes/onboarding.rs`, guards in this order; body `{success:false, error}`):
+
+| HTTP | `error` | Line |
+|---|---|---|
+| 503 | `Relayer V3 is disabled` | 1858-1883 |
+| 503 | `Registration is currently disabled` | 1885-1937 |
+| 503 | `No starter squads in stock right now: your fee was not taken. Please try again later.` | 1839 |
+| 500 | `chain client unavailable` / `on-chain registration check failed: {e}` | 1959, 1982 |
+| 403 | `G6: wallet already registered on-chain` | 2000 |
+| 403 / 500 | `Wallet not whitelisted` / `could not check the whitelist right now; nothing was sent, please retry` | 2021, 2037 |
+| 403 | `wallet holds {n} FOXSY but the registration fee is {m} FOXSY` | 2042-2090 |
+| 429 | `G9: rate limit {EM} max {n} relay calls per {s}s per wallet` (default 3 per 600 s) | 2092-2146 |
+| 503 | `G10: relayer daily cap {cap} reached` (default 5,000) | 2148-2193 |
+| 503 / 400 | `relayer pool not configured`, `bad wallet bech32: {e}`, `no relayer loaded for shard {s} (wallet shard)` | 2201-2215 |
+| 503 | `registration fee is misconfigured {EM} relay unavailable` | 2221-2263 |
+| 403 | `G2: tx sender {} != authenticated wallet {}` | 1727 |
+| 403 | `G3: tx receiver {} != player NFT SC {}` | 1734 |
+| 403 | `G4: invalid data payload {EM} {detail}` (exactly four `@` parts, `ESDTTransfer`, the FOXSY token, `registerAndPay`) | 1455-1490, 1740 |
+| 403 | `G5: tx amount {} wei != canonical fee {} wei` | 1491-1506, 1745 |
+| 403 | `G7: tx.relayer {} != shard-routed relayer {}` | 1752 |
+| 403 | `G8: chainID {} != configured chain {}` | 1758 |
+| 403 | `G11: gasPrice {:?} != canonical {} (the relayer pays this)` | 1767 |
+| 403 | `G12: gasLimit {:?} exceeds max {}` | 1773 |
+| 403 | `G13: value must be "0" for ESDTTransfer, got {:?}` | 1777 |
+| 500 | `serialize inner tx failed: {e}`, `relayer sign failed: {e}`, `gateway broadcast failed: {e}` | 2374, 2403, 2432 |
+
+A G9 slot is used as soon as a call reaches G9, even when a later guard refuses it; a G10 slot is
+given back on every error (`onboarding.rs:2140-2144`, `:2181-2195`). Validate everything locally
+before calling the relay.
+
+**Contract** (`registerAndPay`, `contracts/foxleague-players/src/player_nft.rs:1217-1259`):
+`Contract is paused`, `Registration fee not set`, `Payment must be FOXSY`,
+`FOXSY is a fungible token (nonce must be 0)`, `Payment must match registration fee exactly`,
+`Already paid registration`, `This wallet already received its starter team`. A revert costs the
+relayer's gas, not your FOXSY.
+
+**Register** (`backend/src/routes/registration.rs`, in order): `Team name must be 3-15 characters` (341),
+`Team name can only contain letters, numbers, spaces and hyphens` (344), `Already registered` (359),
+`Registration is currently disabled` (368-375), `That team name is already taken` (383-395),
+`Unable to verify your on-chain registration status right now. Please retry in a moment; no payment is needed.` (445),
+`Wallet not whitelisted` (684), `Chain client unavailable; cannot verify on-chain registration payment.` (722),
+`Registration fee not paid on-chain. Submit the registerAndPay transaction first, then retry registration.` (745),
+`Unable to verify on-chain registration payment right now. Please retry in a moment.` (766),
+`Not enough players in pool ({n} slots unfilled: {..})` (1590-1600).
+
+A cross-shard registration can answer `Registration fee not paid on-chain...` for a few seconds after
+the envelope said `success`. Wait for `/process-status` (1.6), then retry `/api/register`; never relay
+a second payment (the relay answers `G6` and the contract `Already paid registration`).
+
+### 4.6 Badge
+
+- `POST /api/onboarding/generate-badge {team_name, payment_tx_hash?}` (auth) generates an AI badge,
+  pins three JPEG sizes on FoxLeague's IPFS node and returns
+  `{badge_ipfs_uri: "ipfs://<cid>", team_name, regenerations_used, regenerations_max}`
+  (`backend/src/routes/onboarding.rs:245-709`). Free before registration; after registration the
+  first 3 regenerations are free, then **1,000 FOXSY** each (`backend/src/config_registry.rs:1747-1754`).
+  Rate limit: 3 per 10 min per wallet (`onboarding.rs:35-82`).
+- When payment is due the route answers `success:false` with
+  `data:{payment_required:true, cost_foxsy, free_regens, regen_count}` and
+  `You've used your {n} free badge regenerations. The next one costs {c} FOXSY.` (`onboarding.rs:352-364`).
+  Pay with the `shopPay` data field (section 12.1) for exactly `cost_foxsy`, wait for the outcome, then
+  call again with `payment_tx_hash` (verified as `shopPay`, FOXSY, at least the cost, `onboarding.rs:929-965`).
+  A `tx_pending` answer means retry with the same hash.
+- Other errors: `Team name must be 1-15 characters`,
+  `Too many badge generation requests. Please wait a few minutes.`, `Image generation failed: {e}`,
+  `Badge upload failed: {e}. Please try again in a moment.`,
+  `Badge service temporarily unavailable {EM} please retry.` (`onboarding.rs:254-492`).
+- `POST /api/teams/badge {badge_ipfs_uri}` (auth) saves a URI that starts with `ipfs://`
+  (`backend/src/routes/teams.rs:548-620`). There is no upload route for a custom image.
+
+---
+
+## 5. EGLD to FOXSY swap
+
+**Purpose.** Buy the FOXSY a registration (or a top-up) needs, on xExchange's FOXSY/WEGLD pool, as
+the onboarding "Card B" and the Dashboard swap do. It is an ordinary DEX trade signed and paid by the
+user; FoxLeague is not a party to it.
+
+**Gating.** The web app shows it only on a mainnet build with the committed DEX addresses and
+`/api/config` `dex_swap_enabled` true (key `onboarding.dex_swap_enabled`, code default 0)
+(`frontend/src/lib/onboardingSwapMode.ts:12-20`; `backend/src/config_registry.rs:2260-2261`). The pool
+itself is public.
+
+**Quote** (`frontend/src/lib/xexchangeQuote.ts:53-118`; `frontend/src/lib/xexchangeSwap.ts`), all by
+`vm-values/query` on the pair:
+
+1. `getState` must be 1 (active); `getFirstTokenId` / `getSecondTokenId` must be FOXSY / WEGLD.
+2. `missing = fee - FOXSY balance` (atomic) (`xexchangeSwap.ts:149-151`).
+3. `amountIn = getAmountIn(hex("FOXSY-5d5f3e"), hex(missing))`.
+4. `maxIn = floor(amountIn * (10000 + bps) / 10000)`, `bps = dex_swap_slippage_bps` (default 100,
+   clamped 10..300) (`xexchangeSwap.ts:38-40`, `:154-167`; `backend/src/routes/config.rs:840-853`).
+5. Refuse when the quote is more than 5 percent above spot from `getReservesAndTotalSupply`
+   (`xexchangeSwap.ts:186-189`). The pair fee is 0.3 percent (`xexchangeSwap.ts:65-67`).
+6. Re-quote right before signing and abort if the fresh `amountIn > maxIn`
+   (`frontend/src/components/FoxsySwapModal.tsx:332-351`).
+
+**Path choice** (`xexchangeSwap.ts:214-230`): the WEGLD path when WEGLD >= `maxIn` and EGLD >= 0.001;
+otherwise the EGLD path when EGLD >= `maxIn + 0.01`.
+
+**Transactions** (`frontend/src/lib/xexchangeSwapTx.ts:18-85`; version 2, gasPrice 1e9, never relayed):
+
+- **EGLD path**, receiver = Composable Tasks, `value = maxIn`, gas 40,000,000. Fixed input, minimum
+  output = `missing`; any surplus arrives as FOXSY:
+  `composeTasks@<nested(token out) + 0000000000000000 + nested(missing)>@@@02@<nested("swapTokensFixedInput") + nested(token out) + nested(missing)>`,
+  where nested = 4-byte big-endian length + bytes (`xexchangeSwap.ts:112-124`). Mainnet example for
+  5,000 FOXSY (`frontend/src/lib/xexchangeSwap.test.ts:63`):
+  `composeTasks@0000000c464f5853592d35643566336500000000000000000000000a010f0cf064dd59200000@@@02@0000001473776170546f6b656e734669786564496e7075740000000c464f5853592d3564356633650000000a010f0cf064dd59200000`.
+  The wrap to WEGLD happens inside the composer; no separate wrap transaction is sent.
+- **WEGLD path**, receiver = the pair, value 0, gas 24,000,000. Exactly `missing` out; unused WEGLD
+  is refunded:
+  `ESDTTransfer@5745474c442d626434643739@<maxIn hex>@73776170546f6b656e7346697865644f7574707574@464f5853592d356435663365@<missing hex>`
+  (example at `xexchangeSwap.test.ts:75`).
+
+**Confirmation.** Wait for the outcome (1.6), then poll the FOXSY balance each second for up to 30 s
+until it reaches the target; a cross-shard wallet receives it a few blocks later
+(`FoxsySwapModal.tsx:101`, `:411-463`). A revert is atomic and costs only gas. The web app refuses to
+start a second swap while one from the wallet to the composer or pair is pending
+(`frontend/src/lib/pendingDexSwapOnChain.ts`).
+
+**Limits.** The Dashboard top-up is capped at `dex_swap_max_foxsy` (default 50,000, clamped 1,000 to
+1,000,000) (`frontend/src/components/DashboardFoxsySwap.tsx:1-16`; `config_registry.rs:2276-2279`).
+The card or bank on-ramp is "coming soon" on mainnet; the app links to Ramp's public page and
+xPortal only (`frontend/src/lib/community.ts:21`, `:30`).
+
+---
+
+## 6. Training
+
+**Purpose.** Grow one stat of one player through its XP pool. Off chain; the result reaches matches
+only after a sync (section 7).
+
+**API.** `POST /api/training/train` (auth) with `{"player_nonce": <i64>, "attribute": "speed"|"accuracy"|"defense"|"power"|"control"|"vision"|"stamina"}`
+(`backend/src/routes/training.rs:192-203`, `:207`, `:219`). The owner is always the session wallet.
+
+**Gates, in order** (`training.rs`):
+
+| Gate | Error | Source |
+|---|---|---|
+| One request per `training.cooldown_ms` (500 ms) per wallet | `Training too fast {EM} wait a moment` | 114-129, 251 |
+| Attribute name | `Invalid attribute. Choose: speed, accuracy, defense, power, control, vision, stamina` | 258 |
+| Registered, card exists | `Not registered`, `Player not found` | 266, 279 |
+| You own the card (row locked) | `You don't own this player` | 285, 571 |
+| Regenerated condition >= `min_field_condition` (30) | `Player needs to rest {EM} at least {min} condition is required to train. Condition recovers naturally over time.` | 25-33, 292-301 |
+| At most 15 sessions per wallet per day (5 free + 10 paid) since 14:00 UTC | `Daily training cap reached ({used}/{max} for today). {banked} banked slots available {EM} try tomorrow.` | 320-354, 503-518 |
+| Sessions 6 and later consume one banked paid slot | `Daily training limit reached ({used}/{free}). Buy slots in the shop or try again tomorrow.` | 579-621, 589-592 |
+
+The cap is **per wallet**, not per player. Paid slots are bought in the shop (section 12.2 C), are
+banked and never expire.
+
+**Effect** (one database transaction, `training.rs:455-742`):
+
+- XP earned = `round(20 * condition / 100)`, doubled (floor) by an active XP booster (`training.rs:357`,
+  `:365-430`). Tournament XP rewards do not apply to training.
+- The chosen stat's pool grows; at 2,000 XP the stat gains +1 and the excess carries over. XP on a stat
+  already at its rarity cap (Common 30, Uncommon 55, Rare 75, Epic 90, Legendary 100) is discarded,
+  but the session still costs condition and a slot (`training.rs:628-641`).
+- Condition drops by the age-ramped training cost (base 5, up to 15 at age 39) after regeneration is
+  applied (`training.rs:443-450`, `:660-670`).
+- `stats_dirty` is set to true on every session, even without a stat bump (`training.rs:667`).
+- Response: `{attribute, stats:{<attr>:{before, after, increased}}, any_increased, xp_gained, condition_after, slots_used, slots_max}`
+  (`training.rs:745-765`).
+
+Quota view: `GET /api/shop/status` `training` block (section 3.5). The handler's doc comment
+(`training.rs:213-218`, base 50 XP) is stale; the code uses 20.
+
+---
+
+## 7. Sync to chain
+
+**Purpose.** Write the live stats, level, XP, condition and the competitive-match counter of your
+cards into their NFT attributes. Matches, tournament snapshots, fusion and listings read the on-chain
+values, so training and competitive matches count only after a sync.
+
+**Cost.** `getSyncCost` per card: **10 FOXSY** on mainnet (`deploy/mainnet/chain-config.mainnet.env:24`;
+live `/api/config` `sync_cost_foxsy`). Plus network gas.
+
+**Which cards.** `stats_dirty` cards (section 3.3). The flag is set by every training session and every
+match appearance, even when no synced field would change; `prepare` charges for every dirty card.
+Compare the live fields with the `*_synced` fields before paying if you only care about stats.
+
+### 7.1 `GET /api/sync/prepare?wallet_address=<own>[&nonce=<n>]` (auth)
+
+`backend/src/routes/sync.rs:288`. Without `nonce` it takes **every** dirty card of the wallet (lineup
+or not) that is in the wallet on chain right now (listed cards are excluded); with `nonce`, only that
+card. There is no subset option (`sync.rs:423-541`).
+
+Response (`sync.rs:80-102`, `:697-706`):
+`{sc_call_data, receiver, gas_limit, foxsy_cost (atomic decimal string), foxsy_token_id, nonces[], player_count, wait_seconds}`.
+
+- `sc_call_data` is the complete data field (`sync.rs:596-642`):
+  ```
+  MultiESDTNFTTransfer@<players SC hex>@<N+1, 2 hex digits>
+    @464f5853592d356435663365@00@<10 x N x 10^18 hex>
+    @46584c502d366632386535@<nonce hex>@01          (once per card)
+    @73796e634d795374617473@<timestamp, 16 hex>@<game-server signature, 64 bytes hex>
+    @<nonce, 16 hex>@<encoded attributes hex>        (once per card)
+  ```
+  The game server signs `sc_address || collection || caller pubkey || timestamp || (nonce || attributes)*`
+  with ed25519 (`sync.rs:543-590`); the contract rebuilds and checks it
+  (`contracts/foxleague-players/src/player_nft.rs:1672-1702`). Do not modify the payload.
+- `gas_limit` = 15,000,000 + 3,000,000 per card, capped at 600,000,000 (`sync.rs:36-38`, `:655`).
+- `wait_seconds` (0 to 8): sleep this long before signing, so a card received moments ago has
+  propagated across shards (`sync.rs:40-56`, `:658-693`).
+
+Refusals: `Wallet address mismatch`, `Chain is temporarily unavailable. Please retry shortly.`,
+`Stat sync is temporarily disabled: the chain and the contract disagree about time. Your stats are safe and nothing was charged. Please try again later.`,
+`Player not found, not owned, or not dirty`, `No dirty players to sync`,
+`All dirty NFTs you have are no longer in your wallet on-chain (likely transferred / fused / burned). Nothing to sync. Try refreshing your team.`,
+`Signing service unavailable, try again` (`sync.rs:295-592`).
+
+### 7.2 The transaction
+
+As the web app builds it (`frontend/src/pages/Squad.tsx:246-256`): **sender = receiver = your own
+address**, `value 0`, `data = sc_call_data` (raw ASCII), `gasLimit = gas_limit`, gasPrice 1e9,
+chainID `1`, version 1. The contract endpoint is
+`syncMyStats(timestamp: u64, signature: array64<u8>, updates: variadic<multi<u64, PlayerAttributes>>)`, payable
+(`contracts/foxleague-players/output/foxleague-players.abi.json:965-987`).
+
+Contract reverts (`player_nft.rs:1603-1784`): `Contract is paused`,
+`Timestamp must be newer than last sync` (one prepared payload per wallet, in order),
+`Sync timestamp too old (max 1 hour)`, `Sync timestamp too far in future`,
+`Send FOXSY + at least 1 NFT`, `First payment must be FOXSY`, `Insufficient FOXSY for sync`,
+`Wrong token sent`, `NFT nonce mismatch`, `Amount must be 1`, `Payments and updates count mismatch`,
+`More updates than NFT payments`, `<Stat> exceeds cap`, `Condition exceeds 100`. On success the cards
+come back with new attributes and excess FOXSY is refunded.
+
+**Retry rule** (`frontend/src/lib/syncRevertRetry.ts:52-57`; `Squad.tsx:339-373`): on
+`new NFT data on sender for token` or `Sync timestamp too far in future`, wait 5 s, **prepare again**
+and sign the new payload. Re-signing the old payload fails the same way.
+
+### 7.3 `POST /api/sync/confirm` (auth)
+
+Body `{wallet_address, tx_hash, nonces:[...]}` (`sync.rs:710`). The backend polls the transaction to
+finality, checks it reverted nothing, that the sender is you, that it reached the players contract
+as `syncMyStats` and paid at least `sync_cost x nonces`, then promotes the attributes **decoded from
+the transaction** into the `*_synced` mirror and recomputes `stats_dirty` (`sync.rs:744-1111`).
+Response `{confirmed, players_synced}`. Replays are answered idempotently.
+
+Errors: `tx_hash is required`, `nonces list is required and cannot be empty`,
+`Transaction reverted on chain: {reason}`, `Transaction sender does not match your wallet`,
+`Transaction is not a stat-sync call to the game contract. Refresh your team and sync again {EM} if your wallet was debited, contact support with this tx hash.`,
+`Transaction still pending {EM} try again in a few seconds`, `Transaction failed: {e}` (`sync.rs:782-1180`).
+If confirm is never called, the chain indexer promotes the same values from the on-chain event
+(`backend/src/chain_indexer.rs:3469-3509`).
+
+### 7.4 `GET /api/sync/repair?wallet_address=<own>` (auth)
+
+Free chain-to-cache reconcile, no transaction: `{added_to_db, removed_from_db, marked_dirty, updated_from_chain, already_ok, details[]}`.
+Limited to once per 30 s per wallet: `Sync from chain {EM} please wait a few seconds (limit: once every {n}s)`
+(`sync.rs:1320-1366`).
+
+---
+
+## 8. Tactics: formation and lineup
+
+### 8.1 Formation: `POST /api/teams/formation`
+
+Body `{wallet_address, formation}` (auth; `wallet_address` required but unused). Valid ids
+(`backend/src/formation_registry.rs:13-23`):
+
+| Id | Style | Id | Style | Id | Style |
+|---|---|---|---|---|---|
+| `4-4-2` | Balanced | `4-3-3` | Attacking | `5-3-2` | Solid Defense |
+| `4-3-3w` | Wide Play | `4-3-3b` | Balanced Attack | `4-4-2a` | All-Out Attack |
+| `4-4-2o` | Offensive | `4-2-3-1` | Counter Attack | `5-2-3` | Wing Attack |
+
+Errors: `Invalid formation`, `User not found` (`backend/src/routes/teams.rs:139-151`). There are no
+other tactic parameters: the style belongs to the formation.
+
+### 8.2 Lineup: `POST /api/teams/lineup`
+
+Body `{wallet_address, lineup:[11 nonces], substitutes:[0..7 nonces]}` (auth).
+
+- **Slot order matters.** Index 0 is the goalkeeper; the rest follow the formation's slot list
+  (`frontend/src/lib/formations.ts:8-100`, for example `4-4-2`: GK, DEF x4, MID x4, FW x2). The match
+  launches the eleven in this order (`backend/src/routes/matches.rs:1459-1460`).
+- **The server does not check positions**; the web app does (manual `mechanics/tactics.md:37-41`).
+  Keep positions matching yourself.
+- Fewer than 7 substitutes: the server fills the bench from your eligible reserves (unlisted, not in a
+  transfer cooldown, highest total stats first) (`teams.rs:285-322`).
+
+Errors (`teams.rs:257-391`): `Lineup must have exactly 11 players`,
+`Substitutes cannot exceed 7 players`,
+`Team must have exactly 11 starters + 7 substitutes. You picked {k} sub(s) and have only {r} eligible reserve(s) {EM} acquire {x} more NFT(s) to complete the bench.`,
+`Some players are not owned by you or are listed for sale` (also fires on a duplicate nonce),
+`Cooldown active for recently-transferred players: {name} ({time}), ...`. Condition is not checked
+here. The response is the saved `Team`.
+
+### 8.3 Tournament strategy lock
+
+- Each tournament and 1v1 match is simulated `tournament.match_sim_lead_minutes` (default **30**)
+  before its kickoff. At that moment the server snapshots your **currently saved** formation, 11 + 7,
+  synced stats and live condition (`backend/src/config_registry.rs:396-404`;
+  `backend/src/tournament_simulator.rs:1197-1217`, `:1487-1512`).
+- **No route refuses an edit during the lock.** An edit saved after a match locked applies to your next
+  match (manual `mechanics/match-day-strategy.mdx:13-17`).
+- At the lock: an incomplete or not fully owned 11 + 7 forfeits **3-0**; a starter below condition 30
+  or inside a transfer cooldown is swapped for the best fit substitute; fewer than 11 fit starters
+  forfeits 3-0 (`tournament_simulator.rs:2176-2231`; manual `match-day-strategy.mdx:45`).
+- `GET /api/tournaments/upcoming-matches` (auth) gives, per match of yours, `strategy_locks_at`,
+  `locked` and `phase` (`upcoming`/`locked`/`live`/`finished`) (section 10.8).
+- A 1v1 locks right away: it is scheduled within the 30-minute lead as soon as it fills (section 11).
+
+---
+
+## 9. Ranked and casual matches
+
+### 9.1 Start: `POST /api/matches/play`
+
+Body `{wallet_address, match_type: "casual"|"ranked"}` (auth) (`backend/src/routes/matches.rs:431`,
+`:793-797`, `:984`). Tournament and 1v1 matches are never started here.
+
+**Gates, in order** (`matches.rs`):
+
+| # | Gate | Error |
+|---|---|---|
+| 1 | Type | `Invalid match_type. Use: casual, ranked` (991) |
+| 2 | Registered | `Not registered` |
+| 3 | 18 unlisted cards (only when `match.gate_enabled` is "true"; code default "false", not seeded) | `You need at least 18 unlisted players to enter a match. ...` (370-423) |
+| 4 | One request in flight per user | `A match is already being processed. Please wait.` (1021) |
+| 5 | No unrevealed tournament or 1v1 match of yours within 1 h (`TOURNAMENT_BUSY_LEAD_HOURS`, `:331`) | `Your squad is preparing for '{t}' {EM} next match in {m}m. ...`, `... is currently playing in the '{t}' tournament. ...`, `... is about to play in the '{t}' tournament. ...` (944-970) |
+| 6 | Not already in a match (home or away; pending, simulating or inside its playback) | `Already in match #{id}. Wait for it to finish before starting another.` (1109-1133) |
+| 7 | 30 s since the start of your last match of any kind (`match.cooldown_ms`) | `Match cooldown: wait {s} seconds` (1147-1173) |
+| 8 | Ranked only: 15 min since your last ranked match, including ones you were drawn into (`match.ranked_cooldown_ms`) | `Ranked cooldown: your squad needs to rest {EM} wait {m}m ({s}s) before the next ranked match.` (1189-1228) |
+| 9 | At most 5 casual + ranked matches **you start** since 14:00 UTC (`max_matches_per_day`) | `Daily match limit reached ({n}/{max}). Try again tomorrow.` (1233-1247) |
+| 10 | Team and lineup | `No team found`, `Lineup must have 11 players. Set your lineup first.`, `Team must have exactly 7 substitutes (you have {n}). ...` (1268-1280) |
+| 11 | All 18 on chain in your wallet, none listed | `{n} player(s) in your team are listed for sale and are held in marketplace escrow, so they cannot play. ...` (1393); `Your {lineup\|substitute bench\|...} contains {n} player(s) not yet confirmed on-chain. ...` (1441) |
+| 12 | No starter at condition 0 (the 30 floor does not apply here) | `{name} has 0 condition {EM} cannot play. Rest or use recovery item.` (1480-1490) |
+| 13 | None of the 18 in a transfer cooldown | `{name} was recently transferred {EM} cooldown {...} remaining` (1498-1525) |
+| 14 | Platform capacity (`match.sim_max_concurrent`, 3) | `Servers are busy with other matches right now {EM} please try again in a few seconds.` (1667-1729) |
+
+**Opponent** (`matches.rs:1531-1629`, `:7727-7840`): casual is always an AI team at your lineup's
+average OVR. Ranked picks a random real team within 150 ELO, then 300, then 500 that has a full
+11 + 7, at least 18 cards, no tournament match within 1 h and no match in flight; otherwise an AI
+stands in (no ELO change against the AI).
+
+**Response** (`matches.rs:2141-2149`): `{match_id, tm_game_id, home_team, away_team, status: "simulating", ws_url: "/ws/match/{id}", pre_match: {home, away, head_to_head}}`.
+
+### 9.2 Learning the result
+
+The simulation runs on the match runner (about 10 minutes of match time); status moves
+`pending`, `simulating`, `rcg_ready`, `finished` (or `error`) (`matches.rs:1929-2069`).
+
+- `wss://foxleague.ai/ws/match/{id}` (no auth): `{match_id, status, home_score?, away_score?, error?}`.
+  Scores are never sent before the reveal (`matches.rs:2162-2340`).
+- `GET /api/matches/{id}` (public): `MatchDetailView` with `status`, `results_applied`,
+  `home_score`/`away_score` (null until revealed), `home_elo_at_match`, `total_frames`
+  (`matches.rs:4278-4333`; `backend/src/models.rs:868-897`).
+- `GET /api/matches/active` (section 3.5) tells you when you are free again.
+
+**You do not need to call the playback routes.** Results (ELO, W/D/L, XP, condition, career stats)
+are deferred and applied by an abandoned-match sweep about 11 minutes after the match finishes
+(the sweep runs every `cron.stuck_match_check_seconds`, 120 s; `matches.rs:232-237`, `:1888`;
+`backend/src/lib.rs:1511-1537`).
+
+- `POST /api/matches/{id}/playback-done` (auth, participant) applies them earlier, but only once the
+  broadcast could have reached its last frame; an early call answers `{ok:true, applied:false}`
+  (`matches.rs:2561-2665`).
+- `POST /api/matches/{id}/playback-started` stamps the broadcast clock and moves the reveal later;
+  `POST /api/matches/{id}/save-cycle` only stores a resume position (`matches.rs:2527-2552`, `:4074-4140`).
+  An agent gains nothing from either.
+
+### 9.3 Rewards and costs when results apply
+
+Source: `apply_match_results`, `matches.rs:3074-4040`.
+
+- **ELO** (standard Elo, 400 scale; `backend/src/db.rs:779-803`): ranked against a real team K = 24,
+  both sides move (the drawn-in opponent too). Casual and ranked against the AI: no ELO. Silver
+  tournaments and 1v1s K = 12, Gold K = 18, Bronze none (`matches.rs:3589-3645`).
+- **XP** only when the match is XP-eligible: a real opponent, not Bronze, not ranked while
+  `xp.ranked_enabled` is 0 (the launch setting) and analyzer stats present (`matches.rs:3448-3451`).
+  In practice **only Silver/Gold tournament and 1v1 matches award XP**. At most 3 XP-earning matches per
+  card per day (`xp.max_matches_per_player_per_day`).
+- **Competitive counter**: the same test increments `competitive_matches`, which sync writes on chain
+  as `matches_played` and which fusion and listing read (`matches.rs:3868-3883`). Casual and ranked
+  never count at launch.
+- **Condition**: every player who took the pitch (a substitute who came on too, not the unused bench)
+  loses `condition_loss_per_match_ranked` (5) in casual and ranked, **initiator only**, or
+  `condition_loss_per_match` (10) in tournaments and 1v1s, both sides; both ramp up to 3x with age
+  (`matches.rs:2842-2877`, `:3886-3898`).
+- **FOXSY**: none for casual or ranked. FOXSY moves only through tournament and 1v1 pools.
+- **In-match strength** is the synced stat scaled by condition: `attr x (50 + condition/2) / 100`
+  (`backend/src/attribute_mapping.rs:61-64`).
+- `stats_dirty` becomes true for every card that played (`backend/src/db.rs:680-744`).
+
+### 9.4 Pre-match card
+
+`GET /api/matches/pre-match-data?home_user_id=&away_user_id=&match_id=` (auth, participant only;
+`You are not a participant in this match` otherwise; `matches.rs:6797-6916`). `play_match` already
+returns this card, so a client does not need the call.
+
+### 9.5 Replays
+
+`GET /api/replay/{match_id}` serves the raw `.rcg` file once the result is public (tournament: after
+the reveal; ranked or casual: once applied, once aired out or to a participant)
+(`matches.rs:5579-5589`, `:6246-6359`; `backend/src/visibility.rs:424-431`). `GET /api/live/{match_id}`
+serves the growing file during the broadcast. Neither is needed to play.
+
+### 9.6 Condition over time
+
+- **Regeneration**: `min(100, condition + floor(elapsed_s x rate / 86400))`; rate
+  `condition.regen_points_per_day` = **48 per day on mainnet** (code default 24) up to age 30, falling
+  linearly to 24 at age 39 (`deploy/mainnet/seed.sh:99`, `:104`; `backend/src/db.rs:172`, `:556-565`;
+  migration `126`).
+- **Age**: `18 + days since mint / 52` (one in-game year per 52 real days); the cost ramp starts at 30
+  (`backend/src/db.rs:514-521`, `:473-489`). A fresh card is years away from any age effect.
+- **Floors**: 30 to train and to start a tournament or 1v1 match; casual and ranked refuse only 0.
+- **Recovery**: the shop's condition recovery (section 12.2 A). No injuries exist; retirement is not
+  shipped (manual `mechanics/aging.mdx:48-53`).
+
+---
+
+## 10. Tournaments
+
+The backend owns the schedule and the brackets; the tournaments contract holds the seat fees in
+escrow and pays prizes. The game server creates each paid tournament on chain; a player's only
+transactions are `joinTournament` (pay a seat) and `claimRefund`.
+
+### 10.1 Formats, tiers, sizes
+
+| Format | `max_teams` | Notes | Source |
+|---|---|---|---|
+| `knockout` | 4, 8, 16, 32 (2 = a 1v1) | `min_teams` must equal `max_teams` | `backend/src/routes/tournaments.rs:38`, `:2028-2033` |
+| `groups_knockout` | 8, 16, 32, 64 | `min_teams` must equal `max_teams`; groups of 4, top 2 advance | `tournaments.rs:46`, `:2039-2044` |
+| `round_robin` | 3 to 20 | `home_and_away` allowed only here | `tournaments.rs:50`, `:2545` |
+| `swiss` | 3 to 32 | | `tournaments.rs:54-56` |
+
+| Tier | Seat fee (mainnet) | Pool | ELO | XP and competitive count |
+|---|---|---|---|---|
+| `bronze` | free (a fee is refused) | none | none | no |
+| `silver` | 1,000 to 4,999 FOXSY | yes | K 12 | yes |
+| `gold` | 5,000 FOXSY and up | yes | K 18 | yes |
+
+Fee bounds: `/api/config` `tournament_fee_bounds {silver_min, silver_max, gold_min}`. The effective
+Silver top is `min(silver_max, gold_min - 1)` = 4,999, although `silver_max` is served as 5,000
+(`tournaments.rs:481-514`; `deploy/mainnet/seed.sh:111`).
+
+### 10.2 Listing and reading
+
+| Route | Auth | What | Source |
+|---|---|---|---|
+| `GET /api/tournaments?status=&format=&tier=&kind=` | public | `Tournament[]`, featured first then newest start, at most 500, no paging. `kind=standard` (more than 2 teams) or `kind=challenge` (1v1) | `tournaments.rs:615-631`, `:1143-1464` |
+| `GET /api/tournaments/{id}[?wallet_address=]` | public | `{tournament, participants[], rounds[], matches[], standings?, whitelist[], user_can_join_private?, user_is_participant?, ...}`; `matches` are reveal-gated | `tournaments.rs:1494-1788`; `backend/src/tournament_models.rs:389-465` |
+| `GET /api/tournaments/{id}/lobby` | public | seated teams with the formation and OVR of their join snapshot | `tournaments.rs:5687-5799` |
+| `GET /api/tournaments/{id}/standings` | public | `TournamentStanding[]` (played, won, drawn, lost, goals, points), revealed matches only | `tournaments.rs:5822`, `:5994-6018` |
+| `GET /api/tournaments/{id}/entry-status` | auth | `{is_participant, has_escrow, entry_amount (atomic string), joinable}` | `tournaments.rs:6025-6089` |
+| `GET /api/tournaments/hall-of-fame` | public | featured completed tournaments, at most 100 | `tournaments.rs:7009-7072` |
+| `wss://foxleague.ai/ws/tournament/{id}` | none | `status_change`, `participant_joined`, `participant_left`, `tournament_started` pushes | `tournaments.rs:768`, `:7981-7992` |
+
+`Tournament` fields (`backend/src/tournament_models.rs:16-203`): `id, creator_user_id, title,
+description, format, tier, featured, max_teams, min_teams, entry_fee_foxsy (whole FOXSY), status,
+deadline, starts_at, round_interval_minutes, has_third_place_match, sc_tournament_id,
+winner_user_id, runner_up_user_id, third_place_user_id, created_at, started_at, completed_at,
+cancelled_at, participant_count, target_user_id, challenge_deadline_minutes, is_private,
+home_and_away, developer_mode` (plus team names, badges and the final score on 1v1 rows). The detail
+route's `tournament` has no `participant_count`: count `participants`.
+
+Statuses: `open`, `pending_sc` (paid tournament waiting for its on-chain create), `active`,
+`simulating`, `completed`, `cancelled`, `simulation_delayed`
+(`backend/migrations/020_tournaments.sql:14`).
+
+**Completed tournaments' size and fee.** `GET /api/tournaments?status=completed&kind=standard` gives
+`max_teams`, `participant_count`, `entry_fee_foxsy`, `tier` and the podium user ids. The pool is
+`entry_fee_foxsy x seated teams` (`backend/src/tournament_simulator.rs:3775-3791`). On chain, the
+`prizes_distributed(tid, seated_pool, total_distributed, total_royalty, platform_fee)` event records the
+payout (`contracts/foxleague-tournaments/src/tournament_manager.rs:475-481`); after completion
+`getTournamentPool` holds only unseated leftovers.
+
+### 10.3 Create: `POST /api/tournaments/create`
+
+Auth. Optional header `Idempotency-Key` (16 to 255 characters of `[A-Za-z0-9_-]`); a success is cached
+24 h per user (`tournaments.rs:1790-1904`; `backend/src/idempotency.rs:30-46`).
+
+Body `CreateTournamentRequest` (`backend/src/tournament_models.rs:302-356`): `title` (1-100 bytes),
+`description?` (under 1000 bytes), `format`, `tier`, `max_teams`, `min_teams`, `entry_fee_foxsy?`
+(whole FOXSY), `deadline` and `starts_at` (RFC 3339), `round_interval_minutes?`,
+`has_third_place_match?`, `target_user_id?` and `challenge_deadline_minutes?` (1v1 only),
+`whitelist_user_ids?` (private), `organizer_only?`, `home_and_away?`, `developer_mode?` (developer
+binaries; out of scope).
+
+**Rules and their errors** (`create_tournament_inner`, `tournaments.rs:1965-3184`):
+
+- Format, tier, size: `Invalid format '{f}'. Valid: knockout, groups_knockout, round_robin, swiss`,
+  `Invalid tier '{t}'. Valid: bronze, silver, gold`, `Invalid max_teams {n} for format '{f}'. Allowed: [...]`,
+  `min_teams must be >= {m} for format '{f}'`, `min_teams cannot exceed max_teams` plus the
+  knockout/groups "set min and max teams equal" messages.
+- Schedule: `Deadline must be in the future`, `Tournament must start at least 1 hour from now`,
+  `starts_at must be after the registration deadline` (at least 5 min after it),
+  `Tournament cannot start more than 90 days from now` (`tournaments.rs:2250-2264`, `:2496-2499`).
+- Round interval 30 to 1,440 minutes: `Round interval must be 30-1440 minutes` (`tournaments.rs:2421`, `:2482-2484`).
+- **Platform-wide slot**: a standard tournament's window (`starts_at - 1 h` to the estimated end + 1 h,
+  3 minutes per match) must not overlap any other live tournament's window:
+  `Time slot conflicts with tournament #{id} '{title}'. Choose a different time.` (`tournaments.rs:774-827`, `:2295-2358`).
+- **Creation cap**: at most 1 active tournament you created and play in, plus 1 you only organize
+  (1v1s not counted): `You already have an active tournament you are playing in. Complete or cancel it before creating another.`
+  / `... you are organizing. ...` (`tournaments.rs:2360-2409`).
+- Fees: `Bronze tournaments cannot have an entry fee`, `Entry fee cannot be negative` plus the tier
+  bound message `Silver: {min}-{top} FOXSY` / `Gold: >={gold_min} FOXSY` (`tournaments.rs:2412-2477`).
+- Private: the invite list is capped at `max_teams`, every invitee must be registered and capacity must
+  reach `min_teams` (`tournaments.rs:2505-2567`).
+- Faults: `Could not create the tournament right now. Please retry.`
+
+**What happens on chain.** For a paid tier the **game server** calls
+`createTournament(tid, entry_fee_atomic, max_teams, allowed...)` and waits for finality; the row moves
+from `pending_sc` to `open` with `sc_tournament_id = id` (`tournaments.rs:2740-2816`). Errors:
+`Chain is temporarily unavailable. Please retry shortly.` (row removed),
+`On-chain tournament creation failed: {e}`; an inconclusive result leaves `pending_sc`
+(`On-chain tournament creation could not be confirmed yet. ... Please check the tournament list before retrying.`).
+**The create response shows the row as inserted** (`pending_sc`, `sc_tournament_id: null`): read the
+tournament again before joining.
+
+**Joining your own tournament.** A free Bronze creator (not organizer-only) is seated server-side with
+no transaction. A **paid** creator is not: the web app chains create, `joinTournament` and
+`POST /join` (`frontend/src/pages/tournaments/TournamentCreate.tsx:507-571`); organizer-only skips the
+join.
+
+**Organizers earn nothing from the pool.** The "creator royalty" (2.5 percent of the pool, out of the
+10 percent fee) goes to the provider of the match AI binary, not to the organizer
+(`backend/src/royalty.rs:1-16`; manual `developer/royalties.mdx:17-27`).
+
+### 10.4 Paid join (Silver and Gold)
+
+1. (Optional) `GET /api/tournaments/{id}/entry-status`. The web app's plan (`frontend/src/lib/paidJoin.ts:27-60`):
+   `is_participant` means done; `has_escrow && joinable` means an earlier payment is still in escrow,
+   so `POST /join` **without** a hash; otherwise pay.
+2. **Pay** (`frontend/src/lib/tournamentTx.ts:49-167`; `frontend/src/lib/tournamentTxData.ts:29-40`):
+   receiver = tournaments contract, value 0, gas 7,000,000, version 2,
+   `data = ESDTTransfer@464f5853592d356435663365@<fee atomic hex>@6a6f696e546f75726e616d656e74@<tid, 16 hex>`.
+   Example, tournament 1234 at 1,000 FOXSY:
+   `ESDTTransfer@464f5853592d356435663365@3635c9adc5dea00000@6a6f696e546f75726e616d656e74@00000000000004d2`.
+   The amount must equal `entry_fee_foxsy x 10^18` exactly; the id is `sc_tournament_id ?? id`.
+3. Wait for the outcome (1.6).
+4. **`POST /api/tournaments/{id}/join`** with `{"tx_hash": "<64 hex>"}` (or `{}` for Bronze and for
+   escrow recovery). Success: `{participant_id, condition_warning?}` (`tournaments.rs:633-638`, `:5211-5214`).
+   Call it right after finality: a periodic sweep (every 15 minutes by default) refunds escrow that has
+   no seat behind it (`backend/src/config_registry.rs:2776-2778`; `backend/src/tournament_reconcile.rs:1062-1071`).
+
+**Join gates** (`tournaments.rs:3187-5215`). "(R)" = the backend refunds your escrow on chain in the
+same request when you sent a hash and are not seated (`tournaments.rs:314-445`):
+
+| Gate | Error |
+|---|---|
+| Registered, exists | `Not registered`, `Tournament not found` |
+| Open (R) | `Tournament is not open for registration (status: {s})` |
+| Paid tier with a fee | `This tournament has no entry fee on a paid tier and cannot take entries.` |
+| Targeted 1v1 (R) | `This 1v1 challenge is locked to a specific opponent {EM} you cannot join it.` |
+| Organizer-only creator (R) | `You created this tournament as organizer-only, ...` |
+| Private (R) | `This tournament is private {EM} only invited teams can join.` |
+| 1v1 creator seated first (R) | `Creator must join first {EM} slot 1 is reserved` |
+| Before the deadline (R) | `Registration deadline has passed` |
+| Legal squad (R) | `No team found. Set up your team first.`, `Lineup must have 11 players`, `Team must have exactly 7 substitutes to join a tournament (you have {n}). ...`, `Some players in your lineup are no longer owned by you or are listed for sale. ...` (`tournaments.rs:921-1039`) |
+| 1v1: 11 match-fit players (R) | `Your squad isn't rested enough to play {EM} fewer than 11 players are match-fit (condition too low or in transfer cooldown). ...` |
+| No card in a transfer cooldown (R) | `{name} was recently transferred {EM} cooldown {h}h {m}m remaining. Tournaments cannot be joined with a recently-rented NFT.` |
+| 1v1: one active 1v1 (R) | `You already have an active 1v1. Finish it or cancel it first.` |
+| 1v1: no tournament match within 1 h (R) | `You have a tournament match within the hour {EM} finish it first.` |
+| One seat, capacity | `You are already in this tournament`; `Tournament is full` (refund if paid) |
+
+Payment verification (10 s budget; `backend/src/chain_verify.rs:316-347`, `tournaments.rs:4057-4495`):
+`Transaction {status} on chain {EM} cannot confirm tournament entry`,
+`Your payment isn't confirmed on chain yet {EM} it may still settle. Please retry the tournament entry in a moment.`,
+`Transaction was rejected on chain ({msg}) and refunded {EM} tournament entry not confirmed`,
+`Transaction sender does not match your wallet`, `Transaction was not sent to the tournament entry contract`,
+`Transaction is not a tournament entry call`, `Entry fee payment is less than required`,
+`This payment does not match the tournament's entry fee exactly. It stays refundable; please contact support.`,
+`This payment was for a different tournament and can't be used to join this one.`,
+`This entry payment was already used to join. If you left the tournament, pay again to rejoin.`,
+`This entry payment was refunded (you left this tournament). Pay again to rejoin.`,
+`Entry fee verification failed {EM} try again later`.
+
+**Do not pay twice.** `Your entry payment is confirmed {EM} we're finalizing your seat and this page updates automatically. Do NOT pay again.`
+(`tournaments.rs:4297-4353`) means the cross-shard proof is not attached yet: retry `/join` **without a
+hash** (the web app retries 5 times, 6 s apart; `frontend/src/lib/paidJoin.ts:71-87`).
+
+Contract reverts on the payment (atomic; `tournament_manager.rs:260-310`): `Contract is paused`,
+`Must pay with FOXSY token`, `Payment must be > 0`, `Tournament is not open for joining`,
+`Tournament terms not set`, `Payment must equal the entry fee`, `Tournament is full`,
+`Not invited to this tournament`, `Already joined this tournament`.
+
+**Limits.** No cap on how many standard tournaments you join; one seat each; one active 1v1.
+
+### 10.5 Leave: `POST /api/tournaments/{id}/leave`
+
+Auth, no body (`tournaments.rs:5218-5526`). Only while `open` and before the deadline. For a paid seat
+the game server refunds your exact escrow (`refundEntries`) before the seat is removed; the answer is
+`{message: "You have left the tournament.", refund_tx_hash}`. Leaving never cancels the tournament,
+even when it empties (`tournaments.rs:5464-5468`). Errors:
+`Cannot leave {EM} tournament is no longer open`, `Cannot leave {EM} registration deadline has passed`,
+`You are not in this tournament`, `Failed to refund entry on chain: {e}. Please retry shortly.`,
+`Refunds are unavailable right now: your seat and entry fee are untouched. Please retry shortly.`
+
+### 10.6 Cancel and delete (creator)
+
+- `POST /api/tournaments/{id}/cancel` (auth): creator only, while `open`, with **zero** participants
+  (your own seat counts, so leave first). The game server closes it on chain; answer
+  `{message: "Challenge cancelled.", refund_tx_hash: null}`. Errors:
+  `Only the creator can cancel this challenge`,
+  `Cannot cancel {EM} the challenge is no longer open for registration`,
+  `Cannot cancel {EM} a player has already joined this challenge` (`tournaments.rs:531-547`, `:5528-5684`).
+- `POST /api/tournaments/{id}/delete` (auth; the route is shared with admins, only the owner path is
+  described): the creator may delete their own tournament while its status is `open`, whatever the
+  seat count; every seat is refunded on chain (`backend/src/routes/admin.rs:8877-9328`). Real HTTP codes:
+  403 `Not registered`, 404 `Tournament not found`, 400 `A completed tournament cannot be deleted`,
+  400 `This has already started {EM} it can't be deleted while its match is running. Wait for it to finish.`,
+  403 `Only the organizer or an admin can delete this tournament`,
+  400 `You can only delete a tournament while it is still open (before its registration deadline)`,
+  503 `Chain is temporarily unavailable. Please retry shortly.` Answer
+  `{deleted: true, tournament_id, matches_deleted, refund_txs, refund_failed_addrs}` or, when escrow is
+  not drained yet, `{deleted: false, deferred: true, status: "cancelled", reason: "escrow_not_drained", ...}`.
+
+### 10.7 Not filled, cancelled, claim refund
+
+- At the deadline a tournament with at least `min_teams` starts (`startTournament` on chain); otherwise
+  it is cancelled and the game server refunds every paid seat and closes it
+  (`backend/src/tournament_simulator.rs:167-230`, `:359-420`, `:637-900`).
+- **`claimRefund(tid)`** is the self-service fallback (`tournament_manager.rs:318-341`): only when the
+  contract status is cancelled (4) or completed (3), for the caller's own remaining escrow (on a
+  completed tournament only an entry that was never seated). Transaction: receiver = tournaments
+  contract, value 0, gas 6,500,000, version 2, `data = claimRefund@<tid, 16 hex>`
+  (`frontend/src/lib/tournamentTx.ts:183-236`). Reverts:
+  `Refund claims are only open on cancelled or completed tournaments`, `No entry to refund`,
+  `Entry is not backed by the pool`. The web app offers it when `/entry-status` says
+  `has_escrow && !is_participant` on a finished paid tournament
+  (`frontend/src/components/tournament/ClaimEntryRefund.tsx:46-58`). Check first with the view
+  `getEntryAmount(tid, address)`.
+
+### 10.8 Match day: lock, reveal, results
+
+- `GET /api/tournaments/upcoming-matches` (auth): `{lead_minutes, my_team_name, my_team_badge, matches:[...]}`,
+  each with `tournament_id, tournament_title, round_label, group_name, is_home, opponent_name,
+  opponent_badge, scheduled_at, strategy_locks_at, locked, formation, phase, match_id, is_watchable,
+  home_score, away_score, my_lineup` (`tournaments.rs:6320-6595`). `my_lineup` is your own per-match
+  snapshot; the opponent is null until the game makes it public and scores are null until the reveal.
+- Strategy lock and forfeits: section 8.3. Casual and ranked are blocked from 1 h before any of your
+  unrevealed tournament or 1v1 matches (section 9.1 gate 5).
+- **Reveal rule.** Results, scores, ELO changes, later knockout pairings and opponents' per-match lineups
+  become public only when the match is revealed at its scheduled time; the server blanks them before
+  (`backend/src/visibility.rs:43-58`, `:271-367`). A tournament match id you read before the reveal
+  answers `Match not found`.
+- **Prizes** are paid by the game server in one `distributePrizes` transaction after the last reveal
+  (`tournament_simulator.rs:3761-4265`). Split and roll-forward rules: `ECONOMY-AND-RULES.md` section 11.
+- Standings tie-breakers: manual `mechanics/tournaments.mdx:89-108`. A mutual forfeit is a double loss
+  with -1 point (`tournaments.rs:5809-5815`).
+- Reactions: `POST /api/tournaments/{id}/matches/{mid}/react {emoji}` with `fire|goal|shock|target|skull`,
+  one per 30 s per match (`tournaments.rs:6917-7006`).
+
+---
+
+## 11. 1v1 challenges
+
+A 1v1 is a tournament with `max_teams = 2`: same routes, same contract calls.
+
+**Create**: `POST /api/tournaments/create` with `format: "knockout"`, `max_teams: 2`, `min_teams: 2`,
+`tier: "silver"|"gold"`, `entry_fee_foxsy` inside the tier bounds, `target_user_id` (a user id; null
+for an open challenge) and `challenge_deadline_minutes` in `{30, 60, 120, 240}`. **Omitting the
+deadline gives 60**; the web app preselects 30 (`tournaments.rs:62-63`, `:2082`;
+`frontend/src/pages/tournaments/Create1v1Challenge.tsx:214-227`). `deadline` and `starts_at` are still
+required by the body but the server sets deadline = now + minutes and start = deadline + 5 min
+(`tournaments.rs:2241-2248`). A user id comes from `GET /api/users/search?q=` or `GET /api/users/{address}`.
+
+Errors (`tournaments.rs:2055-2248`): `1v1 challenges (max_teams=2) require format=knockout`,
+`1v1 challenges are Silver or Gold; Bronze is for developer challenges only`,
+`1v1 challenges must have min_teams=2`,
+`challenge_deadline_minutes must be one of [30, 60, 120, 240], got {n}`,
+`You cannot challenge yourself {EM} choose a different opponent`,
+`Targeted opponent not found {EM} they need to register on the platform first`,
+`You already have an active 1v1. Finish it or cancel it first.` (one active 1v1 per wallet, created or
+joined; `tournament.one_v_one_max_active_per_user`), `You have a tournament match within the hour {EM} finish it first.`
+
+**The creator pays first.** After create, the creator pays `joinTournament` and calls `/join` like any
+joiner (`Create1v1Challenge.tsx:442-475`). Until then others get `Creator must join first {EM} slot 1 is reserved`.
+An unjoined challenge can be removed with `/cancel`; after paying, withdraw with `/delete` (refund and
+close) or `/leave` then `/cancel` (`frontend/src/lib/challengeCreateRecovery.ts:18-26`).
+
+**List**: `GET /api/tournaments?kind=challenge` (the Challenges page, `frontend/src/pages/tournaments/Challenges.tsx:108`)
+and `GET /api/notifications/challenges-for-me` (auth): `[{tournament_id, title, creator_user_id,
+creator_team_name, entry_fee_foxsy, deadline}]`, up to 20 (`backend/src/routes/leaderboard.rs:480-579`).
+
+**Accept** = the paid join of section 10.4 (same fee). A targeted challenge accepts only the creator and
+the target; the contract enforces it through the `allowed` list (`tournament_manager.rs:290-295`).
+There is no decline route: ignore it. Accepting needs 11 match-fit players, no card in a transfer
+cooldown, no other active 1v1 and no tournament match within the hour.
+
+**When it fills** the deadline becomes now and the match is scheduled 3 to 12 minutes later depending on
+queue load, pushed past either side's busy windows (`tournaments.rs:4922-5147`;
+`backend/src/config_registry.rs:365-384`). The squad snapshot is taken right away (section 8.3).
+
+**Expiry**: unaccepted at the deadline, the challenge is cancelled and the creator refunded in full
+(`refundEntries`), then closed; `claimRefund` recovers anything left (manual `mechanics/one-v-one.mdx:83-93`).
+
+**Outcome**: no draws (extra time, then penalties). Winner 90 percent, platform 10 percent (seeded),
+loser nothing; paid about 180 s after the reveal (`backend/src/tournament_engine.rs:490-521`;
+`tournament_simulator.rs:3712-3748`). Condition cost 10 per appearance for both sides; ELO K 12 (Silver)
+or 18 (Gold); counts as competitive. A 1v1 win does not count as a tournament win.
+
+---
+
+## 12. Shop
+
+### 12.1 How every shop payment works
+
+**One contract endpoint for every product.** `shopPay()` on the players contract accepts any positive
+FOXSY amount and books it to the treasury (`contracts/foxleague-players/src/player_nft.rs:2274-2287`). It
+does not know what you bought: the backend decides from your confirm call.
+
+- **Transaction** (`frontend/src/lib/foxsyPaymentTx.ts:35-79`): receiver = players contract, value 0,
+  gas 12,000,000, version 1,
+  `data = ESDTTransfer@464f5853592d356435663365@<amount atomic hex>@73686f70506179`, no arguments (no
+  product id, no card nonce). Example, one Common pack:
+  `ESDTTransfer@464f5853592d356435663365@878678326eac900000@73686f70506179`.
+- Contract reverts: `Contract is paused`, `Pay with FOXSY`, `Must send FOXSY`.
+- **Confirm**: `POST /api/shop/confirm` (auth) with
+  `{wallet_address, tx_hash, product, player_nonce?, player_nonces?, quantity?}` where `product` is
+  `condition_recovery`, `xp_booster`, `training_slot` or `common_pack` (`backend/src/routes/shop.rs:142-156`, `:188`).
+  Response `{purchase_id, product, message}` (`shop.rs:166-170`).
+- **Verification order** (`shop.rs:2170-3110`; `backend/src/chain_verify.rs:399-576`): wallet match,
+  valid product, pack pre-checks, quantity, chain ready, not already used, price, then the transaction:
+  final status, no `signalError`, sender = you, receiver = players contract, function `shopPay`, token
+  FOXSY, amount. Every product except condition recovery must pay **exactly** `price x 10^18`
+  (`shop.rs:414-445`).
+- **Prices**: read `/api/shop/status` `prices` (or `/api/config` `shop_prices_foxsy`,
+  `common_pack_price_foxsy`) right before signing. Condition, booster and training prices mirror the
+  contract views `getShopConditionPrice`, `getShopXpBoosterPrice`, `getShopTrainingPrice`; pack, transfer
+  waiver and badge prices come from the backend registry (`backend/src/chain_config.rs:194-204`,
+  `:522-524`; `shop.rs:272-281`). The contract enforces no shop price; the backend confirm is the only gate.
+
+**Confirm within 30 minutes.** A `shopPay` that settled but was never confirmed is **refunded, not
+delivered**, after `shop.unconfirmed_refund_grace_secs` (1,800 s) by the reconcile sweep, which looks back
+7 days (`backend/src/config_registry.rs:3039-3042`; `backend/src/shop_refund_reconcile.rs:1195-1230`,
+`:1263-1264`, `:1536-1540`). The timeout message says so:
+`Transaction verification timed out: {e}. The payment is not lost: it is recognized when this same transaction is confirmed again within {N} minutes; after that it is refunded automatically.`
+(`shop.rs:2697-2717`).
+
+**Recovering a pending confirm** (mirror `frontend/src/lib/pendingShopConfirm.ts`): store
+`{hash, payload, savedAt}` per wallet and product as soon as the transaction is sent; before paying
+again, re-check the stored hash: `success` or timeout means confirm it; `fail` or `invalid` means forget
+it and pay again; "not found" older than 10 min means pay again, younger means wait. Forget a hash only
+on a verdict: keep it on `tx_pending`, on a transport error and on any non-200. Entries expire after 24 h
+(`pendingShopConfirm.ts:45-109`, `:248-331`).
+
+**Automatic refunds.** A verified payment the backend cannot use (wrong amount, cap reached, sold out,
+card gone) is refunded once per hash through `refundFromTreasury`, signed by the game server
+(`backend/src/chain.rs:7214-7234`; `player_nft.rs:1007-1031`), at most 10 per wallet per hour (then held
+for an operator) (`config_registry.rs:3051-3057`). The outcome is appended to the error:
+` Your payment is being refunded automatically.`, ` Your refund has been queued and will be issued by our team.`,
+` The automatic refund could not be issued {EM} our team has been notified and will return your payment.`
+and others (`shop.rs:1316-1345`).
+
+**Final refusals for a hash** (`shop.rs:1143-1159`): `Transaction already processed`,
+`This payment was already refunded and cannot be used for a purchase.`,
+`This transaction was already used for a badge regeneration.`,
+`Our support team is handling this payment and will return it to you, so it cannot be used here.`
+(`Could not verify the payment state right now. Please retry in a moment.` is `tx_pending`.)
+
+**History**: `GET /api/shop/purchases?wallet_address=&limit=&offset=` (limit default 20, max 200):
+`[{id, product, tx_hash, amount_foxsy, player_nonce, slots, verified_at}]` (`shop.rs:173-181`, `:4004-4046`).
+
+### 12.2 Products
+
+**A. Condition recovery** (`condition_recovery`)
+
+- Restores condition points up to 100 on your cards (`shop.rs:2835-2848`).
+- Price per card: `ceil(100 x (100 - condition) / 100)`, about **1 FOXSY per missing point**
+  (`shop.rs:310-314`; `frontend/src/lib/conditionRecovery.ts:14-28`).
+- Body: `player_nonce` or `player_nonces` (one is required). Pay any whole FOXSY amount of at least one
+  point; it becomes a points budget spent on the cheapest cards first; unused points and overpayment are
+  refunded automatically (`shop.rs:372-405`, `:2382-2397`, `:2904-2990`). The web app pays the exact total
+  it quoted (`frontend/src/hooks/useConditionRecovery.ts:130-175`).
+- Messages: `{n} player{s} condition recovered`,
+  `Nothing to recover {EM} the selected players are already at full condition.`,
+  `None of the {total} selected player{s} could be recovered {EM} ...`,
+  `Could not price the recovery right now. Please retry in a moment.` (`tx_pending`) (`shop.rs:640-667`, `:2285`, `:2346`).
+
+**B. XP booster** (`xp_booster`): **2,000 FOXSY**, exact. 2x training and match XP for 24 h from the
+verified purchase; buying again restarts the clock (no stacking); the highest active multiplier wins
+over the featured-tournament ones (`shop.rs:771-789`, `:3057-3080`; `config_registry.rs:738-744`). Useful
+only with XP sources: training plus Silver/Gold tournament and 1v1 matches.
+
+**C. Paid training slots** (`training_slot`): **20 FOXSY each**, pay exactly `20 x quantity`, `quantity`
+at least 1 (`Invalid quantity {EM} training slots require a count of at least 1.`). Banked, never expire;
+at most 10 used per day on top of the 5 free sessions (`shop.rs:224-247`, `:501-509`, `:2206-2209`). The
+web app caps one purchase at 25 slots; the backend has no upper bound
+(`frontend/src/pages/Marketplace.tsx:4382-4391`). Message: `Extra training slots purchased: +{slots}, balance now {n}`.
+
+**D. Common pack** (`common_pack`): **2,500 FOXSY** for 5 Common cards, exact. At most 2 per wallet per
+rolling 7 days; platform budget 500 cards (100 packs) per epoch on chain; positions drawn 2/6/6/4 like a
+starter squad (`backend/src/routes/shop_pack.rs:25-32`; `deploy/mainnet/chain-config.mainnet.env:50-52`).
+Check `/api/shop/status` `common_pack_available`, `common_pack_remaining_this_week` and
+`common_pack_epoch_remaining` before paying. Cards are delivered by the game server a minute or so later
+(`distributePack`), with 0 competitive matches and no cooldown; a failed delivery is refunded
+(`shop_pack.rs:647-745`). Refusals (the settled payment is refunded):
+`The Common pack is not on sale right now.`,
+`You already bought {cap} Common pack{s} in the last 7 days. The next pack unlocks when the oldest one leaves the window.`,
+`The Common pack is sold out: fewer than 5 Common players are left in the pool. Try again once the pool is restocked.`,
+`The Common pack budget for this epoch is exhausted. Packs are on sale again in the next epoch.` (`shop.rs:3140-3211`).
+Success: `Common pack purchased: 5 players on the way (delivered by the game server within a few minutes).`
+
+**E. Transfer-cooldown waiver ("Reduce Cooldown")**: shortens the lock on a card received wallet to
+wallet (504 h; 1,512 h for a card that had under 20 competitive matches when it moved) down to a
+72 h floor.
+
+1. `GET /api/shop/waive-cooldown/quote?player_nonce=` (auth):
+   `{player_nonce, remaining_seconds, days_paid, cost_foxsy, price_per_day, floor_hours}` (`shop.rs:3553-3580`).
+   Price per day by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY; all
+   remaining days above the floor, rounded up, all or nothing (`shop.rs:554-612`).
+2. Pay `shopPay` with exactly `cost_foxsy`.
+3. `POST /api/shop/waive-cooldown {wallet_address, player_nonce, tx_hash}` (auth); answer
+   `{player_nonce, cost_foxsy, remaining_hours}` (`shop.rs:3387-3393`, `:3614-3990`).
+
+Errors: `That player is not in your wallet.`, `This player has no active transfer cooldown.`,
+`This player is already within the un-waivable {72}h floor.`,
+`Transaction paid {paid} FOXSY but the waiver costs {cost} FOXSY.` (plus refund text),
+`This transaction was already processed for a cooldown waiver.`,
+`This player is no longer in your wallet {EM} the waiver was not applied.` (plus refund text). The quote
+is recomputed at confirm and must match exactly, so confirm promptly.
+
+**F. Badge regeneration**: section 4.6 (1,000 FOXSY after 3 free).
+
+**G. Fusion waivers**: shown in the Shop but paid per card to the contract with no backend confirm
+(section 13.4).
+
+---
+
+## 13. Fusion
+
+### 13.1 What it does and its gates
+
+Burns 3 cards of the same rarity plus a FOXSY fee and hands you 1 card of the next rarity, taken from a
+pre-minted pool for that rarity and the chosen input's position (`player_nft.rs:2289-2531`, `:2461-2494`).
+Fees: Common 100, Uncommon 200, Rare 400, Epic 800 FOXSY (Legendary cannot be fused). Pay at least the
+fee; excess is refunded. The binding on-chain gates, in the contract's order:
+
+1. **20 competitive matches per input**, counting waived matches: `matches_played + fusionMatchCredit >= getFusionMinMatches` (`player_nft.rs:2346-2367`).
+2. **At least 5 really played** per input: `matches_played >= getFusionMatchWaiverFloor` (`:2368-2391`).
+3. **Wallet spacing 20 h** since your last fusion (`getFusionCooldownSeconds` = 72,000 s), not waivable (`:2393-2411`).
+4. **Per-card cooldown**: each input's `getFusionReadyAt(nonce) <= now`; every fusion output is stamped
+   now + 14 days (`getFusionCardCooldownSeconds` = 1,209,600 s) (`:2413-2431`, `:2502-2506`).
+
+`matches_played` on chain is the **competitive** count written by sync (section 7): **sync every input
+first**: otherwise the contract sees an old count. Only Silver/Gold tournament and 1v1 matches count (section 9.3).
+Off chain, the web app also excludes listed cards and cards under a transfer cooldown; a fused output
+inherits the longest transfer cooldown of its inputs (`frontend/src/components/FusionTab.tsx:202`;
+`backend/src/chain_indexer.rs:3646-3656`). Fusing leaves you 2 cards fewer; a match needs 18.
+
+Pool stock: view `getFusionPoolCount(level 1..4, position 0 GK / 1 DEF / 2 MID / 3 FWD)`. An empty pool
+reverts the fusion and nothing is burned.
+
+### 13.2 Pre-check: `GET /api/fusion/can-fuse[?nonces=a,b,c]`
+
+Auth, advisory (`backend/src/routes/marketplace.rs:2345-2525`). Answers
+`{can_fuse:false, cooldown_remaining, cooldown_end}` (wallet spacing, read from the database),
+`{can_fuse:false, reason:"dirty_stats", dirty_players}`,
+`{can_fuse:false, reason:"card_cooldown"|"below_match_floor"|"insufficient_matches", blocked_players, min_matches_required, match_floor_required, cards}`
+(each card `{nonce, name, competitive_matches, fusion_match_credit, fusion_ready_at, in_cooldown, below_match_floor, eligible}`)
+or `{can_fuse:true, ...}`. The binding clock is the view `getLastFusionTimestamp(address)`.
+
+### 13.3 The fusion transaction
+
+As built at `frontend/src/components/FusionTab.tsx:377-420`: **receiver = your own address**, value 0,
+gas 21,000,000, version 1:
+
+```
+MultiESDTNFTTransfer@0000000000000000050078fcafca32e94d2f1c49a28cfcadb68ad860363fe2f3@04
+  @464f5853592d356435663365@00@<fee atomic hex>
+  @46584c502d366632386535@<nonce1 hex>@01
+  @46584c502d366632386535@<nonce2 hex>@01
+  @46584c502d366632386535@<nonce3 hex>@01
+  @667573696f6e@<position_choice>@<portrait_choice>
+```
+
+(one line, no spaces). FOXSY must be the first transfer. `position_choice` 0, 1 or 2 picks which
+input's position the output takes; `portrait_choice` 0, 1 or 2 is required but unused on chain. The
+web app encodes 0 as `00` (`numberToHex` of 0n gives `0`, padded to `00`).
+
+Reverts (`player_nft.rs:2303-2491`): `Contract is paused`, `Contracts cannot fuse`, `Send FOXSY + 3 NFTs`,
+`position_choice must be 0, 1, or 2`, `portrait_choice must be 0, 1, or 2`, `First payment must be FOXSY`,
+`Wrong NFT collection`, `Send exactly 1 of each NFT`, `Duplicate NFT nonce`, `All 3 must be same rarity`,
+`Cannot fuse Legendary`, `NFT #{i} has not played enough matches for fusion`,
+`NFT #{i} is below the fusion match floor`, `Fusion cooldown active`, `Fusion cooldown active for NFT #{i}`,
+`Fusion cost not set for this rarity`, `Insufficient FOXSY for fusion`,
+`Fusion pool empty for this rarity/position. Try again later.`, `Nonce has an active marketplace listing`,
+`Nonce has an active auction`. A revert is atomic: the cards come back. The protocol error
+`new NFT data on sender` is a cross-shard race right after another update of the same card: wait about
+45 s and retry (`frontend/src/lib/fusionTxOutcome.ts:1-40`).
+
+**Confirm** (best effort): `POST /api/fusion/confirm {tx_hash, burned_nonces?}` (auth) answers
+`{confirmed, indexed, message}`; the chain indexer processes fusions on its own either way
+(`marketplace.rs:2606-2912`). Errors include
+`Fusion didn't go through {EM} the transaction reverted on chain, so your input players are safe and were not consumed. You can simply try again.`
+and `Fusion cooldown active {EM} {d}d {h}h remaining`. History: `GET /api/marketplace/fusion-history`
+(section 3.5).
+
+### 13.4 Waivers (per card, no backend confirm)
+
+Both use the same custody shape as fusion (`frontend/src/lib/fusionWaivers.ts:248-290`): **receiver =
+your own address**, gas 15,000,000 and the **exact** amount:
+
+```
+MultiESDTNFTTransfer@<players SC hex>@02@464f5853592d356435663365@00@<exact cost atomic hex>@46584c502d366632386535@<card nonce hex>@01@<endpoint hex>@<args>
+```
+
+The card goes to the contract and comes back in the same transaction. The chain indexer mirrors the
+result (`backend/src/chain_indexer.rs:3867-3925`). A listed or auctioned card cannot be waived.
+
+- **Cooldown waiver** `payFusionCooldownWaiver(nonce)`, args `@<nonce hex>`: 75 FOXSY per day down to a
+  3-day floor, at most 11 days (825 FOXSY) per card. Quote with the view
+  `getFusionCooldownWaiverQuote(nonce)` returning `(days, cost)` (storage-only, any shard). Sign
+  `fusion_cooldown_waiver_price_per_day_wei x days` from `/api/config`, never a rounded whole-FOXSY
+  value (`player_nft.rs:2542-2631`, `:2951-2955`; `fusionWaivers.ts:266-279`). Reverts:
+  `Fusion cooldown waiver disabled`, `Wrong waiver payment`, `Caller does not own this NFT`, `Nothing to waive`.
+- **Match waiver** `payFusionMatchWaiver(nonce, matches)`, args `@<nonce hex>@<matches hex>`: 20 FOXSY
+  per match, at most 15 per card (5 must really be played). The credit stays on the card, also after a
+  sale. Quote with `GET /api/players/nonce/{nonce}/match-waiver-quote` (auth, your card):
+  `{max_purchasable, chain_played, credit, price_wei}` (`backend/src/routes/players.rs:25`, `:627-726`).
+  Do not use the view `getFusionMatchWaiverQuote` from another shard: it answers `(0, price)` there
+  (`player_nft.rs:2957-2988`). Reverts: `Fusion match waiver disabled`, `Wrong waiver payment`,
+  `Failed to decode NFT`, `Match waiver exceeds the floor`.
+
+---
+
+## 14. Marketplace (auctions)
+
+Every sale is a 24-hour English auction on the players contract; instant listing and instant buy
+revert (`Instant listing disabled {EM} use auctionList`, `Instant buy disabled {EM} use auctionBid`;
+`player_nft.rs:1825`, `:1863`). Mainnet tunables: reserve floor 500 FOXSY, increment 5 percent,
+snipe window 300 s with 300 s extension, relist cooldown 48 h after a sale, fee 10 percent of the
+winning bid paid by the seller, no royalty (`deploy/mainnet/chain-config.mainnet.env:25`, `:39-55`).
+Live: `/api/config` `auction_*`, `marketplace_min_list_price_foxsy`, `marketplace_fee_percent`,
+`auction_enabled`.
+
+### 14.1 List
+
+1. **Gate**: the card needs `matches_played + credit >= 20` and `matches_played >= 5` on chain, so sync
+   first (`player_nft.rs:2650-2673`). Pre-check with `GET /api/marketplace/can-list?nonce=` (auth,
+   advisory): `{can_list:false, reason:"below_match_floor"|"needs_competitive_matches", ...}` or
+   `{can_list, can_relist_at, cooldown_remaining_seconds}` (`backend/src/routes/marketplace.rs:434-543`, `:698-734`).
+2. **Transaction** (`frontend/src/pages/Marketplace.tsx:1099-1134`): **receiver = your own address**,
+   value 0, gas 15,000,000, version 1:
+   `ESDTNFTTransfer@46584c502d366632386535@<nonce hex>@01@<players SC hex>@61756374696f6e4c697374@<reserve atomic hex>`.
+   Reserve in whole FOXSY, at least 500; the web app caps it at 1,000,000 (`Marketplace.tsx:198`).
+3. **No backend call afterwards.** The indexer's `auction_listed` event creates the listing. Do not call
+   `POST /api/marketplace/list`: it is the legacy fixed-price path (`backend/src/auction_settle_keeper.rs:17-23`).
+   Wait until the card has left the wallet before listing another (the `new NFT data on sender` race,
+   `Marketplace.tsx:1172-1196`).
+
+Reverts (`player_nft.rs:2004-2071`): `Min price must be > 0`, `Whole FOXSY only`, `Min price too high`,
+`Min price below the auction floor`, `Contracts cannot list`, `Wrong token`, `Must send exactly 1 NFT`,
+`Already listed`, `Already auctioned`, `Player is below the competitive match floor`,
+`Player needs more competitive matches to be listed`, `Relist cooldown active for this nonce`.
+
+A listed card leaves your wallet (contract custody): it cannot play, sync, fuse or be waived. A
+lineup that holds it fails the match gates.
+
+### 14.2 Bid
+
+Receiver = players contract, value 0, gas 13,500,000, version 1 (`Marketplace.tsx:1745-1761`):
+`ESDTTransfer@464f5853592d356435663365@<bid atomic hex>@61756374696f6e426964@<nonce hex>`.
+
+Rules (`player_nft.rs:2074-2152`): whole FOXSY; first bid at least the reserve; later bids at least
+`top x 1.05` and above the top (the web app uses `max(ceil(top x 1.05), top + 1)`,
+`frontend/src/lib/auctionRules.ts:146-155`); the previous top bidder is refunded at once; a bid with
+less than 300 s left extends the end by 300 s, without limit. No backend call afterwards. Reverts:
+`No auction`, `Contracts cannot bid`, `Seller cannot bid on own auction`, `Auction ended`,
+`Pay with FOXSY`, `FOXSY is fungible (nonce 0)`, `Whole FOXSY only`, `Bid too high`, `Bid below reserve`,
+`Bid must exceed current highest`, `Bid below minimum increment`.
+
+Live auction state: view `getAuction(nonce)` returns
+`Option<{seller, min_price, highest_bid (0 = none), highest_bidder, end_timestamp (seconds)}>`
+(`player_nft.rs:150-167`, `:2989-2997`). The listing rows do not carry the top bidder.
+
+### 14.3 Cancel and settle
+
+- **Cancel** `auctionCancel(nonce)`: seller only, zero bids only. Receiver = players contract, gas
+  12,000,000, `data = auctionCancel@<nonce hex>` (`Marketplace.tsx:1861-1873`; `player_nft.rs:2210-2230`).
+  Reverts: `No auction`, `Only seller can cancel`, `Auction has bids {EM} cannot cancel`. Do not call
+  `POST /api/marketplace/cancel` (it verifies the legacy `marketplaceCancel`); optionally call
+  `POST /api/marketplace/reconcile {wallet_address}` (`marketplace.rs:1700-1968`).
+- **Settle** `auctionSettle(nonce)`: anyone, after the end. Gas 13,500,000, `data = auctionSettle@<nonce hex>`.
+  With a bid, the card goes to the top bidder and the seller gets 90 percent; without, the card returns
+  to the seller (`player_nft.rs:2154-2205`). A backend keeper settles ended auctions every minute and
+  pays the gas, so settling yourself is only a fallback (`backend/src/auction_settle_keeper.rs:1-7`;
+  `config_registry.rs:3087-3088`). Reverts: `No auction`, `Auction not ended`.
+- An auction win starts no transfer cooldown, but a lock the card already carries passes to the buyer
+  (manual `mechanics/marketplace.mdx:58`).
+
+### 14.4 Read routes (public)
+
+| Route | Returns | Source |
+|---|---|---|
+| `GET /api/marketplace/listings?position=&rarity=&min_price=&max_price=&sort_by=price_asc\|price_desc\|overall_desc&limit=` | listing rows (card stats, `is_auction`, `min_price`, `highest_bid`, `ends_at`, `transferred_at`, `transfer_cooldown_hours`); limit default 50, max 200; prices whole FOXSY | `marketplace.rs:89-383` |
+| `GET /api/marketplace/floor-prices` | `[{rarity, floor_price, count}]` (the reserve for auctions), cached 5 s | `marketplace.rs:547-587` |
+| `GET /api/marketplace/recent-sales?limit=&offset=` | `MarketplaceSale[]`, limit default 20, max 100 | `marketplace.rs:589-636` |
+| `GET /api/marketplace/player-sales/{nonce}` | sales of one card | `marketplace.rs:638-673` |
+
+---
+
+## 15. Leaderboard and match history
+
+| Route | Auth | Returns | Source |
+|---|---|---|---|
+| `GET /api/leaderboard?limit=&offset=&window=7d\|30d\|90d\|all` | public | `{users: UserPublicProfileView[], total, limit, offset, window}`; limit default 25, max 500; ordered by ELO; W/D/L windowed, ELO always lifetime | `backend/src/routes/leaderboard.rs:54-294` |
+| `GET /api/users/search?q=&dev_only=` | public | up to 10 `{id, wallet_address, username, team_name, badge, elo_rating}`; `q` at least 2 characters | `leaderboard.rs:337-435` |
+| `GET /api/users/{address}` | public | section 3.1 | `leaderboard.rs:437-477` |
+| `GET /api/matches/history?wallet_address=&limit=&offset=` | public (any wallet) | `MatchHistoryView[]`, limit default 10, max 50; excludes errors, developer tests and unrevealed tournament matches; scores and `*_elo_after` null until revealed | `backend/src/routes/matches.rs:4658-4765`; `backend/src/models.rs:907-980` |
+| `GET /api/matches/{id}` | public | section 9.2 | `matches.rs:4297-4331` |
+| `GET /api/matches/{id}/stats` | public | before the reveal only `{gated: true, ...}`; after it the analysis, formations and lineups | `matches.rs:8392-8605` |
+| `GET /api/public/match/{id}` | public, raw JSON | tournament and 1v1 matches only; names `TBD` and scores null while hidden | `matches.rs:612-791` |
+
+`Invalid window '{x}'. Use one of: 7d, 30d, 90d, all` for a bad window. Windowed records and recent form
+count only revealed matches (`leaderboard.rs:149-166`).
+
+---
+
+## 16. Relayed transactions and the new-wallet bonus
+
+- **Only `registerAndPay` is relayed.** The single relay call site is the onboarding
+  (`frontend/src/pages/Onboarding.tsx:891`, via `frontend/src/lib/api.ts:2113-2117`). Every other
+  transaction, swaps included, is signed and paid by the player in EGLD
+  (manual `legal/terms.md:33`). Keep EGLD for gas.
+- **Relayer choice**: by the sender's shard, from `/api/config` `relayer_addresses` (section 4.4).
+- **Relay ceilings and limits**: `relayer_v3.max_gas_limit` (default 12,500,000, served as
+  `relayer_max_gas_limit`), gas price exactly 1e9, 3 relay calls per wallet per 600 s (in memory),
+  5,000 relays per day platform-wide (`backend/src/config_registry.rs:2080-2164`). `/api/config`
+  `relays_remaining_today` shows what is left; the web app closes onboarding at 0.
+- **New-wallet EGLD bonus** (`backend/src/routes/registration.rs:1016-1130`, `:1654-1710`;
+  `backend/src/sync_worker.rs:1541-1643`):
+  - paid only on the normal registration path (not the 18-card bypass);
+  - only if the wallet holds **less than 0.01 EGLD** when `/api/register` runs
+    (`relayer_v3.bonus_egld_balance_gate_wei`);
+  - only while fewer than `onboarding.bonus_egld_max_recipients` distinct wallets have received it:
+    **the first 100 wallets** on mainnet (252 until 2026-09-28; `deploy/mainnet/inputs.example.env:28-31`; manual
+    `getting-started/onboarding.mdx:74`);
+  - amount `onboarding.bonus_egld_send_wei` = **0.1 EGLD** (`inputs.example.env:27`; `deploy/mainnet/seed.sh:42`),
+    sent later from the wallet-shard relayer, inside a rolling 24 h cap of 100 EGLD;
+  - it is a promotion, not an entitlement (manual `legal/terms.md:35`). A client that already bought
+    FOXSY with its own EGLD usually holds more than 0.01 EGLD and gets nothing. How many of the 100 are
+    left is not public.
+
+---
+
+## 17. Rate limits
+
+### 17.1 Edge (nginx, per client IP behind Cloudflare)
+
+| Scope | Limit | Source |
+|---|---|---|
+| `/api/` | 30 requests/s, burst 50 (`nodelay`), HTTP 429 beyond | `deploy/mainnet/nginx/foxleague-zones.conf:3`, `:10`; `app.conf.template:106-110` |
+| `/ws/` | 5 upgrades/s, burst 10; 300 s read timeout | `foxleague-zones.conf:4`; `app.conf.template:112-121` |
+| Connections | 40 concurrent per IP | `app.conf.template:41` |
+| Body size | 2 MB | `foxleague-zones.conf:15` |
+
+The client IP is taken from `CF-Connecting-IP` (`foxleague-zones.conf:21-37`). Whether Cloudflare adds
+automation challenges for non-browser clients is not in the repo.
+
+### 17.2 Backend limits on player routes
+
+| Route | Limit | Refusal | Source |
+|---|---|---|---|
+| `POST /api/matches/play` | 1 in flight per user; 30 s between match starts; 15 min between ranked; 5 per day; 3 simulations platform-wide | section 9.1 | `matches.rs:1020-1247`, `:1667-1729` |
+| `POST /api/training/train` | 1 per 500 ms per wallet; 15 per day | `Training too fast {EM} wait a moment` | `training.rs:112-133` |
+| `GET /api/sync/repair` | 1 per 30 s per wallet | `Sync from chain {EM} please wait a few seconds (limit: once every {s}s)` | `sync.rs:132-171`, `:1353-1366` |
+| `POST /api/onboarding/relay` | 3 per 600 s per wallet (HTTP 429); 5,000 per day global (503) | section 4.5 | `onboarding.rs:2091-2193` |
+| `POST /api/onboarding/generate-badge` | 3 per 10 min per wallet or paid hash | `Too many badge generation requests. Please wait a few minutes.` | `onboarding.rs:27-52` |
+| `POST .../matches/{mid}/react` | 1 per 30 s per wallet per match | `Rate limit: wait up to 30s between reactions on the same match` | `tournaments.rs:6917-6960` |
+| `GET /api/whitelist/check` | 30 per minute per IP, only while the whitelist is required | `Rate limit exceeded {EM} try again in 60 seconds` | `admin.rs:5876-5929` |
+| `/ws/match/{id}` | 50 concurrent sockets per IP (HTTP 429) | empty body | `matches.rs:2162-2186` |
+| `POST /api/events` | 10 per 60 s per IP (HTTP 429) | `{"ok":false}` | `backend/src/routes/events.rs:18-35` |
+| Shop refunds | 10 automatic refunds per wallet per hour | refund held for an operator | `config_registry.rs:3051-3057` |
+
+Freshness limits that behave like rate limits: the 30 s roster cache (section 3.3), the 300 s login
+signature window plus the shop and join verification windows (10 s poll budget before `tx_pending`).
+
+### 17.3 MultiversX limits
+
+- **Public API quota**: the repo quotes the MultiversX documentation, "Mainnet: Maximum of 2 requests /
+  IP / second" for `api.multiversx.com`; it notes the gateway documents no limit
+  (`backend/src/config_registry.rs:2719-2727`).
+- **The backend's own buckets**: gateway 5 requests/s (burst 5), API 1.8 requests/s (burst 2), keys
+  `chain.gateway_rate_per_sec`, `chain.gateway_burst`, `chain.api_rate_per_sec`, `chain.api_burst`
+  (`config_registry.rs:2711-2736`; `backend/src/lib.rs:866-976`). Transaction status polling starts at
+  500 ms and backs off to 2 s (`config_registry.rs:2738-2742`).
+- **The web app**: deduplicates identical in-flight reads and caches team and user reads for 5 s
+  (`frontend/src/lib/sharedFetch.ts:56-95`; `frontend/src/lib/api.ts:88-101`); polls transaction status
+  every 1.5 s with one shared read per hash (`frontend/src/lib/txFinality.ts:159-191`); reads balances
+  gateway first, API second (`frontend/src/lib/chainBalance.ts:32-67`); polling intervals: active match
+  5 s, notifications 60 s (300 s with the socket), dashboard 120 s, marketplace 15 s, upcoming 60 s,
+  tournament detail 30 s, header balance 20 s.
+- **For an agent**: stay at or under 2 API requests/s per IP, prefer the gateway for balances, nonces,
+  views and transaction status. Back off on HTTP 429 from either FoxLeague or MultiversX.
+
+---
+
+## 18. Contract reference
+
+### 18.1 Players contract (`contracts/foxleague-players/src/player_nft.rs`; ABI committed at `contracts/foxleague-players/output/foxleague-players.abi.json`)
+
+**Player-callable endpoints**
+
+| Endpoint | Payment | Shape (section) |
+|---|---|---|
+| `registerAndPay()` | exactly the fee in FOXSY | `ESDTTransfer` to the contract, relayed (4) |
+| `shopPay()` | any positive FOXSY | `ESDTTransfer` to the contract (12) |
+| `syncMyStats(timestamp, signature, updates...)` | FOXSY sync cost + the cards | `MultiESDTNFTTransfer` to self, payload from `/api/sync/prepare` (7) |
+| `fusion(position_choice u8, portrait_choice u8)` | FOXSY fee + 3 cards | `MultiESDTNFTTransfer` to self (13) |
+| `payFusionCooldownWaiver(nonce)` | exact FOXSY + the card | `MultiESDTNFTTransfer` to self (13.4) |
+| `payFusionMatchWaiver(nonce, matches)` | exact FOXSY + the card | `MultiESDTNFTTransfer` to self (13.4) |
+| `auctionList(min_price)` | the card | `ESDTNFTTransfer` to self (14.1) |
+| `auctionBid(nonce)` | FOXSY | `ESDTTransfer` to the contract (14.2) |
+| `auctionCancel(nonce)` | none | plain call (14.3) |
+| `auctionSettle(nonce)` | none, anyone | plain call (14.3) |
+| `marketplaceCancel(nonce)` | none | legacy fixed-price listings only |
+| `marketplaceList`, `marketplaceBuy` | | always revert |
+
+**Useful views** (`player_nft.rs:2712-3183`): `getRegistrationFee`, `isRegistrationPaid(address)`,
+`getSyncCost`, `getLastSyncTimestamp(address)`, `getShopConditionPrice`, `getShopXpBoosterPrice`,
+`getShopTrainingPrice`, `getFusionCost(level)`, `getFusionMinMatches`, `getFusionCooldownSeconds`,
+`getFusionCardCooldownSeconds`, `getLastFusionTimestamp(address)`, `getFusionReadyAt(nonce)`,
+`getFusionMatchCredit(nonce)`, `getFusionCooldownWaiverPricePerDay`, `getFusionCooldownWaiverFloorSeconds`,
+`getFusionMatchWaiverPricePerMatch`, `getFusionMatchWaiverFloor`, `getFusionCooldownWaiverQuote(nonce)`,
+`getFusionMatchWaiverQuote(owner, nonce)` (shard-dependent), `getFusionPoolCount(level, position)`,
+`getAuction(nonce)`, `getLastPurchaseTimestamp(nonce)`, `getAuctionDurationSeconds`,
+`getAuctionMinIncrementPercent`, `getAuctionSnipeWindowSeconds`, `getAuctionSnipeExtensionSeconds`,
+`getAuctionRelistCooldownSeconds`, `getAuctionMinPrice`, `getMarketplaceFee`,
+`getPackDistributionEpochCap`, `getPackDistributedThisEpoch`, `statCap(rarity)`. Do not use `levelFromXp`:
+it is dead and disagrees with the game's level curve (`player_nft.rs:2770-2837`).
+
+**Events**: `registration_paid`, `shop_paid`, `stats_synced`, `fusion`, `fusion_cooldown_waived`,
+`fusion_matches_waived`, `auction_listed`, `auction_bid`, `auction_settled`, `auction_cancelled`,
+`pack_distributed`, `treasury_refunded`.
+
+**Owner or game server only** (not callable by a player): the setters and admin endpoints listed in the
+ABI, plus `pause`, `refundFromTreasury`, `ownerSyncStats`, `distributeTeam`, `distributePack`,
+`batchSetNewURIs`, `adminClearOrphanListings` (`Not authorized`, `player_nft.rs:3187-3196`).
+
+**Pause**: every player endpoint reverts `Contract is paused` while paused (`player_nft.rs:1190`).
+
+### 18.2 Tournaments contract (`contracts/foxleague-tournaments/src/tournament_manager.rs`; no ABI committed)
+
+Statuses on chain: 0 none, 1 open, 2 active, 3 completed, 4 cancelled (`tournament_manager.rs:7-11`).
+
+| Player endpoint | Payment | Section |
+|---|---|---|
+| `joinTournament(tournament_id: u64)` | exactly the entry fee in FOXSY | 10.4 |
+| `claimRefund(tournament_id: u64)` | none | 10.7 |
+
+Views (`tournament_manager.rs:642-711`): `getTournamentPool(u64)`, `getTournamentStatus(u64)` (u8),
+`getEntryAmount(u64, address)`, `getTournamentEntryFee(u64)`, `getTournamentMaxEntries(u64)`,
+`getTournamentAllowed(u64)` (address list, empty = open), `getTournamentEntryCount(u64)`,
+`getFoxsyTokenId`, `getPlatformFeePercent`, `getMaxRoyaltyBps`, `isPaused`. The backend passes the id
+as 16 hex characters in view queries (`backend/src/chain.rs:7259-7295`).
+
+Events: `tournament_created`, `tournament_joined`, `prizes_distributed`, `royalty_paid`,
+`entries_refunded`, `refund_claimed`.
+
+Owner or game server only: `createTournament`, `setTournamentTerms`, `startTournament`,
+`distributePrizes`, `refundEntries`, `closeTournament`, `clearCompletedEntries`, `pause`, the setters,
+`withdrawPlatformFees`, `sweepUntracked`.
+
+---
+
+## 19. Routes a player client does not use
+
+- `/api/admin/*`, `/api/dev/base-teams*`: admin-only.
+- `/api/dev/teams*`: the developer mode (uploading your own AI binary); out of scope here.
+- `/api/marketplace/list`, `/api/marketplace/sold`, `/api/marketplace/cancel`: legacy fixed-price flow;
+  new sales are auctions (section 14).
+- `/api/players/update`: kept but inert (player edits are disabled; `backend/src/routes/players.rs:26-32`).
+- `/api/onboarding/testnet-faucet`, `/api/faucet`: testnet only (404 on mainnet).
+- `/api/events`: client telemetry. `/api/push/*`: browser Web Push.
+- `/healthz/*`: not reachable at the edge (section 1.1). `GET /api/health` answers
+  `{status, db, tournament_manager, uptime_seconds}` (raw JSON).
+- The match replay routes (`/api/replay`, `/api/live`, `/api/matches/{id}/log`) are for viewers.

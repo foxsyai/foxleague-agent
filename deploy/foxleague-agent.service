@@ -1,0 +1,57 @@
+[Unit]
+Description=foxleague-agent: AI team manager for FoxLeague
+After=network-online.target elrond-proxy.service
+Wants=network-online.target
+# A crash loop stops after 3 restarts in 10 minutes instead of re-planning every 30 seconds.
+StartLimitIntervalSec=600
+StartLimitBurst=3
+
+[Service]
+Type=simple
+User=foxleague-agent
+Group=foxleague-agent
+WorkingDirectory=/opt/foxleague-agent/app
+EnvironmentFile=/etc/foxleague-agent/env
+Environment=AGENT_DATA_DIR=/var/lib/foxleague-agent AGENT_IS_SERVER=1 AGENT_ENV_FILE=/nonexistent NODE_ENV=production
+ExecStart=/opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning src/service.ts
+Restart=on-failure
+RestartSec=30
+# A stop lets the action in flight finish and be booked (the service waits up to 150 s).
+TimeoutStopSec=180
+
+# Isolation from the other services on this server.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/foxleague-agent
+UMask=0077
+# Tighter sandbox (checked on a live server: database, HTTPS, signing, the web port and Telegram all work).
+# No MemoryDenyWriteExecute: Node's JIT needs writable code pages.
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=true
+RestrictRealtime=true
+ProtectClock=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectProc=invisible
+ProcSubset=pid
+PrivateUsers=true
+DevicePolicy=closed
+KeyringMode=private
+RemoveIPC=true
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @resources
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

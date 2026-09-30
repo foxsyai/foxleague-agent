@@ -1,0 +1,154 @@
+// Web UI authentication, the same scheme as the foxsy-trading dashboard:
+// scrypt password hashes in the same "scrypt$salt$hash" format, HMAC-signed session cookies with
+// an expiry, constant-time comparisons, per-IP exponential lockout plus a global burst limiter.
+// Standard library only.
+
+import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+
+const SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 128 * 2 ** 15 * 8 * 2 }
+export const SESSION_TTL_S = 12 * 3600
+export const COOKIE_NAME = 'foxagent_session'
+
+export function hashPassword(password: string, salt: Buffer = randomBytes(16)): string {
+  const dk = scryptSync(password, salt, 32, SCRYPT)
+  return `scrypt$${salt.toString('base64')}$${dk.toString('base64')}`
+}
+
+export function verifyPassword(password: string, stored: string): boolean {
+  const parts = stored.split('$')
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return false
+  try {
+    const salt = Buffer.from(parts[1]!, 'base64')
+    const expected = Buffer.from(parts[2]!, 'base64')
+    if (!salt.length || !expected.length) return false
+    const dk = scryptSync(password, salt, expected.length, SCRYPT)
+    return timingSafeEqual(dk, expected)
+  } catch {
+    return false
+  }
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const x = Buffer.from(a)
+  const y = Buffer.from(b)
+  return x.length === y.length && timingSafeEqual(x, y)
+}
+
+export interface Credentials {
+  username: string
+  passwordHash: string
+  secretKey: string
+}
+
+export function credentialsFromEnv(): Credentials | null {
+  const username = process.env.WEB_UI_USER?.trim()
+  const passwordHash = process.env.WEB_UI_PASSWORD_HASH?.trim()
+  const secretKey = process.env.WEB_UI_SECRET?.trim()
+  return username && passwordHash && secretKey && secretKey.length >= 32 ? { username, passwordHash, secretKey } : null
+}
+
+export class Sessions {
+  private readonly key: Buffer
+  /** Keyed by the secret and the password hash: a new password ends every session issued before it. */
+  constructor(secretKey: string, passwordHash = '') {
+    this.key = passwordHash ? createHmac('sha256', secretKey).update(`sessions:${passwordHash}`).digest() : Buffer.from(secretKey)
+  }
+
+  private sign(body: string): string {
+    return createHmac('sha256', this.key).update(body).digest('hex').slice(0, 32)
+  }
+
+  issue(username: string, now = Date.now()): string {
+    const payload = JSON.stringify({ u: username, exp: Math.floor(now / 1000) + SESSION_TTL_S, n: randomBytes(8).toString('hex') })
+    const body = Buffer.from(payload).toString('base64url')
+    return `${body}.${this.sign(body)}`
+  }
+
+  /** Logged-out sessions until they would have expired anyway (a copied cookie dies with the logout). */
+  private readonly revoked = new Map<string, number>()
+
+  revoke(token: string | undefined, now = Date.now()): void {
+    if (!token || this.verify(token, now) === null) return
+    for (const [t, exp] of this.revoked) if (exp < now / 1000) this.revoked.delete(t)
+    this.revoked.set(token, now / 1000 + SESSION_TTL_S)
+  }
+
+  /** The username of a valid, unexpired, not logged-out session, else null. */
+  verify(token: string | undefined, now = Date.now()): string | null {
+    if (!token || !token.includes('.') || this.revoked.has(token)) return null
+    const cut = token.lastIndexOf('.')
+    const body = token.slice(0, cut)
+    const sig = token.slice(cut + 1)
+    if (!safeEqual(sig, this.sign(body))) return null
+    let d: unknown
+    try {
+      d = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
+    } catch {
+      return null
+    }
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return null
+    const o = d as { u?: unknown; exp?: unknown }
+    if (typeof o.exp !== 'number' || o.exp < now / 1000) return null
+    return typeof o.u === 'string' ? o.u : null
+  }
+
+  /** CSRF token bound to the session: every state-changing request must carry it. */
+  csrfFor(session: string): string {
+    return createHmac('sha256', this.key).update(`csrf:${session}`).digest('hex').slice(0, 32)
+  }
+
+  checkCsrf(session: string | undefined, sent: string | undefined): boolean {
+    return Boolean(session && sent && safeEqual(sent, this.csrfFor(session)))
+  }
+}
+
+const MAX_TRACKED_IPS = 4096
+const GLOBAL_WINDOW_S = 600
+const GLOBAL_MAX_FAILURES = 60
+const GLOBAL_LOCKOUT_S = 60
+
+/**
+ * Exponential lockout per IP (5 free attempts, then 30 s doubling up to 1 h), plus a global burst limit
+ * that holds back only addresses that already failed: a dozen attackers cannot lock the owner out from
+ * a clean address, and the password re-check behind a session skips it.
+ */
+export class LoginThrottle {
+  private readonly fails = new Map<string, { count: number; until: number; seen: number }>()
+  private recent: number[] = []
+  private globalUntil = 0
+  private readonly maxAttempts: number
+  private readonly baseLockoutS: number
+
+  constructor(maxAttempts = 5, baseLockoutS = 30) {
+    this.maxAttempts = maxAttempts
+    this.baseLockoutS = baseLockoutS
+  }
+
+  check(ip: string, now = Date.now() / 1000, opts: { global?: boolean } = {}): { ok: boolean; waitS: number } {
+    const f = this.fails.get(ip)
+    if (opts.global !== false && f && this.globalUntil > now) return { ok: false, waitS: Math.ceil(this.globalUntil - now) }
+    if (f && f.until > now) return { ok: false, waitS: Math.ceil(f.until - now) }
+    return { ok: true, waitS: 0 }
+  }
+
+  recordFailure(ip: string, now = Date.now() / 1000): void {
+    const count = (this.fails.get(ip)?.count ?? 0) + 1
+    const until = count >= this.maxAttempts ? now + Math.min(this.baseLockoutS * 2 ** (count - this.maxAttempts), 3600) : 0
+    this.fails.set(ip, { count, until, seen: now })
+    this.recent = this.recent.filter(t => t > now - GLOBAL_WINDOW_S)
+    this.recent.push(now)
+    if (this.recent.length >= GLOBAL_MAX_FAILURES) {
+      this.globalUntil = now + GLOBAL_LOCKOUT_S
+      this.recent = [] // spent on this lock, so a few addresses cannot keep everyone out for good
+    }
+    if (this.fails.size > MAX_TRACKED_IPS) {
+      // Only expired entries are dropped, oldest first: flooding cannot clear someone's lockout.
+      const expired = [...this.fails.entries()].filter(([, v]) => v.until <= now).sort((a, b) => a[1].seen - b[1].seen)
+      for (const [k] of expired.slice(0, this.fails.size - MAX_TRACKED_IPS / 2)) this.fails.delete(k)
+    }
+  }
+
+  recordSuccess(ip: string): void {
+    this.fails.delete(ip)
+  }
+}

@@ -1,0 +1,115 @@
+// Per-agent behaviour settings (README "Behaviour settings"). Every range is the player's choice;
+// the PoC uses the same knobs.
+
+export interface AgentSettings {
+  /** Free-text direction for the strategist (preset or the owner's own words). */
+  strategy: string
+  /** Spending caps. The executor enforces them; the model only sees what is left. */
+  dailyCapUsd: number
+  monthlyBudgetUsd: number
+  /** One-time setup budget: registration fee, its swap and gas (not part of the daily cap). */
+  setupBudgetUsd: number
+  maxEntryFeeFoxsy: number
+  maxShopPaymentFoxsy: number
+  /** Largest single marketplace bid, in FOXSY. */
+  maxBidFoxsy: number
+  /** Largest single EGLD -> FOXSY swap, in FOXSY. */
+  maxSwapFoxsy: number
+  /** EGLD kept for gas: a swap that would leave less is refused; transaction fees may use it. */
+  egldGasReserve: string
+  /** Round entry amounts to choose from when creating (never odd numbers like 1,246). */
+  entryFeesSilver: number[]
+  entryFeesGold: number[]
+  /** Timing. */
+  tickMinutes: number
+  tickJitterMinutes: number
+  /** Active window in UTC hours [from, to). */
+  activeHoursUtc: [number, number]
+  minGapSeconds: number
+  /** Chance (0..1) that a planned discretionary action is carried out, so the agent is not clockwork. */
+  actionProbability: number
+}
+
+export const STRATEGY_PRESETS: Record<string, string> = {
+  steady:
+    'Steady XP builder: keep the squad healthy and growing. Use every free training session on the players who matter most, sync when enough stats changed, play Silver tournaments and 1v1s at modest stakes for XP and competitive matches, avoid risky high stakes.',
+  climber:
+    'Aggressive climber: maximise ELO. Ranked matches whenever allowed, the strongest lineup at all times, Silver and Gold tournaments when the squad is fit, accept 1v1s against teams of similar or lower ELO.',
+  hunter:
+    'Tournament hunter: focus on tournament wins and prize pools. Enter the tournaments with the best expected value, keep condition high before match days, create tournaments sized from what recently filled.',
+}
+
+/** The gas reserve can be lowered, never to nothing: a wallet without EGLD cannot even pay a refund claim. */
+export const MIN_GAS_RESERVE_EGLD = 0.05
+
+export const DEFAULT_SETTINGS: AgentSettings = {
+  strategy: STRATEGY_PRESETS.steady!,
+  dailyCapUsd: 10,
+  monthlyBudgetUsd: 300,
+  setupBudgetUsd: 20,
+  maxEntryFeeFoxsy: 5000,
+  maxShopPaymentFoxsy: 2500,
+  maxSwapFoxsy: 10_000,
+  maxBidFoxsy: 2500,
+  egldGasReserve: '1',
+  entryFeesSilver: [1000, 1500, 2000, 2500, 3000],
+  entryFeesGold: [5000],
+  tickMinutes: 30,
+  tickJitterMinutes: 10,
+  activeHoursUtc: [5, 21],
+  minGapSeconds: 90,
+  actionProbability: 1,
+}
+
+/**
+ * Validates a settings change from the web UI: known fields only, each within its range.
+ * Throws with the first problem; returns the typed patch.
+ */
+export function validateSettingsPatch(raw: Record<string, unknown>): Partial<AgentSettings> {
+  const out: Partial<AgentSettings> = {}
+  const num = (k: keyof AgentSettings, min: number, max: number, integer = false): void => {
+    if (!(k in raw)) return
+    const v = raw[k]
+    if (typeof v !== 'number' || !Number.isFinite(v) || v < min || v > max || (integer && !Number.isInteger(v))) {
+      throw new Error(`${k} must be ${integer ? 'a whole number' : 'a number'} between ${min} and ${max}`)
+    }
+    ;(out as Record<string, unknown>)[k] = v
+  }
+  const fees = (k: 'entryFeesSilver' | 'entryFeesGold', min: number, max: number): void => {
+    if (!(k in raw)) return
+    const v = raw[k]
+    if (!Array.isArray(v) || v.length < 1 || v.length > 10 || v.some(x => typeof x !== 'number' || !Number.isInteger(x) || x < min || x > max)) {
+      throw new Error(`${k} must list 1 to 10 whole amounts between ${min} and ${max}`)
+    }
+    out[k] = [...new Set(v as number[])].sort((a, b) => a - b)
+  }
+  for (const k of Object.keys(raw)) if (!(k in DEFAULT_SETTINGS)) throw new Error(`unknown setting ${k}`)
+  if ('strategy' in raw) {
+    if (typeof raw.strategy !== 'string' || !raw.strategy.trim() || raw.strategy.length > 2000) throw new Error('strategy must be 1 to 2000 characters')
+    out.strategy = raw.strategy.trim()
+  }
+  num('dailyCapUsd', 0, 1000)
+  num('monthlyBudgetUsd', 0, 10_000)
+  num('setupBudgetUsd', 0, 200)
+  num('maxEntryFeeFoxsy', 0, 100_000, true)
+  num('maxShopPaymentFoxsy', 0, 100_000, true)
+  num('maxSwapFoxsy', 100, 1_000_000, true)
+  num('maxBidFoxsy', 0, 1_000_000, true)
+  if ('egldGasReserve' in raw) {
+    const v = raw.egldGasReserve
+    if (typeof v !== 'string' || !/^\d{1,2}(\.\d{1,4})?$/.test(v) || Number(v) > 10 || Number(v) < MIN_GAS_RESERVE_EGLD) throw new Error(`egldGasReserve must be a decimal EGLD amount from ${MIN_GAS_RESERVE_EGLD} to 10`)
+    out.egldGasReserve = v
+  }
+  fees('entryFeesSilver', 1000, 4999)
+  fees('entryFeesGold', 5000, 1_000_000)
+  num('tickMinutes', 5, 240, true)
+  num('tickJitterMinutes', 0, 60, true)
+  if ('activeHoursUtc' in raw) {
+    const v = raw.activeHoursUtc
+    if (!Array.isArray(v) || v.length !== 2 || !v.every(x => Number.isInteger(x) && x >= 0 && x <= 24) || v[0] === v[1]) throw new Error('activeHoursUtc must be [from, to] hours 0-24')
+    out.activeHoursUtc = [v[0] as number, v[1] as number]
+  }
+  num('minGapSeconds', 30, 3600, true)
+  num('actionProbability', 0, 1)
+  return out
+}

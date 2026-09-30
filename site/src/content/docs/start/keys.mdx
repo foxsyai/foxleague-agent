@@ -1,0 +1,68 @@
+---
+title: Your keys, step by step
+description: Create the AI key, and optionally Telegram and Binance, in a few minutes.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+The agent needs one key to play: the **AI key**. Telegram and Binance are optional. You can paste each key in the
+installer, or later in the dashboard: **Keys** in the header. Your dashboard password confirms every change.
+
+![The Getting started guide in the dashboard: each step shows done, needed or optional](/screenshots/getting-started.png)
+
+## 1. The AI key (Anthropic), needed
+
+This is the AI that plans for your agents. Without it they only watch.
+
+<Steps>
+1. Open [platform.claude.com](https://platform.claude.com) and sign up, or log in.
+2. Open [Billing](https://platform.claude.com/settings/billing) and add credit. $10 is plenty to start.
+3. Open [Limits](https://platform.claude.com/settings/limits) and set a monthly spend limit, for example $20.
+   Then it can never cost more.
+4. Open [API keys](https://platform.claude.com/settings/keys), press **Create key**, name it `foxleague-agent` and
+   copy it. It is shown only once.
+5. In the dashboard, press **Keys**, paste it into **Anthropic API key**, type your dashboard password and press
+   **Save**. The agent uses it at once.
+</Steps>
+
+It costs about $0.50 to $3 a day per agent, depending on the model and effort you pick in the Strategist box.
+
+## 2. Telegram, optional
+
+Every action on your phone, and you can talk to your manager in plain words.
+
+<Steps>
+1. On your phone, open Telegram and start a chat with [BotFather](https://t.me/BotFather), the official bot that
+   makes bots.
+2. Send `/newbot`. Give it a name, then a user name that ends in `bot`, for example `myfox_manager_bot`.
+3. BotFather answers with a token that looks like `123456789:AAH...`. Copy it.
+4. In the dashboard, press **Keys**, paste it into **Telegram bot token**, type your password and press **Save**.
+5. Still in Keys, press **Link my Telegram**. Send the 6-digit code it shows to your new Telegram bot, then
+   press **I sent it**. From then on it talks only to you.
+</Steps>
+
+![The Keys panel: every key masked; Link my Telegram appears here until your chat is linked](/screenshots/keys.png)
+
+## 3. Binance, optional
+
+For automatic EGLD top-ups of your agent wallets. The top-ups arrive in a later version; your key waits in the
+dashboard until then.
+
+<Steps>
+1. Log in to Binance and open [API Management](https://www.binance.com/en/my/settings/api-management).
+2. Press **Create API**, choose **System generated**, name it `foxleague-agent` and confirm with your 2FA.
+3. Press **Edit restrictions**. Tick only **Enable Withdrawals**, then choose **Restrict access to trusted IPs**
+   and enter your computer's public IP ([shown here](https://api.ipify.org)).
+4. Open [Address Management](https://www.binance.com/en/my/security/address-management), add each agent wallet on
+   the **MultiversX (EGLD)** network and switch the whitelist on. Now money can only go to your agents.
+5. Copy the API key and the secret (the secret is shown only once). In the dashboard, press **Keys**, paste both,
+   type your password and press **Save**.
+</Steps>
+
+<Aside type="caution">
+Never tick trading or transfers on the Binance key. If your internet provider changes your IP, update it on
+Binance.
+</Aside>
+
+**Test keys** in the Keys panel checks every key: model access for the AI key, a test message to your Telegram
+chat and the permissions of the Binance key. Nothing is changed.

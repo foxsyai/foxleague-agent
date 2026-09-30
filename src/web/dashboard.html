@@ -1,0 +1,1011 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0e14">
+<title>FoxLeague Agent</title>
+<style>
+/* Palette and components of the foxsy-trading dashboard. */
+:root{
+  --bg:#0b0e14;--panel:#141924;--panel2:#0f141d;--line:#242c3d;--fg:#e6edf7;--dim:#8b97ad;
+  --acc:#f5a524;--up:#2ecc71;--down:#ff5c7c;--blue:#4c9aff;
+}
+*{box-sizing:border-box}
+html,body{max-width:100%;overflow-x:clip} /* clip, not hidden: hidden would stop the sticky top block */
+body{margin:0;background:var(--bg);color:var(--fg);
+     font:14px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+     padding:env(safe-area-inset-top) 0 calc(24px + env(safe-area-inset-bottom))}
+a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
+.wrap{max-width:1440px;margin:0 auto;padding:12px}
+header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 2px 14px}
+.logo{font-size:22px;line-height:1}
+h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.01em}
+h2{font-size:12px;margin:0 0 10px;color:var(--dim);font-weight:650;text-transform:uppercase;letter-spacing:.07em;
+   display:flex;align-items:center;gap:8px}
+h2 .spacer{flex:1}
+.pill{font-size:11px;padding:3px 9px;border-radius:999px;font-weight:650;letter-spacing:.04em;
+      text-transform:uppercase;border:1px solid transparent;white-space:nowrap}
+.pill.run{background:#0d2f1d;color:var(--up);border-color:#1d5c39}
+.pill.halt{background:#3a1620;color:var(--down);border-color:#7d2740}
+.pill.pause{background:#3a2f10;color:var(--acc);border-color:#7d5f1e}
+.pill.dry{background:#132a3f;color:var(--blue);border-color:#25507a}
+.pill.stale{background:#2a2030;color:#c9a0dc;border-color:#5a3f70}
+.pill.mute{background:#1b2230;color:var(--dim);border-color:#2b3447}
+.spacer{flex:1}
+.session{display:inline-flex;align-items:center;gap:8px}
+.usercard{display:flex;align-items:center;gap:8px;padding:3px 10px 3px 3px;
+  border:1px solid var(--line);background:var(--panel2);border-radius:999px}
+.avatar{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;
+  font-size:14px;line-height:1;background:radial-gradient(circle at 30% 25%,#2a3346,#171d29);
+  border:1px solid var(--line)}
+.who{display:flex;flex-direction:column;line-height:1.15}
+.who-label{font-size:9px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+.who-name{font-size:12px;font-weight:600}
+/* hidden always wins over a display rule (.banner, .grid, .controls...) */
+[hidden]{display:none!important}
+.btn{background:#232b3b;border:1px solid #33405a;color:var(--fg);padding:7px 12px;
+     border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;font-family:inherit}
+.btn:hover{background:#2b3547;border-color:#44557a}
+.btn:active{opacity:.75}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.danger{background:#3a1620;border-color:#7d2740;color:#ffb3c1}
+.btn.warn{background:#3a2f10;border-color:#7d5f1e;color:#ffd88a}
+.btn.go{background:var(--acc);border-color:var(--acc);color:#1a1300}
+.btn.go:hover{background:#ffb733}
+.btn.danger:hover{background:#4d1d2a}
+.btn.warn:hover{background:#4d3e15}
+.btn.sm{padding:4px 9px;font-size:12px}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
+.kpi .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.kpi .v{font-size:20px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
+.kpi .s{font-size:11px;color:var(--dim);margin-top:2px}
+.kpi .strat{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+#adviceText{width:100%;min-height:76px;padding:8px 10px;background:#0d1119;border:1px solid var(--line);border-radius:8px;color:var(--fg);font:13px/1.4 inherit;font-family:inherit;resize:vertical}
+#adviceText:focus{outline:none;border-color:var(--acc)}
+#adminPanel{margin-top:12px}
+.keyrow{display:grid;grid-template-columns:170px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.keyrow .k{font-size:12px;color:var(--dim)}
+.keyrow .kv{display:flex;gap:6px;align-items:center;flex-wrap:wrap;min-width:0}
+.keyrow code{word-break:break-all}
+.keyrow input,#adminPw,#pwbox input,#impbox input:not([type=radio]),#impbox textarea{width:100%;padding:8px 10px;background:#0d1119;border:1px solid var(--line);border-radius:8px;color:var(--fg);font:13px/1.4 inherit;font-family:inherit;box-sizing:border-box}
+.keyrow input:focus,#adminPw:focus,#pwbox input:focus,#impbox input:focus,#impbox textarea:focus{outline:none;border-color:var(--acc)}
+#adminPw{max-width:320px;margin:10px 0 4px}
+@media (max-width:560px){.keyrow{grid-template-columns:1fr}}
+.agentbar{display:flex;gap:8px;align-items:center;margin:12px 0;flex-wrap:wrap}
+/* The top block (header, totals, agent tabs) stays on screen while an agent's page scrolls; on a small screen only the tabs do. */
+.topbar{background:var(--bg)}
+@media (min-width:900px) and (min-height:700px){
+  .topbar{position:sticky;top:0;z-index:40;margin:0 -12px;padding:0 12px}
+  .topbar.stuck{border-bottom:1px solid var(--line);box-shadow:0 12px 18px -14px rgba(0,0,0,.9)}
+}
+@media not all and (min-width:900px) and (min-height:700px){
+  #agentbar{position:sticky;top:0;z-index:40;background:var(--bg);margin:0 -12px;padding:8px 12px}
+  #agentbar.stuck{border-bottom:1px solid var(--line)}
+}
+[id]{scroll-margin-top:calc(var(--sticky-h,0px) + 10px)}
+.vtab{display:inline-flex;align-items:center;gap:8px;padding:7px 14px;border-radius:10px;
+  border:1px solid var(--line);background:var(--panel2);color:var(--dim);cursor:pointer;
+  font-size:13px;font-weight:650;font-family:inherit}
+.vtab:hover{border-color:var(--acc)}
+.vtab.on{background:var(--panel);color:var(--fg);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.vdot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.vdot.ok{background:var(--up)} .vdot.bad{background:var(--down)} .vdot.idle{background:var(--acc)}
+.vmode{font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:999px;background:#232b3b;color:var(--dim)}
+.vmode.live{background:rgba(255,92,124,.15);color:var(--down)}
+.vmode.paused{background:rgba(245,165,36,.15);color:var(--acc)}
+.vmode.imported{background:rgba(94,164,255,.14);color:#8fc1ff}
+#impbox{max-width:520px}
+#impbox input,#impbox textarea{margin-bottom:12px}
+#impbox textarea{resize:vertical;min-height:64px;font-family:ui-monospace,Menlo,monospace}
+#impbox input[type=file]{padding:7px 8px;font-size:12.5px}
+.impkinds{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.impkinds label{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;cursor:pointer}
+.impkinds label:has(input:checked){border-color:var(--acc);color:var(--acc);background:rgba(245,165,36,.08)}
+.impkinds label:has(input:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
+.impkinds input{position:absolute;opacity:0;width:0;height:0;margin:0}
+#impbox input[type=file]::file-selector-button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:6px;padding:4px 10px;margin-right:10px;font:inherit;cursor:pointer}
+.dlgwarn{font-size:12.5px!important;color:var(--dim)!important}
+.cols{grid-template-columns:1fr}
+@media (min-width:1000px){.cols{grid-template-columns:minmax(0,1.55fr) minmax(0,1fr)}}
+.stack{display:flex;flex-direction:column;gap:12px;min-width:0}
+.rows{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}
+.rows .k{color:var(--dim)}
+.rows .v{font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.rows .mine{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:4px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px}
+.addr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.addr code{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:4px 8px;overflow-wrap:anywhere}
+.warn-list{margin:10px 0 0;padding:8px 10px;background:#2a2410;border:1px solid #5c4a1a;border-radius:8px;color:#ffd88a;font-size:12px}
+.warn-list div+div{margin-top:4px}
+.note{font-size:12px;color:var(--dim);margin-top:8px}
+.note.bad{color:#ffb3c1}
+pre.plan{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;max-height:340px;overflow:auto}
+.controls{display:flex;gap:8px;flex-wrap:wrap}
+.meter{margin-top:10px}
+.meter .top{display:flex;justify-content:space-between;font-size:12px;color:var(--dim)}
+.meter .top b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+.bar{height:8px;border-radius:999px;background:#0d1119;border:1px solid var(--line);overflow:hidden;margin-top:5px}
+.bar i{display:block;height:100%;background:var(--up);border-radius:999px}
+.bar i.hi{background:var(--acc)} .bar i.full{background:var(--down)}
+.tablewrap{overflow:auto;max-height:520px;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+th{position:sticky;top:0;background:var(--panel2);color:var(--dim);font-weight:600;text-align:left;padding:7px 8px;
+   font-size:11px;text-transform:uppercase;letter-spacing:.06em;border-bottom:1px solid var(--line)}
+td{padding:7px 8px;border-bottom:1px solid #1c2331;vertical-align:top}
+td.t{white-space:nowrap;color:var(--dim);font-variant-numeric:tabular-nums}
+td.s{overflow-wrap:anywhere;min-width:220px}
+tr:last-child td{border-bottom:0}
+form.settings{display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+form.settings .full{grid-column:1/-1}
+form.settings label{display:block;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+form.settings input,form.settings select,form.settings textarea{width:100%;padding:8px 10px;background:#0d1119;border:1px solid var(--line);
+  border-radius:8px;color:var(--fg);font:13px/1.4 inherit;font-family:inherit}
+form.settings textarea{min-height:92px;resize:vertical}
+form.settings input:focus,form.settings select:focus,form.settings textarea:focus{outline:none;border-color:var(--acc)}
+form.settings .hint{font-size:11px;color:var(--dim);margin-top:3px}
+.sep{grid-column:1/-1;border-top:1px solid var(--line);margin:4px 0 0;padding-top:8px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
+.empty{color:var(--dim);font-size:13px;padding:10px 2px}
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:min(560px,92vw);
+  background:#1b2230;border:1px solid #33405a;border-radius:10px;padding:10px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.4);
+  display:none;z-index:10}
+#toast.bad{background:#3a1620;border-color:#7d2740;color:#ffb3c1}
+@media (max-width:560px){form.settings{grid-template-columns:1fr} .kpi .v{font-size:17px}}
+/* Info bubbles, as in foxsy-trading: hover preview for mouse users, a sheet on tap or click. */
+.info{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;
+  border:1px solid var(--line);background:var(--panel2);color:var(--dim);font-size:10px;font-weight:700;font-style:normal;
+  cursor:pointer;margin-left:5px;vertical-align:middle;flex:none;user-select:none;line-height:1;text-transform:none;letter-spacing:0}
+.info:hover,.info:active{background:var(--acc);color:#1a1300;border-color:var(--acc)}
+form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
+#tipwrap,#pwwrap,#guidewrap,#impwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:100;align-items:flex-end;justify-content:center}
+#tipwrap.on,#pwwrap.on,#guidewrap.on,#impwrap.on{display:flex}
+#tipbox,#pwbox,#guidebox,#impbox{background:var(--panel);border:1px solid var(--line);border-top-color:var(--acc);border-radius:14px 14px 0 0;
+  padding:18px 18px calc(24px + env(safe-area-inset-bottom));max-width:560px;width:100%;max-height:70vh;overflow:auto}
+@media (min-width:600px){#tipwrap,#pwwrap,#guidewrap,#impwrap{align-items:center} #tipbox,#pwbox,#guidebox,#impbox{border-radius:14px;border-top-color:var(--line);margin:0 16px}}
+#guidebox{max-width:680px;max-height:84vh}
+#guidebox h3{margin:0 0 4px;font-size:16px;color:var(--acc)}
+#guidebox .gitem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
+#guidebox .ghead{display:flex;gap:8px;align-items:center;cursor:pointer;font-weight:600}
+#guidebox .ghead .spacer{flex:1}
+#guidebox ol{margin:8px 0 4px 18px;padding:0;font-size:13.5px;line-height:1.55}
+#guidebox li{margin:4px 0}
+#guidebox a{color:var(--acc)}
+#guidebox .gnote{font-size:12.5px;color:var(--dim);margin-top:6px}
+#guidebox .gfoot{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;font-size:13px}
+.banner{background:rgba(255,80,80,.12);border:1px solid rgba(255,80,80,.5);border-radius:10px;padding:10px 12px;margin:0 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+#tgLink{margin-top:10px}
+#pwbox h3,#impbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
+#pwbox p,#impbox p{margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--fg)}
+#pwbox input{width:100%;margin-bottom:12px}
+#pwbox .dlgdetail,#impbox .dlgdetail{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0 0 12px;overflow-wrap:anywhere}
+#pwbox .dlglabel,#impbox .dlglabel{display:block;font-size:12.5px;color:var(--dim);margin:0 0 6px}
+#tipbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
+#tipbox p{margin:0 0 10px;font-size:13.5px;line-height:1.55;color:var(--fg)}
+#tipbox p:last-of-type{margin-bottom:0}
+#tipbox code{background:var(--panel2);padding:2px 6px;border-radius:4px;font-size:12px;font-family:ui-monospace,Menlo,monospace;color:var(--acc)}
+#tipbox .close{margin-top:14px;width:100%;padding:10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;color:var(--fg);font-size:14px}
+#hovertip{position:fixed;z-index:120;max-width:330px;background:var(--panel);border:1px solid var(--acc);border-radius:10px;
+  padding:10px 12px;font-size:12.5px;line-height:1.5;color:var(--fg);pointer-events:none;opacity:0;transition:opacity .12s;
+  box-shadow:0 8px 28px rgba(0,0,0,.5)}
+#hovertip.on{opacity:1}
+#hovertip b{color:var(--acc);display:block;margin-bottom:4px;font-size:13px}
+#hovertip i{display:block;margin-top:6px;color:var(--dim);font-size:11px;font-style:normal}
+</style></head><body>
+<div class="wrap">
+  <div class="topbar" id="topbar">
+  <header>
+    <span class="logo">🦊</span><h1>FoxLeague Agent</h1>
+    <span id="modePill" class="pill dry">dry run</span>
+    <span id="killPill" class="pill halt" hidden>kill switch on</span>
+    <span id="tgPill" class="pill mute" hidden>telegram off</span>
+    <span class="spacer"></span>
+    <button id="guideBtn" class="btn">Getting started</button>
+    <button id="adminBtn" class="btn">Keys</button><i class="info" data-tip="keys">i</i>
+    <button id="modeBtn" class="btn danger">Go LIVE</button><i class="info" data-tip="mode">i</i>
+    <button id="killBtn" class="btn danger">Kill switch</button><i class="info" data-tip="kill">i</i>
+    <span class="session">
+      <span class="usercard"><span class="avatar">🦊</span><span class="who"><span class="who-label">Signed in</span><span class="who-name">{{USER}}</span></span></span>
+      <button id="logoutBtn" class="btn sm">Sign out</button>
+    </span>
+  </header>
+
+  <div class="banner" id="aiBanner" hidden><span>The AI key is missing, so your agents only watch and never play. It takes about 5 minutes to add.</span><button class="btn sm go" id="aiBannerBtn">Show me how</button></div>
+
+  <section class="grid kpis">
+    <div class="card kpi"><div class="k">Agents<i class="info" data-tip="k_agents">i</i></div><div class="v" id="kAgents">…</div><div class="s" id="kAgentsS"></div></div>
+    <div class="card kpi"><div class="k">EGLD<i class="info" data-tip="k_egld">i</i></div><div class="v" id="kEgld">…</div><div class="s">MultiversX API</div></div>
+    <div class="card kpi"><div class="k">FOXSY<i class="info" data-tip="k_foxsy">i</i></div><div class="v" id="kFoxsy">…</div><div class="s">xExchange spot</div></div>
+    <div class="card kpi"><div class="k">Spent today<i class="info" data-tip="k_spent">i</i></div><div class="v" id="kSpent">…</div><div class="s" id="kSpentS"></div></div>
+    <div class="card kpi"><div class="k">Strategist · all agents<i class="info" data-tip="k_strat">i</i></div>
+      <div class="strat"><select id="sModel" class="btn sm" aria-label="Model"></select><select id="sEffort" class="btn sm" aria-label="Effort"></select><button id="stratApply" class="btn sm go" hidden>Apply</button></div>
+      <div class="s" id="kModelS"></div></div>
+  </section>
+
+
+  <nav class="agentbar" id="agentbar"></nav>
+  </div>
+
+  <section class="card" id="adminPanel" hidden>
+    <h2>Keys · all agents<i class="info" data-tip="keys">i</i><span class="spacer"></span><button class="btn sm" id="adminClose">Close</button></h2>
+    <div class="note">A saved key is used at once, no restart. Keys are stored on the server (readable only by the agent's user) and override the server's env file. Showing or changing a key needs your password again. Every reveal is logged and sent to Telegram.</div>
+    <input id="adminPw" type="password" autocomplete="current-password" placeholder="Your web UI password (to show or change a key)">
+    <div id="keyRows"></div>
+    <div class="controls"><button class="btn go" id="keysSave">Save</button><button class="btn" id="keysTest">Test keys</button><i class="info" data-tip="keys_test">i</i></div>
+    <div id="keysTestOut"></div>
+    <div id="tgLink" hidden>
+      <div class="note">Your Telegram bot token is saved but no chat is linked yet. Link your own chat, so your Telegram bot talks only to you.</div>
+      <div class="controls"><button class="btn go" id="tgLinkBtn">Link my Telegram</button><span id="tgLinkCode" class="note" style="margin:0"></span><button class="btn" id="tgLinkDone" hidden>I sent it</button></div>
+    </div>
+  </section>
+
+  <section class="grid cols" id="agentview" hidden>
+    <div class="stack">
+      <div class="card">
+        <h2>Controls</h2>
+        <div class="controls">
+          <button class="btn go" id="tickBtn">Plan now</button><i class="info" data-tip="plan_now">i</i>
+          <button class="btn warn" id="pauseBtn">Pause</button><i class="info" data-tip="pause">i</i>
+          <button class="btn danger" id="removeBtn" hidden>Remove</button><i class="info" data-tip="remove" id="removeTip" hidden>i</i>
+        </div>
+        <div class="note" id="ctlNote"></div>
+      </div>
+      <div class="card">
+        <h2>Wallet and team<i class="info" data-tip="wallet">i</i><span class="spacer"></span><span class="note" id="snapAge" style="margin:0"></span><button class="btn sm" id="refreshBtn">Refresh</button></h2>
+        <div class="addr"><code class="mono" id="addr"></code><button class="btn sm" id="copyBtn">Copy</button><a id="explorer" target="_blank" rel="noopener noreferrer">Explorer</a></div>
+        <div class="rows" id="walletRows"></div>
+        <div class="warn-list" id="warnings" hidden></div>
+      </div>
+      <div class="card">
+        <h2>Last plan<i class="info" data-tip="lastplan">i</i></h2>
+        <pre class="plan" id="lastPlan"></pre>
+      </div>
+      <div class="card">
+        <h2>Activity<i class="info" data-tip="activity">i</i><span class="spacer"></span><select id="actFilter" class="btn sm"><option value="">All</option><option value="plan">Plans</option><option value="act">Actions</option><option value="problem">Refused / failed</option></select></h2>
+        <div class="tablewrap"><table><thead><tr><th>Time (UTC)</th><th>What</th><th>Status</th><th>Summary</th></tr></thead><tbody id="activity"></tbody></table></div>
+      </div>
+    </div>
+    <div class="stack">
+      <div class="card">
+        <h2>Budget<i class="info" data-tip="budget">i</i><span class="spacer"></span><span class="pill mute" id="ledgerPill"></span></h2>
+        <div id="meters"></div>
+        <div class="note" id="budgetNote"></div>
+      </div>
+      <div class="card">
+        <h2>Talk to the manager<i class="info" data-tip="advice">i</i></h2>
+        <textarea id="adviceText" maxlength="4000" placeholder="Advice or a question, as in Telegram. For example: this week focus on Silver tournaments and skip boosters."></textarea>
+        <div class="controls"><button class="btn go" id="adviceBtn">Send</button></div>
+        <div id="adviceOut" hidden>
+          <div class="note" id="adviceReply"></div>
+          <div id="proposalBox" hidden>
+            <div class="note" id="proposalFor"></div>
+            <pre class="plan" id="proposalText"></pre>
+            <div class="note" id="proposalChanges"></div>
+            <div class="controls"><button class="btn go" id="applyBtn">Apply</button><button class="btn" id="cancelBtn">Cancel</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Settings</h2>
+        <form class="settings" id="settingsForm" autocomplete="off">
+          <div class="full"><label for="sPreset">Strategy<i class="info" data-tip="strategy">i</i></label>
+            <select id="sPreset"><option value="">Custom</option></select></div>
+          <div class="full"><textarea id="sStrategy" maxlength="2000"></textarea></div>
+          <div class="sep">Spending (USD)</div>
+          <div><label for="sDaily">Daily cap<i class="info" data-tip="daily">i</i></label><input id="sDaily" type="number" min="0" max="1000" step="0.5"></div>
+          <div><label for="sMonthly">Monthly budget<i class="info" data-tip="monthly">i</i></label><input id="sMonthly" type="number" min="0" max="10000" step="1"></div>
+          <div><label for="sSetup">Setup budget<i class="info" data-tip="setup">i</i></label><input id="sSetup" type="number" min="0" max="200" step="1"><div class="hint">Registration fee, swap, gas</div></div>
+          <div><label for="sReserve">EGLD gas reserve<i class="info" data-tip="reserve">i</i></label><input id="sReserve" inputmode="decimal"></div>
+          <div class="sep">Per action (FOXSY)</div>
+          <div><label for="sEntry">Max entry fee / stake<i class="info" data-tip="entry">i</i></label><input id="sEntry" type="number" min="0" step="100"></div>
+          <div><label for="sShop">Max shop payment<i class="info" data-tip="shop">i</i></label><input id="sShop" type="number" min="0" step="100"></div>
+          <div><label for="sSwap">Max swap<i class="info" data-tip="swap">i</i></label><input id="sSwap" type="number" min="100" step="100"></div>
+          <div><label for="sBid">Max bid<i class="info" data-tip="bid">i</i></label><input id="sBid" type="number" min="0" step="100"></div>
+          <div><label for="sSilver">Silver amounts<i class="info" data-tip="silver">i</i></label><input id="sSilver" placeholder="1000, 1500, 2000"><div class="hint">Round amounts for creating</div></div>
+          <div><label for="sGold">Gold amounts<i class="info" data-tip="gold">i</i></label><input id="sGold" placeholder="5000"></div>
+          <div class="sep">Timing</div>
+          <div><label for="sTick">Tick (minutes)<i class="info" data-tip="tick">i</i></label><input id="sTick" type="number" min="5" max="240" step="1"></div>
+          <div><label for="sJitter">Random window (± min)<i class="info" data-tip="jitter">i</i></label><input id="sJitter" type="number" min="0" max="60" step="1"></div>
+          <div><label for="sFrom">Active from (UTC hour)<i class="info" data-tip="hours">i</i></label><input id="sFrom" type="number" min="0" max="23" step="1"></div>
+          <div><label for="sTo">Active until (UTC hour)<i class="info" data-tip="hours">i</i></label><input id="sTo" type="number" min="1" max="24" step="1"></div>
+          <div><label for="sGap">Min gap between actions (s)<i class="info" data-tip="gap">i</i></label><input id="sGap" type="number" min="30" max="3600" step="10"></div>
+          <div><label for="sProb">Action probability<i class="info" data-tip="prob">i</i></label><input id="sProb" type="number" min="0" max="1" step="0.05"></div>
+          <div class="full controls"><button class="btn go" type="submit" id="saveBtn">Save settings</button><button class="btn" type="button" id="resetBtn">Discard changes</button></div>
+        </form>
+      </div>
+    </div>
+  </section>
+  <div class="empty" id="loading">Loading…</div>
+</div>
+<div id="toast"></div>
+<div id="guidewrap"><div id="guidebox"><h3>Getting started</h3><div class="note" style="margin:0">Five short steps. Only the AI key is needed; the rest is optional. Press a step to open it.</div><div id="guideItems"></div>
+  <div class="gfoot"><label><input type="checkbox" id="guideHide"> Don't show this again</label><button class="btn" id="guideClose">Close</button></div></div></div>
+<div id="pwwrap"><form id="pwbox" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="pwTitle"><h3 id="pwTitle"></h3><p id="pwText"></p><div id="pwDetail" class="dlgdetail" hidden></div><label id="pwTypeLabel" for="pwType" class="dlglabel" hidden></label><input id="pwType" type="text" autocomplete="off" spellcheck="false" hidden><input id="pwInput" type="password" autocomplete="current-password" placeholder="Your web UI password" aria-label="Your web UI password" hidden><div class="controls"><button class="btn go" type="submit" id="pwOk">Confirm</button><button class="btn" type="button" id="pwCancel">Cancel</button></div></form></div>
+<div id="impwrap"><form id="impbox" autocomplete="off" role="dialog" aria-modal="true" aria-labelledby="impTitle"><h3 id="impTitle">Import your team</h3>
+  <div id="impStep1">
+    <p>An agent takes over a FoxLeague team you already play and carries on from where it is. This install keeps only the key of that one wallet. Recovery words are used once to find it and are never stored.</p>
+    <div class="impkinds"><label><input type="radio" name="impKind" value="pem" checked>PEM file</label><label><input type="radio" name="impKind" value="keystore">Keystore file</label><label><input type="radio" name="impKind" value="words">Recovery words</label></div>
+    <div data-kind="pem"><label class="dlglabel" for="impPemFile">The PEM file of your team's wallet</label><input id="impPemFile" type="file" accept=".pem,text/plain"></div>
+    <div data-kind="keystore" hidden><label class="dlglabel" for="impKsFile">The keystore file (.json) from the MultiversX web wallet</label><input id="impKsFile" type="file" accept=".json,application/json"><label class="dlglabel" for="impKsPw">The keystore password</label><input id="impKsPw" type="password" autocomplete="off"></div>
+    <div data-kind="words" hidden><label class="dlglabel" for="impWords">Your recovery words, in order</label><textarea id="impWords" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea></div>
+    <div data-kind="keystore words" hidden><label class="dlglabel" for="impAccount">Account number within the recovery words: 0 is the first (a keystore that holds one key ignores it)</label><input id="impAccount" type="number" min="0" max="999" value="0"></div>
+    <p class="dlgwarn">Nothing is stored until you check the team and confirm with your password.</p>
+  </div>
+  <div id="impStep2" hidden>
+    <p>Is this your team?</p>
+    <div id="impFound" class="dlgdetail"></div>
+    <p class="dlgwarn">The agent starts paused. It only spends within the limits you set, but the key can sign anything this wallet holds: a wallet used only for the team is best. Don't play the team by hand while the agent runs it.</p>
+    <input id="impPw" type="password" autocomplete="current-password" placeholder="Your web UI password" aria-label="Your web UI password">
+  </div>
+  <div class="controls"><button class="btn go" type="submit" id="impOk">Check</button><button class="btn" type="button" id="impCancel">Cancel</button></div>
+</form></div>
+<div id="tipwrap"><div id="tipbox"><h3 id="tipTitle"></h3><div id="tipBody"></div><button class="close" id="tipClose">Got it</button></div></div>
+<div id="hovertip"></div>
+<script>
+'use strict'
+const CSRF = '{{CSRF}}'
+let S = null, sel = null, formDirty = false, stratDirty = false, proposal = null, activityRows = []
+
+const $ = id => document.getElementById(id)
+function el(tag, props, ...kids) {
+  const n = document.createElement(tag)
+  for (const [k, v] of Object.entries(props || {})) {
+    if (k === 'class') n.className = v
+    else if (k === 'text') n.textContent = v
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v)
+    else if (v !== undefined && v !== null && v !== false) n.setAttribute(k, v === true ? '' : v)
+  }
+  for (const c of kids.flat()) if (c !== null && c !== undefined) n.append(c instanceof Node ? c : document.createTextNode(String(c)))
+  return n
+}
+const usd = n => (n === null || n === undefined || Number.isNaN(n)) ? '–' : '$' + Number(n).toFixed(n >= 100 ? 0 : 2)
+function ago(iso) {
+  if (!iso) return 'never'
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000)
+  return s < 60 ? Math.round(s) + ' s ago' : s < 3600 ? Math.round(s / 60) + ' min ago' : Math.round(s / 3600) + ' h ago'
+}
+function toast(msg, bad) {
+  const t = $('toast'); t.textContent = msg; t.className = bad ? 'bad' : ''; t.style.display = 'block'
+  clearTimeout(toast.h); toast.h = setTimeout(() => { t.style.display = 'none' }, bad ? 7000 : 3500)
+}
+async function api(method, path, body) {
+  const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-csrf-token': CSRF }, body: body === undefined ? undefined : JSON.stringify(body) })
+  if (r.status === 401) { location.href = '/login'; throw new Error('signed out') }
+  const j = await r.json().catch(() => ({}))
+  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status))
+  return j
+}
+function remember(i) { try { localStorage.setItem('foxagent.agent', String(i)) } catch {} }
+function recalled() { try { const v = localStorage.getItem('foxagent.agent'); return v === null ? null : Number(v) } catch { return null } }
+const agent = () => S && S.agents.find(b => b.index === sel)
+
+function renderHeader() {
+  const i = S.instance
+  const live = i.liveMode && i.liveEnabled
+  $('modePill').textContent = live ? 'LIVE' : i.liveMode ? 'live blocked by the server' : 'dry run'
+  $('modePill').className = 'pill ' + (live ? 'halt' : 'dry')
+  $('modeBtn').textContent = i.liveMode ? 'Back to dry run' : 'Go LIVE'
+  $('modeBtn').className = 'btn ' + (i.liveMode ? 'warn' : 'danger')
+  $('modeBtn').disabled = !i.liveMode && !i.liveEnabled
+  $('modeBtn').title = !i.liveMode && !i.liveEnabled ? 'Live signing is not allowed on this server: set AGENT_LIVE_ENABLED=1 in its env file and restart' : 'One mode for all agents'
+  $('killPill').hidden = !i.killSwitch
+  $('tgPill').hidden = i.telegram
+  $('killBtn').textContent = i.killSwitch ? 'Release kill switch' : 'Kill switch'
+  $('killBtn').className = 'btn ' + (i.killSwitch ? 'warn' : 'danger')
+  $('kAgents').textContent = S.agents.length + ' / ' + i.maxAgents
+  $('kAgentsS').textContent = S.agents.filter(b => b.paused).length + ' paused'
+  const p = S.agents.map(b => b.snapshot && b.snapshot.prices).find(Boolean)
+  $('kEgld').textContent = p ? '$' + p.egldUsd.toFixed(2) : '–'
+  $('kFoxsy').textContent = p ? '$' + p.foxsyUsd.toFixed(5) : '–'
+  const spent = S.agents.reduce((a, b) => a + b.budget.spentTodayUsd, 0)
+  $('kSpent').textContent = usd(spent)
+  $('kSpentS').textContent = S.agents.every(b => b.effectiveDryRun) ? 'simulated (dry-run ledger)' : 'live and dry-run ledgers'
+  const sm = $('sModel'), se = $('sEffort')
+  if (!sm.options.length) {
+    for (const m of i.models) sm.append(el('option', { value: m.id, text: m.label }))
+    for (const e of i.efforts) se.append(el('option', { value: e, text: 'effort ' + e }))
+  }
+  if (!stratDirty) { sm.value = i.model || ''; se.value = i.effort || 'medium' }
+  sm.disabled = se.disabled = !i.model
+  renderStrat()
+}
+
+// One model and effort for every agent; the price hint compares the pick with the model in use.
+function renderStrat() {
+  const i = S.instance
+  if (!i.model) { $('stratApply').hidden = true; $('kModelS').textContent = 'off (no ANTHROPIC_API_KEY)'; return }
+  const pick = i.models.find(m => m.id === $('sModel').value), cur = i.models.find(m => m.id === i.model)
+  const changed = $('sModel').value !== i.model || $('sEffort').value !== i.effort
+  const ratio = pick && cur ? pick.price[0] / cur.price[0] : 1
+  $('stratApply').hidden = !changed
+  $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' : i.model)
+    + (changed && ratio !== 1 ? ' · ' + (Math.round(ratio * 10) / 10) + 'x the current price' : '')
+    + ' · spent ' + usd(i.modelUsdTotal)
+}
+
+function renderAgentbar() {
+  const bar = $('agentbar'); bar.replaceChildren()
+  for (const b of S.agents) {
+    const fresh = b.snapshot && Date.now() - new Date(b.snapshot.takenAt).getTime() < 3600e3
+    const dot = b.paused || S.instance.killSwitch ? 'idle' : fresh && !(b.snapshot.warnings || []).length ? 'ok' : fresh ? 'idle' : 'bad'
+    const name = b.snapshot && b.snapshot.team && b.snapshot.team.name
+    bar.append(el('button', { class: 'vtab' + (b.index === sel ? ' on' : ''), onclick: () => select(b.index) },
+      el('span', { class: 'vdot ' + dot }), 'Agent ' + (b.index + 1) + (name ? ' · ' + name : ''),
+      b.source === 'imported' ? el('span', { class: 'vmode imported', text: 'imported', title: 'An imported team: it plays with its own key, not one from your recovery words' }) : '',
+      b.paused ? el('span', { class: 'vmode paused', text: 'paused' }) : ''))
+  }
+  const next = S.instance.next
+  bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'Account ' + next.index + ' of your recovery words' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: addAgent }, '+ Add agent'))
+  bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'An agent for a FoxLeague team you already play' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: openImport }, 'Import team'))
+}
+
+function row(k, v) { return [el('div', { class: 'k', text: k }), el('div', { class: 'v' }, v)] }
+
+function renderAgent() {
+  const b = agent(); if (!b) return
+  $('agentview').hidden = false; $('loading').hidden = true
+  $('addr').textContent = b.address
+  $('explorer').href = 'https://explorer.multiversx.com/accounts/' + b.address
+  const s = b.snapshot
+  $('snapAge').textContent = s ? 'updated ' + ago(s.takenAt) : 'no snapshot yet'
+  const rows = $('walletRows'); rows.replaceChildren()
+  if (!s) rows.append(...row('State', 'waiting for the first snapshot'))
+  else {
+    rows.append(...row('EGLD', s.egld ?? '–'), ...row('FOXSY', s.foxsy ?? '–'), ...row('Cards', s.cards ?? '–'))
+    const r = s.registration
+    if (!r.registered) {
+      const bits = ['not registered', r.whitelisted === false ? 'not whitelisted' : null, r.relayerEnabled === false ? 'relayer off' : null, r.feePaidOnChain ? 'fee already paid' : null].filter(Boolean)
+      rows.append(...row('Team', bits.join(' · ')))
+    } else if (s.team) {
+      rows.append(...row('Team', s.team.name + ' (user ' + s.team.userId + ')'), ...row('ELO', s.team.elo + ' · ' + s.team.league),
+        ...row('Record', s.team.won + ' W · ' + s.team.drawn + ' D · ' + s.team.lost + ' L' + (s.team.tournamentWins ? ' · ' + s.team.tournamentWins + ' tournament wins' : '')))
+      if (s.formation) rows.append(...row('Formation', s.formation))
+      if (s.matchesToday) rows.append(...row('Matches today', s.matchesToday))
+      if (s.training) rows.append(...row('Training today', s.training.used_today + ' used · ' + s.training.slots_banked + ' paid slots banked'))
+      rows.append(...row('Upcoming matches', String(s.upcoming)))
+    }
+    const mine = s.mine || []
+    const list = el('div')
+    if (!mine.length) list.append(el('span', { text: 'none' }))
+    for (const t of mine) {
+      const line = el('div', { class: 'mine' }, el('span', { text: 'T' + t.id + ' ' + t.kind + ' ' + t.tier + (t.fee ? ' · ' + t.fee.toLocaleString('en-US') + ' FOXSY' : '') + ' · ' + t.status + (t.created ? ' · created by the agent' : '') + (t.leavable ? ' · open until ' + t.deadline.slice(11, 16) + ' UTC' : ' · starts ' + t.startsAt.slice(5, 16).replace('T', ' ')) }))
+      if (t.leavable) line.append(el('button', { class: 'btn sm', text: 'Leave', onclick: async () => {
+        const ok = await dialog({ title: 'Leave T' + t.id + '?', text: 'The seat or stake comes back to the wallet.' + (t.kind === '1v1' && t.created ? ' The 1v1 is closed, so the agent can take another one.' : ''), ok: 'Leave', tone: 'warn' })
+        if (ok) act('Left T' + t.id, () => api('POST', '/api/agents/' + sel + '/leave', { tournament_id: t.id }))
+      } }))
+      list.append(line)
+    }
+    rows.append(el('div', { class: 'k' }, 'In tournaments', el('i', { class: 'info', 'data-tip': 'mine', text: 'i' })), el('div', { class: 'v' }, list))
+    rows.append(...row('Open', s.openTournaments + ' tournaments · ' + s.openChallenges + ' 1v1 challenges'))
+    rows.append(...row('Game day', 'resets in ' + s.gameDay.hoursToReset + ' h (14:00 UTC)'))
+  }
+  const w = $('warnings'); w.replaceChildren()
+  const warns = (s && s.warnings) || []
+  w.hidden = !warns.length
+  for (const x of warns) w.append(el('div', { text: x }))
+  $('lastPlan').textContent = b.lastPlan || 'No plan yet.' + (S.instance.model ? '' : ' The strategist is off (no ANTHROPIC_API_KEY).')
+
+  $('removeBtn').hidden = $('removeTip').hidden = b.source !== 'imported'
+  $('pauseBtn').textContent = b.paused ? 'Resume' : 'Pause'
+  $('pauseBtn').className = 'btn ' + (b.paused ? 'go' : 'warn')
+  $('tickBtn').disabled = b.busy || b.paused || S.instance.killSwitch
+  const notes = []
+  if (b.busy) notes.push('Running a plan now.')
+  if (S.instance.liveMode && !S.instance.liveEnabled) notes.push('Live is switched on, but the server does not allow signing (AGENT_LIVE_ENABLED), so every action is still simulated.')
+  notes.push(b.effectiveDryRun ? 'Dry run: every action is simulated and logged, nothing is signed.' : 'Live: actions are signed and sent within the caps.')
+  if (S.instance.killSwitch) notes.push('Kill switch is on: every action is refused.')
+  $('ctlNote').textContent = notes.join(' ')
+  $('ctlNote').className = 'note' + (!b.effectiveDryRun ? ' bad' : '')
+
+  const g = b.budget
+  $('ledgerPill').textContent = g.dryRun ? 'dry-run ledger' : 'live ledger'
+  const meters = $('meters'); meters.replaceChildren()
+  for (const [label, spent, cap, extra] of [['Today (game day ' + g.gameDay + ')', g.spentTodayUsd, g.dailyCapUsd, ''], ['This month (' + g.month + ')', g.spentMonthUsd, g.monthlyBudgetUsd, ''], ['Setup (one time)', g.spentSetupUsd, g.setupBudgetUsd, '']]) {
+    const pct = cap > 0 ? Math.min(100, (spent / cap) * 100) : 100
+    meters.append(el('div', { class: 'meter' },
+      el('div', { class: 'top' }, el('span', { text: label }), el('span', {}, el('b', { text: usd(spent) }), ' of ' + usd(cap) + extra)),
+      el('div', { class: 'bar' }, el('i', { class: pct >= 100 ? 'full' : pct >= 75 ? 'hi' : '', style: 'width:' + pct.toFixed(1) + '%' }))))
+  }
+  $('budgetNote').textContent = 'The executor refuses any action that would pass a cap. Unspent daily budget does not roll over.'
+  if (!formDirty) fillForm(b.settings)
+}
+
+function fillForm(st) {
+  const presets = S.instance.presets
+  const sp = $('sPreset')
+  if (sp.options.length === 1) for (const k of Object.keys(presets)) sp.append(el('option', { value: k, text: k[0].toUpperCase() + k.slice(1) }))
+  sp.value = Object.keys(presets).find(k => presets[k] === st.strategy) || ''
+  $('sStrategy').value = st.strategy
+  $('sDaily').value = st.dailyCapUsd; $('sMonthly').value = st.monthlyBudgetUsd; $('sSetup').value = st.setupBudgetUsd
+  $('sReserve').value = st.egldGasReserve
+  $('sEntry').value = st.maxEntryFeeFoxsy; $('sShop').value = st.maxShopPaymentFoxsy; $('sSwap').value = st.maxSwapFoxsy; $('sBid').value = st.maxBidFoxsy
+  $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
+  $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
+  $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
+  $('sGap').value = st.minGapSeconds; $('sProb').value = st.actionProbability
+  formDirty = false
+}
+
+function readForm() {
+  const n = id => Number($(id).value)
+  const list = id => $(id).value.split(/[\s,]+/).filter(Boolean).map(Number)
+  return {
+    strategy: $('sStrategy').value, dailyCapUsd: n('sDaily'), monthlyBudgetUsd: n('sMonthly'), setupBudgetUsd: n('sSetup'),
+    egldGasReserve: $('sReserve').value.trim(), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
+    entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
+    activeHoursUtc: [n('sFrom'), n('sTo')], minGapSeconds: n('sGap'), actionProbability: n('sProb'),
+  }
+}
+
+const STATUS = { dry_run: ['dry', 'dry run'], confirmed: ['run', 'done'], refused: ['pause', 'refused'], failed: ['halt', 'failed'], error: ['halt', 'error'], unconfirmed: ['stale', 'pending'], info: ['mute', 'info'], sent: ['stale', 'sent'] }
+function renderActivity() {
+  const f = $('actFilter').value
+  const rows = activityRows.filter(r => !f || (f === 'plan' ? r.kind === 'plan' : f === 'act' ? !['plan', 'tick', 'control'].includes(r.kind) : ['refused', 'failed', 'error'].includes(r.status)))
+  const body = $('activity'); body.replaceChildren()
+  if (!rows.length) body.append(el('tr', {}, el('td', { colspan: '4', class: 's', text: 'Nothing yet.' })))
+  for (const r of rows) {
+    const [cls, label] = STATUS[r.status] || ['mute', r.status]
+    const summary = el('td', { class: 's' }, r.summary.length > 600 ? r.summary.slice(0, 600) + '…' : r.summary)
+    if (r.txHash) summary.append(' ', el('a', { href: 'https://explorer.multiversx.com/transactions/' + r.txHash, target: '_blank', rel: 'noopener noreferrer', text: 'tx' }))
+    if (r.costUsd) summary.append(el('span', { class: 'note', text: '  ' + usd(r.costUsd) }))
+    body.append(el('tr', {}, el('td', { class: 't', text: r.at.slice(5, 16).replace('T', ' ') }), el('td', { class: 'mono', text: r.kind }), el('td', {}, el('span', { class: 'pill ' + cls, text: label })), summary))
+  }
+}
+
+async function loadState() {
+  try {
+    S = await api('GET', '/api/state')
+    if (sel === null || !S.agents.some(b => b.index === sel)) { const r = recalled(); sel = S.agents.some(b => b.index === r) ? r : (S.agents[0] ? S.agents[0].index : null) }
+    renderHeader(); renderAgentbar(); renderSetup()
+    if (sel !== null) renderAgent()
+    else { $('loading').textContent = 'No agents yet.'; $('agentview').hidden = true }
+  } catch (e) { if (e.message !== 'signed out') toast('Could not load state: ' + e.message, true) }
+}
+async function loadActivity() {
+  if (sel === null) return
+  try { activityRows = await api('GET', '/api/agents/' + sel + '/activity?limit=150'); renderActivity() } catch (e) { if (e.message !== 'signed out') toast('Could not load activity: ' + e.message, true) }
+}
+function select(i) { sel = i; remember(i); formDirty = false; $('adviceOut').hidden = true; proposal = null; renderAgentbar(); renderAgent(); loadActivity() }
+
+// Going live, releasing the kill switch and raising a limit ask for the password again (the server checks it).
+// One branded dialog for every question the dashboard asks, never the browser's own confirm or prompt.
+// detail: a line shown in a monospace box (an address); type: text to type exactly (GO LIVE); password: ask for it.
+// Resolves to null when cancelled, else { password }.
+function dialog({ title, text = '', detail = '', type = '', password = false, ok = 'Confirm', tone = 'go' }) {
+  return new Promise(resolve => {
+    $('pwTitle').textContent = title; $('pwText').textContent = text
+    $('pwDetail').hidden = !detail; $('pwDetail').textContent = detail
+    $('pwTypeLabel').hidden = $('pwType').hidden = !type
+    $('pwTypeLabel').textContent = type ? 'Type ' + type + ' to confirm' : ''
+    $('pwType').value = ''; $('pwType').placeholder = type
+    $('pwInput').hidden = !password; $('pwInput').value = ''
+    $('pwOk').textContent = ok; $('pwOk').className = 'btn ' + tone
+    $('pwwrap').classList.add('on')
+    ;(type ? $('pwType') : password ? $('pwInput') : $('pwOk')).focus()
+    const done = v => { $('pwwrap').classList.remove('on'); $('pwbox').onsubmit = null; $('pwCancel').onclick = null; resolve(v) }
+    $('pwbox').onsubmit = e => {
+      e.preventDefault()
+      if (type && $('pwType').value.trim() !== type) { $('pwType').focus(); return toast('Type ' + type + ' exactly', true) }
+      if (password && !$('pwInput').value) return $('pwInput').focus()
+      done({ password: $('pwInput').value })
+    }
+    $('pwCancel').onclick = () => done(null)
+  })
+}
+async function askPassword(title, text) {
+  const r = await dialog({ title, text, password: true })
+  return r ? r.password : null
+}
+$('pwwrap').addEventListener('click', e => { if (e.target.id === 'pwwrap') $('pwCancel').click() })
+async function act(label, fn) {
+  try { const r = await fn(); toast(r && r.message ? r.message : label) ; await loadState(); await loadActivity() } catch (e) { toast(e.message, true) }
+}
+async function addAgent() {
+  const n = S.instance.next; if (!n) return
+  const ok = await dialog({ title: 'Add agent ' + (n.index + 1) + '?', text: 'Its wallet, from the same recovery words. It follows the platform mode (' + (S.instance.liveMode ? 'LIVE' : 'dry run') + ') and needs EGLD in this wallet before it can do anything.', detail: n.address, ok: 'Add agent' })
+  if (!ok) return
+  act('Agent ' + (n.index + 1) + ' added', () => api('POST', '/api/agents')).then(() => select(n.index))
+}
+
+$('killBtn').onclick = async () => {
+  const on = !S.instance.killSwitch
+  if (on) {
+    const ok = await dialog({ title: 'Turn the kill switch on?', text: 'Every agent refuses every action until you release it. Releasing it asks for your password.', ok: 'Kill switch on', tone: 'danger' })
+    if (!ok) return
+    return act('Kill switch on', () => api('POST', '/api/kill', { on }))
+  }
+  const password = await askPassword('Release the kill switch', 'Every agent that is not paused starts acting again, in the current mode.')
+  if (password) act('Kill switch released', () => api('POST', '/api/kill', { on, password }))
+}
+$('logoutBtn').onclick = async () => { try { await api('POST', '/logout') } catch {} location.href = '/login' }
+$('refreshBtn').onclick = () => act('Snapshot refreshed', () => api('POST', '/api/agents/' + sel + '/refresh'))
+$('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(agent().address); toast('Address copied') } catch { toast('Copy failed: select the address by hand', true) } }
+$('tickBtn').onclick = () => act('Planning…', () => api('POST', '/api/agents/' + sel + '/tick'))
+$('removeBtn').onclick = async () => {
+  const b = agent(); if (!b || b.source !== 'imported') return
+  if (!b.paused) return toast('Pause agent ' + (b.index + 1) + ' first', true)
+  const r = await dialog({ title: 'Remove agent ' + (b.index + 1) + '?', text: 'The agent stops managing this team and its key is deleted from this install. The team, its cards and its funds stay in the wallet. You keep your own key file. Its history stays here.', detail: b.address, type: 'REMOVE', password: true, ok: 'Remove', tone: 'danger' })
+  if (!r) return
+  act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && S.agents[0]) select(S.agents[0].index) })
+}
+// Import team: step 1 reads the key file in this browser and has the server check the wallet and its team (nothing
+// is stored); step 2 confirms with the password. The fields are cleared as soon as the server has the key.
+let impToken = null
+const impKind = () => document.querySelector('input[name=impKind]:checked').value
+function impShow() { for (const d of $('impStep1').querySelectorAll('[data-kind]')) d.hidden = !d.dataset.kind.split(' ').includes(impKind()) }
+for (const r of document.querySelectorAll('input[name=impKind]')) r.addEventListener('change', impShow)
+function impReset() { impToken = null; $('impbox').reset(); $('impStep1').hidden = false; $('impStep2').hidden = true; $('impOk').textContent = 'Check'; impShow() }
+function openImport() { impReset(); $('impwrap').classList.add('on'); $('impOk').focus() }
+function closeImport() { $('impwrap').classList.remove('on'); impReset() }
+function readKeyFile(f) {
+  return new Promise((ok, no) => {
+    if (!f) return no(new Error('choose the file first'))
+    if (f.size > 16384) return no(new Error('this file is too big to be a key file'))
+    const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(new Error('the file could not be read')); r.readAsText(f)
+  })
+}
+$('impbox').onsubmit = async e => {
+  e.preventDefault()
+  const btn = $('impOk'); if (btn.disabled) return
+  btn.disabled = true
+  try {
+    if (!impToken) {
+      const kind = impKind(), body = { kind }
+      if (kind === 'pem') body.pem = await readKeyFile($('impPemFile').files[0])
+      if (kind === 'keystore') { body.keystore = await readKeyFile($('impKsFile').files[0]); body.password = $('impKsPw').value; body.account = $('impAccount').value }
+      if (kind === 'words') { if (!$('impWords').value.trim()) throw new Error('paste the recovery words first'); body.words = $('impWords').value; body.account = $('impAccount').value }
+      btn.textContent = 'Checking…'
+      const r = await api('POST', '/api/agents/import/check', body)
+      impToken = r.token
+      $('impWords').value = ''; $('impKsPw').value = ''; $('impPemFile').value = ''; $('impKsFile').value = ''
+      $('impFound').replaceChildren(
+        el('div', { text: r.team.name + ' · overall ' + r.team.overall + (r.team.badge ? ' · has a badge' : '') }),
+        el('div', { text: r.address }),
+        el('div', { text: r.egld + ' EGLD · ' + Number(r.foxsy).toLocaleString('en-US') + ' FOXSY' }))
+      $('impStep1').hidden = true; $('impStep2').hidden = false; $('impPw').focus()
+    } else {
+      if (!$('impPw').value) { $('impPw').focus(); return }
+      const r = await api('POST', '/api/agents/import', { token: impToken, password: $('impPw').value })
+      closeImport(); toast(r.message); await loadState(); select(r.agent.index)
+    }
+  } catch (err) {
+    toast(err.message || String(err), true)
+    if (/expired/.test(err.message || '')) impReset()
+  } finally {
+    btn.disabled = false; btn.textContent = impToken ? 'Import team' : 'Check'
+  }
+}
+$('impCancel').onclick = closeImport
+$('impwrap').addEventListener('click', e => { if (e.target.id === 'impwrap') closeImport() })
+$('pauseBtn').onclick = () => { const b = agent(); act(b.paused ? 'Resumed' : 'Paused', () => api('POST', '/api/agents/' + sel + '/' + (b.paused ? 'resume' : 'pause'))) }
+$('modeBtn').onclick = async () => {
+  if (S.instance.liveMode) return act('Back to dry run', () => api('POST', '/api/mode', { live: false }))
+  const r = await dialog({ title: 'Go LIVE for all agents?', text: 'Every agent that is not paused will sign and send real transactions, within its caps. Back to dry run is one click.', type: 'GO LIVE', password: true, ok: 'Go LIVE', tone: 'danger' })
+  if (r) act('Live', () => api('POST', '/api/mode', { live: true, confirm: 'GO LIVE', password: r.password }))
+}
+$('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; renderStrat() }
+$('stratApply').onclick = async () => {
+  await act('Strategist updated', () => api('POST', '/api/strategist', { model: $('sModel').value, effort: $('sEffort').value }))
+  stratDirty = false; renderHeader()
+}
+// Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
+const TIPS = {
+  mode: ['Dry run or live', `<p>One mode for every agent.</p>
+    <p><b>Dry run:</b> the agent plans, checks each action against the game rules and your caps, then simulates it on chain. Nothing is signed or sent. The spend goes to a separate dry-run ledger.</p>
+    <p><b>Live:</b> actions are signed and sent with real EGLD and FOXSY, inside the same caps.</p>
+    <p>Going live asks you to type <code>GO LIVE</code> and your password. Back to dry run is one click. Live also needs the server permission <code>AGENT_LIVE_ENABLED=1</code>; without it the button stays grey.</p>`],
+  keys: ['Keys', `<p>The keys every agent shares. Anthropic runs the strategist. Telegram sends you notifications and takes your commands. Binance will fund the agent wallets automatically (a later step).</p>
+    <p>Values are masked. Paste a new value and press Save: it is checked, stored on the server and used at once, with no restart.</p>
+    <p>To show a key, type your web UI password first. Every reveal is logged and announced in Telegram.</p>`],
+  kill: ['Kill switch', `<p>Emergency stop for every agent. While it is on, no agent plans and every action is refused, even free ones like matches and training.</p>
+    <p>Nothing is lost: settings, strategy and funds stay as they are. Turning it on is one click; releasing it asks for your password.</p>`],
+  k_agents: ['Agents', `<p>Agents on this install out of the allowed maximum. The line below counts the paused ones.</p>
+    <p>Each agent has its own wallet and team. The wallets come from one set of recovery words: agent 1 uses account 0 of those words, agent 2 account 1 and so on. <b>+ Add agent</b> creates the next one; it follows the platform mode.</p>
+    <p><b>Import team</b> gives an agent to a FoxLeague team you already play, with that wallet's own key (from its PEM file, keystore file or recovery words). It is marked imported and starts paused.</p>`],
+  remove: ['Remove', `<p>Only for an imported team. The agent stops managing it and its key is deleted from this install. The team, its cards and its funds stay in the wallet. You keep your own key file. Its history stays here.</p>
+    <p>Pause it first. It cannot be removed while a payment waits for FoxLeague's confirmation.</p>`],
+  k_egld: ['EGLD price', `<p>EGLD in USD from the MultiversX API. Every spend is valued in USD at this price before it is checked against your caps.</p>`],
+  k_foxsy: ['FOXSY price', `<p>FOXSY in USD at the xExchange FOXSY/WEGLD spot price. Entry fees, stakes, shop items and the registration fee are paid in FOXSY; the caps count them in USD at this price.</p>`],
+  k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
+    <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
+  k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
+    <p><b>Sonnet 5</b> is the default and handles this game well. <b>Opus 5.5</b> costs about 2x as much, <b>Opus 5</b> 2.5x and <b>Fable 5.1</b> 5x.</p>
+    <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
+    <p>The line below shows the list price per million tokens and the model spend so far.</p>`],
+  key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
+    <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
+  key_TELEGRAM_BOT_TOKEN: ['Telegram bot token', `<p>The token of your Telegram bot from @BotFather. Notifications go out through it and your commands come in through it. A new token restarts the Telegram connection at once.</p>`],
+  key_TELEGRAM_CHAT_ID: ['Telegram chat id', `<p>Your own chat with your Telegram bot. It answers only this chat and ignores everyone else. It is not a secret, so it is shown in full.</p>`],
+  key_BINANCE_API_KEY: ['Binance API key', `<p>For automatic EGLD top-ups of the agent wallets, a later step. The key must allow withdrawals only, be restricted to the server's IP and send only to the whitelisted agent addresses. Test keys checks this.</p>`],
+  key_BINANCE_API_SECRET: ['Binance API secret', `<p>The secret that belongs to the Binance API key. Binance shows it only once, when you create the key.</p>`],
+  keys_test: ['Test keys', `<p>Checks every key against its service: Anthropic model access, a test message to your Telegram chat and the Binance key's permissions. Nothing is changed.</p>`],
+  plan_now: ['Plan now', `<p>Runs a planning cycle for this agent now instead of waiting for the next one. The strategist reads a fresh snapshot and proposes actions; they run at random moments over the next minutes, checked like any other action.</p>
+    <p>It works only inside the active hours. It does nothing while the agent is paused or busy or while the kill switch is on.</p>`],
+  pause: ['Pause and resume', `<p>Stops this agent only: no planning and no actions. The other agents carry on. Resume picks up at the next cycle.</p>
+    <p>To stop every agent at once, use the kill switch. To stop signing but keep planning, use Back to dry run.</p>`],
+  mine: ['In tournaments', `<p>The tournaments and 1v1 challenges the agent is in right now. While one is still open, <b>Leave</b> gives the seat or stake back to the wallet.</p>
+    <p>On a 1v1 the agent created and nobody accepted, Leave also closes the challenge, so the agent can take another one. The agent can do the same by itself when it sees a better 1v1.</p>`],
+  wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, FOXSY and cards, plus the team: registration, formation, players and their condition.</p>
+    <p>Refresh reads the chain and FoxLeague again now. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
+  lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
+  activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
+    <p>The filter narrows it to plans, actions or problems.</p>`],
+  budget: ['Budget', `<p>Spend against your caps: today (the game day resets at 14:00 UTC), this month and the one-time setup budget.</p>
+    <p>Every paid action is valued in USD at live prices before it runs; one that would go over a cap is refused. Dry-run spend has its own ledger, so it never blocks live spending.</p>`],
+  advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
+    <p>A question gets an answer. Advice comes back as the full revised strategy with Apply and Cancel; nothing changes until you press Apply. Name other agents ("all agents", "agent 2") to include them.</p>
+    <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
+  strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
+    <p>Presets: <b>steady</b> grows XP and keeps the squad healthy, <b>climber</b> chases ELO and <b>hunter</b> goes for tournament wins. Edit the text freely or let Talk to the manager rewrite it for you.</p>
+    <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
+  daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
+    <p>It counts FOXSY paid (entries, stakes, shop and sync) and network fees. Registration is not included; it has its own setup budget.</p>
+    <p>A Gold entry of 5,000 FOXSY needs a daily cap above its USD value.</p>`],
+  monthly: ['Monthly budget (USD)', `<p>The most this agent may spend in a calendar month (UTC), in USD. Every action has to fit both this budget and the daily cap.</p>
+    <p>It also limits the EGLD swapped to FOXSY in a month, next to the daily cap for swaps. The 1 EGLD gas reserve is never swapped.</p>`],
+  setup: ['Setup budget (USD)', `<p>A separate one-time budget for starting the team: the 5,000 FOXSY registration fee, the swap that buys it and its network fee. It does not count against the daily or monthly caps.</p>`],
+  reserve: ['EGLD gas reserve', `<p>EGLD that always stays in the wallet to pay network fees. A swap may only use the EGLD above it; transaction fees may be paid from it.</p>
+    <p>1 EGLD pays for well over a thousand ordinary transactions. Default 1 EGLD; the lowest allowed is 0.05.</p>`],
+  entry: ['Max entry fee or stake (FOXSY)', `<p>The largest single tournament entry fee or 1v1 stake the agent may pay, when it joins or creates one.</p>
+    <p>Silver entries run from 1,000 to 4,999 FOXSY and Gold starts at 5,000. Below 5,000 the agent never enters Gold.</p>`],
+  shop: ['Max shop payment (FOXSY)', `<p>The largest single shop payment. Prices: condition recovery up to 100 per player (pro-rated), a training slot 20, the XP booster 2,000 and a common pack 2,500.</p>
+    <p>At 2,500 the agent can buy anything in the shop. The two fusion waivers use the same maximum: a shorter fusion cooldown (75 per day, at most 825 per card) and bought match credit (20 per match, at most 300 per card). Fusion fees (100 to 800) and marketplace bids have their own rules.</p>`],
+  swap: ['Max swap (FOXSY)', `<p>The largest single EGLD to FOXSY swap on xExchange, counted in FOXSY received. The agent swaps only what its next actions need and never touches the gas reserve.</p>`],
+  bid: ['Max bid (FOXSY)', `<p>The largest single bid the agent may place on a marketplace auction. Every sale is a 24-hour auction: a bid must reach the reserve or beat the top bid by 5 percent. An outbid bidder gets the FOXSY back at once.</p>
+    <p>The agent never bids on a card that another of your agents sells or already leads. 0 turns bidding off.</p>`],
+  silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
+    <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
+  gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>`],
+  tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes.</p>
+    <p>A shorter tick reacts faster and costs more in model calls.</p>`],
+  jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork.</p>`],
+  hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
+    <p>Add your time zone's offset to read them locally: at UTC+3, 5 until 21 is 08:00 to 00:00.</p>
+    <p>The window may cross midnight: from 22 until 6 means night hours.</p>`],
+  gap: ['Min gap between actions (seconds)', `<p>The shortest pause between two actions of one plan. Together with the random timing it spreads the actions out like a person playing.</p>`],
+  prob: ['Action probability', `<p>The chance, from 0 to 1, that each planned routine action is really carried out. 1 means always; 0.8 skips about one in five at random, so the pattern looks less mechanical.</p>
+    <p>Your own requests always run.</p>`],
+}
+function showTip(k) {
+  const t = TIPS[k]; if (!t) return
+  $('tipTitle').textContent = t[0]
+  $('tipBody').innerHTML = t[1]
+  $('tipwrap').classList.add('on')
+}
+// Mouse users get a preview on hover; everyone can tap or click for the full text.
+if (window.matchMedia && window.matchMedia('(hover: hover)').matches) {
+  const ht = $('hovertip')
+  const plain = html => { const d = document.createElement('div'); d.innerHTML = html; return (d.textContent || '').replace(/\s+/g, ' ').trim() }
+  document.addEventListener('mouseover', e => {
+    const i = e.target.closest && e.target.closest('.info'); if (!i) return
+    const t = TIPS[i.dataset.tip]; if (!t) return
+    ht.replaceChildren(el('b', { text: t[0] }), plain(t[1].split('</p>')[0]), el('i', { text: 'click for the full explanation' }))
+    ht.classList.add('on')
+    const r = i.getBoundingClientRect(), w = Math.min(330, window.innerWidth - 20)
+    let y = r.bottom + 8
+    if (y + 160 > window.innerHeight) y = Math.max(10, r.top - 170)
+    ht.style.left = Math.max(10, Math.min(r.left, window.innerWidth - w - 10)) + 'px'; ht.style.top = y + 'px'
+  })
+  document.addEventListener('mouseout', e => { if (e.target.closest && e.target.closest('.info')) ht.classList.remove('on') })
+}
+document.addEventListener('click', e => {
+  const i = e.target.closest && e.target.closest('.info')
+  if (i) { e.preventDefault(); e.stopPropagation(); $('hovertip').classList.remove('on'); showTip(i.dataset.tip); return }
+  if (e.target.id === 'tipwrap' || e.target.id === 'tipClose') $('tipwrap').classList.remove('on')
+}, true)
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('tipwrap').classList.remove('on'); if ($('pwwrap').classList.contains('on')) $('pwCancel').click(); if ($('impwrap').classList.contains('on')) closeImport() } })
+
+async function loadKeys() {
+  const r = await api('GET', '/api/admin/keys')
+  const box = $('keyRows'); box.replaceChildren()
+  for (const k of r.keys) {
+    const shown = el('code', { class: 'mono', text: k.masked || 'not set' })
+    const copy = el('button', { class: 'btn sm', type: 'button', hidden: true, text: 'Copy' })
+    const eye = el('button', { class: 'btn sm', type: 'button', title: 'Show', text: '👁', disabled: !k.masked || !k.secret })
+    eye.onclick = async () => {
+      const password = $('adminPw').value
+      if (!password) { $('adminPw').focus(); return toast('Enter your web UI password to show a key', true) }
+      try {
+        const { value } = await api('POST', '/api/admin/keys/reveal', { key: k.key, password })
+        shown.textContent = value; copy.hidden = false
+        copy.onclick = async () => { try { await navigator.clipboard.writeText(value); toast('Copied') } catch { toast('Copy failed: select it by hand', true) } }
+        setTimeout(() => { shown.textContent = k.masked; copy.hidden = true }, 60_000)
+      } catch (e) { toast(e.message, true) }
+    }
+    const input = el('input', { type: k.secret ? 'password' : 'text', 'data-key': k.key, autocomplete: 'off', spellcheck: 'false', placeholder: k.masked ? 'New value (empty keeps the current one)' : 'Paste the value' })
+    box.append(el('div', { class: 'keyrow' }, el('div', { class: 'k' }, k.label, el('i', { class: 'info', 'data-tip': 'key_' + k.key, text: 'i' })),
+      el('div', { class: 'kv' }, shown, eye, copy, k.source ? el('span', { class: 'note', style: 'margin:0', text: k.source }) : null), input))
+  }
+}
+function toggleAdmin(open) {
+  $('adminPanel').hidden = !open
+  if (open) loadKeys().catch(e => toast(e.message, true))
+  else { $('adminPw').value = ''; $('keyRows').replaceChildren(); $('keysTestOut').replaceChildren() }
+}
+$('adminBtn').onclick = () => toggleAdmin($('adminPanel').hidden)
+$('adminClose').onclick = () => toggleAdmin(false)
+$('keysSave').onclick = async () => {
+  const values = {}
+  for (const i of $('keyRows').querySelectorAll('input[data-key]')) if (i.value.trim()) values[i.dataset.key] = i.value.trim()
+  const n = Object.keys(values).length
+  if (!n) return toast('Nothing to save: paste a new value first', true)
+  const password = $('adminPw').value
+  if (!password) { $('adminPw').focus(); return toast('Enter your web UI password to save keys', true) }
+  if (!(await dialog({ title: 'Replace ' + n + ' key' + (n > 1 ? 's' : '') + '?', text: 'Every agent uses the new value at once.', ok: 'Replace' }))) return
+  try { const r = await api('POST', '/api/admin/keys', { values, password }); toast(r.message); await loadKeys() } catch (e) { toast(e.message, true) }
+}
+$('keysTest').onclick = async () => {
+  $('keysTest').disabled = true; $('keysTest').textContent = 'Testing…'
+  try {
+    const r = await api('POST', '/api/admin/keys/test')
+    $('keysTestOut').replaceChildren(...r.results.map(c => el('div', { class: 'note' + (c.ok ? '' : ' bad'), text: (c.ok ? '✓ ' : '✗ ') + c.text })))
+  } catch (e) { toast(e.message, true) } finally { $('keysTest').disabled = false; $('keysTest').textContent = 'Test keys' }
+}
+$('adviceBtn').onclick = async () => {
+  const message = $('adviceText').value.trim()
+  if (!message) return toast('Write something first', true)
+  $('adviceBtn').disabled = true; $('adviceBtn').textContent = 'Thinking…'
+  try {
+    const r = await api('POST', '/api/agents/' + sel + '/advise', { message })
+    proposal = r.proposal
+    $('adviceOut').hidden = false
+    $('adviceReply').textContent = r.reply || (proposal ? '' : '(no answer)')
+    $('proposalBox').hidden = !proposal
+    if (proposal) {
+      $('proposalFor').textContent = 'Proposed strategy for ' + (proposal.agents.length === 1 ? 'agent ' + (proposal.agents[0] + 1) : 'agents ' + proposal.agents.map(i => i + 1).join(', ')) + ':'
+      $('proposalText').textContent = proposal.strategy
+      $('proposalChanges').textContent = proposal.changes ? 'Changes: ' + proposal.changes : ''
+    }
+    $('adviceText').value = ''
+  } catch (e) { toast(e.message, true) } finally { $('adviceBtn').disabled = false; $('adviceBtn').textContent = 'Send' }
+}
+function takeProposal() { const id = proposal && proposal.id; proposal = null; $('proposalBox').hidden = true; return id }
+$('applyBtn').onclick = () => { const id = takeProposal(); if (id) act('Strategy updated', () => api('POST', '/api/proposals/' + id + '/apply')) }
+$('cancelBtn').onclick = () => { const id = takeProposal(); if (id) act('Proposal dropped', () => api('POST', '/api/proposals/' + id + '/cancel')) }
+$('actFilter').onchange = renderActivity
+$('sPreset').onchange = () => { const k = $('sPreset').value; if (k) $('sStrategy').value = S.instance.presets[k]; formDirty = true }
+$('settingsForm').addEventListener('input', () => { formDirty = true })
+$('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
+// Settings that let the agent spend more; the server asks for the password when one goes up.
+const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy']
+$('settingsForm').onsubmit = async e => {
+  e.preventDefault()
+  const form = readForm()
+  const cur = agent().settings
+  if (LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)) {
+    const password = await askPassword('Raise a limit', 'A higher cap, budget or per-action maximum (or a smaller gas reserve) lets the agent spend more. Your password confirms it.')
+    if (!password) return
+    form.password = password
+  }
+  act('Settings saved', async () => { const r = await api('POST', '/api/agents/' + sel + '/settings', form); formDirty = false; return r })
+}
+
+// ---- Getting started: the three keys explained step by step, funding and going live ----
+const GUIDE = [
+  { id: 'ai', title: 'AI key (Anthropic)', need: true, done: st => st.ai,
+    intro: 'The AI that plans for your agents. Without it they only watch and never play.',
+    steps: [
+      ['Open the Anthropic console and sign up, or log in if you have an account.', 'https://platform.claude.com'],
+      ['Open Billing and add credit. $10 is plenty to start.', 'https://platform.claude.com/settings/billing'],
+      ['Open Limits and set a monthly spend limit, for example $20. Then it can never cost more.', 'https://platform.claude.com/settings/limits'],
+      ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
+      ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
+    ],
+    note: 'It costs about $0.50 to $3 a day per agent, depending on the model and effort you pick in the Strategist box.' },
+  { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
+    intro: 'Every action on your phone, and you can talk to your manager in plain words.',
+    steps: [
+      ['On your phone, open Telegram and start a chat with BotFather, the official bot that makes bots.', 'https://t.me/BotFather'],
+      ['Send /newbot. Give it a name, then a username that ends in bot, for example myfox_manager_bot.'],
+      ['BotFather answers with a token that looks like 123456789:AAH... Copy it.'],
+      ['Back here, press Keys, paste it into Telegram bot token, type your password and press Save.', null, true],
+      ['Still in Keys, press Link my Telegram, send the 6-digit code to your new Telegram bot, then press I sent it. From then on it talks only to you.', null, true],
+    ] },
+  { id: 'binance', title: 'Binance, for automatic top-ups', need: false, done: st => st.binance,
+    intro: 'Lets the agent top up its own EGLD later. The top-ups arrive in a later version; your key waits here until then.',
+    steps: [
+      ['Log in to Binance and open API Management.', 'https://www.binance.com/en/my/settings/api-management'],
+      ['Press Create API, choose System generated, name it foxleague-agent and confirm with your 2FA.'],
+      ['Press Edit restrictions. Tick only Enable Withdrawals, then choose Restrict access to trusted IPs and enter this computer\'s public IP (the link shows it).', 'https://api.ipify.org'],
+      ['Open Address Management, add each agent wallet on the MultiversX (EGLD) network and switch the whitelist on. Now money can only go to your agents.', 'https://www.binance.com/en/my/security/address-management'],
+      ['Copy the API key and the secret (the secret is shown only once). Back here, press Keys, paste both, type your password and press Save.', null, true],
+    ],
+    note: 'Never tick trading or transfers. If your internet provider changes your IP, update it on Binance.' },
+  { id: 'fund', title: 'Fund your agent', need: true, done: () => S.agents.some(b => b.snapshot && Number(b.snapshot.egld) >= 0.5),
+    intro: 'The agent pays the game in FOXSY and network fees in EGLD. It buys FOXSY by itself.',
+    steps: [
+      ['Buy EGLD on any exchange (for example Binance, Bybit or Bitget).'],
+      ['Withdraw it to the wallet of agent 1 on the MultiversX (EGLD) network. The address is in Wallet and team, with a Copy button.'],
+      ['About 5 EGLD is a good start: 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.'],
+    ] },
+  { id: 'live', title: 'Watch, then go live', need: false, done: () => S.instance.liveMode,
+    intro: 'New agents start in dry run: they plan and simulate, nothing is paid.',
+    steps: [
+      ['Read a few plans in Last plan and Activity.'],
+      ['Set your limits and strategy in Settings. Every field has an i that explains it.'],
+      ['When you are happy, press Go LIVE and type GO LIVE. Back to dry run is one click.'],
+    ] },
+]
+let guideOpen = null
+function renderGuide() {
+  const st = S.instance.setup || {}
+  const box = $('guideItems'); box.replaceChildren()
+  for (const g of GUIDE) {
+    const done = Boolean(g.done(st))
+    const chip = el('span', { class: 'pill ' + (done ? 'run' : g.need ? 'halt' : 'mute'), text: done ? 'done' : g.need ? 'needed' : 'optional' })
+    const head = el('div', { class: 'ghead', onclick: () => { guideOpen = guideOpen === g.id ? null : g.id; renderGuide() } }, el('span', { text: g.title }), el('span', { class: 'spacer' }), chip)
+    const item = el('div', { class: 'gitem' }, head)
+    if (guideOpen === g.id) {
+      item.append(el('div', { class: 'gnote', text: g.intro }))
+      const ol = el('ol')
+      for (const [text, link, keys] of g.steps) {
+        const li = el('li', { text: text + ' ' })
+        if (link) li.append(el('a', { href: link, target: '_blank', rel: 'noopener noreferrer', text: link.replace(/^https:\/\//, '') }))
+        if (keys) li.append(el('button', { class: 'btn sm', type: 'button', text: 'Open Keys', onclick: () => { showGuide(false); toggleAdmin(true); $('adminPanel').scrollIntoView({ behavior: 'smooth' }) } }))
+        ol.append(li)
+      }
+      item.append(ol)
+      if (g.note) item.append(el('div', { class: 'gnote', text: g.note }))
+    }
+    box.append(item)
+  }
+  $('guideHide').checked = Boolean(st.welcomeHidden)
+}
+function showGuide(on, focus) {
+  if (on) { guideOpen = focus || GUIDE.find(g => !g.done(S.instance.setup || {}))?.id || null; renderGuide() }
+  $('guidewrap').classList.toggle('on', on)
+}
+$('guideBtn').onclick = () => showGuide(true)
+$('aiBannerBtn').onclick = () => showGuide(true, 'ai')
+$('guideClose').onclick = () => showGuide(false)
+$('guidewrap').addEventListener('click', e => { if (e.target.id === 'guidewrap') showGuide(false) })
+$('guideHide').onchange = async () => {
+  try { await api('POST', '/api/welcome', { hidden: $('guideHide').checked }); S.instance.setup.welcomeHidden = $('guideHide').checked } catch (e) { toast(e.message, true) }
+}
+let guideAutoShown = false
+function renderSetup() {
+  const st = S.instance.setup || {}
+  $('aiBanner').hidden = Boolean(st.ai)
+  if (!guideAutoShown) { guideAutoShown = true; if (!st.welcomeHidden) showGuide(true) }
+  $('tgLink').hidden = !(st.telegramToken && !st.telegramChat)
+}
+
+// Link my Telegram: a one-time code the owner sends to their Telegram bot, so nobody has to find a chat id.
+$('tgLinkBtn').onclick = async () => {
+  const password = $('adminPw').value
+  if (!password) { $('adminPw').focus(); return toast('Enter your web UI password first', true) }
+  try {
+    const r = await api('POST', '/api/admin/telegram/link', { password })
+    const code = $('tgLinkCode'); code.replaceChildren()
+    code.append(el('span', { text: 'Send ' }), el('b', { text: r.code }), el('span', { text: ' to ' }), el('a', { href: 'https://t.me/' + r.username, target: '_blank', rel: 'noopener noreferrer', text: '@' + r.username }), el('span', { text: ' from your own Telegram, then press I sent it.' }))
+    $('tgLinkDone').hidden = false
+  } catch (e) { toast(e.message, true) }
+}
+$('tgLinkDone').onclick = async () => {
+  const password = $('adminPw').value
+  if (!password) { $('adminPw').focus(); return toast('Enter your web UI password first', true) }
+  try {
+    const r = await api('POST', '/api/admin/telegram/confirm', { password })
+    toast(r.message); $('tgLinkDone').hidden = true; $('tgLinkCode').replaceChildren()
+    await loadState(); await loadKeys()
+  } catch (e) { toast(e.message, true) }
+}
+
+// The fixed top: its height (so scrolled-to elements stop below it) and a shadow once the page scrolls.
+const BIG = matchMedia('(min-width:900px) and (min-height:700px)')
+function stickyUpdate() {
+  const el = BIG.matches ? $('topbar') : $('agentbar')
+  document.documentElement.style.setProperty('--sticky-h', el.offsetHeight + 'px')
+  el.classList.toggle('stuck', window.scrollY > 4)
+  ;(BIG.matches ? $('agentbar') : $('topbar')).classList.remove('stuck')
+}
+window.addEventListener('scroll', stickyUpdate, { passive: true })
+window.addEventListener('resize', stickyUpdate)
+new ResizeObserver(stickyUpdate).observe($('topbar'))
+
+loadState().then(loadActivity)
+setInterval(loadState, 15000)
+setInterval(loadActivity, 30000)
+</script>
+</body></html>

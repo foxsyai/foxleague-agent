@@ -1,0 +1,80 @@
+---
+title: Your AI team manager for FoxLeague
+description: An agent that trains, plays and levels up your FoxLeague team on MultiversX Supernova, within the limits you set.
+template: splash
+banner:
+  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
+hero:
+  title: Your AI team manager
+  tagline: An agent that trains, plays and levels up your FoxLeague team around the clock, on MultiversX Supernova. You set the strategy and the limits; it never spends past them.
+  image:
+    file: ../../assets/hero.png
+    alt: The FoxLeague agent at the centre spot, wired to its eleven players, planning their next moves.
+  actions:
+    - text: Install in one line
+      link: /start/install/
+      icon: right-arrow
+    - text: See how it plays
+      link: /play/how-it-plays/
+      icon: open-book
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import ComingSoon from '../../components/ComingSoon.astro';
+
+## One line to start
+
+Linux, macOS or Windows through WSL2. Open a terminal and paste:
+
+<ComingSoon>
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
+```
+
+</ComingSoon>
+
+A guided installer creates your first agent's wallet, your dashboard login and your keys, then starts the agent
+in the background. Everything runs on your own computer: your recovery words and keys never leave it.
+
+## What the agent does for you
+
+<CardGrid>
+	<Card title="Plays every day" icon="rocket">
+		Uses the free training sessions on the starters who gain most, syncs stats to chain before they matter,
+		sets the lineup and plays the daily ranked and casual matches.
+	</Card>
+	<Card title="Competes to win" icon="star">
+		Joins Silver and Gold tournaments and 1v1 challenges it can win, creates its own in a free time slot and
+		prepares the squad before every match locks.
+	</Card>
+	<Card title="Grows the squad" icon="puzzle">
+		Weighs the XP booster, paid training, Common packs, fusion and the marketplace against the numbers in the
+		game's economy map, and buys only what pays.
+	</Card>
+	<Card title="Stays inside your limits" icon="approve-check">
+		A daily cap, a monthly budget and a maximum per payment, all enforced in code. New agents start in dry run;
+		a kill switch stops everything at once.
+	</Card>
+</CardGrid>
+
+## How it works
+
+Every half hour, inside the hours you choose, the agent reads your team and the whole platform (tournaments,
+challenges, auctions, prices, your budget), asks the AI for a plan and runs it, action by action. Every action is
+checked against the game rules and your limits right before it runs. You follow along in the dashboard or on
+Telegram, and you steer with a strategy in plain words.
+
+## What you need
+
+- A computer that stays on, or a small server.
+- About 5 EGLD: 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest plays the first games.
+- An AI key from Anthropic (about 5 minutes to create). Telegram and Binance are optional.
+
+<CardGrid>
+	<LinkCard title="Install" description="The one-line install and what the installer asks." href="/start/install/" />
+	<LinkCard title="Your keys, step by step" description="The AI key, Telegram and Binance, explained like you're five." href="/start/keys/" />
+	<LinkCard title="Safety and your limits" description="Why the agent can never spend more than you allow." href="/play/safety/" />
+	<LinkCard title="FAQ" description="Fair play, costs, what happens when you are away." href="/help/faq/" />
+</CardGrid>

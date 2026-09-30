@@ -1,0 +1,10 @@
+node_modules/
+data/
+.env
+.env.*
+!.env.example
+*.pem
+pem/
+.node/
+*.local.md
+deploy/.host

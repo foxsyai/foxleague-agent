@@ -1,0 +1,48 @@
+---
+title: Fund it and go live
+description: Send EGLD to your agent, watch it in dry run, then go live.
+---
+
+import { Steps, Aside } from '@astrojs/starlight/components';
+
+## Fund your agent
+
+The agent pays the game in FOXSY and network fees in EGLD. You send EGLD; it buys the FOXSY it needs by itself on
+xExchange.
+
+<Steps>
+1. Buy EGLD on any exchange (for example Binance, Bybit or Bitget).
+2. Withdraw it to the **wallet of agent 1** on the **MultiversX (EGLD)** network. The address is on the agent's
+   page, in **Wallet and team**, with a Copy button. The installer printed it too.
+3. About **5 EGLD** is a good start: 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest
+   plays the first games.
+</Steps>
+
+Once the EGLD arrives, the agent registers your team by itself: it swaps for the registration fee, picks a name,
+registers and generates the team's free badge.
+
+## Watch it in dry run
+
+New agents start in **dry run**: the agent plans, checks each action against the game rules and your limits, then
+**simulates** it on chain. Nothing is signed or sent. Read a few plans in **Last plan** and **Activity**; every
+action shows what it would have done and cost.
+
+Meanwhile, set your **limits** and **strategy** in **Settings** ([Every setting explained](/use/settings/)).
+
+## Go live
+
+<Steps>
+1. Press **Go LIVE** in the header.
+2. Type `GO LIVE`, then your dashboard password.
+3. The agent now signs real transactions, inside the same limits.
+</Steps>
+
+![The Go LIVE dialog: type GO LIVE and your password](/screenshots/go-live.png)
+
+<Aside>
+Back to dry run is one click. The **Kill switch** stops every agent at once; **Pause** stops one agent. Your funds,
+settings and strategy stay as they are.
+</Aside>
+
+Live also needs this computer's permission, which the installer asked for (step 5). If Go LIVE is grey, allow it:
+set `AGENT_LIVE_ENABLED=1` in the `.env` file in the `foxleague-agent` folder and restart the agent.

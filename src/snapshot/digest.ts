@@ -1,0 +1,141 @@
+// Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
+
+import { freeGaps } from '../executor/slots.ts'
+import { lineupStrength } from '../executor/rules.ts'
+import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
+import { agentName } from '../names.ts'
+import type { AgentSnapshot, PlayerView } from './snapshot.ts'
+
+/**
+ * Text written by other players or servers (titles, team, card and listing names, error messages) as
+ * data: control characters and line breaks become spaces, so it can never open a heading or a line of
+ * its own in the prompt, and it is cut to a short length. Quotes are swapped so a value cannot close
+ * the quotes around it; the snapshot fence (<<<SNAPSHOT, SNAPSHOT>>>) and heading marks cannot be
+ * written at all.
+ */
+export function txt(v: unknown, max = 40): string {
+  const s = String(v ?? '')
+    .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ')
+    .replace(/"/g, "'")
+    .replace(/#+/g, '')
+    .replace(/<{2,}/g, '<')
+    .replace(/>{2,}/g, '>')
+    .replace(/SNAPSHOT/gi, 'snapshot')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return s.length > max ? `${s.slice(0, max - 1)}…` : s
+}
+
+const SHORT: Record<string, string> = { speed: 'spd', accuracy: 'acc', defense: 'def', power: 'pow', control: 'ctl', vision: 'vis', stamina: 'sta' }
+
+function statLine(p: PlayerView): string {
+  return Object.keys(SHORT)
+    .map(s => {
+      const synced = p.synced[s] ?? 0
+      const live = p.live[s] ?? 0
+      return `${SHORT[s]} ${synced}${live !== synced ? `>${live}` : ''}`
+    })
+    .join(' ')
+}
+
+export function playerLine(p: PlayerView): string {
+  const tags = [
+    p.role === 'starter' ? `XI#${p.slot}` : p.role === 'bench' ? 'bench' : 'res',
+    p.dirty ? 'dirty' : '',
+    p.listed ? 'LISTED' : '',
+    p.transferLockedUntil ? `locked-until ${p.transferLockedUntil.slice(0, 16)}` : '',
+    p.fusionReadyAt ? `fusion-cooldown-until ${p.fusionReadyAt.slice(0, 16)}` : '',
+  ].filter(Boolean)
+  const comp = p.fusionMatchCredit ? `${p.competitiveMatches}+${p.fusionMatchCredit} credit` : `${p.competitiveMatches}`
+  return `#${p.nonce} ${txt(p.name, 30)} ${p.position} ${p.rarity}(cap ${p.cap}) cond ${p.condition} age ${p.ageYears} comp ${comp} | ${statLine(p)} | tot ${p.syncedTotal} [${tags.join(',')}]`
+}
+
+export function renderDigest(s: AgentSnapshot): string {
+  const scout = (id: number) => {
+    const r = (s.market.scouted ?? []).find(x => x.id === id)
+    return r ? ` [rival ELO ${r.elo ?? 'unknown'}, lineup ${r.strength === null ? 'unknown' : r.strength} at full condition]` : ''
+  }
+  const out: string[] = []
+  const who = s.agent.index !== null ? agentName(s.agent.index) : 'watch'
+  out.push(`# ${who} ${s.agent.address} (shard ${s.agent.shard ?? '?'}) at ${s.takenAt}`)
+  out.push(`Game day resets ${s.gameDay.nextResetAt} (in ${s.gameDay.hoursToReset} h)`)
+  if (s.chain) {
+    const usd = s.prices ? ` (~$${(atomicToFloat(s.chain.egld) * s.prices.egldUsd).toFixed(2)} + ~$${(atomicToFloat(s.chain.foxsy) * s.prices.foxsyUsd).toFixed(2)})` : ''
+    out.push(`Wallet: ${formatAtomic(s.chain.egld, 4)} EGLD, ${formatAtomic(s.chain.foxsy, 2)} FOXSY, ${formatAtomic(s.chain.wegld, 4)} WEGLD, ${s.chain.nftCount} cards, nonce ${s.chain.nonce}${usd}`)
+  }
+  if (s.prices) out.push(`Prices: EGLD $${s.prices.egldUsd.toFixed(2)}, FOXSY ${s.prices.egldPerFoxsy.toExponential(3)} EGLD = $${s.prices.foxsyUsd.toFixed(5)}`)
+
+  const r = s.registration
+  if (!r.registered) {
+    out.push(
+      `NOT REGISTERED: fee paid on chain ${r.feePaidOnChain ?? '?'}, whitelisted ${r.whitelisted ?? '?'}, relayer ${r.relayerEnabled ?? '?'} (${r.relaysRemaining ?? '?'} relays left today), starter stock ${r.starterStock ?? '?'}, fee ${s.config?.registration_fee_foxsy ?? '?'} FOXSY`,
+    )
+  } else if (s.profile) {
+    const p = s.profile
+    out.push(`Team "${txt(p.team_name, 20)}" (user ${p.id}): ELO ${p.elo_rating} ${p.league}, W/D/L ${p.matches_won}/${p.matches_drawn}/${p.matches_lost}, tournament wins ${p.tournament_wins}, ${p.player_count} cards`)
+  }
+  if (s.team) out.push(`Formation ${s.team.formation}; XI ${s.team.lineup.join(',')}; bench ${s.team.substitutes.join(',')}`)
+
+  if (s.auth) {
+    const a = s.auth
+    if (a.allowance) out.push(`Matches started today: ${a.allowance.today_count}/${a.allowance.daily_limit}`)
+    const t = a.shop?.training
+    if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid used ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
+    if (a.shop?.xp_booster) out.push(`XP booster: ${JSON.stringify(a.shop.xp_booster)}`)
+    if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id} ${a.activeMatch.kind} ${a.activeMatch.status}`)
+    for (const m of a.upcoming?.matches ?? []) {
+      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]`)
+    }
+    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
+    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}`)
+  }
+
+  if (s.players.length) {
+    out.push(`Squad (${s.players.length}; stats synced>live):`)
+    const order = { starter: 0, bench: 1, reserve: 2 }
+    for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p)}`)
+  }
+
+  const m = s.market
+  out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
+  for (const t of m.openStandard.slice(0, 30)) {
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${t.is_private ? ' private' : ''}`)
+  }
+  if (m.scouted?.length) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
+  out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
+  for (const t of m.openChallenges.slice(0, 20)) {
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}`)
+  }
+  // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
+  const now = Date.now()
+  const hm = (t: number) => new Date(t).toISOString().slice(5, 16).replace('T', ' ')
+  const slots = (m.slots ?? []).filter(w => w.end > now)
+  out.push(`Tournament time slots taken (UTC; a created tournament reserves 1 h before its start to 1 h after start + FoxLeague's estimate, ~3 min per match; it may not overlap these): ${slots.length ? '' : 'none'}`)
+  for (const w of slots.slice(0, 20)) out.push(`  T${w.id} "${txt(w.title, 40)}" ${hm(w.start)} to ${hm(w.end)}`)
+  const gaps = freeGaps(slots, now + 3600_000, now + 72 * 3600_000)
+  if (slots.length) out.push(`Free for a new tournament's whole window (next 72 h): ${gaps.slice(0, 8).map(g => `${hm(g.start)} to ${hm(g.end)}`).join('; ') || 'none'}`)
+  if (m.recentStandard.length) {
+    out.push('Recent standard tournaments (seated/max, fee, status):')
+    for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${t.tier} ${t.format} ${t.seated}/${t.max_teams} fee ${t.fee} ${t.status} ${t.starts_at.slice(0, 16)}`)
+  }
+  if (m.floors.length) out.push(`Marketplace floors (lowest reserve by rarity): ${m.floors.map(f => `${f.rarity} ${f.floor_price} (${f.count} listed)`).join(', ')}`)
+  if (m.auctions.length) {
+    out.push('Open auctions, strongest first (nonce, card, OVR, price now, ends):')
+    for (const l of m.auctions) {
+      const ovr = Math.round((l.speed + l.accuracy + l.defense + l.power + l.control + l.vision + l.stamina) / 7)
+      const price = l.highest_bid ? `top bid ${l.highest_bid}` : `reserve ${l.min_price ?? '?'}`
+      const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
+      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
+    }
+  }
+  if (s.leaderboardNeighbours.length) {
+    out.push(`Nearby on the leaderboard: ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}`).join('; ')}`)
+  }
+  for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
+  return out.join('\n')
+}
+
+/** JSON-safe copy (bigint as decimal strings). */
+export function snapshotToJson(s: AgentSnapshot): string {
+  return JSON.stringify(s, (_k, v) => (typeof v === 'bigint' ? v.toString() : v), 2)
+}

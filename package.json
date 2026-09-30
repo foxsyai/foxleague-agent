@@ -1,0 +1,24 @@
+{
+  "name": "foxleague-agent",
+  "version": "0.10.0",
+  "private": true,
+  "description": "AI team manager for FoxLeague (MultiversX mainnet)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "cli": "node --disable-warning=ExperimentalWarning src/cli.ts",
+    "start": "node --disable-warning=ExperimentalWarning src/service.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test 'test/**/*.test.ts'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.128.0",
+    "@multiversx/sdk-core": "15.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.4",
+    "typescript": "5.9.3"
+  }
+}

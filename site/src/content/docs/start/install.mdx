@@ -1,0 +1,79 @@
+---
+title: Install
+description: Install the FoxLeague agent on your own computer with one line.
+banner:
+  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ComingSoon from '../../../components/ComingSoon.astro';
+
+The agent runs on your own computer, so your wallet and keys never leave it. It works on **Linux**, **macOS**
+and **Windows through WSL2**. The computer has to stay on for the agent to play; a small cloud server works too
+([Run it on a server](/help/server/)).
+
+## Before you start
+
+- About **5 EGLD** to send to your agent later (you can install first and fund it after).
+- About 5 minutes to create your **AI key** at Anthropic ([Your keys](/start/keys/)). You can also add it after
+  the install.
+
+## Install
+
+<ComingSoon>
+
+<Tabs>
+	<TabItem label="Linux and macOS">
+		Open a terminal and paste this line:
+
+		```sh
+		curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
+		```
+	</TabItem>
+	<TabItem label="Windows">
+		<Steps>
+		1. Install **Ubuntu** from the Microsoft Store (this installs WSL2, a small Linux inside Windows).
+		2. Open Ubuntu. The first time, it asks for a Linux user name and password.
+		3. Turn on systemd, so the agent keeps running in the background: run
+		   `sudo sh -c 'printf "[boot]\nsystemd=true\n" >> /etc/wsl.conf'`, close Ubuntu, run `wsl --shutdown`
+		   in PowerShell, then open Ubuntu again.
+		4. Paste the install line:
+
+		   ```sh
+		   curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
+		   ```
+		</Steps>
+	</TabItem>
+</Tabs>
+
+</ComingSoon>
+
+The line downloads the newest release into `~/foxleague-agent` and starts the guided installer. To install a given
+version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=v0.10.0 bash`.
+
+## What the installer asks
+
+It walks you through seven short steps and explains each one:
+
+| Step | What happens |
+|---|---|
+| 1. Node.js | Uses the Node.js on your computer if it is recent enough, otherwise downloads a private copy (checksum verified). |
+| 2. Wallet | Creates a new wallet for your first agent and shows its **recovery words once**. Write them on paper. |
+| 3. Dashboard login | You choose a user name, a password (12 characters or more) and a port (8870 by default). |
+| 4. Keys | The AI key, Telegram and Binance, each with simple steps and links. You can skip any of them. |
+| 5. Settings | Agents start in **dry run**. You choose whether this computer may sign real transactions once you press Go LIVE. |
+| 6. PEM files | Writes `pem/agent1.pem`, so you can log into the FoxLeague app as your agent's team and watch it play. |
+| 7. Background service | Starts the agent in the background and keeps it running after a restart. |
+
+<Aside type="caution" title="Your recovery words">
+The words are the only way to recover your agents' wallets. Keep them on paper, offline. Anyone with them controls
+the wallets. Never type them into a website, a chat or a screenshot.
+</Aside>
+
+Run the installer again at any time (`./install.sh` in the `foxleague-agent` folder): it keeps your wallet, login and keys and
+only asks for what is missing.
+
+## After the install
+
+Open **http://localhost:8870** and log in. The **Getting started** guide opens by itself and shows what is left:
+your keys, funding your agent and going live. Next: [Your keys, step by step](/start/keys/).

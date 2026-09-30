@@ -1,0 +1,113 @@
+---
+/*
+ * Until the public release the repository is private: the frame shows its real address, and the click opens
+ * Foxsy AI's GitHub page (public), never a "not found" page. Launch day: remove the frames (see README.md).
+ */
+import { Icon } from '@astrojs/starlight/components';
+
+interface Props {
+	title?: string;
+}
+const { title = 'The install opens with the public release' } = Astro.props;
+const REPO = 'github.com/foxsyai/foxleague-agent';
+const HREF = 'https://github.com/foxsyai';
+---
+
+<div class="coming-soon not-content">
+	<div class="cs-head">
+		<span class="cs-pill"><span class="cs-dot" aria-hidden="true"></span>Coming soon</span>
+		<span class="cs-title">{title}</span>
+	</div>
+	{Astro.slots.has('default') && <div class="cs-body"><slot /></div>}
+	<p class="cs-repo">
+		<Icon name="github" size="1.1rem" />
+		<a href={HREF} target="_blank" rel="noopener noreferrer" title="Public at the launch. Until then this opens Foxsy AI on GitHub.">{REPO}</a>
+		<span class="cs-note">public at the launch</span>
+	</p>
+</div>
+
+<style>
+	.coming-soon {
+		margin-block: 1.25rem;
+		padding: 1rem 1.1rem 0.85rem;
+		border: 1.5px solid var(--sl-color-accent);
+		border-radius: 0.75rem;
+		background: color-mix(in srgb, var(--sl-color-accent) 7%, transparent);
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--sl-color-accent) 12%, transparent);
+	}
+	.cs-head {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem 0.75rem;
+	}
+	.cs-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.1rem 0.7rem 0;
+		border-radius: 999px;
+		background: var(--sl-color-accent);
+		color: #fff;
+		font-family: 'Teko', 'Impact', 'Arial Narrow', sans-serif;
+		font-size: 1.15rem;
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		line-height: 1.5;
+	}
+	.cs-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		margin-top: -0.1rem;
+		border-radius: 50%;
+		background: #fff;
+		animation: cs-pulse 1.8s ease-in-out infinite;
+	}
+	@keyframes cs-pulse {
+		50% { opacity: 0.25; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.cs-dot { animation: none; }
+	}
+	.cs-title {
+		color: var(--sl-color-white);
+		font-weight: 600;
+	}
+	.cs-body {
+		margin-top: 0.85rem;
+	}
+	.cs-body :global(.expressive-code),
+	.cs-body :global(starlight-tabs) {
+		margin-top: 0;
+	}
+	.cs-repo {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.5rem;
+		margin: 0.85rem 0 0;
+		font-size: var(--sl-text-sm);
+		color: var(--sl-color-gray-3);
+	}
+	.cs-repo :global(svg) {
+		color: var(--sl-color-white);
+	}
+	.cs-repo a {
+		font-family: var(--sl-font-system-mono);
+		color: var(--sl-color-text-accent);
+		text-decoration: underline dashed;
+		text-underline-offset: 0.25em;
+		overflow-wrap: anywhere;
+	}
+	.cs-repo a:hover {
+		color: var(--sl-color-accent-high);
+	}
+	.cs-note::before {
+		content: '·';
+		margin-inline-end: 0.5rem;
+	}
+	@media (max-width: 40rem) {
+		.cs-note { flex-basis: 100%; }
+		.cs-note::before { content: none; }
+	}
+</style>
