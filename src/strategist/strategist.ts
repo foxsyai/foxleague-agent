@@ -178,10 +178,10 @@ export function renderPlanRequest(p: PlanInput): string {
     `Today: $${b.spentTodayUsd.toFixed(2)} spent of $${b.dailyCapUsd.toFixed(2)}, $${b.remainingTodayUsd.toFixed(2)} left. Month ${b.month}: $${b.remainingMonthUsd.toFixed(2)} of $${b.monthlyBudgetUsd.toFixed(2)} left. Setup budget left: $${b.remainingSetupUsd.toFixed(2)} of $${b.setupBudgetUsd.toFixed(2)}.`,
     `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.join('/')}.`,
     `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
-    `## Recent activity (newest first)`,
     recent.some(r => OLD_SIBLING_RULE.test(r.summary))
-      ? 'Note: some entries below cite a Fair Play rule that kept this agent out of tournaments, 1v1s and auctions with the owner\'s other agents. The owner removed that rule on 2026-09-30: judge every tournament, 1v1 and auction on its merits, whoever else is in it.'
+      ? "## Earlier entries\nSome recent entries below cite a rule that kept this agent out of tournaments, 1v1s and auctions with the owner's other teams. The owner removed that rule on 2026-09-30; the fair play section of your instructions says what holds now. Do not carry that reasoning forward: judge every tournament, 1v1 and auction on its merits."
       : '',
+    `## Recent activity (newest first)`,
     ...(recent.length ? recent.map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${txt(r.summary, 300)}`) : ['- none yet']),
     SNAPSHOT_HEADING,
     '<<<SNAPSHOT',
