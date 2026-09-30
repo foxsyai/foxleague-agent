@@ -160,8 +160,17 @@ export interface PlanInput {
   ownerRequest?: string
 }
 
+/**
+ * Until 2026-09-30 the executor kept an agent out of tournaments, 1v1s and auctions with the owner's other
+ * agents, and refusals and plans in the history still say so. The owner removed the rule (agents know nothing
+ * of each other), so while such an entry is among the recent ones the plan is told it no longer holds, or the
+ * model would keep repeating it from its own earlier plans.
+ */
+const OLD_SIBLING_RULE = /fair.?play|another agent of (this install|this owner)|other agents? of (this|the) owner/i
+
 export function renderPlanRequest(p: PlanInput): string {
   const b = p.budget
+  const recent = p.recent.slice(0, 20)
   const lines = [
     `## Owner's strategy direction\n${p.settings.strategy}`,
     p.ownerRequest ? `## One-off request from the owner (do this if the rules and caps allow, nothing else)\n${p.ownerRequest}` : '',
@@ -170,7 +179,10 @@ export function renderPlanRequest(p: PlanInput): string {
     `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.join('/')}.`,
     `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
     `## Recent activity (newest first)`,
-    ...(p.recent.length ? p.recent.slice(0, 20).map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${txt(r.summary, 300)}`) : ['- none yet']),
+    recent.some(r => OLD_SIBLING_RULE.test(r.summary))
+      ? 'Note: some entries below cite a Fair Play rule that kept this agent out of tournaments, 1v1s and auctions with the owner\'s other agents. The owner removed that rule on 2026-09-30: judge every tournament, 1v1 and auction on its merits, whoever else is in it.'
+      : '',
+    ...(recent.length ? recent.map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${txt(r.summary, 300)}`) : ['- none yet']),
     SNAPSHOT_HEADING,
     '<<<SNAPSHOT',
     renderDigest(p.snapshot),

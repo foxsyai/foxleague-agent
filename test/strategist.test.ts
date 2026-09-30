@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Anthropic from '@anthropic-ai/sdk'
 import { Store } from '../src/store/db.ts'
-import { EFFORTS, Strategist, deadlineMs, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
+import { EFFORTS, Strategist, deadlineMs, renderPlanRequest, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
 import { Proposals } from '../src/strategist/proposals.ts'
 import { cleanPage } from '../src/strategist/manual.ts'
 import type { Config } from '../src/config.ts'
@@ -196,4 +196,14 @@ test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, a
   const cut = await s.plan(input)
   assert.match(cut.summary, /truncated at max_tokens; nothing executed/)
   assert.equal(cut.actions.length, 0)
+})
+
+test('while the history still cites the removed rule about the owner\'s other agents, the plan is told it no longer holds', () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, 'erd1x')
+  const base = { snapshot: snapshot(), settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), dryRun: true }
+  const row = (summary: string) => ({ id: 1, at: new Date().toISOString(), agentIndex: 0, kind: 'join_tournament', status: 'refused', summary, detail: null, costUsd: null, txHash: null })
+  const old = renderPlanRequest({ ...base, recent: [row('join tournament T104: another agent of this install is in or runs this tournament (Fair Play: no coordinated teams)')] as never })
+  assert.match(old, /The owner removed that rule on 2026-09-30/)
+  assert.doesNotMatch(renderPlanRequest({ ...base, recent: [row('play ranked match: match #870 started')] as never }), /removed that rule/)
 })
