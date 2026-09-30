@@ -49,6 +49,8 @@ export interface RulesContext {
   opponent?: { userId: number; elo: number | null; strength?: number | null }
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
+  /** Open 1v1 challenges this agent created in the last 24 hours. */
+  openChallengesToday?: number
   /** Bids this agent already placed on the same auction in the last 48 hours. */
   priorBids?: number
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
@@ -113,6 +115,11 @@ export const MAX_1V1_ELO_GAP = 100
 /** A 1v1 is refused when the rival's lineup (at full condition) is more than this much stronger than ours today. */
 export const MAX_1V1_STRENGTH_RATIO = 1.1
 export const MAX_1V1_PER_OPPONENT_WEEK = 2
+/**
+ * Open 1v1 challenges (anyone may take them, a stronger team too): Silver only, at the owner's lowest Silver
+ * amount, at most this many in 24 hours. They get games played when no targeted opponent answers.
+ */
+export const MAX_OPEN_1V1_PER_DAY = 1
 export const MAX_BIDS_PER_AUCTION = 2
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72
@@ -374,7 +381,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const t: Tournament = d.tournament
       if (t.status !== 'open') return refuse(`T${t.id} is ${t.status}`)
       if (new Date(t.deadline) <= ctx.now) return refuse(`T${t.id} registration deadline passed`)
-      if (t.is_private) return refuse(`T${t.id} is private`)
+      if (t.is_private && d.user_can_join_private !== true) return refuse(`T${t.id} is private and this team is not invited`)
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
       const myId = s.profile.id
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
@@ -388,7 +395,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (legal) return refuse(legal)
       const oneVOne = t.max_teams === 2
       if (oneVOne) {
-        if (t.target_user_id !== null && t.target_user_id !== s.profile.id) return refuse('1v1 is locked to another opponent')
+        if ((t.targeted || t.target_user_id !== null) && t.target_user_id !== s.profile.id && !t.targeted_to_you) return refuse('1v1 is locked to another opponent')
         if (d.participants.length < 1) return refuse('1v1 creator has not paid yet')
         const opp = oneVOneOpponentRefusal(s, ctx)
         if (opp) return refuse(opp)
@@ -454,12 +461,18 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'create_challenge': {
       if (!registered || !s.profile) return refuse('not registered')
-      if (a.target_user_id === null) return refuse('an open challenge only attracts stronger teams: target a known opponent')
-      if (a.target_user_id === s.profile.id) return refuse('cannot challenge yourself')
-      if (ctx.ownUserIds.has(a.target_user_id)) return refuse('target is another agent of this install (Fair Play: no coordinated teams)')
-      if (ctx.siblingsUnknown) return refuse("the FoxLeague ids of this owner's other agents could not be read: not challenging (Fair Play)")
-      const opp = oneVOneOpponentRefusal(s, ctx)
-      if (opp) return refuse(opp)
+      if (a.target_user_id === null) {
+        // Open: the strength of whoever takes it cannot be checked, so the stake is the smallest the owner allows.
+        const lowest = Math.min(...ctx.settings.entryFeesSilver)
+        if (a.tier !== 'silver' || a.stake_foxsy !== lowest) return refuse(`an open challenge is Silver at your lowest amount (${lowest} FOXSY): anyone may take it, a stronger team too`)
+        if ((ctx.openChallengesToday ?? 0) >= MAX_OPEN_1V1_PER_DAY) return refuse(`already ${MAX_OPEN_1V1_PER_DAY} open challenge in the last 24 hours`)
+      } else {
+        if (a.target_user_id === s.profile.id) return refuse('cannot challenge yourself')
+        if (ctx.ownUserIds.has(a.target_user_id)) return refuse('target is another agent of this install (Fair Play: no coordinated teams)')
+        if (ctx.siblingsUnknown) return refuse("the FoxLeague ids of this owner's other agents could not be read: not challenging (Fair Play)")
+        const opp = oneVOneOpponentRefusal(s, ctx)
+        if (opp) return refuse(opp)
+      }
       const list = a.tier === 'silver' ? ctx.settings.entryFeesSilver : ctx.settings.entryFeesGold
       if (!list.includes(a.stake_foxsy)) return refuse(`stake ${a.stake_foxsy} is not one of the configured amounts ${list.join('/')}`)
       const bounds = tierBounds(s, a.tier)

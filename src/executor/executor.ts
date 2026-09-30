@@ -271,7 +271,7 @@ export class Executor {
     let tournament: TournamentDetail | null | undefined
     if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund') {
       try {
-        tournament = await fox.tournament(a.tournament_id, agent.address)
+        tournament = await fox.tournament(a.tournament_id, wallet)
       } catch (err) {
         if (!(err instanceof ApiRefusal)) throw err
         tournament = null
@@ -288,7 +288,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; action?: { nonce?: number } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; action?: { nonce?: number; target_user_id?: number | null } }
       } catch {
         return {}
       }
@@ -327,6 +327,11 @@ export class Executor {
       market.oneVOneWithOpponentThisWeek = store
         .activityOf(agent.index, ['join_tournament', 'create_challenge'], since(7 * 86_400_000))
         .filter(r => counted(r.status) && detailOf(r).opponentUserId === opponentId).length
+    }
+    if (a.type === 'create_challenge' && a.target_user_id === null) {
+      market.openChallengesToday = store
+        .activityOf(agent.index, ['create_challenge'], since(24 * 3_600_000))
+        .filter(r => counted(r.status) && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null).length
     }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
@@ -750,7 +755,7 @@ export class Executor {
         store.retagSpend(booking.ids, 'join:new', `join:${created.id}`)
         let detail: TournamentDetail | undefined
         for (let i = 0; i < 20; i++) {
-          detail = await fox.tournament(created.id, wallet.address)
+          detail = await fox.tournament(created.id, wallet)
           if (detail.tournament.status === 'open' && detail.tournament.sc_tournament_id !== null) break
           await sleep(3000)
         }

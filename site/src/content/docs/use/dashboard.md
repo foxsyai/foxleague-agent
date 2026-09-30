@@ -28,7 +28,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 ## An agent's page
 
 - **Controls**: **Plan now** runs a planning cycle at once; **Pause** stops this agent only.
-- **Wallet and team**: balances, cards, team, rating and record, matches and training today. **Value** is what
+- **Wallet and team**: the EGLD, WEGLD and FOXSY balances (WEGLD shows 0.0000 when the wallet holds none), cards,
+  team, rating and record, matches and training today. **Value** is what
   the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
   reserve aside); it turns orange, and the agent's tab shows **low funds**, when that falls under your **Top-up
   warning** (you also get one message on Telegram). To top up, send EGLD to the agent's

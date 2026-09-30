@@ -471,8 +471,8 @@ function renderAgent() {
   const rows = $('walletRows'); rows.replaceChildren()
   if (!s) rows.append(...row('State', 'waiting for the first snapshot'))
   else {
-    rows.append(...row('EGLD', s.egld ?? '–'), ...row('FOXSY', s.foxsy ?? '–'))
-    if (s.wegld) rows.append(...row('WEGLD', s.wegld + ' · used first for swaps'))
+    const wegld = s.wegld === null || s.wegld === undefined ? '–' : Number(s.wegld) > 0 ? s.wegld + ' · used first for swaps' : s.wegld
+    rows.append(...row('EGLD', s.egld ?? '–'), ...row('WEGLD', wegld), ...row('FOXSY', s.foxsy ?? '–'))
     const f = b.funds || {}
     rows.append(el('div', { class: 'k' }, 'Value', el('i', { class: 'info', 'data-tip': 'funds', text: 'i' })),
       el('div', { class: 'v' + (f.low ? ' low' : '') }, f.usd === null || f.usd === undefined ? '–' : usd(f.usd) + ' · ' + usd(f.playable) + ' to play with' + (f.low ? ' · low: top up with EGLD, WEGLD or FOXSY (warning under $' + b.settings.topUpWarningUsd + ')' : '')))

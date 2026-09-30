@@ -163,8 +163,12 @@ export class FoxLeague {
     return this.call<Tournament[]>(`/tournaments${params.size ? `?${params}` : ''}`)
   }
 
-  tournament(id: number, wallet?: string): Promise<TournamentDetail> {
-    return this.call<TournamentDetail>(`/tournaments/${id}${wallet ? `?wallet_address=${wallet}` : ''}`)
+  /**
+   * A tournament's detail. With the agent's wallet its session goes along: FoxLeague answers the caller's own
+   * fields (for a private tournament, whether this team is invited) only to that session.
+   */
+  tournament(id: number, wallet?: AgentWallet): Promise<TournamentDetail> {
+    return this.call<TournamentDetail>(`/tournaments/${id}${wallet ? `?wallet_address=${wallet.address}` : ''}`, wallet ? { wallet } : {})
   }
 
   leaderboard(limit = 50, offset = 0): Promise<LeaderboardPage> {

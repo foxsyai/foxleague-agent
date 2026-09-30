@@ -161,9 +161,16 @@ export interface Tournament {
   completed_at: string | null
   cancelled_at: string | null
   participant_count?: number
+  /** Named only to the 1v1's creator and its target (their own session); null for everyone else, see `targeted`. */
   target_user_id: number | null
+  /** A targeted 1v1, whoever asks (FoxLeague hides the target itself from other teams). */
+  targeted?: boolean
+  /** The 1v1 targets the caller's own team (only with its session). */
+  targeted_to_you?: boolean
   challenge_deadline_minutes: number | null
   is_private: boolean
+  /** Set by the agent: a private tournament its own team is invited to (FoxLeague tells this to the team's session only). */
+  invited?: boolean
   home_and_away: boolean
   developer_mode: boolean
 }
@@ -172,6 +179,8 @@ export interface TournamentDetail {
   tournament: Tournament
   participants: { user_id: number; team_name?: string; wallet_address?: string }[]
   user_is_participant?: boolean
+  /** Only filled for the caller's own session: true when that team is invited to this private tournament. */
+  user_can_join_private?: boolean | null
   [key: string]: unknown
 }
 

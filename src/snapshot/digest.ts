@@ -99,12 +99,12 @@ export function renderDigest(s: AgentSnapshot): string {
   const m = s.market
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${t.is_private ? ' private' : ''}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${t.is_private ? (t.invited ? ' private, you are invited' : ' private') : ''}`)
   }
   if (m.scouted?.length) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()
@@ -129,7 +129,7 @@ export function renderDigest(s: AgentSnapshot): string {
     }
   }
   if (s.leaderboardNeighbours.length) {
-    out.push(`Nearby on the leaderboard: ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}`).join('; ')}`)
+    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')

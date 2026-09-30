@@ -21,10 +21,16 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. It refuses a schedule that would wear the squad out.
+  platform time slot, sized from what recently filled. It refuses a schedule that would wear the squad out. It
+  never creates a private tournament, but it joins one your team is invited to when it is worth it (only your
+  team's own FoxLeague login sees the invitation).
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
-  starting eleven), never against another of your agents, at most twice a week against the same team. It can leave
-  its own unaccepted challenge when a better one appears.
+  starting eleven), never against another of your agents, at most twice a week against the same team. When it
+  creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show
+  who took challenges in the last 7 days, and a challenge to a team that never answers only locks the stake until
+  its deadline. When no such team fits, it may create one **open** challenge a day, which any team can take, a
+  stronger one too: always Silver at your lowest Silver amount, so the stake stays small. It can leave its own
+  unaccepted challenge when a better one appears.
 - **Match preparation**: about an hour before each match session locks (inside its active hours), it syncs if the gains matter, sets the
   lineup for that opponent and recovers condition only for key starters in a match that matters.
 - **Refunds**: seats and stakes that come back (a tournament that did not fill, an expired challenge) are claimed

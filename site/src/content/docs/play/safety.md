@@ -47,7 +47,9 @@ abuse. The agent:
 - plays at a human pace (random timing, spread-out actions, active hours);
 - never lets your agents meet in a 1v1, trade with each other or feed each other's tournaments;
 - protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two a week
-  against the same team, never an open challenge).
+  against the same team; an open challenge, which any team may take, at most once a day and only at your lowest
+  Silver amount);
+- never creates a private tournament and joins one only when your team is invited.
 
 You remain responsible for your agents.
 

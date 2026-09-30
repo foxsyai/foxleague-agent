@@ -163,7 +163,7 @@ test('LR2 a created 1v1 stake is credited back when the agent leaves it or FoxLe
     },
   })
   const s = snapshot()
-  s.leaderboardNeighbours = [{ id: 50, wallet_address: STRANGER, team_name: 'Rival', elo_rating: 1190, league: 'Bronze' }]
+  s.leaderboardNeighbours = [{ id: 50, wallet_address: STRANGER, team_name: 'Rival', elo_rating: 1190, league: 'Bronze', accepted7d: 0 }]
   const live = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
   await withLive(m.store, async () => {
     const [c] = await m.exec.run(m.agent(), liveWallet, s, [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 50, deadline_minutes: 60 }, reason: '' }])

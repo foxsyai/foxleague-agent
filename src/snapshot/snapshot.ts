@@ -99,7 +99,8 @@ export interface AgentSnapshot {
     challengesForMe: ChallengeForMe[]
   } | null
   market: MarketSummary
-  leaderboardNeighbours: Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'>[]
+  /** Teams to challenge: the ones that accept 1v1s first (`accepted7d`), then the nearest by ELO. */
+  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number })[]
   warnings: string[]
 }
 
@@ -226,16 +227,17 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [] }
   }
 
-  const [openAll, completed, cancelled, board, listings, floors, active, pendingSc, simulating] = await Promise.all([
+  const [openAll, completed, cancelled, board, listings, floors, active, pendingSc, simulating, doneChallenges] = await Promise.all([
     attempt(warnings, 'open tournaments', () => fox.tournaments({ status: 'open' })),
     attempt(warnings, 'completed tournaments', () => fox.tournaments({ status: 'completed', kind: 'standard' })),
     attempt(warnings, 'cancelled tournaments', () => fox.tournaments({ status: 'cancelled', kind: 'standard' })),
-    attempt(warnings, 'leaderboard', () => fox.leaderboard(100)),
+    attempt(warnings, 'leaderboard', () => fox.leaderboard(200)),
     attempt(warnings, 'marketplace listings', () => fox.listings({ sort_by: 'overall_desc', limit: 50 })),
     attempt(warnings, 'marketplace floors', () => fox.floorPrices()),
     attempt(warnings, 'running tournaments', () => fox.tournaments({ status: 'active', kind: 'standard' })),
     attempt(warnings, 'pending tournaments', () => fox.tournaments({ status: 'pending_sc', kind: 'standard' })),
     attempt(warnings, 'simulating tournaments', () => fox.tournaments({ status: 'simulating', kind: 'standard' })),
+    attempt(warnings, 'completed 1v1s', () => fox.tournaments({ status: 'completed', kind: 'challenge' })),
   ])
   const recentStandard = [...(completed ?? []), ...(cancelled ?? [])]
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
@@ -248,7 +250,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   if (auth && profile && !auth.myTournaments?.active.some(t => t.max_teams === 2)) {
     const ids = [
       ...auth.challengesForMe.map(c => c.tournament_id),
-      ...openAllChallenges.filter(t => t.creator_user_id !== profile.id && (t.target_user_id === null || t.target_user_id === profile.id)).map(t => t.id),
+      // A targeted 1v1 names its target only to the two teams: the ones for this team come in challengesForMe.
+      ...openAllChallenges.filter(t => t.creator_user_id !== profile.id && !t.targeted && t.target_user_id === null).map(t => t.id),
     ].filter((id, i, all) => all.indexOf(id) === i).slice(0, 4)
     for (const id of ids) {
       try {
@@ -263,12 +266,34 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
   }
 
+  // Who accepts 1v1s: the side of a 1v1 completed in the last 7 days that did not create it. A targeted
+  // challenge to a team that never accepts only locks the stake until the deadline.
+  const weekAgo = now.getTime() - 7 * 86_400_000
+  const accepted = new Map<number, number>()
+  for (const t of doneChallenges ?? []) {
+    if (t.max_teams !== 2 || !t.completed_at || new Date(t.completed_at).getTime() < weekAgo) continue
+    const taker = [t.winner_user_id, t.runner_up_user_id].find(u => typeof u === 'number' && u !== t.creator_user_id)
+    if (typeof taker === 'number') accepted.set(taker, (accepted.get(taker) ?? 0) + 1)
+  }
   const myElo = profile?.elo_rating ?? 1200
-  const leaderboardNeighbours = (board?.users ?? [])
-    .filter(u => u.wallet_address !== address && u.team_name)
-    .sort((a, b) => Math.abs(a.elo_rating - myElo) - Math.abs(b.elo_rating - myElo))
-    .slice(0, 10)
-    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league }))
+  const gap = (u: { elo_rating: number }) => Math.abs(u.elo_rating - myElo)
+  const others = (board?.users ?? []).filter(u => u.wallet_address !== address && u.team_name && u.id !== profile?.id)
+  // Up to 6 teams that accept 1v1s and are not 100 or more ELO above (the executor refuses those), then the nearest.
+  const takers = others.filter(u => (accepted.get(u.id) ?? 0) > 0 && u.elo_rating < myElo + 100).sort((a, b) => gap(a) - gap(b)).slice(0, 6)
+  const nearest = others.filter(u => !takers.includes(u)).sort((a, b) => gap(a) - gap(b)).slice(0, 10 - takers.length)
+  const leaderboardNeighbours = [...takers, ...nearest]
+    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0 }))
+
+  // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent never
+  // creates one; it may join one it is invited to, so only those are kept.
+  const openStandard = (openAll ?? []).filter(t => t.max_teams > 2 && !t.is_private)
+  if (wallet && registered) {
+    const privates = (openAll ?? []).filter(t => t.max_teams > 2 && t.is_private).sort((a, b) => a.deadline.localeCompare(b.deadline)).slice(0, 8)
+    const details = await Promise.all(privates.map(t => attempt(warnings, `private T${t.id}`, () => fox.tournament(t.id, wallet))))
+    privates.forEach((t, i) => {
+      if (details[i]?.user_can_join_private === true) openStandard.push({ ...t, invited: true })
+    })
+  }
 
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null
   return {
@@ -293,7 +318,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     players,
     auth,
     market: {
-      openStandard: (openAll ?? []).filter(t => t.max_teams > 2),
+      openStandard,
       openChallenges: (openAll ?? []).filter(t => t.max_teams === 2),
       recentStandard,
       scouted,
