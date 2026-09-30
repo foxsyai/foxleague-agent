@@ -16,6 +16,16 @@ Each agent's page has a **Talk to the manager** box. Write a question or advice:
 Name other agents to include them: *"all agents"*, *"agent 2"* (*"team 2"* works too). The chat can change only the strategy text, never your
 limits, dry run or live, pause, the kill switch or the model.
 
+### Speak instead of typing
+
+Press **Speak** next to **Send** and talk: your words appear in the box. Press **Stop** when you are done, read
+the text, correct it if needed and press **Send**. Nothing reaches the manager until you press Send.
+
+Your browser turns the speech into text and asks for the microphone the first time. In Chrome, Edge and Safari
+the sound goes to the browser maker's speech service for that. It listens in one language at a time: with several
+languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to
+text (Firefox) do not show the button.
+
 ## On Telegram
 
 Once Telegram is linked ([Your keys](/start/keys/)), every action arrives on your phone, and any plain message

@@ -64,6 +64,8 @@ h2 .spacer{flex:1}
 .kpi .strat{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
 #adviceText{width:100%;min-height:76px;padding:8px 10px;background:#0d1119;border:1px solid var(--line);border-radius:8px;color:var(--fg);font:13px/1.4 inherit;font-family:inherit;resize:vertical}
 #adviceText:focus{outline:none;border-color:var(--acc)}
+#speakBox{display:flex;gap:8px;align-items:center}
+.btn.listening{background:#3a1620;border-color:#7d2740;color:#ffb3c1}
 #adminPanel{margin-top:12px}
 .keyrow{display:grid;grid-template-columns:170px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
 .keyrow .k{font-size:12px;color:var(--dim)}
@@ -275,7 +277,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
       <div class="card">
         <h2>Talk to the manager<i class="info" data-tip="advice">i</i></h2>
         <textarea id="adviceText" maxlength="4000" placeholder="Advice or a question, as in Telegram. For example: this week focus on Silver tournaments and skip boosters."></textarea>
-        <div class="controls"><button class="btn go" id="adviceBtn">Send</button></div>
+        <div class="controls"><button class="btn go" id="adviceBtn">Send</button><span id="speakBox" hidden><button class="btn" id="speakBtn" type="button">🎤 Speak</button><select id="speakLang" class="btn sm" aria-label="The language you speak" hidden></select><i class="info" data-tip="speak">i</i></span></div>
         <div id="adviceOut" hidden>
           <div class="note" id="adviceReply"></div>
           <div id="proposalBox" hidden>
@@ -335,7 +337,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
   <div id="impStep2" hidden>
     <p>Is this your team?</p>
     <div id="impFound" class="dlgdetail"></div>
-    <p class="dlgwarn">The agent starts paused. It only spends within the limits you set, but the key can sign anything this wallet holds: a wallet used only for the team is best. Don't play the team by hand while the agent runs it.</p>
+    <p class="dlgwarn">The agent starts paused. It only spends within the limits you set, but the key can sign anything this wallet holds: a wallet used only for the team is best. A wallet with a Guardian cannot be run by an agent: turn the Guardian off first. Don't play the team by hand while the agent runs it.</p>
     <input id="impPw" type="password" autocomplete="current-password" placeholder="Your web UI password" aria-label="Your web UI password">
   </div>
   <div class="controls"><button class="btn go" type="submit" id="impOk">Check</button><button class="btn" type="button" id="impCancel">Cancel</button></div>
@@ -566,7 +568,7 @@ async function loadActivity() {
   if (sel === null) return
   try { activityRows = await api('GET', '/api/agents/' + sel + '/activity?limit=150'); renderActivity() } catch (e) { if (e.message !== 'signed out') toast('Could not load activity: ' + e.message, true) }
 }
-function select(i) { sel = i; remember(i); formDirty = false; $('adviceOut').hidden = true; proposal = null; renderAgentbar(); renderAgent(); loadActivity() }
+function select(i) { sel = i; remember(i); formDirty = false; stopSpeech(true); $('adviceOut').hidden = true; proposal = null; renderAgentbar(); renderAgent(); loadActivity() }
 
 // Going live, releasing the kill switch and raising a limit ask for the password again (the server checks it).
 // One branded dialog for every question the dashboard asks, never the browser's own confirm or prompt.
@@ -736,6 +738,9 @@ const TIPS = {
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
     <p>A question gets an answer. Advice comes back as the full revised strategy with Apply and Cancel; nothing changes until you press Apply. Name other agents ("all agents", "agent 2") to include them.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
+  speak: ['Speak', `<p>Press Speak and talk instead of typing: your words appear in the box. Press Stop when you are done, read the text and press Send.</p>
+    <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
+    <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
     <p>Presets: <b>steady</b> grows XP and keeps the squad healthy, <b>climber</b> chases ELO and <b>hunter</b> goes for tournament wins. Edit the text freely or let Talk to the manager rewrite it for you.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
@@ -843,6 +848,7 @@ $('keysTest').onclick = async () => {
   } catch (e) { toast(e.message, true) } finally { $('keysTest').disabled = false; $('keysTest').textContent = 'Test keys' }
 }
 $('adviceBtn').onclick = async () => {
+  stopSpeech(true)
   const message = $('adviceText').value.trim()
   if (!message) return toast('Write something first', true)
   $('adviceBtn').disabled = true; $('adviceBtn').textContent = 'Thinking…'
@@ -859,6 +865,45 @@ $('adviceBtn').onclick = async () => {
     }
     $('adviceText').value = ''
   } catch (e) { toast(e.message, true) } finally { $('adviceBtn').disabled = false; $('adviceBtn').textContent = 'Send' }
+}
+// Speak to the manager: the browser's own speech to text fills the box; the owner reads it and presses Send.
+const SpeechRec = window.isSecureContext && (window.SpeechRecognition || window.webkitSpeechRecognition)
+let speech = null
+// Stops listening. With drop, words still on their way are not written into the box any more.
+function stopSpeech(drop) { if (!speech) return; if (drop) speech.onresult = null; speech.stop() }
+if (SpeechRec) {
+  const seen = new Set()
+  const langs = (navigator.languages && navigator.languages.length ? [...navigator.languages] : [navigator.language || 'en-US'])
+    .filter(l => { const base = l.split('-')[0]; if (seen.has(base)) return false; seen.add(base); return true })
+  let names = null
+  try { names = new Intl.DisplayNames([navigator.language || 'en'], { type: 'language' }) } catch {}
+  for (const l of langs) { let name = l; try { name = (names && names.of(l.split('-')[0])) || l } catch {} $('speakLang').append(el('option', { value: l, text: name })) }
+  try { const saved = localStorage.getItem('foxagent.speech'); if (saved && langs.includes(saved)) $('speakLang').value = saved } catch {}
+  $('speakLang').hidden = langs.length < 2
+  $('speakLang').onchange = () => { try { localStorage.setItem('foxagent.speech', $('speakLang').value) } catch {} }
+  $('speakBox').hidden = false
+  $('speakBtn').onclick = () => {
+    if (speech) return speech.stop()
+    const rec = new SpeechRec()
+    rec.lang = $('speakLang').value || langs[0]
+    rec.continuous = true
+    rec.interimResults = true
+    const before = $('adviceText').value.trim()
+    rec.onresult = e => {
+      let said = ''
+      for (let i = 0; i < e.results.length; i++) said += e.results[i][0].transcript
+      $('adviceText').value = ((before ? before + ' ' : '') + said.trim()).slice(0, 4000)
+    }
+    rec.onerror = e => {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('The browser did not allow the microphone for this page', true)
+      else if (e.error !== 'no-speech' && e.error !== 'aborted') toast('Speech to text stopped: ' + e.error, true)
+    }
+    rec.onend = () => { if (speech === rec) speech = null; $('speakBtn').textContent = '🎤 Speak'; $('speakBtn').classList.remove('listening') }
+    try { rec.start() } catch (err) { return toast('Speech to text did not start: ' + err.message, true) }
+    speech = rec
+    $('speakBtn').textContent = '■ Stop'
+    $('speakBtn').classList.add('listening')
+  }
 }
 function takeProposal() { const id = proposal && proposal.id; proposal = null; $('proposalBox').hidden = true; return id }
 $('applyBtn').onclick = () => { const id = takeProposal(); if (id) act('Strategy updated', () => api('POST', '/api/proposals/' + id + '/apply')) }

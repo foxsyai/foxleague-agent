@@ -45,9 +45,17 @@ The import refuses:
 
 ## Before you import
 
-- **The key can sign anything this wallet holds.** The agent only swaps EGLD to FOXSY and pays for the game,
-  within the limits you set, but the wallet is only as safe as the file that holds its key. A wallet used only
-  for the team is best.
+- **Turn the Guardian off.** A wallet with a MultiversX Guardian needs a second signature on every transaction,
+  the one you confirm with your 2FA code. The agent holds only the wallet's key, so the network would refuse
+  everything it sends and the team would not play. Turn the Guardian off in your wallet's Guardian settings
+  (xPortal or the MultiversX web wallet) before you import.
+- **Keep only game money in the wallet.** The key can sign anything this wallet holds, and without a Guardian
+  the key alone moves the funds. The agent only swaps EGLD to FOXSY and pays for the game, within the limits you
+  set, but the wallet is only as safe as the file that holds its key. The best wallet for an agent holds the
+  team and the amount you are ready to spend on FoxLeague, nothing else: move savings and other tokens to
+  another wallet first, keep small amounts here and top it up from time to time.
+- **Starting a new team?** Use **+ Add agent** instead: it makes a new wallet only for the game, with no
+  Guardian and nothing else in it.
 - **Don't play the team by hand while the agent runs it.** To play yourself, pause the agent first and resume it
   when you are done.
 - **Set its limits before you resume it.** A new agent starts with the default daily cap, monthly budget and gas

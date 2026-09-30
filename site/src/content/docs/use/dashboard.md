@@ -33,7 +33,7 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   the AI call.
 - **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems.
 - **Budget**: spend against today's cap, this month's budget and the setup budget.
-- **Talk to the manager**: advice or questions in plain words ([Talk to your manager](/use/talk-to-your-manager/)).
+- **Talk to the manager**: advice or questions in plain words, typed or spoken ([Talk to your manager](/use/talk-to-your-manager/)).
 - **Settings**: the strategy and every limit ([Every setting explained](/use/settings/)).
 
 Above the pages, a tab per agent shows its number and team. **+ Add agent** adds one from your recovery words;

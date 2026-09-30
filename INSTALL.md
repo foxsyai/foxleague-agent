@@ -106,7 +106,8 @@ A saved key is used at once. Showing or changing a key needs your password; ever
 - **Telegram:** write in plain words ("this week focus on Silver tournaments, no boosters"). The agent answers
   questions and turns advice into a new strategy you confirm with Apply. `/status`, `/plan`, `/pause 1`,
   `/mode dry`, `/mode live confirm` and `/help` work too.
-- **Dashboard:** each agent's page has a Talk to the manager box that works the same way.
+- **Dashboard:** each agent's page has a Talk to the manager box that works the same way. Its Speak button lets
+  you talk instead of typing.
 
 ## More agents
 
