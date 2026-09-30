@@ -184,6 +184,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         presets: STRATEGY_PRESETS,
         user: creds.username,
       },
+      chat: service.chatLines(),
       agents: agents.map(b => {
         const dry = b.dryRun || !service.executor.liveEnabled
         const snap = service.snapshots.get(b.index)
@@ -295,7 +296,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
               if (!message) throw new HttpFail(400, 'write something first')
               if (message.length > 4000) throw new HttpFail(400, 'at most 4000 characters')
               try {
-                return json(res, 200, await service.discuss(message, `web UI, ${user}`, [index]))
+                return json(res, 200, { ...(await service.discuss(message, `web UI, ${user}`, [index])), chat: service.chatLines() })
               } catch (err) {
                 throw new HttpFail(502, err instanceof Error ? err.message : String(err))
               }

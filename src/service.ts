@@ -86,6 +86,24 @@ const TELEGRAM_MENU = [
   { command: 'help', description: 'Every command with its options' },
 ]
 
+/** One line of the conversation with the owner. */
+export interface ChatLine {
+  from: 'owner' | 'manager'
+  text: string
+  at: string
+  /** Where the owner wrote it: Telegram or the web UI. */
+  source?: string
+  /** The agents an owner line was about; on a manager line, the agents its strategy proposal is for. */
+  agents?: number[]
+  /** A manager line that came with a strategy proposal: its id, text and summary of changes. */
+  proposal?: string
+  strategy?: string
+  changes?: string
+}
+/** Lines kept and shown; lines the manager reads as context. */
+const CHAT_KEPT = 20
+const CHAT_CONTEXT = 12
+
 export class Service {
   readonly cfg: Config
   readonly store: Store
@@ -101,8 +119,11 @@ export class Service {
   /** Last snapshot per agent, for the web UI (refreshed at every tick and every action). */
   readonly snapshots = new Map<number, AgentSnapshot>()
   readonly proposals = new Proposals()
-  /** The last exchanges with the owner (Telegram and the web UI's box), so follow-ups have context. */
-  private readonly chat: { from: 'owner' | 'manager'; text: string }[] = []
+  /**
+   * The conversation with the owner, from Telegram and the web UI's box alike: the last CHAT_KEPT lines, saved
+   * (kv chat) so a restart keeps them. The manager reads the last CHAT_CONTEXT lines, so a follow-up has context.
+   */
+  private chat: ChatLine[] = []
   private readonly lastRefresh = new Map<number, number>()
   /** Import team, step 1 checked the key and the team; step 2 (with the password) takes it by this token. */
   private readonly pendingImports = new Map<string, { key: UserSecretKey; address: string; team: string; expires: number }>()
@@ -119,6 +140,27 @@ export class Service {
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
     this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (_i, text) => this.notify(text) })
+    try {
+      const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
+      if (Array.isArray(saved)) this.chat = saved.filter((l): l is ChatLine => (l?.from === 'owner' || l?.from === 'manager') && typeof l.text === 'string' && typeof l.at === 'string').slice(-CHAT_KEPT)
+    } catch {
+      // A saved conversation that cannot be read starts empty.
+    }
+  }
+
+  /** The conversation for the web UI; a line whose proposal can still be applied carries it. */
+  chatLines(): (Omit<ChatLine, 'proposal' | 'strategy' | 'changes'> & { proposed: boolean; open?: { id: string; strategy: string; changes: string } })[] {
+    return this.chat.map(({ proposal, strategy, changes, ...line }) => ({
+      ...line,
+      proposed: strategy !== undefined,
+      ...(proposal && strategy !== undefined && this.proposals.isOpen(proposal) ? { open: { id: proposal, strategy, changes: changes ?? '' } } : {}),
+    }))
+  }
+
+  private say(line: Omit<ChatLine, 'at'>): void {
+    this.chat.push({ ...line, at: new Date().toISOString() })
+    this.chat.splice(0, Math.max(0, this.chat.length - CHAT_KEPT))
+    this.store.setKv('chat', JSON.stringify(this.chat))
   }
 
   notify(text: string): void {
@@ -184,7 +226,10 @@ export class Service {
           const s = this.snapshots.get(b.index)
           return { index: b.index, team: s?.team?.name ?? s?.registration.teamName ?? null, strategy: b.settings.strategy, paused: b.paused }
         }),
-        recent: this.chat.slice(-12),
+        recent: this.chat.slice(-CHAT_CONTEXT).map(l => ({
+          from: l.from,
+          text: l.from === 'owner' ? l.text.slice(0, 600) : `${l.text}${l.strategy !== undefined ? ` [proposed strategy for ${whichAgents(l.agents ?? [])}: ${l.strategy}]` : ''}`.slice(0, 1200),
+        })),
         digests: targets.slice(0, 3).flatMap(i => {
           const s = this.snapshots.get(i)
           return s ? [{ index: i, digest: renderDigest(s) }] : []
@@ -195,9 +240,8 @@ export class Service {
     }
     this.store.setKv('model_usd_total', String(Number(this.store.getKv('model_usd_total') ?? 0) + answer.usd))
     const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
-    this.chat.push({ from: 'owner', text: message.slice(0, 600) })
-    this.chat.push({ from: 'manager', text: `${answer.reply}${proposal ? ` [proposed strategy for ${whichAgents(proposal.agents)}: ${proposal.strategy}]` : ''}`.slice(0, 1200) })
-    this.chat.splice(0, Math.max(0, this.chat.length - 12))
+    this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets })
+    this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
     return { reply: answer.reply, proposal }
   }
 
@@ -210,14 +254,17 @@ export class Service {
       this.store.updateSettings(i, patch)
       this.store.log({ agentIndex: i, kind: 'control', status: 'info', summary: `strategy updated (${by})${p.changes ? `: ${p.changes}` : ''}` })
     }
-    this.chat.push({ from: 'owner', text: `(applied the proposed strategy for ${whichAgents(p.agents)})` })
+    this.say({ from: 'owner', text: `(applied the proposed strategy for ${whichAgents(p.agents)})`, source: by })
     const text = `strategy updated for ${whichAgents(p.agents)} (${by})`
     this.notify(text)
     return text
   }
 
   cancelProposal(id: string): string {
-    return this.proposals.take(id) ? 'proposal dropped; nothing changed' : 'this proposal was already applied, cancelled or expired'
+    const p = this.proposals.take(id)
+    if (!p) return 'this proposal was already applied, cancelled or expired'
+    this.say({ from: 'owner', text: `(dropped the proposed strategy for ${whichAgents(p.agents)})` })
+    return 'proposal dropped; nothing changed'
   }
 
   private async chatFromTelegram(text: string): Promise<TextReply> {

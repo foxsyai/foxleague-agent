@@ -16,6 +16,13 @@ Each agent's page has a **Talk to the manager** box. Write a question or advice:
 Name other agents to include them: *"all agents"*, *"agent 2"* (*"team 2"* works too). The chat can change only the strategy text, never your
 limits, dry run or live, pause, the kill switch or the model.
 
+![Talk to the manager: your messages on the right, the manager's answers on the left](/screenshots/talk-to-the-manager.png)
+
+The box keeps the conversation like a chat: your messages on the right, the manager's answers on the left, the
+last 20 messages, together with the ones you sent on Telegram. The manager reads the last 12 lines each time, so
+a follow-up question needs no repeating. A proposed strategy waits under the conversation with **Apply** and
+**Cancel**, also when it was proposed on Telegram. **Ctrl+Enter** sends.
+
 ### Speak instead of typing
 
 Press **Speak** next to **Send** and talk: your words appear in the box. Press **Stop** when you are done, read

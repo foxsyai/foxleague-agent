@@ -24,6 +24,12 @@ export class Proposals {
     return proposal
   }
 
+  /** True while a proposal can still be applied or dropped. */
+  isOpen(id: string, now = Date.now()): boolean {
+    const p = this.open.get(id)
+    return p !== undefined && now - p.at <= TTL_MS
+  }
+
   /** Removes and returns an open proposal: each one is applied or dropped once, from either channel. */
   take(id: string, now = Date.now()): Proposal | undefined {
     const p = this.open.get(id)

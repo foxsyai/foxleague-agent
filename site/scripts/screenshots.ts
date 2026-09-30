@@ -161,6 +161,26 @@ await js(`document.getElementById('adminPanel').scrollIntoView({block: 'start'})
 await sleep(500)
 await shot('keys')
 
+// The conversation with the manager, for its page in the manual: a stand-in answers, nothing leaves this machine.
+const realStrategist = svc.strategist
+const answers = [
+  { reply: 'Agent 1 is in good shape: the squad is fit, three of today\'s five free trainings are still open and it holds a seat in the Fox Demo Cup (5 of 8 teams).', proposal: null },
+  { reply: 'Understood: Silver only this week and no boosters.', proposal: { agents: [0], strategy: 'This week: Silver tournaments and Silver 1v1s only, at modest stakes. No XP boosters. Keep the squad healthy, use every free training and sync when enough stats changed.', changes: 'Silver only this week, no boosters' } },
+]
+svc.strategist = { discuss: async () => ({ ...answers.shift()!, usd: 0 }) } as never
+await svc.discuss('How is agent 1 doing today?', 'web UI, demo', [0])
+await svc.discuss('This week focus on Silver tournaments and skip boosters.', 'web UI, demo', [0])
+svc.strategist = realStrategist
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1600, deviceScaleFactor: 1, mobile: false }) // tall enough for the whole card
+await js(`toggleAdmin(false); void loadState()`)
+await sleep(1000)
+await js(`document.getElementById('chatLog').closest('.card').scrollIntoView({block: 'center'})`)
+await sleep(400)
+const card = await send<{ result: { value: string } }>('Runtime.evaluate', {
+  expression: `JSON.stringify((r => ({ x: Math.max(0, r.x + scrollX - 12), y: r.y + scrollY - 12, width: r.width + 24, height: r.height + 24 }))(document.getElementById('chatLog').closest('.card').getBoundingClientRect()))`,
+})
+await shot('talk-to-the-manager', JSON.parse(card.result.value))
+
 ws.close()
 chrome.kill()
 server.close()
