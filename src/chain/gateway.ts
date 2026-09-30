@@ -81,6 +81,16 @@ export class Chain {
     return { address, nonce: d.account.nonce, balance: BigInt(d.account.balance) }
   }
 
+  /**
+   * True while the wallet's Guardian is on: the network then wants the guardian's signature next to the
+   * owner's on every transaction, and an agent holds only the owner's key. (A guardian that is set but not
+   * switched on does not count.)
+   */
+  async guarded(address: string): Promise<boolean> {
+    const d = await this.gwGet<{ guardianData?: { guarded?: boolean } }>(`/address/${address}/guardian-data`)
+    return d.guardianData?.guarded === true
+  }
+
   /** Every ESDT and NFT the wallet holds, in one call (keys like "FXLP-6f28e5-0177"). */
   async esdts(address: string): Promise<EsdtHolding[]> {
     const d = await this.gwGet<{ esdts: Record<string, { tokenIdentifier: string; balance: string; nonce?: number }> }>(

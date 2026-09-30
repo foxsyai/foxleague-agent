@@ -27,6 +27,14 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 - Raising a limit, releasing the kill switch and changing a key all ask for your password again.
 - Your recovery words and keys stay on your computer. The dashboard is not on the internet.
 
+## A wallet only for the game
+
+Each agent plays from its own wallet, and the agent's key file can sign for everything that wallet holds. So
+keep it a wallet made only for FoxLeague: no Guardian, no other assets, only the amount you set aside for the
+game, in small amounts that you top up daily, weekly or whenever it suits you. **+ Add agent** creates such a
+wallet. Your personal wallet, with its history and other assets, is better kept away from any automation
+([Which wallet to give an agent](/use/import-team/#which-wallet-to-give-an-agent)).
+
 ## Fair play
 
 FoxLeague's Fair Play rules allow automation on your own wallets for the actions the app offers, and prohibit its

@@ -39,7 +39,14 @@ words, its own settings and its own budget. Your agents never meet in a 1v1 and 
 
 Yes. **Import team** gives an agent your existing FoxLeague team, from its PEM file, keystore file or recovery
 words, and it carries on from where the team is ([Import your team](/use/import-team/)). A wallet with a Guardian
-has to have it turned off first, and it is best to keep only game money in that wallet.
+is refused: an agent cannot sign for it.
+
+### Which wallet should an agent use?
+
+A fresh wallet made only for FoxLeague, without a Guardian, holding only the amount you set aside for the game.
+Keep small amounts in it and top it up daily, weekly or whenever it suits you. **+ Add agent** makes such a wallet.
+We do not recommend giving an agent your personal wallet with your history and other assets, or turning the
+Guardian off there just for FoxLeague ([Which wallet to give an agent](/use/import-team/#which-wallet-to-give-an-agent)).
 
 ### Which AI model should I pick?
 

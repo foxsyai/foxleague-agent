@@ -431,7 +431,9 @@ export class Service {
     }
     const team = await this.fox.team(address)
     if (!team) throw new Error('this wallet has no FoxLeague team. Register the team in the FoxLeague app first or use + Add agent for a new one')
-    const [account, esdts] = await Promise.all([this.chain.account(address), this.chain.esdts(address)])
+    const [account, esdts, guarded] = await Promise.all([this.chain.account(address), this.chain.esdts(address), this.chain.guarded(address)])
+    // Nothing an agent signs would go through: say so now, not after the import at the first transaction.
+    if (guarded) throw new Error('this wallet has a Guardian, so an agent cannot sign for it. Turn the Guardian off in your wallet first, or better, play with a wallet made only for FoxLeague')
     const foxsy = esdts.find(e => e.tokenIdentifier === MAINNET.foxsyToken)
     const now = Date.now()
     for (const [t, p] of this.pendingImports) if (p.expires < now) this.pendingImports.delete(t)

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Anthropic from '@anthropic-ai/sdk'
 import { Store } from '../src/store/db.ts'
-import { Strategist, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
+import { EFFORTS, Strategist, deadlineMs, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
 import { Proposals } from '../src/strategist/proposals.ts'
 import { cleanPage } from '../src/strategist/manual.ts'
 import type { Config } from '../src/config.ts'
@@ -49,11 +49,13 @@ test('server-side fallback only for classifier models, dropped for good if the A
   ;(s as unknown as { client: unknown }).client = {
     beta: {
       messages: {
-        create: async (p: Record<string, unknown>) => {
-          calls.push(p)
-          if (refuseFallbacks && p.fallbacks) throw new Anthropic.BadRequestError(400, { error: { message: 'fallbacks is not supported' } }, 'fallbacks is not supported', new Headers())
-          return { model: p.model }
-        },
+        stream: (p: Record<string, unknown>) => ({
+          finalMessage: async () => {
+            calls.push(p)
+            if (refuseFallbacks && p.fallbacks) throw new Anthropic.BadRequestError(400, { error: { message: 'fallbacks is not supported' } }, 'fallbacks is not supported', new Headers())
+            return { model: p.model }
+          },
+        }),
       },
     },
   }
@@ -91,7 +93,7 @@ test('manager chat: questions get an answer, advice a proposal for known agents 
   let content: unknown[] = []
   const requests: { messages: { content: string }[]; tools: { name: string }[] }[] = []
   ;(s as unknown as { client: unknown }).client = {
-    beta: { messages: { create: async (p: never) => (requests.push(p), { model: 'claude-sonnet-5', stop_reason: 'end_turn', content, usage: { input_tokens: 0, output_tokens: 0, iterations: null } }) } },
+    beta: { messages: { stream: (p: never) => ({ finalMessage: async () => (requests.push(p), { model: 'claude-sonnet-5', stop_reason: 'end_turn', content, usage: { input_tokens: 0, output_tokens: 0, iterations: null } }) }) } },
   }
   const input: ChatInput = {
     message: 'this week Silver tournaments only',
@@ -154,7 +156,7 @@ test('manual pages: title heading, no imports or source comments, callouts as qu
   )
 })
 
-test('a plan streams with room for 32,000 tokens, and a cut-off one runs nothing', async () => {
+test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, and a cut-off one runs nothing', async () => {
   const s = new Strategist('test-key', 'claude-sonnet-5', 'xhigh')
   const sent: { max_tokens: number; output_config: { effort: string }; stream?: unknown }[] = []
   let answer: Record<string, unknown> = {}
@@ -174,8 +176,18 @@ test('a plan streams with room for 32,000 tokens, and a cut-off one runs nothing
 
   answer = { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't', name: 'submit_plan', input: { summary: 'train', actions: [{ action: { type: 'sync' }, reason: 'dirty cards' }] } }] }
   const plan = await s.plan(input)
-  assert.equal(sent[0]!.max_tokens, 32_000)
+  assert.equal(sent[0]!.max_tokens, 48_000)
   assert.equal(sent[0]!.output_config.effort, 'xhigh')
+  const rooms: number[] = []
+  for (const effort of EFFORTS) {
+    s.configure('claude-fable-5-1', effort)
+    await s.plan(input)
+    rooms.push(sent.at(-1)!.max_tokens)
+  }
+  assert.deepEqual(rooms, [16_000, 16_000, 32_000, 48_000, 64_000], 'low, medium, high, xhigh, max')
+  assert.deepEqual([roomFor('max', 8_000), roomFor('max', 4_000), roomFor('medium', 8_000)], [32_000, 16_000, 8_000], 'chat and questions grow the same way')
+  assert.ok(64_000 <= 128_000, 'under the 128,000 tokens a model can write')
+  assert.deepEqual([deadlineMs(16_000), deadlineMs(64_000)], [380_000, 1_340_000], 'a minute to begin plus 50 tokens a second')
   assert.equal(plan.summary, 'train')
   assert.equal(plan.actions.length, 1)
 

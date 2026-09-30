@@ -332,12 +332,12 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
     <div data-kind="keystore" hidden><label class="dlglabel" for="impKsFile">The keystore file (.json) from the MultiversX web wallet</label><input id="impKsFile" type="file" accept=".json,application/json"><label class="dlglabel" for="impKsPw">The keystore password</label><input id="impKsPw" type="password" autocomplete="off"></div>
     <div data-kind="words" hidden><label class="dlglabel" for="impWords">Your recovery words, in order</label><textarea id="impWords" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea></div>
     <div data-kind="keystore words" hidden><label class="dlglabel" for="impAccount">Account number within the recovery words: 0 is the first (a keystore that holds one key ignores it)</label><input id="impAccount" type="number" min="0" max="999" value="0"></div>
-    <p class="dlgwarn">Nothing is stored until you check the team and confirm with your password.</p>
+    <p class="dlgwarn">Best is a wallet made only for FoxLeague, with no Guardian and only the amount you set aside for the game, not your personal wallet. A wallet with a Guardian is refused: an agent cannot sign for it. Nothing is stored until you check the team and confirm with your password.</p>
   </div>
   <div id="impStep2" hidden>
     <p>Is this your team?</p>
     <div id="impFound" class="dlgdetail"></div>
-    <p class="dlgwarn">The agent starts paused. It only spends within the limits you set, but the key can sign anything this wallet holds: a wallet used only for the team is best. A wallet with a Guardian cannot be run by an agent: turn the Guardian off first. Don't play the team by hand while the agent runs it.</p>
+    <p class="dlgwarn">The agent starts paused. It only spends within the limits you set, but the key can sign anything this wallet holds: a wallet used only for FoxLeague, with small amounts you top up, is best. Don't play the team by hand while the agent runs it.</p>
     <input id="impPw" type="password" autocomplete="current-password" placeholder="Your web UI password" aria-label="Your web UI password">
   </div>
   <div class="controls"><button class="btn go" type="submit" id="impOk">Check</button><button class="btn" type="button" id="impCancel">Cancel</button></div>
@@ -947,8 +947,8 @@ const GUIDE = [
       ['Back here, press Keys, paste it into Telegram bot token, type your password and press Save.', null, true],
       ['Still in Keys, press Link my Telegram, send the 6-digit code to your new Telegram bot, then press I sent it. From then on it talks only to you.', null, true],
     ] },
-  { id: 'binance', title: 'Binance, for automatic top-ups', need: false, done: st => st.binance,
-    intro: 'Lets the agent top up its own EGLD later. The top-ups arrive in a later version; your key waits here until then.',
+  { id: 'binance', title: 'CEX top-up, optional', need: false, done: st => st.binance,
+    intro: 'Lets the agent top up its own EGLD from an exchange (a CEX) later. The top-ups arrive in a later version; your key waits here until then. The example is Binance: a key that can only withdraw EGLD to your agent wallets.',
     steps: [
       ['Log in to Binance and open API Management.', 'https://www.binance.com/en/my/settings/api-management'],
       ['Press Create API, choose System generated, name it foxleague-agent and confirm with your 2FA.'],

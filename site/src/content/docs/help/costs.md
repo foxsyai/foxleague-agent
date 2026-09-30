@@ -14,8 +14,8 @@ The agent itself is free. Three things cost money, and you control each one:
 ## To start
 
 About **5 EGLD**: 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve, the rest plays
-the first games. After that, top up as the agent plays, by hand for now (automatic top-ups from Binance come in a
-later version).
+the first games. After that, top up as the agent plays, by hand for now (automatic top-ups from an exchange, with Binance as
+the first one, come in a later version).
 
 ## What you get back
 

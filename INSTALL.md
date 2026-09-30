@@ -13,7 +13,7 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 - About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
-- Optional: a Telegram bot for notifications and commands on your phone, and a Binance API key for automatic
+- Optional: a Telegram bot for notifications and commands on your phone, and a CEX (Binance) API key for automatic
   top-ups (a later feature).
 
 ## Install
@@ -36,7 +36,7 @@ The installer walks you through seven steps and explains each one:
 | 1. Node.js | Uses the Node.js on your computer if it is recent enough, otherwise downloads a private copy into the `foxleague-agent` folder (checksum verified). |
 | 2. Wallet | Creates a new wallet and shows its recovery words once. Write them down on paper. |
 | 3. Dashboard login | You choose a username, a password (at least 12 characters) and a port (default 8870). |
-| 4. Keys | Anthropic, Telegram and Binance keys. Every key can be skipped and added later in the dashboard. |
+| 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |
 | 5. Settings | Agents start in dry run. You choose whether this computer may sign real transactions once you press Go LIVE. |
 | 6. PEM files | Writes `pem/agent1.pem`, so you can log into FoxLeague as your agent's team and watch it play. |
 | 7. Background service | Starts the agent in the background and keeps it running after a restart. |
@@ -89,7 +89,9 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
 5. Link your chat: the installer shows a 6-digit code, or press **Link my Telegram** in Keys. Send the code to
    your new Telegram bot from your own account, then press **I sent it**. It then talks only to you.
 
-**3. Binance (optional): automatic EGLD top-ups, coming in a later version**
+**3. CEX top-up (optional): automatic EGLD top-ups from an exchange, coming in a later version**
+
+The example is Binance: an API key that can only withdraw EGLD to your agent wallets.
 
 1. Log in to Binance and open [API Management](https://www.binance.com/en/my/settings/api-management).
 2. Press Create API, choose System generated, name it foxleague-agent and confirm with your 2FA.

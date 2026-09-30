@@ -255,7 +255,8 @@ cat <<'KEYS'
      c. Copy the token it sends you (it looks like 123456789:AAH...).
      d. The installer then shows a 6-digit code: send it to your new Telegram bot.
 
-  3. Binance, optional (automatic EGLD top-ups, coming in a later version):
+  3. CEX top-up, optional (automatic EGLD top-ups from an exchange, coming in a later version).
+     The example is Binance:
      a. API Management:                 https://www.binance.com/en/my/settings/api-management
      b. Create API, System generated, name foxleague-agent, confirm with 2FA.
      c. Edit restrictions: only Enable Withdrawals, restricted to this computer's IP

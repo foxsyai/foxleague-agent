@@ -101,13 +101,17 @@ test('import: the service checks the wallet (not an agent, not its own words, a 
   ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
   const teams: Record<string, { name: string; team_overall: number; badge: string | null } | null> = { [teamAddress()]: { name: 'Community XI', team_overall: 61, badge: 'x' } }
   Object.assign(svc.fox, { team: async (a: string) => teams[a] ?? null })
-  Object.assign(svc.chain, { account: async () => ({ balance: 2n * 10n ** 18n }), esdts: async () => [{ tokenIdentifier: 'FOXSY-5d5f3e', balance: 1500n * 10n ** 18n, nonce: 0 }] })
+  let guardian = true
+  Object.assign(svc.chain, { account: async () => ({ balance: 2n * 10n ** 18n }), esdts: async () => [{ tokenIdentifier: 'FOXSY-5d5f3e', balance: 1500n * 10n ** 18n, nonce: 0 }], guarded: async () => guardian })
 
   await assert.rejects(svc.previewImport({ kind: 'pem', pem: pemOf(1) }), /no FoxLeague team/)
   const own = deriveWallet(svc.cfg.mnemonic!, 1)
   await assert.rejects(svc.previewImport({ kind: 'words', words: svc.cfg.mnemonic!, account: 1 }), /this install's own recovery words/, own.address)
   await assert.rejects(svc.previewImport({ kind: 'words', words: svc.cfg.mnemonic!, account: 0 }), /already agent 1/)
 
+  // A wallet with its Guardian on is refused at the check: nothing an agent signs for it would go through.
+  await assert.rejects(svc.previewImport({ kind: 'pem', pem: pemOf() }), /has a Guardian, so an agent cannot sign for it/)
+  guardian = false
   const p = await svc.previewImport({ kind: 'pem', pem: pemOf() })
   assert.deepEqual([p.address, p.team.name, p.egld, p.foxsy], [teamAddress(), 'Community XI', '2.0000', '1500'])
   assert.doesNotMatch(JSON.stringify(p), /PRIVATE KEY/, 'the answer holds no secret')
@@ -135,7 +139,7 @@ test('import: over the web the check answers without secrets, the import needs t
   svc.ensureAgents()
   ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
   Object.assign(svc.fox, { team: async () => ({ name: 'Community XI', team_overall: 61, badge: null }) })
-  Object.assign(svc.chain, { account: async () => ({ balance: 0n }), esdts: async () => [] })
+  Object.assign(svc.chain, { account: async () => ({ balance: 0n }), esdts: async () => [], guarded: async () => false })
   const pw = 'correct-horse-battery'
   const creds = { username: 'admin', passwordHash: hashPassword(pw), secretKey: 'k'.repeat(64) }
   const server = startWeb(svc, creds, 0)

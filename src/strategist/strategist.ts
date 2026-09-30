@@ -177,12 +177,24 @@ export function renderPlanRequest(p: PlanInput): string {
 }
 
 /**
- * The most a plan may write, thinking included: at the highest efforts the thinking alone has filled 16,000
- * tokens and cut a plan off (nothing runs from a cut-off plan). Only the tokens used are paid for.
+ * Room for one answer, thinking included. The higher the effort, the longer the model thinks before it
+ * writes: at xhigh the thinking alone once filled 16,000 tokens and cut a plan off, and nothing runs from a
+ * cut-off plan. So the room grows with the effort. It is only a ceiling: the tokens used are what is paid for.
  */
-const PLAN_MAX_TOKENS = 32_000
-/** The whole plan answer must arrive within this time; past it the call fails and the next tick plans again. */
-const PLAN_DEADLINE_MS = 10 * 60_000
+const ROOM_TIMES: Record<Effort, number> = { low: 1, medium: 1, high: 2, xhigh: 3, max: 4 }
+const PLAN_TOKENS = 16_000
+const CHAT_TOKENS = 8_000
+const ASK_TOKENS = 4_000
+
+/** The most one answer may write at an effort: a plan gets 16,000 tokens at low and medium, 64,000 at max. */
+export function roomFor(effort: Effort, base: number): number {
+  return base * ROOM_TIMES[effort]
+}
+
+/** How long a whole answer may take before the call is given up: a minute to begin plus 50 tokens a second. */
+export function deadlineMs(maxTokens: number): number {
+  return 60_000 + maxTokens * 20
+}
 
 export class Strategist {
   private client: Anthropic
@@ -209,13 +221,13 @@ export class Strategist {
   }
 
   /**
-   * One request to the model. A streamed one is read to its end before anything is used: a plan at a high
-   * effort can take minutes, longer than one plain request may wait, and the deadline covers the whole answer.
+   * One request to the model, streamed and read to its end before anything is used: an answer at a high
+   * effort can take minutes, longer than one plain request may wait. The deadline covers the whole answer.
    */
-  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, streamed = false): Promise<Anthropic.Beta.BetaMessage> {
+  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>): Promise<Anthropic.Beta.BetaMessage> {
     const model = this.model
     const send = (body: Anthropic.Beta.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.BetaMessage> =>
-      streamed ? this.client.beta.messages.stream(body, { signal: AbortSignal.timeout(PLAN_DEADLINE_MS) }).finalMessage() : this.client.beta.messages.create(body)
+      this.client.beta.messages.stream(body, { signal: AbortSignal.timeout(deadlineMs(body.max_tokens)) }).finalMessage()
     if (!WITH_FALLBACK.has(model) || this.noFallback.has(model)) return send({ ...params, model })
     try {
       return await send({ ...params, model, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
@@ -239,14 +251,14 @@ export class Strategist {
   async plan(input: PlanInput): Promise<Plan> {
     const model = this.model
     const response = await this.create({
-      max_tokens: PLAN_MAX_TOKENS,
+      max_tokens: roomFor(this.effort, PLAN_TOKENS),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       system: this.system,
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: `${renderPlanRequest(input)}\n\nCall submit_plan now.` }],
-    }, true)
+    })
     const usage = {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
@@ -285,7 +297,7 @@ export class Strategist {
   async discuss(input: ChatInput): Promise<ChatAnswer> {
     const model = this.model
     const response = await this.create({
-      max_tokens: 8000,
+      max_tokens: roomFor(this.effort, CHAT_TOKENS),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       system: this.system,
@@ -311,7 +323,7 @@ export class Strategist {
   async ask(snapshot: AgentSnapshot, question: string): Promise<{ answer: string; usd: number }> {
     const model = this.model
     const response = await this.create({
-      max_tokens: 4000,
+      max_tokens: roomFor(this.effort, ASK_TOKENS),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       system: this.system,
