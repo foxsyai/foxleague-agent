@@ -111,6 +111,7 @@ test('manager chat: questions get an answer, advice a proposal for known agents 
   // Same tools as the planning tick (one shared cache); a submit_plan call from the chat is never run.
   assert.deepEqual(requests[0]!.tools.map(t => t.name), ['submit_plan', 'propose_strategy'])
   assert.match(requests[0]!.messages[0]!.content, /it is for agents 1, 2/)
+  assert.match(requests[0]!.messages[0]!.content, /in the language the owner's message below is written in \(English if that is unclear\)/)
   assert.match(requests[0]!.messages[0]!.content, /agent 2 \(no team yet\) PAUSED: Aggressive climber/)
 
   content = [{ type: 'tool_use', id: 't', name: 'propose_strategy', input: { agents: [2, 8, 0], strategy: '  Silver only this week. ', changes: 'Silver focus' } }]

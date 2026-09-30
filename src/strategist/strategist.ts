@@ -121,7 +121,7 @@ export interface ChatAnswer {
 export function renderChatRequest(c: ChatInput): string {
   return [
     `## Chat with the owner (${c.source}); not a planning tick, plan no actions`,
-    `Do not call submit_plan. If the message gives direction on how the agents should play, call propose_strategy once with the complete revised strategy for the agents it concerns; the owner confirms with an Apply button. Unless the message names other agents, it is for ${whichAgents(c.defaultAgents)} ("all agents" means every agent below; the owner may say team instead of agent). If it is only a question or small talk, answer briefly in plain text and do not call the tool. Spending caps, dry run or live, pause, the kill switch and the model are the owner's own settings: you cannot change them; say so if asked. Reply in the owner's language, in a few sentences.`,
+    `Do not call submit_plan. If the message gives direction on how the agents should play, call propose_strategy once with the complete revised strategy for the agents it concerns; the owner confirms with an Apply button. Unless the message names other agents, it is for ${whichAgents(c.defaultAgents)} ("all agents" means every agent below; the owner may say team instead of agent). If it is only a question or small talk, answer briefly in plain text and do not call the tool. Spending caps, dry run or live, pause, the kill switch and the model are the owner's own settings: you cannot change them; say so if asked. Write only the reply itself, to the owner, with no note about what you decided or why. Reply in a few sentences, in the language the owner's message below is written in (English if that is unclear): never pick a language from team names, player names or anything else. Keep a strategy text in the language of the current strategy unless the owner asks for another.`,
     `## Agents and their current strategy`,
     ...c.agents.map(b => `- ${agentName(b.index)}${b.team ? ` (${b.team})` : ' (no team yet)'}${b.paused ? ' PAUSED' : ''}: ${b.strategy}`),
     ...(c.digests.length ? [SNAPSHOT_HEADING, ...c.digests.map(d => `${agentName(d.index)}:\n<<<SNAPSHOT\n${d.digest}\nSNAPSHOT>>>`)] : []),
@@ -332,7 +332,7 @@ export class Strategist {
       messages: [
         {
           role: 'user',
-          content: `## Snapshot\n${renderDigest(snapshot)}\n\n## The owner asks (answer briefly, plain text, no tool call)\n${question}`,
+          content: `## Snapshot\n${renderDigest(snapshot)}\n\n## The owner asks (answer briefly, plain text, no tool call, in the language of the question; English if that is unclear)\n${question}`,
         },
       ],
     })
