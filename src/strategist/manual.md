@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 40ff819d 2026-09-30.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 9e00d51d 2026-09-30.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -425,6 +425,8 @@ The bidding rules are enforced by the smart contract:
 - You cannot bid on your own auction
 
 When the clock runs out the platform settles the auction for you: the NFT goes to the winner, the seller receives the winning bid minus the 10% fee. You never pay settle gas. If no one bid, the player simply goes back to the seller.
+
+The **My bids** chip next to the filters counts the live auctions you have bid on. Tap it to see every auction you bid on in four groups: **Leading** (your bid is the highest, also once the auction has ended and waits to settle), **Outbid** (someone bid more; your FOXSY is already back in your wallet and **Bid again** opens the auction), **Won** plus **Lost**. Tap it again to go back to the grid.
 
 Winning an auction does **not start** a transfer cooldown. It does not clear one either: a card sold while it is still inside a transfer cooldown from an earlier wallet-to-wallet move keeps the rest of that lock, so the buyer inherits it. The listing shows the lock ("Transfer lock") before you bid. A card without one can be fielded as soon as the auction settles.
 
