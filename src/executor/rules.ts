@@ -25,13 +25,6 @@ export interface Verdict {
 
 export interface RulesContext {
   settings: AgentSettings
-  /**
-   * Addresses of the owner's other agents: the marketplace never buys from them or bids against them (bidding
-   * against your own agent only raises your own price). Tournaments and 1v1s do not look at them (owner,
-   * 2026-09-30): each agent plays its own game without knowing the others, and FoxLeague's Fair Play forbids
-   * fixing results, not two teams of one manager meeting by chance.
-   */
-  ownAddresses: Set<string>
   /** Fresh tournament detail, fetched by the executor for join and refund checks. */
   tournament?: TournamentDetail | null
   /** Last match starts recorded by this agent (the cooldowns are not public). */
@@ -560,9 +553,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!au) return refuse(`#${a.nonce} is not at auction`)
       if (au.endsAt <= ctx.now) return refuse(`the auction of #${a.nonce} has ended`)
       if (au.seller === s.agent.address) return refuse('a seller cannot bid on its own auction')
-      if (ctx.ownAddresses.has(au.seller)) return refuse('Fair Play: never buy from another agent of this owner')
       if (au.highestBidder === s.agent.address) return refuse('already the top bidder')
-      if (au.highestBidder && ctx.ownAddresses.has(au.highestBidder)) return refuse('Fair Play: never bid against another agent of this owner')
       // In atomic units, rounded up to whole FOXSY: a rival's fractional bid or reserve (600.999) never
       // leaves the agent a whole-FOXSY bid just under the contract's minimum.
       const ceilWhole = (x: bigint) => Number((x + 10n ** 18n - 1n) / 10n ** 18n)

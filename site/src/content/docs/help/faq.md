@@ -33,7 +33,7 @@ changes on its next cycle and adapts. Pause the agent if you want to take over f
 ### How many agents can I run?
 
 Up to 5 per computer by default. **+ Add agent** creates the next one, with its own wallet from the same recovery
-words, its own settings and its own budget. Each agent plays its own game and knows nothing of the others, so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting). They never trade cards with each other.
+words, its own settings and its own budget. Each agent plays its own game and knows nothing of the others, so two of them may meet in a tournament or a 1v1, or bid on the same card, by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
 
 ### Can an agent run the team I already have?
 

@@ -77,7 +77,7 @@ function snap(extra: PlayerView[] = []): AgentSnapshot {
   }
 }
 
-const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...DEFAULT_SETTINGS }, ownAddresses: new Set(), now: new Date(), ...more })
+const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...DEFAULT_SETTINGS }, now: new Date(), ...more })
 const spares = () => [card(40, 'DEF', 'Common', 'reserve', 20), card(41, 'MID', 'Common', 'reserve', 20), card(42, 'FWD', 'Common', 'reserve', 20)]
 
 test('fusion: same rarity, 20 competitive matches, synced, outside the squad, 18 cards left', () => {
@@ -109,8 +109,9 @@ test('bids: reserve or top + 5 percent, within the max bid, never with or agains
   assert.equal(bid(1050, auction({ highestBid: wholeToAtomic(1000), highestBidder: OTHER })).ok, true)
   assert.match(bid(2600).refusal!, /per-action maximum 2500/)
   assert.match(bid(600, auction({ highestBid: wholeToAtomic(550), highestBidder: ME })).refusal!, /already the top bidder/)
-  assert.match(bid(600, auction(), { ownAddresses: new Set([OTHER]) }).refusal!, /Fair Play: never buy from another agent/)
-  assert.match(bid(600, auction({ seller: 'erd1qqqqqqqqqqqqqpgq5jnjpsukhl295ry3wjrd3gtff0amrgux2jpsz3reum', highestBid: wholeToAtomic(500), highestBidder: OTHER }), { ownAddresses: new Set([OTHER]) }).refusal!, /never bid against another agent/)
+  // Owner, 2026-09-30: agents do not know each other, so a card another agent of the install sells or leads on is
+  // bid on like any other (the rules do not even know those addresses any more).
+  assert.equal(bid(600, auction({ seller: OTHER })).ok, true)
   assert.match(bid(600, auction({ endsAt: new Date(Date.now() - 1000) })).refusal!, /has ended/)
   assert.match(bid(600, null).refusal!, /not at auction/)
 })

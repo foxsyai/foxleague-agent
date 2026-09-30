@@ -45,7 +45,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen.
 - **Marketplace**: bids on cards that clearly strengthen the squad at a fair price, lists spare cards above the
-  floor, never trades with your other agents.
+  floor.
 
 ## Getting started by itself
 

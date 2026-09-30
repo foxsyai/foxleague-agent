@@ -19,7 +19,7 @@ newest version, then runs the installer, which offers your earlier answers as th
 
 Press **+ Add agent** in the dashboard. The new agent gets the next wallet from the same recovery words, its own
 PEM file in `pem/` (`agent2.pem` for agent 2), its own settings, strategy and budget. Fund it like the first one.
-Each agent plays its own game and knows nothing of the others, so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting). They never trade cards with each other.
+Each agent plays its own game and knows nothing of the others, so two of them may meet in a tournament or a 1v1, or bid on the same card, by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
 
 Already playing FoxLeague? **Import team** gives an agent the team you have ([Import your team](/use/import-team/)).
 

@@ -46,8 +46,8 @@ abuse. The agent:
 - uses only public information, the same a player sees in the app;
 - plays at a human pace (random timing, spread-out actions, active hours);
 - never coordinates your agents: each plays its own game without knowing the others, so two of them may meet in a
-  tournament or a 1v1 by chance (FoxLeague's Fair Play forbids arranging results, not meeting), and they never
-  trade cards with each other;
+  tournament or a 1v1, or bid on the same card, by chance (FoxLeague's Fair Play forbids arranging results, not
+  meeting);
 - protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two a week
   against the same team; an open challenge, which any team may take, at most once a day and only at your lowest
   Silver amount);

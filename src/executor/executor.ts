@@ -259,7 +259,6 @@ export class Executor {
 
   private async context(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, a: Action, now: Date, dry: boolean): Promise<RulesContext> {
     const { store, fox } = this.d
-    const others = store.agents().filter(b => b.index !== agent.index)
     let tournament: TournamentDetail | null | undefined
     if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund') {
       try {
@@ -358,7 +357,6 @@ export class Executor {
     const lastRanked = recent.find(r => r.summary.includes('ranked'))
     return {
       settings: agent.settings,
-      ownAddresses: new Set(others.map(b => b.address)),
       ...(tournament !== undefined ? { tournament } : {}),
       ...(entryAmount !== undefined ? { entryAmount } : {}),
       ...market,
