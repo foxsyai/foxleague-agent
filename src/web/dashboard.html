@@ -109,6 +109,8 @@ h2 .spacer{flex:1}
 .vmode.live{background:rgba(255,92,124,.15);color:var(--down)}
 .vmode.paused{background:rgba(245,165,36,.15);color:var(--acc)}
 .vmode.imported{background:rgba(94,164,255,.14);color:#8fc1ff}
+.vmode.low{background:rgba(255,140,60,.18);color:#ffa45c}
+#walletRows .v.low{color:#ffa45c;font-weight:650}
 #impbox{max-width:520px}
 #impbox input,#impbox textarea{margin-bottom:12px}
 #impbox textarea{resize:vertical;min-height:64px;font-family:ui-monospace,Menlo,monospace}
@@ -310,6 +312,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sMonthly">Monthly budget<i class="info" data-tip="monthly">i</i></label><input id="sMonthly" type="number" min="0" max="10000" step="1"></div>
           <div><label for="sSetup">Setup budget<i class="info" data-tip="setup">i</i></label><input id="sSetup" type="number" min="0" max="200" step="1"><div class="hint">Registration fee, swap, gas</div></div>
           <div><label for="sReserve">EGLD gas reserve<i class="info" data-tip="reserve">i</i></label><input id="sReserve" inputmode="decimal"></div>
+          <div><label for="sTopUp">Top-up warning<i class="info" data-tip="topup">i</i></label><input id="sTopUp" type="number" min="0" max="10000" step="1"><div class="hint">0 switches it off</div></div>
           <div class="sep">Per action (FOXSY)</div>
           <div><label for="sEntry">Max entry fee / stake<i class="info" data-tip="entry">i</i></label><input id="sEntry" type="number" min="0" step="100"></div>
           <div><label for="sShop">Max shop payment<i class="info" data-tip="shop">i</i></label><input id="sShop" type="number" min="0" step="100"></div>
@@ -407,7 +410,8 @@ function renderHeader() {
   $('killBtn').textContent = i.killSwitch ? 'Release kill switch' : 'Kill switch'
   $('killBtn').className = 'btn ' + (i.killSwitch ? 'warn' : 'danger')
   $('kAgents').textContent = S.agents.length + ' / ' + i.maxAgents
-  $('kAgentsS').textContent = S.agents.filter(b => b.paused).length + ' paused'
+  const lowFunds = S.agents.filter(b => b.funds && b.funds.low).length
+  $('kAgentsS').textContent = S.agents.filter(b => b.paused).length + ' paused' + (lowFunds ? ' · ' + lowFunds + ' low on funds' : '')
   const p = S.agents.map(b => b.snapshot && b.snapshot.prices).find(Boolean)
   $('kEgld').textContent = p ? '$' + p.egldUsd.toFixed(2) : '–'
   $('kFoxsy').textContent = p ? '$' + p.foxsyUsd.toFixed(5) : '–'
@@ -446,7 +450,8 @@ function renderAgentbar() {
     bar.append(el('button', { class: 'vtab' + (b.index === sel ? ' on' : ''), onclick: () => select(b.index) },
       el('span', { class: 'vdot ' + dot }), 'Agent ' + (b.index + 1) + (name ? ' · ' + name : ''),
       b.source === 'imported' ? el('span', { class: 'vmode imported', text: 'imported', title: 'An imported team: it plays with its own key, not one from your recovery words' }) : '',
-      b.paused ? el('span', { class: 'vmode paused', text: 'paused' }) : ''))
+      b.paused ? el('span', { class: 'vmode paused', text: 'paused' }) : '',
+      b.funds && b.funds.low ? el('span', { class: 'vmode low', text: 'low funds', title: 'Its wallet is worth less than its top-up warning: send EGLD or FOXSY to this agent' }) : ''))
   }
   const next = S.instance.next
   bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'Account ' + next.index + ' of your recovery words' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: addAgent }, '+ Add agent'))
@@ -465,7 +470,12 @@ function renderAgent() {
   const rows = $('walletRows'); rows.replaceChildren()
   if (!s) rows.append(...row('State', 'waiting for the first snapshot'))
   else {
-    rows.append(...row('EGLD', s.egld ?? '–'), ...row('FOXSY', s.foxsy ?? '–'), ...row('Cards', s.cards ?? '–'))
+    rows.append(...row('EGLD', s.egld ?? '–'), ...row('FOXSY', s.foxsy ?? '–'))
+    if (s.wegld) rows.append(...row('WEGLD', s.wegld + ' · not used by the agent'))
+    const f = b.funds || {}
+    rows.append(el('div', { class: 'k' }, 'Value', el('i', { class: 'info', 'data-tip': 'funds', text: 'i' })),
+      el('div', { class: 'v' + (f.low ? ' low' : '') }, f.usd === null || f.usd === undefined ? '–' : usd(f.usd) + (f.low ? ' · low: top up with EGLD or FOXSY (warning at $' + b.settings.topUpWarningUsd + ')' : '')))
+    rows.append(...row('Cards', s.cards ?? '–'))
     const r = s.registration
     if (!r.registered) {
       const bits = ['not registered', r.whitelisted === false ? 'not whitelisted' : null, r.relayerEnabled === false ? 'relayer off' : null, r.feePaidOnChain ? 'fee already paid' : null].filter(Boolean)
@@ -531,7 +541,7 @@ function fillForm(st) {
   sp.value = Object.keys(presets).find(k => presets[k] === st.strategy) || ''
   $('sStrategy').value = st.strategy
   $('sDaily').value = st.dailyCapUsd; $('sMonthly').value = st.monthlyBudgetUsd; $('sSetup').value = st.setupBudgetUsd
-  $('sReserve').value = st.egldGasReserve
+  $('sReserve').value = st.egldGasReserve; $('sTopUp').value = st.topUpWarningUsd
   $('sEntry').value = st.maxEntryFeeFoxsy; $('sShop').value = st.maxShopPaymentFoxsy; $('sSwap').value = st.maxSwapFoxsy; $('sBid').value = st.maxBidFoxsy
   $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
@@ -545,7 +555,7 @@ function readForm() {
   const list = id => $(id).value.split(/[\s,]+/).filter(Boolean).map(Number)
   return {
     strategy: $('sStrategy').value, dailyCapUsd: n('sDaily'), monthlyBudgetUsd: n('sMonthly'), setupBudgetUsd: n('sSetup'),
-    egldGasReserve: $('sReserve').value.trim(), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
+    egldGasReserve: $('sReserve').value.trim(), topUpWarningUsd: n('sTopUp'), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
     entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
     activeHoursUtc: [n('sFrom'), n('sTo')], minGapSeconds: n('sGap'), actionProbability: n('sProb'),
   }
@@ -752,9 +762,14 @@ const TIPS = {
     <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, up to 100 messages, together with the ones from Telegram. Ctrl+Enter sends.</p>
     <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
+  funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD (the gas reserve included) plus its FOXSY.</p>
+    <p>It turns orange, and the agent's tab shows "low funds", when it is worth less than the Top-up warning in Settings. You also get one message on Telegram when it falls under that level. Nothing is paused: the agent plays on with what it has.</p>
+    <p>To top up, send EGLD to the address above on the MultiversX network: the agent buys FOXSY with it by itself. You can send FOXSY too. WEGLD is not used by the agent, so it is not counted.</p>`],
+  topup: ['Top-up warning', `<p>You are warned when this agent's wallet (EGLD plus FOXSY) is worth less than this amount in USD: the value turns orange here and one message goes to Telegram. The next message comes only after you topped it up and it fell again.</p>
+    <p>Keep it above what one day of play costs you. Remember that the EGLD gas reserve is part of the value and is never swapped. 0 switches the warning off.</p>`],
   chat_clear: ['Clear', `<p>Empties the conversation, here and for Telegram: the manager starts fresh with your next message.</p>
     <p>Why: the manager reads the current conversation again with every message you send, and the AI is paid for what it reads. A short conversation costs less and keeps the answers on the topic. One line costs a fraction of a cent, so it counts in long discussions and with the dearer models.</p>
-    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation, and it never reads more than the last 40 lines. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
+    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation, and it never reads more than the last 25 messages. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
   speak: ['Speak', `<p>Press Speak and talk instead of typing: your words appear in the box. Press Stop when you are done, read the text and press Send.</p>
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],

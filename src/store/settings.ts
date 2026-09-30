@@ -17,6 +17,8 @@ export interface AgentSettings {
   maxSwapFoxsy: number
   /** EGLD kept for gas: a swap that would leave less is refused; transaction fees may use it. */
   egldGasReserve: string
+  /** The owner is told when the wallet's EGLD and FOXSY together are worth less than this (USD); 0 switches it off. */
+  topUpWarningUsd: number
   /** Round entry amounts to choose from when creating (never odd numbers like 1,246). */
   entryFeesSilver: number[]
   entryFeesGold: number[]
@@ -52,6 +54,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   maxSwapFoxsy: 10_000,
   maxBidFoxsy: 2500,
   egldGasReserve: '1',
+  topUpWarningUsd: 10,
   entryFeesSilver: [1000, 1500, 2000, 2500, 3000],
   entryFeesGold: [5000],
   tickMinutes: 30,
@@ -91,6 +94,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('dailyCapUsd', 0, 1000)
   num('monthlyBudgetUsd', 0, 10_000)
   num('setupBudgetUsd', 0, 200)
+  num('topUpWarningUsd', 0, 10_000)
   num('maxEntryFeeFoxsy', 0, 100_000, true)
   num('maxShopPaymentFoxsy', 0, 100_000, true)
   num('maxSwapFoxsy', 100, 1_000_000, true)

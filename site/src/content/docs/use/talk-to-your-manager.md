@@ -26,8 +26,12 @@ with **Apply** and **Cancel**, also when it was proposed on Telegram. **Ctrl+Ent
 
 The manager reads the **current conversation** with every message you send, so a follow-up question needs no
 repeating. A conversation ends by itself after **an hour without a message**: your next message then starts a
-new one. It never reads more than the last 40 lines. A thin line in the box shows where its memory starts; what
-is above stays there for you to read back.
+new one. It never reads more than the last 25 messages. A thin line in the box shows where its memory starts;
+what is above stays there for you to read back.
+
+There is one conversation for all your agents, the same one on every agent's page and on Telegram: you have one
+manager for all your teams. A message sent from an agent's page is about that agent unless you name others, and
+the manager is told which agent each earlier message was about.
 
 **Clear** (on Telegram: `/clear`) empties the conversation at once. Use it when you change the subject: the AI is
 paid for what it reads, so a short conversation costs less and keeps the answers on the topic. One line costs a

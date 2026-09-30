@@ -66,16 +66,16 @@ test('the conversation with the manager is kept: saved across a restart, read ba
   assert.match(svc.cancelProposal('deadbeef'), /already applied, cancelled or expired/)
   assert.equal(svc.chatLines().length, count)
 
-  // The box keeps the last 100 lines, the manager reads 40 at most, and a long message is shortened for it.
+  // The box keeps the last 100 messages and the manager reads 25 at most, whole.
   answer = { reply: 'r'.repeat(3000), proposal: null, usd: 0 }
   for (let i = 0; i < 60; i++) await svc.discuss(`${'m'.repeat(1000)} ${i}`, 'Telegram')
   assert.equal(svc.chatLines().length, 100)
   assert.equal(new Service(cfg).chatLines().length, 100)
   assert.equal(svc.chatLines().at(-2)!.text.length, 1003, 'the box shows the whole message')
-  assert.equal(svc.chatLines().filter(l => l.read).length, 40)
+  assert.equal(svc.chatLines().filter(l => l.read).length, 25)
   const context = seen.at(-1)!.recent
-  assert.equal(context.length, 40)
-  assert.deepEqual([context[0]!.text.length, context[1]!.text.length], [600, 1200])
+  assert.equal(context.length, 25)
+  assert.deepEqual([context[0]!.from, context[0]!.text.length, context[1]!.text.length], ['manager', 3000, 1003], 'whole messages')
 })
 
 test('the manager reads the current conversation only: an hour without a message or Clear starts a new one', async () => {
@@ -101,6 +101,14 @@ test('the manager reads the current conversation only: an hour without a message
   assert.deepEqual(seen.at(-1)!.recent.map(r => r.text), ['q2', 'a'], 'only the current conversation goes to the manager')
   assert.equal(later.chatLines().length, 8, 'the box still shows the earlier lines')
 
+  // With a second agent, a message about one of them says so when the manager reads it again.
+  ;(later as unknown as { schedule: unknown }).schedule = () => undefined
+  later.addNextAgent()
+  await later.discuss('play more ranked', 'web UI, demo', [1])
+  await later.discuss('and you all?', 'Telegram')
+  assert.deepEqual(seen.at(-1)!.recent.slice(-2).map(r => r.text), ['(about agent 2) play more ranked', 'a'])
+  assert.equal(seen.at(-1)!.recent.length, 6)
+
   // Clear empties it for both sides and drops a proposal still waiting in it.
   answer = { reply: 'Gold then.', proposal: { agents: [0], strategy: 'Gold only', changes: '' }, usd: 0 }
   const asked = await later.discuss('go for Gold', 'Telegram')
@@ -116,4 +124,40 @@ test('the manager reads the current conversation only: an hour without a message
   assert.deepEqual(seen.at(-1)!.recent, [], 'the next message starts with no context')
   assert.match(await later.command('clear', [], ''), /conversation cleared/)
   assert.deepEqual(later.chatLines(), [])
+})
+
+test('low funds: the owner is told once when a wallet falls under its top-up warning, and again only after a top-up', async () => {
+  const { snapshot } = await import('./fixtures.ts')
+  const { fundsUsd, lowOnFunds } = await import('../src/snapshot/funds.ts')
+  const { validateSettingsPatch, DEFAULT_SETTINGS } = await import('../src/store/settings.ts')
+  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
+  svc.ensureAgents()
+  const told: string[] = []
+  svc.notify = (text: string) => void told.push(text)
+  const check = (egld: number, foxsy: number) => {
+    const snap = snapshot()
+    snap.chain = { ...snap.chain!, egld: BigInt(Math.round(egld * 1e6)) * 10n ** 12n, foxsy: BigInt(foxsy) * 10n ** 18n, wegld: 5n * 10n ** 18n }
+    snap.prices = { egldUsd: 4, egldPerFoxsy: 0.0005, foxsyUsd: 0.002 }
+    ;(svc as unknown as { checkFunds: (a: unknown, s: unknown) => void }).checkFunds(svc.store.agent(0)!, snap)
+    return snap
+  }
+  assert.equal(DEFAULT_SETTINGS.topUpWarningUsd, 10)
+  assert.equal(fundsUsd(check(3, 1000)), 14, '3 EGLD at $4 plus 1,000 FOXSY at $0.002; WEGLD is not counted')
+  assert.deepEqual(told, [], 'above the level nothing is said')
+  check(2, 500) // $9
+  assert.equal(told.length, 1)
+  assert.match(told[0]!, /^agent 1 is low on funds: about \$9\.00 in its wallet \(2\.0000 EGLD, 500 FOXSY\), under its top-up warning of \$10\. Send EGLD .* to erd1/)
+  check(1.5, 500)
+  check(1, 0)
+  assert.equal(told.length, 1, 'said once while it stays low')
+  check(5, 0) // topped up
+  check(2, 0)
+  assert.equal(told.length, 2, 'said again after a top-up and a new fall')
+  assert.match(svc.store.activity(0, 3)[0]!.summary, /low on funds/)
+  // The level is the owner's: 0 switches the warning off, and an unknown price says nothing.
+  svc.store.updateSettings(0, validateSettingsPatch({ topUpWarningUsd: 0 }))
+  check(5, 0); check(0.1, 0)
+  assert.equal(told.length, 2)
+  assert.deepEqual([lowOnFunds(9.99, 10), lowOnFunds(10, 10), lowOnFunds(1, 0), lowOnFunds(null, 10), fundsUsd(undefined)], [true, false, false, false, null])
+  assert.throws(() => validateSettingsPatch({ topUpWarningUsd: -1 }), /topUpWarningUsd/)
 })

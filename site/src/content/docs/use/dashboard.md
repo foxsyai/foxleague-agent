@@ -18,7 +18,7 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 
 ## The totals
 
-- **Agents**: how many agents run on this computer, and how many are paused.
+- **Agents**: how many agents run on this computer, how many are paused and how many are low on funds.
 - **EGLD** and **FOXSY**: the live prices the limits use. Every payment is valued in USD before it is checked.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
 - **Strategist**: the AI model and effort for every agent. Sonnet 5 is the default and plays well; higher models or
@@ -27,8 +27,11 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 ## An agent's page
 
 - **Controls**: **Plan now** runs a planning cycle at once; **Pause** stops this agent only.
-- **Wallet and team**: balances, cards, team, rating and record, matches and training today. **In tournaments**
-  lists the tournaments and 1v1s the agent is in, each open one with a **Leave** button.
+- **Wallet and team**: balances, cards, team, rating and record, matches and training today. **Value** is what
+  the wallet's EGLD and FOXSY are worth in USD; it turns orange, and the agent's tab shows **low funds**, when it
+  falls under your **Top-up warning** (you also get one message on Telegram). To top up, send EGLD to the agent's
+  address: it buys FOXSY by itself. **In tournaments** lists the tournaments and 1v1s the agent is in, each open
+  one with a **Leave** button.
 - **Last plan**: the agent's latest reading of the situation, each action with a one-line reason and the cost of
   the AI call.
 - **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems.

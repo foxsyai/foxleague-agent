@@ -16,7 +16,8 @@ import { deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
 import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
 import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
-import { atomicToFloat } from './util/encoding.ts'
+import { atomicToFloat, formatAtomic } from './util/encoding.ts'
+import { fundsUsd, lowOnFunds } from './snapshot/funds.ts'
 import { Executor } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
@@ -102,12 +103,12 @@ export interface ChatLine {
   changes?: string
 }
 /**
- * The box keeps and shows the last CHAT_KEPT lines. The manager reads the current conversation only: the
- * lines since the last pause of CHAT_PAUSE_MS (or since Clear), at most CHAT_CONTEXT of them, because every
- * line it reads is paid for with each message.
+ * The box keeps and shows the last CHAT_KEPT messages. The manager reads the current conversation only: the
+ * messages since the last pause of CHAT_PAUSE_MS (or since Clear), at most CHAT_CONTEXT of them (a quarter of
+ * what is kept), whole, because everything it reads is paid for with each message.
  */
 const CHAT_KEPT = 100
-const CHAT_CONTEXT = 40
+const CHAT_CONTEXT = 25
 const CHAT_PAUSE_MS = 3600_000
 
 export class Service {
@@ -251,9 +252,13 @@ export class Service {
           const s = this.snapshots.get(b.index)
           return { index: b.index, team: s?.team?.name ?? s?.registration.teamName ?? null, strategy: b.settings.strategy, paused: b.paused }
         }),
+        // Whole messages. An owner message that was about some of the agents only says which, so a follow-up
+        // about another agent is not mixed up with it.
         recent: this.chatContext().map(l => ({
           from: l.from,
-          text: l.from === 'owner' ? l.text.slice(0, 600) : `${l.text}${l.strategy !== undefined ? ` [proposed strategy for ${whichAgents(l.agents ?? [])}: ${l.strategy}]` : ''}`.slice(0, 1200),
+          text: l.from === 'owner'
+            ? `${l.agents?.length && l.agents.length < agents.length ? `(about ${whichAgents(l.agents)}) ` : ''}${l.text}`
+            : `${l.text}${l.strategy !== undefined ? ` [proposed strategy for ${whichAgents(l.agents ?? [])}: ${l.strategy}]` : ''}`,
         })),
         digests: targets.slice(0, 3).flatMap(i => {
           const s = this.snapshots.get(i)
@@ -296,6 +301,27 @@ export class Service {
     this.store.setKv('chat', '[]')
     if (n) this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `conversation with the manager cleared (${by})` })
     return n ? 'conversation cleared: the manager starts fresh with your next message' : 'the conversation is already empty'
+  }
+
+  /**
+   * Tells the owner when an agent's wallet is worth less than its top-up warning level: once when it falls
+   * under it, and again only after it was topped up above it. Nothing is paused: the agent plays on with what
+   * it has.
+   */
+  private checkFunds(agent: AgentRow, snap: AgentSnapshot): void {
+    const usd = fundsUsd(snap)
+    const level = agent.settings.topUpWarningUsd
+    const key = `low_funds:${agent.index}`
+    if (usd === null || level <= 0) return
+    if (!lowOnFunds(usd, level)) {
+      if (this.store.getKv(key) === '1') this.store.setKv(key, '0')
+      return
+    }
+    if (this.store.getKv(key) === '1') return
+    this.store.setKv(key, '1')
+    const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} in its wallet (${formatAtomic(snap.chain!.egld, 4)} EGLD, ${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
+    this.store.log({ agentIndex: agent.index, kind: 'control', status: 'info', summary: text })
+    this.notify(text)
   }
 
   cancelProposal(id: string): string {
@@ -683,6 +709,7 @@ export class Service {
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
       const snap = await this.snapshot(index)
+      this.checkFunds(agent, snap)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.notify(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
       if (!this.strategist) {
@@ -810,7 +837,12 @@ export class Service {
         for (const b of this.store.agents()) {
           const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(b.index) })
           const v = budgetView(this.store, b.index, b.settings, b.dryRun || !this.executor.liveEnabled, new Date())
-          lines.push(renderDigest(snap).split('\n').slice(0, 5).join('\n'), `spent today $${v.spentTodayUsd.toFixed(2)}/${v.dailyCapUsd}, month $${v.spentMonthUsd.toFixed(2)}/${v.monthlyBudgetUsd}`)
+          const worth = fundsUsd(snap)
+          lines.push(
+            renderDigest(snap).split('\n').slice(0, 5).join('\n'),
+            `spent today $${v.spentTodayUsd.toFixed(2)}/${v.dailyCapUsd}, month $${v.spentMonthUsd.toFixed(2)}/${v.monthlyBudgetUsd}`,
+            ...(worth === null ? [] : [`wallet worth about $${worth.toFixed(2)}${lowOnFunds(worth, b.settings.topUpWarningUsd) ? ` (LOW: under the $${b.settings.topUpWarningUsd} top-up warning)` : ''}`]),
+          )
         }
         return lines.join('\n')
       }

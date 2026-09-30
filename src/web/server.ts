@@ -13,6 +13,7 @@ import { budgetView } from '../executor/budget.ts'
 import { EFFORTS, MODELS, type Effort } from '../strategist/strategist.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
+import { fundsUsd, lowOnFunds } from '../snapshot/funds.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { agentName, pemName } from '../names.ts'
 import type { ImportInput } from '../wallet/imported.ts'
@@ -102,6 +103,8 @@ function snapshotSummary(s: AgentSnapshot | undefined) {
     takenAt: s.takenAt,
     egld: s.chain ? formatAtomic(s.chain.egld, 4) : null,
     foxsy: s.chain ? formatAtomic(s.chain.foxsy, 2) : null,
+    // WEGLD is shown only when the wallet holds some: the agent never uses it.
+    wegld: s.chain && s.chain.wegld > 0n ? formatAtomic(s.chain.wegld, 4) : null,
     cards: s.chain?.nftCount ?? null,
     prices: s.prices,
     registration: s.registration,
@@ -199,6 +202,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           settings: b.settings,
           budget: budgetView(service.store, b.index, b.settings, dry, now, snap?.gameDay.resetHourUtc ?? 14),
           snapshot: snapshotSummary(snap),
+          funds: { usd: fundsUsd(snap), low: lowOnFunds(fundsUsd(snap), b.settings.topUpWarningUsd) },
           lastPlan: service.store.getKv(`last_plan_${b.index}`) ?? null,
         }
       }),
