@@ -6,6 +6,9 @@ import { Strategist, strategistChoice, usd, type ChatInput } from '../src/strate
 import { Proposals } from '../src/strategist/proposals.ts'
 import { cleanPage } from '../src/strategist/manual.ts'
 import type { Config } from '../src/config.ts'
+import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
+import { budgetView } from '../src/executor/budget.ts'
+import { setup, snapshot } from './fixtures.ts'
 
 test('strategist choice: the web UI pick wins over the env, unknown effort falls back to medium', () => {
   const store = new Store('', ':memory:')
@@ -149,4 +152,35 @@ test('manual pages: title heading, no imports or source comments, callouts as qu
     cleanPage(src, 'mechanics/matches.mdx'),
     '# Match Types\n(docs.foxleague.ai/mechanics/matches/)\n\n## Casual\n\n> **Cooldown**\n> Wait 30 s.\n>\n> Then play.\n\n| a | b |\n',
   )
+})
+
+test('a plan streams with room for 32,000 tokens, and a cut-off one runs nothing', async () => {
+  const s = new Strategist('test-key', 'claude-sonnet-5', 'xhigh')
+  const sent: { max_tokens: number; output_config: { effort: string }; stream?: unknown }[] = []
+  let answer: Record<string, unknown> = {}
+  ;(s as unknown as { client: unknown }).client = {
+    beta: {
+      messages: {
+        create: async () => { throw new Error('a plan must not use a plain request') },
+        stream: (p: never, options: { signal?: AbortSignal }) => {
+          sent.push(p)
+          assert.ok(options.signal instanceof AbortSignal, 'the whole answer has a deadline')
+          return { finalMessage: async () => ({ model: 'claude-sonnet-5', usage: { input_tokens: 10, output_tokens: 20 }, ...answer }) }
+        },
+      },
+    },
+  }
+  const input = { snapshot: snapshot(), settings: DEFAULT_SETTINGS, budget: budgetView(setup().store, 0, DEFAULT_SETTINGS, true, new Date(), 14), recent: [], dryRun: true }
+
+  answer = { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't', name: 'submit_plan', input: { summary: 'train', actions: [{ action: { type: 'sync' }, reason: 'dirty cards' }] } }] }
+  const plan = await s.plan(input)
+  assert.equal(sent[0]!.max_tokens, 32_000)
+  assert.equal(sent[0]!.output_config.effort, 'xhigh')
+  assert.equal(plan.summary, 'train')
+  assert.equal(plan.actions.length, 1)
+
+  answer = { stop_reason: 'max_tokens', content: [{ type: 'tool_use', id: 't', name: 'submit_plan', input: { summary: 'half a pl', actions: [{ action: { type: 'sync' }, reason: '' }] } }] }
+  const cut = await s.plan(input)
+  assert.match(cut.summary, /truncated at max_tokens; nothing executed/)
+  assert.equal(cut.actions.length, 0)
 })

@@ -176,6 +176,14 @@ export function renderPlanRequest(p: PlanInput): string {
   return lines.filter(Boolean).join('\n')
 }
 
+/**
+ * The most a plan may write, thinking included: at the highest efforts the thinking alone has filled 16,000
+ * tokens and cut a plan off (nothing runs from a cut-off plan). Only the tokens used are paid for.
+ */
+const PLAN_MAX_TOKENS = 32_000
+/** The whole plan answer must arrive within this time; past it the call fails and the next tick plans again. */
+const PLAN_DEADLINE_MS = 10 * 60_000
+
 export class Strategist {
   private client: Anthropic
   model: string
@@ -200,15 +208,21 @@ export class Strategist {
     this.effort = effort
   }
 
-  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>): Promise<Anthropic.Beta.BetaMessage> {
+  /**
+   * One request to the model. A streamed one is read to its end before anything is used: a plan at a high
+   * effort can take minutes, longer than one plain request may wait, and the deadline covers the whole answer.
+   */
+  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, streamed = false): Promise<Anthropic.Beta.BetaMessage> {
     const model = this.model
-    if (!WITH_FALLBACK.has(model) || this.noFallback.has(model)) return this.client.beta.messages.create({ ...params, model })
+    const send = (body: Anthropic.Beta.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.BetaMessage> =>
+      streamed ? this.client.beta.messages.stream(body, { signal: AbortSignal.timeout(PLAN_DEADLINE_MS) }).finalMessage() : this.client.beta.messages.create(body)
+    if (!WITH_FALLBACK.has(model) || this.noFallback.has(model)) return send({ ...params, model })
     try {
-      return await this.client.beta.messages.create({ ...params, model, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
+      return await send({ ...params, model, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
     } catch (err) {
       if (!(err instanceof Anthropic.BadRequestError) || !/fallback/i.test(err.message)) throw err
       this.noFallback.add(model)
-      return this.client.beta.messages.create({ ...params, model })
+      return send({ ...params, model })
     }
   }
 
@@ -225,14 +239,14 @@ export class Strategist {
   async plan(input: PlanInput): Promise<Plan> {
     const model = this.model
     const response = await this.create({
-      max_tokens: 16000,
+      max_tokens: PLAN_MAX_TOKENS,
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       system: this.system,
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: `${renderPlanRequest(input)}\n\nCall submit_plan now.` }],
-    })
+    }, true)
     const usage = {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
