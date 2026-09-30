@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 #   (or: git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh)
 #
-# Re-run it any time: it keeps your wallet, login and keys. It only asks for what is missing.
+# Re-run it any time: it keeps your wallet, login and keys, and offers your earlier answers as the defaults.
 #   ./install.sh --update      get the latest version, update dependencies, restart
 #   ./install.sh --uninstall   stop and remove the background service (your files and wallet stay)
 #   ./install.sh --no-service  set everything up but do not install the background service
@@ -267,7 +267,8 @@ cat <<'KEYS'
   Nothing you paste is shown on screen. Press Enter at any key to skip it.
 
 KEYS
-if yes_no "Enter keys now?" y; then
+# Keys already set: pressing Enter skips this step (they stay as they are).
+if yes_no "Enter keys now?" "$([ -n "$(get_env ANTHROPIC_API_KEY)" ] && echo n || echo y)"; then
   cli configure < "$TTY"
 else
   info "Skipped. Add them any time in the dashboard: Keys."
@@ -276,9 +277,10 @@ fi
 say "5/7 Settings"
 [ -n "$(get_env AGENT_COUNT)" ] || set_env AGENT_COUNT 1
 set_env AGENT_PEM_DIR "$PEM_DIR"
-info "The agents start in DRY RUN: they plan and simulate, nothing is signed."
+info "A new install starts in DRY RUN: the agents plan and simulate, nothing is signed."
 info "When you are happy, press Go LIVE in the dashboard. This machine still has to allow it:"
-if yes_no "Allow this machine to sign real transactions once you press Go LIVE?" y; then
+# A re-run offers the earlier answer, so pressing Enter never turns live signing on by surprise.
+if yes_no "Allow this machine to sign real transactions once you press Go LIVE?" "$([ "$(get_env AGENT_LIVE_ENABLED)" = 0 ] && echo n || echo y)"; then
   set_env AGENT_LIVE_ENABLED 1
 else
   set_env AGENT_LIVE_ENABLED 0

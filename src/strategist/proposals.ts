@@ -24,6 +24,11 @@ export class Proposals {
     return proposal
   }
 
+  /** Drops every open proposal (the owner cleared the conversation they were made in). */
+  clear(): void {
+    this.open.clear()
+  }
+
   /** True while a proposal can still be applied or dropped. */
   isOpen(id: string, now = Date.now()): boolean {
     const p = this.open.get(id)

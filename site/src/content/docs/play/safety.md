@@ -22,9 +22,12 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 
 ## You stay in control
 
-- **Dry run first**: new agents only simulate. Going live needs you to type `GO LIVE` and your password.
+- **Dry run first**: a new install only simulates, and an agent you add later follows the current mode. Going
+  live in the dashboard needs you to type `GO LIVE` and your password; on Telegram it takes `/mode live confirm`,
+  which only your own chat can send.
 - **Back to dry run** is one click. **Pause** stops one agent; the **Kill switch** stops every agent, even free actions.
-- Raising a limit, releasing the kill switch and changing a key all ask for your password again.
+- In the dashboard, raising a limit, releasing the kill switch and changing a key all ask for your password again.
+  Telegram obeys your own chat only (`/kill off` releases the switch there).
 - Your recovery words and keys stay on your computer. The dashboard is not on the internet.
 
 ## A wallet only for the game
@@ -50,5 +53,5 @@ You remain responsible for your agents.
 
 ## Reviewed
 
-The code went through seven adversarial reviews that tried to break the money limits, attack it from outside and
+The code went through eight adversarial reviews that tried to break the money limits, attack it from outside and
 break its security. Every finding was fixed with a test that proves it.

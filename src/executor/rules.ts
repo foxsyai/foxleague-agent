@@ -226,6 +226,12 @@ function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
 /** Contract floor: 5 competitive matches must really be played per fusion input or listed card. */
 const PLAYED_FLOOR = 5
 
+/**
+ * The agent's own team could not be read (FoxLeague answered without its lineup, or not at all). Nothing that
+ * depends on who plays may run blind: no lineup or formation change, no match, and no card leaves the squad.
+ */
+const TEAM_UNREADABLE = 'the team could not be read (lineup and bench unknown): not acting blind'
+
 function inSquad(s: AgentSnapshot, nonce: number): boolean {
   return Boolean(s.team && (s.team.lineup.includes(nonce) || s.team.substitutes.includes(nonce)))
 }
@@ -316,14 +322,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
     }
 
     case 'set_formation': {
-      if (!registered || !s.team) return refuse('not registered')
+      if (!registered) return refuse('not registered')
+      if (!s.team) return refuse(TEAM_UNREADABLE)
       if (s.team.formation === a.formation) return refuse(`formation is already ${a.formation}`)
       const mismatch = lineupPositionsOk(s, a.formation, s.team.lineup)
       return allow(0, {}, 'play', mismatch ? [`current lineup does not fit ${a.formation} (${mismatch}): set a new lineup next`] : [])
     }
 
     case 'set_lineup': {
-      if (!registered || !s.team) return refuse('not registered')
+      if (!registered) return refuse('not registered')
+      if (!s.team) return refuse(TEAM_UNREADABLE)
       const all = [...a.lineup, ...a.substitutes]
       if (new Set(all).size !== all.length) return refuse('a card appears twice')
       for (const n of all) {
@@ -342,7 +350,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
     }
 
     case 'play_match': {
-      if (!registered || !s.team) return refuse('not registered')
+      if (!registered) return refuse('not registered')
+      if (!s.team) return refuse(TEAM_UNREADABLE)
       const al = s.auth?.allowance
       if (!al) return refuse('daily allowance unknown')
       if (al.today_count >= al.daily_limit) return refuse(`daily match limit reached (${al.today_count}/${al.daily_limit})`)
@@ -466,6 +475,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'buy': {
       if (!registered) return refuse('not registered')
+      if (a.product === 'condition_recovery' && !s.team) return refuse(TEAM_UNREADABLE)
       if (ctx.pendingShop?.has(a.product)) return refuse(`a ${a.product} payment is still waiting for FoxLeague's confirmation`)
       const prices = cfg.shop_prices_foxsy
       let amount: number
@@ -506,6 +516,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'fuse': {
       if (!registered) return refuse('not registered')
+      if (!s.team) return refuse(TEAM_UNREADABLE)
       const cards = a.player_nonces.map(n => card(s, n))
       const missing = a.player_nonces.filter((_n, i) => !cards[i])
       if (missing.length) return refuse(`${missing.map(n => `#${n}`).join(', ')} not in the wallet`)
@@ -562,6 +573,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'list_card': {
       if (!registered) return refuse('not registered')
+      if (!s.team) return refuse(TEAM_UNREADABLE)
       if (!cfg.auction_enabled) return refuse('auctions are switched off')
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
@@ -586,6 +598,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
     case 'fusion_cooldown_waiver':
     case 'fusion_match_waiver': {
       if (!registered) return refuse('not registered')
+      if (!s.team) return refuse(TEAM_UNREADABLE)
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
       if (c.listed) return refuse(`#${a.nonce} is listed for sale: a listed card cannot be waived`)

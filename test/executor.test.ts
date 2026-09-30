@@ -295,3 +295,10 @@ test('sync: the payload targets the players contract, the transaction goes to th
   assert.equal(wrong!.status, 'error')
   assert.match(wrong!.summary, /not the players contract/)
 })
+
+test('a formation FoxLeague lists as coming soon is not offered: 4-4-2a is refused before the executor sees it', async () => {
+  const { parseAction, FORMATION_SLOTS } = await import('../src/executor/actions.ts')
+  assert.throws(() => parseAction({ type: 'set_formation', formation: '4-4-2a' }), /formation/)
+  assert.deepEqual(parseAction({ type: 'set_formation', formation: '4-4-2o' }), { type: 'set_formation', formation: '4-4-2o' })
+  assert.ok(FORMATION_SLOTS['4-4-2a'], 'its slots stay known for a team that saved it earlier')
+})

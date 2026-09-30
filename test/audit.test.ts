@@ -1064,3 +1064,23 @@ test('the agent reads its own team with its session; a public view of it counts 
   assert.deepEqual([asked.at(-1), watched.team?.hidden], [undefined, true])
   assert.match(renderDigest(watched), /Formation and lineup: not public/)
 })
+
+test('own team unreadable: no card leaves the squad and nothing that needs the lineup runs blind', async () => {
+  const { exec, agent } = setup()
+  const blind = snapshot()
+  blind.team = null
+  const spare = blind.players.find(p => p.role === 'reserve') ?? blind.players[0]!
+  const starters = blind.players.slice(0, 3).map(p => p.nonce)
+  for (const a of [
+    { type: 'list_card', nonce: starters[0]!, reserve_foxsy: 1000 },
+    { type: 'fuse', player_nonces: starters, position_of: 0 },
+    { type: 'fusion_cooldown_waiver', nonce: starters[0]! },
+    { type: 'set_lineup', lineup: blind.players.slice(0, 11).map(p => p.nonce), substitutes: [] },
+    { type: 'play_match', match_type: 'ranked' },
+    { type: 'buy', product: 'condition_recovery', player_nonces: [spare.nonce] },
+  ] as const) {
+    const [r] = await exec.run(agent(), dryWallet, blind, act(a as never))
+    assert.equal(r!.status, 'refused', a.type)
+    assert.match(r!.summary, /the team could not be read/, a.type)
+  }
+})

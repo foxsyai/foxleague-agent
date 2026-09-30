@@ -12,7 +12,8 @@ In the `foxleague-agent` folder:
 ```
 
 It downloads the newest release (or pulls it, if you installed with git), updates the dependencies and restarts
-the agent. Your wallet, keys, settings and history are kept. Pasting the install line again does the same.
+the agent. Your wallet, keys, settings and history are kept. Pasting the install line again also downloads the
+newest version, then runs the installer, which offers your earlier answers as the defaults.
 
 ## More agents
 

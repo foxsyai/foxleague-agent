@@ -1,6 +1,6 @@
 // Operator CLI. `npm run cli -- <command>`.
 
-import { existsSync, writeFileSync } from 'node:fs'
+import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { envFilePath, loadConfig } from './config.ts'
 import { Chain } from './chain/gateway.ts'
@@ -14,7 +14,7 @@ import { Executor, formatResult, liveSigningAllowed } from './executor/executor.
 import { parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
 import { Strategist, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
-import { buildManual } from './strategist/manual.ts'
+import { buildManual, manualStatus } from './strategist/manual.ts'
 import { checkKeys, pickOwnerChat, promptHidden, setEnvValues, telegramMe, telegramRecentChats } from './setup/keys.ts'
 import { Address } from '@multiversx/sdk-core'
 import { randomBytes, randomInt } from 'node:crypto'
@@ -35,6 +35,7 @@ function usage(): never {
   export-pem <N> <path>         write agent N's PEM under pem/ or outside the repo (local only; never on the server)
   sync-manual [foxleague-repo]  rebuild src/strategist/manual.md from the FoxLeague repo's mainnet branch
                                 (default ../next-foxleague); commit and deploy it afterwards
+  manual-status [foxleague-repo]  say whether the strategist's game knowledge still matches FoxLeague's manual
   snapshot <N> [--json]         read-only snapshot of agent N (public API, chain, the agent's own authed routes)
   watch <erd1...> [--json]      public-only snapshot of any team (no login)
   dry-run <N> '<actions json>'  run a hand-written plan for agent N in dry run (always simulated, never signed)
@@ -119,6 +120,16 @@ async function main(): Promise<void> {
       if (new Store(cfg.dataDir).agent(agentIndex(n))?.source === 'imported') throw new Error(`${agentName(agentIndex(n))} is an imported team: its PEM file is the one you imported`)
       const out = exportPem(mnemonicOrExit(), agentIndex(n), path, { isServer: cfg.isServer, repoRoot: REPO_ROOT })
       console.log(`Wrote ${out} (mode 600). Keep it on this machine; never copy it to the server or into git.`)
+      return
+    }
+    case 'manual-status': {
+      const repo = resolve(args[0] ?? join(REPO_ROOT, '..', 'next-foxleague'))
+      if (!existsSync(join(repo, '.git'))) throw new Error(`${repo} is not a FoxLeague checkout; pass its path`)
+      const st = manualStatus(repo, readFileSync(join(REPO_ROOT, 'src', 'strategist', 'manual.md'), 'utf8'))
+      console.log(st.current
+        ? `Game knowledge is up to date with FoxLeague's manual (${st.latest}).`
+        : `GAME KNOWLEDGE IS BEHIND: it was synced at ${st.synced}, FoxLeague's manual is at ${st.latest}. Run: npm run cli -- sync-manual, then commit and deploy.`)
+      if (!st.current) process.exitCode = 2
       return
     }
     case 'sync-manual': {

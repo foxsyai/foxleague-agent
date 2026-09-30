@@ -17,7 +17,7 @@ import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, s
 import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
 import { atomicToFloat, formatAtomic } from './util/encoding.ts'
-import { fundsUsd, lowOnFunds } from './snapshot/funds.ts'
+import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/funds.ts'
 import { Executor } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
@@ -97,6 +97,8 @@ export interface ChatLine {
   source?: string
   /** The agents an owner line was about; on a manager line, the agents its strategy proposal is for. */
   agents?: number[]
+  /** An owner line whose answer is still being written; never saved (a restart drops it). */
+  pending?: boolean
   /** A manager line that came with a strategy proposal: its id, text and summary of changes. */
   proposal?: string
   strategy?: string
@@ -132,6 +134,8 @@ export class Service {
    * has context.
    */
   private chat: ChatLine[] = []
+  /** Raised by every Clear: an answer that arrives after a Clear is not written back into the new conversation. */
+  private chatEpoch = 0
   private readonly lastRefresh = new Map<number, number>()
   /** Import team, step 1 checked the key and the team; step 2 (with the password) takes it by this token. */
   private readonly pendingImports = new Map<string, { key: UserSecretKey; address: string; team: string; expires: number }>()
@@ -150,7 +154,7 @@ export class Service {
     this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (_i, text) => this.notify(text) })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
-      if (Array.isArray(saved)) this.chat = saved.filter((l): l is ChatLine => (l?.from === 'owner' || l?.from === 'manager') && typeof l.text === 'string' && typeof l.at === 'string').slice(-CHAT_KEPT)
+      if (Array.isArray(saved)) this.chat = saved.filter((l): l is ChatLine => (l?.from === 'owner' || l?.from === 'manager') && typeof l.text === 'string' && typeof l.at === 'string' && !l.pending).slice(-CHAT_KEPT)
     } catch {
       // A saved conversation that cannot be read starts empty.
     }
@@ -183,10 +187,23 @@ export class Service {
     }))
   }
 
-  private say(line: Omit<ChatLine, 'at'>): void {
-    this.chat.push({ ...line, at: new Date().toISOString() })
-    this.chat.splice(0, Math.max(0, this.chat.length - CHAT_KEPT))
-    this.store.setKv('chat', JSON.stringify(this.chat))
+  /** A short fingerprint of what the box shows, so the web UI downloads the conversation only when it changed. */
+  chatRevision(now = Date.now()): string {
+    const last = this.chat.at(-1)
+    return [this.chat.length, last?.at ?? '', this.chat.filter(l => l.pending).length, this.chat.filter(l => l.proposal && this.proposals.isOpen(l.proposal)).length, this.chat.length - this.chatContext(now).length].join(':')
+  }
+
+  private say(line: Omit<ChatLine, 'at'>): ChatLine {
+    const said: ChatLine = { ...line, at: new Date().toISOString() }
+    this.chat.push(said)
+    // A proposal whose line leaves the box is dropped with it, so none stays open out of sight.
+    for (const old of this.chat.splice(0, Math.max(0, this.chat.length - CHAT_KEPT))) if (old.proposal) this.proposals.take(old.proposal)
+    this.saveChat()
+    return said
+  }
+
+  private saveChat(): void {
+    this.store.setKv('chat', JSON.stringify(this.chat.filter(l => !l.pending)))
   }
 
   notify(text: string): void {
@@ -242,6 +259,11 @@ export class Service {
     if (!this.strategist) throw new Error('the strategist is off (no ANTHROPIC_API_KEY)')
     const agents = this.store.agents()
     const targets = defaultAgents?.length ? defaultAgents : agents.map(b => b.index)
+    // The context is the conversation before this message; the message shows in the box at once, marked as
+    // waiting for its answer, so a reload or Telegram shows it too.
+    const recent = this.chatContext()
+    const epoch = this.chatEpoch
+    const mine = this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets, pending: true })
     let answer
     try {
       answer = await this.strategist.discuss({
@@ -254,7 +276,7 @@ export class Service {
         }),
         // Whole messages. An owner message that was about some of the agents only says which, so a follow-up
         // about another agent is not mixed up with it.
-        recent: this.chatContext().map(l => ({
+        recent: recent.map(l => ({
           from: l.from,
           text: l.from === 'owner'
             ? `${l.agents?.length && l.agents.length < agents.length ? `(about ${whichAgents(l.agents)}) ` : ''}${l.text}`
@@ -266,11 +288,16 @@ export class Service {
         }),
       })
     } catch (err) {
+      // No answer: the message leaves the box again (the web UI gives the text back to retry).
+      this.chat = this.chat.filter(l => l !== mine)
+      this.saveChat()
       throw new Error(describeModelError(err))
     }
     this.store.setKv('model_usd_total', String(Number(this.store.getKv('model_usd_total') ?? 0) + answer.usd))
+    // Cleared while the answer was written: it does not come back into the new conversation, and makes no proposal.
+    if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
+    delete mine.pending
     const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
-    this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets })
     this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
     return { reply: answer.reply, proposal }
   }
@@ -295,31 +322,33 @@ export class Service {
    * Proposals made in it are dropped with it, so none stays open out of sight. Strategies and settings stay.
    */
   clearChat(by: string): string {
-    for (const l of this.chat) if (l.proposal) this.proposals.take(l.proposal)
+    // Every open proposal goes, also one whose line already left the box or one Telegram still shows buttons for.
+    this.proposals.clear()
+    this.chatEpoch++
     const n = this.chat.length
     this.chat = []
-    this.store.setKv('chat', '[]')
+    this.saveChat()
     if (n) this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `conversation with the manager cleared (${by})` })
     return n ? 'conversation cleared: the manager starts fresh with your next message' : 'the conversation is already empty'
   }
 
   /**
-   * Tells the owner when an agent's wallet is worth less than its top-up warning level: once when it falls
-   * under it, and again only after it was topped up above it. Nothing is paused: the agent plays on with what
-   * it has.
+   * Tells the owner when what an agent can play with (its wallet without the EGLD gas reserve) is worth less
+   * than its top-up warning level: once when it falls under it, and again only after a top-up to well above it
+   * (TOP_UP_REARM). Nothing is paused: the agent plays on with what it has.
    */
   private checkFunds(agent: AgentRow, snap: AgentSnapshot): void {
-    const usd = fundsUsd(snap)
+    const usd = playableUsd(snap, agent.settings.egldGasReserve)
     const level = agent.settings.topUpWarningUsd
     const key = `low_funds:${agent.index}`
     if (usd === null || level <= 0) return
     if (!lowOnFunds(usd, level)) {
-      if (this.store.getKv(key) === '1') this.store.setKv(key, '0')
+      if (this.store.getKv(key) === '1' && usd >= level * TOP_UP_REARM) this.store.setKv(key, '0')
       return
     }
     if (this.store.getKv(key) === '1') return
     this.store.setKv(key, '1')
-    const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} in its wallet (${formatAtomic(snap.chain!.egld, 4)} EGLD, ${snap.chain!.wegld > 0n ? `${formatAtomic(snap.chain!.wegld, 4)} WEGLD, ` : ''}${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD or WEGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
+    const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} to play with, besides its ${agent.settings.egldGasReserve} EGLD gas reserve (wallet: ${formatAtomic(snap.chain!.egld, 4)} EGLD, ${snap.chain!.wegld > 0n ? `${formatAtomic(snap.chain!.wegld, 4)} WEGLD, ` : ''}${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD or WEGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
     this.store.log({ agentIndex: agent.index, kind: 'control', status: 'info', summary: text })
     this.notify(text)
   }
@@ -488,6 +517,9 @@ export class Service {
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) })
     this.snapshots.set(index, snap)
     this.lastRefresh.set(index, Date.now())
+    // Every fresh balance is checked, so a paused agent or one outside its active hours warns too.
+    const agent = this.store.agent(index)
+    if (agent) this.checkFunds(agent, snap)
     return snap
   }
 
@@ -541,7 +573,9 @@ export class Service {
       if (!this.store.importedAt(i) && deriveWallet(this.cfg.mnemonic!, i).address === address) throw new Error("this wallet comes from this install's own recovery words: use + Add agent instead")
     }
     // The team's overall is answered to the team's own session only: the key just given signs that login.
-    const team = await this.fox.team(address, walletFromSecretKey(key, this.store.maxIndex() + 1))
+    // The public profile first: a wallet without a team is refused before any login, so none is created for it.
+    const profile = await this.fox.user(address)
+    const team = profile?.team_name ? await this.fox.team(address, walletFromSecretKey(key, this.store.maxIndex() + 1)) : null
     if (!team) throw new Error('this wallet has no FoxLeague team. Register the team in the FoxLeague app first or use + Add agent for a new one')
     const [account, esdts, guarded] = await Promise.all([this.chain.account(address), this.chain.esdts(address), this.chain.guarded(address)])
     // Nothing an agent signs would go through: say so now, not after the import at the first transaction.
@@ -710,7 +744,6 @@ export class Service {
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
       const snap = await this.snapshot(index)
-      this.checkFunds(agent, snap)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.notify(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
       if (!this.strategist) {
@@ -819,7 +852,7 @@ export class Service {
           '/budget [N]',
           '/ask [N] question',
           '/do N request  one-off action (same executor and caps)',
-          '/strategy [N|all] [steady|climber|hunter|<text>]  show or replace directly',
+          '/strategy [N|all]  show the strategy; /strategy N|all steady|climber|hunter|<text>  replace it directly',
           '(any plain message)  talk to the manager: advice becomes a strategy proposal with Apply',
           '/clear  start a new conversation: the manager forgets the current one (it also does after an hour without a message)',
           '/kill on|off  pause every agent at once',
@@ -842,7 +875,7 @@ export class Service {
           lines.push(
             renderDigest(snap).split('\n').slice(0, 5).join('\n'),
             `spent today $${v.spentTodayUsd.toFixed(2)}/${v.dailyCapUsd}, month $${v.spentMonthUsd.toFixed(2)}/${v.monthlyBudgetUsd}`,
-            ...(worth === null ? [] : [`wallet worth about $${worth.toFixed(2)}${lowOnFunds(worth, b.settings.topUpWarningUsd) ? ` (LOW: under the $${b.settings.topUpWarningUsd} top-up warning)` : ''}`]),
+            ...(worth === null ? [] : [`wallet worth about $${worth.toFixed(2)}${lowOnFunds(playableUsd(snap, b.settings.egldGasReserve), b.settings.topUpWarningUsd) ? ` (LOW: under the $${b.settings.topUpWarningUsd} top-up warning, gas reserve aside)` : ''}`]),
           )
         }
         return lines.join('\n')

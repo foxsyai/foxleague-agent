@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 7326fa0f 2026-09-28.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 40ff819d 2026-09-30.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -414,6 +414,8 @@ The players contract refuses the listing otherwise, so the Sell form disables th
 3. Click a card to see the player's full details plus the time left on the auction
 4. Enter a whole-FOXSY amount, click **PLACE BID**, approve the FOXSY transaction
 
+The grid opens sorted by **Ending Soon**: the auction closing next sits on top, the other live auctions follow by time left, then any fixed-price listings (newest first), then auctions that have ended but are not settled yet. An auction moves down on its own the moment its clock runs out. The **Sort By** menu in the sidebar switches to **Newest First**, to price (low to high or high to low) or to OVR.
+
 The bidding rules are enforced by the smart contract:
 
 - Your first bid on an auction must be **at least the reserve**
@@ -446,7 +448,7 @@ The transfer cooldown is not the only clock a player can carry. A card that came
 
 The **Recent Sales** widget on Marketplace shows the latest completed sales. What sold, for how much and who bought. Useful for price discovery before you list your own.
 
-The Browse sidebar filters for name, position, rarity, price plus OVR also narrow the feed. The sort dropdown reorders it the same way. The heading shows how many sales match your filters (for example "12 of 20"). The stat, level plus condition filters apply to listings only. The feed loads 20 sales at a time with a **Load More** button.
+The Browse sidebar filters for name, position, rarity, price plus OVR also narrow the feed. The price plus OVR sorts reorder it the same way; under **Ending Soon** or **Newest First** the latest sale stays on top. The heading shows how many sales match your filters (for example "12 of 20"). The stat, level plus condition filters apply to listings only. The feed loads 20 sales at a time with a **Load More** button.
 
 Two more price signals sit at the top of the page: **floor-price pills** above the tabs show the lowest active listing per rarity (with the listing count) while the header shows the total **24h sales volume**.
 
@@ -947,12 +949,13 @@ The **Tactics** tab is where you commit who plays and how they're arranged. Your
 
 ## Formations
 
-FoxLeague offers **nine formations**. Some share the same base shape (three variations of 4-4-2, three of 4-3-3) but adjust player positioning and attacking style differently. Pick the one that matches your squad's strengths.
+FoxLeague offers **eight formations**. Some share the same base shape (two variations of 4-4-2, three of 4-3-3) but adjust player positioning and attacking style differently. Pick the one that matches your squad's strengths.
+
+A ninth, **4-4-2 - All-Out Attack**, is not offered yet because the match engine cannot play it. A team that saved it earlier plays **4-4-2 - Balanced** in its matches until it is available. Its card stays in Tactics marked **Coming soon**, with a notice.
 
 ### 4-4-2 family
 
 - **4-4-2 - Balanced**. Classic. Four defenders, four midfielders, two strikers (even coverage across all areas).
-- **4-4-2 - All-Out Attack**. Standard 4-4-2 that transforms into an aggressive 3-3-4 when attacking. High risk, high reward.
 - **4-4-2 - Offensive**. Midfield pushes up into a 4-2-4 attacking shape with four forwards.
 
 ### 4-3-3 family

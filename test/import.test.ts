@@ -100,7 +100,7 @@ test('import: the service checks the wallet (not an agent, not its own words, a 
   svc.ensureAgents()
   ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
   const teams: Record<string, { name: string; team_overall: number; badge: string | null } | null> = { [teamAddress()]: { name: 'Community XI', team_overall: 61, badge: 'x' } }
-  Object.assign(svc.fox, { team: async (a: string) => teams[a] ?? null })
+  Object.assign(svc.fox, { team: async (a: string) => teams[a] ?? null, user: async (a: string) => (teams[a] ? { team_name: teams[a]!.name } : null) })
   let guardian = true
   Object.assign(svc.chain, { account: async () => ({ balance: 2n * 10n ** 18n }), esdts: async () => [{ tokenIdentifier: 'FOXSY-5d5f3e', balance: 1500n * 10n ** 18n, nonce: 0 }], guarded: async () => guardian })
 
@@ -138,7 +138,7 @@ test('import: over the web the check answers without secrets, the import needs t
   const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
   svc.ensureAgents()
   ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
-  Object.assign(svc.fox, { team: async () => ({ name: 'Community XI', team_overall: 61, badge: null }) })
+  Object.assign(svc.fox, { team: async () => ({ name: 'Community XI', team_overall: 61, badge: null }), user: async () => ({ team_name: 'Community XI' }) })
   Object.assign(svc.chain, { account: async () => ({ balance: 0n }), esdts: async () => [], guarded: async () => false })
   const pw = 'correct-horse-battery'
   const creds = { username: 'admin', passwordHash: hashPassword(pw), secretKey: 'k'.repeat(64) }

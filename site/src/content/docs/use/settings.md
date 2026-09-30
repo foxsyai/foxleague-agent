@@ -17,11 +17,11 @@ Your limits always win: the strategy guides the choices, the code enforces the l
 
 | Setting | Default | What it does |
 |---|---|---|
-| Daily cap | $10 | The most this agent may spend in one game day (resets at 14:00 UTC), in USD at live prices. It counts FOXSY paid (entries, stakes, shop, sync) and network fees. A Gold entry of 5,000 FOXSY needs a daily cap above its USD value. |
+| Daily cap | $10 | The most this agent may spend in one game day (resets at 14:00 UTC), in USD at live prices. It counts FOXSY paid (entries, stakes, shop, sync) and network fees. A Gold entry of 5,000 FOXSY needs a daily cap above its USD value. It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget). |
 | Monthly budget | $300 | The most this agent may spend in a calendar month. Every action must fit both this and the daily cap. It also limits the EGLD swapped to FOXSY in a month. |
 | Setup budget | $20 | A separate one-time budget for starting the team: the 5,000 FOXSY registration, the swap that buys it and its fee. It does not count against the daily or monthly caps. |
 | EGLD gas reserve | 1 EGLD | EGLD that always stays in the wallet for network fees. A swap may only use the EGLD above it; WEGLD in the wallet has no reserve and is spent first when it covers the swap. 1 EGLD pays for well over a thousand ordinary transactions. The lowest allowed is 0.05. |
-| Top-up warning | $10 | You are warned when the wallet's EGLD, WEGLD and FOXSY together are worth less than this: the value turns orange on the agent's page and one message goes to Telegram. Nothing is paused. 0 switches it off. |
+| Top-up warning | $10 | You are warned when what the wallet can play with (its EGLD, WEGLD and FOXSY, the EGLD gas reserve aside) is worth less than this: the value turns orange on the agent's page and one message goes to Telegram, the next one only after a top-up to well above it. Nothing is paused. 0 switches it off. |
 
 ## Per action (FOXSY)
 
@@ -43,5 +43,5 @@ Your limits always win: the strategy guides the choices, the code enforces the l
 | Min gap between actions | 90 seconds | The shortest pause between two actions of one plan. |
 | Action probability | 1 | The chance that each routine action really runs. 0.8 skips about one in five at random. Your own requests always run. |
 
-Before each of its own matches, the agent also plans about an hour before the lineup locks, so it can sync, set the
-lineup and recover condition in time.
+Before each match session, the agent also plans about an hour before the lineup locks (inside its active hours), so
+it can sync, set the lineup and recover condition in time.

@@ -7,6 +7,10 @@ HOST=${DEPLOY_HOST:-$(cat "$(dirname "$0")/.host" 2>/dev/null || true)}
 [ -n "$HOST" ] || { echo "Set DEPLOY_HOST=root@your-server or write it into deploy/.host" >&2; exit 1; }
 SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$HOME/.ssh/cm-%r@%h-%p" -o ControlPersist=10m)
 
+# The strategist's game knowledge follows FoxLeague's manual: say so when it is behind (only on a computer
+# that has a FoxLeague checkout next to this folder). A reminder, never a stop.
+if [ -d ../next-foxleague/.git ]; then npm run -s cli -- manual-status || true; fi
+
 rsync -az --delete -e "ssh ${SSH_OPTS[*]}" \
   --exclude node_modules --exclude data --exclude '.env' --exclude '.env.*' --exclude .git --exclude '*.pem' --exclude pem --exclude .node --exclude .claude --exclude site \
   ./ "$HOST:/opt/foxleague-agent/app/"

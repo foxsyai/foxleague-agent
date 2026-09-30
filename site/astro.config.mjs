@@ -26,8 +26,11 @@ export default defineConfig({
 			title: 'FoxLeague Agent',
 			description: 'Your AI team manager for FoxLeague: an agent that trains, plays and levels up your team on MultiversX Supernova, within the limits you set.',
 			logo: { src: './public/foxsy-logo.svg', replacesTitle: false },
-			favicon: '/favicon.svg',
+			// The orange fox head, the same tab icon as foxleague.ai.
+			favicon: '/brand/favicon-32.png',
 			head: [
+				{ tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/brand/favicon-192.png' } },
+				{ tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: '/brand/favicon-180.png' } },
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
 				{ tag: 'link', attrs: { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Teko:wght@500;700&display=swap' } },

@@ -125,7 +125,9 @@ export function renderChatRequest(c: ChatInput): string {
     `## Agents and their current strategy`,
     ...c.agents.map(b => `- ${agentName(b.index)}${b.team ? ` (${b.team})` : ' (no team yet)'}${b.paused ? ' PAUSED' : ''}: ${b.strategy}`),
     ...(c.digests.length ? [SNAPSHOT_HEADING, ...c.digests.map(d => `${agentName(d.index)}:\n<<<SNAPSHOT\n${d.digest}\nSNAPSHOT>>>`)] : []),
-    ...(c.recent.length ? [`## Recent chat (oldest first)`, ...c.recent.map(r => `${r.from}: ${r.text}`)] : []),
+    // The earlier lines are framed and indented: a quote inside them (a rival's team name, a tournament title)
+    // can never pass for a heading or a new message from the owner.
+    ...(c.recent.length ? [`## Recent chat (oldest first; the owner's current message is the one after this block)`, '<<<CHAT', ...c.recent.map(r => `${r.from}: ${r.text.replace(/\n/g, '\n    ')}`), 'CHAT>>>'] : []),
     `## The owner's message`,
     c.message,
   ].join('\n')

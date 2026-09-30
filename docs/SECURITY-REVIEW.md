@@ -153,6 +153,32 @@ Two low findings, both fixed:
 | WS1 | low | The live result of a swap did not say which coin had paid | It says "paid with WEGLD from the wallet" or "paid with EGLD", with the most it may pay |
 | WS2 | low | A sentence in the plan request invited the model to size a swap to the WEGLD balance, against "swap only what the next actions need" | The sentence is gone |
 
+## Eighth review, 2026-09-30 (everything built that day)
+
+Two Claude Fable 5.1 reviewers (read-only) on all of the day's code: one on money, chain and model calls
+(streamed calls and the room by effort, the WEGLD swap, the wallet value and top-up warning, the Guardian
+check, the fix for FoxLeague answering a team's lineup to its own session only), one on the dashboard, the
+owner chat and Telegram. A third pass checked every number and rule in the manual and the dashboard texts against
+the code. Checked and sound: a cut or aborted stream is never parsed or executed; the WEGLD path, the caps and the
+Guardian check; session, CSRF and owner-only Telegram on every new route; no markup injection in the page.
+Findings:
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| TA1 | medium | With the agent's own team unreadable, a starter could be listed or fused (the squad check saw an empty lineup) | Card, lineup, match and condition actions are refused while the team cannot be read |
+| TA2 | medium | The top-up warning counted the EGLD gas reserve: a wallet holding only its reserve cannot play, yet looked funded once EGLD is dear | The warning uses what the agent can play with (the reserve aside); the dashboard shows both values |
+| TA3 | low | A rival's strength is now the best eleven of its public roster, a little above its real lineup | Accepted: stricter, never weaker (FoxLeague no longer shows a rival's lineup) |
+| TA4 | low | The model cost of a call cut by its deadline is not booked | Accepted: rare, and the Anthropic spend limit still applies |
+| TA5 | low | The Import team check logged into FoxLeague before checking that the wallet has a team | The public profile is read first; no login for a wallet without a team |
+| TA6 | low | A value hovering around the top-up level could send a message at every dip | The warning re-arms only after a top-up to 20 percent above the level |
+| CW1 | low | Clear left open a proposal whose line had already left the box (Telegram could still apply it) | Clear drops every open proposal; a line leaving the box takes its proposal with it |
+| CW2 | medium | The dashboard downloaded the whole conversation every 15 seconds | The conversation comes only when it changed (a revision in the state) |
+| CW3 | low | The owner's message was saved only once the answer came: lost on a reload, out of order, back after a Clear | It shows at once as waiting; a failed call removes it; an answer after a Clear is not written back |
+| CW4 | low | Every open proposal said "Apply or Cancel below", though the box holds the newest one only | Only the newest says so |
+| CW5 | low | A failed Apply or Cancel hid a proposal that was still open | It comes back into view |
+| CW6 | low | A paused agent, or one outside its hours, never sent the low-funds message | Every fresh balance is checked |
+| CW7 | low | Earlier chat lines were not framed in the prompt: a quoted title could pose as the owner's message | They sit in a framed, indented block |
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

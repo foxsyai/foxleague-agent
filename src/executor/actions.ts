@@ -15,6 +15,11 @@ export const FORMATION_SLOTS: Record<string, { DEF: number; MID: number; FWD: nu
   '4-2-3-1': { DEF: 4, MID: 5, FWD: 1 },
   '5-2-3': { DEF: 5, MID: 2, FWD: 3 },
 }
+/**
+ * Formations FoxLeague lists as coming soon: its match engine cannot play them yet and set_formation refuses
+ * them. A team that saved one earlier keeps it (it plays as 4-4-2), so its slots stay in the table above.
+ */
+export const FORMATIONS_COMING_SOON = new Set(['4-4-2a'])
 
 export const SHOP_PRODUCTS = ['condition_recovery', 'xp_booster', 'training_slot', 'common_pack'] as const
 export type ShopProduct = (typeof SHOP_PRODUCTS)[number]
@@ -114,7 +119,7 @@ export function parseAction(raw: unknown): Action {
     case 'train':
       return { type: o.type, player_nonce: int(o, 'player_nonce', 1, 2 ** 40), attribute: oneOf(o, 'attribute', STATS) }
     case 'set_formation':
-      return { type: o.type, formation: oneOf(o, 'formation', Object.keys(FORMATION_SLOTS)) }
+      return { type: o.type, formation: oneOf(o, 'formation', Object.keys(FORMATION_SLOTS).filter(f => !FORMATIONS_COMING_SOON.has(f))) }
     case 'set_lineup':
       return { type: o.type, lineup: nonces(o, 'lineup', 11, 11), substitutes: nonces(o, 'substitutes', 0, 7) }
     case 'play_match':

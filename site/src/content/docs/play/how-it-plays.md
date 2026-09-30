@@ -25,7 +25,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
   starting eleven), never against another of your agents, at most twice a week against the same team. It can leave
   its own unaccepted challenge when a better one appears.
-- **Match preparation**: about an hour before each of its matches locks, it syncs if the gains matter, sets the
+- **Match preparation**: about an hour before each match session locks (inside its active hours), it syncs if the gains matter, sets the
   lineup for that opponent and recovers condition only for key starters in a match that matters.
 - **Refunds**: seats and stakes that come back (a tournament that did not fill, an expired challenge) are claimed
   when needed and stop counting against your budget.

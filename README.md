@@ -6,7 +6,7 @@ against the game rules and your spending limits before anything is paid. It uses
 smart contracts, exactly like the player app, from your own computer or server. Your wallet words and keys never
 leave it.
 
-Status: version 0.9, in internal testing. Everything below works live on mainnet.
+Status: version 0.10, in internal testing. Everything below works live on mainnet.
 
 ## Install
 
@@ -31,7 +31,7 @@ the AI for a plan and runs the actions spread over the next minutes:
 - **Daily routine:** the free training sessions on the starters who gain most, syncing stats to chain when it
   matters, lineup and formation, ranked and casual matches.
 - **Competition:** joins Silver and Gold tournaments and 1v1 challenges it can win, creates its own in a free
-  platform time slot, prepares before each match locks (sync, lineup, condition), leaves or cancels when a
+  platform time slot, prepares before each match session locks (sync, lineup, condition), leaves or cancels when a
   better option appears, claims refunds.
 - **Growth:** XP booster and paid training when the numbers say so, Common packs, fusion and both fusion
   waivers, bids and listings on the marketplace.
@@ -42,16 +42,16 @@ the dashboard or by chatting with it on Telegram.
 
 ## Safety
 
-- **Your limits are code, not a prompt.** A daily cap, a monthly budget, a one-time setup budget and a maximum
-  per entry fee, shop payment, bid and swap, all in USD at live prices. The AI proposes; the executor refuses
+- **Your limits are code, not a prompt.** A daily cap, a monthly budget and a one-time setup budget in USD at
+  live prices, and a maximum per entry fee, shop payment, bid and swap in FOXSY. The AI proposes; the executor refuses
   anything over them. An EGLD gas reserve (1 EGLD by default) is never swapped.
 - **The AI never holds keys** and cannot build a transaction: it picks from a fixed list of actions, each checked
   against the game rules first.
-- **Dry run first.** New agents only simulate. Going live needs your Go LIVE (typed, with your password) and this
-  machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
+- **Dry run first.** A new install only simulates. Going live needs your Go LIVE (typed, with your password, in
+  the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only, a human pace, never a 1v1 or trade between your own agents; guards
   against rivals who try to farm an agent (1v1s only against teams of similar strength, at most two a week each).
-- **Reviewed.** Seven adversarial reviews, every finding fixed with a test: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Eight adversarial reviews, every finding fixed with a test: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 
@@ -66,7 +66,7 @@ the dashboard or by chatting with it on Telegram.
 ## What it costs
 
 - **The game:** never more than your caps (defaults $10 a day and $300 a month, plus $20 for the registration).
-- **The AI:** about $0.50 to $3 a day per agent, depending on the model and effort you pick.
+- **The AI:** about $1 to $3 a day per agent with the default model and effort, more at a higher effort or with Opus or Fable.
 - **Network fees:** a few cents a day.
 
 ## Command line

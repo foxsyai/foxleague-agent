@@ -60,3 +60,15 @@ export function buildManual(repo: string): { text: string; pages: number; commit
   ].join('\n')
   return { text: `${header}\n\n${pages.join('\n')}`, pages: pages.length, commit }
 }
+
+/**
+ * Whether manual.md still matches FoxLeague's manual: the commit written in its header against the manual's
+ * newest commit on the mainnet branch of a FoxLeague checkout (after a fetch).
+ */
+export function manualStatus(repo: string, manual: string): { synced: string; latest: string; current: boolean } {
+  const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
+  git('fetch', '--quiet', 'origin', MANUAL_BRANCH.replace(/^origin\//, ''))
+  const latest = git('log', '-1', '--format=%h %cs', MANUAL_BRANCH, '--', ROOT).trim()
+  const synced = / at ([0-9a-f]{7,} \d{4}-\d{2}-\d{2})\./.exec(manual.split('\n', 3).join('\n'))?.[1] ?? 'unknown'
+  return { synced, latest, current: synced === latest }
+}

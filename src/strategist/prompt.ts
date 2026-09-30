@@ -56,7 +56,7 @@ Money: the wallet holds EGLD (for gas and swaps), sometimes WEGLD (for swaps onl
 - {"type":"register","team_name":"..."}
 - {"type":"sync"} all dirty cards
 - {"type":"train","player_nonce":N,"attribute":"speed|accuracy|defense|power|control|vision|stamina"}
-- {"type":"set_formation","formation":"4-4-2|4-4-2a|4-4-2o|4-3-3|4-3-3w|4-3-3b|5-3-2|4-2-3-1|5-2-3"}
+- {"type":"set_formation","formation":"4-4-2|4-4-2o|4-3-3|4-3-3w|4-3-3b|5-3-2|4-2-3-1|5-2-3"}
 - {"type":"set_lineup","lineup":[11 nonces, slot order],"substitutes":[up to 7 nonces]}
 - {"type":"play_match","match_type":"casual|ranked"}
 - {"type":"join_tournament","tournament_id":N} also accepts a 1v1 challenge (same id space)

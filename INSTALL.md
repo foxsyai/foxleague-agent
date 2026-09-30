@@ -37,11 +37,12 @@ The installer walks you through seven steps and explains each one:
 | 2. Wallet | Creates a new wallet and shows its recovery words once. Write them down on paper. |
 | 3. Dashboard login | You choose a username, a password (at least 12 characters) and a port (default 8870). |
 | 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |
-| 5. Settings | Agents start in dry run. You choose whether this computer may sign real transactions once you press Go LIVE. |
+| 5. Settings | A new install starts in dry run. You choose whether this computer may sign real transactions once you press Go LIVE. |
 | 6. PEM files | Writes `pem/agent1.pem`, so you can log into FoxLeague as your agent's team and watch it play. |
 | 7. Background service | Starts the agent in the background and keeps it running after a restart. |
 
-Run `./install.sh` again at any time: it keeps your wallet, login and keys. It only asks for what is missing.
+Run `./install.sh` again at any time: it keeps your wallet, login and keys. It asks again for the port, the keys
+and the live permission, each with your earlier answer as the default, so pressing Enter keeps things as they are.
 The dashboard's **Getting started** guide repeats the key steps below, shows which keys are set and has a
 "Don't show this again" box.
 
@@ -55,7 +56,7 @@ The dashboard's **Getting started** guide repeats the key steps below, shows whi
    Activity.
 4. **Set your limits and strategy** in Settings: daily cap, monthly budget, the largest entry fee, shop payment
    and bid. Write your strategy in plain words too. Every field has an "i" that explains it.
-5. **Go live.** Press Go LIVE in the header and type `GO LIVE`. Back to dry run is one click.
+5. **Go live.** Press Go LIVE in the header, type `GO LIVE` and your password. Back to dry run is one click.
 6. **Watch it play.** In the FoxLeague app, connect with `pem/agent1.pem` to see the team as the agent runs it.
 
 ## Your recovery words and PEM files
@@ -121,13 +122,13 @@ other and never trade with each other: that is a FoxLeague Fair Play rule.
 
 - **The game:** limited by your daily cap and monthly budget (defaults $10 a day and $300 a month) plus a
   one-time $20 setup budget for the registration. Your agents never go over them.
-- **The AI:** about $0.50 to $1 per agent per day with the default model. You can pick another model and effort
-  in the dashboard.
+- **The AI:** about $1 to $3 a day per agent with the default model and effort, more at a higher effort or with Opus or Fable. You pick the model and effort in the dashboard.
 - **Network fees:** a few cents a day. Each agent always keeps an EGLD reserve for them (1 EGLD by default, never swapped).
 
 ## Safety built in
 
-- New agents start in dry run. Live needs your Go LIVE plus this computer's permission.
+- A new install starts in dry run; an agent added later follows the current mode. Live needs your Go LIVE plus
+  this computer's permission.
 - The AI only proposes; plain code checks every action against the game rules and your caps before paying.
 - A kill switch in the dashboard (and `/kill on` in Telegram) stops every agent at once.
 - The dashboard listens on this computer only. To open it from another device, use an SSH tunnel
@@ -139,7 +140,7 @@ other and never trade with each other: that is a FoxLeague Fair Play rule.
 |---|---|---|
 | Logs | `journalctl --user -u foxleague-agent -f` | `tail -f data/service.log` |
 | Restart | `systemctl --user restart foxleague-agent` | `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent` |
-| Update | `./install.sh --update` (or paste the install line again) | `./install.sh --update` |
+| Update | `./install.sh --update` | `./install.sh --update` |
 | Uninstall | `./install.sh --uninstall` | `./install.sh --uninstall` |
 
 Uninstall stops the background service and leaves your folder, wallet and PEM files in place. Delete the folder

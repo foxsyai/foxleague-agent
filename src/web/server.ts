@@ -13,7 +13,7 @@ import { budgetView } from '../executor/budget.ts'
 import { EFFORTS, MODELS, type Effort } from '../strategist/strategist.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
-import { fundsUsd, lowOnFunds } from '../snapshot/funds.ts'
+import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { agentName, pemName } from '../names.ts'
 import type { ImportInput } from '../wallet/imported.ts'
@@ -158,7 +158,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
     throttle.recordSuccess(ip)
   }
 
-  const state = () => {
+  // `seen`: the conversation revision the page already holds; the conversation is sent only when it changed.
+  const state = (seen?: string | null) => {
     const cfg = service.cfg
     const agents = service.store.agents()
     const now = new Date()
@@ -187,7 +188,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         presets: STRATEGY_PRESETS,
         user: creds.username,
       },
-      chat: service.chatLines(),
+      chatRev: service.chatRevision(),
+      chat: seen && seen === service.chatRevision() ? null : service.chatLines(),
       agents: agents.map(b => {
         const dry = b.dryRun || !service.executor.liveEnabled
         const snap = service.snapshots.get(b.index)
@@ -202,7 +204,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           settings: b.settings,
           budget: budgetView(service.store, b.index, b.settings, dry, now, snap?.gameDay.resetHourUtc ?? 14),
           snapshot: snapshotSummary(snap),
-          funds: { usd: fundsUsd(snap), low: lowOnFunds(fundsUsd(snap), b.settings.topUpWarningUsd) },
+          funds: { usd: fundsUsd(snap), playable: playableUsd(snap, b.settings.egldGasReserve), low: lowOnFunds(playableUsd(snap, b.settings.egldGasReserve), b.settings.topUpWarningUsd) },
           lastPlan: service.store.getKv(`last_plan_${b.index}`) ?? null,
         }
       }),
@@ -276,7 +278,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': 'application/json', 'set-cookie': `${COOKIE_NAME}=; Max-Age=0; ${cookieFlags}` })
         return res.end('{"ok":true}')
       }
-      if (method === 'GET' && path === '/api/state') return json(res, 200, state())
+      if (method === 'GET' && path === '/api/state') return json(res, 200, state(url.searchParams.get('chat')))
 
       const m = /^\/api\/agents\/(\d+)\/([a-z]+)$/.exec(path)
       if (m) {

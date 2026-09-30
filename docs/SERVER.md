@@ -30,7 +30,7 @@ The files are in `deploy/`.
    - `agentctl.sh check-keys` tests them.
 4. Start it: `systemctl enable --now foxleague-agent`. Logs: `journalctl -u foxleague-agent -f`.
 
-The service reads `/etc/foxleague-agent/env`. Useful entries (see `.env.example` for all):
+The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lists every setting):
 
 - `AGENT_LIVE_ENABLED=1`: this server may sign real transactions once you press Go LIVE.
 - `WEB_UI_TRUST_PROXY=1`: only behind your own nginx (it passes the client IP in `X-Real-IP`).
