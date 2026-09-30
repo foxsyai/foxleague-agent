@@ -134,9 +134,15 @@ export class FoxLeague {
     }
   }
 
-  async team(address: string): Promise<Team | null> {
+  /**
+   * A team. Its formation, eleven, bench and overall are answered to the team's own session only: pass the
+   * agent's `wallet` for its own team. Anyone else's team comes back `hidden`, with those fields empty.
+   */
+  async team(address: string, wallet?: AgentWallet): Promise<Team | null> {
     try {
-      return await this.call<Team>(`/teams/${address}`)
+      const t = await this.call<Partial<Team> & Pick<Team, 'id' | 'user_id' | 'name'>>(`/teams/${address}`, wallet && wallet.address === address ? { wallet } : {})
+      const hidden = !Array.isArray(t.lineup)
+      return { ...t, coach_name: t.coach_name ?? null, badge: t.badge ?? null, formation: t.formation ?? '', lineup: t.lineup ?? [], substitutes: t.substitutes ?? [], team_overall: t.team_overall ?? 0, ...(hidden ? { hidden } : {}) }
     } catch (err) {
       if (err instanceof ApiRefusal && /not found/i.test(err.message)) return null
       throw err
@@ -296,16 +302,15 @@ export class FoxLeague {
   }
 }
 
-/** A rival's starting eleven at full condition (synced stats; public reads). null when it has no full lineup. */
-export async function rivalStrength(fox: Pick<FoxLeague, 'team' | 'players'>, wallet: string): Promise<number | null> {
-  const [team, cards] = await Promise.all([fox.team(wallet), fox.players(wallet)])
-  if (!team || team.lineup.length < 11) return null
-  const byNonce = new Map(cards.map(c => [c.nft_nonce, c]))
-  let sum = 0
-  for (const n of team.lineup) {
-    const c = byNonce.get(n)
-    if (!c) return null
-    sum += c.speed_synced + c.accuracy_synced + c.defense_synced + c.power_synced + c.control_synced + c.vision_synced + c.stamina_synced
-  }
-  return sum
+/**
+ * The strongest eleven a rival can field, at full condition (synced stats; the roster is public). A rival's
+ * own eleven is no longer public, and this is never less than it, so a check against it is at least as
+ * strict as one against the real lineup. null when the rival holds fewer than eleven cards.
+ */
+export async function rivalStrength(fox: Pick<FoxLeague, 'players'>, wallet: string): Promise<number | null> {
+  const cards = await fox.players(wallet)
+  if (cards.length < 11) return null
+  const totals = cards.map(c => c.speed_synced + c.accuracy_synced + c.defense_synced + c.power_synced + c.control_synced + c.vision_synced + c.stamina_synced)
+  if (totals.some(t => !Number.isFinite(t))) return null
+  return totals.sort((a, b) => b - a).slice(0, 11).reduce((sum, t) => sum + t, 0)
 }

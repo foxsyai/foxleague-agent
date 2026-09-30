@@ -73,6 +73,11 @@ export interface Team {
   team_overall: number
   badge: string | null
   badge_ipfs_uri?: string | null
+  /**
+   * True when FoxLeague answered its public view: the formation, the eleven, the bench and the overall go to
+   * the team's own session only (since 2026-09-30), so for anyone else they are empty here.
+   */
+  hidden?: boolean
 }
 
 export const STATS = ['speed', 'accuracy', 'defense', 'power', 'control', 'vision', 'stamina'] as const

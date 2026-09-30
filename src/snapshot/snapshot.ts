@@ -174,16 +174,20 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   const wallet = 'wallet' in target ? target.wallet : null
   const address = wallet ? wallet.address : (target as { watch: string }).watch
 
-  const [config, account, esdts, profile, team, egldUsd, pool] = await Promise.all([
+  const [config, account, esdts, profile, teamRead, egldUsd, pool] = await Promise.all([
     attempt(warnings, 'config', () => fox.config()),
     attempt(warnings, 'account', () => chain.account(address)),
     attempt(warnings, 'esdts', () => chain.esdts(address)),
     attempt(warnings, 'profile', () => fox.user(address)),
-    attempt(warnings, 'team', () => fox.team(address)),
+    attempt(warnings, 'team', () => fox.team(address, wallet ?? undefined)),
     attempt(warnings, 'egld price', () => chain.egldUsd()),
     attempt(warnings, 'xExchange pool', () => poolState(chain)),
   ])
 
+  // The agent's own team must come with its lineup (its session is sent). A public view here means FoxLeague
+  // did not recognise the session: the team counts as unreadable, so nothing is planned on an empty lineup.
+  if (wallet && teamRead?.hidden) warnings.push('team: FoxLeague answered without the lineup (the session was not recognised)')
+  const team = wallet && teamRead?.hidden ? null : teamRead
   const bal = (id: string) => esdts?.find(e => e.tokenIdentifier === id && e.nonce === 0)?.balance ?? 0n
   const nftCount = esdts?.filter(e => e.tokenIdentifier.startsWith(`${MAINNET.playerCollection}-`)).length ?? 0
   const registered = Boolean(profile?.team_name)

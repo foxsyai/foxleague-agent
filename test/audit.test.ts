@@ -208,7 +208,7 @@ test('AA1 a 1v1 against a stronger squad is refused even at the same ELO', async
   for (const p of tired.players) p.condition = 40
   assert.equal((await join(oneVOne(rivalSquad(20)), tired)).status, 'refused')
   // Unreadable squad: refused, never a blind stake.
-  const hidden = await join(oneVOne({ team: async () => { throw new Error('HTTP 500') } }))
+  const hidden = await join(oneVOne({ players: async () => { throw new Error('HTTP 500') } }))
   assert.equal(hidden.status, 'refused')
   assert.match(hidden.summary, /could not be read/)
   assert.equal((await join(oneVOne(rivalSquad(21)))).status, 'dry_run', 'a squad within 10 percent is fair')
@@ -1027,4 +1027,40 @@ test('a data folder that holds another database is never started empty next to i
   new Store(fresh).db.close()
   new Store(fresh).db.close() // the same folder opens again
   assert.equal(existsSync(join(fresh, 'agent.db')), true)
+})
+
+test('FoxLeague hides a rival\'s eleven: strength is the best eleven of its public roster, never less than the real one', async () => {
+  const { rivalStrength } = await import('../src/foxleague/api.ts')
+  const stats = (v: number) => Object.fromEntries(['speed', 'accuracy', 'defense', 'power', 'control', 'vision', 'stamina'].map(k => [`${k}_synced`, v]))
+  // 18 cards: eleven at 30 and seven at 10. Whatever eleven the rival fields, it is at most 11 x 7 x 30.
+  const roster = Array.from({ length: 18 }, (_, i) => ({ nft_nonce: 100 + i, ...stats(i < 11 ? 30 : 10) }))
+  const fox = (cards: unknown[]) => ({ players: async () => cards }) as never
+  assert.equal(await rivalStrength(fox(roster), STRANGER), 11 * 7 * 30)
+  assert.equal(await rivalStrength(fox([...roster].reverse()), STRANGER), 11 * 7 * 30, 'the order of the roster does not matter')
+  assert.equal(await rivalStrength(fox(roster.slice(0, 10)), STRANGER), null, 'fewer than eleven cards: unknown')
+  assert.equal(await rivalStrength(fox([...roster.slice(0, 17), { nft_nonce: 1 }]), STRANGER), null, 'a card without stats: unknown, never a low guess')
+})
+
+test('the agent reads its own team with its session; a public view of it counts as unreadable', async () => {
+  const { takeSnapshot } = await import('../src/snapshot/snapshot.ts')
+  const { renderDigest } = await import('../src/snapshot/digest.ts')
+  const asked: (string | undefined)[] = []
+  const own = { id: 1, user_id: 100, name: 'Mine', coach_name: null, formation: '4-4-2', lineup: [1, 2, 3], substitutes: [4], team_overall: 50, badge: null }
+  const fox = (team: unknown) => ({
+    team: async (_a: string, w?: { address: string }) => (asked.push(w?.address), team),
+    user: async () => null,
+    config: async () => { throw new Error('off') },
+    players: async () => [],
+  }) as never
+  const chain = { account: async () => { throw new Error('off') }, esdts: async () => { throw new Error('off') }, egldUsd: async () => { throw new Error('off') }, query: async () => { throw new Error('off') } } as never
+  const mine = await takeSnapshot({ chain, fox: fox(own) }, { wallet: dryWallet })
+  assert.deepEqual([asked.at(-1), mine.team?.lineup], [dryWallet.address, [1, 2, 3]], 'the session goes with the request')
+  const publicView = { ...own, formation: '', lineup: [], substitutes: [], team_overall: 0, hidden: true }
+  const refused = await takeSnapshot({ chain, fox: fox(publicView) }, { wallet: dryWallet })
+  assert.equal(refused.team, null)
+  assert.ok(refused.warnings.some(w => /answered without the lineup/.test(w)))
+  // Watching someone else's team: the public view is what there is, and the digest says so.
+  const watched = await takeSnapshot({ chain, fox: fox(publicView) }, { watch: STRANGER })
+  assert.deepEqual([asked.at(-1), watched.team?.hidden], [undefined, true])
+  assert.match(renderDigest(watched), /Formation and lineup: not public/)
 })

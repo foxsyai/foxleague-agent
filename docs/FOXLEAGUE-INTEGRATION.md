@@ -320,7 +320,11 @@ Errors: `User not found` (no login yet), `DB error`.
 
 ### 3.2 Your team: `GET /api/teams/{address}`
 
-Public (`backend/src/routes/teams.rs:47`, `:109-131`). The address is matched exactly. Returns `Team`
+Since the mainnet release of 2026-09-30 the full `Team` goes to the team's own session only (send the
+`Authorization` header of that wallet): everyone else gets `TeamPublicView`, the team without `formation`,
+`lineup`, `substitutes` and `team_overall` (`backend/src/routes/teams.rs:109-135`, `backend/src/models.rs:240-270`).
+A stale session is answered 401, never the public view. A rival's eleven can therefore no longer be read; its
+roster (`GET /api/players/{address}`) still can. The address is matched exactly. `Team`
 (`backend/src/models.rs:203-239`):
 
 | Field | Meaning |

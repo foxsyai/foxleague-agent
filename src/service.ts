@@ -12,7 +12,7 @@ import { STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
+import { walletFromSecretKey, deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
 import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
 import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
@@ -540,7 +540,8 @@ export class Service {
     for (let i = 0; i <= this.store.maxIndex() + this.cfg.maxAgents; i++) {
       if (!this.store.importedAt(i) && deriveWallet(this.cfg.mnemonic!, i).address === address) throw new Error("this wallet comes from this install's own recovery words: use + Add agent instead")
     }
-    const team = await this.fox.team(address)
+    // The team's overall is answered to the team's own session only: the key just given signs that login.
+    const team = await this.fox.team(address, walletFromSecretKey(key, this.store.maxIndex() + 1))
     if (!team) throw new Error('this wallet has no FoxLeague team. Register the team in the FoxLeague app first or use + Add agent for a new one')
     const [account, esdts, guarded] = await Promise.all([this.chain.account(address), this.chain.esdts(address), this.chain.guarded(address)])
     // Nothing an agent signs would go through: say so now, not after the import at the first transaction.

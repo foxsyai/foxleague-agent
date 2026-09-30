@@ -74,7 +74,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const p = s.profile
     out.push(`Team "${txt(p.team_name, 20)}" (user ${p.id}): ELO ${p.elo_rating} ${p.league}, W/D/L ${p.matches_won}/${p.matches_drawn}/${p.matches_lost}, tournament wins ${p.tournament_wins}, ${p.player_count} cards`)
   }
-  if (s.team) out.push(`Formation ${s.team.formation}; XI ${s.team.lineup.join(',')}; bench ${s.team.substitutes.join(',')}`)
+  if (s.team) out.push(s.team.hidden ? 'Formation and lineup: not public (FoxLeague shows them to the team itself only)' : `Formation ${s.team.formation}; XI ${s.team.lineup.join(',')}; bench ${s.team.substitutes.join(',')}`)
 
   if (s.auth) {
     const a = s.auth
