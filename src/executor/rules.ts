@@ -25,9 +25,13 @@ export interface Verdict {
 
 export interface RulesContext {
   settings: AgentSettings
-  /** Addresses and user ids of the other agents of this instance (Fair Play: never coordinate teams). */
+  /**
+   * Addresses of the owner's other agents: the marketplace never buys from them or bids against them (bidding
+   * against your own agent only raises your own price). Tournaments and 1v1s do not look at them (owner,
+   * 2026-09-30): each agent plays its own game without knowing the others, and FoxLeague's Fair Play forbids
+   * fixing results, not two teams of one manager meeting by chance.
+   */
   ownAddresses: Set<string>
-  ownUserIds: Set<number>
   /** Fresh tournament detail, fetched by the executor for join and refund checks. */
   tournament?: TournamentDetail | null
   /** Last match starts recorded by this agent (the cooldowns are not public). */
@@ -43,8 +47,6 @@ export interface RulesContext {
   /** Listing pre-check and the current floor of the card's rarity (0 when none is listed), fetched for list_card; null = unavailable. */
   canList?: CanList | null
   floorPrice?: number | null
-  /** One of the owner's other agents whose FoxLeague user id could not be read (fail closed on Fair Play checks). */
-  siblingsUnknown?: boolean
   /** The other side of a 1v1 (joined or created): its ELO and lineup strength at full condition, null when unreadable. */
   opponent?: { userId: number; elo: number | null; strength?: number | null }
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
@@ -387,10 +389,6 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
       if (ctx.pendingJoin) return refuse(`a seat in T${t.id} is already paid and waiting for FoxLeague's confirmation: not paying twice`)
       if (d.participants.length >= t.max_teams) return refuse(`T${t.id} is full`)
-      const others = [t.creator_user_id, t.target_user_id, ...d.participants.map(p => p.user_id)].filter((x): x is number => typeof x === 'number' && x !== myId)
-      if (others.some(u => ctx.ownUserIds.has(u))) return refuse('another agent of this install is in or runs this tournament (Fair Play: no coordinated teams)')
-      if (d.participants.some(p => p.wallet_address && ctx.ownAddresses.has(p.wallet_address))) return refuse('another agent of this install is seated in this tournament (Fair Play: no coordinated teams)')
-      if (ctx.siblingsUnknown) return refuse("the FoxLeague ids of this owner's other agents could not be read: not joining (Fair Play)")
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
       const oneVOne = t.max_teams === 2
@@ -468,8 +466,6 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if ((ctx.openChallengesToday ?? 0) >= MAX_OPEN_1V1_PER_DAY) return refuse(`already ${MAX_OPEN_1V1_PER_DAY} open challenge in the last 24 hours`)
       } else {
         if (a.target_user_id === s.profile.id) return refuse('cannot challenge yourself')
-        if (ctx.ownUserIds.has(a.target_user_id)) return refuse('target is another agent of this install (Fair Play: no coordinated teams)')
-        if (ctx.siblingsUnknown) return refuse("the FoxLeague ids of this owner's other agents could not be read: not challenging (Fair Play)")
         const opp = oneVOneOpponentRefusal(s, ctx)
         if (opp) return refuse(opp)
       }

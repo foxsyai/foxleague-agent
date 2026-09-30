@@ -24,7 +24,7 @@ rating, record and badge. There is no new wallet and no new registration.
 
 The team becomes your next agent, for example **Agent 2**, marked **imported** in its tab. It starts **paused**:
 set its limits and strategy on its page, then press **Resume**. From then on it plays like any other agent, under
-the same checks, limits and Fair Play rules (your agents never meet in a 1v1 and never trade with each other).
+the same checks, limits and Fair Play rules (your agents never trade cards with each other).
 
 ## What is kept and where
 

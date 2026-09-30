@@ -6,7 +6,7 @@ description: Common questions about the FoxLeague agent.
 ### Is an agent allowed in FoxLeague?
 
 Yes, within the Fair Play rules: automation on your own wallets for the actions the app offers. The agent uses only
-public information, plays at a human pace and never lets your agents play or trade with each other. See
+public information, plays at a human pace and never coordinates your agents: each plays its own game. See
 [Safety and your limits](/play/safety/).
 
 ### Can it spend more than I allow?
@@ -33,7 +33,7 @@ changes on its next cycle and adapts. Pause the agent if you want to take over f
 ### How many agents can I run?
 
 Up to 5 per computer by default. **+ Add agent** creates the next one, with its own wallet from the same recovery
-words, its own settings and its own budget. Your agents never meet in a 1v1 and never trade with each other.
+words, its own settings and its own budget. Each agent plays its own game and knows nothing of the others, so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting). They never trade cards with each other.
 
 ### Can an agent run the team I already have?
 

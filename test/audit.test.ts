@@ -401,15 +401,13 @@ test('AA3 tournaments that overlap are judged together', async () => {
   assert.equal(r!.status, 'refused', 'your own tournaments unreadable: not joined blind')
 })
 
-test('A4 the check against your other agents fails closed', async () => {
-  const unknown = setup({ fox: { user: async () => { throw new Error('HTTP 429') }, tournament: async () => tournament(556, {}, [{ user_id: 77, wallet_address: STRANGER }]) } })
-  unknown.store.addAgent(1, OTHER)
-  const [r] = await unknown.exec.run(unknown.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 556 }))
-  assert.equal(r!.status, 'refused', 'a sibling whose user id cannot be read')
-  const byWallet = setup({ fox: { user: async () => null, tournament: async () => tournament(557, {}, [{ user_id: 78, wallet_address: OTHER }]) } })
-  byWallet.store.addAgent(1, OTHER)
-  const [w] = await byWallet.exec.run(byWallet.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 557 }))
-  assert.equal(w!.status, 'refused', 'a sibling seated in the tournament, matched by wallet')
+test('A4 (owner, 2026-09-30) two of your agents may meet by chance: a tournament another one runs and sits in is joined', async () => {
+  const lookups: string[] = []
+  const m = setup({ fox: { user: async (a: string) => (lookups.push(a), null), tournament: async () => tournament(557, { creator_user_id: 78 }, [{ user_id: 78, wallet_address: OTHER }]) } })
+  m.store.addAgent(1, OTHER)
+  const [w] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 557 }))
+  assert.equal(w!.status, 'dry_run')
+  assert.ok(!lookups.includes(OTHER), 'the other agents are not even looked up')
 })
 
 async function poll(chatId: string, batch: unknown[]): Promise<string[]> {

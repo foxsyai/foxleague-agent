@@ -88,7 +88,6 @@ export function liveSigningAllowed(): boolean {
 
 export class Executor {
   private readonly d: ExecutorDeps
-  private readonly userIdCache = new Map<string, number>()
   /** One action at a time per agent, whatever started it (a plan, Telegram /do, the web UI). */
   private readonly locks = new Map<number, Promise<void>>()
 
@@ -261,13 +260,6 @@ export class Executor {
   private async context(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, a: Action, now: Date, dry: boolean): Promise<RulesContext> {
     const { store, fox } = this.d
     const others = store.agents().filter(b => b.index !== agent.index)
-    const ownUserIds = new Set<number>()
-    let siblingsUnknown = false
-    for (const b of others) {
-      const id = await this.userIdOf(b.address)
-      if (id === 'unknown') siblingsUnknown = true
-      else if (id !== null) ownUserIds.add(id)
-    }
     let tournament: TournamentDetail | null | undefined
     if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund') {
       try {
@@ -367,28 +359,12 @@ export class Executor {
     return {
       settings: agent.settings,
       ownAddresses: new Set(others.map(b => b.address)),
-      ownUserIds,
-      siblingsUnknown,
       ...(tournament !== undefined ? { tournament } : {}),
       ...(entryAmount !== undefined ? { entryAmount } : {}),
       ...market,
       lastMatchStartAt: lastMatch ? new Date(lastMatch.at) : null,
       lastRankedStartAt: lastRanked ? new Date(lastRanked.at) : null,
       now,
-    }
-  }
-
-  /** A sibling's FoxLeague user id; null when it never logged in, 'unknown' when the lookup failed. */
-  private async userIdOf(address: string): Promise<number | null | 'unknown'> {
-    const known = this.userIdCache.get(address)
-    if (known !== undefined) return known
-    try {
-      const u = await this.d.fox.user(address)
-      if (!u) return null
-      this.userIdCache.set(address, u.id)
-      return u.id
-    } catch {
-      return 'unknown'
     }
   }
 

@@ -123,15 +123,6 @@ test('plans see earlier effects: the 6th match of the day is refused', async () 
   assert.equal(rs[1]!.status, 'refused')
 })
 
-test('never a 1v1 against another agent of the same install', async () => {
-  const { exec, agent, store } = setup()
-  store.addAgent(1, 'erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th')
-  ;(exec as unknown as { userIdCache: Map<string, number> }).userIdCache.set('erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th', 77)
-  const [r] = await exec.run(agent(), wallet, snapshot(), [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 77, deadline_minutes: 30 }, reason: '' }])
-  assert.equal(r!.status, 'refused')
-  assert.match(r!.summary, /Fair Play/)
-})
-
 test('registration refused while the whitelist gate is on', async () => {
   const { exec, agent } = setup()
   const s = snapshot()

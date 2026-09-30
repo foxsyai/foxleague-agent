@@ -115,8 +115,9 @@ A saved key is used at once. Showing or changing a key needs your password; ever
 ## More agents
 
 Press **+ Add agent** in the dashboard. Each agent has its own wallet from the same recovery words, its own PEM
-file in `pem/`, its own settings and strategy. Fund it like the first one. Your agents never play against each
-other and never trade with each other: that is a FoxLeague Fair Play rule.
+file in `pem/`, its own settings and strategy. Fund it like the first one. Each agent plays its own game and
+knows nothing of the others, so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play
+allows that (it forbids arranging results, not meeting). They never trade cards with each other.
 
 ## What it costs
 

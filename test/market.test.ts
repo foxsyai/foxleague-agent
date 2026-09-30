@@ -77,7 +77,7 @@ function snap(extra: PlayerView[] = []): AgentSnapshot {
   }
 }
 
-const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...DEFAULT_SETTINGS }, ownAddresses: new Set(), ownUserIds: new Set(), now: new Date(), ...more })
+const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...DEFAULT_SETTINGS }, ownAddresses: new Set(), now: new Date(), ...more })
 const spares = () => [card(40, 'DEF', 'Common', 'reserve', 20), card(41, 'MID', 'Common', 'reserve', 20), card(42, 'FWD', 'Common', 'reserve', 20)]
 
 test('fusion: same rarity, 20 competitive matches, synced, outside the squad, 18 cards left', () => {
