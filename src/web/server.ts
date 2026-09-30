@@ -183,6 +183,12 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           welcomeHidden: service.store.getKv('welcome_hidden') === '1',
         },
         modelUsdTotal: Number(service.store.getKv('model_usd_total') ?? 0),
+        ...(() => {
+          const days = service.modelUsdByDay()
+          const today = new Date().toISOString().slice(0, 10)
+          const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10)
+          return { modelUsdToday: days[today] ?? 0, modelUsdYesterday: days[yesterday] ?? 0 }
+        })(),
         maxAgents: cfg.maxAgents,
         next: agents.length < cfg.maxAgents ? { index: nextIndex, address: service.wallet(nextIndex).address } : null,
         presets: STRATEGY_PRESETS,

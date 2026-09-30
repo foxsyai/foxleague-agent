@@ -293,7 +293,7 @@ export class Service {
       this.saveChat()
       throw new Error(describeModelError(err))
     }
-    this.store.setKv('model_usd_total', String(Number(this.store.getKv('model_usd_total') ?? 0) + answer.usd))
+    this.addModelUsd(answer.usd)
     // Cleared while the answer was written: it does not come back into the new conversation, and makes no proposal.
     if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
     delete mine.pending
@@ -763,6 +763,41 @@ export class Service {
     }
   }
 
+  /**
+   * What the AI cost per UTC day (plans, the manager chat and /ask), the last 14 days. The first time it is
+   * rebuilt from the plans in the activity log; the chat was only counted in the total before.
+   */
+  modelUsdByDay(): Record<string, number> {
+    const saved = this.store.getKv('model_usd_days')
+    if (saved) {
+      try {
+        return JSON.parse(saved) as Record<string, number>
+      } catch {
+        // rebuilt below
+      }
+    }
+    const days: Record<string, number> = {}
+    for (const r of this.store.plansSince(new Date(Date.now() - 14 * 86_400_000))) {
+      try {
+        const usd = (JSON.parse(r.detail ?? '{}') as { plan?: { usage?: { usd?: number } } }).plan?.usage?.usd
+        if (typeof usd === 'number' && Number.isFinite(usd)) days[r.at.slice(0, 10)] = (days[r.at.slice(0, 10)] ?? 0) + usd
+      } catch {
+        // an unreadable row counts nothing
+      }
+    }
+    this.store.setKv('model_usd_days', JSON.stringify(days))
+    return days
+  }
+
+  private addModelUsd(usd: number, now = new Date()): void {
+    this.store.setKv('model_usd_total', String(Number(this.store.getKv('model_usd_total') ?? 0) + usd))
+    const days = this.modelUsdByDay()
+    const day = now.toISOString().slice(0, 10)
+    days[day] = (days[day] ?? 0) + usd
+    const kept = Object.keys(days).sort().slice(-14)
+    this.store.setKv('model_usd_days', JSON.stringify(Object.fromEntries(kept.map(d => [d, days[d]]))))
+  }
+
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc)
@@ -772,9 +807,10 @@ export class Service {
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +
       (plan.rejected.length ? `\nrejected proposals: ${plan.rejected.map(r => r.error).join('; ')}` : '') +
       `\nmodel cost $${plan.usage.usd.toFixed(4)} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== this.strategist!.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
+    // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
+    this.addModelUsd(plan.usage.usd)
     this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
-    this.store.setKv('model_usd_total', String(Number(this.store.getKv('model_usd_total') ?? 0) + plan.usage.usd))
     this.notify(text)
     return plan
   }

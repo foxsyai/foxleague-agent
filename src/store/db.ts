@@ -246,6 +246,11 @@ export class Store {
   }
 
   /** Every row of these kinds since a moment, newest first: limits over days never depend on how busy the log is. */
+  /** Every agent's plans since a moment, oldest first (for the AI's cost per day). */
+  plansSince(since: Date): { at: string; detail: string | null }[] {
+    return this.db.prepare("SELECT at, detail FROM activity WHERE kind = 'plan' AND at >= ? ORDER BY id").all(since.toISOString()) as { at: string; detail: string | null }[]
+  }
+
   activityOf(agentIndex: number, kinds: string[], since: Date): ActivityRow[] {
     const rows = this.db
       .prepare(`SELECT * FROM activity WHERE agent_idx = ? AND at >= ? AND kind IN (${kinds.map(() => '?').join(', ')}) ORDER BY id DESC`)

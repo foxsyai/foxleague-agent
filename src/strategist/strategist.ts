@@ -26,11 +26,12 @@ export interface Plan {
 /**
  * Models the owner can pick in the web UI, with list prices per million tokens (input, output,
  * cache read); 1-hour cache writes cost 2x input. All take adaptive thinking and every effort level.
+ * Listed from the least to the most capable, like the efforts (Opus 5.5 is newer, stronger and cheaper than Opus 5).
  */
 export const MODELS: Record<string, { label: string; price: [number, number, number] }> = {
   'claude-sonnet-5': { label: 'Sonnet 5', price: [2, 10, 0.2] },
-  'claude-opus-5-5': { label: 'Opus 5.5', price: [4, 20, 0.2] },
   'claude-opus-5': { label: 'Opus 5', price: [5, 25, 0.5] },
+  'claude-opus-5-5': { label: 'Opus 5.5', price: [4, 20, 0.2] },
   'claude-fable-5-1': { label: 'Fable 5.1', price: [10, 50, 0.25] },
 }
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const

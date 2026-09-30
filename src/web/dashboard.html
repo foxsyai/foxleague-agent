@@ -439,7 +439,7 @@ function renderStrat() {
   $('stratApply').hidden = !changed
   $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' : i.model)
     + (changed && ratio !== 1 ? ' · ' + (Math.round(ratio * 10) / 10) + 'x the current price' : '')
-    + ' · spent ' + usd(i.modelUsdTotal)
+    + ' · spent ' + usd(i.modelUsdToday) + ' today, ' + usd(i.modelUsdYesterday) + ' yesterday, ' + usd(i.modelUsdTotal) + ' in all'
 }
 
 function renderAgentbar() {
@@ -738,9 +738,9 @@ const TIPS = {
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
-    <p><b>Sonnet 5</b> is the default and handles this game well. <b>Opus 5.5</b> costs about 2x as much, <b>Opus 5</b> 2.5x and <b>Fable 5.1</b> 5x.</p>
+    <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b>, the most capable, 5x.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
-    <p>The line below shows the list price per million tokens and the model spend so far.</p>`],
+    <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
   key_TELEGRAM_BOT_TOKEN: ['Telegram bot token', `<p>The token of your Telegram bot from @BotFather. Notifications go out through it and your commands come in through it. A new token restarts the Telegram connection at once.</p>`],

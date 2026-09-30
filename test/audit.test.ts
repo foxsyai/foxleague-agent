@@ -1157,3 +1157,18 @@ test('own team unreadable: no card leaves the squad and nothing that needs the l
     assert.match(r!.summary, /the team could not be read/, a.type)
   }
 })
+
+test('the AI cost is counted per UTC day, rebuilt once from the logged plans and never counted twice', async () => {
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
+  const today = new Date().toISOString().slice(0, 10)
+  svc.store.addAgent(0, ADDR)
+  for (const usd of [0.1, 0.2]) svc.store.log({ agentIndex: 0, kind: 'plan', status: 'info', summary: 'plan', detail: { plan: { usage: { usd } } } })
+  // A new plan is counted before it is logged: the first count rebuilds from the two logged ones.
+  ;(svc as unknown as { addModelUsd: (usd: number) => void }).addModelUsd(0.4)
+  svc.store.log({ agentIndex: 0, kind: 'plan', status: 'info', summary: 'plan', detail: { plan: { usage: { usd: 0.4 } } } })
+  assert.equal(Math.round(svc.modelUsdByDay()[today]! * 100) / 100, 0.7)
+  ;(svc as unknown as { addModelUsd: (usd: number) => void }).addModelUsd(0.05)
+  assert.equal(Math.round(svc.modelUsdByDay()[today]! * 100) / 100, 0.75, 'a chat answer adds to the same day')
+  assert.equal(Math.round(Number(svc.store.getKv('model_usd_total')) * 100) / 100, 0.45, 'the total counts what was added')
+})
