@@ -30,6 +30,7 @@ import {
   shardOfPubkeyLastByte,
   shopPayTx,
   swapEgldTx,
+  swapWegldTx,
   syncTx,
   toPlain,
   fusionTx,
@@ -64,9 +65,11 @@ interface Built {
   txs: TxSpec[]
   /** EGLD (atomic) the transactions move as value (the swap). */
   egldValue: bigint
+  /** WEGLD (atomic) a swap pays from the wallet's own WEGLD, at most. */
+  wegldValue?: bigint
   /** Extra USD counted as spend beyond FOXSY and fees (the swap's pool fee). */
   extraUsd: number
-  /** USD value of the EGLD a swap sends away, counted against the daily swap allowance. */
+  /** USD value of the EGLD or WEGLD a swap sends away, counted against the daily swap allowance. */
   swapUsd?: number
   notes: string[]
 }
@@ -390,11 +393,24 @@ export class Executor {
       case 'swap_egld_for_foxsy': {
         const q = await quoteEgldForFoxsy(this.d.chain, v.facts.foxsyOut as bigint, (v.facts.slippageBps as number | undefined) ?? 100)
         const poolFeeUsd = prices ? atomicToFloat(q.amountIn) * 0.003 * prices.egldUsd : 0
+        const swapUsd = prices ? atomicToFloat(q.maxIn) * prices.egldUsd : 0
+        // WEGLD in the wallet goes first, when it covers the whole swap: it pays no gas, so no reserve is kept
+        // of it, and the pair returns what it does not use. The caps and swap allowances count it like EGLD.
+        if ((snap.chain?.wegld ?? 0n) >= q.maxIn) {
+          return {
+            txs: [swapWegldTx(q.foxsyOut, q.maxIn)],
+            egldValue: 0n,
+            wegldValue: q.maxIn,
+            extraUsd: poolFeeUsd,
+            swapUsd,
+            notes: [`quote ${formatAtomic(q.amountIn, 4)} WEGLD from the wallet, pays at most ${formatAtomic(q.maxIn, 4)} WEGLD (${q.slippageBps / 100}% slippage)`],
+          }
+        }
         return {
           txs: [swapEgldTx(q.foxsyOut, q.maxIn)],
           egldValue: q.maxIn,
           extraUsd: poolFeeUsd,
-          swapUsd: prices ? atomicToFloat(q.maxIn) * prices.egldUsd : 0,
+          swapUsd,
           notes: [`quote ${formatAtomic(q.amountIn, 4)} EGLD, pays at most ${formatAtomic(q.maxIn, 4)} EGLD (${q.slippageBps / 100}% slippage)`],
         }
       }
@@ -565,7 +581,8 @@ export class Executor {
       case 'swap_egld_for_foxsy': {
         const { hash, outcome } = await this.sendAndWait(wallet, built.txs[0]!, booking)
         if (outcome.kind === 'success') applyEffect(a, v, snap, built) // a register later in the plan sees the FOXSY
-        return outcomeResult(hash, outcome)
+        // The result says which coin paid: the owner's WEGLD, or EGLD above the reserve.
+        return outcomeResult(hash, outcome, async () => `done, paid with ${built.wegldValue ? 'WEGLD from the wallet' : 'EGLD'} (at most ${formatAtomic(built.wegldValue ?? built.egldValue, 4)})`)
       }
       case 'register': {
         if (built.txs.length) {
@@ -804,10 +821,11 @@ function apiCallsFor(a: Action): string | null {
 }
 
 /** Local effect of an action on the working snapshot, so later actions of the same plan validate against it. */
-export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { egldValue: bigint }): void {
+export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { egldValue: bigint; wegldValue?: bigint }): void {
   if (s.chain) {
     s.chain.foxsy -= v.foxsy
     s.chain.egld -= built.egldValue
+    s.chain.wegld -= built.wegldValue ?? 0n
     if (a.type === 'swap_egld_for_foxsy') s.chain.foxsy += v.facts.foxsyOut as bigint
   }
   const card = (n: number) => s.players.find(p => p.nonce === n)

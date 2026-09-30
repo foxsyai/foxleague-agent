@@ -103,7 +103,7 @@ function snapshotSummary(s: AgentSnapshot | undefined) {
     takenAt: s.takenAt,
     egld: s.chain ? formatAtomic(s.chain.egld, 4) : null,
     foxsy: s.chain ? formatAtomic(s.chain.foxsy, 2) : null,
-    // WEGLD is shown only when the wallet holds some: the agent never uses it.
+    // WEGLD is shown only when the wallet holds some.
     wegld: s.chain && s.chain.wegld > 0n ? formatAtomic(s.chain.wegld, 4) : null,
     cards: s.chain?.nftCount ?? null,
     prices: s.prices,

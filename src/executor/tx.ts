@@ -5,7 +5,7 @@ import { Address, Transaction } from '@multiversx/sdk-core'
 import { GAS, MAINNET } from '../config.ts'
 import type { PlainTx } from '../chain/gateway.ts'
 import { hexOfString, numberToHex, u64Hex, wholeToAtomic } from '../util/encoding.ts'
-import { composeTasksEgldToFoxsyData } from '../chain/xexchange.ts'
+import { composeTasksEgldToFoxsyData, swapWegldToFoxsyData } from '../chain/xexchange.ts'
 
 export interface TxSpec {
   /** Short label for logs. */
@@ -128,6 +128,18 @@ export function swapEgldTx(foxsyOut: bigint, maxInAtomic: bigint): TxSpec {
     value: maxInAtomic,
     data: composeTasksEgldToFoxsyData(foxsyOut),
     gasLimit: GAS.swapEgldPath,
+    version: 2,
+  }
+}
+
+/** WEGLD path swap: at most `maxIn` WEGLD goes to the pair, exactly `foxsyOut` FOXSY comes back with the unused WEGLD. */
+export function swapWegldTx(foxsyOut: bigint, maxInAtomic: bigint): TxSpec {
+  return {
+    label: 'pair swap (WEGLD)',
+    receiver: MAINNET.foxsyWegldPair,
+    value: 0n,
+    data: swapWegldToFoxsyData(foxsyOut, maxInAtomic),
+    gasLimit: GAS.swapWegldPath,
     version: 2,
   }
 }

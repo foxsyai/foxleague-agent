@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { decimalToAtomic, formatAtomic, numberToHex, u64Hex, wholeToAtomic } from '../src/util/encoding.ts'
-import { applySlippage, composeTasksEgldToFoxsyData } from '../src/chain/xexchange.ts'
+import { applySlippage, composeTasksEgldToFoxsyData, swapWegldToFoxsyData } from '../src/chain/xexchange.ts'
 
 test('literals from docs/FOXLEAGUE-INTEGRATION.md 1.4', () => {
   assert.equal(numberToHex(wholeToAtomic(10)), '8ac7230489e80000')
@@ -19,6 +19,15 @@ test('composeTasks matches the web app pin for 5,000 FOXSY (xexchangeSwap.test.t
     composeTasksEgldToFoxsyData(wholeToAtomic(5000)),
     'composeTasks@0000000c464f5853592d35643566336500000000000000000000000a010f0cf064dd59200000@@@02@0000001473776170546f6b656e734669786564496e7075740000000c464f5853592d3564356633650000000a010f0cf064dd59200000',
   )
+})
+
+test('the WEGLD path data is the web app\'s ESDTTransfer to the pair (xexchangeSwap.test.ts:75 shape)', () => {
+  assert.equal(
+    swapWegldToFoxsyData(wholeToAtomic(5000), 2444652762607399830n),
+    'ESDTTransfer@5745474c442d626434643739@21ed26bc3a643396@73776170546f6b656e7346697865644f7574707574@464f5853592d356435663365@010f0cf064dd59200000',
+  )
+  assert.throws(() => swapWegldToFoxsyData(0n, 1n), /positive/)
+  assert.throws(() => swapWegldToFoxsyData(1n, 0n), /positive/)
 })
 
 test('slippage rounds down like the web app (2420448279809306763 -> 2444652762607399830 at 1%)', () => {

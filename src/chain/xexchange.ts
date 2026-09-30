@@ -1,4 +1,4 @@
-// EGLD -> FOXSY on the xExchange FOXSY/WEGLD pair, the same trade the FoxLeague onboarding and
+// EGLD or WEGLD -> FOXSY on the xExchange FOXSY/WEGLD pair, the same trades the FoxLeague onboarding and
 // Dashboard swap sign. Encoders and amount maths are ported from the web app's pure module
 // (next-foxleague frontend/src/lib/xexchangeSwap.ts, pinned there against mainnet transactions).
 
@@ -46,6 +46,15 @@ export function composeTasksEgldToFoxsyData(foxsyOut: bigint): string {
   const minExpected = nestedHex(token) + '0'.repeat(16) + nestedHex(amount)
   const swapArgs = nestedHex(hexOfString('swapTokensFixedInput')) + nestedHex(token) + nestedHex(amount)
   return `composeTasks@${minExpected}@${topEncodeU8(TASK_WRAP_EGLD)}@@${topEncodeU8(TASK_SWAP)}@${swapArgs}`
+}
+
+/**
+ * `ESDTTransfer` data for the WEGLD path: at most `maxIn` WEGLD goes to the pair for exactly `foxsyOut`
+ * FOXSY, and the pair sends the WEGLD it did not need back.
+ */
+export function swapWegldToFoxsyData(foxsyOut: bigint, maxIn: bigint): string {
+  if (foxsyOut <= 0n || maxIn <= 0n) throw new Error('swap amounts must be positive')
+  return `ESDTTransfer@${hexOfString(MAINNET.wegldToken)}@${numberToHex(maxIn)}@${hexOfString('swapTokensFixedOutput')}@${hexOfString(MAINNET.foxsyToken)}@${numberToHex(foxsyOut)}`
 }
 
 export interface SwapQuote {

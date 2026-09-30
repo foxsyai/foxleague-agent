@@ -28,9 +28,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 
 - **Controls**: **Plan now** runs a planning cycle at once; **Pause** stops this agent only.
 - **Wallet and team**: balances, cards, team, rating and record, matches and training today. **Value** is what
-  the wallet's EGLD and FOXSY are worth in USD; it turns orange, and the agent's tab shows **low funds**, when it
+  the wallet's EGLD, WEGLD and FOXSY are worth in USD; it turns orange, and the agent's tab shows **low funds**, when it
   falls under your **Top-up warning** (you also get one message on Telegram). To top up, send EGLD to the agent's
-  address: it buys FOXSY by itself. **In tournaments** lists the tournaments and 1v1s the agent is in, each open
+  address: it buys FOXSY by itself (WEGLD and FOXSY work too). **In tournaments** lists the tournaments and 1v1s the agent is in, each open
   one with a **Leave** button.
 - **Last plan**: the agent's latest reading of the situation, each action with a one-line reason and the cost of
   the AI call.

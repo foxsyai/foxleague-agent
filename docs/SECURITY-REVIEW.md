@@ -138,6 +138,21 @@ finding in the code, reproduced and fixed:
 |---|---|---|---|
 | DB1 | medium | Started on a data folder whose database has another file name, the service created an empty database next to it: no agents, default caps and an empty spend ledger | The store refuses to create a database in a folder that already holds another one |
 
+## Seventh review, 2026-09-30 (the WEGLD swap path)
+
+Claude Fable 5.1 (read-only) on the uncommitted change that lets a swap pay with the wallet's WEGLD: when it
+covers the whole swap, one `ESDTTransfer` to the FOXSY/WEGLD pair (`swapTokensFixedOutput`, the transaction the
+FoxLeague app signs), with no reserve kept of the WEGLD; otherwise the EGLD path as before. Checked and sound:
+the data matches the app's pinned transaction; the caps, the daily and monthly swap allowances and the booking
+treat both paths alike; nothing keys on the swap's receiver or value; a swap sized on a stale balance costs only
+its gas; the booking counts the most the swap may pay, never less. No finding that loses money or breaks a cap.
+Two low findings, both fixed:
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| WS1 | low | The live result of a swap did not say which coin had paid | It says "paid with WEGLD from the wallet" or "paid with EGLD", with the most it may pay |
+| WS2 | low | A sentence in the plan request invited the model to size a swap to the WEGLD balance, against "swap only what the next actions need" | The sentence is gone |
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

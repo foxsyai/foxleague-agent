@@ -451,7 +451,7 @@ function renderAgentbar() {
       el('span', { class: 'vdot ' + dot }), 'Agent ' + (b.index + 1) + (name ? ' · ' + name : ''),
       b.source === 'imported' ? el('span', { class: 'vmode imported', text: 'imported', title: 'An imported team: it plays with its own key, not one from your recovery words' }) : '',
       b.paused ? el('span', { class: 'vmode paused', text: 'paused' }) : '',
-      b.funds && b.funds.low ? el('span', { class: 'vmode low', text: 'low funds', title: 'Its wallet is worth less than its top-up warning: send EGLD or FOXSY to this agent' }) : ''))
+      b.funds && b.funds.low ? el('span', { class: 'vmode low', text: 'low funds', title: 'Its wallet is worth less than its top-up warning: send EGLD, WEGLD or FOXSY to this agent' }) : ''))
   }
   const next = S.instance.next
   bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'Account ' + next.index + ' of your recovery words' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: addAgent }, '+ Add agent'))
@@ -471,10 +471,10 @@ function renderAgent() {
   if (!s) rows.append(...row('State', 'waiting for the first snapshot'))
   else {
     rows.append(...row('EGLD', s.egld ?? '–'), ...row('FOXSY', s.foxsy ?? '–'))
-    if (s.wegld) rows.append(...row('WEGLD', s.wegld + ' · not used by the agent'))
+    if (s.wegld) rows.append(...row('WEGLD', s.wegld + ' · used first for swaps'))
     const f = b.funds || {}
     rows.append(el('div', { class: 'k' }, 'Value', el('i', { class: 'info', 'data-tip': 'funds', text: 'i' })),
-      el('div', { class: 'v' + (f.low ? ' low' : '') }, f.usd === null || f.usd === undefined ? '–' : usd(f.usd) + (f.low ? ' · low: top up with EGLD or FOXSY (warning at $' + b.settings.topUpWarningUsd + ')' : '')))
+      el('div', { class: 'v' + (f.low ? ' low' : '') }, f.usd === null || f.usd === undefined ? '–' : usd(f.usd) + (f.low ? ' · low: top up with EGLD, WEGLD or FOXSY (warning at $' + b.settings.topUpWarningUsd + ')' : '')))
     rows.append(...row('Cards', s.cards ?? '–'))
     const r = s.registration
     if (!r.registered) {
@@ -762,14 +762,14 @@ const TIPS = {
     <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, up to 100 messages, together with the ones from Telegram. Ctrl+Enter sends.</p>
     <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
-  funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD (the gas reserve included) plus its FOXSY.</p>
+  funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD (the gas reserve included), its WEGLD and its FOXSY.</p>
     <p>It turns orange, and the agent's tab shows "low funds", when it is worth less than the Top-up warning in Settings. You also get one message on Telegram when it falls under that level. Nothing is paused: the agent plays on with what it has.</p>
-    <p>To top up, send EGLD to the address above on the MultiversX network: the agent buys FOXSY with it by itself. You can send FOXSY too. WEGLD is not used by the agent, so it is not counted.</p>`],
-  topup: ['Top-up warning', `<p>You are warned when this agent's wallet (EGLD plus FOXSY) is worth less than this amount in USD: the value turns orange here and one message goes to Telegram. The next message comes only after you topped it up and it fell again.</p>
+    <p>To top up, send EGLD to the address above on the MultiversX network: the agent buys FOXSY with it by itself. You can send FOXSY or WEGLD too. When a swap fits in the wallet's WEGLD, the agent spends that first and all of it if needed, because WEGLD pays no network fees and needs no reserve. Otherwise it swaps EGLD, down to the gas reserve.</p>`],
+  topup: ['Top-up warning', `<p>You are warned when this agent's wallet (EGLD, WEGLD and FOXSY together) is worth less than this amount in USD: the value turns orange here and one message goes to Telegram. The next message comes only after you topped it up and it fell again.</p>
     <p>Keep it above what one day of play costs you. Remember that the EGLD gas reserve is part of the value and is never swapped. 0 switches the warning off.</p>`],
   chat_clear: ['Clear', `<p>Empties the conversation, here and for Telegram: the manager starts fresh with your next message.</p>
     <p>Why: the manager reads the current conversation again with every message you send, and the AI is paid for what it reads. A short conversation costs less and keeps the answers on the topic. One line costs a fraction of a cent, so it counts in long discussions and with the dearer models.</p>
-    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation, and it never reads more than the last 25 messages. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
+    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation, and it never reads more than the last 50 messages, about 25 of yours with their answers. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
   speak: ['Speak', `<p>Press Speak and talk instead of typing: your words appear in the box. Press Stop when you are done, read the text and press Send.</p>
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],

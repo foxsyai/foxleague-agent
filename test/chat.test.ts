@@ -66,16 +66,16 @@ test('the conversation with the manager is kept: saved across a restart, read ba
   assert.match(svc.cancelProposal('deadbeef'), /already applied, cancelled or expired/)
   assert.equal(svc.chatLines().length, count)
 
-  // The box keeps the last 100 messages and the manager reads 25 at most, whole.
+  // The box keeps the last 100 messages and the manager reads 50 at most (about 25 questions with their answers), whole.
   answer = { reply: 'r'.repeat(3000), proposal: null, usd: 0 }
   for (let i = 0; i < 60; i++) await svc.discuss(`${'m'.repeat(1000)} ${i}`, 'Telegram')
   assert.equal(svc.chatLines().length, 100)
   assert.equal(new Service(cfg).chatLines().length, 100)
   assert.equal(svc.chatLines().at(-2)!.text.length, 1003, 'the box shows the whole message')
-  assert.equal(svc.chatLines().filter(l => l.read).length, 25)
+  assert.equal(svc.chatLines().filter(l => l.read).length, 50)
   const context = seen.at(-1)!.recent
-  assert.equal(context.length, 25)
-  assert.deepEqual([context[0]!.from, context[0]!.text.length, context[1]!.text.length], ['manager', 3000, 1003], 'whole messages')
+  assert.equal(context.length, 50)
+  assert.deepEqual([context[0]!.from, context[0]!.text.length, context[1]!.text.length], ['owner', 1003, 3000], 'whole messages, in pairs')
 })
 
 test('the manager reads the current conversation only: an hour without a message or Clear starts a new one', async () => {
@@ -134,15 +134,16 @@ test('low funds: the owner is told once when a wallet falls under its top-up war
   svc.ensureAgents()
   const told: string[] = []
   svc.notify = (text: string) => void told.push(text)
-  const check = (egld: number, foxsy: number) => {
+  const check = (egld: number, foxsy: number, wegld = 0) => {
     const snap = snapshot()
-    snap.chain = { ...snap.chain!, egld: BigInt(Math.round(egld * 1e6)) * 10n ** 12n, foxsy: BigInt(foxsy) * 10n ** 18n, wegld: 5n * 10n ** 18n }
+    snap.chain = { ...snap.chain!, egld: BigInt(Math.round(egld * 1e6)) * 10n ** 12n, foxsy: BigInt(foxsy) * 10n ** 18n, wegld: BigInt(Math.round(wegld * 1e6)) * 10n ** 12n }
     snap.prices = { egldUsd: 4, egldPerFoxsy: 0.0005, foxsyUsd: 0.002 }
     ;(svc as unknown as { checkFunds: (a: unknown, s: unknown) => void }).checkFunds(svc.store.agent(0)!, snap)
     return snap
   }
   assert.equal(DEFAULT_SETTINGS.topUpWarningUsd, 10)
-  assert.equal(fundsUsd(check(3, 1000)), 14, '3 EGLD at $4 plus 1,000 FOXSY at $0.002; WEGLD is not counted')
+  assert.equal(fundsUsd(check(3, 1000)), 14, '3 EGLD at $4 plus 1,000 FOXSY at $0.002')
+  assert.equal(fundsUsd(check(1, 1000, 2)), 14, 'WEGLD counts like EGLD: a swap spends it first')
   assert.deepEqual(told, [], 'above the level nothing is said')
   check(2, 500) // $9
   assert.equal(told.length, 1)
@@ -150,9 +151,10 @@ test('low funds: the owner is told once when a wallet falls under its top-up war
   check(1.5, 500)
   check(1, 0)
   assert.equal(told.length, 1, 'said once while it stays low')
-  check(5, 0) // topped up
-  check(2, 0)
+  check(0.5, 0, 2.5) // topped up with WEGLD
+  check(1, 0, 1)
   assert.equal(told.length, 2, 'said again after a top-up and a new fall')
+  assert.match(told[1]!, /\(1\.0000 EGLD, 1\.0000 WEGLD, 0 FOXSY\).*Send EGLD or WEGLD/)
   assert.match(svc.store.activity(0, 3)[0]!.summary, /low on funds/)
   // The level is the owner's: 0 switches the warning off, and an unknown price says nothing.
   svc.store.updateSettings(0, validateSettingsPatch({ topUpWarningUsd: 0 }))

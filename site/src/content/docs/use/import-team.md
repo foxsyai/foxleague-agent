@@ -52,7 +52,7 @@ it suits you. **+ Add agent** makes exactly such a wallet for a new team.
 
 We do not recommend giving an agent your personal wallet, the one with your history and your other assets:
 
-- **The key can sign anything the wallet holds.** The agent only swaps EGLD to FOXSY and pays for the game,
+- **The key can sign anything the wallet holds.** The agent only swaps EGLD and WEGLD to FOXSY and pays for the game,
   within the limits you set, but the wallet is only as safe as the file that holds its key.
 - **A wallet with a Guardian is refused.** A MultiversX Guardian asks for a second signature on every
   transaction, the one you confirm with your 2FA code. The agent holds only the wallet's key, so nothing it

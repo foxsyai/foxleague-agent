@@ -49,7 +49,7 @@ Marketplace: every sale is a 24-hour auction. Bid at least the reserve, or at le
 
 Setup (only before the team exists): EGLD is swapped to FOXSY on xExchange (swap_egld_for_foxsy), then register pays the 5,000 FOXSY fee (the relayer pays the gas) and names the team (3-15 characters: letters, digits, spaces, hyphens; names are unique, pick something original, not offensive, not imitating anyone). The squad of 18 cards arrives right after.
 
-Money: the wallet holds EGLD (for gas and swaps) and FOXSY (for everything in the game). Swap only what the next actions need, in round amounts, with a margin; never swap the whole EGLD balance.
+Money: the wallet holds EGLD (for gas and swaps), sometimes WEGLD (for swaps only, used before EGLD) and FOXSY (for everything in the game). Swap only what the next actions need, in round amounts, with a margin; never swap the whole EGLD balance.
 
 ## Actions (the only ones the executor accepts)
 - {"type":"swap_egld_for_foxsy","foxsy":N} whole FOXSY to receive (100 or more)

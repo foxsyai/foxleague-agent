@@ -10,7 +10,8 @@ import type { Chain } from '../src/chain/gateway.ts'
 import type { FoxLeague } from '../src/foxleague/api.ts'
 import type { Config } from '../src/config.ts'
 import type { AgentWallet } from '../src/wallet/wallet.ts'
-import { decimalToAtomic, numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
+import { decimalToAtomic, hexOfString, numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
+import { liveWallet, withLive } from './fixtures.ts'
 
 const ADDR = 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl'
 const wallet: AgentWallet = { index: 0, address: ADDR, pubkeyHex: '00', shard: 0, signTransaction: () => assert.fail('must not sign in dry run'), signMessage: () => assert.fail('must not sign') }
@@ -169,6 +170,79 @@ test('gas reserve: fees may use it, a swap may not dip into it', async () => {
   assert.match(short!.summary, /gas reserve/)
   const [ok] = await exec.run(agent(), wallet, at('0.6'), [swap])
   assert.equal(ok!.status, 'dry_run')
+})
+
+test('WEGLD in the wallet is spent first, with no reserve, when it covers the whole swap; otherwise EGLD', async () => {
+  const { exec, agent, store } = setup()
+  store.updateSettings(0, { egldGasReserve: '1', dailyCapUsd: 50 })
+  // Pool at 0.0005 EGLD per FOXSY: 1,000 FOXSY quote 0.5, pays at most 0.505 (1%).
+  const b64 = (n: bigint) => Buffer.from(numberToHex(n), 'hex').toString('base64')
+  const answers: Record<string, string[]> = {
+    getState: [b64(1n)],
+    getFirstTokenId: [Buffer.from('FOXSY-5d5f3e').toString('base64')],
+    getSecondTokenId: [Buffer.from('WEGLD-bd4d79').toString('base64')],
+    getReservesAndTotalSupply: [b64(wholeToAtomic(1_000_000)), b64(wholeToAtomic(500)), b64(1n)],
+    getAmountIn: [b64(wholeToAtomic(1) / 2n)],
+  }
+  const sent: { receiver: string; value: string; data: string; gasLimit: number }[] = []
+  ;(exec as unknown as { d: { chain: unknown } }).d.chain = {
+    simulate: async (tx: { receiver: string; value: string; data: string; gasLimit: number }) => (sent.push(tx), { ok: true, detail: 'success', raw: {} }),
+    query: async (_sc: string, fn: string) => answers[fn] ?? assert.fail(`unexpected query ${fn}`),
+  }
+  const at = (egld: string, wegld: string) => { const s = snapshot(); s.chain!.egld = decimalToAtomic(egld); s.chain!.wegld = decimalToAtomic(wegld); return s }
+  const swap = { action: { type: 'swap_egld_for_foxsy', foxsy: 1000 }, reason: '' } as const
+  const maxIn = decimalToAtomic('0.505')
+
+  // Only the gas reserve in EGLD, but 0.6 WEGLD: the swap goes through the pair with WEGLD, nothing of the EGLD is sent.
+  const [viaWegld] = await exec.run(agent(), wallet, at('1', '0.6'), [swap])
+  assert.equal(viaWegld!.status, 'dry_run')
+  assert.match(viaWegld!.summary, /quote 0\.5000 WEGLD from the wallet, pays at most 0\.5050 WEGLD/)
+  const tx = sent.at(-1)!
+  assert.equal(tx.receiver, MAINNET.foxsyWegldPair)
+  assert.equal(BigInt(tx.value), 0n)
+  assert.equal(Buffer.from(tx.data, 'base64').toString(), `ESDTTransfer@${hexOfString('WEGLD-bd4d79')}@${numberToHex(maxIn)}@${hexOfString('swapTokensFixedOutput')}@${hexOfString('FOXSY-5d5f3e')}@${numberToHex(wholeToAtomic(1000))}`)
+  assert.equal(Number(tx.gasLimit), 24_000_000)
+
+  // Too little WEGLD for the whole swap: the EGLD path, and with EGLD at the reserve it is refused as before.
+  const [short] = await exec.run(agent(), wallet, at('1', '0.5'), [swap])
+  assert.equal(short!.status, 'refused')
+  assert.match(short!.summary, /gas reserve/)
+  const [viaEgld] = await exec.run(agent(), wallet, at('2', '0.5'), [swap])
+  assert.equal(viaEgld!.status, 'dry_run')
+  assert.equal(sent.at(-1)!.receiver, MAINNET.composableTasks)
+  assert.equal(BigInt(sent.at(-1)!.value), maxIn)
+
+  // Two swaps in one plan: the first takes the WEGLD, the second sees it gone and uses EGLD.
+  const before = sent.length
+  const both = await exec.run(agent(), wallet, at('3', '0.6'), [swap, swap])
+  assert.deepEqual(both.map(r => r.status), ['dry_run', 'dry_run'])
+  assert.deepEqual(sent.slice(before).map(t => t.receiver), [MAINNET.foxsyWegldPair, MAINNET.composableTasks])
+
+  // Live: one transaction to the pair, booked against the swap allowance, and the result names the coin that paid.
+  const live: { receiver: string; value: string }[] = []
+  Object.assign((exec as unknown as { d: { chain: Record<string, unknown> } }).d.chain, {
+    account: async () => ({ nonce: 1, balance: wholeToAtomic(1) }),
+    send: async (tx: { receiver: string; value: string }) => (live.push(tx), 'hashswap'),
+    waitForOutcome: async () => ({ kind: 'success' }),
+  })
+  await withLive(store, async () => {
+    const [paidWegld] = await exec.run(agent(), liveWallet, at('1', '0.6'), [swap])
+    assert.equal(paidWegld!.status, 'confirmed', paidWegld!.summary)
+    assert.match(paidWegld!.summary, /swap EGLD for 1000 FOXSY: done, paid with WEGLD from the wallet \(at most 0\.5050\)/)
+    const [paidEgld] = await exec.run(agent(), liveWallet, at('3', '0'), [swap])
+    assert.match(paidEgld!.summary, /done, paid with EGLD \(at most 0\.5050\)/)
+  })
+  assert.deepEqual(live.map(t => [t.receiver, BigInt(t.value)]), [[MAINNET.foxsyWegldPair, 0n], [MAINNET.composableTasks, maxIn]])
+  assert.ok(Math.abs(store.spentUsd(0, { category: 'swap', dryRun: false }) - 2 * 0.505 * 4.5) < 0.01, 'both swaps count against the swap allowance at what they may pay')
+
+  // A WEGLD swap still needs EGLD for its fee, and still counts against the daily swap allowance.
+  const [noGas] = await exec.run(agent(), wallet, at('0', '0.6'), [swap])
+  assert.equal(noGas!.status, 'refused')
+  assert.match(noGas!.summary, /for gas/)
+  store.updateSettings(0, { dailyCapUsd: 1 })
+  const [capped] = await exec.run(agent(), wallet, at('1', '0.6'), [swap])
+  assert.equal(capped!.status, 'refused')
+  assert.match(capped!.summary, /daily cap|daily swap allowance/)
 })
 
 test('one mode for all agents: live needs the platform switch AND the server permission', async () => {

@@ -104,11 +104,11 @@ export interface ChatLine {
 }
 /**
  * The box keeps and shows the last CHAT_KEPT messages. The manager reads the current conversation only: the
- * messages since the last pause of CHAT_PAUSE_MS (or since Clear), at most CHAT_CONTEXT of them (a quarter of
- * what is kept), whole, because everything it reads is paid for with each message.
+ * messages since the last pause of CHAT_PAUSE_MS (or since Clear), at most CHAT_CONTEXT of them (half of what
+ * is kept: about 25 questions with their answers), whole, because everything it reads is paid for with each message.
  */
 const CHAT_KEPT = 100
-const CHAT_CONTEXT = 25
+const CHAT_CONTEXT = 50
 const CHAT_PAUSE_MS = 3600_000
 
 export class Service {
@@ -319,7 +319,7 @@ export class Service {
     }
     if (this.store.getKv(key) === '1') return
     this.store.setKv(key, '1')
-    const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} in its wallet (${formatAtomic(snap.chain!.egld, 4)} EGLD, ${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
+    const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} in its wallet (${formatAtomic(snap.chain!.egld, 4)} EGLD, ${snap.chain!.wegld > 0n ? `${formatAtomic(snap.chain!.wegld, 4)} WEGLD, ` : ''}${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD or WEGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
     this.store.log({ agentIndex: agent.index, kind: 'control', status: 'info', summary: text })
     this.notify(text)
   }

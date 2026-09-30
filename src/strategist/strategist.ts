@@ -165,7 +165,7 @@ export function renderPlanRequest(p: PlanInput): string {
     `## Budget (${p.dryRun ? 'dry-run ledger' : 'live ledger'}, game day ${b.gameDay})`,
     `Today: $${b.spentTodayUsd.toFixed(2)} spent of $${b.dailyCapUsd.toFixed(2)}, $${b.remainingTodayUsd.toFixed(2)} left. Month ${b.month}: $${b.remainingMonthUsd.toFixed(2)} of $${b.monthlyBudgetUsd.toFixed(2)} left. Setup budget left: $${b.remainingSetupUsd.toFixed(2)} of $${b.setupBudgetUsd.toFixed(2)}.`,
     `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.join('/')}.`,
-    `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee).`,
+    `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
     `## Recent activity (newest first)`,
     ...(p.recent.length ? p.recent.slice(0, 20).map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${txt(r.summary, 300)}`) : ['- none yet']),
     SNAPSHOT_HEADING,
