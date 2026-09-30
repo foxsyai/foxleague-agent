@@ -73,6 +73,9 @@ h2 .spacer{flex:1}
 #chatLog .who{display:block;font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);margin-bottom:3px}
 #chatLog .msg.owner .who{color:#d9b56a}
 #chatLog .prop{display:block;margin-top:5px;font-size:12px;color:var(--dim)}
+#chatLog .gap{font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--dim);text-align:center;border-top:1px dashed var(--line);padding-top:6px;margin-top:2px}
+#chatLog .msg.old{opacity:.55}
+#chatClearBox{display:flex;align-items:center}
 .btn.listening{background:#3a1620;border-color:#7d2740;color:#ffb3c1}
 #adminPanel{margin-top:12px}
 .keyrow{display:grid;grid-template-columns:170px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
@@ -283,7 +286,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
         <div class="note" id="budgetNote"></div>
       </div>
       <div class="card">
-        <h2>Talk to the manager<i class="info" data-tip="advice">i</i></h2>
+        <h2>Talk to the manager<i class="info" data-tip="advice">i</i><span class="spacer"></span><span id="chatClearBox" hidden><button class="btn sm" id="chatClear" type="button">Clear</button><i class="info" data-tip="chat_clear">i</i></span></h2>
         <div id="chatLog" hidden></div>
         <textarea id="adviceText" maxlength="4000" placeholder="Advice or a question, as in Telegram. For example: this week focus on Silver tournaments and skip boosters."></textarea>
         <div class="controls"><button class="btn go" id="adviceBtn">Send</button><span id="speakBox" hidden><button class="btn" id="speakBtn" type="button">🎤 Speak</button><select id="speakLang" class="btn sm" aria-label="The language you speak" hidden></select><i class="info" data-tip="speak">i</i></span></div>
@@ -746,8 +749,12 @@ const TIPS = {
     <p>Every paid action is valued in USD at live prices before it runs; one that would go over a cap is refused. Dry-run spend has its own ledger, so it never blocks live spending.</p>`],
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
     <p>A question gets an answer. Advice comes back as the full revised strategy with Apply and Cancel; nothing changes until you press Apply. Name other agents ("all agents", "agent 2") to include them.</p>
-    <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, the last 20 messages, together with the ones from Telegram. The manager reads the last 12 lines, so a follow-up needs no repeating. Ctrl+Enter sends.</p>
+    <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, up to 100 messages, together with the ones from Telegram. Ctrl+Enter sends.</p>
+    <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
+  chat_clear: ['Clear', `<p>Empties the conversation, here and for Telegram: the manager starts fresh with your next message.</p>
+    <p>Why: the manager reads the current conversation again with every message you send, and the AI is paid for what it reads. A short conversation costs less and keeps the answers on the topic. One line costs a fraction of a cent, so it counts in long discussions and with the dearer models.</p>
+    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation, and it never reads more than the last 40 lines. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
   speak: ['Speak', `<p>Press Speak and talk instead of typing: your words appear in the box. Press Stop when you are done, read the text and press Send.</p>
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
@@ -867,7 +874,7 @@ const agentsLabel = list => list.length === 1 ? 'agent ' + (list[0] + 1) : 'agen
 function chatBubble(l) {
   const mine = l.from === 'owner'
   const where = !mine ? '' : l.source === 'Telegram' ? 'Telegram' : /^web UI/.test(l.source || '') && l.agents && l.agents.length ? 'to ' + agentsLabel(l.agents) : ''
-  return el('div', { class: 'msg ' + (mine ? 'owner' : 'manager') },
+  return el('div', { class: 'msg ' + (mine ? 'owner' : 'manager') + (l.read ? '' : ' old') },
     el('span', { class: 'who', text: (mine ? 'You' : 'Manager') + ' · ' + chatTime(l.at) + (where ? ' · ' + where : '') }),
     l.text || (l.proposed ? '' : '(no answer)'),
     l.proposed ? el('span', { class: 'prop', text: 'Proposed a strategy for ' + agentsLabel(l.agents || []) + (l.open ? ': Apply or Cancel below' : '') }) : null)
@@ -875,11 +882,17 @@ function chatBubble(l) {
 function renderChat() {
   const lines = (S && S.chat) || []
   const last = lines[lines.length - 1]
-  const key = lines.length + '|' + (last ? last.at : '') + '|' + lines.filter(l => l.open).length + '|' + (chatWaiting || '')
+  const firstRead = lines.findIndex(l => l.read)
+  const key = lines.length + '|' + (last ? last.at : '') + '|' + lines.filter(l => l.open).length + '|' + firstRead + '|' + (chatWaiting || '')
   if (key === chatShown) return
   chatShown = key
   const log = $('chatLog')
-  log.replaceChildren(...lines.map(chatBubble), ...(chatWaiting ? [
+  const bubbles = lines.map(chatBubble)
+  // Where the manager's memory starts: what is above the line is kept to read back, it is no longer sent to it.
+  if (firstRead > 0) bubbles.splice(firstRead, 0, el('div', { class: 'gap', text: 'The manager reads from here' }))
+  else if (firstRead < 0 && lines.length) bubbles.push(el('div', { class: 'gap', text: 'A new conversation starts with your next message' }))
+  $('chatClearBox').hidden = !lines.length
+  log.replaceChildren(...bubbles, ...(chatWaiting ? [
     el('div', { class: 'msg owner' }, el('span', { class: 'who', text: 'You · now' }), chatWaiting),
     el('div', { class: 'msg manager wait', text: 'The manager is thinking…' })] : []))
   log.hidden = !lines.length && !chatWaiting
@@ -910,6 +923,9 @@ $('adviceBtn').onclick = async () => {
     if (!$('adviceText').value) $('adviceText').value = message
     toast(e.message, true)
   } finally { $('adviceBtn').disabled = false; $('adviceBtn').textContent = 'Send' }
+}
+$('chatClear').onclick = async () => {
+  try { const r = await api('POST', '/api/chat/clear'); if (S) S.chat = r.chat; renderChat(); toast(r.message) } catch (e) { toast(e.message, true) }
 }
 $('adviceText').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && !$('adviceBtn').disabled) { e.preventDefault(); $('adviceBtn').click() } })
 // Speak to the manager: the browser's own speech to text fills the box; the owner reads it and presses Send.

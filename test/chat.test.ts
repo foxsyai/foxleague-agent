@@ -16,7 +16,7 @@ function testConfig(dir: string): Config {
   } as Config
 }
 
-test('the conversation with the manager is kept: 20 lines saved across a restart, the last 12 as context, an open proposal with its line', async () => {
+test('the conversation with the manager is kept: saved across a restart, read back as context, an open proposal with its line', async () => {
   const cfg = testConfig(mkdtempSync(join(tmpdir(), 'foxagent-')))
   const svc = new Service(cfg)
   svc.ensureAgents()
@@ -66,13 +66,54 @@ test('the conversation with the manager is kept: 20 lines saved across a restart
   assert.match(svc.cancelProposal('deadbeef'), /already applied, cancelled or expired/)
   assert.equal(svc.chatLines().length, count)
 
-  // Only the last 20 lines are kept, the manager reads the last 12, and a long message is shortened for it.
+  // The box keeps the last 100 lines, the manager reads 40 at most, and a long message is shortened for it.
   answer = { reply: 'r'.repeat(3000), proposal: null, usd: 0 }
-  for (let i = 0; i < 12; i++) await svc.discuss(`${'m'.repeat(1000)} ${i}`, 'Telegram')
-  assert.equal(svc.chatLines().length, 20)
-  assert.equal(new Service(cfg).chatLines().length, 20)
+  for (let i = 0; i < 60; i++) await svc.discuss(`${'m'.repeat(1000)} ${i}`, 'Telegram')
+  assert.equal(svc.chatLines().length, 100)
+  assert.equal(new Service(cfg).chatLines().length, 100)
   assert.equal(svc.chatLines().at(-2)!.text.length, 1003, 'the box shows the whole message')
+  assert.equal(svc.chatLines().filter(l => l.read).length, 40)
   const context = seen.at(-1)!.recent
-  assert.equal(context.length, 12)
+  assert.equal(context.length, 40)
   assert.deepEqual([context[0]!.text.length, context[1]!.text.length], [600, 1200])
+})
+
+test('the manager reads the current conversation only: an hour without a message or Clear starts a new one', async () => {
+  const cfg = testConfig(mkdtempSync(join(tmpdir(), 'foxagent-')))
+  const seen: ChatInput[] = []
+  let answer: ChatAnswer = { reply: 'a', proposal: null, usd: 0 }
+  const manager = { discuss: async (i: ChatInput) => (seen.push(i), answer) } as never
+  const svc = new Service(cfg)
+  svc.ensureAgents()
+  svc.strategist = manager
+  for (let i = 0; i < 3; i++) await svc.discuss(`q${i}`, 'Telegram')
+  assert.ok(svc.chatLines().every(l => l.read), 'a running conversation is read whole')
+  assert.ok(svc.chatLines(Date.now() + 61 * 60_000).every(l => !l.read), 'an hour after the last message none of it is read')
+
+  // The first two exchanges are from two hours ago: a pause of more than an hour lies before the third.
+  const saved = JSON.parse(svc.store.getKv('chat')!) as { at: string }[]
+  for (const l of saved.slice(0, 4)) l.at = new Date(Date.now() - 2 * 3600_000).toISOString()
+  svc.store.setKv('chat', JSON.stringify(saved))
+  const later = new Service(cfg)
+  later.strategist = manager
+  assert.deepEqual(later.chatLines().map(l => l.read), [false, false, false, false, true, true])
+  await later.discuss('follow-up', 'web UI, demo', [0])
+  assert.deepEqual(seen.at(-1)!.recent.map(r => r.text), ['q2', 'a'], 'only the current conversation goes to the manager')
+  assert.equal(later.chatLines().length, 8, 'the box still shows the earlier lines')
+
+  // Clear empties it for both sides and drops a proposal still waiting in it.
+  answer = { reply: 'Gold then.', proposal: { agents: [0], strategy: 'Gold only', changes: '' }, usd: 0 }
+  const asked = await later.discuss('go for Gold', 'Telegram')
+  assert.ok(later.chatLines().at(-1)!.open)
+  assert.match(later.clearChat('web UI, demo'), /conversation cleared/)
+  assert.deepEqual(later.chatLines(), [])
+  assert.deepEqual(new Service(cfg).chatLines(), [], 'it stays empty after a restart')
+  assert.throws(() => later.applyProposal(asked.proposal!.id, 'Telegram'), /expired or was already applied or cancelled/)
+  assert.match(later.store.activity(null, 5)[0]!.summary, /conversation with the manager cleared \(web UI, demo\)/)
+  assert.match(later.clearChat('web UI, demo'), /already empty/)
+  answer = { reply: 'fresh', proposal: null, usd: 0 }
+  await later.discuss('hello again', 'Telegram')
+  assert.deepEqual(seen.at(-1)!.recent, [], 'the next message starts with no context')
+  assert.match(await later.command('clear', [], ''), /conversation cleared/)
+  assert.deepEqual(later.chatLines(), [])
 })

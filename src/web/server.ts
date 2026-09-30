@@ -357,6 +357,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           throw new HttpFail(409, err instanceof Error ? err.message : String(err))
         }
       }
+      if (path === '/api/chat/clear' && method === 'POST') return json(res, 200, { ok: true, message: service.clearChat(`web UI, ${user}`), chat: service.chatLines() })
       const pm = /^\/api\/proposals\/([0-9a-f]{8})\/(apply|cancel)$/.exec(path)
       if (method === 'POST' && pm) {
         if (pm[2] === 'cancel') return json(res, 200, { ok: true, message: service.cancelProposal(pm[1]!) })

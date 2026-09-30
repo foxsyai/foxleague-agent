@@ -18,10 +18,21 @@ limits, dry run or live, pause, the kill switch or the model.
 
 ![Talk to the manager: your messages on the right, the manager's answers on the left](/screenshots/talk-to-the-manager.png)
 
-The box keeps the conversation like a chat: your messages on the right, the manager's answers on the left, the
-last 20 messages, together with the ones you sent on Telegram. The manager reads the last 12 lines each time, so
-a follow-up question needs no repeating. A proposed strategy waits under the conversation with **Apply** and
-**Cancel**, also when it was proposed on Telegram. **Ctrl+Enter** sends.
+The box keeps the conversation like a chat: your messages on the right, the manager's answers on the left, up
+to 100 messages, together with the ones you sent on Telegram. A proposed strategy waits under the conversation
+with **Apply** and **Cancel**, also when it was proposed on Telegram. **Ctrl+Enter** sends.
+
+### What the manager remembers
+
+The manager reads the **current conversation** with every message you send, so a follow-up question needs no
+repeating. A conversation ends by itself after **an hour without a message**: your next message then starts a
+new one. It never reads more than the last 40 lines. A thin line in the box shows where its memory starts; what
+is above stays there for you to read back.
+
+**Clear** (on Telegram: `/clear`) empties the conversation at once. Use it when you change the subject: the AI is
+paid for what it reads, so a short conversation costs less and keeps the answers on the topic. One line costs a
+fraction of a cent, so it counts in long discussions and with the dearer models. Clear drops a proposal that is
+still waiting in the conversation; your strategies, settings and history are not touched.
 
 ### Speak instead of typing
 
@@ -49,6 +60,7 @@ goes to your manager, with the same Apply and Cancel buttons. Commands (agents a
 | `/budget [N]` | Spend against the limits |
 | `/ask [N] question` | A question to the manager about the team |
 | `/strategy [N\|all] <text>` | Show or replace a strategy directly |
+| `/clear` | Start a new conversation with the manager |
 | `/kill on\|off` | Stop every agent at once, or release |
 | `/help` | The full list |
 

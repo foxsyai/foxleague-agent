@@ -80,6 +80,7 @@ const TELEGRAM_MENU = [
   { command: 'ask', description: 'A question about a team: /ask 1 question' },
   { command: 'do', description: 'One action now: /do 1 request' },
   { command: 'strategy', description: 'Show or replace a strategy' },
+  { command: 'clear', description: 'Start a new conversation with the manager' },
   { command: 'log', description: 'Recent activity' },
   { command: 'keys', description: 'Which keys are set (masked)' },
   { command: 'kill', description: 'Stop every agent at once: /kill on' },
@@ -100,9 +101,14 @@ export interface ChatLine {
   strategy?: string
   changes?: string
 }
-/** Lines kept and shown; lines the manager reads as context. */
-const CHAT_KEPT = 20
-const CHAT_CONTEXT = 12
+/**
+ * The box keeps and shows the last CHAT_KEPT lines. The manager reads the current conversation only: the
+ * lines since the last pause of CHAT_PAUSE_MS (or since Clear), at most CHAT_CONTEXT of them, because every
+ * line it reads is paid for with each message.
+ */
+const CHAT_KEPT = 100
+const CHAT_CONTEXT = 40
+const CHAT_PAUSE_MS = 3600_000
 
 export class Service {
   readonly cfg: Config
@@ -121,7 +127,8 @@ export class Service {
   readonly proposals = new Proposals()
   /**
    * The conversation with the owner, from Telegram and the web UI's box alike: the last CHAT_KEPT lines, saved
-   * (kv chat) so a restart keeps them. The manager reads the last CHAT_CONTEXT lines, so a follow-up has context.
+   * (kv chat) so a restart keeps them. The manager reads the current conversation (chatContext), so a follow-up
+   * has context.
    */
   private chat: ChatLine[] = []
   private readonly lastRefresh = new Map<number, number>()
@@ -148,10 +155,28 @@ export class Service {
     }
   }
 
-  /** The conversation for the web UI; a line whose proposal can still be applied carries it. */
-  chatLines(): (Omit<ChatLine, 'proposal' | 'strategy' | 'changes'> & { proposed: boolean; open?: { id: string; strategy: string; changes: string } })[] {
-    return this.chat.map(({ proposal, strategy, changes, ...line }) => ({
+  /**
+   * The lines the manager reads with the next message: back from the newest one for as long as no pause
+   * between two lines (or since the newest) is longer than CHAT_PAUSE_MS, at most CHAT_CONTEXT lines.
+   */
+  private chatContext(now = Date.now()): ChatLine[] {
+    const out: ChatLine[] = []
+    let next = now
+    for (let i = this.chat.length - 1; i >= 0 && out.length < CHAT_CONTEXT; i--) {
+      const at = Date.parse(this.chat[i]!.at)
+      if (next - at > CHAT_PAUSE_MS) break
+      out.unshift(this.chat[i]!)
+      next = at
+    }
+    return out
+  }
+
+  /** The conversation for the web UI: `read` marks the lines the manager still reads; an open proposal travels with its line. */
+  chatLines(now = Date.now()): (Omit<ChatLine, 'proposal' | 'strategy' | 'changes'> & { read: boolean; proposed: boolean; open?: { id: string; strategy: string; changes: string } })[] {
+    const firstRead = this.chat.length - this.chatContext(now).length
+    return this.chat.map(({ proposal, strategy, changes, ...line }, i) => ({
       ...line,
+      read: i >= firstRead,
       proposed: strategy !== undefined,
       ...(proposal && strategy !== undefined && this.proposals.isOpen(proposal) ? { open: { id: proposal, strategy, changes: changes ?? '' } } : {}),
     }))
@@ -226,7 +251,7 @@ export class Service {
           const s = this.snapshots.get(b.index)
           return { index: b.index, team: s?.team?.name ?? s?.registration.teamName ?? null, strategy: b.settings.strategy, paused: b.paused }
         }),
-        recent: this.chat.slice(-CHAT_CONTEXT).map(l => ({
+        recent: this.chatContext().map(l => ({
           from: l.from,
           text: l.from === 'owner' ? l.text.slice(0, 600) : `${l.text}${l.strategy !== undefined ? ` [proposed strategy for ${whichAgents(l.agents ?? [])}: ${l.strategy}]` : ''}`.slice(0, 1200),
         })),
@@ -258,6 +283,19 @@ export class Service {
     const text = `strategy updated for ${whichAgents(p.agents)} (${by})`
     this.notify(text)
     return text
+  }
+
+  /**
+   * Empties the conversation: the manager starts fresh with the next message (a smaller context costs less).
+   * Proposals made in it are dropped with it, so none stays open out of sight. Strategies and settings stay.
+   */
+  clearChat(by: string): string {
+    for (const l of this.chat) if (l.proposal) this.proposals.take(l.proposal)
+    const n = this.chat.length
+    this.chat = []
+    this.store.setKv('chat', '[]')
+    if (n) this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `conversation with the manager cleared (${by})` })
+    return n ? 'conversation cleared: the manager starts fresh with your next message' : 'the conversation is already empty'
   }
 
   cancelProposal(id: string): string {
@@ -755,6 +793,7 @@ export class Service {
           '/do N request  one-off action (same executor and caps)',
           '/strategy [N|all] [steady|climber|hunter|<text>]  show or replace directly',
           '(any plain message)  talk to the manager: advice becomes a strategy proposal with Apply',
+          '/clear  start a new conversation: the manager forgets the current one (it also does after an hour without a message)',
           '/kill on|off  pause every agent at once',
           '/log [N]  recent activity',
           '/keys [test]  which keys are set (masked); test checks them. Change keys in the web UI only',
@@ -850,6 +889,8 @@ export class Service {
         this.store.setKillSwitch(on === 'on')
         return `kill switch ${on}`
       }
+      case 'clear':
+        return this.clearChat('Telegram')
       case 'log':
         return this.store
           .activity(args[0] ? this.agentsArg(args[0])[0]! : null, 12)
