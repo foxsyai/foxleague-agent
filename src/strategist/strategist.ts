@@ -157,6 +157,8 @@ export interface PlanInput {
   dryRun: boolean
   /** A one-off request from the owner (Telegram /do), planned instead of a routine tick. */
   ownerRequest?: string
+  /** The owner's other agents, so the plan leaves them alone (Fair Play) instead of paying for a refused step. */
+  siblings?: { index: number; userId: number | null; teamName: string | null; tournamentIds: number[] }[]
 }
 
 export function renderPlanRequest(p: PlanInput): string {
@@ -168,6 +170,9 @@ export function renderPlanRequest(p: PlanInput): string {
     `Today: $${b.spentTodayUsd.toFixed(2)} spent of $${b.dailyCapUsd.toFixed(2)}, $${b.remainingTodayUsd.toFixed(2)} left. Month ${b.month}: $${b.remainingMonthUsd.toFixed(2)} of $${b.monthlyBudgetUsd.toFixed(2)} left. Setup budget left: $${b.remainingSetupUsd.toFixed(2)} of $${b.setupBudgetUsd.toFixed(2)}.`,
     `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.join('/')}.`,
     `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
+    p.siblings?.length
+      ? `## The owner's other agents (Fair Play)\n${p.siblings.map(b => `- ${agentName(b.index)}: ${b.userId === null ? 'FoxLeague id not read yet' : `${b.teamName ? `${txt(b.teamName, 30)}, ` : ''}user ${b.userId}`}${b.tournamentIds.length ? `, in ${b.tournamentIds.map(id => `T${id}`).join(', ')}` : ''}`).join('\n')}\nNever join a tournament or 1v1 one of them created or is in, never challenge one of them, never bid on or buy their cards: the executor refuses it, so do not plan it or anything bought only for it (a swap, a sync).`
+      : '',
     `## Recent activity (newest first)`,
     ...(p.recent.length ? p.recent.slice(0, 20).map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${txt(r.summary, 300)}`) : ['- none yet']),
     SNAPSHOT_HEADING,

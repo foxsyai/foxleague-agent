@@ -766,7 +766,14 @@ export class Service {
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc)
-    const plan = await this.strategist!.plan({ snapshot: snap, settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
+    const siblings = this.store
+      .agents()
+      .filter(b => b.index !== agent.index)
+      .map(b => {
+        const s = this.snapshots.get(b.index)
+        return { index: b.index, userId: s?.profile?.id ?? null, teamName: s?.registration.teamName ?? null, tournamentIds: (s?.auth?.myTournaments?.active ?? []).map(t => t.id) }
+      })
+    const plan = await this.strategist!.plan({ snapshot: snap, settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, siblings, ...(ownerRequest ? { ownerRequest } : {}) })
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +

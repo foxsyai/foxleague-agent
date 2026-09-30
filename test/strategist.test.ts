@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Anthropic from '@anthropic-ai/sdk'
 import { Store } from '../src/store/db.ts'
-import { EFFORTS, Strategist, deadlineMs, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
+import { EFFORTS, Strategist, deadlineMs, renderPlanRequest, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
 import { Proposals } from '../src/strategist/proposals.ts'
 import { cleanPage } from '../src/strategist/manual.ts'
 import type { Config } from '../src/config.ts'
@@ -196,4 +196,15 @@ test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, a
   const cut = await s.plan(input)
   assert.match(cut.summary, /truncated at max_tokens; nothing executed/)
   assert.equal(cut.actions.length, 0)
+})
+
+test('the plan names the owner\'s other agents and their tournaments, so it does not pay for a step Fair Play refuses', () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, 'erd1x')
+  const base = { snapshot: snapshot(), settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true }
+  const text = renderPlanRequest({ ...base, siblings: [{ index: 0, userId: 321, teamName: 'Fox Steady XI', tournamentIds: [104, 170] }, { index: 2, userId: null, teamName: null, tournamentIds: [] }] })
+  assert.match(text, /- agent 1: Fox Steady XI, user 321, in T104, T170/)
+  assert.match(text, /- agent 3: FoxLeague id not read yet/)
+  assert.match(text, /Never join a tournament or 1v1 one of them created or is in/)
+  assert.doesNotMatch(renderPlanRequest(base), /other agents \(Fair Play\)/, 'a single agent gets no such section')
 })
