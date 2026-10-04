@@ -216,5 +216,12 @@ test('presets run from careful to all-in, and the AI is told the owner sets how 
   assert.match(STRATEGY_PRESETS.beast!, /XP booster running every day/)
   assert.match(STRATEGY_PRESETS.beast!, /Never move cards between wallets/)
   assert.match(STRATEGY_PRESETS.predator!, /never a fusion match waiver, a fusion cooldown waiver or any other waiver/)
+  // A strict ladder: each text names its level and the auction step it adds, and is complete on its own.
+  Object.keys(STRATEGY_PRESETS).forEach((k, i) => assert.match(STRATEGY_PRESETS[k]!, new RegExp(`\\(level ${i + 1} of 5\\)`)))
+  assert.match(STRATEGY_PRESETS.steady!, /No shop purchases, no auction bids/)
+  assert.match(STRATEGY_PRESETS.hunter!, /Bid on Rare players/)
+  assert.match(STRATEGY_PRESETS.predator!, /Bid on Rare and Epic players/)
+  assert.match(STRATEGY_PRESETS.beast!, /Legendary players included/)
+  for (const k of ['climber', 'hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /5 free training sessions every day|all 15 training sessions every day/)
   assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
 })

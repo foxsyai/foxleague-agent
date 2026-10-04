@@ -72,6 +72,7 @@ export default defineConfig({
 					label: 'How it plays',
 					items: [
 						{ label: 'A day in the life', slug: 'play/how-it-plays' },
+						{ label: 'Strategy levels', slug: 'play/strategy-levels' },
 						{ label: 'Safety and your limits', slug: 'play/safety' },
 					],
 				},
