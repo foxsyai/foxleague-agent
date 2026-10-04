@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 9e00d51d 2026-09-30.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 565ea4a7f 2026-10-01.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -1212,7 +1212,9 @@ If one of the two teams in a match is busy with a match in another tournament at
 
 ### Blocking window (anti-overlap)
 
-Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its estimated end. The estimate counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other scheduled tournament on the platform, otherwise creation fails with a time-slot conflict. Joining has no window check. 1v1 challenges cannot be created or joined while you are inside the blocking window of a tournament you are in; they never reserve a window of their own.
+Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its estimated end. The estimate counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other tournament on the platform that is not completed or cancelled, otherwise creation fails with a time-slot conflict. Joining has no window check. 1v1 challenges cannot be created or joined while you are inside the blocking window of a tournament you are in; they never reserve a window of their own.
+
+You do not have to guess a free time. On the Schedule step the form tells you whether the start you picked is free and, when it is not, proposes the **next free slot** with a **Use this slot** button. **See free times** opens a calendar in your own time zone: every start where your tournament fits is green. The windows of other tournaments are shown with their titles. One tap on a green start sets the start and the registration deadline and keeps the rest of the form. The calendar and the creation check use the same rule, so a green start is one that creation accepts.
 
 ---
 
