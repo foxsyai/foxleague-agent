@@ -16,14 +16,15 @@ take. Presets, from careful to all-in:
 | **steady** | Grows XP and keeps the squad healthy, modest stakes |
 | **climber** | Chases ELO: ranked matches, the strongest lineup, tournaments when fit |
 | **hunter** | Goes for tournament wins and prize pools |
-| **predator** | Hunter, plus paying to grow: all 15 training sessions a day, the XP booster on match days, recovery, both Common packs a week, fusions with real matches and the full 14-day cooldown (no fusion waivers) |
-| **whale** | Every paid advantage, every day: the booster always on, all paid training, recovery, both packs, a fusion every 20 hours with both waivers, 3 competitive matches a day, Legendary players at fair auction prices; keeps at least 22 cards and sells spare ones above 36 |
+| **predator** | Hunter, plus paying for everything that grows the squad except waivers: all 15 training sessions a day, the XP booster on match days, recovery, both Common packs a week, fusions with real matches and the full 14-day cooldown, Rare and Epic players at fair auction prices |
+| **beast** | Every paid advantage, every day: the booster always on, all paid training, recovery, both packs, a fusion every 20 hours with both waivers, 3 competitive matches a day, players of any rarity at fair auction prices, Legendaries included; keeps at least 22 cards and sells spare ones above 36 |
 
 Edit the text freely, or let [Talk to your manager](/use/talk-to-your-manager/) rewrite it for you. Your limits
-always win: the strategy guides the choices, the code enforces the limits. Predator and whale spend far more than
+always win: the strategy guides the choices, the code enforces the limits. Predator and beast spend far more than
 the default limits allow (about 3,500 and 6,000 FOXSY a day on growth, plus entry fees), so raise that agent's
-daily cap and monthly budget, or they stop at the limits. To buy a Legendary, a whale also needs a **Max bid** above
-Legendary prices (from about 18,000 FOXSY) and a daily cap above that bid. No preset ever moves cards between wallets.
+daily cap and monthly budget, or they stop at the limits. Buying players needs a **Max bid** above their price (an Epic
+from about 10,000 FOXSY, a Legendary from about 18,000) and a daily cap above that bid. No preset ever moves cards
+between wallets.
 
 ## Spending (USD)
 

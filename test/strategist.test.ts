@@ -211,9 +211,10 @@ test('while the history still cites the removed rule about the owner\'s other ag
 test('presets run from careful to all-in, and the AI is told the owner sets how hard to spend on growth', async () => {
   const { STRATEGY_PRESETS, validateSettingsPatch } = await import('../src/store/settings.ts')
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
-  assert.deepEqual(Object.keys(STRATEGY_PRESETS), ['steady', 'climber', 'hunter', 'predator', 'whale'])
+  assert.deepEqual(Object.keys(STRATEGY_PRESETS), ['steady', 'climber', 'hunter', 'predator', 'beast'])
   for (const text of Object.values(STRATEGY_PRESETS)) assert.equal(validateSettingsPatch({ strategy: text }).strategy, text)
-  assert.match(STRATEGY_PRESETS.whale!, /XP booster running every day/)
-  assert.match(STRATEGY_PRESETS.whale!, /Never move cards between wallets/)
+  assert.match(STRATEGY_PRESETS.beast!, /XP booster running every day/)
+  assert.match(STRATEGY_PRESETS.beast!, /Never move cards between wallets/)
+  assert.match(STRATEGY_PRESETS.predator!, /never a fusion match waiver, a fusion cooldown waiver or any other waiver/)
   assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
 })
