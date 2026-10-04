@@ -738,7 +738,7 @@ const TIPS = {
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
-    <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b>, the most capable, 5x.</p>
+    <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well; <b>Sonnet 5.5</b> is the newer Sonnet at the same price. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b>, the most capable, 5x.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>

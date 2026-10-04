@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import Anthropic from '@anthropic-ai/sdk'
 import { Store } from '../src/store/db.ts'
-import { EFFORTS, Strategist, deadlineMs, renderPlanRequest, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
+import { EFFORTS, MODELS, Strategist, deadlineMs, renderPlanRequest, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
 import { Proposals } from '../src/strategist/proposals.ts'
 import { cleanPage } from '../src/strategist/manual.ts'
 import type { Config } from '../src/config.ts'
@@ -62,6 +62,11 @@ test('server-side fallback only for classifier models, dropped for good if the A
   const create = (s as unknown as { create: (p: object) => Promise<unknown> }).create.bind(s)
   await create({ max_tokens: 10, messages: [] })
   assert.equal(calls.at(-1)!.fallbacks, undefined) // Sonnet 5: plain request
+
+  s.configure('claude-sonnet-5-5', 'high')
+  await create({ max_tokens: 10, messages: [] })
+  assert.equal(calls.at(-1)!.fallbacks, 'default', 'Sonnet 5.5 takes the default fallback form')
+  assert.deepEqual(Object.keys(MODELS), ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1'], 'least to most capable')
 
   s.configure('claude-opus-5-5', 'high')
   await create({ max_tokens: 10, messages: [] })
