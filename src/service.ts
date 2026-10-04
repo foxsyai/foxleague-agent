@@ -9,6 +9,7 @@ import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
 import { STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
+import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -645,7 +646,10 @@ export class Service {
   async start(): Promise<void> {
     writeFileSync(join(this.cfg.dataDir, SERVICE_PID_FILE), String(process.pid), { mode: 0o600 })
     const agents = this.ensureAgents()
+    const local = await loadExtensions().catch(err => [`local extension failed to load: ${err instanceof Error ? err.message : String(err)}`])
+    if (local.length) console.log(`local: ${local.join(', ')}`)
     this.notify(
+      (local.length ? `local: ${local.join(', ')}\n` : '') +
       `foxleague-agent ${VERSION} started: ${agents.length} agent(s), strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'OFF (no ANTHROPIC_API_KEY)'}, mode ${this.modeText()}${this.store.killSwitch ? ', KILL SWITCH ON' : ''}\n` +
         agents.map(b => `${agentName(b.index)} ${b.address}${b.paused ? ' paused' : ''}`).join('\n'),
     )
@@ -828,15 +832,21 @@ export class Service {
       .map(m => new Date(m.strategy_locks_at).getTime())
       .filter(t => Number.isFinite(t) && t > Date.now())
       .sort((x, y) => x - y)[0]
+    // A plan whose window the next lock cuts prepares a match: it runs unsplit, so nothing is pushed past the lock.
+    const beforeLock = nextLock !== undefined && nextLock - Date.now() - LOCK_MARGIN_MS < windowMs
     if (nextLock !== undefined) windowMs = Math.max(0, Math.min(windowMs, nextLock - Date.now() - LOCK_MARGIN_MS))
     const gapMs = agent.settings.minGapSeconds * 1000
     const offsets = actions.map(() => Math.random() * windowMs).sort((a, b) => a - b)
+    // Pieces an extension cuts from an action (see src/extensions.ts) queue right behind it, at the usual gap.
+    const queue = actions.map((p, i) => ({ p, offset: offsets[i]! }))
     let last = -gapMs
     const start = Date.now()
     // The mode the plan was made in: a switch between dry run and live mid-plan ends the plan.
     const plannedDry = agent.dryRun
-    for (let i = 0; i < actions.length; i++) {
-      const at = Math.max(offsets[i]!, last + gapMs)
+    while (queue.length) {
+      const { offset } = queue[0]!
+      let planned = queue.shift()!.p
+      const at = Math.max(offset, last + gapMs)
       last = at
       const wait = start + at - Date.now()
       if (wait > 0) await this.pause(wait)
@@ -851,12 +861,27 @@ export class Service {
         this.store.log({ agentIndex: agent.index, kind: 'tick', status: 'info', summary: `plan ended: active hours are over (until ${String(current.settings.activeHoursUtc[1]).padStart(2, '0')}:00 UTC); the rest waits for tomorrow's plans` })
         return
       }
-      if (routine && Math.random() > current.settings.actionProbability) {
-        this.store.log({ agentIndex: agent.index, kind: actions[i]!.action.type, status: 'info', summary: `skipped by the action probability: ${describeAction(actions[i]!.action)}` })
+      if (routine && !planned.piece && Math.random() > current.settings.actionProbability) {
+        this.store.log({ agentIndex: agent.index, kind: planned.action.type, status: 'info', summary: `skipped by the action probability: ${describeAction(planned.action)}` })
         continue
       }
       const snap = await this.snapshot(agent.index)
-      await this.executor.run(current, this.wallet(agent.index), snap, [actions[i]!])
+      if (!planned.piece && extensions.splitAction && !beforeLock) {
+        const pieces = extensions.splitAction(planned, snap, current.settings)
+        if (pieces && pieces.length > 1) {
+          queue.unshift(...pieces.slice(1).map(p => ({ p, offset: 0 })))
+          planned = pieces[0]!
+        }
+      }
+      const [result] = await this.executor.run(current, this.wallet(agent.index), snap, [planned])
+      // A piece that did not go through: the rest of its group would only repeat the refusal.
+      if (planned.piece && result && result.status !== 'confirmed' && result.status !== 'dry_run') {
+        const group = planned.piece.group
+        const before = queue.length
+        for (let j = queue.length - 1; j >= 0; j--) if (queue[j]!.p.piece?.group === group) queue.splice(j, 1)
+        const dropped = before - queue.length
+        if (dropped) this.store.log({ agentIndex: agent.index, kind: planned.action.type, status: 'info', summary: `${dropped} more piece${dropped > 1 ? 's' : ''} of ${describeAction(planned.action)} dropped after piece ${planned.piece.index} of ${planned.piece.of}: ${result.status}` })
+      }
     }
   }
 

@@ -146,7 +146,9 @@ export class Executor {
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}) }, costUsd: costUsdValue || null, txHash })
       const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}) }
-      this.d.notify?.(agent.index, formatResult(agent.index, result))
+      // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
+      const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
+      if (!quietPiece) this.d.notify?.(agent.index, formatResult(agent.index, result))
       return result
     }
 
@@ -160,6 +162,7 @@ export class Executor {
 
       const now = new Date()
       const ctx = await this.context(agent, wallet, snap, a, now, dry)
+      if (planned.piece) ctx.piece = { index: planned.piece.index, of: planned.piece.of }
       if (ctx.opponent) logExtra.opponentUserId = ctx.opponent.userId
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
@@ -402,7 +405,7 @@ export class Executor {
         return { txs: [spec], egldValue: 0n, extraUsd: 0, notes: [`relayed through ${relayer.slice(0, 12)}... (shard ${wallet.shard})`, `then name "${a.team_name}" via POST /api/register`] }
       }
       case 'sync': {
-        const prep = await this.d.fox.syncPrepare(wallet)
+        const prep = await this.d.fox.syncPrepare(wallet, a.nonce)
         const { spec, foxsy } = this.checkedSync(wallet, prep, snap, v)
         return { txs: [spec], egldValue: 0n, extraUsd: 0, notes: [`${prep.nonces.length} cards, ${formatAtomic(foxsy, 0)} FOXSY`] }
       }
@@ -599,7 +602,7 @@ export class Executor {
         return finish('error', `${desc}: ${lastErr}`, usd)
       }
       case 'sync': {
-        const prep = await fox.syncPrepare(wallet)
+        const prep = await fox.syncPrepare(wallet, a.nonce)
         const { spec } = this.checkedSync(wallet, prep, snap, v)
         if (prep.wait_seconds > 0) {
           await sleep(Math.min(prep.wait_seconds, 30) * 1000)
@@ -810,7 +813,7 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
   const card = (n: number) => s.players.find(p => p.nonce === n)
   switch (a.type) {
     case 'sync':
-      for (const p of s.players) if (!p.listed) { p.dirty = false; p.synced = { ...p.live } }
+      for (const p of s.players) if (!p.listed && (a.nonce === undefined || p.nonce === a.nonce)) { p.dirty = false; p.synced = { ...p.live } }
       break
     case 'train': {
       const p = card(a.player_nonce)

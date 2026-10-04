@@ -27,7 +27,7 @@ export type ShopProduct = (typeof SHOP_PRODUCTS)[number]
 export type Action =
   | { type: 'swap_egld_for_foxsy'; foxsy: number }
   | { type: 'register'; team_name: string }
-  | { type: 'sync' }
+  | { type: 'sync'; nonce?: number }
   | { type: 'train'; player_nonce: number; attribute: Stat }
   | { type: 'set_formation'; formation: string }
   | { type: 'set_lineup'; lineup: number[]; substitutes: number[] }
@@ -68,6 +68,8 @@ export interface PlannedAction {
   reason: string
   /** Set only by the service for the owner's own requests (web UI Leave, Telegram /do JSON); never from a plan. */
   byOwner?: true
+  /** One of several smaller actions an extension made from one (see src/extensions.ts); never from a plan. */
+  piece?: { group: number; index: number; of: number }
 }
 
 class ParseError extends Error {}
@@ -182,7 +184,7 @@ export function describeAction(a: Action): string {
   switch (a.type) {
     case 'swap_egld_for_foxsy': return `swap EGLD for ${a.foxsy} FOXSY`
     case 'register': return `register team "${a.team_name}"`
-    case 'sync': return 'sync dirty cards to chain'
+    case 'sync': return a.nonce === undefined ? 'sync dirty cards to chain' : `sync #${a.nonce} to chain`
     case 'train': return `train #${a.player_nonce} ${a.attribute}`
     case 'set_formation': return `formation ${a.formation}`
     case 'set_lineup': return `lineup ${a.lineup.join(',')} | bench ${a.substitutes.join(',')}`

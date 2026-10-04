@@ -248,8 +248,9 @@ export class FoxLeague {
     return this.call('/shop/confirm', { method: 'POST', wallet: w, body: { wallet_address: w.address, ...body }, timeoutMs: 60_000 })
   }
 
-  syncPrepare(w: AgentWallet): Promise<{ sc_call_data: string; receiver: string; gas_limit: number; foxsy_cost: string; nonces: number[]; player_count: number; wait_seconds: number }> {
-    return this.call(`/sync/prepare?wallet_address=${w.address}`, { wallet: w })
+  /** The sync of every dirty card, or of one card (`nonce`), as FoxLeague's player profile offers it. */
+  syncPrepare(w: AgentWallet, nonce?: number): Promise<{ sc_call_data: string; receiver: string; gas_limit: number; foxsy_cost: string; nonces: number[]; player_count: number; wait_seconds: number }> {
+    return this.call(`/sync/prepare?wallet_address=${w.address}${nonce === undefined ? '' : `&nonce=${nonce}`}`, { wallet: w })
   }
 
   syncConfirm(w: AgentWallet, txHash: string, nonces: number[]): Promise<{ confirmed: boolean; players_synced: number }> {

@@ -46,6 +46,11 @@ export interface RulesContext {
   oneVOneWithOpponentThisWeek?: number
   /** Open 1v1 challenges this agent created in the last 24 hours. */
   openChallengesToday?: number
+  /**
+   * The action is one piece of a larger one (see src/extensions.ts). A match waiver piece may buy part of what is
+   * missing; the first piece checks the whole group (exactly the missing matches, within the max shop payment).
+   */
+  piece?: { index: number; of: number }
   /** Bids this agent already placed on the same auction in the last 48 hours. */
   priorBids?: number
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
@@ -302,8 +307,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'sync': {
       if (!registered) return refuse('not registered')
-      const dirty = s.players.filter(p => p.dirty && !p.listed)
-      if (!dirty.length) return refuse('no dirty cards to sync')
+      const dirty = s.players.filter(p => p.dirty && !p.listed && (a.nonce === undefined || p.nonce === a.nonce))
+      if (!dirty.length) return refuse(a.nonce === undefined ? 'no dirty cards to sync' : `#${a.nonce} has nothing to sync`)
       const changed = dirty.filter(p => Object.keys(p.live).some(k => p.live[k] !== p.synced[k]))
       const cost = cfg.sync_cost_foxsy * dirty.length
       return needFoxsy(cost, allow(cost, { cards: dirty.length }, 'play', [`${changed.length} of ${dirty.length} dirty cards have stat changes`]))
@@ -624,17 +629,23 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (q.chain_played < PLAYED_FLOOR) return refuse(`#${a.nonce} has really played ${q.chain_played} competitive matches on chain; ${PLAYED_FLOOR} must be played before credit can be bought`)
         const needed = minMatches - q.chain_played - q.credit
         if (needed <= 0) return refuse(`#${a.nonce} already has the ${minMatches} matches fusion needs`)
-        if (a.matches !== Math.min(needed, q.max_purchasable)) {
+        if (ctx.piece) {
+          const target = Math.min(needed, q.max_purchasable)
+          if (ctx.piece.index === 1 && ctx.piece.of * a.matches !== target) return refuse(`#${a.nonce} needs exactly ${target} to reach ${minMatches}: the pieces would buy ${ctx.piece.of * a.matches}`)
+          if (a.matches < 1 || a.matches > target) return refuse(`#${a.nonce} can take 1 to ${target} more matches, not ${a.matches}`)
+        } else if (a.matches !== Math.min(needed, q.max_purchasable)) {
           return refuse(needed > q.max_purchasable
             ? `#${a.nonce} needs ${needed} more but only ${q.max_purchasable} can be bought: play more matches first`
             : `#${a.nonce} needs exactly ${needed} to reach ${minMatches}: buy that many, not ${a.matches}`)
         }
         if (needed > q.max_purchasable) return refuse(`#${a.nonce} needs ${needed} more but only ${q.max_purchasable} can be bought: play more matches first`)
         costAtomic = BigInt(q.price_wei) * BigInt(a.matches)
-        notes.push(`#${a.nonce} reaches ${minMatches} competitive matches for fusion`)
+        notes.push(a.matches === needed ? `#${a.nonce} reaches ${minMatches} competitive matches for fusion` : `#${a.nonce} +${a.matches} toward the ${minMatches} matches for fusion (${needed - a.matches} to go)`)
       }
       const whole = Number(costAtomic / 10n ** 18n)
-      if (whole > ctx.settings.maxShopPaymentFoxsy) return refuse(`${whole} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy} (Max shop payment)`)
+      // The first piece of a split waiver answers for the whole group, as the unsplit action would.
+      const groupWhole = ctx.piece?.index === 1 ? whole * ctx.piece.of : whole
+      if (groupWhole > ctx.settings.maxShopPaymentFoxsy) return refuse(`${groupWhole} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy} (Max shop payment)`)
       return needFoxsy(whole, allow(costAtomic, { costAtomic, nonce: a.nonce, ...(a.type === 'fusion_match_waiver' ? { matches: a.matches } : {}) }, 'play', notes))
     }
 
