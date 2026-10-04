@@ -888,7 +888,7 @@ export class Service {
           '/budget [N]',
           '/ask [N] question',
           '/do N request  one-off action (same executor and caps)',
-          '/strategy [N|all]  show the strategy; /strategy N|all steady|climber|hunter|<text>  replace it directly',
+          '/strategy [N|all]  show the strategy; /strategy N|all steady|climber|hunter|predator|whale|<text>  replace it directly',
           '(any plain message)  talk to the manager: advice becomes a strategy proposal with Apply',
           '/clear  start a new conversation: the manager forgets the current one (it also does after an hour without a message)',
           '/kill on|off  pause every agent at once',

@@ -39,6 +39,10 @@ export const STRATEGY_PRESETS: Record<string, string> = {
     'Aggressive climber: maximise ELO. Ranked matches whenever allowed, the strongest lineup at all times, Silver and Gold tournaments when the squad is fit, accept 1v1s against teams of similar or lower ELO.',
   hunter:
     'Tournament hunter: focus on tournament wins and prize pools. Enter the tournaments with the best expected value, keep condition high before match days, create tournaments sized from what recently filled.',
+  predator:
+    'Predator: everything the tournament hunter does, plus paying to grow the squad faster. Use all 15 training sessions every day (5 free and the 10 paid slots) on starters below their cap. Run the XP booster on every day with competitive matches. Buy condition recovery so starters train and play at full strength. Buy both Common packs every week and fuse whenever three cards of a rarity are ready, with the fusion match waiver for the last missing matches. Play Silver and Gold tournaments and 1v1s to collect competitive matches. Spend for growth up to the limits.',
+  whale:
+    'Whale: maximum growth, whatever it costs within the limits and the wallet. Keep the XP booster running every day. Use all 15 training sessions every day (5 free and the 10 paid slots) on starters below their cap. Buy condition recovery whenever condition holds back training or a match. Buy both Common packs every week. Fuse every 20 hours whenever a triplet can be made, with the fusion match waiver for every missing match and the cooldown waiver down to 3 days, so fusions never wait. Play 3 competitive matches a day in Silver and Gold tournaments and 1v1s. Bid on auction cards that clearly lift the squad. Never move cards between wallets.',
 }
 
 /** The gas reserve can be lowered, never to nothing: a wallet without EGLD cannot even pay a refund claim. */

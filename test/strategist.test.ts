@@ -207,3 +207,13 @@ test('while the history still cites the removed rule about the owner\'s other ag
   assert.match(old, /## Earlier entries\nSome recent entries below cite a rule[^\n]*The owner removed that rule on 2026-09-30/)
   assert.doesNotMatch(renderPlanRequest({ ...base, recent: [row('play ranked match: match #870 started')] as never }), /removed that rule/)
 })
+
+test('presets run from careful to all-in, and the AI is told the owner sets how hard to spend on growth', async () => {
+  const { STRATEGY_PRESETS, validateSettingsPatch } = await import('../src/store/settings.ts')
+  const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
+  assert.deepEqual(Object.keys(STRATEGY_PRESETS), ['steady', 'climber', 'hunter', 'predator', 'whale'])
+  for (const text of Object.values(STRATEGY_PRESETS)) assert.equal(validateSettingsPatch({ strategy: text }).strategy, text)
+  assert.match(STRATEGY_PRESETS.whale!, /XP booster running every day/)
+  assert.match(STRATEGY_PRESETS.whale!, /Never move cards between wallets/)
+  assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
+})

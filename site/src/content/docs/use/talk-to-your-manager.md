@@ -64,7 +64,7 @@ goes to your manager, with the same Apply and Cancel buttons. Commands (agents a
 | `/budget [N]` | Spend against the limits |
 | `/ask [N] question` | A question to the manager about the team |
 | `/strategy [N\|all]` | Show the strategy |
-| `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter) |
+| `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, whale) |
 | `/clear` | Start a new conversation with the manager |
 | `/kill on\|off` | Stop every agent at once, or release |
 | `/help` | The full list |

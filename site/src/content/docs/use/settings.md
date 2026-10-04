@@ -9,9 +9,20 @@ shrinking the gas reserve) asks for your password.
 ## Strategy
 
 The direction the AI follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to
-take. Presets: **steady** grows XP and keeps the squad healthy, **climber** chases ELO and **hunter** goes for
-tournament wins. Edit the text freely, or let [Talk to your manager](/use/talk-to-your-manager/) rewrite it for you.
-Your limits always win: the strategy guides the choices, the code enforces the limits.
+take. Presets, from careful to all-in:
+
+| Preset | What it does |
+|---|---|
+| **steady** | Grows XP and keeps the squad healthy, modest stakes |
+| **climber** | Chases ELO: ranked matches, the strongest lineup, tournaments when fit |
+| **hunter** | Goes for tournament wins and prize pools |
+| **predator** | Hunter, plus paying to grow: all 15 training sessions a day, the XP booster on match days, recovery, both Common packs a week, fusions with the match waiver |
+| **whale** | Buys every boost, every day: the booster always on, all paid training, recovery, both packs, a fusion every 20 hours with every waiver, 3 competitive matches a day, auction bids |
+
+Edit the text freely, or let [Talk to your manager](/use/talk-to-your-manager/) rewrite it for you. Your limits
+always win: the strategy guides the choices, the code enforces the limits. Predator and whale spend far more than
+the default limits allow (about 3,500 and 6,000 FOXSY a day on growth, plus entry fees), so raise that agent's
+daily cap and monthly budget, or they stop at the limits. No preset ever moves cards between wallets.
 
 ## Spending (USD)
 
