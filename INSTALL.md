@@ -154,5 +154,10 @@ only when the agent wallets are empty and your recovery words are safe.
 - **"systemd user services are not available" on Windows:** turn on systemd in WSL2 (`/etc/wsl.conf`, section
   `[boot]`, `systemd=true`), restart WSL, run the installer again.
 - **The agent stops when I log out (Linux):** run `sudo loginctl enable-linger $USER` once.
+- **The agent does not start after I changed the recovery words:** its history and limits belong to the wallets
+  of the words it was made with. Put the original words back in `.env` and restart. To play another wallet's
+  team, keep the original words and use **Import team** in the dashboard. To start over with the new words, stop
+  the agent and move `data/agent.db*` to another folder (only when the old agent wallets are empty or you keep
+  their words). The installer checks this before it starts the agent.
 - **Nothing happens at night:** each agent plays from 08:00 to 20:00 UTC by default (Settings: Active from and Active until).
 - **"strategist OFF" in the logs:** add your Anthropic API key in Keys.

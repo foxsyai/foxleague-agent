@@ -13,6 +13,7 @@ description: Fixes for the most common problems.
 | **Telegram stays silent** | Press Test keys in Keys. If the chat is not linked, press Link my Telegram and send the code to your Telegram bot. |
 | **The agent stops when I log out (Linux)** | Run `sudo loginctl enable-linger $USER` once. |
 | **"systemd user services are not available" on Windows** | Turn on systemd in WSL2 ([Install](/start/install/), Windows), restart WSL, run the installer again. |
+| **The agent does not start after I changed the recovery words** | The logs say "The recovery words ... are not the ones this install's agents were made with". Put the original words back in `.env` and restart the agent. To play another wallet's FoxLeague team, keep the original words and use **Import team** ([Import your team](/use/import-team/)). To start over with the new words, stop the agent and move `data/agent.db`, `agent.db-wal` and `agent.db-shm` to another folder: history and settings start fresh, so do it only when the old agent wallets are empty or you keep their words. Replacing `pem/agent1.pem` changes nothing for the agent: it signs with the words, the PEM file is only for you to log into FoxLeague. |
 
 ## Logs and restart
 

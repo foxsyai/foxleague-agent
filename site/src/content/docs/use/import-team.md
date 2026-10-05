@@ -66,6 +66,9 @@ settings (xPortal or the MultiversX web wallet) and import.
 
 ## Before you import
 
+- **Don't put the team's recovery words or PEM file in place of the install's own.** The agents' history and
+  limits belong to the wallets of the words they were made with, so an agent refuses to start with other words
+  in `.env`. Import team is the way to bring another wallet.
 - **Don't play the team by hand while the agent runs it.** To play yourself, pause the agent first and resume it
   when you are done.
 - **Set its limits before you resume it.** A new agent starts with the default daily cap, monthly budget and gas

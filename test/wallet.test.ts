@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { UserPem, UserPublicKey, Message, MessageComputer, Address } from '@multiversx/sdk-core'
-import { deriveWallet, exportPem, generateMnemonicInto } from '../src/wallet/wallet.ts'
+import { ChangedWordsError, assertSameWords, deriveWallet, exportPem, generateMnemonicInto } from '../src/wallet/wallet.ts'
 
 // The public MultiversX SDK test mnemonic: indexes 0, 1, 2 are the well-known alice, bob, carol.
 const TEST_MNEMONIC =
@@ -54,4 +54,23 @@ test('mnemonic generation never replaces an existing one', () => {
   assert.equal(statSync(env).mode & 0o777, 0o600)
   assert.equal(generateMnemonicInto(env).created, false)
   assert.equal(readFileSync(env, 'utf8'), first)
+})
+
+test('changed recovery words stop the start and say what to do; imported teams are skipped', () => {
+  const other = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art'
+  const agents = [
+    { index: 0, address: deriveWallet(TEST_MNEMONIC, 0).address, source: 'derived' },
+    { index: 1, address: 'erd1qqqqqqqqqqqqqpgqd77fnev2sthnczp2lnfx0y5jdycynjfhzzgq6p3rax', source: 'imported' },
+    { index: 2, address: deriveWallet(TEST_MNEMONIC, 2).address, source: 'derived' },
+  ]
+  assert.doesNotThrow(() => assertSameWords(agents, TEST_MNEMONIC, '/x/.env', '/x/data'))
+  assert.doesNotThrow(() => assertSameWords([], other, '/x/.env', '/x/data'))
+  assert.throws(() => assertSameWords(agents, other, '/x/.env', '/x/data'), (err: Error) => {
+    assert.ok(err instanceof ChangedWordsError)
+    assert.match(err.message, new RegExp(`agent 1 is ${deriveWallet(TEST_MNEMONIC, 0).address}, the words give ${deriveWallet(other, 0).address}`))
+    assert.match(err.message, /original words back in \/x\/\.env/)
+    assert.match(err.message, /Import team/)
+    assert.match(err.message, /agent\.db-wal and agent\.db-shm from \/x\/data/)
+    return true
+  })
 })

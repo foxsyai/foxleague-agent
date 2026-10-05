@@ -2,7 +2,7 @@
 // active agent takes a snapshot, asks the strategist for a plan, and hands the actions to the
 // executor spread over the next window, each re-checked against a fresh snapshot.
 
-import { loadConfig, type Config } from './config.ts'
+import { envFilePath, loadConfig, type Config } from './config.ts'
 import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
@@ -13,7 +13,7 @@ import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { walletFromSecretKey, deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
+import { ChangedWordsError, assertSameWords, walletFromSecretKey, deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
 import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
 import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
@@ -485,6 +485,8 @@ export class Service {
 
   /** Agents 1..AGENT_COUNT from the recovery words exist in the store (they follow the platform mode). */
   ensureAgents(): AgentRow[] {
+    // A server reads its words from the env file systemd loads (AGENT_ENV_FILE points nowhere there).
+    assertSameWords(this.store.agents(), this.cfg.mnemonic!, this.cfg.isServer ? 'the env file' : envFilePath(), this.cfg.dataDir)
     const count = Math.min(this.cfg.maxAgents, Math.max(1, Number(process.env.AGENT_COUNT ?? 1)))
     for (let i = 0; i < count; i++) if (!this.store.importedAt(i)) this.store.addAgent(i, this.wallet(i).address)
     const agents = this.store.agents()
@@ -1034,7 +1036,8 @@ export class Service {
 if (import.meta.main) {
   const service = new Service(loadConfig())
   service.start().catch(err => {
-    console.error(err)
+    // Changed recovery words: what to do, without a stack trace around it.
+    console.error(err instanceof ChangedWordsError ? err.message : err)
     process.exit(1)
   })
   let exiting = false

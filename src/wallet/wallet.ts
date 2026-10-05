@@ -16,6 +16,7 @@ import {
   UserPem,
   type UserSecretKey,
 } from '@multiversx/sdk-core'
+import { agentName } from '../names.ts'
 
 export interface AgentWallet {
   index: number
@@ -66,6 +67,28 @@ export function walletFromSecretKey(sk: UserSecretKey, index: number): AgentWall
 
 export function addressOf(mnemonic: string, index: number): string {
   return deriveWallet(mnemonic, index).address
+}
+
+/** The recovery words in the env file no longer give an agent's saved address: they were replaced after it was made. */
+export class ChangedWordsError extends Error {}
+
+/**
+ * Throws ChangedWordsError, with what to do, when the words do not give every agent from the recovery words its
+ * saved address. Such an install must not start: each agent would sign with another wallet than the one its
+ * team, history and limits belong to. Imported teams have their own keys and are skipped.
+ */
+export function assertSameWords(agents: { index: number; address: string; source: string }[], mnemonic: string, envFile: string, dataDir: string): void {
+  for (const a of agents) {
+    if (a.source === 'imported') continue
+    const fromWords = addressOf(mnemonic, a.index)
+    if (fromWords === a.address) continue
+    throw new ChangedWordsError([
+      `The recovery words in ${envFile} are not the ones this install's agents were made with: ${agentName(a.index)} is ${a.address}, the words give ${fromWords}.`,
+      `- Put the original words back in ${envFile}, then start the agent again.`,
+      `- To play another wallet's FoxLeague team, keep the original words and use Import team in the dashboard.`,
+      `- To start over with the new words instead, stop the agent and move agent.db, agent.db-wal and agent.db-shm from ${dataDir} to another folder. The history and settings start fresh, so do it only when the old agent wallets are empty or you keep their words.`,
+    ].join('\n'))
+  }
 }
 
 export function shardOf(bech32: string): number {

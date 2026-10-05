@@ -189,6 +189,7 @@ if [ "$MODE" = update ]; then
   fi
   ensure_node
   (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error)
+  cli check-words || die "The agent was not restarted. Fix the recovery words as above, then run the update again."
   if [ "$NO_SERVICE" = 0 ]; then
     if service_installed; then service_restart && info "Restarted."; else install_service && info "Installed and started."; fi
   fi
@@ -221,6 +222,8 @@ if [ -z "$had_words" ]; then
 else
   info "Your existing wallet is kept."
 fi
+# Words changed in .env after the agents were made: say so here, not in a restart loop of the background service.
+cli check-words || die "Fix the recovery words as above, then run the installer again."
 
 say "3/7 Dashboard login"
 if [ -n "$(get_env WEB_UI_PASSWORD_HASH)" ] && ! yes_no "A login is already set. Change it?" n; then

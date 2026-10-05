@@ -7,7 +7,7 @@ import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot } from './snapshot/snapshot.ts'
 import { renderDigest, snapshotToJson } from './snapshot/digest.ts'
-import { deriveWallet, exportPem, generateMnemonicInto, shardOf, type AgentWallet } from './wallet/wallet.ts'
+import { assertSameWords, deriveWallet, exportPem, generateMnemonicInto, shardOf, type AgentWallet } from './wallet/wallet.ts'
 import { Store } from './store/db.ts'
 import { secretsFile, writeSecrets } from './store/secrets.ts'
 import { Executor, formatResult, liveSigningAllowed } from './executor/executor.ts'
@@ -30,6 +30,8 @@ function usage(): never {
 
   setup                         create the install's recovery words in the env file (once) and print agent 1's address
   backup-words                  print the recovery words for an offline backup (only in an interactive terminal)
+  check-words                   check that the recovery words still give every agent its saved address (the
+                                installer runs it before it starts the agent)
   address <N>                   print agent N's address and shard
   agents                        list this install's agents: number and address, one per line
   export-pem <N> <path>         write agent N's PEM under pem/ or outside the repo (local only; never on the server)
@@ -102,6 +104,12 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       console.log(m.split(/\s+/).map((w, i) => `${String(i + 1).padStart(2)}. ${w}`).join('\n'))
+      return
+    }
+    case 'check-words': {
+      // A new install has no database yet: nothing to compare.
+      if (!existsSync(join(cfg.dataDir, 'agent.db'))) return
+      assertSameWords(new Store(cfg.dataDir).agents(), mnemonicOrExit(), envFilePath(), cfg.dataDir)
       return
     }
     case 'address': {
