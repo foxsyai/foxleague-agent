@@ -51,6 +51,8 @@ export interface RulesContext {
    * missing; the first piece checks the whole group (exactly the missing matches, within the max shop payment).
    */
   piece?: { index: number; of: number }
+  /** The rarity of the card at auction (its FoxLeague player record). */
+  cardRarity?: string
   /** Bids this agent already placed on the same auction in the last 48 hours. */
   priorBids?: number
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
@@ -121,6 +123,21 @@ export const MAX_1V1_PER_OPPONENT_WEEK = 2
  */
 export const MAX_OPEN_1V1_PER_DAY = 1
 export const MAX_BIDS_PER_AUCTION = 2
+
+/**
+ * What a card of a rarity costs from Common packs and fusion fees alone, at FoxLeague's live prices: 3^n Commons
+ * at a fifth of a pack each plus every fusion fee on the way up (Rare 5,000, Epic 15,400, Legendary 47,000 in
+ * October 2026). A bid above it pays more than building the card; null when the prices are unknown.
+ */
+export function packAndFusionCost(cfg: { common_pack_price_foxsy?: number; fusion_costs_foxsy?: number[] } | null | undefined, rarity: string): number | null {
+  const level = (RARITY_LEVEL as Record<string, number>)[rarity]
+  const pack = cfg?.common_pack_price_foxsy
+  const fees = cfg?.fusion_costs_foxsy
+  if (level === undefined || !pack || pack <= 0 || !Array.isArray(fees) || fees.length < level) return null
+  let cost = pack / 5
+  for (let i = 0; i < level; i++) cost = 3 * cost + fees[i]!
+  return Math.round(cost)
+}
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72
 /** Lowest reserve per rarity, whatever the floor says (one junk listing can drag the floor to 500). */
@@ -570,6 +587,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const min = ceilWhole(minAtomic)
       if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + 5 percent` : 'the reserve'})`)
       if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
+      const ceiling = ctx.cardRarity ? packAndFusionCost(cfg, ctx.cardRarity) : null
+      if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what a ${ctx.cardRarity} costs from Common packs and fusion fees (${ceiling} FOXSY): building it is cheaper`)
       if ((ctx.priorBids ?? 0) >= MAX_BIDS_PER_AUCTION) return refuse(`already ${MAX_BIDS_PER_AUCTION} bids on #${a.nonce}: no bidding war`)
       if (ctx.cardLock === null) return refuse(`the details of #${a.nonce} could not be read: not bidding blind`)
       const lock = ctx.cardLock?.until

@@ -1192,3 +1192,72 @@ test('no Gold amounts means no Gold at all: no Gold seat, no Gold tournament or 
   const text = renderPlanRequest({ snapshot: snapshot(), settings: { ...DEFAULT_SETTINGS }, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
   assert.match(text, /Gold off \(this agent never creates or joins Gold tournaments or 1v1s\)/)
 })
+
+// ---- FoxLeague's Security S3 and paging releases (checked 2026-10-05) ----
+
+test('S3 a paid seat FoxLeague cannot verify yet (code tx_pending, any wording) is confirmed again with the same hash', async () => {
+  const { ApiRefusal } = await import('../src/foxleague/api.ts')
+  const asked: (string | undefined)[] = []
+  let answers = 0
+  const m = setup({
+    chain: { esdts: async () => [] },
+    fox: {
+      user: async () => null,
+      tournament: async () => tournament(5, { participant_count: 3 }),
+      joinTournament: async (_w: unknown, _id: number, hash?: string) => {
+        asked.push(hash)
+        if (answers++ === 0) throw new ApiRefusal('Could not verify the tournament right now. Please try again.', 'tx_pending')
+        return {}
+      },
+    },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 5 }))
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(asked, ['hash1', 'hash1'], 'the same payment confirmed again, never a second one')
+  // A real refusal (no code) still stops at once; the payment stays pending for the next tick.
+  const refused = setup({ chain: { esdts: async () => [] }, fox: { user: async () => null, tournament: async () => tournament(6, { participant_count: 3 }), joinTournament: async () => { throw new ApiRefusal('This tournament is full') } } })
+  await withLive(refused.store, async () => {
+    const [r] = await refused.exec.run(refused.agent(), liveWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 6 }))
+    assert.equal(r!.status, 'error')
+    assert.equal(refused.store.pending(0).length, 1, 'kept for the pending retry')
+  })
+})
+
+test('S3 a login never signs the same second twice for one wallet (a signature logs in once)', async () => {
+  const { FoxLeague } = await import('../src/foxleague/api.ts')
+  const fox = new FoxLeague('http://fox.test', 50)
+  const stamps: number[] = []
+  const real = globalThis.fetch
+  globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+    stamps.push((JSON.parse(String(init?.body ?? '{}')) as { timestamp: number }).timestamp)
+    return new Response(JSON.stringify({ success: true, data: { token: `t${stamps.length}` } }))
+  }) as typeof fetch
+  try {
+    const login = (fox as unknown as { login: (w: unknown) => Promise<string> }).login.bind(fox)
+    const wallet = { ...dryWallet, signMessage: (m: string) => `sig:${m}` }
+    await login(wallet)
+    await login(wallet)
+  } finally {
+    globalThis.fetch = real
+  }
+  assert.equal(stamps.length, 2)
+  assert.ok(stamps[1]! > stamps[0]!, `two different seconds, got ${stamps.join(', ')}`)
+})
+
+test('paging: the completed 1v1s are read page by page until a week is covered', async () => {
+  const { recentChallenges } = await import('../src/snapshot/snapshot.ts')
+  const now = new Date()
+  // 1,200 rows, newest first, one every 10 minutes: a week is 1,008 rows, so three pages of 500.
+  const all = Array.from({ length: 1200 }, (_, i) => ({ id: i, completed_at: new Date(now.getTime() - i * 600_000).toISOString() }))
+  const asked: number[] = []
+  const rows = await recentChallenges({ tournaments: async (q: { limit: number; offset: number }) => (asked.push(q.offset), all.slice(q.offset, q.offset + q.limit)) } as never, now)
+  assert.deepEqual(asked, [0, 500, 1000])
+  assert.equal(rows.length, 1200)
+  // A page that already reaches past the week ends the reading.
+  const old = Array.from({ length: 600 }, (_, i) => ({ id: i, completed_at: new Date(now.getTime() - i * 30 * 60_000).toISOString() }))
+  asked.length = 0
+  await recentChallenges({ tournaments: async (q: { limit: number; offset: number }) => (asked.push(q.offset), old.slice(q.offset, q.offset + q.limit)) } as never, now)
+  assert.deepEqual(asked, [0], '500 rows at 30 minutes reach 10 days back: one page is enough')
+})

@@ -2,7 +2,7 @@
 // 200 with success:false (docs/FOXLEAGUE-INTEGRATION.md 1.3); the auth extractor answers 401 in
 // plain text, and the client signs a fresh login once and replays, like the web app.
 
-import { HttpError, RateLimiter, requestJson } from '../util/http.ts'
+import { HttpError, RateLimiter, requestJson, sleep } from '../util/http.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import type {
   DailyAllowance,
@@ -106,8 +106,17 @@ export class FoxLeague {
     return login
   }
 
+  /** The second each wallet last signed in: a signature logs in once, so the next login waits for a newer second. */
+  private readonly lastLoginSecond = new Map<string, number>()
+
   private async login(wallet: AgentWallet): Promise<string> {
-    const timestamp = Math.floor(Date.now() / 1000)
+    let timestamp = Math.floor(Date.now() / 1000)
+    const last = this.lastLoginSecond.get(wallet.address) ?? 0
+    if (timestamp <= last) {
+      await sleep((last + 1) * 1000 - Date.now() + 10)
+      timestamp = last + 1
+    }
+    this.lastLoginSecond.set(wallet.address, timestamp)
     const signature = wallet.signMessage(`foxleague:chain=1:auth-${timestamp}`)
     const { json } = await requestJson<Envelope<{ token: string }>>(this.limiter, `${this.base}/auth/verify`, {
       method: 'POST',
@@ -158,8 +167,9 @@ export class FoxLeague {
     return this.call<PlayerCard>(`/players/nonce/${nonce}`)
   }
 
-  tournaments(q: { status?: string; kind?: 'standard' | 'challenge'; tier?: string; format?: string } = {}): Promise<Tournament[]> {
-    const params = new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined) as [string, string][])
+  /** A page of tournaments, newest first (FoxLeague pages its lists: at most 500 rows a page, `offset` for more). */
+  tournaments(q: { status?: string; kind?: 'standard' | 'challenge'; tier?: string; format?: string; limit?: number; offset?: number } = {}): Promise<Tournament[]> {
+    const params = new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]): [string, string] => [k, String(v)]))
     return this.call<Tournament[]>(`/tournaments${params.size ? `?${params}` : ''}`)
   }
 

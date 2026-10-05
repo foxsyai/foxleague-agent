@@ -12,6 +12,7 @@ import type { AgentSettings } from '../store/settings.ts'
 import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
+import { packAndFusionCost } from '../executor/rules.ts'
 import { SUBMIT_PLAN_TOOL_DESCRIPTION, SYSTEM_PROMPT } from './prompt.ts'
 
 export interface Plan {
@@ -170,6 +171,15 @@ export interface PlanInput {
  */
 const OLD_SIBLING_RULE = /fair.?play|another agent of (this install|this owner)|other agents? of (this|the) owner/i
 
+/** The packs-and-fusion cost of each rarity worth bidding on: the executor refuses a bid above it. */
+function bidCeilings(s: AgentSnapshot): string {
+  const parts = ['Rare', 'Epic', 'Legendary'].flatMap(r => {
+    const c = packAndFusionCost(s.config, r)
+    return c === null ? [] : [`${r} ${c}`]
+  })
+  return parts.length ? ` and never above what the card costs from Common packs and fusion fees (${parts.join(', ')})` : ''
+}
+
 export function renderPlanRequest(p: PlanInput): string {
   const b = p.budget
   const recent = p.recent.slice(0, 20)
@@ -178,7 +188,7 @@ export function renderPlanRequest(p: PlanInput): string {
     p.ownerRequest ? `## One-off request from the owner (do this if the rules and caps allow, nothing else)\n${p.ownerRequest}` : '',
     `## Budget (${p.dryRun ? 'dry-run ledger' : 'live ledger'}, game day ${b.gameDay})`,
     `Today: $${b.spentTodayUsd.toFixed(2)} spent of $${b.dailyCapUsd.toFixed(2)}, $${b.remainingTodayUsd.toFixed(2)} left. Month ${b.month}: $${b.remainingMonthUsd.toFixed(2)} of $${b.monthlyBudgetUsd.toFixed(2)} left. Setup budget left: $${b.remainingSetupUsd.toFixed(2)} of $${b.setupBudgetUsd.toFixed(2)}.`,
-    `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.length ? p.settings.entryFeesGold.join('/') : 'off (this agent never creates or joins Gold tournaments or 1v1s)'}.`,
+    `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY${bidCeilings(p.snapshot)}, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.length ? p.settings.entryFeesGold.join('/') : 'off (this agent never creates or joins Gold tournaments or 1v1s)'}.`,
     `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
     recent.some(r => OLD_SIBLING_RULE.test(r.summary))
       ? "## Earlier entries\nSome recent entries below cite a rule that kept this agent out of tournaments, 1v1s and auctions with the owner's other teams. The owner removed that rule on 2026-09-30; the fair play section of your instructions says what holds now. Do not carry that reasoning forward: judge every tournament, 1v1 and auction on its merits."

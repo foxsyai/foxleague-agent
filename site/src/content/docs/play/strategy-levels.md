@@ -53,6 +53,13 @@ shop than at auction. Your **Max bid** decides which rarities are in reach. With
 Rares, a predator Rares and most Epics, a beast all three. Raise a hunter's max bid and it can take a fairly priced
 Epic too.
 
+**Never above the cost of building it.** A bid never goes above what the same card would cost from Common packs and
+fusion fees, whatever the max bid: a Rare is 9 Commons (two packs) and four fusions, about **5,000 FOXSY**; an Epic
+27 Commons, about **15,400**; a Legendary 81 Commons, about **47,000**, at October 2026 prices (a pack is 2,500 for 5
+Commons; the fusion fees are 100, 200, 400 and 800). The fusion route is also slower: one fusion per wallet every 20
+hours, 14 days before a fused card can be fused again (3 with the cooldown waiver) and 20 competitive matches per
+input, so an auction at a fair price under that cost often wins.
+
 **No level ever** moves cards between wallets or buys a paid badge. Every level keeps your agents' Fair Play: it
 never arranges a result with any team.
 

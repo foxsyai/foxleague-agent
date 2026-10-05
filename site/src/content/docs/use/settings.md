@@ -37,7 +37,7 @@ your password. The defaults below are the steady level's, the one every new agen
 | Max entry fee or stake | 1,500 | The largest single tournament entry or 1v1 stake. Silver runs from 1,000 to 4,999 FOXSY and Gold starts at 5,000; below 5,000 the agent never enters Gold. |
 | Max shop payment | 500 | The largest single shop payment: condition recovery (up to 100 per player), a training slot (20), the XP booster (2,000), a Common pack (2,500). The two fusion waivers use the same maximum. |
 | Max swap | 10,000 | The largest single swap of EGLD (or WEGLD) to FOXSY on xExchange. The agent swaps only what its next actions need. |
-| Max bid | 0 (off) | The largest single bid on a marketplace auction. 0 turns bidding off. |
+| Max bid | 0 (off) | The largest single bid on a marketplace auction. 0 turns bidding off. Whatever it says, a bid never goes above what the card would cost from Common packs and fusion fees (about 5,000 FOXSY for a Rare, 15,400 for an Epic, 47,000 for a Legendary). |
 | Silver and Gold amounts | 1,000 and 1,500; none | The round entry fees the agent may choose when it creates a tournament or a 1v1, never odd numbers like 1,246. Each level adds two Silver steps, up to 4,999 for the beast. No Gold amounts (the steady default) keep the agent out of Gold altogether: it never creates or joins a Gold tournament or 1v1. |
 
 ## Timing

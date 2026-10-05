@@ -345,6 +345,7 @@ export class Executor {
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours
         const at = (c as { transferred_at?: string | null }).transferred_at
         market.cardLock = { until: at && hours ? new Date(new Date(at).getTime() + hours * 3600_000) : null }
+        if (typeof c.rarity === 'string') market.cardRarity = c.rarity
       } catch {
         market.cardLock = null
       }
@@ -595,7 +596,7 @@ export class Executor {
           } catch (err) {
             lastErr = err instanceof Error ? err.message : String(err)
             if (/already taken/i.test(lastErr)) return finish('failed', `${desc}: name taken; the fee stays recorded on chain, retry with another name (no second payment)`, usd)
-            if (!/not paid on-chain|Unable to verify|retry/i.test(lastErr)) break
+            if (!retryable(err, /not paid on-chain|Unable to verify|retry/i)) break
             await sleep(8000)
           }
         }
@@ -771,12 +772,22 @@ export class Executor {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (/Do NOT pay again/i.test(msg)) withHash = false
-        else if (!/not confirmed on chain yet|retry/i.test(msg)) return finish('error', `${desc}: paid ${hash} but not seated: ${msg} (the backend refunds unseated escrow)`, usd, hash)
+        else if (!retryable(err, /not confirmed on chain yet|retry/i)) return finish('error', `${desc}: paid ${hash} but not seated: ${msg} (the backend refunds unseated escrow)`, usd, hash)
         await sleep(6000)
       }
     }
     return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the next tick retries the join without paying again`, usd, hash)
   }
+}
+
+/**
+ * A confirm worth asking again with the same hash: FoxLeague's tx_pending code (its one signal that the payment
+ * was not refused, only not verifiable yet; its wording changes), a transport failure (no answer is no refusal),
+ * or the older wording.
+ */
+function retryable(err: unknown, wording: RegExp): boolean {
+  if (err instanceof ApiRefusal) return err.isTxPending || wording.test(err.message)
+  return true
 }
 
 /** Last byte of the public key, which the relayer shard rule reads. */

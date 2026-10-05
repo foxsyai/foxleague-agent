@@ -129,3 +129,19 @@ test('listing: spare card only, 20 matches, never under the floor; cancel only w
   assert.match(cancel(auction({ seller: ME, highestBid: wholeToAtomic(500), highestBidder: OTHER })).refusal!, /has bids/)
   assert.match(cancel(auction()).refusal!, /not this agent's auction/)
 })
+
+test('a bid never pays more than the card would cost from Common packs and fusion fees', async () => {
+  const { packAndFusionCost } = await import('../src/executor/rules.ts')
+  const cfg = { common_pack_price_foxsy: 2500, fusion_costs_foxsy: [100, 200, 400, 800] }
+  assert.deepEqual(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].map(r => packAndFusionCost(cfg, r)), [500, 1600, 5000, 15400, 47000])
+  assert.equal(packAndFusionCost({ common_pack_price_foxsy: 0, fusion_costs_foxsy: [] }, 'Rare'), null, 'unknown prices: no ceiling')
+  const s = snap()
+  s.chain!.foxsy = wholeToAtomic(100_000)
+  s.config = { ...s.config!, common_pack_price_foxsy: 2500 }
+  const rich = { ...TEST_SETTINGS, maxBidFoxsy: 40_000 }
+  const bid = (foxsy: number, rarity: string) => checkAction({ type: 'bid', nonce: 9, foxsy }, s, ctx({ settings: rich, auction: auction({ minPrice: wholeToAtomic(500) }), cardRarity: rarity }))
+  assert.equal(bid(15_400, 'Epic').ok, true)
+  assert.match(bid(16_000, 'Epic').refusal!, /above what a Epic costs from Common packs and fusion fees \(15400 FOXSY\)/)
+  assert.equal(bid(40_000, 'Legendary').ok, true)
+  assert.match(bid(5_500, 'Rare').refusal!, /\(5000 FOXSY\): building it is cheaper/)
+})

@@ -156,6 +156,23 @@ export function playerView(p: PlayerCard, team: Team | null, now: Date): PlayerV
   }
 }
 
+/**
+ * The 1v1s completed in the last 7 days. FoxLeague pages the list, newest first, 500 rows a page (about four days
+ * on 2026-10-05): read on until the oldest row is a week old, at most 5 pages.
+ */
+export async function recentChallenges(fox: FoxLeague, now: Date): Promise<Tournament[]> {
+  const page = 500
+  const weekAgo = now.getTime() - 7 * 86_400_000
+  const rows: Tournament[] = []
+  for (let offset = 0; offset < page * 5; offset += page) {
+    const part = await fox.tournaments({ status: 'completed', kind: 'challenge', limit: page, offset })
+    rows.push(...part)
+    const oldest = part.at(-1)?.completed_at
+    if (part.length < page || (oldest && new Date(oldest).getTime() < weekAgo)) break
+  }
+  return rows
+}
+
 async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>): Promise<T | null> {
   try {
     return await fn()
@@ -237,7 +254,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     attempt(warnings, 'running tournaments', () => fox.tournaments({ status: 'active', kind: 'standard' })),
     attempt(warnings, 'pending tournaments', () => fox.tournaments({ status: 'pending_sc', kind: 'standard' })),
     attempt(warnings, 'simulating tournaments', () => fox.tournaments({ status: 'simulating', kind: 'standard' })),
-    attempt(warnings, 'completed 1v1s', () => fox.tournaments({ status: 'completed', kind: 'challenge' })),
+    attempt(warnings, 'completed 1v1s', () => recentChallenges(fox, now)),
   ])
   const recentStandard = [...(completed ?? []), ...(cancelled ?? [])]
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
