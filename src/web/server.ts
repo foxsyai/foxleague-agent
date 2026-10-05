@@ -136,9 +136,18 @@ function snapshotSummary(s: AgentSnapshot | undefined) {
 /** Settings that let an agent spend more: raising one needs the password, lowering one never does. */
 const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy'] as const
 
+/** Hours in an active window [from, to), which may cross midnight; [0, 24] is all day. */
+export function windowHours([from, to]: [number, number]): number {
+  return (to - from + 24) % 24 || 24
+}
+
 export function raisesLimit(current: AgentSettings, patch: Partial<AgentSettings>): boolean {
   if (LIMITS.some(k => patch[k] !== undefined && Number(patch[k]) > Number(current[k]))) return true
-  return patch.egldGasReserve !== undefined && Number(patch.egldGasReserve) < Number(current.egldGasReserve)
+  if (patch.egldGasReserve !== undefined && Number(patch.egldGasReserve) < Number(current.egldGasReserve)) return true
+  // Gold back on (entries above the Silver ceiling), more cycles a day (AI spend): the password too.
+  if (patch.entryFeesGold !== undefined && patch.entryFeesGold.length > 0 && current.entryFeesGold.length === 0) return true
+  if (patch.tickMinutes !== undefined && patch.tickMinutes < current.tickMinutes) return true
+  return patch.activeHoursUtc !== undefined && windowHours(patch.activeHoursUtc) > windowHours(current.activeHoursUtc)
 }
 
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {

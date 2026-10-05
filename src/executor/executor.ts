@@ -325,7 +325,8 @@ export class Executor {
     if (a.type === 'create_challenge' && a.target_user_id === null) {
       market.openChallengesToday = store
         .activityOf(agent.index, ['create_challenge'], since(24 * 3_600_000))
-        .filter(r => counted(r.status) && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null).length
+        // On the safe side: a create that failed or errored may still have left a challenge on FoxLeague.
+        .filter(r => (counted(r.status) || r.status === 'failed' || r.status === 'error') && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null).length
     }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))

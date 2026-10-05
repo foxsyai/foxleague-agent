@@ -975,7 +975,8 @@ export class Service {
         const question = first !== undefined ? raw.slice(args[0]!.length).trim() : raw
         if (!question) return 'usage: /ask [N] question'
         const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) })
-        const { answer } = await this.strategist.ask(snap, question)
+        const { answer, usd } = await this.strategist.ask(snap, question)
+        this.addModelUsd(usd)
         return `${agentName(index)}: ${answer}`
       }
       case 'do': {

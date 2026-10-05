@@ -1261,3 +1261,45 @@ test('paging: the completed 1v1s are read page by page until a week is covered',
   await recentChallenges({ tournaments: async (q: { limit: number; offset: number }) => (asked.push(q.offset), old.slice(q.offset, q.offset + q.limit)) } as never, now)
   assert.deepEqual(asked, [0], '500 rows at 30 minutes reach 10 days back: one page is enough')
 })
+
+// ---- ninth review (2026-10-05) ----
+
+test('R9-1 an open 1v1 whose seat payment reverted or whose join errored still counts toward the one a day', async () => {
+  const { ApiRefusal } = await import('../src/foxleague/api.ts')
+  const open = act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 })
+  let outcomes = 0
+  const reverted = setup({
+    chain: { waitForOutcome: async () => (++outcomes === 1 ? { kind: 'failed', reason: 'out of gas' } : { kind: 'success' }) },
+    fox: { createTournament: async () => ({ id: 800 }), tournament: async () => tournament(800, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 800 }), joinTournament: async () => ({ participant_id: 1 }) },
+  })
+  await withLive(reverted.store, async () => {
+    assert.equal((await reverted.exec.run(reverted.agent(), liveWallet, snapshot(), open))[0]!.status, 'failed')
+    const [second] = await reverted.exec.run(reverted.agent(), liveWallet, snapshot(), open)
+    assert.equal(second!.status, 'refused')
+    assert.match(second!.summary, /already 1 open challenge in the last 24 hours/)
+  })
+  let joins = 0
+  const errored = setup({
+    fox: {
+      createTournament: async () => ({ id: 801 }),
+      tournament: async () => tournament(801, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 801 }),
+      joinTournament: async () => { if (++joins === 1) throw new ApiRefusal('You already have an active challenge'); return { participant_id: 1 } },
+    },
+  })
+  await withLive(errored.store, async () => {
+    assert.equal((await errored.exec.run(errored.agent(), liveWallet, snapshot(), open))[0]!.status, 'error')
+    assert.match((await errored.exec.run(errored.agent(), liveWallet, snapshot(), open))[0]!.summary, /already 1 open challenge in the last 24 hours/)
+  })
+})
+
+test('R9-2 turning Gold back on, a shorter tick or longer active hours needs the password, like a higher cap', async () => {
+  const { raisesLimit, windowHours } = await import('../src/web/server.ts')
+  const cur = { ...DEFAULT_SETTINGS, entryFeesGold: [], tickMinutes: 60, activeHoursUtc: [8, 20] as [number, number] }
+  assert.deepEqual([windowHours([8, 20]), windowHours([0, 24]), windowHours([22, 6]), windowHours([5, 6])], [12, 24, 8, 1])
+  assert.equal(raisesLimit(cur, { entryFeesGold: [5000] }), true, 'Gold on')
+  assert.equal(raisesLimit(cur, { tickMinutes: 30 }), true, 'more cycles')
+  assert.equal(raisesLimit(cur, { activeHoursUtc: [0, 24] }), true, 'all day')
+  assert.equal(raisesLimit(cur, { activeHoursUtc: [20, 8] }), false, 'the same 12 hours at night')
+  assert.equal(raisesLimit(cur, { tickMinutes: 90, activeHoursUtc: [9, 17], entryFeesGold: [] }), false, 'fewer is one click')
+  assert.equal(raisesLimit({ ...cur, entryFeesGold: [5000] }, { entryFeesGold: [5000, 7500] }), false, 'Gold already on: the max entry still bounds it')
+})

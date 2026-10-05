@@ -1021,8 +1021,11 @@ $('settingsForm').onsubmit = async e => {
   e.preventDefault()
   const form = readForm()
   const cur = agent().settings
-  if (LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)) {
-    const password = await askPassword('Raise a limit', 'A higher cap, budget or per-action maximum (or a smaller gas reserve) lets the agent spend more. Your password confirms it.')
+  const hours = h => (h[1] - h[0] + 24) % 24 || 24
+  const more = LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)
+    || (form.entryFeesGold.length > 0 && cur.entryFeesGold.length === 0) || form.tickMinutes < cur.tickMinutes || hours(form.activeHoursUtc) > hours(cur.activeHoursUtc)
+  if (more) {
+    const password = await askPassword('Raise a limit', 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.')
     if (!password) return
     form.password = password
   }

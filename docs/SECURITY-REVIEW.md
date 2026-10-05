@@ -179,6 +179,29 @@ Findings:
 | CW6 | low | A paused agent, or one outside its hours, never sent the low-funds message | Every fresh balance is checked |
 | CW7 | low | Earlier chat lines were not framed in the prompt: a quoted title could pose as the owner's message | They sit in a framed, indented block |
 
+## Ninth review, 2026-10-05 (open 1v1s, private tournaments, the ladder presets, level defaults)
+
+One Claude Fable 5.1 reviewer (read-only) on everything built from 2026-09-30 evening to 2026-10-05: open 1v1
+challenges, joining invited private tournaments, hidden 1v1 targets, the removal of the guards against the owner's
+own agents, the AI cost per day, the spend-on-growth prompt rule and the ladder presets, the per-level default
+limits and timing floors, Gold off, Sonnet 5.5. Checked and sound: an open 1v1 is always Silver at the lowest
+amount; a private tournament is joined only on FoxLeague's own `user_can_join_private` for the agent's session
+(fail closed); no money check relied on the removed guards (a trade or 1v1 between the owner's agents stays inside
+every cap and costs the platform fee); the executor never reads the strategy text; the 10-minute tick floor holds
+on every path; Gold off refuses joining and creating. Findings:
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R9-1 | low | An open 1v1 whose seat payment reverted or whose join errored was not counted toward the one a day, so a second could follow | Failed and errored creates count too |
+| R9-2 | low | Turning Gold back on, a shorter tick and longer active hours (more spending, more AI calls) went through without the password | They need the password like a higher cap, in the server and the dashboard |
+| R9-n | note | The cost of /ask was not counted in the AI cost per day | Counted |
+
+The same day, FoxLeague's Security S3 release (single-use login signatures, plain error wording) and its paging
+release were checked against the agent: the tournament join and the registration now confirm again on FoxLeague's
+`tx_pending` code (the wording "not confirmed on chain yet" no longer exists), a login never signs the same second
+twice, the completed 1v1s are read page by page (one page held four of the seven days), and a bid never goes above
+what the card costs from Common packs and fusion fees.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
