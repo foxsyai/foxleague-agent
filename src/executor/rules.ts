@@ -383,6 +383,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (new Date(t.deadline) <= ctx.now) return refuse(`T${t.id} registration deadline passed`)
       if (t.is_private && d.user_can_join_private !== true) return refuse(`T${t.id} is private and this team is not invited`)
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
+      if (t.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
       const myId = s.profile.id
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
       if (ctx.pendingJoin) return refuse(`a seat in T${t.id} is already paid and waiting for FoxLeague's confirmation: not paying twice`)
@@ -427,6 +428,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'create_tournament': {
       if (!registered || !s.profile) return refuse('not registered')
+      if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const list = a.tier === 'silver' ? ctx.settings.entryFeesSilver : ctx.settings.entryFeesGold
       if (!list.includes(a.entry_fee_foxsy)) return refuse(`entry fee ${a.entry_fee_foxsy} is not one of the configured amounts ${list.join('/')}`)
       const bounds = tierBounds(s, a.tier)
@@ -457,6 +459,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'create_challenge': {
       if (!registered || !s.profile) return refuse('not registered')
+      if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       if (a.target_user_id === null) {
         // Open: the strength of whoever takes it cannot be checked, so the stake is the smallest the owner allows.
         const lowest = Math.min(...ctx.settings.entryFeesSilver)

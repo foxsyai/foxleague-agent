@@ -795,7 +795,8 @@ const TIPS = {
     <p>0 turns bidding off.</p>`],
   silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
     <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
-  gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>`],
+  gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>
+    <p>Leave it empty to keep the agent out of Gold altogether: it then never creates or joins a Gold tournament or 1v1. That is the steady level's default.</p>`],
   tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes, at least 30 seconds apart.</p>
     <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. Defaults: 60 for steady, climber and hunter, 30 for predator and beast. A planning cycle also runs about an hour before each match locks, whatever the tick.</p>`],
   jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. 0 (the default) keeps the exact tick.</p>

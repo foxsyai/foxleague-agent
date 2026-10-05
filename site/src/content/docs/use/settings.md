@@ -38,7 +38,7 @@ your password. The defaults below are the steady level's, the one every new agen
 | Max shop payment | 500 | The largest single shop payment: condition recovery (up to 100 per player), a training slot (20), the XP booster (2,000), a Common pack (2,500). The two fusion waivers use the same maximum. |
 | Max swap | 10,000 | The largest single swap of EGLD (or WEGLD) to FOXSY on xExchange. The agent swaps only what its next actions need. |
 | Max bid | 0 (off) | The largest single bid on a marketplace auction. 0 turns bidding off. |
-| Silver and Gold amounts | 1,000 and 1,500; 5,000 | The round entry fees the agent may choose when it creates a tournament or a 1v1, never odd numbers like 1,246. Each level adds two Silver steps, up to 4,999 for the beast. |
+| Silver and Gold amounts | 1,000 and 1,500; none | The round entry fees the agent may choose when it creates a tournament or a 1v1, never odd numbers like 1,246. Each level adds two Silver steps, up to 4,999 for the beast. No Gold amounts (the steady default) keep the agent out of Gold altogether: it never creates or joins a Gold tournament or 1v1. |
 
 ## Timing
 

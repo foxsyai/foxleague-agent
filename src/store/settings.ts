@@ -60,10 +60,11 @@ export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUs
 
 /**
  * Default limits per level, rising with what each level spends (FOXSY about $0.0027 in October 2026). Silver
- * amounts grow by two steps a level up to the 4,999 Silver ceiling; a max bid of 0 turns bidding off.
+ * amounts grow by two steps a level up to the 4,999 Silver ceiling; no Gold amounts (steady) turn Gold off and a max bid
+ * of 0 turns bidding off.
  */
 export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
-  steady: { dailyCapUsd: 10, monthlyBudgetUsd: 300, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [5000], tickMinutes: 60 },
+  steady: { dailyCapUsd: 10, monthlyBudgetUsd: 300, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 60 },
   climber: { dailyCapUsd: 20, monthlyBudgetUsd: 500, topUpWarningUsd: 15, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 1000, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 60 },
   hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 600, topUpWarningUsd: 20, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 4000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 60 },
   predator: { dailyCapUsd: 40, monthlyBudgetUsd: 1000, topUpWarningUsd: 40, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 20_000, maxBidFoxsy: 15_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 30 },
@@ -99,11 +100,12 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
     }
     ;(out as Record<string, unknown>)[k] = v
   }
-  const fees = (k: 'entryFeesSilver' | 'entryFeesGold', min: number, max: number): void => {
+  // Silver needs at least one amount; an empty Gold list turns Gold off for the agent.
+  const fees = (k: 'entryFeesSilver' | 'entryFeesGold', min: number, max: number, least = 1): void => {
     if (!(k in raw)) return
     const v = raw[k]
-    if (!Array.isArray(v) || v.length < 1 || v.length > 10 || v.some(x => typeof x !== 'number' || !Number.isInteger(x) || x < min || x > max)) {
-      throw new Error(`${k} must list 1 to 10 whole amounts between ${min} and ${max}`)
+    if (!Array.isArray(v) || v.length < least || v.length > 10 || v.some(x => typeof x !== 'number' || !Number.isInteger(x) || x < min || x > max)) {
+      throw new Error(`${k} must list ${least} to 10 whole amounts between ${min} and ${max}`)
     }
     out[k] = [...new Set(v as number[])].sort((a, b) => a - b)
   }
@@ -126,7 +128,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
     out.egldGasReserve = v
   }
   fees('entryFeesSilver', 1000, 4999)
-  fees('entryFeesGold', 5000, 1_000_000)
+  fees('entryFeesGold', 5000, 1_000_000, 0)
   num('tickMinutes', MIN_TICK_MINUTES, 240, true)
   num('tickJitterMinutes', 0, 60, true)
   if ('activeHoursUtc' in raw) {

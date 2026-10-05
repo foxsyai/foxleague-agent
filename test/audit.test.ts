@@ -1172,3 +1172,23 @@ test('the AI cost is counted per UTC day, rebuilt once from the logged plans and
   assert.equal(Math.round(svc.modelUsdByDay()[today]! * 100) / 100, 0.75, 'a chat answer adds to the same day')
   assert.equal(Math.round(Number(svc.store.getKv('model_usd_total')) * 100) / 100, 0.45, 'the total counts what was added')
 })
+
+test('no Gold amounts means no Gold at all: no Gold seat, no Gold tournament or 1v1 created, and the plan is told', async () => {
+  const { LEVEL_SETTINGS } = await import('../src/store/settings.ts')
+  assert.deepEqual(LEVEL_SETTINGS.steady!.entryFeesGold, [], 'the steady level has no Gold amounts')
+  const m = setup({ fox: { tournament: async () => tournament(700, { tier: 'gold', entry_fee_foxsy: 5000 }) } })
+  m.store.updateSettings(0, { entryFeesGold: [], maxEntryFeeFoxsy: 20_000, dailyCapUsd: 100 })
+  for (const a of [
+    { type: 'join_tournament', tournament_id: 700 },
+    { type: 'create_tournament', title: 'Gold Cup', format: 'knockout', tier: 'gold', max_teams: 8, min_teams: 8, entry_fee_foxsy: 5000, starts_in_hours: 6, registration_closes_minutes_before: 30, round_interval_minutes: 30 },
+    { type: 'create_challenge', tier: 'gold', stake_foxsy: 5000, target_user_id: null, deadline_minutes: 60 },
+  ]) {
+    const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), act(a))
+    assert.equal(r!.status, 'refused', a.type)
+    assert.match(r!.summary, /Gold is off for this agent/, a.type)
+  }
+  const store = new Store('', ':memory:')
+  store.addAgent(0, ADDR)
+  const text = renderPlanRequest({ snapshot: snapshot(), settings: { ...DEFAULT_SETTINGS }, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
+  assert.match(text, /Gold off \(this agent never creates or joins Gold tournaments or 1v1s\)/)
+})
