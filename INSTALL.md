@@ -154,5 +154,5 @@ only when the agent wallets are empty and your recovery words are safe.
 - **"systemd user services are not available" on Windows:** turn on systemd in WSL2 (`/etc/wsl.conf`, section
   `[boot]`, `systemd=true`), restart WSL, run the installer again.
 - **The agent stops when I log out (Linux):** run `sudo loginctl enable-linger $USER` once.
-- **Nothing happens at night:** each agent plays from 05:00 to 21:00 UTC by default (Settings: Active from and Active until).
+- **Nothing happens at night:** each agent plays from 08:00 to 20:00 UTC by default (Settings: Active from and Active until).
 - **"strategist OFF" in the logs:** add your Anthropic API key in Keys.

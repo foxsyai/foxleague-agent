@@ -44,7 +44,7 @@ not a cost. The shop, the waivers and the bids are real spending.
 | Fusion match waiver (20 FOXSY a match) | | | | | ✓ |
 | Fusion cooldown waiver (75 FOXSY a day) | | | | | ✓ |
 | Bids at auction: Rare, Epic, Legendary | | | ✓ | ✓ | ✓ |
-| Max bid to set (FOXSY) | | | 4,000 | 15,000 | 40,000 |
+| Default max bid (FOXSY) | | | 4,000 | 15,000 | 40,000 |
 | Sells spare cards (above 36 cards) | | | | | ✓ |
 
 **Bids.** From the hunter up, an agent bids on Rare, Epic and Legendary players, never on Common or Uncommon
@@ -56,19 +56,30 @@ Epic too.
 **No level ever** moves cards between wallets or buys a paid badge. Every level keeps your agents' Fair Play: it
 never arranges a result with any team.
 
-## The limits to set for each level
+## The default limits of each level
 
-The presets only set the direction. Your limits always win: an agent stops at its daily cap, its monthly budget and
-its largest single payment, whatever its strategy says. Raise them with the level, or a higher level behaves like a
-lower one. Rough values at a FOXSY price of about $0.0027 (October 2026):
+The presets set the direction and your limits always win: an agent stops at its daily cap, its monthly budget and
+its largest single payment, whatever its strategy says. So each level comes with its own limits, and **picking a
+level in Settings fills them** in the form; check them and press Save (raising a limit asks for your password). You
+can change any of them afterwards. Values at a FOXSY price of about $0.0027 (October 2026):
 
-| Level | Daily cap | Monthly budget | Max bid |
-|---|---|---|---|
-| Steady | $10 (the default) | $300 (the default) | not used |
-| Climber | $20 (a Gold entry is about $14) | $500 | not used |
-| Hunter | $25 | $600 | 4,000 FOXSY |
-| Predator | $40 | $1,000 | 15,000 FOXSY |
-| Beast | $100 (a Legendary bid is about $95) | $2,000 | 40,000 FOXSY |
+| Setting | Steady | Climber | Hunter | Predator | Beast |
+|---|---|---|---|---|---|
+| Daily cap | $10 | $20 | $25 | $40 | $100 |
+| Monthly budget | $300 | $500 | $600 | $1,000 | $2,000 |
+| Top-up warning | $10 | $15 | $20 | $40 | $100 |
+| Max entry fee or stake (FOXSY) | 1,500 | 5,000 | 7,500 | 10,000 | 20,000 |
+| Max shop payment (FOXSY) | 500 | 1,000 | 2,500 | 2,500 | 3,000 |
+| Max swap (FOXSY) | 10,000 | 10,000 | 10,000 | 20,000 | 40,000 |
+| Max bid (FOXSY) | 0 (off) | 0 (off) | 4,000 | 15,000 | 40,000 |
+| Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 |
+| Gold amounts (FOXSY) | 5,000 | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 |
+| Tick | 60 min | 60 min | 60 min | 30 min | 30 min |
+
+The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the active hours (08:00 to 20:00
+UTC), no random window, actions at least 30 seconds apart. A daily cap covers the largest entry at each level (a
+Gold entry of 20,000 FOXSY is about $54, under the beast's $100), and the top-up warning comes a few days of
+spending ahead.
 
 At auction a Rare started at about 2,300 FOXSY, an Epic at about 10,000 and a Legendary at about 18,000 (October
 2026). A bid also needs a daily cap above its value.

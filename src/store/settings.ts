@@ -52,23 +52,36 @@ export const STRATEGY_PRESETS: Record<string, string> = {
 /** The gas reserve can be lowered, never to nothing: a wallet without EGLD cannot even pay a refund claim. */
 export const MIN_GAS_RESERVE_EGLD = 0.05
 
+/** The shortest cycle: with at most about 20 actions a cycle and 30 s between them, 10 minutes is the floor. */
+export const MIN_TICK_MINUTES = 10
+
+/** What a strategy level sets when the owner picks it (the manual's Strategy levels page lists them). */
+export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUsd' | 'topUpWarningUsd' | 'maxEntryFeeFoxsy' | 'maxShopPaymentFoxsy' | 'maxSwapFoxsy' | 'maxBidFoxsy' | 'entryFeesSilver' | 'entryFeesGold' | 'tickMinutes'>
+
+/**
+ * Default limits per level, rising with what each level spends (FOXSY about $0.0027 in October 2026). Silver
+ * amounts grow by two steps a level up to the 4,999 Silver ceiling; a max bid of 0 turns bidding off.
+ */
+export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
+  steady: { dailyCapUsd: 10, monthlyBudgetUsd: 300, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [5000], tickMinutes: 60 },
+  climber: { dailyCapUsd: 20, monthlyBudgetUsd: 500, topUpWarningUsd: 15, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 1000, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 60 },
+  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 600, topUpWarningUsd: 20, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 4000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 60 },
+  predator: { dailyCapUsd: 40, monthlyBudgetUsd: 1000, topUpWarningUsd: 40, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 20_000, maxBidFoxsy: 15_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 30 },
+  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2000, topUpWarningUsd: 100, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 40_000, maxBidFoxsy: 40_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 30 },
+}
+
+/**
+ * Every new agent: the steady level, active 12 hours centred on the 14:00 UTC game-day reset, cycles on the
+ * hour with no random part, 30 s between actions, every planned action carried out.
+ */
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
-  dailyCapUsd: 10,
-  monthlyBudgetUsd: 300,
+  ...LEVEL_SETTINGS.steady!,
   setupBudgetUsd: 20,
-  maxEntryFeeFoxsy: 5000,
-  maxShopPaymentFoxsy: 2500,
-  maxSwapFoxsy: 10_000,
-  maxBidFoxsy: 2500,
   egldGasReserve: '1',
-  topUpWarningUsd: 10,
-  entryFeesSilver: [1000, 1500, 2000, 2500, 3000],
-  entryFeesGold: [5000],
-  tickMinutes: 30,
-  tickJitterMinutes: 10,
-  activeHoursUtc: [5, 21],
-  minGapSeconds: 90,
+  tickJitterMinutes: 0,
+  activeHoursUtc: [8, 20],
+  minGapSeconds: 30,
   actionProbability: 1,
 }
 
@@ -114,7 +127,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   }
   fees('entryFeesSilver', 1000, 4999)
   fees('entryFeesGold', 5000, 1_000_000)
-  num('tickMinutes', 5, 240, true)
+  num('tickMinutes', MIN_TICK_MINUTES, 240, true)
   num('tickJitterMinutes', 0, 60, true)
   if ('activeHoursUtc' in raw) {
     const v = raw.activeHoursUtc
@@ -124,4 +137,11 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('minGapSeconds', 30, 3600, true)
   num('actionProbability', 0, 1)
   return out
+}
+
+/** Checks a whole settings object: the random part of a cycle may never bring it under the 10-minute floor. */
+export function checkTiming(s: AgentSettings): void {
+  if (s.tickMinutes - s.tickJitterMinutes < MIN_TICK_MINUTES) {
+    throw new Error(`the random window (±${s.tickJitterMinutes} min) would bring a ${s.tickMinutes}-minute cycle under ${MIN_TICK_MINUTES} minutes: lower it to ${Math.max(0, s.tickMinutes - MIN_TICK_MINUTES)} or less`)
+  }
 }

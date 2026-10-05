@@ -10,6 +10,17 @@ import type { FoxLeague } from '../src/foxleague/api.ts'
 import type { Config } from '../src/config.ts'
 import type { AgentWallet } from '../src/wallet/wallet.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
+import { DEFAULT_SETTINGS, type AgentSettings } from '../src/store/settings.ts'
+
+/**
+ * The limits the tests were written against (the defaults before the per-level ones of 2026-10-05): generous
+ * enough that a test checks a rule, not a default. A test that wants another value sets it.
+ */
+export const TEST_SETTINGS: AgentSettings = {
+  ...DEFAULT_SETTINGS,
+  dailyCapUsd: 10, monthlyBudgetUsd: 300, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 2500,
+  entryFeesSilver: [1000, 1500, 2000, 2500, 3000], entryFeesGold: [5000], tickMinutes: 30, tickJitterMinutes: 10, activeHoursUtc: [5, 21], minGapSeconds: 90,
+}
 
 export const ADDR = 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl'
 export const OTHER = 'erd1qyu5wthldzr8wx5c9ucg8kjagg0jfs53s8nr3zpz3hypefsdd8ssycr6th'
@@ -92,6 +103,7 @@ export interface Mocks {
 export function setup(over: Partial<Mocks> = {}) {
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
+  store.updateSettings(0, TEST_SETTINGS)
   const chain = {
     simulate: async () => ({ ok: true, detail: 'success', raw: {} }),
     query: async () => [],

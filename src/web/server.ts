@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Service } from '../service.ts'
 import { COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, type Credentials } from './auth.ts'
-import { STRATEGY_PRESETS, validateSettingsPatch, type AgentSettings } from '../store/settings.ts'
+import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
 import { EFFORTS, MODELS, type Effort } from '../strategist/strategist.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
@@ -192,6 +192,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         maxAgents: cfg.maxAgents,
         next: agents.length < cfg.maxAgents ? { index: nextIndex, address: service.wallet(nextIndex).address } : null,
         presets: STRATEGY_PRESETS,
+        levels: LEVEL_SETTINGS,
         user: creds.username,
       },
       chatRev: service.chatRevision(),
@@ -338,6 +339,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
               let patch
               try {
                 patch = validateSettingsPatch(fields)
+                checkTiming({ ...service.store.agent(index)!.settings, ...patch })
               } catch (err) {
                 throw new HttpFail(400, err instanceof Error ? err.message : String(err))
               }

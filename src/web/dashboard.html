@@ -306,7 +306,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
         <h2>Settings</h2>
         <form class="settings" id="settingsForm" autocomplete="off">
           <div class="full"><label for="sPreset">Strategy<i class="info" data-tip="strategy">i</i></label>
-            <select id="sPreset"><option value="">Custom</option></select></div>
+            <select id="sPreset"><option value="">Custom</option></select><div class="hint">Picking a level also fills its limits below: check them, then Save.</div></div>
           <div class="full"><textarea id="sStrategy" maxlength="2000"></textarea></div>
           <div class="sep">Spending (USD)</div>
           <div><label for="sDaily">Daily cap<i class="info" data-tip="daily">i</i></label><input id="sDaily" type="number" min="0" max="1000" step="0.5"></div>
@@ -326,8 +326,6 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sJitter">Random window (± min)<i class="info" data-tip="jitter">i</i></label><input id="sJitter" type="number" min="0" max="60" step="1"></div>
           <div><label for="sFrom">Active from (UTC hour)<i class="info" data-tip="hours">i</i></label><input id="sFrom" type="number" min="0" max="23" step="1"></div>
           <div><label for="sTo">Active until (UTC hour)<i class="info" data-tip="hours">i</i></label><input id="sTo" type="number" min="1" max="24" step="1"></div>
-          <div><label for="sGap">Min gap between actions (s)<i class="info" data-tip="gap">i</i></label><input id="sGap" type="number" min="30" max="3600" step="10"></div>
-          <div><label for="sProb">Action probability<i class="info" data-tip="prob">i</i></label><input id="sProb" type="number" min="0" max="1" step="0.05"></div>
           <div class="full controls"><button class="btn go" type="submit" id="saveBtn">Save settings</button><button class="btn" type="button" id="resetBtn">Discard changes</button></div>
         </form>
       </div>
@@ -547,7 +545,6 @@ function fillForm(st) {
   $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
-  $('sGap').value = st.minGapSeconds; $('sProb').value = st.actionProbability
   formDirty = false
 }
 
@@ -558,7 +555,7 @@ function readForm() {
     strategy: $('sStrategy').value, dailyCapUsd: n('sDaily'), monthlyBudgetUsd: n('sMonthly'), setupBudgetUsd: n('sSetup'),
     egldGasReserve: $('sReserve').value.trim(), topUpWarningUsd: n('sTopUp'), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
     entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
-    activeHoursUtc: [n('sFrom'), n('sTo')], minGapSeconds: n('sGap'), actionProbability: n('sProb'),
+    activeHoursUtc: [n('sFrom'), n('sTo')],
   }
 }
 
@@ -778,7 +775,7 @@ const TIPS = {
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Five levels, from careful to all-in; each does everything the level below does and adds more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>The higher levels spend far more than the default limits allow: raise this agent's daily cap, monthly budget and max bid with the level, or it stops at the limits. Rough values: climber $20 a day, hunter $25 and a 4,000 FOXSY max bid, predator $40 and 15,000, beast $100 and 40,000.</p>
+    <p>Five levels, from careful to all-in; each does everything the level below does and adds more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level also fills its default limits in the form (daily cap, monthly budget, top-up warning, per-action maximums, Silver and Gold amounts, tick); check them and press Save. Raising a limit asks for your password. The manual's Strategy levels page lists every level's values.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
@@ -799,15 +796,14 @@ const TIPS = {
   silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
     <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
   gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>`],
-  tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes.</p>
-    <p>A shorter tick reacts faster and costs more in model calls.</p>`],
-  jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork.</p>`],
+  tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes, at least 30 seconds apart.</p>
+    <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. Defaults: 60 for steady, climber and hunter, 30 for predator and beast. A planning cycle also runs about an hour before each match locks, whatever the tick.</p>`],
+  jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. 0 (the default) keeps the exact tick.</p>
+    <p>It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20.</p>`],
   hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
-    <p>Add your time zone's offset to read them locally: at UTC+3, 5 until 21 is 08:00 to 00:00.</p>
+    <p>The default, from 8 until 20, is 12 hours around the 14:00 UTC game-day reset. From 0 until 24 runs all day.</p>
+    <p>Add your time zone's offset to read them locally: at UTC+3, 8 until 20 is 11:00 to 23:00.</p>
     <p>The window may cross midnight: from 22 until 6 means night hours.</p>`],
-  gap: ['Min gap between actions (seconds)', `<p>The shortest pause between two actions of one plan. Together with the random timing it spreads the actions out like a person playing.</p>`],
-  prob: ['Action probability', `<p>The chance, from 0 to 1, that each planned routine action is really carried out. 1 means always; 0.8 skips about one in five at random, so the pattern looks less mechanical.</p>
-    <p>Your own requests always run.</p>`],
 }
 function showTip(k) {
   const t = TIPS[k]; if (!t) return
@@ -1002,7 +998,19 @@ async function decideProposal(verb, label) {
 $('applyBtn').onclick = () => decideProposal('apply', 'Strategy updated')
 $('cancelBtn').onclick = () => decideProposal('cancel', 'Proposal dropped')
 $('actFilter').onchange = renderActivity
-$('sPreset').onchange = () => { const k = $('sPreset').value; if (k) $('sStrategy').value = S.instance.presets[k]; formDirty = true }
+$('sPreset').onchange = () => {
+  const k = $('sPreset').value
+  if (k) {
+    $('sStrategy').value = S.instance.presets[k]
+    const l = S.instance.levels && S.instance.levels[k]
+    if (l) {
+      $('sDaily').value = l.dailyCapUsd; $('sMonthly').value = l.monthlyBudgetUsd; $('sTopUp').value = l.topUpWarningUsd
+      $('sEntry').value = l.maxEntryFeeFoxsy; $('sShop').value = l.maxShopPaymentFoxsy; $('sSwap').value = l.maxSwapFoxsy; $('sBid').value = l.maxBidFoxsy
+      $('sSilver').value = l.entryFeesSilver.join(', '); $('sGold').value = l.entryFeesGold.join(', '); $('sTick').value = l.tickMinutes
+    }
+  }
+  formDirty = true
+}
 $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
 // Settings that let the agent spend more; the server asks for the password when one goes up.

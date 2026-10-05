@@ -8,7 +8,7 @@ import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
-import { STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
+import { MIN_TICK_MINUTES, STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
 import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -711,7 +711,7 @@ export class Service {
     const s = this.store.agent(index)?.settings
     if (!s) return
     const jitter = (Math.random() * 2 - 1) * s.tickJitterMinutes
-    let delay = Math.max(5, s.tickMinutes + jitter) * 60_000
+    let delay = Math.max(MIN_TICK_MINUTES, s.tickMinutes + jitter) * 60_000
     // A planning tick about an hour before the first lock of each match session of our own (no lock of
     // ours in the 2 hours before it), so the plan can sync, set the lineup and recover condition in time.
     // Matches close together are covered by the normal ticks. The tick itself still keeps to active hours.

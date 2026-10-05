@@ -230,3 +230,24 @@ test('presets run from careful to all-in, and the AI is told the owner sets how 
   for (const k of ['climber', 'hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /5 free training sessions every day|all 15 training sessions every day/)
   assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
 })
+
+test('each level brings its own default limits, rising with the level; every agent starts steady, 08 to 20 UTC', async () => {
+  const { LEVEL_SETTINGS, STRATEGY_PRESETS: P, DEFAULT_SETTINGS: D, validateSettingsPatch, checkTiming, MIN_TICK_MINUTES } = await import('../src/store/settings.ts')
+  assert.deepEqual(Object.keys(LEVEL_SETTINGS), Object.keys(P), 'one set of limits per preset')
+  const levels = Object.values(LEVEL_SETTINGS)
+  for (const l of levels) assert.deepEqual(validateSettingsPatch({ ...l }), l, 'every level passes the settings check')
+  for (let i = 1; i < levels.length; i++) {
+    for (const k of ['dailyCapUsd', 'monthlyBudgetUsd', 'topUpWarningUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy'] as const) assert.ok(levels[i]![k] >= levels[i - 1]![k], `${k} never falls with the level`)
+    assert.ok(levels[i - 1]!.entryFeesSilver.every(f => levels[i]!.entryFeesSilver.includes(f)), 'Silver amounts only add up')
+  }
+  assert.deepEqual(LEVEL_SETTINGS.steady!.entryFeesSilver, [1000, 1500])
+  assert.equal(LEVEL_SETTINGS.beast!.entryFeesSilver.at(-1), 4999)
+  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [0, 0], 'no bids below the hunter')
+  for (const l of levels) assert.ok(l.maxEntryFeeFoxsy * 0.0027 < l.dailyCapUsd, 'the largest entry fits the daily cap at October 2026 prices')
+  assert.deepEqual([D.strategy, D.dailyCapUsd, D.activeHoursUtc, D.tickMinutes, D.tickJitterMinutes, D.minGapSeconds, D.actionProbability], [P.steady, 10, [8, 20], 60, 0, 30, 1])
+  // The cycle: never under 10 minutes, the random window included.
+  assert.throws(() => validateSettingsPatch({ tickMinutes: MIN_TICK_MINUTES - 1 }), /between 10 and 240/)
+  assert.throws(() => checkTiming({ ...D, tickMinutes: 30, tickJitterMinutes: 25 }), /under 10 minutes: lower it to 20 or less/)
+  checkTiming({ ...D, tickMinutes: 30, tickJitterMinutes: 20 })
+  assert.throws(() => validateSettingsPatch({ minGapSeconds: 10 }), /between 30 and 3600/, 'no two actions closer than 30 seconds')
+})

@@ -3,7 +3,7 @@ title: A day in the life
 description: What the agent does every day, before a match and to grow the squad.
 ---
 
-Every cycle (every 30 minutes by default, inside your active hours) the agent takes a fresh look at everything a
+Every cycle (every hour by default, every 30 minutes for the predator and the beast, inside your active hours) the agent takes a fresh look at everything a
 player can see: its squad and their condition, its budget, open tournaments and 1v1 challenges, auctions,
 prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.

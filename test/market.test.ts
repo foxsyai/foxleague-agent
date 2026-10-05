@@ -6,7 +6,7 @@ import { auctionBidTx, auctionCancelTx, auctionListTx, fusionTx } from '../src/e
 import { decodeAuction, type Auction } from '../src/chain/players.ts'
 import { checkAction, type RulesContext } from '../src/executor/rules.ts'
 import { parseAction } from '../src/executor/actions.ts'
-import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
+import { TEST_SETTINGS } from './fixtures.ts'
 import type { AgentSnapshot, PlayerView } from '../src/snapshot/snapshot.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
 
@@ -77,7 +77,7 @@ function snap(extra: PlayerView[] = []): AgentSnapshot {
   }
 }
 
-const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...DEFAULT_SETTINGS }, now: new Date(), ...more })
+const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...TEST_SETTINGS }, now: new Date(), ...more })
 const spares = () => [card(40, 'DEF', 'Common', 'reserve', 20), card(41, 'MID', 'Common', 'reserve', 20), card(42, 'FWD', 'Common', 'reserve', 20)]
 
 test('fusion: same rarity, 20 competitive matches, synced, outside the squad, 18 cards left', () => {
