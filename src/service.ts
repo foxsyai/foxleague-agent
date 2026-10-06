@@ -125,6 +125,8 @@ export class Service {
   telegram: Telegram | null
   private readonly wallets = new Map<number, AgentWallet>()
   private readonly timers = new Map<number, NodeJS.Timeout>()
+  /** When each agent's next tick is due (ms), for a settings save that shortens the cycle. */
+  private readonly nextAt = new Map<number, number>()
   private readonly busy = new Set<number>()
   /** Last snapshot per agent, for the web UI (refreshed at every tick and every action). */
   readonly snapshots = new Map<number, AgentSnapshot>()
@@ -683,6 +685,18 @@ export class Service {
     return `${agentName(index)} retired: it is in Retired, ready to restore`
   }
 
+  /**
+   * After a settings save: a shorter cycle brings the next plan forward, to at most one new cycle from now. A plan
+   * still running is left alone: when it ends, the next one is set from the saved settings anyway.
+   */
+  settingsSaved(index: number): void {
+    const row = this.store.agent(index)
+    const at = this.nextAt.get(index)
+    if (!row || row.retired || at === undefined || this.busy.has(index)) return
+    const cycle = Math.max(MIN_TICK_MINUTES, row.settings.tickMinutes) * 60_000
+    if (at - Date.now() > cycle) this.schedule(index, cycle)
+  }
+
   /** Restore: a retired agent rejoins the active agents, paused, within the agent limit. */
   restoreAgent(index: number, who: string): string {
     const agent = this.store.agent(index)
@@ -721,6 +735,7 @@ export class Service {
   private schedule(index: number, delayMs: number): void {
     clearTimeout(this.timers.get(index))
     if (this.stopping) return
+    this.nextAt.set(index, Date.now() + delayMs)
     this.timers.set(index, setTimeout(() => void this.tick(index).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
   }
 

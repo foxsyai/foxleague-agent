@@ -376,6 +376,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
               // Lowering a limit is one click; raising one (or shrinking the gas reserve) needs the password again.
               if (raisesLimit(service.store.agent(index)!.settings, patch)) recheckPassword(req, password)
               const next = service.store.updateSettings(index, patch)
+              service.settingsSaved(index)
               service.store.log({ agentIndex: index, kind: 'control', status: 'info', summary: `settings changed from the web UI by ${user}: ${Object.keys(patch).join(', ')}` })
               return json(res, 200, { ok: true, settings: next })
             }

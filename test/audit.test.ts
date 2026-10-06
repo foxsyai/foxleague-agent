@@ -721,7 +721,7 @@ test('SS6 going live, releasing the kill switch and raising a limit need the pas
   const { startWeb } = await import('../src/web/server.ts')
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
-  const service = { store, cfg: {}, notify: () => undefined, setMode: (live: boolean) => (store.setLiveMode(live), live ? 'LIVE' : 'dry run') }
+  const service = { store, cfg: {}, notify: () => undefined, settingsSaved: () => undefined, setMode: (live: boolean) => (store.setLiveMode(live), live ? 'LIVE' : 'dry run') }
   const creds = { username: 'admin', passwordHash: hashPassword('correct-horse-battery'), secretKey: 'k'.repeat(64) }
   const server = startWeb(service as never, creds, 0)
   if (!server.listening) await once(server, 'listening')

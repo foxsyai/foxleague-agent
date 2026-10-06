@@ -798,7 +798,7 @@ const TIPS = {
   mine: ['In tournaments', `<p>The tournaments and 1v1 challenges the agent is in right now. While one is still open, <b>Leave</b> gives the seat or stake back to the wallet.</p>
     <p>On a 1v1 the agent created and nobody accepted, Leave also closes the challenge, so the agent can take another one. The agent can do the same by itself when it sees a better 1v1.</p>`],
   wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation, today's matches and training, and the tournaments it is in.</p>
-    <p>Refresh reads the chain and FoxLeague again now. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
+    <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
     <p>The filter narrows it to plans, actions or problems.</p>`],
@@ -845,7 +845,8 @@ const TIPS = {
   gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>
     <p>Leave it empty to keep the agent out of Gold altogether: it then never creates or joins a Gold tournament or 1v1. That is the steady level's default.</p>`],
   tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes, at least 30 seconds apart.</p>
-    <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. Defaults: 60 for steady, climber and hunter, 30 for predator and beast. A planning cycle also runs about an hour before each match locks, whatever the tick.</p>`],
+    <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. Defaults: 60 for steady, climber and hunter, 30 for predator and beast. A planning cycle also runs about an hour before each match locks, whatever the tick.</p>
+    <p>A shorter tick counts from the save: the next plan comes within one new tick.</p>`],
   jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. 0 (the default) keeps the exact tick.</p>
     <p>It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20.</p>`],
   hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
@@ -1203,6 +1204,16 @@ new ResizeObserver(stickyUpdate).observe($('topbar'))
 
 loadState().then(loadActivity)
 setInterval(loadState, 15000)
+// The open agent's wallet is read again when the last reading is over 10 minutes old (after a top-up, for example);
+// a failed read waits a minute before the next try.
+let rereadAt = 0
+setInterval(() => {
+  const b = agent(); if (!b || Date.now() < rereadAt) return
+  const age = b.snapshot ? Date.now() - new Date(b.snapshot.takenAt).getTime() : Infinity
+  if (age < 10 * 60e3) return
+  rereadAt = Date.now() + 60e3
+  api('POST', '/api/agents/' + b.index + '/refresh').then(loadState, () => undefined)
+}, 5000)
 setInterval(loadActivity, 30000)
 </script>
 </body></html>

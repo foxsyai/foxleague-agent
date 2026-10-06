@@ -44,7 +44,7 @@ your password. The defaults below are the steady level's, the one every new agen
 
 | Setting | Default | What it does |
 |---|---|---|
-| Tick | 60 minutes | How often the agent plans (30 minutes for predator and beast). Shorter reacts faster and costs more in AI calls. The shortest allowed is 10 minutes. |
+| Tick | 60 minutes | How often the agent plans (30 minutes for predator and beast). Shorter reacts faster and costs more in AI calls. The shortest allowed is 10 minutes. A shorter tick counts from the save: the next plan comes within one new tick. |
 | Random window | 0 | Each cycle starts up to this many minutes earlier or later, at random, so the agent does not act like clockwork. It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20. |
 | Active hours | 08:00 to 20:00 UTC | The agent plans only inside this window, in UTC: 12 hours around the 14:00 UTC game-day reset. A plan still running at the end hour stops. Matches FoxLeague already scheduled are played as usual. The window may cross midnight; from 0 until 24 runs all day. |
 
