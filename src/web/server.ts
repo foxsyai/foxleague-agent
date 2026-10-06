@@ -224,12 +224,19 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           lastPlan: service.store.getKv(`last_plan_${b.index}`) ?? null,
         }
       }),
+      // Parked with Retire: what the Retired list shows to restore them.
+      retired: service.store.retiredAgents().map(b => ({
+        index: b.index, address: b.address, source: b.source, ...b.retired!,
+        // For the Spent today total: a retired agent may have spent earlier this game day.
+        spentTodayUsd: budgetView(service.store, b.index, b.settings, b.dryRun || !service.executor.liveEnabled, now).spentTodayUsd,
+      })),
     }
   }
 
   const agentIndex = (raw: string | undefined): number => {
     const n = Number(raw)
     if (!Number.isInteger(n) || !service.store.agent(n)) throw new HttpFail(404, `no agent at index ${raw}`)
+    if (service.store.agent(n)!.retired) throw new HttpFail(409, `${agentName(n)} is retired: restore it first`)
     return n
   }
 
@@ -297,6 +304,14 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
       if (method === 'GET' && path === '/api/state') return json(res, 200, state(url.searchParams.get('chat')))
 
       const m = /^\/api\/agents\/(\d+)\/([a-z]+)$/.exec(path)
+      // Restore is the one route for a retired agent.
+      if (m && method === 'POST' && m[2] === 'restore') {
+        try {
+          return json(res, 200, { ok: true, message: service.restoreAgent(Number(m[1]), user) })
+        } catch (err) {
+          throw new HttpFail(400, err instanceof Error ? err.message : String(err))
+        }
+      }
       if (m) {
         const index = agentIndex(m[1])
         const action = m[2]
@@ -334,6 +349,12 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
               if (!Number.isInteger(id) || id <= 0) throw new HttpFail(400, 'tournament_id must be a positive whole number')
               return json(res, 200, { ok: true, message: await service.leave(index, id, `web UI, ${user}`) })
             }
+            case 'retire':
+              try {
+                return json(res, 200, { ok: true, message: await service.retireAgent(index, user) })
+              } catch (err) {
+                throw new HttpFail(400, err instanceof Error ? err.message : String(err))
+              }
             case 'remove': {
               if (data.confirm !== 'REMOVE') throw new HttpFail(400, 'type REMOVE to confirm')
               recheckPassword(req, data.password)

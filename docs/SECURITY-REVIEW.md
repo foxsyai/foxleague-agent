@@ -202,6 +202,22 @@ release were checked against the agent: the tournament join and the registration
 twice, the completed 1v1s are read page by page (one page held four of the seven days), and a bid never goes above
 what the card costs from Common packs and fusion fees.
 
+## Tenth review, 2026-10-06 (Retire and restore)
+
+One adversarial reviewer tried to make a retired agent plan, sign, send, spend or come back unpaused through every
+path (scheduler, plans in flight, the executor's lock, Telegram, the web UI, the CLI, proposals, the start, Import
+team). None did: a retired agent's row is always paused, every pause check before a signature still reads it, and
+only Restore (which keeps it paused) brings it back.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R10-1 | medium | Retire paused the agent only after reading the wallet, so an action could still sign in those seconds and leave a payment waiting that no tick of a retired agent would confirm | Retire pauses first, reads the wallet, then refuses (agent left paused) while an action of that agent is still finishing or a payment waits |
+| R10-2 | low | A stale Import team confirmation for the wallet of a retired imported agent deleted that agent's key file | The import checks retired agents too before it touches any key file |
+| R10-3 | low | /ask with every agent retired paid a model call about a retired agent | It answers that every agent is retired |
+| R10-4 | low | `cli check-words` (run by the installer) and `cli agents` (for the PEM files) skipped retired agents | Both include them |
+| R10-5 | low | Retiring an agent with unsaved settings edits left the edits in the form under the next agent | The next agent's page opens with a fresh form |
+| R10-6 | note | Spent today left out what a retired agent spent earlier that game day | Counted |
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

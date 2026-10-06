@@ -175,11 +175,11 @@ form.settings .hint{font-size:11px;color:var(--dim);margin-top:3px}
   cursor:pointer;margin-left:5px;vertical-align:middle;flex:none;user-select:none;line-height:1;text-transform:none;letter-spacing:0}
 .info:hover,.info:active{background:var(--acc);color:#1a1300;border-color:var(--acc)}
 form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
-#tipwrap,#pwwrap,#guidewrap,#impwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:100;align-items:flex-end;justify-content:center}
-#tipwrap.on,#pwwrap.on,#guidewrap.on,#impwrap.on{display:flex}
-#tipbox,#pwbox,#guidebox,#impbox{background:var(--panel);border:1px solid var(--line);border-top-color:var(--acc);border-radius:14px 14px 0 0;
+#tipwrap,#pwwrap,#guidewrap,#impwrap,#retwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:100;align-items:flex-end;justify-content:center}
+#tipwrap.on,#pwwrap.on,#guidewrap.on,#impwrap.on,#retwrap.on{display:flex}
+#tipbox,#pwbox,#guidebox,#impbox,#retbox{background:var(--panel);border:1px solid var(--line);border-top-color:var(--acc);border-radius:14px 14px 0 0;
   padding:18px 18px calc(24px + env(safe-area-inset-bottom));max-width:560px;width:100%;max-height:70vh;overflow:auto}
-@media (min-width:600px){#tipwrap,#pwwrap,#guidewrap,#impwrap{align-items:center} #tipbox,#pwbox,#guidebox,#impbox{border-radius:14px;border-top-color:var(--line);margin:0 16px}}
+@media (min-width:600px){#tipwrap,#pwwrap,#guidewrap,#impwrap,#retwrap{align-items:center} #tipbox,#pwbox,#guidebox,#impbox,#retbox{border-radius:14px;border-top-color:var(--line);margin:0 16px}}
 #guidebox{max-width:680px;max-height:84vh}
 #guidebox h3{margin:0 0 4px;font-size:16px;color:var(--acc)}
 #guidebox .gitem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
@@ -192,8 +192,12 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
 #guidebox .gfoot{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;font-size:13px}
 .banner{background:rgba(255,80,80,.12);border:1px solid rgba(255,80,80,.5);border-radius:10px;padding:10px 12px;margin:0 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px}
 #tgLink{margin-top:10px}
-#pwbox h3,#impbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
-#pwbox p,#impbox p{margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--fg)}
+#pwbox h3,#impbox h3,#retbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
+#pwbox p,#impbox p,#retbox p{margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--fg)}
+#retbox .ritem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+#retbox .ritem .rtext{flex:1;min-width:200px;font-size:13px;line-height:1.5}
+#retbox .ritem .rname{font-weight:600}
+#retbox .ritem .mono{font-family:ui-monospace,Menlo,monospace;font-size:12px;color:var(--dim);overflow-wrap:anywhere}
 #pwbox input{width:100%;margin-bottom:12px}
 #pwbox .dlgdetail,#impbox .dlgdetail{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:1.5;color:var(--fg);background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:0 0 12px;overflow-wrap:anywhere}
 #pwbox .dlglabel,#impbox .dlglabel{display:block;font-size:12.5px;color:var(--dim);margin:0 0 6px}
@@ -263,6 +267,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
         <div class="controls">
           <button class="btn go" id="tickBtn">Plan now</button><i class="info" data-tip="plan_now">i</i>
           <button class="btn warn" id="pauseBtn">Pause</button><i class="info" data-tip="pause">i</i>
+          <button class="btn" id="retireBtn">Retire</button><i class="info" data-tip="retire">i</i>
           <button class="btn danger" id="removeBtn" hidden>Remove</button><i class="info" data-tip="remove" id="removeTip" hidden>i</i>
         </div>
         <div class="note" id="ctlNote"></div>
@@ -355,6 +360,11 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
   </div>
   <div class="controls"><button class="btn go" type="submit" id="impOk">Check</button><button class="btn" type="button" id="impCancel">Cancel</button></div>
 </form></div>
+<div id="retwrap"><div id="retbox" role="dialog" aria-modal="true" aria-labelledby="retTitle"><h3 id="retTitle">Retired agents<i class="info" data-tip="retire">i</i></h3>
+  <p>Parked agents: no plans, no AI cost, no warnings, and they don't count toward the agent limit. Each wallet keeps its funds. Restore brings an agent back paused, with its settings and history.</p>
+  <div id="retList"></div>
+  <div class="controls"><button class="btn" type="button" id="retClose">Close</button></div>
+</div></div>
 <div id="tipwrap"><div id="tipbox"><h3 id="tipTitle"></h3><div id="tipBody"></div><button class="close" id="tipClose">Got it</button></div></div>
 <div id="hovertip"></div>
 <script>
@@ -410,11 +420,11 @@ function renderHeader() {
   $('killBtn').className = 'btn ' + (i.killSwitch ? 'warn' : 'danger')
   $('kAgents').textContent = S.agents.length + ' / ' + i.maxAgents
   const lowFunds = S.agents.filter(b => b.funds && b.funds.low).length
-  $('kAgentsS').textContent = S.agents.filter(b => b.paused).length + ' paused' + (lowFunds ? ' · ' + lowFunds + ' low on funds' : '')
+  $('kAgentsS').textContent = S.agents.filter(b => b.paused).length + ' paused' + (S.retired && S.retired.length ? ' · ' + S.retired.length + ' retired' : '') + (lowFunds ? ' · ' + lowFunds + ' low on funds' : '')
   const p = S.agents.map(b => b.snapshot && b.snapshot.prices).find(Boolean)
   $('kEgld').textContent = p ? '$' + p.egldUsd.toFixed(2) : '–'
   $('kFoxsy').textContent = p ? '$' + p.foxsyUsd.toFixed(5) : '–'
-  const spent = S.agents.reduce((a, b) => a + b.budget.spentTodayUsd, 0)
+  const spent = S.agents.reduce((a, b) => a + b.budget.spentTodayUsd, 0) + (S.retired || []).reduce((a, r) => a + (r.spentTodayUsd || 0), 0)
   $('kSpent').textContent = usd(spent)
   $('kSpentS').textContent = S.agents.every(b => b.effectiveDryRun) ? 'simulated (dry-run ledger)' : 'live and dry-run ledgers'
   const sm = $('sModel'), se = $('sEffort')
@@ -455,6 +465,7 @@ function renderAgentbar() {
   const next = S.instance.next
   bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'Account ' + next.index + ' of your recovery words' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: addAgent }, '+ Add agent'))
   bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'An agent for a FoxLeague team you already play' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: openImport }, 'Import team'))
+  if (S.retired && S.retired.length) bar.append(el('button', { class: 'btn sm', title: 'Agents you parked with Retire: restore them from here', onclick: openRetired }, 'Retired (' + S.retired.length + ')'))
 }
 
 function row(k, v) { return [el('div', { class: 'k', text: k }), el('div', { class: 'v' }, v)] }
@@ -583,7 +594,8 @@ async function loadState() {
     if (sel === null || !S.agents.some(b => b.index === sel)) { const r = recalled(); sel = S.agents.some(b => b.index === r) ? r : (S.agents[0] ? S.agents[0].index : null) }
     renderHeader(); renderAgentbar(); renderSetup()
     if (sel !== null) renderAgent()
-    else { $('loading').textContent = 'No agents yet.'; $('agentview').hidden = true }
+    else { $('loading').textContent = S.retired && S.retired.length ? 'Every agent is retired. Restore one from Retired, or add a new one.' : 'No agents yet.'; $('loading').hidden = false; $('agentview').hidden = true }
+    if ($('retwrap').classList.contains('on')) renderRetired()
     renderChat()
   } catch (e) { if (e.message !== 'signed out') toast('Could not load state: ' + e.message, true) }
 }
@@ -654,6 +666,36 @@ $('removeBtn').onclick = async () => {
   if (!r) return
   act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && S.agents[0]) select(S.agents[0].index) })
 }
+// Retire parks an agent (paused, out of the tabs); Retired lists the parked ones, each with Restore.
+$('retireBtn').onclick = async () => {
+  const b = agent(); if (!b) return
+  const ok = await dialog({ title: 'Retire agent ' + (b.index + 1) + '?', text: 'It is paused and moved out of the tabs, into Retired. It makes no plans and costs nothing. Nothing is sold or moved: the wallet keeps its funds and the team stays in FoxLeague, so tournaments it already joined go on without it. You can restore it any time.', detail: b.address, ok: 'Retire', tone: 'warn' })
+  if (!ok) return
+  // Once it is gone, the first agent's page with a fresh form (unsaved edits never follow to another agent).
+  act('Retired', () => api('POST', '/api/agents/' + b.index + '/retire')).then(() => { if (S && !S.agents.some(x => x.index === b.index) && S.agents[0]) select(S.agents[0].index) })
+}
+function renderRetired() {
+  const list = $('retList'); list.replaceChildren()
+  if (!S.retired || !S.retired.length) { list.append(el('p', { text: 'No retired agents.' })); return }
+  const full = !S.instance.next
+  for (const r of S.retired) {
+    const held = [r.egld !== null ? r.egld + ' EGLD' : null, r.foxsy !== null ? Number(r.foxsy).toLocaleString('en-US') + ' FOXSY' : null].filter(Boolean).join(' · ')
+    list.append(el('div', { class: 'ritem' },
+      el('div', { class: 'rtext' },
+        el('div', { class: 'rname' }, 'Agent ' + (r.index + 1) + (r.team ? ' · ' + r.team : ''), r.source === 'imported' ? el('span', { class: 'vmode imported', text: 'imported', style: 'margin-left:6px' }) : ''),
+        el('div', { class: 'mono', text: r.address }),
+        el('div', { text: 'Retired ' + new Date(r.at).toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' }) + ' by ' + r.by + (held ? ' · then ' + held + (r.usd !== null ? ' (about ' + usd(r.usd) + ')' : '') : '') })),
+      el('button', { class: 'btn sm go', disabled: full, title: full ? 'Limit reached (AGENT_MAX_AGENTS): retire another agent first' : 'Back to the tabs, paused', onclick: () => restoreAgent(r.index) }, 'Restore')))
+  }
+}
+function openRetired() { renderRetired(); $('retwrap').classList.add('on'); $('retClose').focus() }
+function closeRetired() { $('retwrap').classList.remove('on') }
+async function restoreAgent(i) {
+  await act('Restored', () => api('POST', '/api/agents/' + i + '/restore'))
+  if (S && S.agents.some(b => b.index === i)) { select(i); if (!S.retired.length) closeRetired() }
+}
+$('retClose').onclick = closeRetired
+$('retwrap').addEventListener('click', e => { if (e.target.id === 'retwrap') closeRetired() })
 // Import team: step 1 reads the key file in this browser and has the server check the wallet and its team (nothing
 // is stored); step 2 confirms with the password. The fields are cleared as soon as the server has the key.
 let impToken = null
@@ -725,11 +767,15 @@ const TIPS = {
     <p>To show a key, type your web UI password first. Every reveal is logged and announced in Telegram.</p>`],
   kill: ['Kill switch', `<p>Emergency stop for every agent. While it is on, no agent plans and every action is refused, even free ones like matches and training.</p>
     <p>Nothing is lost: settings, strategy and funds stay as they are. Turning it on is one click; releasing it asks for your password.</p>`],
-  k_agents: ['Agents', `<p>Agents on this install out of the allowed maximum. The line below counts the paused ones and those low on funds (under their Top-up warning).</p>
+  k_agents: ['Agents', `<p>Active agents on this install out of the allowed maximum. The line below counts the paused ones, the retired ones and those low on funds (under their Top-up warning).</p>
     <p>Each agent has its own wallet and team. The wallets come from one set of recovery words: agent 1 uses account 0 of those words, agent 2 account 1 and so on. <b>+ Add agent</b> creates the next one; it follows the platform mode.</p>
-    <p><b>Import team</b> gives an agent to a FoxLeague team you already play, with that wallet's own key (from its PEM file, keystore file or recovery words). It is marked imported and starts paused.</p>`],
+    <p><b>Import team</b> gives an agent to a FoxLeague team you already play, with that wallet's own key (from its PEM file, keystore file or recovery words). It is marked imported and starts paused.</p>
+    <p><b>Retire</b> (on an agent's page) parks an agent you no longer use: it leaves the tabs for <b>Retired</b> and no longer counts toward the maximum. Restore brings it back.</p>`],
   remove: ['Remove', `<p>Only for an imported team. The agent stops managing it and its key is deleted from this install. The team, its cards and its funds stay in the wallet. You keep your own key file. Its history stays here.</p>
-    <p>Pause it first. It cannot be removed while a payment waits for FoxLeague's confirmation.</p>`],
+    <p>Pause it first. It cannot be removed while a payment waits for FoxLeague's confirmation. To only park the team and keep its key, use Retire.</p>`],
+  retire: ['Retire and restore', `<p>Parks an agent you no longer use: it is paused and moved out of the tabs, into <b>Retired</b> (next to + Add agent). It makes no plans, costs nothing and sends no warnings, and it does not count toward the agent limit.</p>
+    <p>Nothing is sold or moved: the wallet keeps its funds and cards, and the team stays in FoxLeague, so tournaments it already joined go on without it. An imported team keeps its key.</p>
+    <p><b>Restore</b> brings it back to the tabs with its settings and history, paused: press Resume when it should play again. It cannot be retired while a payment waits for FoxLeague's confirmation.</p>`],
   k_egld: ['EGLD price', `<p>EGLD in USD from the MultiversX API. Every spend is valued in USD at this price before it is checked against your caps.</p>`],
   k_foxsy: ['FOXSY price', `<p>FOXSY in USD at the xExchange FOXSY/WEGLD spot price. Entry fees, stakes, shop items and the registration fee are paid in FOXSY; the caps count them in USD at the higher of this price and its two-day median, so a sudden dip never makes a payment look cheaper.</p>`],
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>

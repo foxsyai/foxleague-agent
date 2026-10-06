@@ -17,6 +17,18 @@ export interface AgentRow {
   paused: boolean
   settings: AgentSettings
   createdAt: string
+  /** Set while the agent is parked with Retire (out of the tabs, always paused); null for an active agent. */
+  retired: RetiredInfo | null
+}
+
+/** When and by whom an agent was retired, and what its wallet held then (shown in Retired, to restore it). */
+export interface RetiredInfo {
+  at: string
+  by: string
+  team: string | null
+  egld: string | null
+  foxsy: string | null
+  usd: number | null
 }
 
 export type ActivityStatus = 'dry_run' | 'sent' | 'confirmed' | 'failed' | 'refused' | 'unconfirmed' | 'info' | 'error'
@@ -127,6 +139,8 @@ export class Store {
     const cols = new Set((this.db.prepare('PRAGMA table_info(agents)').all() as { name: string }[]).map(c => c.name))
     if (!cols.has('source')) this.db.exec("ALTER TABLE agents ADD COLUMN source TEXT NOT NULL DEFAULT 'derived'")
     if (!cols.has('removed_at')) this.db.exec('ALTER TABLE agents ADD COLUMN removed_at TEXT')
+    // Added with Retire: a RetiredInfo JSON while the agent is parked, NULL while it is active.
+    if (!cols.has('retired')) this.db.exec('ALTER TABLE agents ADD COLUMN retired TEXT')
   }
 
   // ---- agents ----
@@ -147,8 +161,8 @@ export class Store {
    * and history; a wallet that is already an agent is refused.
    */
   addImportedAgent(address: string): AgentRow {
-    const old = this.db.prepare('SELECT idx, source, removed_at FROM agents WHERE address = ?').get(address) as { idx: number; source: string; removed_at: string | null } | undefined
-    if (old && old.removed_at === null) throw new Error(`this wallet is already ${agentName(old.idx)}`)
+    const old = this.db.prepare('SELECT idx, source, removed_at, retired FROM agents WHERE address = ?').get(address) as { idx: number; source: string; removed_at: string | null; retired: string | null } | undefined
+    if (old && old.removed_at === null) throw new Error(`this wallet is already ${agentName(old.idx)}${old.retired ? ' (retired: restore it instead)' : ''}`)
     if (old && old.source !== 'imported') throw new Error(`this wallet is ${agentName(old.idx)} of this install`)
     if (old) {
       this.db.prepare('UPDATE agents SET removed_at = NULL, paused = 1 WHERE idx = ?').run(old.idx)
@@ -178,18 +192,39 @@ export class Store {
     return r.m ?? -1
   }
 
+  /** One agent by number, a retired one included (it stays paused); removed teams are gone. */
   agent(index: number): AgentRow | undefined {
     const r = this.db.prepare('SELECT * FROM agents WHERE idx = ? AND removed_at IS NULL').get(index) as Record<string, unknown> | undefined
     return r ? toAgentRow(r, this.liveMode) : undefined
   }
 
+  /** The active agents: the ones that plan, show in the tabs and count toward the agent limit. */
   agents(): AgentRow[] {
     const live = this.liveMode
-    return (this.db.prepare('SELECT * FROM agents WHERE removed_at IS NULL ORDER BY idx').all() as Record<string, unknown>[]).map(r => toAgentRow(r, live))
+    return (this.db.prepare('SELECT * FROM agents WHERE removed_at IS NULL AND retired IS NULL ORDER BY idx').all() as Record<string, unknown>[]).map(r => toAgentRow(r, live))
   }
 
+  /** The agents parked with Retire, until they are restored. */
+  retiredAgents(): AgentRow[] {
+    const live = this.liveMode
+    return (this.db.prepare('SELECT * FROM agents WHERE removed_at IS NULL AND retired IS NOT NULL ORDER BY idx').all() as Record<string, unknown>[]).map(r => toAgentRow(r, live))
+  }
+
+  /** Parks an agent: paused and out of the active agents. Its row, settings and history stay. */
+  retireAgent(index: number, info: RetiredInfo): void {
+    const r = this.db.prepare('UPDATE agents SET retired = ?, paused = 1 WHERE idx = ? AND removed_at IS NULL AND retired IS NULL').run(JSON.stringify(info), index)
+    if (r.changes !== 1) throw new Error(`${agentName(index)} is not an active agent`)
+  }
+
+  /** Brings a retired agent back among the active ones, still paused: the owner resumes it. */
+  restoreAgent(index: number): void {
+    const r = this.db.prepare('UPDATE agents SET retired = NULL, paused = 1 WHERE idx = ? AND removed_at IS NULL AND retired IS NOT NULL').run(index)
+    if (r.changes !== 1) throw new Error(`${agentName(index)} is not retired`)
+  }
 
   setPaused(index: number, paused: boolean): void {
+    // A retired agent stays paused until it is restored, whoever asks (web UI, Telegram, CLI).
+    if (!paused && this.agent(index)?.retired) throw new Error(`${agentName(index)} is retired: restore it first`)
     this.db.prepare('UPDATE agents SET paused = ? WHERE idx = ?').run(paused ? 1 : 0, index)
   }
 
@@ -352,5 +387,6 @@ function toAgentRow(r: Record<string, unknown>, live: boolean): AgentRow {
     // Settings added after an agent was created fall back to the defaults.
     settings: { ...DEFAULT_SETTINGS, ...(JSON.parse(String(r.settings)) as Partial<AgentSettings>) },
     createdAt: String(r.created_at),
+    retired: r.retired ? (JSON.parse(String(r.retired)) as RetiredInfo) : null,
   }
 }

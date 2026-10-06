@@ -486,7 +486,7 @@ export class Service {
   /** Agents 1..AGENT_COUNT from the recovery words exist in the store (they follow the platform mode). */
   ensureAgents(): AgentRow[] {
     // A server reads its words from the env file systemd loads (AGENT_ENV_FILE points nowhere there).
-    assertSameWords(this.store.agents(), this.cfg.mnemonic!, this.cfg.isServer ? 'the env file' : envFilePath(), this.cfg.dataDir)
+    assertSameWords([...this.store.agents(), ...this.store.retiredAgents()], this.cfg.mnemonic!, this.cfg.isServer ? 'the env file' : envFilePath(), this.cfg.dataDir)
     const count = Math.min(this.cfg.maxAgents, Math.max(1, Number(process.env.AGENT_COUNT ?? 1)))
     for (let i = 0; i < count; i++) if (!this.store.importedAt(i)) this.store.addAgent(i, this.wallet(i).address)
     const agents = this.store.agents()
@@ -569,8 +569,8 @@ export class Service {
     if (this.store.agents().length >= this.cfg.maxAgents) throw new Error(`this install allows ${this.cfg.maxAgents} agents (AGENT_MAX_AGENTS)`)
     const key = secretKeyFrom(input)
     const address = addressOfKey(key)
-    const same = this.store.agents().find(b => b.address === address)
-    if (same) throw new Error(`this wallet is already ${agentName(same.index)}`)
+    const same = [...this.store.agents(), ...this.store.retiredAgents()].find(b => b.address === address)
+    if (same) throw new Error(`this wallet is already ${agentName(same.index)}${same.retired ? ' (retired: restore it instead)' : ''}`)
     // One of the install's own accounts (now or the next ones Add agent would take) is added with Add agent.
     for (let i = 0; i <= this.store.maxIndex() + this.cfg.maxAgents; i++) {
       if (!this.store.importedAt(i) && deriveWallet(this.cfg.mnemonic!, i).address === address) throw new Error("this wallet comes from this install's own recovery words: use + Add agent instead")
@@ -605,8 +605,9 @@ export class Service {
     if (!p || p.expires < Date.now()) throw new Error('this import has expired: check the key again')
     if (this.stopping) throw new Error('the service is stopping; try again after the restart')
     if (this.store.agents().length >= this.cfg.maxAgents) throw new Error(`this install allows ${this.cfg.maxAgents} agents (AGENT_MAX_AGENTS)`)
-    const same = this.store.agents().find(b => b.address === p.address)
-    if (same) throw new Error(`this wallet is already ${agentName(same.index)}`)
+    // Retired agents too: their key file must never be overwritten or deleted by an import.
+    const same = [...this.store.agents(), ...this.store.retiredAgents()].find(b => b.address === p.address)
+    if (same) throw new Error(`this wallet is already ${agentName(same.index)}${same.retired ? ' (retired: restore it instead)' : ''}`)
     saveImportedKey(this.cfg.dataDir, p.key)
     let row: AgentRow
     try {
@@ -645,6 +646,57 @@ export class Service {
     return `${agentName(index)} removed; its key was deleted from this install`
   }
 
+  /**
+   * Retire: parks an agent the owner no longer uses. It is paused at once (a plan under way stops before its
+   * next step) and leaves the active agents: no plans, no snapshots, no warnings, no place in the agent limit.
+   * Nothing is sold or moved. Refused, the agent left paused, while an action it started is still finishing or
+   * a payment waits for FoxLeague's confirmation (only the agent's own ticks confirm one).
+   */
+  async retireAgent(index: number, who: string): Promise<string> {
+    const agent = this.store.agent(index)
+    if (!agent || agent.retired) throw new Error(`no active ${agentName(index)}`)
+    // Paused before anything is awaited, so nothing new is signed while the wallet is read.
+    if (!agent.paused) {
+      this.store.setPaused(index, true)
+      this.store.log({ agentIndex: index, kind: 'control', status: 'info', summary: `paused by ${who} to retire it` })
+    }
+    // What the wallet holds now, for the Retired list: a fresh read without the low-funds check.
+    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }).catch(() => this.snapshots.get(index))
+    // Checked after the read, with no wait before the retire itself: an action that was already signing has finished.
+    if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: retire it in a minute`)
+    if (this.store.pending(index).length) throw new Error(`${agentName(index)} is paused, but a payment waits for FoxLeague's confirmation: resume it until the payment is confirmed, then retire it`)
+    const usd = fundsUsd(snap)
+    this.store.retireAgent(index, {
+      at: new Date().toISOString(),
+      by: who,
+      team: snap?.team?.name ?? snap?.registration.teamName ?? null,
+      egld: snap?.chain ? formatAtomic(snap.chain.egld, 4) : null,
+      foxsy: snap?.chain ? formatAtomic(snap.chain.foxsy, 0) : null,
+      usd: usd === null ? null : Math.round(usd * 100) / 100,
+    })
+    clearTimeout(this.timers.get(index))
+    this.timers.delete(index)
+    this.snapshots.delete(index)
+    this.lastRefresh.delete(index)
+    this.store.log({ agentIndex: index, kind: 'control', status: 'info', summary: `retired by ${who}: paused and out of the active agents; restore it from Retired` })
+    this.notify(`${agentName(index)} retired by ${who} (${agent.address}): paused and out of the list. Its wallet keeps its funds; restore it in the dashboard, Retired.`)
+    return `${agentName(index)} retired: it is in Retired, ready to restore`
+  }
+
+  /** Restore: a retired agent rejoins the active agents, paused, within the agent limit. */
+  restoreAgent(index: number, who: string): string {
+    const agent = this.store.agent(index)
+    if (!agent?.retired) throw new Error(`${agentName(index)} is not retired`)
+    if (this.stopping) throw new Error('the service is stopping; try again after the restart')
+    if (this.store.agents().length >= this.cfg.maxAgents) throw new Error(`this install allows ${this.cfg.maxAgents} active agents (AGENT_MAX_AGENTS): retire another one first`)
+    this.store.restoreAgent(index)
+    this.store.log({ agentIndex: index, kind: 'control', status: 'info', summary: `restored by ${who}; paused until resumed` })
+    this.notify(`${agentName(index)} restored by ${who} (${agent.address}). It is paused: check its limits and strategy, then resume it.`)
+    this.schedule(index, 20_000)
+    void this.snapshot(index).catch(() => undefined)
+    return `${agentName(index)} restored, paused: press Resume when it should play again`
+  }
+
   async start(): Promise<void> {
     writeFileSync(join(this.cfg.dataDir, SERVICE_PID_FILE), String(process.pid), { mode: 0o600 })
     const agents = this.ensureAgents()
@@ -653,7 +705,8 @@ export class Service {
     this.notify(
       (local.length ? `local: ${local.join(', ')}\n` : '') +
       `foxleague-agent ${VERSION} started: ${agents.length} agent(s), strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'OFF (no ANTHROPIC_API_KEY)'}, mode ${this.modeText()}${this.store.killSwitch ? ', KILL SWITCH ON' : ''}\n` +
-        agents.map(b => `${agentName(b.index)} ${b.address}${b.paused ? ' paused' : ''}`).join('\n'),
+        agents.map(b => `${agentName(b.index)} ${b.address}${b.paused ? ' paused' : ''}`).join('\n') +
+        retiredLine(this.store.retiredAgents()),
     )
     this.startTelegram()
     const creds = credentialsFromEnv()
@@ -710,8 +763,9 @@ export class Service {
   }
 
   private scheduleNext(index: number, now = Date.now()): void {
-    const s = this.store.agent(index)?.settings
-    if (!s) return
+    const row = this.store.agent(index)
+    if (!row || row.retired) return
+    const s = row.settings
     const jitter = (Math.random() * 2 - 1) * s.tickJitterMinutes
     let delay = Math.max(MIN_TICK_MINUTES, s.tickMinutes + jitter) * 60_000
     // A planning tick about an hour before the first lock of each match session of our own (no lock of
@@ -741,6 +795,7 @@ export class Service {
     if (!agent) return `no ${agentName(index)}`
     if (this.stopping) return 'stopping'
     if (this.store.killSwitch) return 'kill switch is on'
+    if (agent.retired) return `${agentName(index)} is retired`
     if (agent.paused) return `${agentName(index)} is paused`
     if (!ownerRequest && !this.inActiveHours(agent)) return `${agentName(index)}: outside active hours`
     if (this.busy.has(index)) return `${agentName(index)} is still running its previous plan`
@@ -898,6 +953,7 @@ export class Service {
     if (!arg || arg === 'all') return this.store.agents().map(b => b.index)
     const n = numberToIndex(arg)
     if (n === undefined || !this.store.agent(n)) throw new Error(`no agent ${arg} (agents are numbered from 1)`)
+    if (this.store.agent(n)!.retired) throw new Error(`${agentName(n)} is retired: restore it in the dashboard first`)
     return [n]
   }
 
@@ -927,7 +983,7 @@ export class Service {
         return [
           `mode ${this.modeText()}; kill switch ${this.store.killSwitch ? 'ON' : 'off'}; strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'off'}; model spend $${Number(this.store.getKv('model_usd_total') ?? 0).toFixed(2)}`,
           ...agents.map(b => `${agentName(b.index)}${b.paused ? ' PAUSED' : ''} ${b.address}`),
-        ].join('\n')
+        ].join('\n') + retiredLine(this.store.retiredAgents())
       }
       case 'agents': {
         const lines: string[] = []
@@ -973,7 +1029,10 @@ export class Service {
       case 'ask': {
         if (!this.strategist) return 'no strategist (ANTHROPIC_API_KEY not set)'
         const first = numberToIndex(args[0])
-        const index = first !== undefined && this.store.agent(first) ? first : 0
+        const active = this.store.agents()
+        if (!active.length) return 'every agent is retired: restore one in the dashboard first'
+        // A number that names an agent picks it (a retired one is refused); otherwise the first active agent.
+        const index = first !== undefined && this.store.agent(first) ? this.agentsArg(args[0])[0]! : active[0]!.index
         const question = first !== undefined ? raw.slice(args[0]!.length).trim() : raw
         if (!question) return 'usage: /ask [N] question'
         const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) })
@@ -1032,6 +1091,10 @@ export class Service {
   }
 }
 
+/** One line naming the retired agents for /status and the start message (empty without any). */
+function retiredLine(retired: AgentRow[]): string {
+  return retired.length ? `\n${retired.length} retired (${whichAgents(retired.map(b => b.index))}): restore them in the dashboard, Retired` : ''
+}
 
 if (import.meta.main) {
   const service = new Service(loadConfig())

@@ -55,7 +55,7 @@ goes to your manager, with the same Apply and Cancel buttons. Commands (agents a
 
 | Command | What it does |
 |---|---|
-| `/status` | This install and every agent at a glance |
+| `/status` | This install and every agent at a glance (retired agents in one line) |
 | `/agents` | Balances and today's spend |
 | `/plan [N]` | The latest plan |
 | `/tick N` | Plan and run now |

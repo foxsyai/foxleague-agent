@@ -81,5 +81,9 @@ the team and its key is deleted from this install. The team, its cards and its f
 keep your own key file. Its history stays in the dashboard. It cannot be removed while a payment waits for
 FoxLeague's confirmation. You can import it again later.
 
+To only park the team for a while, use **Retire** instead: the agent stops and leaves the tabs, but its key stays,
+so **Restore** brings it back without importing it again ([Retire and restore an
+agent](/use/dashboard/#retire-and-restore-an-agent)).
+
 To watch the team in the FoxLeague app, log in with your own PEM file or wallet, as before
 ([Watch your team play](/use/watch-your-team/)).

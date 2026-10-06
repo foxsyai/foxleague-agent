@@ -51,7 +51,7 @@ the dashboard or by chatting with it on Telegram.
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only, a human pace, never a 1v1 or trade between your own agents; guards
   against rivals who try to farm an agent (1v1s only against teams of similar strength, at most two a week each).
-- **Reviewed.** Nine adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Ten adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 
@@ -62,6 +62,7 @@ the dashboard or by chatting with it on Telegram.
   week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`,
   `/plan`, `/pause`, `/mode`, `/kill`, `/help`.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
+  Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
 ## What it costs
 

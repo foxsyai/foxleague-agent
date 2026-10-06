@@ -104,6 +104,11 @@ export class Executor {
     return this.locks.size === 0
   }
 
+  /** No action running or queued for this agent. */
+  idleFor(index: number): boolean {
+    return !this.locks.has(index)
+  }
+
   /** Runs a plan in order; each action sees the local effect of the ones before it. */
   async run(agent: AgentRow, wallet: AgentWallet, snapshot: AgentSnapshot, plan: PlannedAction[]): Promise<ExecutionResult[]> {
     const snap = structuredClone(snapshot)

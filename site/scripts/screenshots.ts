@@ -64,6 +64,9 @@ const snap2 = structuredClone(snap)
 snap2.team = { ...snap2.team!, name: 'Vixen United' }
 snap2.profile = { ...snap2.profile!, team_name: 'Vixen United', elo_rating: 1288, matches_won: 23, matches_drawn: 4, matches_lost: 11, tournament_wins: 3 }
 svc.snapshots.set(imported.index, snap2)
+// Agent 3, parked with Retire a few days ago (it shows in Retired, not in the tabs).
+store.addAgent(imported.index + 1, svc.wallet(imported.index + 1).address)
+store.retireAgent(imported.index + 1, { at: iso(now - 3 * 86_400_000), by: 'demo', team: 'Kestrel Forge', egld: '0.8500', foxsy: '1250', usd: 6.12 })
 
 const plan = `agent 1 plan: Squad is fit (condition 72 to 100) and today's free training is still open. The own knockout T204 has 5 of 8 teams and the targeted 1v1 T212 waits for its opponent, so no new entries: train the starters who gain most and sync before tomorrow's first lock.
 1. train #6034 speed (Legendary starter, speed lowest at 40 with cap 100)
@@ -155,7 +158,13 @@ await shot('import-team')
 await js(`impToken = 'demo'; $('impFound').replaceChildren(el('div', { text: 'Vixen United · overall 64 · has a badge' }), el('div', { text: S.agents[1].address }), el('div', { text: '1.2500 EGLD · 3,120 FOXSY' })); $('impStep1').hidden = true; $('impStep2').hidden = false; $('impOk').textContent = 'Import team'`)
 await sleep(300)
 await shot('import-team-check')
-await js(`closeImport(); toggleAdmin(true)`)
+await js(`closeImport(); void $('retireBtn').click()`)
+await sleep(400)
+await shot('retire')
+await js(`$('pwCancel').click(); openRetired()`)
+await sleep(400)
+await shot('retired')
+await js(`closeRetired(); toggleAdmin(true)`)
 await sleep(1200)
 await js(`document.getElementById('adminPanel').scrollIntoView({block: 'start'})`)
 await sleep(500)

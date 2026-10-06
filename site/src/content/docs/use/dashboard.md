@@ -18,7 +18,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 
 ## The totals
 
-- **Agents**: how many agents run on this computer, how many are paused and how many are low on funds.
+- **Agents**: how many agents are active on this computer, how many are paused, how many are retired and how many
+  are low on funds.
 - **EGLD** and **FOXSY**: the live prices. Every payment is valued in USD before it is checked; FOXSY counts at the
   higher of its spot price and its two-day median, so a sudden dip never makes a payment look cheaper.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
@@ -27,7 +28,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 
 ## An agent's page
 
-- **Controls**: **Plan now** runs a planning cycle at once; **Pause** stops this agent only.
+- **Controls**: **Plan now** runs a planning cycle at once; **Pause** stops this agent only; **Retire** parks an
+  agent you no longer use (see below).
 - **Wallet and team**: the EGLD, WEGLD and FOXSY balances (WEGLD shows 0.0000 when the wallet holds none), cards,
   team, rating and record, matches and training today. **Value** is what
   the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
@@ -47,6 +49,28 @@ Above the pages, a tab per agent shows its number and team. **+ Add agent** adds
 its page ([Import your team](/use/import-team/)).
 
 ![An agent's plan, budget and settings](/screenshots/agent-page.png)
+
+## Retire and restore an agent
+
+An agent you no longer use can be parked, so only the ones that play stay in the tabs. On its page, press
+**Retire** and confirm. The agent is paused and moves to **Retired**, a button next to **Import team** that shows
+how many agents are parked there.
+
+![Retire: the agent is paused and moves to Retired](/screenshots/retire.png)
+
+A retired agent makes no plans, costs nothing, sends no warnings and does not count toward the agent limit, so it
+frees its place for a new agent. Nothing is sold or moved: the wallet keeps its funds and cards, the team stays in
+FoxLeague (tournaments it already joined go on without it) and an imported team keeps its key. An agent cannot be
+retired while a payment waits for FoxLeague's confirmation.
+
+**Retired** lists each parked agent with its team, wallet address, the day it was retired and what the wallet held
+then. **Restore** brings it back to the tabs with its settings and history, paused: check its limits, then press
+**Resume**. Restore needs a free place under the agent limit.
+
+![Retired: the parked agents, each with Restore](/screenshots/retired.png)
+
+On Telegram, `/status` names the retired agents, and commands for one of them answer that it is retired. Restore
+is in the dashboard only.
 
 ## Opening it from your phone
 

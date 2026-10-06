@@ -109,7 +109,8 @@ async function main(): Promise<void> {
     case 'check-words': {
       // A new install has no database yet: nothing to compare.
       if (!existsSync(join(cfg.dataDir, 'agent.db'))) return
-      assertSameWords(new Store(cfg.dataDir).agents(), mnemonicOrExit(), envFilePath(), cfg.dataDir)
+      const store = new Store(cfg.dataDir)
+      assertSameWords([...store.agents(), ...store.retiredAgents()], mnemonicOrExit(), envFilePath(), cfg.dataDir)
       return
     }
     case 'address': {
@@ -118,8 +119,10 @@ async function main(): Promise<void> {
       return
     }
     case 'agents': {
-      // Read by deploy/sync-pems.sh from a server: public data only (agent numbers and addresses).
-      for (const b of new Store(cfg.dataDir).agents()) console.log(`${b.index + 1} ${b.address}${b.source === 'imported' ? ' imported' : ''}`)
+      // Read by deploy/sync-pems.sh from a server: public data only (agent numbers and addresses). Retired agents
+      // are listed too, so their PEM files exist when the owner wants to play such a team by hand.
+      const store = new Store(cfg.dataDir)
+      for (const b of [...store.agents(), ...store.retiredAgents()].sort((x, y) => x.index - y.index)) console.log(`${b.index + 1} ${b.address}${b.source === 'imported' ? ' imported' : ''}`)
       return
     }
     case 'export-pem': {
