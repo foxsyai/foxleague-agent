@@ -171,6 +171,11 @@ export class Executor {
       if (ctx.opponent) logExtra.opponentUserId = ctx.opponent.userId
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
+      // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
+      if (a.type === 'register') {
+        const taken = await this.nameRefusal(wallet, a.team_name)
+        if (taken) return finish('refused', `${desc}: ${taken}`)
+      }
 
       const prices = this.valuationPrices(snap.prices)
       const built = await this.build(a, verdict, snap, wallet, prices)
@@ -441,6 +446,18 @@ export class Executor {
         return { ...none, notes: ['seat payment (joinTournament) follows the create'] }
       default:
         return none
+    }
+  }
+
+  /** Why a team name cannot be registered (FoxLeague's check before the fee), or null when it is free. */
+  private async nameRefusal(wallet: AgentWallet, name: string): Promise<string | null> {
+    try {
+      const r = await this.d.fox.nameAvailable(wallet, name)
+      return r.available ? null : `FoxLeague does not confirm the name "${name}" is free; nothing paid, the next plan picks another`
+    } catch (err) {
+      if (err instanceof ApiRefusal) return /already taken/i.test(err.message) ? `the name "${name}" is taken (FoxLeague checked it before any payment); the next plan picks another` : `FoxLeague refuses the name "${name}": ${err.message}`
+      // An unanswered check is never read as a free name in front of a payment.
+      return `the name could not be checked (${err instanceof Error ? err.message : String(err)}); nothing paid, the next plan tries again`
     }
   }
 

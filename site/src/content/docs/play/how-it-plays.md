@@ -50,4 +50,6 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Getting started by itself
 
 With EGLD in the wallet, a new agent swaps for the 5,000 FOXSY registration, picks a team name, registers and
-generates its free team badge.
+generates its free team badge. It names the team the way fans name a club: a city or town from anywhere in the
+world with a club word, such as FC, United or Rovers. It asks FoxLeague whether the name is free before it pays
+the fee, so a taken name costs nothing: it picks another.

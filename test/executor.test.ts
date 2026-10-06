@@ -131,6 +131,42 @@ test('registration refused while the whitelist gate is on', async () => {
   assert.match(r!.summary, /not whitelisted/)
 })
 
+test('registration: FoxLeague is asked about the name before the fee; a taken, refused or unchecked name pays nothing', async () => {
+  const { ApiRefusal } = await import('../src/foxleague/api.ts')
+  const s = snapshot()
+  s.registration = { ...s.registration, registered: false, feePaidOnChain: false }
+  s.config!.relayer_addresses = [ADDR] // a relayer in the wallet's shard
+  const register = { action: { type: 'register', team_name: 'Lyon Rovers' }, reason: '' } as const
+  const run = async (answer: () => Promise<unknown>) => {
+    const store = new Store('', ':memory:')
+    store.addAgent(0, ADDR)
+    const asked: string[] = []
+    let simulated = 0
+    const chain = { simulate: async () => (simulated++, { ok: true, detail: 'success', raw: {} }) } as unknown as Chain
+    const fox = { user: async () => null, nameAvailable: async (_w: unknown, name: string) => (asked.push(name), answer()) } as unknown as FoxLeague
+    const [r] = await new Executor({ cfg: {} as Config, chain, fox, store }).run(store.agent(0)!, wallet, s, [register])
+    return { r: r!, asked, simulated, spent: store.spentUsd(0, { category: 'setup', dryRun: true }) }
+  }
+
+  const free = await run(async () => ({ available: true }))
+  assert.deepEqual([free.r.status, free.asked, free.simulated], ['dry_run', ['Lyon Rovers'], 1])
+  assert.ok(free.spent > 0, 'a free name goes on to the fee')
+
+  const taken = await run(async () => { throw new ApiRefusal('That team name is already taken') })
+  assert.equal(taken.r.status, 'refused')
+  assert.match(taken.r.summary, /the name "Lyon Rovers" is taken \(FoxLeague checked it before any payment\); the next plan picks another/)
+  assert.deepEqual([taken.simulated, taken.spent], [0, 0], 'nothing built, nothing booked')
+
+  const format = await run(async () => { throw new ApiRefusal('Team name can only contain letters, numbers, spaces and hyphens') })
+  assert.match(format.r.summary, /FoxLeague refuses the name "Lyon Rovers": Team name can only contain/)
+  assert.equal(format.simulated, 0)
+
+  const unchecked = await run(async () => { throw new Error('HTTP 500') })
+  assert.equal(unchecked.r.status, 'refused')
+  assert.match(unchecked.r.summary, /the name could not be checked \(HTTP 500\); nothing paid/)
+  assert.equal(unchecked.simulated, 0, 'an unanswered check is never a free name')
+})
+
 test('gas reserve: fees may use it, a swap may not dip into it', async () => {
   const { exec, agent, store } = setup()
   store.updateSettings(0, { egldGasReserve: '0.05' })

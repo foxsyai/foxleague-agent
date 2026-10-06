@@ -312,6 +312,14 @@ export class FoxLeague {
     return this.call('/teams/badge', { method: 'POST', wallet: w, body: { badge_ipfs_uri: badgeIpfsUri } })
   }
 
+  /**
+   * Whether a team name can still be taken, by POST /api/register's own rule (3-15 characters, unique ignoring case,
+   * spaces and hyphens). A taken or malformed name is an ApiRefusal with FoxLeague's text; it reserves nothing.
+   */
+  nameAvailable(w: AgentWallet, teamName: string): Promise<{ available: boolean }> {
+    return this.call(`/register/name-available?name=${encodeURIComponent(teamName)}`, { wallet: w })
+  }
+
   register(w: AgentWallet, teamName: string): Promise<{ user_id: number; team_name: string; nonces: number[] }> {
     return this.call('/register', { method: 'POST', wallet: w, body: { team_name: teamName, wallet_address: w.address }, timeoutMs: 45_000 })
   }
