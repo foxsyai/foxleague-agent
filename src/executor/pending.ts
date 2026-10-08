@@ -39,7 +39,8 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       if (p.kind === 'shop' && /already processed|refunded|cannot be used/i.test(msg)) d.store.resolvePending(p.hash, 'done')
-      if (p.kind === 'join' && /already|Do NOT pay again|refunded/i.test(msg)) d.store.resolvePending(p.hash, 'done')
+      // "not open for registration": the tournament closed before the seat; FoxLeague refunds a paid entry (2026-10-07).
+      if (p.kind === 'join' && /already|Do NOT pay again|refunded|not open for registration/i.test(msg)) d.store.resolvePending(p.hash, 'done')
     }
   }
 }

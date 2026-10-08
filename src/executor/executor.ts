@@ -795,7 +795,7 @@ export class Executor {
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         if (/Do NOT pay again/i.test(msg)) withHash = false
-        else if (!retryable(err, /not confirmed on chain yet|retry/i)) return finish('error', `${desc}: paid ${hash} but not seated: ${msg} (the backend refunds unseated escrow)`, usd, hash)
+        else if (!retryable(err, /not confirmed on chain yet|retry/i)) return finish('error', `${desc}: paid ${hash} but not seated: ${msg} (FoxLeague refunds an unseated entry; the creator of a 1v1 is seated from it instead)`, usd, hash)
         await sleep(6000)
       }
     }

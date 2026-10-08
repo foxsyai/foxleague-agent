@@ -82,7 +82,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const t = a.shop?.training
     if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid used ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
     if (a.shop?.xp_booster) out.push(`XP booster: ${JSON.stringify(a.shop.xp_booster)}`)
-    if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id} ${a.activeMatch.kind} ${a.activeMatch.status}`)
+    if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]`)
     }

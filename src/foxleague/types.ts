@@ -215,7 +215,10 @@ export interface DailyAllowance {
 }
 
 export interface ActiveMatch {
-  match_id: number
+  /** A ranked or casual match's id; null for a tournament or 1v1 match (FoxLeague 2026-10-07: see tournament_match_id). */
+  match_id: number | null
+  /** A tournament or 1v1 match's public id (random, not a sequence); null for a ranked or casual match. */
+  tournament_match_id?: string | null
   kind: 'ranked' | 'challenge' | 'tournament'
   status: string
   tournament_id: number | null
@@ -237,7 +240,8 @@ export interface UpcomingMatch {
   strategy_locks_at: string
   locked: boolean
   phase: 'upcoming' | 'locked' | 'live' | 'finished'
-  match_id: number | null
+  /** The match's public id (random, not a sequence; replaced match_id on 2026-10-07). */
+  tournament_match_id?: string | null
   home_score: number | null
   away_score: number | null
 }

@@ -921,7 +921,7 @@ test('match preparation: the next tick comes about an hour before a strategy loc
   const next = (svc as unknown as { scheduleNext: (i: number, now?: number) => void }).scheduleNext.bind(svc)
   const now = Date.now()
   const snap = snapshot()
-  const upcoming = (locksInMin: number, phase: 'upcoming' | 'locked' = 'upcoming') => ({ tournament_id: 104, tournament_title: 'T', round_label: null, is_home: true, opponent_name: null, scheduled_at: new Date(now + (locksInMin + 30) * 60_000).toISOString(), strategy_locks_at: new Date(now + locksInMin * 60_000).toISOString(), locked: false, phase, match_id: null, home_score: null, away_score: null })
+  const upcoming = (locksInMin: number, phase: 'upcoming' | 'locked' = 'upcoming') => ({ tournament_id: 104, tournament_title: 'T', round_label: null, is_home: true, opponent_name: null, scheduled_at: new Date(now + (locksInMin + 30) * 60_000).toISOString(), strategy_locks_at: new Date(now + locksInMin * 60_000).toISOString(), locked: false, phase, tournament_match_id: null, home_score: null, away_score: null })
   snap.auth!.upcoming = { lead_minutes: 30, my_team_name: 'Agent', matches: [upcoming(80), upcoming(200)] }
   svc.snapshots.set(0, snap)
   next(0, now)
@@ -943,7 +943,7 @@ test('FR3 FR5 one preparation tick per match session, and a plan never spreads p
   ;(svc as unknown as { schedule: unknown }).schedule = (_i: number, ms: number) => void delays.push(ms)
   const next = (svc as unknown as { scheduleNext: (i: number, now?: number) => void }).scheduleNext.bind(svc)
   const now = Date.now()
-  const match = (locksInMin: number, phase: 'upcoming' | 'locked' = 'upcoming') => ({ tournament_id: 104, tournament_title: 'T', round_label: null, is_home: true, opponent_name: null, scheduled_at: new Date(now + (locksInMin + 30) * 60_000).toISOString(), strategy_locks_at: new Date(now + locksInMin * 60_000).toISOString(), locked: false, phase, match_id: null, home_score: null, away_score: null })
+  const match = (locksInMin: number, phase: 'upcoming' | 'locked' = 'upcoming') => ({ tournament_id: 104, tournament_title: 'T', round_label: null, is_home: true, opponent_name: null, scheduled_at: new Date(now + (locksInMin + 30) * 60_000).toISOString(), strategy_locks_at: new Date(now + locksInMin * 60_000).toISOString(), locked: false, phase, tournament_match_id: null, home_score: null, away_score: null })
   const snap = snapshot()
   // A round robin: a lock every 15 minutes. The session starts at the first one only.
   snap.auth!.upcoming = { lead_minutes: 30, my_team_name: 'Agent', matches: [0, 15, 30, 45, 60].map(k => match(80 + k)) }

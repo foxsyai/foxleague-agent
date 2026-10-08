@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 565ea4a7f 2026-10-01.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 858cfe30e 2026-10-08.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -45,12 +45,12 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card with at least 20 competitive matches; 63 days (1,512 hours) for a card moved before that | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The 63 days close the alt-wallet path: a second wallet's untouched Legendary cannot be moved and played the same season | Reduce Cooldown: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days, the same rate for both lengths). Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY; of a fresh 63-day one: 60 days, from 1,500 to 75,000 FOXSY |
 | **Tournament seat fee** | Bronze free; Silver 1,000 to 4,999 FOXSY; Gold 5,000 FOXSY and up | What a seat costs, chosen by the creator inside the tier | Paid exactly, on chain, into a free seat. Refunded if you leave before the registration deadline or the tournament is cancelled | None. Bronze is the free tier |
 | **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a Silver or Gold pool is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
-| **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the reveal. Unaccepted challenges refund in full at the deadline | None |
+| **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the broadcast ends. Unaccepted challenges refund in full at the deadline | None |
 | **Tournaments you can run** | 1 active as a player plus 1 active as organizer-only | Creation cap | Complete or cancel before creating another. Admins are uncapped as organizers | Not for sale |
 | **Sync fee** | 10 FOXSY per player | Writes trained stats to the chain so they count in matches | Sync All shows the total before you sign. Required before fusing or listing a player. Not required to play | None |
 | **Badge re-roll** | 1,000 FOXSY after 3 free re-rolls | A fresh AI-generated team badge from Settings | The first badge during onboarding is always free | This row is the shortcut |
 | **ELO leagues** | Bronze below 1,300; Silver 1,300; Gold 1,600; Platinum 2,000; Diamond 2,700 | Your league bracket, from your ELO | New teams start at 1,200. Ranked games against another manager move rating with K = 24. Silver tournaments and Silver 1v1s use K = 12, Gold ones K = 18. Bronze tournaments move no ELO. The bands are 300 to 700 points wide: Gold is a season of wins, Platinum about three in either direction | Not for sale |
-| **ELO decay** | On. After 10 idle days you lose 5 points every 20 hours (6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a revealed Silver or Gold tournament match resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
+| **ELO decay** | On. After 10 idle days you lose 5 points every 20 hours (6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a finished Silver or Gold tournament match resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
 | **Aging** | Minted at 18; one in-game week per real day; ramp from age 30 to the peak at 39 | Older players lose more condition per match and per training while regenerating less | Stats never drop. Every condition cost climbs to 3x its base at 39: matches from 10 or 5 to 30 or 15, training from 5 to 15; regeneration falls from 48 to 24 a day. A 39-year-old plays three tournament matches from full, then rests about 4 days | Condition recovery keeps a veteran on the pitch. Age itself is not for sale |
 | **Onboarding EGLD bonus** | 0.1 EGLD to each of the first 100 wallets that register with less than 0.01 EGLD | Covers roughly 100 on-chain actions of gas | The whole 10 EGLD reserve can go out on one day, so the first 100 wallets are paid whenever they arrive. After the 100 wallets you top up EGLD yourself | None |
 | **Registration relayer** | 3 attempts per wallet per 10 minutes; 5,000 relayed registrations per day platform-wide | Rate limits on the gas-free registration | Past the daily cap the gas-free registration closes (the registration screen says "Onboarding closed for today"): try again tomorrow or ask the team on Telegram. There is no path where you pay the registration gas yourself | Not for sale |
@@ -488,7 +488,7 @@ The **Upcoming** page lists every scheduled match you still have to play:
 - Kickoff date and time
 - A live countdown to the **strategy lock** for that match
 
-Use it to see how long you still have to set your plan for each game. A countdown turns orange in the final hour before a lock. Once your lineup is captured the card counts down to kickoff instead. Finished games stay on the list for 24 hours after their reveal.
+Use it to see how long you still have to set your plan for each game. A countdown turns orange in the final hour before a lock. Once your lineup is captured the card counts down to kickoff instead. Finished games stay on the list for 24 hours after their broadcast ends.
 
 ![Upcoming Games page listing your scheduled matches, each with a live countdown to its tactics lock](/screenshots/upcoming-games.png)
 
@@ -545,7 +545,7 @@ The competitive mode. ELO points move between you and your opponent based on the
 - **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO.
 - **Condition**: only you, the player who started the match, pay condition. The opponent drawn into your game pays nothing.
 - **ELO**: the winner gains exactly what the loser drops. The size of the swing depends on the rating gap: beating a stronger opponent moves more points than beating a weaker one. A draw moves a few points from the higher-rated player to the lower-rated one; between equal ratings it changes nothing. Ranked games move your rating with a K-factor of **24**.
-- **Inactivity decay**: rating decay is active. After **10 days** without an ELO-affecting match (a ranked game against a real opponent or a revealed Silver/Gold tournament match) you lose **5 rating points every 20 hours** (6 a day), down to a floor of **1200**. Casual play, ranked games against the AI and Bronze tournaments do not stop the decay.
+- **Inactivity decay**: rating decay is active. After **10 days** without an ELO-affecting match (a ranked game against a real opponent or a finished Silver/Gold tournament match) you lose **5 rating points every 20 hours** (6 a day), down to a floor of **1200**. Casual play, ranked games against the AI and Bronze tournaments do not stop the decay.
 
 You see your ELO in the header and on the **Leaderboard** tab. The leaderboard is a single global ELO ranking across all leagues.
 
@@ -616,7 +616,7 @@ The entry fee is written to the tournaments contract when the challenge is creat
 
 ![Create 1v1 Challenge form (title, description, tier picker, entry fee with live pool calculator, opponent search, deadline buttons)](/screenshots/create-1v1-form.png)
 
-Your synced XI is captured as a **snapshot** when the simulator picks the match up, the same way regular tournament matches work. For a 1v1 that happens right after the opponent accepts, not when you create the challenge. Training and syncing done before the opponent accepts still count; anything after the pickup doesn't.
+Your synced XI is captured as a **snapshot** at the match's strategy lock, the same way regular tournament matches work. A 1v1 normally kicks off a few minutes after the opponent accepts, so its lineup is captured right then, not when you create the challenge. Training and syncing done before the opponent accepts still count; anything after the lock doesn't.
 
 ## Targeted vs open challenges
 
@@ -662,7 +662,7 @@ The challenge detail page and the lobby card show the resolution method in the f
 
 ## Prize delivery
 
-The winner's 90% payout is **distributed automatically to their wallet**, about 3 minutes (180 seconds) after the result is revealed. The challenge detail page shows a **distribute transaction link** once the payout fires. No claim action required.
+The winner's 90% payout is **distributed automatically to their wallet**, about 3 minutes (180 seconds) after the match's broadcast ends. The challenge detail page shows a **distribute transaction link** once the payout fires. No claim action required.
 
 ![Completed 1v1 detail (header with LOCKED + SILVER + COMPLETED badges, prize structure card, FT match card with ELO swing and Distribute TX link)](/screenshots/challenge-detail.png)
 
@@ -696,14 +696,14 @@ Cancelled or finished challenges don't count. Once your active one resolves (win
 
 ## Snapshot rules (same as tournaments)
 
-Once the challenge fills and the simulator picks the match up:
+Once the challenge fills and its strategy lock passes:
 
 - Your synced XI is **locked** for this match
-- Training/sync after the pickup doesn't apply to this match
-- Individual players are not locked. Instead your **account** is blocked from starting casual or ranked matches from **1 hour before** the 1v1 (or any of your tournament matches) is scheduled until its result is revealed
+- Training/sync after the lock doesn't apply to this match
+- Individual players are not locked. Instead your **account** is blocked from starting casual or ranked matches from **1 hour before** the 1v1 (or any of your tournament matches) is scheduled until its broadcast ends
 - An open challenge still waiting for an opponent doesn't restrict you at all
 - You cannot create or join a 1v1 while you're inside a standard tournament's blocking window (from 1 hour before it starts until 1 hour after its estimated end). The error reads "You have a tournament match within the hour"
-- Once the result is revealed, you're free to play again immediately
+- Once the broadcast ends, you're free to play again immediately
 
 > **Post-transfer cooldown**
 > Any player that arrived in your wallet via a **wallet-to-wallet transfer** within the transfer cooldown (**21 days / 504 hours**, **63 days** for a card that had fewer than 20 competitive matches when it moved) **cannot** be staked into a 1v1. Same anti-rental rule that applies to ranked matches plus tournaments. Marketplace purchases, fusion outputs, distribute events, shop mints do **not** trigger the cooldown. Only direct wallet-to-wallet transfers do. You can pay to cut a transfer cooldown down to a 3-day floor in **Marketplace → Shop → Reduce Cooldown**.
@@ -721,10 +721,10 @@ There's no separate Hall of Fame for 1v1. They're tracked alongside regular rank
 ## Tips
 
 - **Target someone in your ELO range**. Picking a much weaker opponent looks like sandbagging; picking someone much stronger is high-variance gambling.
-- **Sync before the opponent accepts**. The snapshot freezes whatever's synced when the match is picked up, right after the challenge fills. Train/sync first, then challenge, because an open challenge can be accepted at any moment.
+- **Sync before the opponent accepts**. The snapshot freezes whatever's synced at the match's strategy lock, normally right after the challenge fills. Train/sync first, then challenge, because an open challenge can be accepted at any moment.
 - **Pick a deadline you'll honor**. If you target someone, give them time to see and respond. 30 min is aggressive; 1-2 h is conventional.
 - **Check the live entry-fee bounds** in the create form.
-- **Mind the 1-hour busy window**. Casual and ranked play is blocked from 1 hour before your 1v1 kicks off until it's revealed, so plan around the deadline window. Overlapping tournament matches are handled by the scheduler, which slides the 1v1 kickoff past them.
+- **Mind the 1-hour busy window**. Casual and ranked play is blocked from 1 hour before your 1v1 kicks off until its broadcast ends, so plan around the deadline window. Overlapping tournament matches are handled by the scheduler, which slides the 1v1 kickoff past them.
 
 # Shop
 (docs.foxleague.ai/mechanics/shop/)
@@ -1028,7 +1028,7 @@ Reasons a player can't be fielded even when ready:
 - **In transfer cooldown**: 21 days (504h) after a wallet-to-wallet receive, 63 days for a card that had fewer than 20 competitive matches when it moved. You can pay to cut it to a 3-day floor in **Marketplace → Shop → Reduce Cooldown**
 - **Listed for sale**: escrowed on the marketplace until you cancel the listing
 
-Kickoff can also be blocked at the **account** level: from 1 hour before one of your tournament or 1v1 matches is scheduled until it's revealed, casual and ranked play is off.
+Kickoff can also be blocked at the **account** level: from 1 hour before one of your tournament or 1v1 matches is scheduled until its broadcast ends, casual and ranked play is off.
 
 The widget breaks down by position so you see if you're short of, e.g., midfielders.
 
@@ -1214,7 +1214,7 @@ If one of the two teams in a match is busy with a match in another tournament at
 
 Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its estimated end. The estimate counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other tournament on the platform that is not completed or cancelled, otherwise creation fails with a time-slot conflict. Joining has no window check. 1v1 challenges cannot be created or joined while you are inside the blocking window of a tournament you are in; they never reserve a window of their own.
 
-You do not have to guess a free time. On the Schedule step the form tells you whether the start you picked is free and, when it is not, proposes the **next free slot** with a **Use this slot** button. **See free times** opens a calendar in your own time zone: every start where your tournament fits is green. The windows of other tournaments are shown with their titles. One tap on a green start sets the start and the registration deadline and keeps the rest of the form. The calendar and the creation check use the same rule, so a green start is one that creation accepts.
+You do not have to guess a free time. On the Schedule step the form tells you whether the start you picked is free and, when it is not, proposes the **next free slot** with a **Use this slot** button. **See free times** opens a calendar in your own time zone: every start where your tournament fits is green. The windows of other tournaments are shown with their titles. A gray block is another tournament's start window: the hour before its kickoff, the time it needs to get its first round under way and an hour after. Hover over it or tap it to see the tournament and its booked times. A tournament that runs for days books only this window; its later rounds run alongside other tournaments, so they do not block the calendar. A new tournament cannot start inside a gray block. One tap on a green start sets the start and the registration deadline and keeps the rest of the form. The calendar and the creation check use the same rule, so a green start is one that creation accepts.
 
 ---
 

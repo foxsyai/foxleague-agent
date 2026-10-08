@@ -211,7 +211,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   const registered = Boolean(profile?.team_name)
 
   const players = registered
-    ? ((await attempt(warnings, 'players', () => fox.players(address))) ?? []).map(p => playerView(p, team, now))
+    ? ((await attempt(warnings, 'players', () => fox.players(address, wallet ?? undefined))) ?? []).map(p => playerView(p, team, now))
     : []
 
   // Registration readiness only matters before the team exists.
@@ -244,16 +244,16 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [] }
   }
 
-  const [openAll, completed, cancelled, board, listings, floors, active, pendingSc, simulating, doneChallenges] = await Promise.all([
+  const [openAll, completed, cancelled, board, listings, floors, active, pendingSc, doneChallenges] = await Promise.all([
     attempt(warnings, 'open tournaments', () => fox.tournaments({ status: 'open' })),
     attempt(warnings, 'completed tournaments', () => fox.tournaments({ status: 'completed', kind: 'standard' })),
     attempt(warnings, 'cancelled tournaments', () => fox.tournaments({ status: 'cancelled', kind: 'standard' })),
     attempt(warnings, 'leaderboard', () => fox.leaderboard(200)),
     attempt(warnings, 'marketplace listings', () => fox.listings({ sort_by: 'overall_desc', limit: 50 })),
     attempt(warnings, 'marketplace floors', () => fox.floorPrices()),
+    // FoxLeague answers only its public statuses (2026-10-07): a tournament being simulated reads active.
     attempt(warnings, 'running tournaments', () => fox.tournaments({ status: 'active', kind: 'standard' })),
     attempt(warnings, 'pending tournaments', () => fox.tournaments({ status: 'pending_sc', kind: 'standard' })),
-    attempt(warnings, 'simulating tournaments', () => fox.tournaments({ status: 'simulating', kind: 'standard' })),
     attempt(warnings, 'completed 1v1s', () => recentChallenges(fox, now)),
   ])
   const recentStandard = [...(completed ?? []), ...(cancelled ?? [])]
@@ -339,7 +339,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       openChallenges: (openAll ?? []).filter(t => t.max_teams === 2),
       recentStandard,
       scouted,
-      slots: slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? []), ...(simulating ?? [])]),
+      slots: slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? [])]),
       auctions: (listings ?? []).filter(l => l.is_auction && l.owner_address !== address).slice(0, 15),
       floors: floors ?? [],
     },

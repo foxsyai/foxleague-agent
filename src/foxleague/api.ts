@@ -158,9 +158,13 @@ export class FoxLeague {
     }
   }
 
-  /** Roster (30 s server cache, never invalidated): read single cards with player() after a change. */
-  players(address: string): Promise<PlayerCard[]> {
-    return this.call<PlayerCard[]>(`/players/${address}`)
+  /**
+   * Roster (30 s server cache, never invalidated): read single cards with player() after a change. Asked with the
+   * wallet's own session, FoxLeague reads the cards from the chain; anyone else gets its own records (2026-10-07).
+   * Listed cards are left out either way.
+   */
+  players(address: string, wallet?: AgentWallet): Promise<PlayerCard[]> {
+    return this.call<PlayerCard[]>(`/players/${address}`, wallet ? { wallet } : {})
   }
 
   player(nonce: number): Promise<PlayerCard> {

@@ -379,7 +379,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const al = s.auth?.allowance
       if (!al) return refuse('daily allowance unknown')
       if (al.today_count >= al.daily_limit) return refuse(`daily match limit reached (${al.today_count}/${al.daily_limit})`)
-      if (s.auth?.activeMatch) return refuse(`already in match #${s.auth.activeMatch.match_id}`)
+      if (s.auth?.activeMatch) return refuse(`already in match #${s.auth.activeMatch.match_id ?? s.auth.activeMatch.tournament_match_id ?? '?'}`)
       const busy = tournamentMatchWithinHour(s, ctx.now)
       if (busy) return refuse(`pre-match lockout: ${busy}`)
       const legal = squadLegal(s)
