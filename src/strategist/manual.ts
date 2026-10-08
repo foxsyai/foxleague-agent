@@ -6,14 +6,36 @@ import { execFileSync } from 'node:child_process'
 
 export const MANUAL_BRANCH = 'origin/release/mainnet-1.0'
 const ROOT = 'docs/manual/src/content/docs'
-/**
- * What shapes play decisions: the economy map first, every mechanics page, fair play. Left out:
- * getting started (onboarding and app walkthroughs; registration is handled by code), the FAQ and
- * glossary (support answers and definitions the mechanics pages already give), the World Cup preview
- * (not live), developer guides, privacy, terms and the roadmap.
- */
+/** What shapes play decisions: the economy map first, every mechanics page, fair play. A new page in these folders is taken in. */
 const FOLDERS = ['mechanics/economy-map.mdx', 'mechanics', 'legal/fair-play.md']
-const SKIP = new Set(['mechanics/world-cup.mdx'])
+
+/**
+ * Every other page of the manual, each left out on purpose (a page or a whole folder). A page that is in neither
+ * list stops sync-manual and manual-status until someone decides: a new section is never skipped unseen.
+ */
+export const LEFT_OUT: Record<string, string> = {
+  'mechanics/world-cup.mdx': 'a preview, not live',
+  'getting-started': 'onboarding and app walkthroughs; registration is handled by code',
+  'reference': 'the FAQ and glossary: support answers and definitions the mechanics pages already give',
+  'developer': 'guides for developer teams, not for playing',
+  'legal/privacy.md': 'privacy policy',
+  'legal/terms.md': 'terms of use',
+  'vision': 'roadmap and plans, not live rules',
+  'index.mdx': 'the welcome page',
+  'connect-ai.mdx': "connecting an AI client to FoxLeague's read-only MCP server, not a game rule",
+}
+
+const under = (page: string, entry: string) => page === entry || page.startsWith(`${entry}/`)
+
+/** The manual's pages (paths under the docs root) that are neither taken in nor left out on purpose. */
+export function undecidedPages(pages: string[]): string[] {
+  return pages.filter(p => !FOLDERS.some(f => under(p, f)) && !Object.keys(LEFT_OUT).some(e => under(p, e)))
+}
+
+/** Every page of the manual on the mainnet branch, as paths under the docs root. */
+function manualPages(git: (...args: string[]) => string): string[] {
+  return git('ls-tree', '-r', '--name-only', MANUAL_BRANCH, '--', ROOT).split('\n').filter(f => /\.mdx?$/.test(f)).map(f => f.slice(ROOT.length + 1))
+}
 
 /** One page as plain markdown: title heading, no imports or source comments, callouts as quotes. */
 export function cleanPage(source: string, path: string): string {
@@ -40,35 +62,36 @@ export function cleanPage(source: string, path: string): string {
 }
 
 /** Reads the pages from a FoxLeague checkout (after a fetch) and returns manual.md's content. */
-export function buildManual(repo: string): { text: string; pages: number; commit: string } {
+export function buildManual(repo: string): { text: string; pages: number; commit: string; undecided: string[] } {
   const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
   git('fetch', '--quiet', 'origin', MANUAL_BRANCH.replace(/^origin\//, ''))
   const commit = git('log', '-1', '--format=%h %cs', MANUAL_BRANCH, '--', ROOT).trim()
-  const all = git('ls-tree', '-r', '--name-only', MANUAL_BRANCH, '--', ROOT).split('\n').filter(f => /\.mdx?$/.test(f))
+  const all = manualPages(git)
   const paths: string[] = []
   for (const folder of FOLDERS) {
-    for (const f of all.filter(f => f === `${ROOT}/${folder}` || f.startsWith(`${ROOT}/${folder}/`)).sort()) {
-      if (!paths.includes(f) && !SKIP.has(f.slice(ROOT.length + 1))) paths.push(f)
+    for (const p of all.filter(p => under(p, folder)).sort()) {
+      if (!paths.includes(p) && !Object.keys(LEFT_OUT).some(e => under(p, e))) paths.push(p)
     }
   }
-  const pages = paths.map(f => cleanPage(git('show', `${MANUAL_BRANCH}:${f}`), f.slice(ROOT.length + 1)))
+  const pages = paths.map(p => cleanPage(git('show', `${MANUAL_BRANCH}:${ROOT}/${p}`), p))
   const header = [
     '# FoxLeague player manual',
     `The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, ${MANUAL_BRANCH.replace(/^origin\//, '')} at ${commit}.`,
     'Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.',
     "A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.",
   ].join('\n')
-  return { text: `${header}\n\n${pages.join('\n')}`, pages: pages.length, commit }
+  return { text: `${header}\n\n${pages.join('\n')}`, pages: pages.length, commit, undecided: undecidedPages(all) }
 }
 
 /**
  * Whether manual.md still matches FoxLeague's manual: the commit written in its header against the manual's
  * newest commit on the mainnet branch of a FoxLeague checkout (after a fetch).
  */
-export function manualStatus(repo: string, manual: string): { synced: string; latest: string; current: boolean } {
+export function manualStatus(repo: string, manual: string): { synced: string; latest: string; current: boolean; undecided: string[] } {
   const git = (...args: string[]) => execFileSync('git', ['-C', repo, ...args], { encoding: 'utf8' })
   git('fetch', '--quiet', 'origin', MANUAL_BRANCH.replace(/^origin\//, ''))
   const latest = git('log', '-1', '--format=%h %cs', MANUAL_BRANCH, '--', ROOT).trim()
   const synced = / at ([0-9a-f]{7,} \d{4}-\d{2}-\d{2})\./.exec(manual.split('\n', 3).join('\n'))?.[1] ?? 'unknown'
-  return { synced, latest, current: synced === latest }
+  const undecided = undecidedPages(manualPages(git))
+  return { synced, latest, current: synced === latest && !undecided.length, undecided }
 }

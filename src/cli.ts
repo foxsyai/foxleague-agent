@@ -137,16 +137,21 @@ async function main(): Promise<void> {
       const repo = resolve(args[0] ?? join(REPO_ROOT, '..', 'next-foxleague'))
       if (!existsSync(join(repo, '.git'))) throw new Error(`${repo} is not a FoxLeague checkout; pass its path`)
       const st = manualStatus(repo, readFileSync(join(REPO_ROOT, 'src', 'strategist', 'manual.md'), 'utf8'))
-      console.log(st.current
-        ? `Game knowledge is up to date with FoxLeague's manual (${st.latest}).`
-        : `GAME KNOWLEDGE IS BEHIND: it was synced at ${st.synced}, FoxLeague's manual is at ${st.latest}. Run: npm run cli -- sync-manual, then commit and deploy.`)
+      if (st.synced !== st.latest) console.log(`GAME KNOWLEDGE IS BEHIND: it was synced at ${st.synced}, FoxLeague's manual is at ${st.latest}. Run: npm run cli -- sync-manual, then commit and deploy.`)
+      if (st.undecided.length) console.log(undecidedText(st.undecided))
+      if (st.current) console.log(`Game knowledge is up to date with FoxLeague's manual (${st.latest}).`)
       if (!st.current) process.exitCode = 2
       return
     }
     case 'sync-manual': {
       const repo = resolve(args[0] ?? join(REPO_ROOT, '..', 'next-foxleague'))
       if (!existsSync(join(repo, '.git'))) throw new Error(`${repo} is not a FoxLeague checkout; pass its path`)
-      const { text, pages, commit } = buildManual(repo)
+      const { text, pages, commit, undecided } = buildManual(repo)
+      // A page nobody has decided on stops the sync: it might be a new rule the agent would not know.
+      if (undecided.length) {
+        console.error(undecidedText(undecided))
+        process.exit(2)
+      }
       const out = join(REPO_ROOT, 'src', 'strategist', 'manual.md')
       writeFileSync(out, text)
       console.log(`Wrote ${out}: ${pages} pages, ${Math.round(text.length / 1024)} KB (about ${Math.round(text.length / 2.7 / 1000)}k tokens; tables run about 2.7 characters a token), manual at ${commit}.`)
@@ -332,6 +337,17 @@ function parsePlan(json: string | undefined): PlannedAction[] {
   if (!json) usage()
   const raw = JSON.parse(json) as unknown
   return (Array.isArray(raw) ? raw : [raw]).map(a => ({ action: parseAction(a), reason: 'operator (CLI)' }))
+}
+
+/** The manual pages no list covers yet, and what to do about them. */
+function undecidedText(pages: string[]): string {
+  return [
+    `NEW MANUAL PAGES, NOT DECIDED YET (${pages.length}):`,
+    ...pages.map(p => `  ${p}`),
+    'Read each one. A page with game rules goes into FOLDERS in src/strategist/manual.ts (and the condensed rules in',
+    'prompt.ts and the checks in rules.ts if it changes play); any other page goes into LEFT_OUT there, with the reason.',
+    'Then run sync-manual again.',
+  ].join('\n')
 }
 
 /** An address-only wallet for simulations: it cannot sign anything. */

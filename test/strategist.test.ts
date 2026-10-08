@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { Store } from '../src/store/db.ts'
 import { EFFORTS, MODELS, Strategist, deadlineMs, renderPlanRequest, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
 import { Proposals } from '../src/strategist/proposals.ts'
-import { cleanPage } from '../src/strategist/manual.ts'
+import { cleanPage, undecidedPages } from '../src/strategist/manual.ts'
 import type { Config } from '../src/config.ts'
 import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
 import { budgetView } from '../src/executor/budget.ts'
@@ -250,4 +250,11 @@ test('each level brings its own default limits, rising with the level; every age
   assert.throws(() => checkTiming({ ...D, tickMinutes: 30, tickJitterMinutes: 25 }), /under 10 minutes: lower it to 20 or less/)
   checkTiming({ ...D, tickMinutes: 30, tickJitterMinutes: 20 })
   assert.throws(() => validateSettingsPatch({ minGapSeconds: 10 }), /between 30 and 3600/, 'no two actions closer than 30 seconds')
+})
+
+test('manual sync: every page is taken in or left out on purpose; a new section is named, never skipped unseen', () => {
+  const today = ['mechanics/fusion.mdx', 'mechanics/world-cup.mdx', 'legal/fair-play.md', 'legal/terms.md', 'getting-started/wallet.mdx', 'reference/faq.md', 'developer/building.mdx', 'vision/roadmap.mdx', 'index.mdx', 'connect-ai.mdx']
+  assert.deepEqual(undecidedPages(today), [])
+  assert.deepEqual(undecidedPages([...today, 'mechanics/leagues.mdx']), [], 'a new mechanics page is taken in by its folder')
+  assert.deepEqual(undecidedPages([...today, 'competitions/world-league.mdx', 'legal/refunds.md', 'season.mdx']), ['competitions/world-league.mdx', 'legal/refunds.md', 'season.mdx'])
 })
