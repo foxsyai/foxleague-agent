@@ -29,6 +29,9 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 - In the dashboard, raising a limit, releasing the kill switch and changing a key all ask for your password again.
   Telegram obeys your own chat only (`/kill off` releases the switch there).
 - Your recovery words and keys stay on your computer. The dashboard is not on the internet.
+- **Top-ups from Binance** move only with a one-time code you send on Telegram, only to an agent's own wallet,
+  with a key that can only read and withdraw from one IP. A withdrawal whose answer was lost is never sent again
+  by itself: you check Binance first.
 
 ## A wallet only for the game
 
@@ -57,6 +60,6 @@ You remain responsible for your agents.
 
 ## Reviewed
 
-The code went through ten adversarial reviews that tried to break the money limits, attack it from outside and
+The code went through eleven adversarial reviews that tried to break the money limits, attack it from outside and
 break its security. Every finding was fixed with a test that proves it, except two low ones that were weighed and
 accepted; all are listed in the review record.

@@ -218,6 +218,23 @@ only Restore (which keeps it paused) brings it back.
 | R10-5 | low | Retiring an agent with unsaved settings edits left the edits in the form under the next agent | The next agent's page opens with a fresh form |
 | R10-6 | note | Spent today left out what a retired agent spent earlier that game day | Counted |
 
+## Eleventh review, 2026-10-09 (EGLD top-ups from Binance, approved by code)
+
+One adversarial reviewer tried to withdraw EGLD without the owner's code, twice for one code, to a wrong
+address, in dry run, with the kill switch on or above the proposal, through races between offers and
+approvals. None did: an approval claims its request before anything is awaited, the address is the agent's own
+and checked again, and the code (a hash only is kept) reaches the owner's Telegram chat and nothing else.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R11-1 | medium | A restart while a top-up was being sent left it 'sending' for good: its outcome was never looked up and that agent's top-ups stayed blocked | The start and /topup look such a request up on Binance by its order id (sent, failed, or never went out after 30 minutes); a stop waits for a top-up being sent |
+| R11-2 | low | A lost answer later found as cancelled, rejected or failed on Binance was reported as sent | Only Binance's pending and completed states count as sent |
+| R11-3 | low | A typed amount could be sent one rounding step higher, or raised to Binance's minimum without a word | Whole steps are kept as typed; under the minimum is refused and the code stays valid |
+| R11-4 | low | A lost Telegram message with the code blocked a new code for an hour | /topup N replaces an open code with a new one |
+
+Added the same day: a top-up goes only to a wallet on the Binance withdrawal whitelist, and Test keys shows which
+agent wallets are not on it yet.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

@@ -90,14 +90,17 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
 5. Link your chat: the installer shows a 6-digit code, or press **Link my Telegram** in Keys. Send the code to
    your new Telegram bot from your own account, then press **I sent it**. It then talks only to you.
 
-**3. CEX top-up (optional): automatic EGLD top-ups from an exchange, coming in a later version**
+**3. CEX top-up (optional): EGLD top-ups from an exchange, each one approved by you on Telegram**
 
-The example is Binance: an API key that can only withdraw EGLD to your agent wallets.
+When an agent runs low, Telegram shows what it has, the EGLD that brings it to its monthly budget and a one-time
+code; `/topup <code>` sends it (`/topup N` asks for one at any time). It needs Telegram and LIVE mode. An account
+in the EU also needs `BINANCE_ACCOUNT_TYPE=individual` (or `corporate`) in `.env`, for Binance's Travel Rule form.
+The example is Binance: an API key that can only read and withdraw EGLD to your agent wallets.
 
 1. Log in to Binance and open [API Management](https://www.binance.com/en/my/settings/api-management).
 2. Press Create API, choose System generated, name it foxleague-agent and confirm with your 2FA.
-3. Press Edit restrictions: tick only **Enable Withdrawals** and restrict access to this computer's public IP
-   ([shown here](https://api.ipify.org)). Never tick trading.
+3. Press Edit restrictions: tick only **Enable Withdrawals** and restrict access to the public IP of the computer
+   the agent runs on ([shown here](https://api.ipify.org) when you open it there). Never tick trading.
 4. In [Address Management](https://www.binance.com/en/my/security/address-management), add each agent wallet on
    the MultiversX (EGLD) network and switch the whitelist on, so money can only go to your agents.
 5. Copy the API key and the secret (the secret is shown only once) and paste both in Keys.

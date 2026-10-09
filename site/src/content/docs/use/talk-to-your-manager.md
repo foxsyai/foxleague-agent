@@ -67,6 +67,8 @@ goes to your manager, with the same Apply and Cancel buttons. Commands (agents a
 | `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, beast) |
 | `/clear` | Start a new conversation with the manager |
 | `/kill on\|off` | Stop every agent at once, or release |
+| `/topup N` | Propose an EGLD top-up from Binance for agent N, with a one-time code |
+| `/topup <code> [EGLD]` | Approve it (with an amount, that much instead) |
 | `/help` | The full list |
 
 Your Telegram bot answers only your own chat and ignores everyone else.

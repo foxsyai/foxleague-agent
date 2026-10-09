@@ -762,7 +762,7 @@ const TIPS = {
     <p><b>Dry run:</b> the agent plans, checks each action against the game rules and your caps, then simulates it on chain. Nothing is signed or sent. The spend goes to a separate dry-run ledger.</p>
     <p><b>Live:</b> actions are signed and sent with real EGLD and FOXSY, inside the same caps.</p>
     <p>Going live asks you to type <code>GO LIVE</code> and your password. Back to dry run is one click. Live also needs the server permission <code>AGENT_LIVE_ENABLED=1</code>; without it the button stays grey.</p>`],
-  keys: ['Keys', `<p>The keys every agent shares. Anthropic runs the strategist. Telegram sends you notifications and takes your commands. Binance will fund the agent wallets automatically (a later step).</p>
+  keys: ['Keys', `<p>The keys every agent shares. Anthropic runs the strategist. Telegram sends you notifications and takes your commands. Binance tops up the agent wallets with EGLD, each top-up approved by you on Telegram with a one-time code.</p>
     <p>Values are masked. Paste a new value and press Save: it is checked, stored on the server and used at once, with no restart.</p>
     <p>To show a key, type your web UI password first. Every reveal is logged and announced in Telegram.</p>`],
   kill: ['Kill switch', `<p>Emergency stop for every agent. While it is on, no agent plans and every action is refused, even free ones like matches and training.</p>
@@ -788,7 +788,8 @@ const TIPS = {
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
   key_TELEGRAM_BOT_TOKEN: ['Telegram bot token', `<p>The token of your Telegram bot from @BotFather. Notifications go out through it and your commands come in through it. A new token restarts the Telegram connection at once.</p>`],
   key_TELEGRAM_CHAT_ID: ['Telegram chat id', `<p>Your own chat with your Telegram bot. It answers only this chat and ignores everyone else. It is not a secret, so it is shown in full.</p>`],
-  key_BINANCE_API_KEY: ['Binance API key', `<p>For automatic EGLD top-ups of the agent wallets, a later step. The key must allow withdrawals only, be restricted to the server's IP and send only to the whitelisted agent addresses. Test keys checks the withdrawal and IP settings and that trading and transfers are off; the address whitelist cannot be read through the API, so check it in Binance yourself.</p>`],
+  key_BINANCE_API_KEY: ['Binance API key', `<p>For EGLD top-ups of the agent wallets that you approve. When an agent runs low, Telegram shows what it has, the EGLD that brings it to its monthly budget and a one-time code; <b>/topup</b> with the code sends it (with an amount after the code, less). <b>/topup N</b> asks for one at any time. It needs Telegram and LIVE mode. An EU account also needs BINANCE_ACCOUNT_TYPE (individual or corporate) in the env file, for Binance's Travel Rule form.</p>
+    <p>The key must allow reading and withdrawals only, be restricted to the server's IP and send only to the whitelisted agent addresses. Test keys checks the withdrawal and IP settings, that trading and transfers are off and which agent wallets are on your withdrawal whitelist: a top-up goes only to a whitelisted wallet. Switch the whitelist itself on in Binance (Account, Withdrawal): that switch cannot be read through the API.</p>`],
   key_BINANCE_API_SECRET: ['Binance API secret', `<p>The secret that belongs to the Binance API key. Binance shows it only once, when you create the key.</p>`],
   keys_test: ['Test keys', `<p>Checks every key against its service: Anthropic model access, a test message to your Telegram chat and the Binance key's permissions. Nothing is changed.</p>`],
   plan_now: ['Plan now', `<p>Runs a planning cycle for this agent now instead of waiting for the next one. The strategist reads a fresh snapshot and proposes actions; they run at random moments over the next minutes, checked like any other action.</p>
@@ -1101,11 +1102,11 @@ const GUIDE = [
       ['Still in Keys, press Link my Telegram, send the 6-digit code to your new Telegram bot, then press I sent it. From then on it talks only to you.', null, true],
     ] },
   { id: 'binance', title: 'CEX top-up, optional', need: false, done: st => st.binance,
-    intro: 'Lets the agent top up its own EGLD from an exchange (a CEX) later. The top-ups arrive in a later version; your key waits here until then. The example is Binance: a key that can only withdraw EGLD to your agent wallets.',
+    intro: 'Lets your agents get EGLD from an exchange (a CEX), each top-up approved by you: when an agent runs low, Telegram shows the proposal and a one-time code, and /topup with the code sends it. The example is Binance: a key that can only read and withdraw EGLD to your agent wallets.',
     steps: [
       ['Log in to Binance and open API Management.', 'https://www.binance.com/en/my/settings/api-management'],
       ['Press Create API, choose System generated, name it foxleague-agent and confirm with your 2FA.'],
-      ['Press Edit restrictions. Tick only Enable Withdrawals, then choose Restrict access to trusted IPs and enter this computer\'s public IP (the link shows it).', 'https://api.ipify.org'],
+      ['Press Edit restrictions. Tick only Enable Withdrawals, then choose Restrict access to trusted IPs and enter the public IP of the computer the agent runs on (the link shows the IP of the computer you open it on).', 'https://api.ipify.org'],
       ['Open Address Management, add each agent wallet on the MultiversX (EGLD) network and switch the whitelist on. Now money can only go to your agents.', 'https://www.binance.com/en/my/security/address-management'],
       ['Copy the API key and the secret (the secret is shown only once). Back here, press Keys, paste both, type your password and press Save.', null, true],
     ],

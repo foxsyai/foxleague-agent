@@ -51,7 +51,7 @@ the dashboard or by chatting with it on Telegram.
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only, a human pace, never a 1v1 or trade between your own agents; guards
   against rivals who try to farm an agent (1v1s only against teams of similar strength, at most two a week each).
-- **Reviewed.** Ten adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Eleven adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 

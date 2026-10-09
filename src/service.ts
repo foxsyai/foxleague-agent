@@ -30,6 +30,8 @@ import { ensureBadge } from './setup/badge.ts'
 import { Telegram, type TextReply } from './telegram/telegram.ts'
 import { KEY_FIELDS, keyFormatError, maskKey, readSecrets, secretsFile, writeSecrets, type KeyName, type KeyValues } from './store/secrets.ts'
 import { checkKeys, pickOwnerChat, telegramMe, telegramRecentChats, type KeyCheck } from './setup/keys.ts'
+import { TopUps } from './topup.ts'
+import { egldOnBinance, findWithdrawal, travelRuleCountry, whitelisted, withdrawEgld } from './cex/binance.ts'
 import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
 import { sleep } from './util/http.ts'
@@ -85,6 +87,7 @@ const TELEGRAM_MENU = [
   { command: 'clear', description: 'Start a new conversation with the manager' },
   { command: 'log', description: 'Recent activity' },
   { command: 'keys', description: 'Which keys are set (masked)' },
+  { command: 'topup', description: 'EGLD from Binance: /topup 2 asks, /topup code approves' },
   { command: 'kill', description: 'Stop every agent at once: /kill on' },
   { command: 'help', description: 'Every command with its options' },
 ]
@@ -120,6 +123,8 @@ export class Service {
   readonly chain: Chain
   readonly fox: FoxLeague
   readonly executor: Executor
+  /** EGLD top-ups from Binance that the owner approves with a one-time code on Telegram. */
+  readonly topups: TopUps
   /** Both replaced at run time when the admin panel changes their key or token. */
   strategist: Strategist | null
   telegram: Telegram | null
@@ -155,6 +160,22 @@ export class Service {
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
     this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (_i, text) => this.notify(text) })
+    this.topups = new TopUps({
+      store: this.store,
+      key: () => {
+        const apiKey = process.env.BINANCE_API_KEY?.trim()
+        const secret = process.env.BINANCE_API_SECRET?.trim()
+        return apiKey && secret ? { apiKey, secret } : null
+      },
+      accountType: () => {
+        const t = process.env.BINANCE_ACCOUNT_TYPE?.trim().toLowerCase()
+        return t === 'individual' || t === 'corporate' ? t : undefined
+      },
+      live: () => this.store.liveMode && this.executor.liveEnabled,
+      binance: { egldOnBinance, travelRuleCountry, withdrawEgld, findWithdrawal, whitelisted },
+      // The offer holds the code: straight to the owner's chat, never through notify (which also logs).
+      send: text => this.telegram?.send(text),
+    })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
       if (Array.isArray(saved)) this.chat = saved.filter((l): l is ChatLine => (l?.from === 'owner' || l?.from === 'manager') && typeof l.text === 'string' && typeof l.at === 'string' && !l.pending).slice(-CHAT_KEPT)
@@ -354,6 +375,10 @@ export class Service {
     const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} to play with, besides its ${agent.settings.egldGasReserve} EGLD gas reserve (wallet: ${formatAtomic(snap.chain!.egld, 4)} EGLD, ${snap.chain!.wegld > 0n ? `${formatAtomic(snap.chain!.wegld, 4)} WEGLD, ` : ''}${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD or WEGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
     this.store.log({ agentIndex: agent.index, kind: 'control', status: 'info', summary: text })
     this.notify(text)
+    // With a Binance key and Telegram, the warning comes with a top-up the owner approves by code.
+    if (this.telegram && process.env.BINANCE_API_KEY?.trim()) {
+      void this.topups.offer(agent, usd, snap.prices?.egldUsd ?? 0, 'low').catch(err => this.store.log({ agentIndex: agent.index, kind: 'topup', status: 'error', summary: `no top-up offered: ${err instanceof Error ? err.message : String(err)}` }))
+    }
   }
 
   cancelProposal(id: string): string {
@@ -482,6 +507,7 @@ export class Service {
       telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim(),
       binanceKey: process.env.BINANCE_API_KEY?.trim(),
       binanceSecret: process.env.BINANCE_API_SECRET?.trim(),
+      agentWallets: this.store.agents().map(b => ({ name: agentName(b.index), address: b.address })),
     })
   }
 
@@ -723,6 +749,8 @@ export class Service {
         retiredLine(this.store.retiredAgents()),
     )
     this.startTelegram()
+    // A top-up whose outcome was not known when the last run ended (a restart while it was sent): ask Binance.
+    if (this.telegram) void this.topups.settleUnclear().then(lines => { if (lines.length) this.telegram?.send(lines.join('\n')) }).catch(() => undefined)
     const creds = credentialsFromEnv()
     if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870))
     else console.log('web UI off: set it up with `agentctl.sh set-web-password`')
@@ -758,8 +786,9 @@ export class Service {
     for (const t of this.timers.values()) clearTimeout(t)
     this.telegram?.stop()
     const until = Date.now() + 150_000
-    // Plans (busy) and single actions from Telegram /do or the web (the executor's per-agent locks).
-    while ((this.busy.size || !this.executor.idle) && Date.now() < until) await sleep(500)
+    // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
+    // being sent to Binance, so its outcome is stored before the process ends.
+    while ((this.busy.size || !this.executor.idle || !this.topups.idle) && Date.now() < until) await sleep(500)
     const pidFile = join(this.cfg.dataDir, SERVICE_PID_FILE)
     if (serviceRunning(this.cfg.dataDir) === process.pid) rmSync(pidFile, { force: true })
   }
@@ -992,6 +1021,7 @@ export class Service {
           '/kill on|off  pause every agent at once',
           '/log [N]  recent activity',
           '/keys [test]  which keys are set (masked); test checks them. Change keys in the web UI only',
+          '/topup [N | code [EGLD]]  EGLD from Binance: /topup N proposes a top-up for agent N, /topup <code> approves it (optionally fewer EGLD); alone, what waits',
         ].join('\n')
       case 'status': {
         const agents = this.store.agents()
@@ -1079,6 +1109,18 @@ export class Service {
           this.store.log({ agentIndex: i, kind: 'control', status: 'info', summary: 'strategy replaced (Telegram /strategy)' })
         }
         return `strategy set for ${whichAgents(targets)}`
+      }
+      case 'topup': {
+        const [first, amount] = args
+        if (!first) return this.topups.listText()
+        if (/^\d{6}$/.test(first)) return this.topups.approve(first, amount)
+        if (first === 'all') return 'one agent at a time: /topup N, then /topup <code> to approve'
+        const [i] = this.agentsArg(first)
+        const row = this.store.agent(i!)!
+        const snap = await this.snapshot(i!)
+        const playable = playableUsd(snap, row.settings.egldGasReserve)
+        if (playable === null) return `${agentName(i!)}'s wallet could not be read right now; try again in a minute`
+        return this.topups.offer(row, playable, snap.prices?.egldUsd ?? 0, 'owner')
       }
       case 'keys': {
         if (args[0] === 'test') return (await this.testKeys()).map(c => `${c.ok ? 'OK' : 'FAIL'}  ${c.text}`).join('\n')

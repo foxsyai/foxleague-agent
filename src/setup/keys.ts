@@ -4,6 +4,7 @@
 import { createHmac } from 'node:crypto'
 import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import Anthropic from '@anthropic-ai/sdk'
+import { whitelisted } from '../cex/binance.ts'
 
 /** Reads one line from an interactive terminal without echoing it. */
 export function promptHidden(question: string): Promise<string> {
@@ -147,7 +148,7 @@ export interface KeyCheck {
 }
 
 /** Every key checked against its service: the CLI's check-keys and the web UI's Test button. */
-export async function checkKeys(k: { anthropicApiKey?: string; model: string; telegramToken?: string; telegramChatId?: string; binanceKey?: string; binanceSecret?: string }): Promise<KeyCheck[]> {
+export async function checkKeys(k: { anthropicApiKey?: string; model: string; telegramToken?: string; telegramChatId?: string; binanceKey?: string; binanceSecret?: string; agentWallets?: { name: string; address: string }[] }): Promise<KeyCheck[]> {
   const out: KeyCheck[] = []
   const why = (e: unknown) => (e instanceof Error ? e.message : String(e))
   if (k.anthropicApiKey) {
@@ -171,6 +172,16 @@ export async function checkKeys(k: { anthropicApiKey?: string; model: string; te
         out.push(problems.length ? { ok: false, text: `Binance key: ${problems.join('; ')}` } : { ok: true, text: 'Binance key is withdraw-only and IP-restricted (reading on, trading and transfers off)' })
       })
       .catch(e => out.push({ ok: false, text: `Binance: ${why(e)}` }))
+    // A top-up goes only to a wallet on the whitelist: say which agent wallets are not on it yet.
+    if (k.agentWallets?.length) {
+      const key = { apiKey: k.binanceKey, secret: k.binanceSecret }
+      await Promise.all(k.agentWallets.map(async w => [w, await whitelisted(key, w.address)] as const))
+        .then(rows => {
+          const missing = rows.filter(([, on]) => !on).map(([w]) => w.name)
+          out.push(missing.length ? { ok: false, text: `Binance withdrawal whitelist: ${missing.join(', ')} not on it yet (Address Management, MultiversX network; top-ups go only to whitelisted wallets)` } : { ok: true, text: 'Binance withdrawal whitelist holds every agent wallet' })
+        })
+        .catch(e => out.push({ ok: false, text: `Binance whitelist: ${why(e)}` }))
+    }
   } else out.push({ ok: false, text: 'BINANCE_API_KEY or BINANCE_API_SECRET not set' })
   return out
 }
