@@ -31,6 +31,7 @@ import { Telegram, type TextReply } from './telegram/telegram.ts'
 import { KEY_FIELDS, keyFormatError, maskKey, readSecrets, secretsFile, writeSecrets, type KeyName, type KeyValues } from './store/secrets.ts'
 import { checkKeys, pickOwnerChat, telegramMe, telegramRecentChats, type KeyCheck } from './setup/keys.ts'
 import { TopUps } from './topup.ts'
+import { dayBefore, nextSummaryAt, summaryText, validZone, zoneDate, zoneInstant, type AgentDay } from './summary.ts'
 import { egldOnBinance, findWithdrawal, travelRuleCountry, whitelisted, withdrawEgld } from './cex/binance.ts'
 import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
@@ -88,6 +89,8 @@ const TELEGRAM_MENU = [
   { command: 'log', description: 'Recent activity' },
   { command: 'keys', description: 'Which keys are set (masked)' },
   { command: 'topup', description: 'EGLD from Binance: /topup 2 asks, /topup code approves' },
+  { command: 'summary', description: "Yesterday per agent (/summary today: so far today)" },
+  { command: 'updates', description: 'Telegram: daily (summary only) or all (every update)' },
   { command: 'kill', description: 'Stop every agent at once: /kill on' },
   { command: 'help', description: 'Every command with its options' },
 ]
@@ -159,7 +162,7 @@ export class Service {
     this.telegram = cfg.telegramToken && cfg.telegramChatId ? new Telegram(cfg.telegramToken, cfg.telegramChatId) : null
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
-    this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (_i, text) => this.notify(text) })
+    this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (_i, text) => this.report(text) })
     this.topups = new TopUps({
       store: this.store,
       key: () => {
@@ -233,6 +236,20 @@ export class Service {
   notify(text: string): void {
     console.log(`[${new Date().toISOString()}] ${text}`)
     this.telegram?.send(text)
+  }
+
+  /**
+   * A routine message (a plan, an action's result, low funds): on Telegram at once only with /updates all;
+   * otherwise it waits for the daily summary (it is in the log and the activity either way).
+   */
+  report(text: string): void {
+    if (this.updatesMode() === 'all') return this.notify(text)
+    console.log(`[${new Date().toISOString()}] ${text}`)
+  }
+
+  /** daily (the default): routine messages wait for the summary; all: every update as it happens. */
+  updatesMode(): 'daily' | 'all' {
+    return this.store.getKv('telegram_updates') === 'all' ? 'all' : 'daily'
   }
 
   /** An agent's wallet: from the recovery words (account = index) or an imported team's own key. */
@@ -374,7 +391,7 @@ export class Service {
     this.store.setKv(key, '1')
     const text = `${agentName(agent.index)} is low on funds: about $${usd.toFixed(2)} to play with, besides its ${agent.settings.egldGasReserve} EGLD gas reserve (wallet: ${formatAtomic(snap.chain!.egld, 4)} EGLD, ${snap.chain!.wegld > 0n ? `${formatAtomic(snap.chain!.wegld, 4)} WEGLD, ` : ''}${formatAtomic(snap.chain!.foxsy, 0)} FOXSY), under its top-up warning of $${level}. Send EGLD or WEGLD (it buys FOXSY by itself) or FOXSY to ${agent.address}`
     this.store.log({ agentIndex: agent.index, kind: 'control', status: 'info', summary: text })
-    this.notify(text)
+    this.report(text)
     // With a Binance key and Telegram, the warning comes with a top-up the owner approves by code.
     if (this.telegram && process.env.BINANCE_API_KEY?.trim()) {
       void this.topups.offer(agent, usd, snap.prices?.egldUsd ?? 0, 'low').catch(err => this.store.log({ agentIndex: agent.index, kind: 'topup', status: 'error', summary: `no top-up offered: ${err instanceof Error ? err.message : String(err)}` }))
@@ -409,6 +426,98 @@ export class Service {
     }
     if (verb === 'cancel' && id) return this.cancelProposal(id)
     return 'unknown button'
+  }
+
+  // ---- the daily summary ----
+
+  private summaryTimer: NodeJS.Timeout | undefined
+  /** The summary's time zone and hour: TELEGRAM_SUMMARY_TZ (default this computer's zone) and TELEGRAM_SUMMARY_HOUR (default 9). */
+  private readonly summaryZone = validZone(process.env.TELEGRAM_SUMMARY_TZ)
+  private readonly summaryHour = (() => {
+    const h = Number(process.env.TELEGRAM_SUMMARY_HOUR ?? 9)
+    return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 9
+  })()
+
+  /** Kinds in the activity that are not actions (plans, ticks, controls, top-ups). */
+  private static readonly NOT_ACTIONS = new Set(['plan', 'tick', 'control', 'topup'])
+
+  /**
+   * The summary of one day (YYYY-MM-DD in the summary's zone), or of today so far. `scheduled`: the morning one,
+   * which also notes each agent's ELO so the next one shows the change.
+   */
+  summary(day: string, o: { soFar?: boolean; scheduled?: boolean } = {}): string {
+    const zone = this.summaryZone
+    const from = new Date(zoneInstant(day, 0, zone))
+    const to = o.soFar ? new Date() : new Date(zoneInstant(new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10) + 1)).toISOString().slice(0, 10), 0, zone))
+    const live = this.store.liveMode && this.executor.liveEnabled
+    const counts = this.store.activityCounts(from, to)
+    const spent = this.store.spentBetween(from, to, !live)
+    const days: AgentDay[] = this.store.agents().map(b => {
+      const mine = counts.filter(c => c.agentIndex === b.index)
+      const sum = (f: (c: (typeof mine)[number]) => boolean) => mine.filter(f).reduce((n, c) => n + c.n, 0)
+      const action = (c: (typeof mine)[number]) => !Service.NOT_ACTIONS.has(c.kind)
+      const snap = this.snapshots.get(b.index)
+      const elo = snap?.profile?.elo_rating ?? null
+      const prev = Number(this.store.getKv(`summary_elo:${b.index}`) ?? NaN)
+      if (o.scheduled && elo !== null) this.store.setKv(`summary_elo:${b.index}`, String(elo))
+      const playable = snap ? playableUsd(snap, b.settings.egldGasReserve) : null
+      return {
+        index: b.index,
+        team: snap?.team?.name ?? snap?.registration.teamName ?? null,
+        registered: snap ? snap.registration.registered : true,
+        paused: b.paused,
+        done: sum(c => action(c) && (c.status === 'confirmed' || c.status === 'dry_run')),
+        refused: sum(c => action(c) && c.status === 'refused'),
+        failed: sum(c => action(c) && (c.status === 'failed' || c.status === 'error' || c.status === 'unconfirmed')),
+        plans: sum(c => c.kind === 'plan'),
+        errors: sum(c => c.kind === 'tick' && c.status === 'error'),
+        spentUsd: spent.get(b.index) ?? 0,
+        elo,
+        eloChange: elo !== null && Number.isFinite(prev) ? elo - prev : null,
+        worthUsd: snap ? fundsUsd(snap) : null,
+        low: playable !== null && lowOnFunds(playable, b.settings.topUpWarningUsd),
+        topups: sum(c => c.kind === 'topup' && c.status === 'confirmed'),
+      }
+    })
+    const label = o.soFar ? 'today so far' : new Intl.DateTimeFormat('en-GB', { timeZone: zone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(from.getTime() + 12 * 3600_000))
+    return summaryText(label, days, { aiUsd: this.modelUsdByDay()[day] ?? null, live, killSwitch: this.store.killSwitch, waitingTopUps: this.topups.openCount() })
+  }
+
+  /** The morning summary of yesterday, once a day (a restart after the hour sends a missed one). */
+  private sendDailySummary(): void {
+    const today = zoneDate(Date.now(), this.summaryZone)
+    if (this.store.getKv('summary_sent_day') === today || !this.telegram) return
+    this.store.setKv('summary_sent_day', today)
+    this.telegram.send(this.summary(dayBefore(today), { scheduled: true }))
+    console.log(`[${new Date().toISOString()}] daily summary of ${dayBefore(today)} sent`)
+  }
+
+  private scheduleSummary(): void {
+    clearTimeout(this.summaryTimer)
+    if (!this.telegram || this.stopping) return
+    const at = nextSummaryAt(Date.now(), this.summaryHour, this.summaryZone)
+    this.summaryTimer = setTimeout(() => {
+      try {
+        this.sendDailySummary()
+      } catch (err) {
+        console.error('daily summary failed:', err)
+      }
+      this.scheduleSummary()
+    }, Math.max(1000, at - Date.now()))
+  }
+
+  /**
+   * An agent with no team yet and too little to pay the registration: its plan could only say so, so it waits for
+   * funds without an AI call (logged once, when it starts waiting).
+   */
+  private waitingForFunds(agent: AgentRow, snap: AgentSnapshot): string | null {
+    const r = snap.registration
+    const fee = snap.config?.registration_fee_foxsy
+    if (r.registered || r.feePaidOnChain || !snap.prices || !fee) return null
+    const playable = playableUsd(snap, agent.settings.egldGasReserve)
+    const needUsd = fee * snap.prices.foxsyUsd * 1.05
+    if (playable === null || playable >= needUsd) return null
+    return `${agentName(agent.index)} waits for funds: no team yet and about $${playable.toFixed(2)} to play with, the registration needs about $${needUsd.toFixed(2)} (${fee.toLocaleString('en-US')} FOXSY) besides the ${agent.settings.egldGasReserve} EGLD gas reserve. No AI call until EGLD arrives at ${agent.address}`
   }
 
   private startTelegram(): void {
@@ -749,6 +858,18 @@ export class Service {
         retiredLine(this.store.retiredAgents()),
     )
     this.startTelegram()
+    // The morning summary every day at its hour; a missed one (a restart after its hour) two minutes after the
+    // start, once the agents' first snapshots are in.
+    if (this.telegram && Date.now() >= zoneInstant(zoneDate(Date.now(), this.summaryZone), this.summaryHour, this.summaryZone)) {
+      this.summaryTimer = setTimeout(() => {
+        try {
+          this.sendDailySummary()
+        } catch (err) {
+          console.error('daily summary failed:', err)
+        }
+        this.scheduleSummary()
+      }, 120_000)
+    } else this.scheduleSummary()
     // A top-up whose outcome was not known when the last run ended (a restart while it was sent): ask Binance.
     if (this.telegram) void this.topups.settleUnclear().then(lines => { if (lines.length) this.telegram?.send(lines.join('\n')) }).catch(() => undefined)
     const creds = credentialsFromEnv()
@@ -784,6 +905,7 @@ export class Service {
     this.stopping = true
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)
+    clearTimeout(this.summaryTimer)
     this.telegram?.stop()
     const until = Date.now() + 150_000
     // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
@@ -850,7 +972,14 @@ export class Service {
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
       const snap = await this.snapshot(index)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
-      await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.notify(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
+      await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
+      const waiting = this.waitingForFunds(agent, snap)
+      if (waiting) {
+        if (this.store.getKv(`waiting_funds:${index}`) !== '1') this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: waiting })
+        this.store.setKv(`waiting_funds:${index}`, '1')
+        return waiting
+      }
+      this.store.setKv(`waiting_funds:${index}`, '0')
       if (!this.strategist) {
         this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: 'snapshot taken; no strategist (ANTHROPIC_API_KEY not set)', detail: { warnings: snap.warnings } })
         return 'snapshot only (no strategist key)'
@@ -861,7 +990,7 @@ export class Service {
     } catch (err) {
       const msg = describeModelError(err)
       this.store.log({ agentIndex: index, kind: 'tick', status: 'error', summary: msg })
-      this.notify(`${agentName(index)} tick failed: ${msg}`)
+      this.report(`${agentName(index)} tick failed: ${msg}`)
       return msg
     } finally {
       this.busy.delete(index)
@@ -916,7 +1045,7 @@ export class Service {
     this.addModelUsd(plan.usage.usd)
     this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
-    this.notify(text)
+    this.report(text)
     return plan
   }
 
@@ -988,7 +1117,7 @@ export class Service {
 
   /** Payments sent but not confirmed with FoxLeague yet: confirmed again with the same hash, never paid twice. */
   private async retryPending(agent: AgentRow): Promise<void> {
-    await retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.notify(t) }, agent.index, this.wallet(agent.index))
+    await retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t) }, agent.index, this.wallet(agent.index))
   }
 
   // ---- Telegram commands ----
@@ -1021,6 +1150,8 @@ export class Service {
           '/kill on|off  pause every agent at once',
           '/log [N]  recent activity',
           '/keys [test]  which keys are set (masked); test checks them. Change keys in the web UI only',
+          '/summary [today]  yesterday per agent (or today so far); it also comes by itself every morning',
+          '/updates [daily|all]  daily: plans and action results wait for the morning summary; all: every update as it happens',
           '/topup [N | code [EGLD]]  EGLD from Binance: /topup N proposes a top-up for agent N, /topup <code> approves it (optionally fewer EGLD); alone, what waits',
         ].join('\n')
       case 'status': {
@@ -1109,6 +1240,17 @@ export class Service {
           this.store.log({ agentIndex: i, kind: 'control', status: 'info', summary: 'strategy replaced (Telegram /strategy)' })
         }
         return `strategy set for ${whichAgents(targets)}`
+      }
+      case 'summary': {
+        const today = zoneDate(Date.now(), this.summaryZone)
+        return args[0] === 'today' ? this.summary(today, { soFar: true }) : this.summary(dayBefore(today))
+      }
+      case 'updates': {
+        const to = args[0]?.toLowerCase()
+        if (to !== 'daily' && to !== 'all') return `Telegram updates: ${this.updatesMode()} (${this.updatesMode() === 'daily' ? `plans and action results wait for the summary at ${String(this.summaryHour).padStart(2, '0')}:00 ${this.summaryZone}` : 'every update as it happens'}). Change with /updates daily or /updates all.`
+        this.store.setKv('telegram_updates', to)
+        this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `Telegram updates set to ${to} (Telegram)` })
+        return to === 'daily' ? `Done: plans and action results now wait for the summary at ${String(this.summaryHour).padStart(2, '0')}:00 ${this.summaryZone}. Urgent messages and top-up codes still come at once.` : 'Done: every plan and action result comes as it happens.'
       }
       case 'topup': {
         const [first, amount] = args

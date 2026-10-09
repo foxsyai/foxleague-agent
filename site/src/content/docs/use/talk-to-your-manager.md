@@ -50,8 +50,11 @@ text (Firefox) do not show the button.
 
 ## On Telegram
 
-Once Telegram is linked ([Your keys](/start/keys/)), every action arrives on your phone, and any plain message
-goes to your manager, with the same Apply and Cancel buttons. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
+Once Telegram is linked ([Your keys](/start/keys/)), you get a **summary every morning** (09:00 by default) with
+yesterday per agent: what it did, what it spent, its rating and what its wallet is worth. Plans and action results
+wait for it, so many agents never flood your chat; `/updates all` sends every update as it happens again, and
+`/updates daily` goes back. Urgent messages (the kill switch, an internal error, a change of mode or keys) and
+top-up codes always come at once. Any plain message goes to your manager, with the same Apply and Cancel buttons. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
 
 | Command | What it does |
 |---|---|
@@ -67,6 +70,8 @@ goes to your manager, with the same Apply and Cancel buttons. Commands (agents a
 | `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, beast) |
 | `/clear` | Start a new conversation with the manager |
 | `/kill on\|off` | Stop every agent at once, or release |
+| `/summary [today]` | Yesterday per agent, or today so far |
+| `/updates [daily\|all]` | Daily: plans and action results wait for the morning summary; all: every update as it happens |
 | `/topup N` | Propose an EGLD top-up from Binance for agent N, with a one-time code |
 | `/topup <code> [EGLD]` | Approve it (with an amount, that much instead) |
 | `/help` | The full list |

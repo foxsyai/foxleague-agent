@@ -58,9 +58,10 @@ the dashboard or by chatting with it on Telegram.
 - **Dashboard** at `http://localhost:8870`: every agent with its balances, spend against the caps, last plan and
   activity; settings with an explanation on every field; Pause, Plan now, Add agent, Go LIVE and the kill switch;
   the AI's model and effort; the Keys panel.
-- **Telegram** (optional): every action on your phone. Write in plain words ("focus on Silver tournaments this
+- **Telegram** (optional): a summary of every agent each morning, every update as it happens if you want it
+  (`/updates all`). Write in plain words ("focus on Silver tournaments this
   week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`,
-  `/plan`, `/pause`, `/mode`, `/kill`, `/help`.
+  `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/help`.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 

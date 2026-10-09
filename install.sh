@@ -252,7 +252,7 @@ cat <<'KEYS'
      d. Create a key, name it foxleague-agent, copy it (shown once):
                                         https://platform.claude.com/settings/keys
 
-  2. Telegram, optional (every action on your phone, talk to your manager):
+  2. Telegram, optional (a morning summary of every agent, talk to your manager):
      a. In Telegram, open BotFather:    https://t.me/BotFather
      b. Send /newbot, pick a name and a username ending in bot.
      c. Copy the token it sends you (it looks like 123456789:AAH...).

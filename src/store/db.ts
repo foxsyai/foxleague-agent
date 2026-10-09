@@ -294,6 +294,14 @@ export class Store {
   }
 
 
+  /** Activity rows counted per agent, kind and status between two moments (the daily summary). */
+  activityCounts(from: Date, to: Date): { agentIndex: number | null; kind: string; status: ActivityStatus; n: number }[] {
+    return (this.db
+      .prepare('SELECT agent_idx AS a, kind, status, COUNT(*) AS n FROM activity WHERE at >= ? AND at < ? GROUP BY agent_idx, kind, status')
+      .all(from.toISOString(), to.toISOString()) as { a: number | null; kind: string; status: ActivityStatus; n: number }[])
+      .map(r => ({ agentIndex: r.a === null ? null : Number(r.a), kind: r.kind, status: r.status, n: Number(r.n) }))
+  }
+
   // ---- spend ledger ----
 
   /** Returns the row id, so a live payment booked before signing can be confirmed or released. */
@@ -343,6 +351,14 @@ export class Store {
   }
 
   /** USD spent in one game day / month / ever, in the ledger of the given mode (dry-run or live). */
+  /** What each agent spent (play and setup, not swaps) between two moments, in one mode's ledger. */
+  spentBetween(from: Date, to: Date, dryRun: boolean): Map<number, number> {
+    const rows = this.db
+      .prepare("SELECT agent_idx AS a, COALESCE(SUM(usd), 0) AS s FROM spend WHERE at >= ? AND at < ? AND dry_run = ? AND category IN ('play', 'setup') GROUP BY agent_idx")
+      .all(from.toISOString(), to.toISOString(), dryRun ? 1 : 0) as { a: number; s: number }[]
+    return new Map(rows.map(r => [Number(r.a), Number(r.s)]))
+  }
+
   spentUsd(agentIndex: number, q: { gameDay?: string; month?: string; category: SpendCategory; dryRun: boolean }): number {
     let sql = 'SELECT COALESCE(SUM(usd), 0) AS s FROM spend WHERE agent_idx = ? AND category = ? AND dry_run = ?'
     const args: (string | number)[] = [agentIndex, q.category, q.dryRun ? 1 : 0]

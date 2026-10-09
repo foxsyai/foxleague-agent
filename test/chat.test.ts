@@ -133,7 +133,8 @@ test('low funds: the owner is told once when what an agent can play with falls u
   const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
   svc.ensureAgents()
   const told: string[] = []
-  svc.notify = (text: string) => void told.push(text)
+  // A routine message: it goes through report (on Telegram at once only with /updates all).
+  svc.report = (text: string) => void told.push(text)
   const check = (egld: number, foxsy: number, wegld = 0) => {
     const snap = snapshot()
     snap.chain = { ...snap.chain!, egld: BigInt(Math.round(egld * 1e6)) * 10n ** 12n, foxsy: BigInt(foxsy) * 10n ** 18n, wegld: BigInt(Math.round(wegld * 1e6)) * 10n ** 12n }

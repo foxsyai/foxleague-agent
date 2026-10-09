@@ -38,19 +38,26 @@ export class Telegram {
     chunks.forEach((chunk, n) => {
       const markup = buttons?.length && n === chunks.length - 1 ? { reply_markup: { inline_keyboard: [buttons.map(b => ({ text: b.label, callback_data: b.data }))] } } : {}
       this.queue = this.queue.then(async () => {
-        try {
-          const res = await fetch(`${this.base}/sendMessage`, {
-            method: 'POST',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ chat_id: this.chatId, text: chunk, disable_web_page_preview: true, ...markup }),
-            signal: AbortSignal.timeout(15_000),
-          })
-          if (res.status === 429) {
+        // "Too many requests" (429) or no answer: the same message again after the pause, up to 4 tries, so a
+        // warning or a top-up code is not lost when many agents report at once.
+        for (let attempt = 1; attempt <= 4; attempt++) {
+          try {
+            const res = await fetch(`${this.base}/sendMessage`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ chat_id: this.chatId, text: chunk, disable_web_page_preview: true, ...markup }),
+              signal: AbortSignal.timeout(15_000),
+            })
+            if (res.status !== 429) {
+              if (!res.ok) console.error(`telegram send failed: HTTP ${res.status}`)
+              break
+            }
             const body = (await res.json().catch(() => ({}))) as { parameters?: { retry_after?: number } }
-            await sleep((body.parameters?.retry_after ?? 5) * 1000)
+            await sleep(Math.min(60, body.parameters?.retry_after ?? 5) * 1000)
+          } catch (err) {
+            console.error(`telegram send failed (try ${attempt} of 4):`, err instanceof Error ? err.message : err)
+            if (attempt < 4) await sleep(3000 * attempt)
           }
-        } catch (err) {
-          console.error('telegram send failed:', err instanceof Error ? err.message : err)
         }
         await sleep(1100)
       })

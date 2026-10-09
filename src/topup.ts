@@ -147,6 +147,11 @@ export class TopUps {
   /** Requests an approval in this process is sending now. */
   private readonly claimed = new Set<string>()
 
+  /** How many requests wait for their code now. */
+  openCount(): number {
+    return this.expire().filter(r => r.status === 'open').length
+  }
+
   /** /topup alone: the requests still waiting for a code, after settling the unclear ones. */
   async listText(): Promise<string> {
     const settled = await this.settleUnclear()
