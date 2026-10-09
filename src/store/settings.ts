@@ -59,16 +59,18 @@ export const MIN_TICK_MINUTES = 10
 export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUsd' | 'topUpWarningUsd' | 'maxEntryFeeFoxsy' | 'maxShopPaymentFoxsy' | 'maxSwapFoxsy' | 'maxBidFoxsy' | 'entryFeesSilver' | 'entryFeesGold' | 'tickMinutes'>
 
 /**
- * Default limits per level, rising with what each level spends (FOXSY about $0.0027 in October 2026). Silver
+ * Default limits per level, from what the owner's agents spent per game day at each level in October 2026 (FOXSY
+ * about $0.0027): a daily cap over each level's largest allowed entry (a Gold entry must fit in one day), a monthly
+ * budget near 30 days of its real use, and a top-up warning at two days of play at the daily cap. Silver
  * amounts grow by two steps a level up to the 4,999 Silver ceiling; no Gold amounts (steady) turn Gold off and a max bid
  * of 0 turns bidding off.
  */
 export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
-  steady: { dailyCapUsd: 10, monthlyBudgetUsd: 300, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 120 },
-  climber: { dailyCapUsd: 20, monthlyBudgetUsd: 500, topUpWarningUsd: 15, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 1000, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120 },
-  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 600, topUpWarningUsd: 20, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 4000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 120 },
-  predator: { dailyCapUsd: 40, monthlyBudgetUsd: 1000, topUpWarningUsd: 40, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 20_000, maxBidFoxsy: 15_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 120 },
-  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2000, topUpWarningUsd: 100, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 40_000, maxBidFoxsy: 40_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 120 },
+  steady: { dailyCapUsd: 5, monthlyBudgetUsd: 150, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 120 },
+  climber: { dailyCapUsd: 15, monthlyBudgetUsd: 250, topUpWarningUsd: 30, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 1000, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120 },
+  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 400, topUpWarningUsd: 50, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 4000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 120 },
+  predator: { dailyCapUsd: 35, monthlyBudgetUsd: 750, topUpWarningUsd: 70, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 20_000, maxBidFoxsy: 15_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 120 },
+  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2_000, topUpWarningUsd: 200, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 40_000, maxBidFoxsy: 40_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 120 },
 }
 
 /**

@@ -72,9 +72,9 @@ can change any of them afterwards. Values at a FOXSY price of about $0.0027 (Oct
 
 | Setting | Steady | Climber | Hunter | Predator | Beast |
 |---|---|---|---|---|---|
-| Daily cap | $10 | $20 | $25 | $40 | $100 |
-| Monthly budget | $300 | $500 | $600 | $1,000 | $2,000 |
-| Top-up warning | $10 | $15 | $20 | $40 | $100 |
+| Daily cap | $5 | $15 | $25 | $35 | $100 |
+| Monthly budget | $150 | $250 | $400 | $750 | $2,000 |
+| Top-up warning | $10 | $30 | $50 | $70 | $200 |
 | Max entry fee or stake (FOXSY) | 1,500 | 5,000 | 7,500 | 10,000 | 20,000 |
 | Max shop payment (FOXSY) | 500 | 1,000 | 2,500 | 2,500 | 3,000 |
 | Max swap (FOXSY) | 10,000 | 10,000 | 10,000 | 20,000 | 40,000 |
@@ -84,9 +84,12 @@ can change any of them afterwards. Values at a FOXSY price of about $0.0027 (Oct
 | Tick | 120 min | 120 min | 120 min | 120 min | 120 min |
 
 The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the active hours (08:00 to 20:00
-UTC), no random window, actions at least 30 seconds apart. A daily cap covers the largest entry at each level (a
-Gold entry of 20,000 FOXSY is about $54, under the beast's $100), and the top-up warning comes a few days of
-spending ahead.
+UTC), a random window of 10 minutes, actions at least 30 seconds apart.
+
+The limits come from what agents spent per game day at each level in October 2026. The daily cap covers the
+largest entry the level allows (a climber's Gold entry of 5,000 FOXSY is about $13.50, a beast's of 20,000 about
+$54), the monthly budget is close to 30 days of real use, and the top-up warning comes when about two days of play
+at the daily cap are left.
 
 At auction a Rare started at about 2,300 FOXSY, an Epic at about 10,000 and a Legendary at about 18,000 (October
 2026). A bid also needs a daily cap above its value.

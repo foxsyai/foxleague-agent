@@ -11,6 +11,8 @@ const NET: EgldOnBinance = { free: 500, network: 'EGLD', withdrawEnable: true, f
 function rig(over: Partial<TopUpDeps> & { net?: Partial<EgldOnBinance>; country?: string; withdraw?: TopUpDeps['binance']['withdrawEgld']; listed?: boolean; found?: TopUpDeps['binance']['findWithdrawal'] } = {}) {
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
+  // A fixed monthly budget, so the proposals below do not move with the level defaults.
+  store.updateSettings(0, { monthlyBudgetUsd: 300 })
   store.setLiveMode(true)
   const withdrawals: { address: string; amount: string; orderId: string; network: string; questionnaire?: string }[] = []
   const sent: string[] = []

@@ -67,7 +67,7 @@ the dashboard or by chatting with it on Telegram.
 
 ## What it costs
 
-- **The game:** never more than your caps (defaults $10 a day and $300 a month, plus $20 for the registration).
+- **The game:** never more than your caps (defaults $5 a day and $150 a month, plus $20 for the registration).
 - **The AI:** about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick.
 - **Network fees:** a few cents a day.
 
