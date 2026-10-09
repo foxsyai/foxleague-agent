@@ -235,6 +235,25 @@ and checked again, and the code (a hash only is kept) reaches the owner's Telegr
 Added the same day: a top-up goes only to a wallet on the Binance withdrawal whitelist, and Test keys shows which
 agent wallets are not on it yet.
 
+## Twelfth review, 2026-10-09 (the quiet Telegram, the morning summary, urgent messages, top-ups again)
+
+One adversarial reviewer went through every Telegram message the agent sends, the morning summary, the agents
+that wait for funds and the top-ups once more. The top-ups held: no EGLD leaves without the owner's code, twice
+for one code, to another address or above the proposal, and the quiet mode cannot hold a code back.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R12-1 | medium | A payment signed and handed to the network whose send then timed out (no hash) waited for the morning summary | A sent payment with an unclear outcome is told at once, with or without a hash; a paid registration keeps its fee's hash |
+| R12-2 | medium | `/do N {json}` answered nothing in the quiet mode, so the owner might send it twice; owner-asked plans waited too | The answer is the result itself; a plan or action the owner asks for on Telegram is told at once |
+| R12-3 | medium | A Telegram chat linked after the start never got the morning summary until a restart | Linking a chat arms the summary |
+| R12-4 | medium | An agent already holding the 5,000 FOXSY fee, or whose fee state could not be read, was parked as waiting for funds | Only a fee known to be unpaid and too little to pay it parks an agent |
+| R12-5 | low | The summary's waiting line hid plan errors, plans and paused agents | They get their own line |
+| R12-6 | low | A summary that failed to build was marked sent and never came that day | It is marked sent only after it is sent |
+| R12-7 | low | One shared cause (an outage) gave one urgent message per agent, up to 25 | One an hour per cause |
+| R12-8 | low | `/topup N` on an agent that had just fallen low sent two codes, the first one dead | It reads the wallet without the low-funds check |
+| R12-9 | low | Telegram's own 5xx dropped a message after one try | Retried like a lost connection; a final drop is logged, without the text |
+| R12-10 | note | Summary bookkeeping: the AI cost is a UTC day, badges counted as actions, an unconfirmed payment counted as failed, an empty summary hour | Labelled, left out, not counted, defaults to 9 |
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

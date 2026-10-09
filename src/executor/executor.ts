@@ -51,6 +51,8 @@ export interface ExecutionResult {
   summary: string
   costUsd: number
   txHash?: string
+  /** A payment was signed and handed to the network or the relay: with an error, its outcome is unclear. */
+  sent?: boolean
 }
 
 export interface ExecutorDeps {
@@ -58,7 +60,8 @@ export interface ExecutorDeps {
   chain: Chain
   fox: FoxLeague
   store: Store
-  notify?: (agentIndex: number, text: string) => void
+  /** Every action's result as text; the result too, so a payment with an unclear outcome can be said at once. */
+  notify?: (agentIndex: number, text: string, result?: ExecutionResult) => void
 }
 
 interface Built {
@@ -150,10 +153,10 @@ export class Executor {
     let booking: Booking | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}) }, costUsd: costUsdValue || null, txHash })
-      const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}) }
+      const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
       // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
       const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
-      if (!quietPiece) this.d.notify?.(agent.index, formatResult(agent.index, result))
+      if (!quietPiece) this.d.notify?.(agent.index, formatResult(agent.index, result), result)
       return result
     }
 
@@ -591,6 +594,8 @@ export class Executor {
         return outcomeResult(hash, outcome, async () => `done, paid with ${built.wegldValue ? 'WEGLD from the wallet' : 'EGLD'} (at most ${formatAtomic(built.wegldValue ?? built.egldValue, 4)})`)
       }
       case 'register': {
+        // The relayed fee's hash, kept for every answer after it: a fee paid without a team is not routine.
+        let relayed: string | undefined
         if (built.txs.length) {
           const relayer = snap.config!.relayer_addresses.find(r => shardOfPubkeyLastByte(lastByte(r)) === shardOfPubkeyLastByte(lastByte(wallet.address)))!
           const spec = registerAndPayTx(v.facts.feeAtomic as bigint, relayer, snap.config?.relayer_max_gas_limit)
@@ -599,7 +604,6 @@ export class Executor {
           this.assertNotStopped(wallet.index)
           wallet.signTransaction(tx)
           booking.sent = true
-          let relayed: string
           try {
             relayed = await fox.relay(wallet, tx.toPlainObject())
           } catch (err) {
@@ -618,12 +622,12 @@ export class Executor {
             return finish('confirmed', `${desc}: team "${r.team_name}" created, ${r.nonces.length} cards; ${costText}`, usd)
           } catch (err) {
             lastErr = err instanceof Error ? err.message : String(err)
-            if (/already taken/i.test(lastErr)) return finish('failed', `${desc}: name taken; the fee stays recorded on chain, retry with another name (no second payment)`, usd)
+            if (/already taken/i.test(lastErr)) return finish('failed', `${desc}: name taken; the fee stays recorded on chain, retry with another name (no second payment)`, usd, relayed)
             if (!retryable(err, /not paid on-chain|Unable to verify|retry/i)) break
             await sleep(8000)
           }
         }
-        return finish('error', `${desc}: ${lastErr}`, usd)
+        return finish('error', `${desc}: ${lastErr}`, usd, relayed)
       }
       case 'sync': {
         const prep = await fox.syncPrepare(wallet, a.nonce)

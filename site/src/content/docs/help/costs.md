@@ -8,7 +8,7 @@ The agent itself is free. Three things cost money, and you control each one:
 | What | How much | Who limits it |
 |---|---|---|
 | **The game** (entries, stakes, shop, sync, bids) | Never more than your limits: by default $10 a day and $300 a month, plus $20 once for the registration. | Your daily cap, monthly budget and per-action maximums, enforced in code. |
-| **The AI** (every plan and chat) | About $1 to $3 a day per agent with the default model and effort, more at a higher effort or with Opus or Fable. | The monthly spend limit you set at Anthropic, plus the model and effort in the dashboard. |
+| **The AI** (every plan and chat) | About $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick. | The monthly spend limit you set at Anthropic, plus the model and effort in the dashboard. |
 | **Network fees** | A few cents a day. | Paid from the EGLD gas reserve, which swaps never touch. |
 
 ## To start

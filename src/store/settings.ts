@@ -64,23 +64,24 @@ export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUs
  * of 0 turns bidding off.
  */
 export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
-  steady: { dailyCapUsd: 10, monthlyBudgetUsd: 300, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 60 },
-  climber: { dailyCapUsd: 20, monthlyBudgetUsd: 500, topUpWarningUsd: 15, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 1000, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 60 },
-  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 600, topUpWarningUsd: 20, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 4000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 60 },
-  predator: { dailyCapUsd: 40, monthlyBudgetUsd: 1000, topUpWarningUsd: 40, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 20_000, maxBidFoxsy: 15_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 30 },
-  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2000, topUpWarningUsd: 100, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 40_000, maxBidFoxsy: 40_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 30 },
+  steady: { dailyCapUsd: 10, monthlyBudgetUsd: 300, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 120 },
+  climber: { dailyCapUsd: 20, monthlyBudgetUsd: 500, topUpWarningUsd: 15, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 1000, maxSwapFoxsy: 10_000, maxBidFoxsy: 0, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120 },
+  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 600, topUpWarningUsd: 20, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 4000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 120 },
+  predator: { dailyCapUsd: 40, monthlyBudgetUsd: 1000, topUpWarningUsd: 40, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 20_000, maxBidFoxsy: 15_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 120 },
+  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2000, topUpWarningUsd: 100, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 40_000, maxBidFoxsy: 40_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 120 },
 }
 
 /**
- * Every new agent: the steady level, active 12 hours centred on the 14:00 UTC game-day reset, cycles on the
- * hour with no random part, 30 s between actions, every planned action carried out.
+ * Every new agent: the steady level, active 12 hours centred on the 14:00 UTC game-day reset, a cycle every 2 hours
+ * give or take 10 minutes (every level: the daily-capped play fits in 6 to 8 plans), 30 s between actions, every
+ * planned action carried out.
  */
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
   setupBudgetUsd: 20,
   egldGasReserve: '1',
-  tickJitterMinutes: 0,
+  tickJitterMinutes: 10,
   activeHoursUtc: [8, 20],
   minGapSeconds: 30,
   actionProbability: 1,

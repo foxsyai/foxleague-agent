@@ -60,6 +60,6 @@ You remain responsible for your agents.
 
 ## Reviewed
 
-The code went through eleven adversarial reviews that tried to break the money limits, attack it from outside and
+The code went through twelve adversarial reviews that tried to break the money limits, attack it from outside and
 break its security. Every finding was fixed with a test that proves it, except two low ones that were weighed and
 accepted; all are listed in the review record.

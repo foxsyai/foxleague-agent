@@ -126,7 +126,7 @@ FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
 
 - **The game:** limited by your daily cap and monthly budget (defaults $10 a day and $300 a month) plus a
   one-time $20 setup budget for the registration. Your agents never go over them.
-- **The AI:** about $1 to $3 a day per agent with the default model and effort, more at a higher effort or with Opus or Fable. You pick the model and effort in the dashboard.
+- **The AI:** about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick. You pick the model and effort in the dashboard.
 - **Network fees:** a few cents a day. Each agent always keeps an EGLD reserve for them (1 EGLD by default, never swapped).
 
 ## Safety built in

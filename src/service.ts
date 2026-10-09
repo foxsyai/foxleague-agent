@@ -19,10 +19,10 @@ import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
 import { atomicToFloat, formatAtomic } from './util/encoding.ts'
 import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/funds.ts'
-import { Executor } from './executor/executor.ts'
+import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { MODELS, Strategist, describeModelError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
 import { creditRefunds } from './executor/refunds.ts'
@@ -162,7 +162,7 @@ export class Service {
     this.telegram = cfg.telegramToken && cfg.telegramChatId ? new Telegram(cfg.telegramToken, cfg.telegramChatId) : null
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
-    this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (_i, text) => this.report(text) })
+    this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)) })
     this.topups = new TopUps({
       store: this.store,
       key: () => {
@@ -245,6 +245,38 @@ export class Service {
   report(text: string): void {
     if (this.updatesMode() === 'all') return this.notify(text)
     console.log(`[${new Date().toISOString()}] ${text}`)
+  }
+
+  /** Agents running a plan or an action the owner asked for on Telegram: its plan and results are told at once. */
+  private readonly loud = new Set<number>()
+
+  /** Plans failed in a row per agent (reset by a plan that works), and when each account problem was last said. */
+  private readonly failStreak = new Map<number, number>()
+  private readonly alertedAt = new Map<string, number>()
+
+  /**
+   * A plan that failed. Routine (it waits for the summary) unless it needs the owner: a problem with the AI account
+   * (said at once, at most once an hour whatever number of agents hit it) or an agent failing 3 plans in a row.
+   */
+  private tickFailed(index: number, err: unknown, msg: string): void {
+    const streak = (this.failStreak.get(index) ?? 0) + 1
+    this.failStreak.set(index, streak)
+    if (isModelAccountError(err)) {
+      const last = this.alertedAt.get(msg) ?? 0
+      if (Date.now() - last >= 3600_000) {
+        this.alertedAt.set(msg, Date.now())
+        return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard, or the Anthropic console for credit and limits).`)
+      }
+      return this.report(`${agentName(index)} tick failed: ${msg}`)
+    }
+    if (streak === 3) {
+      const key = `streak:${msg}`
+      if (Date.now() - (this.alertedAt.get(key) ?? 0) >= 3600_000) {
+        this.alertedAt.set(key, Date.now())
+        return this.notify(`${agentName(index)}: its last 3 plans failed (${msg}). It keeps trying every cycle; other agents failing the same way within the hour are in the summary.`)
+      }
+    }
+    this.report(`${agentName(index)} tick failed: ${msg}`)
   }
 
   /** daily (the default): routine messages wait for the summary; all: every update as it happens. */
@@ -434,12 +466,13 @@ export class Service {
   /** The summary's time zone and hour: TELEGRAM_SUMMARY_TZ (default this computer's zone) and TELEGRAM_SUMMARY_HOUR (default 9). */
   private readonly summaryZone = validZone(process.env.TELEGRAM_SUMMARY_TZ)
   private readonly summaryHour = (() => {
-    const h = Number(process.env.TELEGRAM_SUMMARY_HOUR ?? 9)
+    const raw = process.env.TELEGRAM_SUMMARY_HOUR?.trim()
+    const h = raw ? Number(raw) : 9
     return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 9
   })()
 
   /** Kinds in the activity that are not actions (plans, ticks, controls, top-ups). */
-  private static readonly NOT_ACTIONS = new Set(['plan', 'tick', 'control', 'topup'])
+  private static readonly NOT_ACTIONS = new Set(['plan', 'tick', 'control', 'topup', 'badge'])
 
   /**
    * The summary of one day (YYYY-MM-DD in the summary's zone), or of today so far. `scheduled`: the morning one,
@@ -464,11 +497,13 @@ export class Service {
       return {
         index: b.index,
         team: snap?.team?.name ?? snap?.registration.teamName ?? null,
-        registered: snap ? snap.registration.registered : true,
+        // Before its first snapshot after a start: what its last tick found.
+        registered: snap ? snap.registration.registered : this.store.getKv(`waiting_funds:${b.index}`) !== '1',
         paused: b.paused,
         done: sum(c => action(c) && (c.status === 'confirmed' || c.status === 'dry_run')),
         refused: sum(c => action(c) && c.status === 'refused'),
-        failed: sum(c => action(c) && (c.status === 'failed' || c.status === 'error' || c.status === 'unconfirmed')),
+        // An unconfirmed payment is confirmed later without a row of its own: not counted as failed.
+        failed: sum(c => action(c) && (c.status === 'failed' || c.status === 'error')),
         plans: sum(c => c.kind === 'plan'),
         errors: sum(c => c.kind === 'tick' && c.status === 'error'),
         spentUsd: spent.get(b.index) ?? 0,
@@ -487,9 +522,29 @@ export class Service {
   private sendDailySummary(): void {
     const today = zoneDate(Date.now(), this.summaryZone)
     if (this.store.getKv('summary_sent_day') === today || !this.telegram) return
+    // Built before it is marked sent: a summary that fails to build comes at the next try, not never.
+    const text = this.summary(dayBefore(today), { scheduled: true })
+    this.telegram.send(text)
     this.store.setKv('summary_sent_day', today)
-    this.telegram.send(this.summary(dayBefore(today), { scheduled: true }))
     console.log(`[${new Date().toISOString()}] daily summary of ${dayBefore(today)} sent`)
+  }
+
+  /**
+   * The morning summary every day at its hour; a missed one (a start or a newly linked chat after the hour) two
+   * minutes later, once the agents' first snapshots are in.
+   */
+  private armSummary(): void {
+    clearTimeout(this.summaryTimer)
+    if (!this.telegram || this.stopping) return
+    if (Date.now() < zoneInstant(zoneDate(Date.now(), this.summaryZone), this.summaryHour, this.summaryZone)) return this.scheduleSummary()
+    this.summaryTimer = setTimeout(() => {
+      try {
+        this.sendDailySummary()
+      } catch (err) {
+        console.error('daily summary failed:', err)
+      }
+      this.scheduleSummary()
+    }, 120_000)
   }
 
   private scheduleSummary(): void {
@@ -513,7 +568,10 @@ export class Service {
   private waitingForFunds(agent: AgentRow, snap: AgentSnapshot): string | null {
     const r = snap.registration
     const fee = snap.config?.registration_fee_foxsy
-    if (r.registered || r.feePaidOnChain || !snap.prices || !fee) return null
+    // Only a fee known to be unpaid (null: the chain could not be read) and too little to pay it parks an agent.
+    if (r.registered || r.feePaidOnChain !== false || !snap.prices || !fee) return null
+    const feeAtomic = BigInt(snap.config?.registration_fee_wei ?? 0)
+    if (snap.chain && feeAtomic > 0n && snap.chain.foxsy >= feeAtomic) return null
     const playable = playableUsd(snap, agent.settings.egldGasReserve)
     const needUsd = fee * snap.prices.foxsyUsd * 1.05
     if (playable === null || playable >= needUsd) return null
@@ -565,6 +623,8 @@ export class Service {
       this.telegram?.stop()
       this.telegram = this.cfg.telegramToken && this.cfg.telegramChatId ? new Telegram(this.cfg.telegramToken, this.cfg.telegramChatId) : null
       this.startTelegram()
+      // A chat linked after the start gets its morning summary too; no chat, no timer.
+      this.armSummary()
     }
     const text = `keys updated: ${labels} (${by}); in use now`
     this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: text })
@@ -858,18 +918,7 @@ export class Service {
         retiredLine(this.store.retiredAgents()),
     )
     this.startTelegram()
-    // The morning summary every day at its hour; a missed one (a restart after its hour) two minutes after the
-    // start, once the agents' first snapshots are in.
-    if (this.telegram && Date.now() >= zoneInstant(zoneDate(Date.now(), this.summaryZone), this.summaryHour, this.summaryZone)) {
-      this.summaryTimer = setTimeout(() => {
-        try {
-          this.sendDailySummary()
-        } catch (err) {
-          console.error('daily summary failed:', err)
-        }
-        this.scheduleSummary()
-      }, 120_000)
-    } else this.scheduleSummary()
+    this.armSummary()
     // A top-up whose outcome was not known when the last run ended (a restart while it was sent): ask Binance.
     if (this.telegram) void this.topups.settleUnclear().then(lines => { if (lines.length) this.telegram?.send(lines.join('\n')) }).catch(() => undefined)
     const creds = credentialsFromEnv()
@@ -956,7 +1005,15 @@ export class Service {
   }
 
   /** One tick: snapshot, plan, run the actions spread over the window. */
-  async tick(index: number, ownerRequest?: string): Promise<string> {
+  async tick(index: number, ownerRequest?: string, o: { loud?: boolean } = {}): Promise<string> {
+    if (o.loud) {
+      this.loud.add(index)
+      try {
+        return await this.tick(index, ownerRequest)
+      } finally {
+        this.loud.delete(index)
+      }
+    }
     const agent = this.store.agent(index)
     if (!agent) return `no ${agentName(index)}`
     if (this.stopping) return 'stopping'
@@ -985,12 +1042,13 @@ export class Service {
         return 'snapshot only (no strategist key)'
       }
       const plan = await this.makePlan(agent, snap, ownerRequest)
+      this.failStreak.delete(index)
       await this.runPlan(agent, plan.actions, !ownerRequest)
       return plan.summary
     } catch (err) {
       const msg = describeModelError(err)
       this.store.log({ agentIndex: index, kind: 'tick', status: 'error', summary: msg })
-      this.report(`${agentName(index)} tick failed: ${msg}`)
+      this.tickFailed(index, err, msg)
       return msg
     } finally {
       this.busy.delete(index)
@@ -1045,7 +1103,8 @@ export class Service {
     this.addModelUsd(plan.usage.usd)
     this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
-    this.report(text)
+    if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
+    else this.report(text)
     return plan
   }
 
@@ -1117,7 +1176,7 @@ export class Service {
 
   /** Payments sent but not confirmed with FoxLeague yet: confirmed again with the same hash, never paid twice. */
   private async retryPending(agent: AgentRow): Promise<void> {
-    await retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t) }, agent.index, this.wallet(agent.index))
+    await retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t), alert: t => this.notify(t) }, agent.index, this.wallet(agent.index))
   }
 
   // ---- Telegram commands ----
@@ -1179,8 +1238,8 @@ export class Service {
         return this.agentsArg(args[0]).map(i => this.store.getKv(`last_plan_${i}`) ?? `${agentName(i)}: no plan yet`).join('\n\n')
       case 'tick': {
         const [i] = this.agentsArg(args[0])
-        void this.tick(i!)
-        return `${agentName(i!)}: tick started`
+        void this.tick(i!, undefined, { loud: true })
+        return `${agentName(i!)}: tick started; its plan and results follow here`
       }
       case 'pause':
       case 'resume':
@@ -1224,10 +1283,11 @@ export class Service {
         if (request.startsWith('{')) {
           const planned: PlannedAction = { action: parseAction(JSON.parse(request)), reason: 'owner (Telegram /do)', byOwner: true }
           const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(i!) })
+          // The answer is the result itself, in every Telegram mode: an owner who hears nothing might ask twice.
           const [r] = await this.executor.run(this.store.agent(i!)!, this.wallet(i!), snap, [planned])
-          return r ? '' : 'nothing ran' // the executor already notified the result
+          return r ? formatResult(i!, r) : 'nothing ran'
         }
-        void this.tick(i!, request)
+        void this.tick(i!, request, { loud: true })
         return `${agentName(i!)}: planning "${request}"`
       }
       case 'strategy': {
@@ -1259,7 +1319,8 @@ export class Service {
         if (first === 'all') return 'one agent at a time: /topup N, then /topup <code> to approve'
         const [i] = this.agentsArg(first)
         const row = this.store.agent(i!)!
-        const snap = await this.snapshot(i!)
+        // Read without the low-funds check: that check may offer a top-up of its own, and two codes would go out.
+        const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(i!) })
         const playable = playableUsd(snap, row.settings.egldGasReserve)
         if (playable === null) return `${agentName(i!)}'s wallet could not be read right now; try again in a minute`
         return this.topups.offer(row, playable, snap.prices?.egldUsd ?? 0, 'owner')

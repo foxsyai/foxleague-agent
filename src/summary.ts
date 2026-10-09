@@ -88,7 +88,8 @@ const usd = (v: number) => `$${v.toFixed(2)}`
 
 /** The summary message. `label` names the day (for example "Thursday 8 October"). */
 export function summaryText(label: string, days: AgentDay[], o: { aiUsd: number | null; live: boolean; killSwitch: boolean; waitingTopUps: number }): string {
-  const idle = days.filter(d => !d.registered && !d.done && !d.refused && !d.failed && !d.topups)
+  // Only an agent with nothing at all to tell waits in the one line: errors, plans and a pause are told per agent.
+  const idle = days.filter(d => !d.registered && !d.done && !d.refused && !d.failed && !d.topups && !d.errors && !d.plans && !d.paused)
   const shown = days.filter(d => !idle.includes(d))
   const lines = [
     `Daily summary, ${label} (${o.live ? 'LIVE' : 'dry run'}${o.killSwitch ? ', KILL SWITCH ON' : ''})`,
@@ -106,7 +107,7 @@ export function summaryText(label: string, days: AgentDay[], o: { aiUsd: number 
     }),
     ...(idle.length ? [`${idle.length === 1 ? 'Agent' : 'Agents'} ${numbers(idle.map(d => d.index))}: not registered yet, waiting for funds`] : []),
     '',
-    `Spent in all: ${usd(days.reduce((s, d) => s + d.spentUsd, 0))}${o.aiUsd !== null ? `; AI ${usd(o.aiUsd)}` : ''}.${o.waitingTopUps ? ` ${o.waitingTopUps} top-up${o.waitingTopUps > 1 ? 's wait' : ' waits'} for a code (/topup).` : ''}`,
+    `Spent in all: ${usd(days.reduce((s, d) => s + d.spentUsd, 0))}${o.aiUsd !== null ? `; AI ${usd(o.aiUsd)} (UTC day)` : ''}.${o.waitingTopUps ? ` ${o.waitingTopUps} top-up${o.waitingTopUps > 1 ? 's wait' : ' waits'} for a code (/topup).` : ''}`,
     'Details any time: /status, /plan N, /log N, /budget N. Every update as it happens: /updates all.',
   ]
   return lines.join('\n')

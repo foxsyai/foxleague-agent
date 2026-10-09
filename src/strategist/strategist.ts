@@ -370,6 +370,16 @@ export class Strategist {
 }
 
 /** Human-readable error for a failed model call (typed SDK errors, most specific first). */
+/**
+ * A problem with the AI account itself (the key, its permissions, its credit or spend limit): every agent's plans
+ * fail until the owner fixes it, so it is said at once, not in the next summary.
+ */
+export function isModelAccountError(err: unknown): boolean {
+  if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) return true
+  if (err instanceof Anthropic.APIError && (err.status === 402 || /credit balance|billing|spend limit|usage limit/i.test(err.message))) return true
+  return false
+}
+
 export function describeModelError(err: unknown): string {
   if (err instanceof Anthropic.AuthenticationError) return 'Anthropic API key rejected'
   if (err instanceof Anthropic.PermissionDeniedError) return 'Anthropic API: permission denied (spend limit or model access)'

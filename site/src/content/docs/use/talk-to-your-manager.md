@@ -53,8 +53,10 @@ text (Firefox) do not show the button.
 Once Telegram is linked ([Your keys](/start/keys/)), you get a **summary every morning** (09:00 by default) with
 yesterday per agent: what it did, what it spent, its rating and what its wallet is worth. Plans and action results
 wait for it, so many agents never flood your chat; `/updates all` sends every update as it happens again, and
-`/updates daily` goes back. Urgent messages (the kill switch, an internal error, a change of mode or keys) and
-top-up codes always come at once. Any plain message goes to your manager, with the same Apply and Cancel buttons. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
+`/updates daily` goes back. A low-funds warning waits for the summary too, unless it comes with a top-up proposal.
+What you ask for yourself (`/do`, `/tick`) answers at once. Urgent messages always come at once: the kill switch, an internal error, a change of
+mode or keys, plans failing for a problem with the AI account (its key, credit or limits) or three times in a row
+for one agent, a payment whose outcome is unclear, and top-up codes. Any plain message goes to your manager, with the same Apply and Cancel buttons. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
 
 | Command | What it does |
 |---|---|

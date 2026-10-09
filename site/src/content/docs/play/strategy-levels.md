@@ -81,7 +81,7 @@ can change any of them afterwards. Values at a FOXSY price of about $0.0027 (Oct
 | Max bid (FOXSY) | 0 (off) | 0 (off) | 4,000 | 15,000 | 40,000 |
 | Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 |
 | Gold amounts (FOXSY) | none (no Gold) | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 |
-| Tick | 60 min | 60 min | 60 min | 30 min | 30 min |
+| Tick | 120 min | 120 min | 120 min | 120 min | 120 min |
 
 The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the active hours (08:00 to 20:00
 UTC), no random window, actions at least 30 seconds apart. A daily cap covers the largest entry at each level (a

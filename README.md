@@ -51,7 +51,7 @@ the dashboard or by chatting with it on Telegram.
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only, a human pace, never a 1v1 or trade between your own agents; guards
   against rivals who try to farm an agent (1v1s only against teams of similar strength, at most two a week each).
-- **Reviewed.** Eleven adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Twelve adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 
@@ -68,7 +68,7 @@ the dashboard or by chatting with it on Telegram.
 ## What it costs
 
 - **The game:** never more than your caps (defaults $10 a day and $300 a month, plus $20 for the registration).
-- **The AI:** about $1 to $3 a day per agent with the default model and effort, more at a higher effort or with Opus or Fable.
+- **The AI:** about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick.
 - **Network fees:** a few cents a day.
 
 ## Command line

@@ -32,7 +32,7 @@ test('summary text: one line per playing agent, the agents waiting for funds in 
   assert.match(text, /agent 1 · Fox Steady XI: 12 done, 2 refused, \$4\.20 spent, ELO 1203 \(\+8\), worth \$45\.00/)
   assert.match(text, /agent 6 · Copper Lynx FC: 3 done, 0 refused, 1 failed, ELO 1180 \(-4\), worth \$6\.50 LOW, 1 top-up/)
   assert.match(text, /Agents 7 to 25: not registered yet, waiting for funds/)
-  assert.match(text, /Spent in all: \$4\.20; AI \$31\.40\. 1 top-up waits for a code \(\/topup\)\./)
+  assert.match(text, /Spent in all: \$4\.20; AI \$31\.40 \(UTC day\)\. 1 top-up waits for a code \(\/topup\)\./)
   assert.match(text, /Details any time: \/status, \/plan N, \/log N, \/budget N\. Every update as it happens: \/updates all\./)
 })
 
@@ -84,4 +84,96 @@ test('an agent with no team and too little for the registration waits for funds 
   paid.registration.feePaidOnChain = true
   assert.equal(waiting(svc.store.agent(0)!, paid), null, 'a paid fee only needs the free register call')
   assert.equal(waiting(svc.store.agent(0)!, snapshot()), null, 'a registered team always plans')
+})
+
+test('urgent stays urgent: an AI account problem once an hour, 3 failed plans in a row, a payment with an unclear outcome, a seat payment given up on', async () => {
+  const Anthropic = (await import('@anthropic-ai/sdk')).default
+  const { isModelAccountError } = await import('../src/strategist/strategist.ts')
+  const { Service } = await import('../src/service.ts')
+  const { retryPendingPayments } = await import('../src/executor/pending.ts')
+  const err = (status: number, message: string) => Anthropic.APIError.generate(status, { error: { message } }, message, new Headers())
+  assert.equal(isModelAccountError(err(401, 'invalid x-api-key')), true)
+  assert.equal(isModelAccountError(err(403, 'permission denied')), true)
+  assert.equal(isModelAccountError(err(400, 'Your credit balance is too low to access the Anthropic API')), true)
+  assert.equal(isModelAccountError(err(429, 'rate limited')), false)
+  assert.equal(isModelAccountError(new Error('fetch failed')), false)
+
+  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
+  svc.ensureAgents()
+  const urgent: string[] = []
+  const routine: string[] = []
+  svc.notify = (t: string) => void urgent.push(t)
+  svc.report = (t: string) => void routine.push(t)
+  const failed = (svc as unknown as { tickFailed: (i: number, e: unknown, m: string) => void }).tickFailed.bind(svc)
+  const key = err(401, 'invalid x-api-key')
+  failed(0, key, 'Anthropic API key rejected')
+  failed(1, key, 'Anthropic API key rejected')
+  assert.equal(urgent.length, 1, 'once for all agents')
+  assert.match(urgent[0]!, /^Plans are failing: Anthropic API key rejected/)
+  urgent.length = 0
+  failed(2, new Error('FoxLeague timeout'), 'FoxLeague timeout')
+  failed(2, new Error('FoxLeague timeout'), 'FoxLeague timeout')
+  assert.deepEqual(urgent, [], 'one or two failures wait for the summary')
+  failed(2, new Error('FoxLeague timeout'), 'FoxLeague timeout')
+  assert.match(urgent[0]!, /^agent 3: its last 3 plans failed \(FoxLeague timeout\)/)
+  failed(2, new Error('FoxLeague timeout'), 'FoxLeague timeout')
+  assert.equal(urgent.length, 1, 'said once per streak')
+
+  urgent.length = 0
+  const d = (svc.executor as unknown as { d: { notify: (i: number, t: string, r?: unknown) => void } }).d
+  d.notify(0, 'agent 1 [ok] train', { status: 'confirmed' })
+  d.notify(0, 'agent 1 [error] join: paid 0xabc but not seated', { status: 'error', txHash: '0xabc' })
+  d.notify(0, 'agent 1 [error] train: FoxLeague timeout', { status: 'error' })
+  assert.deepEqual(urgent, ['agent 1 [error] join: paid 0xabc but not seated'], 'only money with an unclear outcome is urgent')
+
+  const told: string[] = []
+  const alerted: string[] = []
+  svc.store.addPending('0xold', 0, 'join', { tournamentId: 7 })
+  await retryPendingPayments({ store: svc.store, fox: {} as never, notify: t => void told.push(t), alert: t => void alerted.push(t) }, 0, svc.wallet(0), Date.now() + 26 * 60_000)
+  assert.match(alerted[0]!, /tournament seat payment 0xold was never confirmed/)
+  assert.deepEqual(told, [])
+})
+
+test('review R12: an unclear payment without a hash is urgent, owner requests answer at once, the fee on hand is enough, nothing hides in the waiting line', async () => {
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
+  svc.ensureAgents()
+  const urgent: string[] = []
+  svc.notify = (t: string) => void urgent.push(t)
+  svc.report = () => undefined
+  const d = (svc.executor as unknown as { d: { notify: (i: number, t: string, r?: unknown) => void } }).d
+  // R12-1: signed and handed to the network, then the send timed out: no hash, outcome unclear.
+  d.notify(0, 'agent 1 [error] bid: The operation was aborted due to timeout', { status: 'error', sent: true })
+  assert.deepEqual(urgent, ['agent 1 [error] bid: The operation was aborted due to timeout'])
+  // R12-2: while the owner's own request runs, every result is told at once.
+  urgent.length = 0
+  ;(svc as unknown as { loud: Set<number> }).loud.add(0)
+  d.notify(0, 'agent 1 [refused] buy condition: over the cap', { status: 'refused' })
+  assert.equal(urgent.length, 1)
+
+  // R12-4: 5,000 FOXSY on hand pays the fee (no swap, no margin); an unknown fee state never parks an agent.
+  const waiting = (svc as unknown as { waitingForFunds: (a: unknown, s: unknown) => string | null }).waitingForFunds.bind(svc)
+  const holds = snapshot()
+  holds.registration = { ...holds.registration, registered: false, feePaidOnChain: false }
+  holds.chain = { ...holds.chain!, egld: 10n ** 18n, foxsy: 5000n * 10n ** 18n, wegld: 0n }
+  assert.equal(waiting(svc.store.agent(0)!, holds), null)
+  const unknownFee = structuredClone(holds)
+  unknownFee.chain!.foxsy = 0n
+  unknownFee.registration.feePaidOnChain = null
+  assert.equal(waiting(svc.store.agent(0)!, unknownFee), null)
+
+  // R12-5: an unregistered agent with plan errors, plans or a pause gets its own line.
+  const day = (index: number, more: Partial<AgentDay> = {}): AgentDay => ({ index, team: null, registered: false, paused: false, done: 0, refused: 0, failed: 0, plans: 0, errors: 0, spentUsd: 0, elo: null, eloChange: null, worthUsd: null, low: false, topups: 0, ...more })
+  const text = summaryText('x', [day(6, { errors: 7 }), day(7, { plans: 9 }), day(8, { paused: true }), day(9)], { aiUsd: null, live: true, killSwitch: false, waitingTopUps: 0 })
+  assert.match(text, /agent 7: no actions, 7 plan errors/)
+  assert.match(text, /agent 8: no actions/)
+  assert.match(text, /agent 9 \(paused\): no actions/)
+  assert.match(text, /Agent 10: not registered yet, waiting for funds/)
+
+  // R12-7: one shared cause, one 3-in-a-row alert an hour, whatever number of agents it hits.
+  urgent.length = 0
+  ;(svc as unknown as { loud: Set<number> }).loud.clear()
+  const failed = (svc as unknown as { tickFailed: (i: number, e: unknown, m: string) => void }).tickFailed.bind(svc)
+  for (const i of [0, 1, 2]) for (let n = 0; n < 3; n++) failed(i, new Error('gateway down'), 'gateway down')
+  assert.equal(urgent.length, 1)
 })

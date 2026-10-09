@@ -11,7 +11,10 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 export interface PendingDeps {
   store: Store
   fox: Pick<FoxLeague, 'shopConfirm' | 'joinTournament'>
+  /** Routine news (a payment confirmed after all). */
   notify: (text: string) => void
+  /** A payment given up on: said at once (defaults to notify). */
+  alert?: (text: string) => void
 }
 
 const ABANDON_AFTER_MIN = 25
@@ -22,7 +25,7 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
     if (p.kind !== 'shop' && p.kind !== 'join') continue
     if (ageMin > ABANDON_AFTER_MIN) {
       d.store.resolvePending(p.hash, 'abandoned')
-      d.notify(`${agentName(agentIndex)}: ${p.kind === 'shop' ? 'shop payment' : 'tournament seat payment'} ${p.hash} was never confirmed; FoxLeague refunds it automatically`)
+      ;(d.alert ?? d.notify)(`${agentName(agentIndex)}: ${p.kind === 'shop' ? 'shop payment' : 'tournament seat payment'} ${p.hash} was never confirmed; FoxLeague refunds it automatically`)
       continue
     }
     try {
