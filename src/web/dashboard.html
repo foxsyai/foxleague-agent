@@ -19,6 +19,20 @@ body{margin:0;background:var(--bg);color:var(--fg);
 a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
 .wrap{max-width:1440px;margin:0 auto;padding:12px}
 header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 2px 14px}
+.brand{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+.act{display:inline-flex;align-items:center}
+.iconbtn{display:inline-flex;align-items:center;justify-content:center;padding:6px 8px}
+@media (max-width:640px){
+  header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
+  .brand{grid-column:1;gap:8px}
+  .session{grid-column:2;grid-row:1;justify-self:end}
+  .actions{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
+  .act .btn{flex:1;min-height:40px}
+  .act .info{margin-left:6px}
+  .act:not(:has(.info))::after{content:'';width:21px;flex:none}
+  .strat-card{grid-column:1 / -1}
+}
 .logo{font-size:22px;line-height:1}
 h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.01em}
 h2{font-size:12px;margin:0 0 10px;color:var(--dim);font-weight:650;text-transform:uppercase;letter-spacing:.07em;
@@ -104,7 +118,14 @@ h2 .spacer{flex:1}
   font-size:13px;font-weight:650;font-family:inherit}
 .vtab:hover{border-color:var(--acc)}
 .vtab.on{background:var(--panel);color:var(--fg);border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
-.vdot{width:8px;height:8px;border-radius:50%;background:var(--dim)}
+.vdot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex:none}
+/* Many agents or a small screen: one dropdown with the selected agent's state beside it, and steps to the next. */
+.agentpick{display:flex;align-items:center;gap:8px;flex:1 1 320px;min-width:0;padding:6px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.agentpick select{flex:1;min-width:0;background:transparent;border:0;color:var(--fg);font:inherit;font-size:14px;font-weight:650;padding:4px 0;cursor:pointer}
+.agentpick select:focus{outline:none}
+.agentpick option{background:var(--panel);color:var(--fg)}
+.agentpick .step{padding:4px 9px;font-size:14px;line-height:1}
+.agentbar .tools{display:flex;gap:8px;flex-wrap:wrap}
 .vdot.ok{background:var(--up)} .vdot.bad{background:var(--down)} .vdot.idle{background:var(--acc)}
 .vmode{font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:999px;background:#232b3b;color:var(--dim)}
 .vmode.live{background:rgba(255,92,124,.15);color:var(--down)}
@@ -216,18 +237,21 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
 <div class="wrap">
   <div class="topbar" id="topbar">
   <header>
-    <span class="logo">🦊</span><h1>FoxLeague Agent</h1>
-    <span id="modePill" class="pill dry">dry run</span>
-    <span id="killPill" class="pill halt" hidden>kill switch on</span>
-    <span id="tgPill" class="pill mute" hidden>telegram off</span>
-    <span class="spacer"></span>
-    <button id="guideBtn" class="btn">Getting started</button>
-    <button id="adminBtn" class="btn">Keys</button><i class="info" data-tip="keys">i</i>
-    <button id="modeBtn" class="btn danger">Go LIVE</button><i class="info" data-tip="mode">i</i>
-    <button id="killBtn" class="btn danger">Kill switch</button><i class="info" data-tip="kill">i</i>
+    <div class="brand">
+      <span class="logo">🦊</span><h1>FoxLeague Agent</h1>
+      <span id="modePill" class="pill dry">dry run</span>
+      <span id="killPill" class="pill halt" hidden>kill switch on</span>
+      <span id="tgPill" class="pill mute" hidden>telegram off</span>
+    </div>
+    <div class="actions">
+      <span class="act"><button id="guideBtn" class="btn">Getting started</button></span>
+      <span class="act"><button id="adminBtn" class="btn">Keys</button><i class="info" data-tip="keys">i</i></span>
+      <span class="act"><button id="modeBtn" class="btn danger">Go LIVE</button><i class="info" data-tip="mode">i</i></span>
+      <span class="act"><button id="killBtn" class="btn danger">Kill switch</button><i class="info" data-tip="kill">i</i></span>
+    </div>
     <span class="session">
       <span class="usercard"><span class="avatar">🦊</span><span class="who"><span class="who-label">Signed in</span><span class="who-name">{{USER}}</span></span></span>
-      <button id="logoutBtn" class="btn sm">Sign out</button>
+      <button id="logoutBtn" class="btn iconbtn" title="Sign out" aria-label="Sign out"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
     </span>
   </header>
 
@@ -238,7 +262,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
     <div class="card kpi"><div class="k">EGLD<i class="info" data-tip="k_egld">i</i></div><div class="v" id="kEgld">…</div><div class="s">MultiversX API</div></div>
     <div class="card kpi"><div class="k">FOXSY<i class="info" data-tip="k_foxsy">i</i></div><div class="v" id="kFoxsy">…</div><div class="s">xExchange spot</div></div>
     <div class="card kpi"><div class="k">Spent today<i class="info" data-tip="k_spent">i</i></div><div class="v" id="kSpent">…</div><div class="s" id="kSpentS"></div></div>
-    <div class="card kpi"><div class="k">Strategist · all agents<i class="info" data-tip="k_strat">i</i></div>
+    <div class="card kpi strat-card"><div class="k">Strategist · all agents<i class="info" data-tip="k_strat">i</i></div>
       <div class="strat"><select id="sModel" class="btn sm" aria-label="Model"></select><select id="sEffort" class="btn sm" aria-label="Effort"></select><button id="stratApply" class="btn sm go" hidden>Apply</button></div>
       <div class="s" id="kModelS"></div></div>
   </section>
@@ -450,11 +474,17 @@ function renderStrat() {
     + ' · spent ' + usd(i.modelUsdToday) + ' today, ' + usd(i.modelUsdYesterday) + ' yesterday, ' + usd(i.modelUsdTotal) + ' in all'
 }
 
+const NARROW = matchMedia('(max-width:700px)')
+NARROW.addEventListener('change', () => { if (S) renderAgentbar() })
+function agentDot(b) {
+  const fresh = b.snapshot && Date.now() - new Date(b.snapshot.takenAt).getTime() < 3600e3
+  return b.paused || S.instance.killSwitch ? 'idle' : fresh && !(b.snapshot.warnings || []).length ? 'ok' : fresh ? 'idle' : 'bad'
+}
 function renderAgentbar() {
   const bar = $('agentbar'); bar.replaceChildren()
-  for (const b of S.agents) {
-    const fresh = b.snapshot && Date.now() - new Date(b.snapshot.takenAt).getTime() < 3600e3
-    const dot = b.paused || S.instance.killSwitch ? 'idle' : fresh && !(b.snapshot.warnings || []).length ? 'ok' : fresh ? 'idle' : 'bad'
+  if (S.agents.length > 6 || NARROW.matches) renderAgentPicker(bar)
+  else for (const b of S.agents) {
+    const dot = agentDot(b)
     const name = b.snapshot && b.snapshot.team && b.snapshot.team.name
     bar.append(el('button', { class: 'vtab' + (b.index === sel ? ' on' : ''), onclick: () => select(b.index) },
       el('span', { class: 'vdot ' + dot }), 'Agent ' + (b.index + 1) + (name ? ' · ' + name : ''),
@@ -463,9 +493,29 @@ function renderAgentbar() {
       b.funds && b.funds.low ? el('span', { class: 'vmode low', text: 'low funds', title: 'Its wallet is worth less than its top-up warning: send EGLD, WEGLD or FOXSY to this agent' }) : ''))
   }
   const next = S.instance.next
-  bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'Account ' + next.index + ' of your recovery words' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: addAgent }, '+ Add agent'))
-  bar.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'An agent for a FoxLeague team you already play' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: openImport }, 'Import team'))
-  if (S.retired && S.retired.length) bar.append(el('button', { class: 'btn sm', title: 'Agents you parked with Retire: restore them from here', onclick: openRetired }, 'Retired (' + S.retired.length + ')'))
+  const tools = el('div', { class: 'tools' })
+  tools.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'Account ' + next.index + ' of your recovery words' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: addAgent }, '+ Add agent'))
+  tools.append(el('button', { class: 'btn sm', disabled: !next, title: next ? 'An agent for a FoxLeague team you already play' : 'Limit reached (AGENT_MAX_AGENTS)', onclick: openImport }, 'Import team'))
+  if (S.retired && S.retired.length) tools.append(el('button', { class: 'btn sm', title: 'Agents you parked with Retire: restore them from here', onclick: openRetired }, 'Retired (' + S.retired.length + ')'))
+  bar.append(tools)
+}
+/** One line for every agent: a dropdown (its state in each option), the selected agent's badges, and steps. */
+function renderAgentPicker(bar) {
+  if (!S.agents.length) return
+  const cur = S.agents.find(b => b.index === sel) || S.agents[0]
+  const label = b => {
+    const name = b.snapshot && b.snapshot.team && b.snapshot.team.name
+    return 'Agent ' + (b.index + 1) + (name ? ' · ' + name : '') + (b.paused ? ' · paused' : '') + (b.source === 'imported' ? ' · imported' : '') + (b.funds && b.funds.low ? ' · low funds' : '')
+  }
+  const pick = el('select', { 'aria-label': 'Agent', onchange: e => select(Number(e.target.value)) })
+  for (const b of S.agents) pick.append(el('option', { value: String(b.index), selected: b.index === cur.index }, label(b)))
+  const at = S.agents.indexOf(cur)
+  const step = d => { const b = S.agents[(at + d + S.agents.length) % S.agents.length]; if (b) select(b.index) }
+  bar.append(el('div', { class: 'agentpick' },
+    el('span', { class: 'vdot ' + agentDot(cur) }), pick,
+    cur.funds && cur.funds.low ? el('span', { class: 'vmode low', text: 'low funds', title: 'Its wallet is worth less than its top-up warning: send EGLD, WEGLD or FOXSY to this agent' }) : '',
+    el('button', { class: 'btn sm step', title: 'Previous agent', 'aria-label': 'Previous agent', onclick: () => step(-1) }, '‹'),
+    el('button', { class: 'btn sm step', title: 'Next agent', 'aria-label': 'Next agent', onclick: () => step(1) }, '›')))
 }
 
 function row(k, v) { return [el('div', { class: 'k', text: k }), el('div', { class: 'v' }, v)] }
@@ -908,7 +958,7 @@ async function loadKeys() {
 }
 function toggleAdmin(open) {
   $('adminPanel').hidden = !open
-  if (open) loadKeys().catch(e => toast(e.message, true))
+  if (open) { loadKeys().catch(e => toast(e.message, true)); requestAnimationFrame(() => $('adminPanel').scrollIntoView({ behavior: 'smooth', block: 'start' })) }
   else { $('adminPw').value = ''; $('keyRows').replaceChildren(); $('keysTestOut').replaceChildren() }
 }
 $('adminBtn').onclick = () => toggleAdmin($('adminPanel').hidden)
