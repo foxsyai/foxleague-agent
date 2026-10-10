@@ -27,10 +27,11 @@ header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 2px 
   header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}
   .brand{grid-column:1;gap:8px}
   .session{grid-column:2;grid-row:1;justify-self:end}
-  .actions{grid-column:1 / -1;display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0}
-  .act .btn{flex:1;min-height:40px}
-  .act .info{margin-left:6px}
-  .act:not(:has(.info))::after{content:'';width:21px;flex:none}
+  .actions{grid-column:1 / -1;display:grid;grid-template-columns:repeat(6,1fr);gap:10px 8px;margin:0}
+  .act{position:relative;grid-column:span 2}
+  .act:nth-child(-n+2){grid-column:span 3}
+  .act .btn{flex:1;min-height:42px;padding:7px 6px;font-size:13px;text-align:center;line-height:1.2}
+  .act .info{position:absolute;top:-7px;right:-5px;margin:0;z-index:1;background:var(--panel)}
   .strat-card{grid-column:1 / -1}
 }
 .logo{font-size:22px;line-height:1}
@@ -42,6 +43,7 @@ h2 .spacer{flex:1}
       text-transform:uppercase;border:1px solid transparent;white-space:nowrap}
 .pill.run{background:#0d2f1d;color:var(--up);border-color:#1d5c39}
 .pill.halt{background:#3a1620;color:var(--down);border-color:#7d2740}
+.pill.live{background:#10301f;color:var(--up);border-color:#1f6b41}
 .pill.pause{background:#3a2f10;color:var(--acc);border-color:#7d5f1e}
 .pill.dry{background:#132a3f;color:var(--blue);border-color:#25507a}
 .pill.stale{background:#2a2030;color:#c9a0dc;border-color:#5a3f70}
@@ -61,6 +63,7 @@ h2 .spacer{flex:1}
 .btn{background:#232b3b;border:1px solid #33405a;color:var(--fg);padding:7px 12px;
      border-radius:8px;font-size:13px;cursor:pointer;font-weight:600;font-family:inherit}
 .btn:hover{background:#2b3547;border-color:#44557a}
+a.btn{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
 .btn:active{opacity:.75}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.danger{background:#3a1620;border-color:#7d2740;color:#ffb3c1}
@@ -248,7 +251,8 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
       <span id="tgPill" class="pill mute" hidden>telegram off</span>
     </div>
     <div class="actions">
-      <span class="act"><button id="guideBtn" class="btn">Getting started</button></span>
+      <span class="act"><a id="howBtn" class="btn" href="https://agent.foxleague.ai/" target="_blank" rel="noopener noreferrer">How it works</a><i class="info" data-tip="how">i</i></span>
+      <span class="act"><button id="guideBtn" class="btn">Getting started</button><i class="info" data-tip="guide">i</i></span>
       <span class="act"><button id="adminBtn" class="btn">Keys</button><i class="info" data-tip="keys">i</i></span>
       <span class="act"><button id="modeBtn" class="btn danger">Go LIVE</button><i class="info" data-tip="mode">i</i></span>
       <span class="act"><button id="killBtn" class="btn danger">Kill switch</button><i class="info" data-tip="kill">i</i></span>
@@ -443,7 +447,7 @@ function renderHeader() {
   const i = S.instance
   const live = i.liveMode && i.liveEnabled
   $('modePill').textContent = live ? 'LIVE' : i.liveMode ? 'live blocked by the server' : 'dry run'
-  $('modePill').className = 'pill ' + (live ? 'halt' : 'dry')
+  $('modePill').className = 'pill ' + (live ? 'live' : 'dry')
   $('modeBtn').textContent = i.liveMode ? 'Back to dry run' : 'Go LIVE'
   $('modeBtn').className = 'btn ' + (i.liveMode ? 'warn' : 'danger')
   $('modeBtn').disabled = !i.liveMode && !i.liveEnabled
@@ -819,6 +823,8 @@ $('stratApply').onclick = async () => {
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
 const TIPS = {
+  how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
+  guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>
     <p><b>Dry run:</b> the agent plans, checks each action against the game rules and your caps, then simulates it on chain. Nothing is signed or sent. The spend goes to a separate dry-run ledger.</p>
     <p><b>Live:</b> actions are signed and sent with real EGLD and FOXSY, inside the same caps.</p>
