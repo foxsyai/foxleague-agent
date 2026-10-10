@@ -255,6 +255,11 @@ export class Store {
     this.setKv('live_mode', on ? '1' : '0')
   }
 
+  /** Every kv row whose key starts with this prefix. */
+  kvWithPrefix(prefix: string): [string, string][] {
+    return (this.db.prepare("SELECT key, value FROM kv WHERE key LIKE ? ESCAPE '\\'").all(prefix.replace(/[\\%_]/g, c => `\\${c}`) + '%') as { key: string; value: string }[]).map(r => [r.key, r.value])
+  }
+
   getKv(key: string): string | undefined {
     return (this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key) as { value: string } | undefined)?.value
   }

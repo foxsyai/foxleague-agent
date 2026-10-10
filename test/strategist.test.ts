@@ -216,13 +216,18 @@ test('while the history still cites the removed rule about the owner\'s other ag
 test('presets run from careful to all-in, and the AI is told the owner sets how hard to spend on growth', async () => {
   const { STRATEGY_PRESETS, validateSettingsPatch } = await import('../src/store/settings.ts')
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
-  assert.deepEqual(Object.keys(STRATEGY_PRESETS), ['steady', 'climber', 'hunter', 'predator', 'beast'])
+  assert.deepEqual(Object.keys(STRATEGY_PRESETS), ['steady', 'climber', 'hunter', 'predator', 'beast', 'zeus'])
   for (const text of Object.values(STRATEGY_PRESETS)) assert.equal(validateSettingsPatch({ strategy: text }).strategy, text)
   assert.match(STRATEGY_PRESETS.beast!, /XP booster running every day/)
   assert.match(STRATEGY_PRESETS.beast!, /Never move cards between wallets/)
   assert.match(STRATEGY_PRESETS.predator!, /never a fusion match waiver, a fusion cooldown waiver or any other waiver/)
   // A strict ladder: each text names its level and the auction step it adds, and is complete on its own.
-  Object.keys(STRATEGY_PRESETS).forEach((k, i) => assert.match(STRATEGY_PRESETS[k]!, new RegExp(`\\(level ${i + 1} of 5\\)`)))
+  Object.keys(STRATEGY_PRESETS).forEach((k, i) => assert.match(STRATEGY_PRESETS[k]!, new RegExp(`\\(level ${i + 1} of 6\\)`)))
+  // Zeus: No. 1 at the least spending, a benefit for every action, the numbers first, never an arranged result.
+  assert.match(STRATEGY_PRESETS.zeus!, /No\. 1 on the leaderboard with the least spending/)
+  assert.match(STRATEGY_PRESETS.zeus!, /every action must name its benefit/)
+  assert.match(STRATEGY_PRESETS.zeus!, /Climb in steps/)
+  assert.match(STRATEGY_PRESETS.zeus!, /never arrange a result/)
   assert.match(STRATEGY_PRESETS.steady!, /No shop purchases, no auction bids/)
   // Bidding from the hunter up: Rare, Epic and Legendary only, the max bid decides what is in reach.
   for (const k of ['hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /Bid on Rare, Epic or Legendary players, never Common or Uncommon ones/)

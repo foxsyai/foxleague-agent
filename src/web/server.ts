@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Service } from '../service.ts'
 import { COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, type Credentials } from './auth.ts'
-import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings } from '../store/settings.ts'
+import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
 import { EFFORTS, MODELS, type Effort } from '../strategist/strategist.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
@@ -202,6 +202,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         next: agents.length < cfg.maxAgents ? { index: nextIndex, address: service.wallet(nextIndex).address } : null,
         presets: STRATEGY_PRESETS,
         levels: LEVEL_SETTINGS,
+        levelAi: LEVEL_AI,
         user: creds.username,
       },
       chatRev: service.chatRevision(),

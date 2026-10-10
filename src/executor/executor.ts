@@ -6,6 +6,8 @@
 // Live needs BOTH the platform in live mode (one switch for all agents) AND AGENT_LIVE_ENABLED=1 in the environment.
 
 import { randomUUID } from 'node:crypto'
+import { isZeus } from '../store/settings.ts'
+import { winChance } from '../snapshot/winchance.ts'
 import { Address } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
 import type { Chain, TxOutcome } from '../chain/gateway.ts'
@@ -20,7 +22,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
-import { checkAction, type RulesContext, type Verdict } from './rules.ts'
+import { checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -171,7 +173,11 @@ export class Executor {
       const now = new Date()
       const ctx = await this.context(agent, wallet, snap, a, now, dry)
       if (planned.piece) ctx.piece = { index: planned.piece.index, of: planned.piece.of }
-      if (ctx.opponent) logExtra.opponentUserId = ctx.opponent.userId
+      if (ctx.opponent) {
+        logExtra.opponentUserId = ctx.opponent.userId
+        // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
+        logExtra.winChance = winChance({ myElo: snap.profile?.elo_rating ?? null, oppElo: ctx.opponent.elo, myStrength: lineupStrength(snap) || null, oppStrength: ctx.opponent.strength ?? null })
+      }
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
@@ -370,11 +376,33 @@ export class Executor {
       const floors = await soft(() => fox.floorPrices())
       market.floorPrice = floors ? (floors.find(f => f.rarity === rarity)?.floor_price ?? 0) : null
     }
+    // Zeus: its own extra checks need the owner's other teams (private invites) and the seated field (the podium).
+    const zeus = isZeus(agent.settings.strategy)
+    if (zeus && a.type === 'create_tournament' && a.invite_user_ids?.length) {
+      // Every team this install ever ran (active, retired, removed): noted by each agent's snapshot and at start.
+      market.ownUserIds = store.kvWithPrefix('agent_user_id:')
+        .filter(([k]) => k !== `agent_user_id:${agent.index}`)
+        .map(([, v]) => Number(v))
+        .filter(n => Number.isInteger(n) && n > 0)
+    }
+    // The field is read only for an entry the cheap checks would allow (open, before its deadline, a seat left).
+    const t0 = tournament?.tournament
+    const worthReading = t0 && t0.max_teams > 2 && t0.status === 'open' && new Date(t0.deadline) > now && tournament!.participants.length < t0.max_teams && !tournament!.participants.some(p => p.user_id === snap.profile?.id)
+    if (zeus && a.type === 'join_tournament' && tournament && worthReading) {
+      const seated = tournament.participants.filter(p => p.user_id !== snap.profile?.id).slice(0, 32)
+      market.field = await Promise.all(seated.map(async p => {
+        const known = snap.leaderboardNeighbours.find(u => u.id === p.user_id)
+        const elo = known?.elo_rating ?? (p.wallet_address ? (await soft(() => fox.user(p.wallet_address!)))?.elo_rating ?? null : null)
+        const strength = typeof known?.strength === 'number' ? known.strength : p.wallet_address ? await soft(() => rivalStrength(fox, p.wallet_address!)) : null
+        return { userId: p.user_id, strength, elo }
+      }))
+    }
     const recent = store.activityOf(agent.index, ['play_match'], since(86_400_000)).filter(r => r.status === 'confirmed' || r.status === 'dry_run')
     const lastMatch = recent[0]
     const lastRanked = recent.find(r => r.summary.includes('ranked'))
     return {
       settings: agent.settings,
+      ...(zeus ? { zeus } : {}),
       ...(tournament !== undefined ? { tournament } : {}),
       ...(entryAmount !== undefined ? { entryAmount } : {}),
       ...market,
@@ -755,6 +783,8 @@ export class Executor {
                 round_interval_minutes: a.round_interval_minutes,
                 has_third_place_match: a.format === 'knockout',
                 ...(a.home_and_away ? { home_and_away: true } : {}),
+                // A non-empty invite list makes it private (FoxLeague's whitelist_user_ids): the one the rules kept.
+                ...(Array.isArray(v.facts.invites) && v.facts.invites.length ? { whitelist_user_ids: v.facts.invites } : {}),
               }
         const created = await fox.createTournament(wallet, body, `agent${agent.index}-${randomUUID()}`)
         store.retagSpend(booking.ids, 'join:new', `join:${created.id}`)

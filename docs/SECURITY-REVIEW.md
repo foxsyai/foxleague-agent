@@ -254,6 +254,26 @@ for one code, to another address or above the proposal, and the quiet mode canno
 | R12-9 | low | Telegram's own 5xx dropped a message after one try | Retried like a lost connection; a final drop is logged, without the text |
 | R12-10 | note | Summary bookkeeping: the AI cost is a UTC day, badges counted as actions, an unconfirmed payment counted as failed, an empty summary hour | Labelled, left out, not counted, defaults to 9 |
 
+## Thirteenth review, 2026-10-10 (Zeus, the level window, the phone layout)
+
+One adversarial reviewer went through Zeus (the win chance, the podium rule, private invites), the level proposal
+window and the phone layout. Nothing high: a private tournament is checked by FoxLeague before anything is paid, so
+a refused invite list never costs a seat, and only Zeus can create one.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| Z1 | medium | The owner's teams that were never noted (an agent retired before this version, a removed imported team, a failed first reading) could be invited | Every team this install ever ran counts, noted at each reading, at retire and at start |
+| Z2 | low | A field that could not be read let Zeus pay into it | Refused; a team with an unread squad and a clearly higher ELO counts as stronger |
+| Z3 | low | An open 1v1 skipped the 55 percent rule | Zeus plays a 1v1 only against a named team |
+| Z4 | low | Refusals named the barred teams, so the AI could learn them | The owner's teams leave the invite list without a word |
+| Z5 | low | "Matches in 3 days" could cover a week or one day | Counted against the reading nearest 3 days back, with the real span |
+| Z6 | low | Extra FoxLeague calls on every reading and a burst at every join | A rival's squad is read at most every 20 minutes; the field only for an entry that could go through |
+| Z7 | low | The level window: moving down proposed nothing, Accept saved other unsaved edits, no Escape, "null" with the AI off | It follows the direction, saves only the ticked rows, closes with Escape and says when the AI is off |
+| Z8 | low | Agents with the older "of 5" texts showed as Custom | A level is recognised by its name |
+| Z9 | low | An empty invite list refused the whole create | It is a public tournament |
+| Z10 | low | A rewrite without the level name dropped Zeus mode | The manager keeps the level name |
+| Z11 | note | The AI was not told the 55 percent threshold, and the strength units were unclear | Both stated |
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

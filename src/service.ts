@@ -8,7 +8,7 @@ import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
-import { MIN_TICK_MINUTES, STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
+import { MIN_TICK_MINUTES, STRATEGY_PRESETS, isZeus, validateSettingsPatch } from './store/settings.ts'
 import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -714,13 +714,53 @@ export class Service {
   }
 
   private async snapshot(index: number): Promise<AgentSnapshot> {
-    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) })
+    const research = isZeus(this.store.agent(index)?.settings.strategy ?? '')
+    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research })
+    this.noteTeams(index, snap)
     this.snapshots.set(index, snap)
     this.lastRefresh.set(index, Date.now())
     // Every fresh balance is checked, so a paused agent or one outside its active hours warns too.
     const agent = this.store.agent(index)
     if (agent) this.checkFunds(agent, snap)
     return snap
+  }
+
+  /**
+   * What the snapshot alone cannot tell: how many matches each rival played in the last 3 days (from its record,
+   * noted once a day), and this agent's own FoxLeague user id (so the code keeps its own teams out of a private
+   * tournament's invites; the AI is never told which teams are the owner's).
+   */
+  private noteTeams(index: number, snap: AgentSnapshot): void {
+    if (snap.profile?.id) this.store.setKv(`agent_user_id:${index}`, String(snap.profile.id))
+    const day = new Date().toISOString().slice(0, 10)
+    let hist: Record<string, [string, number][]> = {}
+    try {
+      hist = JSON.parse(this.store.getKv('rival_matches') ?? '{}') as Record<string, [string, number][]>
+    } catch {
+      hist = {}
+    }
+    for (const u of snap.leaderboardNeighbours) {
+      if (typeof u.matches !== 'number') continue
+      const rows = (hist[u.id] ?? []).filter(([d]) => d !== day)
+      rows.push([day, u.matches])
+      hist[u.id] = rows.slice(-8)
+      // Against the row nearest 3 days back, within 2 to 4 days: "N matches in D days", or nothing when none fits.
+      const daysBack = (d: string) => Math.round((Date.parse(day) - Date.parse(d)) / 86_400_000)
+      const base = rows.filter(([d]) => daysBack(d) >= 2 && daysBack(d) <= 4).sort((x, y) => Math.abs(daysBack(x[0]) - 3) - Math.abs(daysBack(y[0]) - 3))[0]
+      u.played = base ? { matches: Math.max(0, u.matches - base[1]), days: daysBack(base[0]) } : null
+    }
+    // A record of the teams noted in the last 8 days only.
+    const cutoff = new Date(Date.now() - 8 * 86_400_000).toISOString().slice(0, 10)
+    for (const k of Object.keys(hist)) if (!(hist[k] ?? []).some(([d]) => d >= cutoff)) delete hist[k]
+    this.store.setKv('rival_matches', JSON.stringify(hist))
+  }
+
+  private async noteOwnUserIds(): Promise<void> {
+    for (const b of [...this.store.agents(), ...this.store.retiredAgents()]) {
+      if (this.store.getKv(`agent_user_id:${b.index}`)) continue
+      const id = (await this.fox.user(b.address).catch(() => null))?.id
+      if (id) this.store.setKv(`agent_user_id:${b.index}`, String(id))
+    }
   }
 
   /** A fresh snapshot for the web UI, at most one per agent every 15 s. */
@@ -859,6 +899,7 @@ export class Service {
     }
     // What the wallet holds now, for the Retired list: a fresh read without the low-funds check.
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }).catch(() => this.snapshots.get(index))
+    if (snap?.profile?.id) this.store.setKv(`agent_user_id:${index}`, String(snap.profile.id))
     // Checked after the read, with no wait before the retire itself: an action that was already signing has finished.
     if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: retire it in a minute`)
     if (this.store.pending(index).length) throw new Error(`${agentName(index)} is paused, but a payment waits for FoxLeague's confirmation: resume it until the payment is confirmed, then retire it`)
@@ -919,6 +960,9 @@ export class Service {
     )
     this.startTelegram()
     this.armSummary()
+    // Each agent's FoxLeague user id, for one that was never noted (retired or added before this version): a Zeus
+    // private tournament never invites the owner's own teams.
+    void this.noteOwnUserIds().catch(() => undefined)
     // A top-up whose outcome was not known when the last run ended (a restart while it was sent): ask Binance.
     if (this.telegram) void this.topups.settleUnclear().then(lines => { if (lines.length) this.telegram?.send(lines.join('\n')) }).catch(() => undefined)
     const creds = credentialsFromEnv()
@@ -1203,7 +1247,7 @@ export class Service {
           '/budget [N]',
           '/ask [N] question',
           '/do N request  one-off action (same executor and caps)',
-          '/strategy [N|all]  show the strategy; /strategy N|all steady|climber|hunter|predator|beast|<text>  replace it directly',
+          '/strategy [N|all]  show the strategy; /strategy N|all steady|climber|hunter|predator|beast|zeus|<text>  replace it directly',
           '(any plain message)  talk to the manager: advice becomes a strategy proposal with Apply',
           '/clear  start a new conversation: the manager forgets the current one (it also does after an hour without a message)',
           '/kill on|off  pause every agent at once',

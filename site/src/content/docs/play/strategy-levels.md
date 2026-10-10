@@ -1,16 +1,19 @@
 ---
 title: Strategy levels
-description: The five strategy presets, from careful to all-in, what each one does with your money and the limits to set for it.
+description: The six strategy levels, five from careful to all-in and then Zeus, what each one does with your money and the limits to set for it.
 ---
 
-The strategy is the direction the AI follows on every cycle. Five presets set it for you, from careful to all-in.
-They work like the trim levels of a car: **each level does everything the level below does and adds more**. What
-grows from one level to the next is how much the agent pays to grow the squad.
+The strategy is the direction the AI follows on every cycle. Six presets set it for you. The first five work like
+the trim levels of a car: **each level does everything the level below does and adds more**, and what grows from
+one level to the next is how much the agent pays to grow the squad. The sixth, **Zeus**, is different: it may do
+everything a beast does, but only what pays, and it aims every move at No. 1 on the leaderboard.
 
-Pick one in **Settings → Strategy** or on Telegram (`/strategy 2 hunter`). You can edit the text afterwards or write
-your own. [Every setting explained](/use/settings/) covers the field itself.
+Pick one in **Settings → Strategy** or on Telegram (`/strategy 2 hunter`). In the dashboard, picking a level opens
+a short proposal: the settings that fall short of the level's recommendation, each with a tick, and its recommended
+AI. **Accept and save** takes the ticked ones; **Cancel** keeps everything as it is saved. You can edit the text
+afterwards or write your own. [Every setting explained](/use/settings/) covers the field itself.
 
-## The five levels
+## The six levels
 
 | Level | Adds on top of the level below | Typical spend a day |
 |---|---|---|
@@ -19,33 +22,34 @@ your own. [Every setting explained](/use/settings/) covers the field itself.
 | **3. Hunter** | Tournaments and the first purchases: creates its own tournaments, the XP booster on days with 3 sure competitive matches, paid training slots while it runs, a fusion when three spare cards are ready, **bids at auction** (see below) | Plus about 2,000 FOXSY on booster days, and bids |
 | **4. Predator** | Pays for everything that grows the squad **except waivers**: all 15 training sessions every day, the booster on every match day, recovery whenever it helps, both Common packs a week, a fusion whenever a triplet is ready (real matches, full 14-day cooldown), a higher max bid | About 3,500 FOXSY, plus entries and bids |
 | **5. Beast** | Every paid advantage: the booster always on, **both fusion waivers** so a fusion can happen every 20 hours, 3 competitive matches a day, the highest max bid; keeps 22 to 36 cards and sells the spare ones above 36 | About 6,000 FOXSY, plus entries and bids |
+| **6. Zeus** | Not more spending, better decisions: a **win chance** for every team it could face, 1v1s only from 55 percent against active teams that accept them, tournaments only with a real chance of the top three, its own tournaments including **private** ones that invite active teams it should beat, training on the stats each role needs, syncs and recovery only before matches that count, a player bought only at a good price and for a reason that pays. It climbs in steps, from the teams it beats to stronger ones | As little as winning needs, up to its limits |
 
 On average about 90 percent of all entry fees come back as prizes, so entries are mostly a stake that returns,
 not a cost. The shop, the waivers and the bids are real spending.
 
 ## Every action, level by level
 
-| Action | Steady | Climber | Hunter | Predator | Beast |
-|---|---|---|---|---|---|
-| 5 free training sessions a day | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Lineup, formation, the 5 daily matches | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Ranked matches whenever allowed | | ✓ | ✓ | ✓ | ✓ |
-| Sync before match days | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Free team badge | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Silver tournaments and 1v1s, lowest amounts | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ |
-| Creates its own tournaments | | | ✓ | ✓ | ✓ |
-| 3 competitive matches every day | | | | | ✓ |
-| Condition recovery | | key starters, key matches | key starters, key matches | whenever it helps | whenever it helps |
-| XP booster (2,000 FOXSY, 24 hours) | | | days with 3 sure matches | every match day | always on |
-| Paid training slots (10 a day, 20 FOXSY) | | | while the booster runs | all 10, every day | all 10, every day |
-| Common packs (2 a week, 2,500 FOXSY) | | | | ✓ | ✓ |
-| Fusion | | | spare triplets | whenever ready | every 20 hours |
-| Fusion match waiver (20 FOXSY a match) | | | | | ✓ |
-| Fusion cooldown waiver (75 FOXSY a day) | | | | | ✓ |
-| Bids at auction: Rare, Epic, Legendary | | | ✓ | ✓ | ✓ |
-| Default max bid (FOXSY) | | | 4,000 | 15,000 | 40,000 |
-| Sells spare cards (above 36 cards) | | | | | ✓ |
+| Action | Steady | Climber | Hunter | Predator | Beast | Zeus |
+|---|---|---|---|---|---| --- |
+| 5 free training sessions a day | ✓ | ✓ | ✓ | ✓ | ✓ | on the stats each role needs |
+| Lineup, formation, the 5 daily matches | ✓ | ✓ | ✓ | ✓ | ✓ | ✓, set against each opponent |
+| Ranked matches whenever allowed | | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
+| Sync before match days | ✓ | ✓ | ✓ | ✓ | ✓ | only when it changes a match |
+| Free team badge | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Silver tournaments and 1v1s, lowest amounts | ✓ | ✓ | ✓ | ✓ | ✓ | when the win chance is good |
+| Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ | with a real chance of the top three |
+| Creates its own tournaments | | | ✓ | ✓ | ✓ | ✓, also private ones |
+| 3 competitive matches every day | | | | | ✓ | when they pay |
+| Condition recovery | | key starters, key matches | key starters, key matches | whenever it helps | whenever it helps | key starters, matches that count |
+| XP booster (2,000 FOXSY, 24 hours) | | | days with 3 sure matches | every match day | always on | days with 3 sure matches |
+| Paid training slots (10 a day, 20 FOXSY) | | | while the booster runs | all 10, every day | all 10, every day | when they beat other uses |
+| Common packs (2 a week, 2,500 FOXSY) | | | | ✓ | ✓ | when they pay |
+| Fusion | | | spare triplets | whenever ready | every 20 hours | toward Legendary, when it pays |
+| Fusion match waiver (20 FOXSY a match) | | | | | ✓ | when the time it wins counts |
+| Fusion cooldown waiver (75 FOXSY a day) | | | | | ✓ | when the time it wins counts |
+| Bids at auction: Rare, Epic, Legendary | | | ✓ | ✓ | ✓ | only at a good price, for a reason |
+| Default max bid (FOXSY) | | | 4,000 | 15,000 | 40,000 | 47,000 |
+| Sells spare cards (above 36 cards) | | | | | ✓ | when the price beats the use |
 
 **Bids.** From the hunter up, an agent bids on Rare, Epic and Legendary players, never on Common or Uncommon
 ones: two Common packs give 10 Commons, which fuse into three Uncommons and then a Rare, so those cost less from the
@@ -60,6 +64,12 @@ Commons; the fusion fees are 100, 200, 400 and 800). The fusion route is also sl
 hours, 14 days before a fused card can be fused again (3 with the cooldown waiver) and 20 competitive matches per
 input, so an auction at a fair price under that cost often wins.
 
+**Zeus decides from numbers.** For every team it could face it reads the ELO and the lineup strength at today's
+condition and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to
+its rules whatever the AI decides: no 1v1 under 55 percent, no tournament where three seated teams are clearly
+stronger, and a private tournament never invites your other agents. Each 1v1 records the chance it was taken at, so
+the estimate can be checked against real results.
+
 **No level ever** moves cards between wallets or buys a paid badge. Every level keeps your agents' Fair Play: it
 never arranges a result with any team.
 
@@ -70,18 +80,19 @@ its largest single payment, whatever its strategy says. So each level comes with
 level in Settings fills them** in the form; check them and press Save (raising a limit asks for your password). You
 can change any of them afterwards. Values at a FOXSY price of about $0.0027 (October 2026):
 
-| Setting | Steady | Climber | Hunter | Predator | Beast |
-|---|---|---|---|---|---|
-| Daily cap | $5 | $15 | $25 | $35 | $100 |
-| Monthly budget | $150 | $250 | $400 | $750 | $2,000 |
-| Top-up warning | $10 | $30 | $50 | $70 | $200 |
-| Max entry fee or stake (FOXSY) | 1,500 | 5,000 | 7,500 | 10,000 | 20,000 |
-| Max shop payment (FOXSY) | 500 | 1,000 | 2,500 | 2,500 | 3,000 |
-| Max swap (FOXSY) | 10,000 | 10,000 | 10,000 | 20,000 | 40,000 |
-| Max bid (FOXSY) | 0 (off) | 0 (off) | 4,000 | 15,000 | 40,000 |
-| Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 |
-| Gold amounts (FOXSY) | none (no Gold) | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 |
-| Tick | 120 min | 120 min | 120 min | 120 min | 120 min |
+| Setting | Steady | Climber | Hunter | Predator | Beast | Zeus |
+|---|---|---|---|---|---|---|
+| Daily cap | $5 | $15 | $25 | $35 | $100 | $150 |
+| Monthly budget | $150 | $250 | $400 | $750 | $2,000 | $3,000 |
+| Top-up warning | $10 | $30 | $50 | $70 | $200 | $300 |
+| Max entry fee or stake (FOXSY) | 1,500 | 5,000 | 7,500 | 10,000 | 20,000 | 25,000 |
+| Max shop payment (FOXSY) | 500 | 1,000 | 2,500 | 2,500 | 3,000 | 5,000 |
+| Max swap (FOXSY) | 10,000 | 10,000 | 10,000 | 20,000 | 40,000 | 50,000 |
+| Max bid (FOXSY) | 0 (off) | 0 (off) | 4,000 | 15,000 | 40,000 | 47,000 |
+| Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 | as beast |
+| Gold amounts (FOXSY) | none (no Gold) | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 | up to 25,000 |
+| Tick | 120 min | 120 min | 120 min | 120 min | 120 min | 60 min |
+| Recommended AI | Sonnet 5, medium | Sonnet 5, medium | Sonnet 5.5, high | Opus 5.5, medium | Opus 5.5, high | Opus 5.5, high |
 
 The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the active hours (08:00 to 20:00
 UTC), a random window of 10 minutes, actions at least 30 seconds apart.

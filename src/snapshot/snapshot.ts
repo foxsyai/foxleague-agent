@@ -7,6 +7,18 @@ import type { Chain } from '../chain/gateway.ts'
 import { poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
+import { winChance } from './winchance.ts'
+
+/** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
+const rivalSeen = new Map<string, { at: number; strength: number | null }>()
+async function rivalStrengthCached(fox: FoxLeague, wallet: string): Promise<number | null> {
+  const hit = rivalSeen.get(wallet)
+  if (hit && Date.now() - hit.at < 20 * 60_000) return hit.strength
+  const strength = await rivalStrength(fox, wallet).catch(() => null)
+  rivalSeen.set(wallet, { at: Date.now(), strength })
+  if (rivalSeen.size > 500) rivalSeen.delete(rivalSeen.keys().next().value!)
+  return strength
+}
 import {
   RARITY_CAP,
   STATS,
@@ -99,8 +111,12 @@ export interface AgentSnapshot {
     challengesForMe: ChallengeForMe[]
   } | null
   market: MarketSummary
-  /** Teams to challenge: the ones that accept 1v1s first (`accepted7d`), then the nearest by ELO. */
-  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number })[]
+  /**
+   * Teams to challenge: the ones that accept 1v1s first (`accepted7d`), then the nearest by ELO. `matches` is the
+   * team's record so far (its activity is the change over days); a Zeus agent also reads each team's lineup
+   * strength and its own win chance against it.
+   */
+  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null })[]
   warnings: string[]
 }
 
@@ -186,7 +202,8 @@ async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>
  * Builds the snapshot for an agent (`wallet`), or a public-only view of any address (`watch`).
  * Every section is independent: a failing route leaves a warning, not a failed tick.
  */
-export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date()): Promise<AgentSnapshot> {
+/** `research`: a Zeus agent reads every team it could challenge (its lineup strength) to weigh its win chance. */
+export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean } = {}): Promise<AgentSnapshot> {
   const { chain, fox } = deps
   const warnings: string[] = []
   const wallet = 'wallet' in target ? target.wallet : null
@@ -298,8 +315,19 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // Up to 6 teams that accept 1v1s and are not 100 or more ELO above (the executor refuses those), then the nearest.
   const takers = others.filter(u => (accepted.get(u.id) ?? 0) > 0 && u.elo_rating < myElo + 100).sort((a, b) => gap(a) - gap(b)).slice(0, 6)
   const nearest = others.filter(u => !takers.includes(u)).sort((a, b) => gap(a) - gap(b)).slice(0, 10 - takers.length)
-  const leaderboardNeighbours = [...takers, ...nearest]
-    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0 }))
+  const leaderboardNeighbours: AgentSnapshot['leaderboardNeighbours'] = [...takers, ...nearest]
+    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0, matches: (u.matches_won ?? 0) + (u.matches_drawn ?? 0) + (u.matches_lost ?? 0) }))
+  if (opts.research && registered) {
+    // Our eleven as the engine sees it today (synced stats scaled by condition), against each rival at full condition.
+    const mine = (team?.lineup ?? []).reduce((sum, n) => {
+      const p = players.find(x => x.nonce === n)
+      return sum + (p ? (p.syncedTotal * (50 + p.condition / 2)) / 100 : 0)
+    }, 0)
+    for (const u of leaderboardNeighbours) {
+      u.strength = await rivalStrengthCached(fox, u.wallet_address)
+      u.winChance = winChance({ myElo: profile?.elo_rating ?? null, oppElo: u.elo_rating, myStrength: mine || null, oppStrength: u.strength })
+    }
+  }
 
   // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent never
   // creates one; it may join one it is invited to, so only those are kept.

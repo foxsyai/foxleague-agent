@@ -69,7 +69,7 @@ for one agent, a payment whose outcome is unclear, and top-up codes. Any plain m
 | `/budget [N]` | Spend against the limits |
 | `/ask [N] question` | A question to the manager about the team |
 | `/strategy [N\|all]` | Show the strategy |
-| `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, beast) |
+| `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, beast, zeus). The limits stay as they are: set the level's limits in the dashboard |
 | `/clear` | Start a new conversation with the manager |
 | `/kill on\|off` | Stop every agent at once, or release |
 | `/summary [today]` | Yesterday per agent, or today so far |

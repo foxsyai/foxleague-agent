@@ -46,6 +46,8 @@ export type Action =
       registration_closes_minutes_before: number
       round_interval_minutes: number
       home_and_away?: boolean
+      /** Teams invited (their user ids): a non-empty list makes it private. The Zeus level only. */
+      invite_user_ids?: number[]
     }
   | { type: 'create_challenge'; tier: 'silver' | 'gold'; stake_foxsy: number; target_user_id: number | null; deadline_minutes: 30 | 60 | 120 | 240 }
   | { type: 'buy'; product: ShopProduct; player_nonces?: number[]; quantity?: number }
@@ -102,6 +104,14 @@ function nonces(o: Record<string, unknown>, k: string, min: number, max: number)
   return v as number[]
 }
 
+function userIds(o: Record<string, unknown>, k: string, min: number, max: number): number[] {
+  const v = o[k]
+  if (!Array.isArray(v) || v.length < min || v.length > max) throw new ParseError(`${k} must be a list of ${min}..${max} user ids`)
+  for (const n of v) if (typeof n !== 'number' || !Number.isInteger(n) || n <= 0) throw new ParseError(`${k} holds a bad user id`)
+  if (new Set(v).size !== v.length) throw new ParseError(`${k} holds a user id twice`)
+  return v as number[]
+}
+
 /** Validates the model's proposal into a typed action; throws with a short reason otherwise. */
 export function parseAction(raw: unknown): Action {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new ParseError('an action is an object')
@@ -144,6 +154,7 @@ export function parseAction(raw: unknown): Action {
         registration_closes_minutes_before: int(o, 'registration_closes_minutes_before', 10, 24 * 60),
         round_interval_minutes: int(o, 'round_interval_minutes', 30, 1440),
         ...(o.home_and_away === true && format === 'round_robin' ? { home_and_away: true } : {}),
+        ...(Array.isArray(o.invite_user_ids) && o.invite_user_ids.length ? { invite_user_ids: userIds(o, 'invite_user_ids', 1, 63) } : {}),
       }
     }
     case 'create_challenge': {
@@ -191,7 +202,7 @@ export function describeAction(a: Action): string {
     case 'play_match': return `play ${a.match_type} match`
     case 'join_tournament': return `join tournament T${a.tournament_id}`
     case 'leave_tournament': return `leave tournament T${a.tournament_id}`
-    case 'create_tournament': return `create ${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, starts in ${a.starts_in_hours} h`
+    case 'create_tournament': return `create ${a.invite_user_ids?.length ? `private (${a.invite_user_ids.length} invited) ` : ''}${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, starts in ${a.starts_in_hours} h`
     case 'create_challenge': return `create ${a.tier} 1v1, stake ${a.stake_foxsy}${a.target_user_id ? ` vs user ${a.target_user_id}` : ' (open)'}`
     case 'buy': return `buy ${a.product}${a.quantity ? ` x${a.quantity}` : ''}${a.player_nonces ? ` for ${a.player_nonces.map(n => `#${n}`).join(',')}` : ''}`
     case 'claim_refund': return `claim refund T${a.tournament_id}`

@@ -3,6 +3,7 @@
 // paying for something that cannot work). Every number is read live where a public source exists.
 
 import { blockingWindow, clash, firstFreeStartHours } from './slots.ts'
+import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
@@ -42,6 +43,12 @@ export interface RulesContext {
   floorPrice?: number | null
   /** The other side of a 1v1 (joined or created): its ELO and lineup strength at full condition, null when unreadable. */
   opponent?: { userId: number; elo: number | null; strength?: number | null }
+  /** The agent plays at the Zeus level: a 1v1 needs a good win chance, a tournament a chance of the top three. */
+  zeus?: boolean
+  /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
+  ownUserIds?: number[]
+  /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
+  field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
   /** Open 1v1 challenges this agent created in the last 24 hours. */
@@ -221,6 +228,11 @@ export function lineupStrength(s: AgentSnapshot): number {
   }, 0)
 }
 
+/** A Zeus 1v1 needs at least this win chance; a seated team is clearly stronger with both margins below. */
+export const ZEUS_MIN_1V1_CHANCE = 0.55
+const ZEUS_STRONGER_SQUAD = 1.05
+const ZEUS_STRONGER_ELO = 50
+
 /** The 1v1 gates both join and create share: a known, not stronger opponent, not farmed every day. */
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
   const opp = ctx.opponent
@@ -232,6 +244,10 @@ function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | n
   const ours = lineupStrength(s)
   if (opp.strength > ours * MAX_1V1_STRENGTH_RATIO) return `the opponent's squad is stronger (lineup strength ${Math.round(opp.strength)} vs ours ${Math.round(ours)} at today's condition)`
   if ((ctx.oneVOneWithOpponentThisWeek ?? 0) >= MAX_1V1_PER_OPPONENT_WEEK) return `already ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against user ${opp.userId} in the last 7 days`
+  if (ctx.zeus) {
+    const p = winChance({ myElo: mine, oppElo: opp.elo, myStrength: ours || null, oppStrength: opp.strength })
+    if (p !== null && p < ZEUS_MIN_1V1_CHANCE) return `the win chance against user ${opp.userId} is about ${percent(p)}; Zeus plays a 1v1 from ${percent(ZEUS_MIN_1V1_CHANCE)}`
+  }
   return null
 }
 /**
@@ -425,6 +441,18 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!oneVOne) {
         const worn = scheduleRefusal(s, t)
         if (worn) return refuse(worn)
+        // Zeus enters only with a chance of the top three: not when three seated teams are clearly stronger.
+        if (ctx.zeus) {
+          // Never blind: a field that could not be read is no field to pay into.
+          if (!ctx.field) return refuse('the seated teams could not be read: Zeus does not enter a field it cannot judge')
+          const ours = lineupStrength(s)
+          const myElo = s.profile.elo_rating
+          const unread = ctx.field.filter(f => f.strength === null && f.elo === null).length
+          if (unread >= 3) return refuse(`${unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)
+          // A team whose squad could not be read counts as stronger when its ELO alone is clearly higher.
+          const stronger = ctx.field.filter(f => f.elo !== null && f.elo > myElo + ZEUS_STRONGER_ELO && (f.strength === null || f.strength > ours * ZEUS_STRONGER_SQUAD))
+          if (stronger.length >= 3) return refuse(`${stronger.length} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
+        }
       }
       if (t.tier === 'bronze') return allow(0, { tier: 'bronze', scId: t.sc_tournament_id ?? t.id, fee: 0 })
       if (t.entry_fee_foxsy <= 0) return refuse('paid tier without a fee cannot take entries')
@@ -445,6 +473,14 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'create_tournament': {
       if (!registered || !s.profile) return refuse('not registered')
+      // The owner's own teams are left out of the invites without a word, so no agent learns which they are.
+      const invites = (a.invite_user_ids ?? []).filter(id => !(ctx.ownUserIds ?? []).includes(id))
+      if (a.invite_user_ids?.length) {
+        if (!ctx.zeus) return refuse('only the Zeus level creates private tournaments')
+        if (invites.includes(s.profile.id)) return refuse('cannot invite yourself')
+        if (invites.length > a.max_teams - 1) return refuse(`at most ${a.max_teams - 1} invited teams for ${a.max_teams} seats`)
+        if (invites.length + 1 < a.min_teams) return refuse(`a private tournament fills only with its invited teams and you: ${invites.length + 1} cannot reach the minimum of ${a.min_teams}; invite more active teams`)
+      }
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const list = a.tier === 'silver' ? ctx.settings.entryFeesSilver : ctx.settings.entryFeesGold
       if (!list.includes(a.entry_fee_foxsy)) return refuse(`entry fee ${a.entry_fee_foxsy} is not one of the configured amounts ${list.join('/')}`)
@@ -471,13 +507,14 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (worn) return refuse(worn)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
-      return needFoxsy(a.entry_fee_foxsy, allow(a.entry_fee_foxsy, { fee: a.entry_fee_foxsy }))
+      return needFoxsy(a.entry_fee_foxsy, allow(a.entry_fee_foxsy, { fee: a.entry_fee_foxsy, ...(a.invite_user_ids?.length ? { invites } : {}) }))
     }
 
     case 'create_challenge': {
       if (!registered || !s.profile) return refuse('not registered')
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       if (a.target_user_id === null) {
+        if (ctx.zeus) return refuse('Zeus plays a 1v1 only against a named team with a known win chance: challenge one of the teams listed')
         // Open: the strength of whoever takes it cannot be checked, so the stake is the smallest the owner allows.
         const lowest = Math.min(...ctx.settings.entryFeesSilver)
         if (a.tier !== 'silver' || a.stake_foxsy !== lowest) return refuse(`an open challenge is Silver at your lowest amount (${lowest} FOXSY): anyone may take it, a stronger team too`)

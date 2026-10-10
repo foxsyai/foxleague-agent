@@ -196,11 +196,11 @@ form.settings .hint{font-size:11px;color:var(--dim);margin-top:3px}
   cursor:pointer;margin-left:5px;vertical-align:middle;flex:none;user-select:none;line-height:1;text-transform:none;letter-spacing:0}
 .info:hover,.info:active{background:var(--acc);color:#1a1300;border-color:var(--acc)}
 form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
-#tipwrap,#pwwrap,#guidewrap,#impwrap,#retwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:100;align-items:flex-end;justify-content:center}
-#tipwrap.on,#pwwrap.on,#guidewrap.on,#impwrap.on,#retwrap.on{display:flex}
-#tipbox,#pwbox,#guidebox,#impbox,#retbox{background:var(--panel);border:1px solid var(--line);border-top-color:var(--acc);border-radius:14px 14px 0 0;
+#tipwrap,#pwwrap,#guidewrap,#impwrap,#retwrap,#lvlwrap{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;z-index:100;align-items:flex-end;justify-content:center}
+#tipwrap.on,#pwwrap.on,#guidewrap.on,#impwrap.on,#retwrap.on,#lvlwrap.on{display:flex}
+#tipbox,#pwbox,#guidebox,#impbox,#retbox,#lvlbox{background:var(--panel);border:1px solid var(--line);border-top-color:var(--acc);border-radius:14px 14px 0 0;
   padding:18px 18px calc(24px + env(safe-area-inset-bottom));max-width:560px;width:100%;max-height:70vh;overflow:auto}
-@media (min-width:600px){#tipwrap,#pwwrap,#guidewrap,#impwrap,#retwrap{align-items:center} #tipbox,#pwbox,#guidebox,#impbox,#retbox{border-radius:14px;border-top-color:var(--line);margin:0 16px}}
+@media (min-width:600px){#tipwrap,#pwwrap,#guidewrap,#impwrap,#retwrap,#lvlwrap{align-items:center} #tipbox,#pwbox,#guidebox,#impbox,#retbox,#lvlbox{border-radius:14px;border-top-color:var(--line);margin:0 16px}}
 #guidebox{max-width:680px;max-height:84vh}
 #guidebox h3{margin:0 0 4px;font-size:16px;color:var(--acc)}
 #guidebox .gitem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0}
@@ -213,8 +213,12 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
 #guidebox .gfoot{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;font-size:13px}
 .banner{background:rgba(255,80,80,.12);border:1px solid rgba(255,80,80,.5);border-radius:10px;padding:10px 12px;margin:0 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px}
 #tgLink{margin-top:10px}
-#pwbox h3,#impbox h3,#retbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
-#pwbox p,#impbox p,#retbox p{margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--fg)}
+#pwbox h3,#impbox h3,#retbox h3,#lvlbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
+#lvlbox .lvlrows{display:grid;grid-template-columns:auto minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:6px 10px;font-size:13px;margin:0 0 12px;align-items:center}
+#lvlbox .lvlrows .h{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+#lvlbox .lvlrows .new{color:var(--acc);font-weight:650}
+#lvlbox .lvlai{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin:0 0 12px;line-height:1.45}
+#pwbox p,#impbox p,#retbox p,#lvlbox p{margin:0 0 12px;font-size:13.5px;line-height:1.55;color:var(--fg)}
 #retbox .ritem{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:0 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 #retbox .ritem .rtext{flex:1;min-width:200px;font-size:13px;line-height:1.5}
 #retbox .ritem .rname{font-weight:600}
@@ -335,8 +339,8 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
         <h2>Settings</h2>
         <form class="settings" id="settingsForm" autocomplete="off">
           <div class="full"><label for="sPreset">Strategy<i class="info" data-tip="strategy">i</i></label>
-            <select id="sPreset"><option value="">Custom</option></select><div class="hint">Picking a level also fills its limits below: check them, then Save.</div></div>
-          <div class="full"><textarea id="sStrategy" maxlength="2000"></textarea></div>
+            <select id="sPreset"><option value="">Custom</option></select><div class="hint">Picking a level shows what it changes, for you to accept or cancel.</div><div class="hint" id="sAiHint" hidden></div></div>
+          <div class="full"><textarea id="sStrategy" maxlength="3000"></textarea></div>
           <div class="sep">Spending (USD)</div>
           <div><label for="sDaily">Daily cap<i class="info" data-tip="daily">i</i></label><input id="sDaily" type="number" min="0" max="1000" step="0.5"></div>
           <div><label for="sMonthly">Monthly budget<i class="info" data-tip="monthly">i</i></label><input id="sMonthly" type="number" min="0" max="10000" step="1"></div>
@@ -384,6 +388,12 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
   </div>
   <div class="controls"><button class="btn go" type="submit" id="impOk">Check</button><button class="btn" type="button" id="impCancel">Cancel</button></div>
 </form></div>
+<div id="lvlwrap"><div id="lvlbox" role="dialog" aria-modal="true" aria-labelledby="lvlTitle"><h3 id="lvlTitle"></h3>
+  <p id="lvlText"></p>
+  <div id="lvlRows" class="lvlrows"></div>
+  <label class="lvlai" id="lvlAiRow" hidden><input type="checkbox" id="lvlAi"><span id="lvlAiText"></span></label>
+  <div class="controls"><button class="btn go" type="button" id="lvlOk">Accept and save</button><button class="btn" type="button" id="lvlKeep">Cancel</button></div>
+</div></div>
 <div id="retwrap"><div id="retbox" role="dialog" aria-modal="true" aria-labelledby="retTitle"><h3 id="retTitle">Retired agents<i class="info" data-tip="retire">i</i></h3>
   <p>Parked agents: no plans, no AI cost, no warnings, and they don't count toward the agent limit. Each wallet keeps its funds. Restore brings an agent back paused, with its settings and history.</p>
   <div id="retList"></div>
@@ -598,7 +608,8 @@ function fillForm(st) {
   const presets = S.instance.presets
   const sp = $('sPreset')
   if (sp.options.length === 1) for (const k of Object.keys(presets)) sp.append(el('option', { value: k, text: k[0].toUpperCase() + k.slice(1) }))
-  sp.value = Object.keys(presets).find(k => presets[k] === st.strategy) || ''
+  sp.value = Object.keys(presets).find(k => presets[k] === st.strategy) || levelOf(st.strategy) || ''
+  renderAiHint(sp.value)
   $('sStrategy').value = st.strategy
   $('sDaily').value = st.dailyCapUsd; $('sMonthly').value = st.monthlyBudgetUsd; $('sSetup').value = st.setupBudgetUsd
   $('sReserve').value = st.egldGasReserve; $('sTopUp').value = st.topUpWarningUsd
@@ -872,7 +883,7 @@ const TIPS = {
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Five levels, from careful to all-in; each does everything the level below does and adds more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level also fills its default limits in the form (daily cap, monthly budget, top-up warning, per-action maximums, Silver and Gold amounts, tick); check them and press Save. Raising a limit asks for your password. The manual's Strategy levels page lists every level's values.</p>
+    <p>Six levels. The first five go from careful to all-in, each doing everything the level below does and more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. <b>Zeus</b> is different: everything a beast may do, but only what pays, aiming at No. 1. It weighs a win chance for every team, plays a 1v1 only from 55 percent and a tournament only with a real chance of the top three, and can create private tournaments. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that fall short of its recommendation (each with a tick) and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit asks for your password.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
@@ -932,7 +943,7 @@ document.addEventListener('click', e => {
   if (i) { e.preventDefault(); e.stopPropagation(); $('hovertip').classList.remove('on'); showTip(i.dataset.tip); return }
   if (e.target.id === 'tipwrap' || e.target.id === 'tipClose') $('tipwrap').classList.remove('on')
 }, true)
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('tipwrap').classList.remove('on'); if ($('pwwrap').classList.contains('on')) $('pwCancel').click(); if ($('impwrap').classList.contains('on')) closeImport() } })
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { $('tipwrap').classList.remove('on'); if ($('pwwrap').classList.contains('on')) $('pwCancel').click(); if ($('impwrap').classList.contains('on')) closeImport(); if ($('lvlwrap').classList.contains('on')) $('lvlKeep').click(); if ($('retwrap').classList.contains('on')) closeRetired() } })
 
 async function loadKeys() {
   const r = await api('GET', '/api/admin/keys')
@@ -1098,18 +1109,86 @@ async function decideProposal(verb, label) {
 $('applyBtn').onclick = () => decideProposal('apply', 'Strategy updated')
 $('cancelBtn').onclick = () => decideProposal('cancel', 'Proposal dropped')
 $('actFilter').onchange = renderActivity
+/** The AI a level plays best with, next to the level picker; "Use it" sets the Strategist box (every agent). */
+function renderAiHint(k) {
+  const box = $('sAiHint'); box.replaceChildren()
+  const rec = k && S.instance.levelAi && S.instance.levelAi[k]
+  box.hidden = !rec
+  if (!rec) return
+  const label = id => (S.instance.models.find(m => m.id === id) || { label: id }).label
+  if (!S.instance.model) { box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort, once the AI key is set.'); return }
+  const same = S.instance.model === rec.model && S.instance.effort === rec.effort
+  box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort' + (same ? ' (in use).' : ' (now ' + label(S.instance.model) + ', ' + S.instance.effort + '). It is one setting for every agent. '))
+  if (!same) box.append(el('button', { class: 'btn sm', type: 'button', onclick: () => { $('sModel').value = rec.model; $('sEffort').value = rec.effort; stratDirty = true; renderStrat(); $('sModel').scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('Press Apply in the Strategist box to use it') } }, 'Use it'))
+}
+/** The level a strategy text belongs to, by the name it starts with ("Zeus (level 6 of 6): ..."), or null. */
+function levelOf(text) {
+  return Object.keys(S.instance.presets).find(k => new RegExp('^\\s*' + k + ' \\(level', 'i').test(text || '')) || null
+}
+/** The form takes a level's recommended limits and tick (nothing is saved yet). */
+function fillLevel(l) {
+  $('sDaily').value = l.dailyCapUsd; $('sMonthly').value = l.monthlyBudgetUsd; $('sTopUp').value = l.topUpWarningUsd
+  $('sEntry').value = l.maxEntryFeeFoxsy; $('sShop').value = l.maxShopPaymentFoxsy; $('sSwap').value = l.maxSwapFoxsy; $('sBid').value = l.maxBidFoxsy
+  $('sSilver').value = l.entryFeesSilver.join(', '); $('sGold').value = l.entryFeesGold.join(', '); $('sTick').value = l.tickMinutes
+}
+/**
+ * Picking a level proposes it with its values next to the agent's own: Accept saves the level's strategy and
+ * limits (a raise still asks for the password); Cancel leaves everything as it was saved. The AI is offered apart,
+ * unticked: it is one setting for every agent.
+ */
+function openLevel(k) {
+  const l = S.instance.levels && S.instance.levels[k], b = agent()
+  if (!l || !b) return
+  const cur = b.settings, name = k[0].toUpperCase() + k.slice(1)
+  const usdv = v => '$' + Number(v).toLocaleString('en-US'), fox = v => Number(v).toLocaleString('en-US') + ' FOXSY', list = v => v.length ? v.map(x => Number(x).toLocaleString('en-US')).join(', ') : 'none'
+  // Moving up proposes what falls short of the level, moving down what goes beyond it, a custom text what differs;
+  // a value already right for the direction stays as it is.
+  const order = Object.keys(S.instance.presets), from = order.indexOf(levelOf(cur.strategy)), to = order.indexOf(k)
+  const dir = from < 0 ? 'any' : to > from ? 'up' : to < from ? 'down' : 'any'
+  const num = (a, b) => dir === 'up' ? a < b : dir === 'down' ? a > b : a !== b
+  const below = f => num(Number(cur[f]), Number(l[f]))
+  const missing = f => dir === 'up' ? l[f].some(x => !cur[f].includes(x)) : dir === 'down' ? cur[f].some(x => !l[f].includes(x)) : cur[f].join() !== l[f].join()
+  const longer = f => dir === 'up' ? Number(cur[f]) > Number(l[f]) : dir === 'down' ? Number(cur[f]) < Number(l[f]) : Number(cur[f]) !== Number(l[f])
+  const fields = [['Daily cap', 'dailyCapUsd', usdv, below], ['Monthly budget', 'monthlyBudgetUsd', usdv, below], ['Top-up warning', 'topUpWarningUsd', usdv, below],
+    ['Max entry or stake', 'maxEntryFeeFoxsy', fox, below], ['Max shop payment', 'maxShopPaymentFoxsy', fox, below], ['Max swap', 'maxSwapFoxsy', fox, below], ['Max bid', 'maxBidFoxsy', fox, below],
+    ['Silver amounts', 'entryFeesSilver', list, missing], ['Gold amounts', 'entryFeesGold', list, missing], ['Tick', 'tickMinutes', v => v + ' min', longer]]
+  const short = fields.filter(([, f, , isShort]) => isShort(f))
+  $('lvlTitle').textContent = 'Use the ' + name + ' values for agent ' + (b.index + 1) + '?'
+  $('lvlText').textContent = 'Accept gives this agent the ' + name + ' strategy and the ticked settings below' + (dir === 'down' ? ', lowered to the level' : dir === 'up' ? ', raised to the level' : '') + '; the others stay as they are. Untick a row to keep it. Cancel keeps everything as it is saved.'
+  const box = $('lvlRows'); box.replaceChildren()
+  // A tick per row, all ticked: untick a row to keep that setting as it is.
+  const ticks = {}
+  if (short.length) {
+    box.append(el('div', { class: 'h', text: 'Take' }), el('div', { class: 'h', text: 'Setting' }), el('div', { class: 'h', text: 'Now' }), el('div', { class: 'h', text: name }))
+    for (const [label, f, show] of short) {
+      ticks[f] = el('input', { type: 'checkbox', 'aria-label': 'Take the ' + name + ' ' + label.toLowerCase() })
+      ticks[f].checked = true
+      box.append(ticks[f], el('div', { text: label }), el('div', { text: show(cur[f]) }), el('div', { class: 'new', text: show(l[f]) }))
+    }
+  } else box.append(el('div', { style: 'grid-column:1 / -1', text: 'Its settings already fit the ' + name + ' level.' }))
+  const ai = S.instance.levelAi && S.instance.levelAi[k]
+  const mlabel = id => (S.instance.models.find(m => m.id === id) || { label: id }).label
+  const aiDiffers = ai && S.instance.model && (ai.model !== S.instance.model || ai.effort !== S.instance.effort)
+  $('lvlAiRow').hidden = !aiDiffers; $('lvlAi').checked = false
+  if (aiDiffers) $('lvlAiText').textContent = 'Also switch the AI to ' + mlabel(ai.model) + ' at ' + ai.effort + ' effort, recommended for this level. It is one setting for every agent (now ' + mlabel(S.instance.model) + ', ' + S.instance.effort + ').'
+  $('lvlOk').onclick = async () => {
+    $('lvlwrap').classList.remove('on')
+    // Only the settings that fall short take the level's value; the rest keep the agent's own.
+    const pick = {}
+    for (const [, f] of short) if (ticks[f].checked) pick[f] = dir === 'up' && Array.isArray(l[f]) ? [...new Set([...cur[f], ...l[f]])].sort((x, y) => x - y) : l[f]
+    fillForm(cur); $('sPreset').value = k; $('sStrategy').value = S.instance.presets[k]
+    fillLevel({ ...cur, ...pick }); formDirty = true
+    if ($('lvlAi').checked && ai) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; await $('stratApply').onclick() }
+    $('settingsForm').requestSubmit()
+  }
+  $('lvlKeep').onclick = () => { $('lvlwrap').classList.remove('on'); formDirty = false; fillForm(agent().settings) }
+  $('lvlwrap').classList.add('on'); $('lvlOk').focus()
+}
+$('lvlwrap').addEventListener('click', e => { if (e.target.id === 'lvlwrap') $('lvlKeep').click() })
 $('sPreset').onchange = () => {
   const k = $('sPreset').value
-  if (k) {
-    $('sStrategy').value = S.instance.presets[k]
-    const l = S.instance.levels && S.instance.levels[k]
-    if (l) {
-      $('sDaily').value = l.dailyCapUsd; $('sMonthly').value = l.monthlyBudgetUsd; $('sTopUp').value = l.topUpWarningUsd
-      $('sEntry').value = l.maxEntryFeeFoxsy; $('sShop').value = l.maxShopPaymentFoxsy; $('sSwap').value = l.maxSwapFoxsy; $('sBid').value = l.maxBidFoxsy
-      $('sSilver').value = l.entryFeesSilver.join(', '); $('sGold').value = l.entryFeesGold.join(', '); $('sTick').value = l.tickMinutes
-    }
-  }
-  formDirty = true
+  renderAiHint(k)
+  if (k) { $('sStrategy').value = S.instance.presets[k]; formDirty = true; openLevel(k) }
 }
 $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
@@ -1124,7 +1203,7 @@ $('settingsForm').onsubmit = async e => {
     || (form.entryFeesGold.length > 0 && cur.entryFeesGold.length === 0) || form.tickMinutes < cur.tickMinutes || hours(form.activeHoursUtc) > hours(cur.activeHoursUtc)
   if (more) {
     const password = await askPassword('Raise a limit', 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.')
-    if (!password) return
+    if (!password) return toast('Nothing saved', true)
     form.password = password
   }
   act('Settings saved', async () => { const r = await api('POST', '/api/agents/' + sel + '/settings', form); formDirty = false; return r })
