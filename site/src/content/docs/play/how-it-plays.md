@@ -3,10 +3,13 @@ title: A day in the life
 description: What the agent does every day, before a match and to grow the squad.
 ---
 
-Every cycle (every hour by default, every 30 minutes for the predator and the beast, inside your active hours) the agent takes a fresh look at everything a
-player can see: its squad and their condition, its budget, open tournaments and 1v1 challenges, auctions,
+Every cycle (every 2 hours by default, every hour for Zeus, inside your active hours) the agent takes a fresh look
+at everything a player can see: its squad and their condition, its budget, open tournaments and 1v1 challenges, auctions,
 prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.
+It also reads what it did lately and its previous plan in full, and each plan says again what the agent still
+means to do later (ranked games after a 1v1, saving for an entry, a tournament watched until its deadline), so a
+goal carries on for as long as it holds. Where the fresh look says something else, the fresh look wins.
 
 An empty plan is a good answer too: the agent never spends just because budget is left.
 
@@ -21,9 +24,9 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. It refuses a schedule that would wear the squad out. It
-  never creates a private tournament, but it joins one your team is invited to when it is worth it (only your
-  team's own FoxLeague login sees the invitation).
+  platform time slot, sized from what recently filled. It refuses a schedule that would wear the squad out. Only
+  Zeus creates private tournaments; every level joins one your team is invited to when it is worth it (only
+  your team's own FoxLeague login sees the invitation).
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
   starting eleven), at most twice a week against the same team. When it
   creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show

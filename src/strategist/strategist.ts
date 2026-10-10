@@ -180,9 +180,20 @@ function bidCeilings(s: AgentSnapshot): string {
   return parts.length ? ` and never above what the card costs from Common packs and fusion fees (${parts.join(', ')})` : ''
 }
 
+/**
+ * The newest plan goes in whole, the way it was logged (its summary and its numbered actions). In the 300
+ * characters every other entry gets, only its opening would remain, and that restates the state the snapshot
+ * already gives; what the plan meant to do next (wait for a 1v1, play ranked after it, watch a tournament until
+ * its deadline) comes at the end. Only the one plan: an intention that still holds is said again in each new
+ * summary, so it lasts as long as it is true, while the older texts with their outdated numbers stay out.
+ * About 300 more tokens a plan.
+ */
+const PREVIOUS_PLAN_CHARS = 2000
+
 export function renderPlanRequest(p: PlanInput): string {
   const b = p.budget
   const recent = p.recent.slice(0, 20)
+  const last = recent.find(r => r.kind === 'plan')
   const lines = [
     `## Owner's strategy direction\n${p.settings.strategy}`,
     p.ownerRequest ? `## One-off request from the owner (do this if the rules and caps allow, nothing else)\n${p.ownerRequest}` : '',
@@ -194,7 +205,10 @@ export function renderPlanRequest(p: PlanInput): string {
       ? "## Earlier entries\nSome recent entries below cite a rule that kept this agent out of tournaments, 1v1s and auctions with the owner's other teams. The owner removed that rule on 2026-09-30; the fair play section of your instructions says what holds now. Do not carry that reasoning forward: judge every tournament, 1v1 and auction on its merits."
       : '',
     `## Recent activity (newest first)`,
-    ...(recent.length ? recent.map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${txt(r.summary, 300)}`) : ['- none yet']),
+    ...(recent.length ? recent.map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${r === last ? 'your previous plan, in full below' : txt(r.summary, 300)}`) : ['- none yet']),
+    last
+      ? `## Your previous plan (${last.at.slice(0, 16)} UTC, in full)\nYour own words from then. The snapshot below is newer: where they differ, the snapshot is right. Carry an intention forward only while it still makes sense, and do not repeat a step the activity above shows as done or refused. An intention for later that still holds (saving for an entry, a fusion when a card arrives, a tournament to watch): say it again in your new summary, so the next plan sees it too.\n${txt(last.summary.replace(/\nmodel cost \$[\s\S]*$/, ''), PREVIOUS_PLAN_CHARS)}`
+      : '',
     SNAPSHOT_HEADING,
     '<<<SNAPSHOT',
     renderDigest(p.snapshot),

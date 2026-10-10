@@ -213,6 +213,25 @@ test('while the history still cites the removed rule about the owner\'s other ag
   assert.doesNotMatch(renderPlanRequest({ ...base, recent: [row('play ranked match: match #870 started')] as never }), /removed that rule/)
 })
 
+test('the newest plan goes to the next one in full, its intentions at the end included; older entries stay short', () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, 'erd1x')
+  const base = { snapshot: snapshot(), settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), dryRun: true }
+  const row = (id: number, kind: string, summary: string) => ({ id, at: `2026-10-10T20:${10 + id}:00.000Z`, agentIndex: 0, kind, status: 'info', summary, detail: null, costUsd: null, txHash: null })
+  const filler = 'The squad is fresh and the board is quiet. '.repeat(12)
+  const newest = `agent 1 plan: ${filler}Ranked games come in the next ticks, after the 1v1 is played. T1371 stays under watch until its deadline.\n1. create silver 1v1, stake 1000 vs user 2696 (73 percent win chance)\nmodel cost $0.0812 (cache read 51234 tokens)`
+  const older = `agent 1 plan: ${filler}An older ending that stays out.`
+  const text = renderPlanRequest({ ...base, recent: [row(3, 'create_challenge', 'create silver 1v1: seated'), row(2, 'plan', newest), row(1, 'plan', older)] as never })
+  assert.match(text, /- 2026-10-10T20:12 \[info\] your previous plan, in full below/)
+  assert.match(text, /## Your previous plan \(2026-10-10T20:12 UTC, in full\)\nYour own words from then\. The snapshot below is newer: where they differ, the snapshot is right\./)
+  assert.match(text, /T1371 stays under watch until its deadline\. 1\. create silver 1v1, stake 1000 vs user 2696 \(73 percent win chance\)\n/)
+  assert.match(text, /An intention for later that still holds [^\n]*: say it again in your new summary, so the next plan sees it too\./)
+  assert.doesNotMatch(text, /model cost/, 'the cost line is left out')
+  assert.doesNotMatch(text, /An older ending/, 'an older plan keeps its 300 characters')
+  assert.ok(text.indexOf('## Your previous plan') < text.indexOf('<<<SNAPSHOT'))
+  assert.doesNotMatch(renderPlanRequest({ ...base, recent: [row(3, 'create_challenge', 'seated')] as never }), /Your previous plan/, 'no plan yet: no section')
+})
+
 test('presets run from careful to all-in, and the AI is told the owner sets how hard to spend on growth', async () => {
   const { STRATEGY_PRESETS, validateSettingsPatch } = await import('../src/store/settings.ts')
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
