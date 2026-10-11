@@ -966,7 +966,9 @@ export class Service {
     // A top-up whose outcome was not known when the last run ended (a restart while it was sent): ask Binance.
     if (this.telegram) void this.topups.settleUnclear().then(lines => { if (lines.length) this.telegram?.send(lines.join('\n')) }).catch(() => undefined)
     const creds = credentialsFromEnv()
-    if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870))
+    // 127.0.0.1 unless WEB_UI_HOST says otherwise: a container that publishes the port on the host's loopback only
+    // binds 0.0.0.0 inside its own network namespace.
+    if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870), process.env.WEB_UI_HOST?.trim() || '127.0.0.1')
     else console.log('web UI off: set it up with `agentctl.sh set-web-password`')
     for (const b of agents) {
       this.schedule(b.index, 5_000 + Math.random() * 20_000)
@@ -1037,7 +1039,7 @@ export class Service {
     const prep = locks
       .filter((l, i) => l.upcoming && (i === 0 || l.at - locks[i - 1]!.at > SESSION_GAP_MS))
       .map(l => l.at - PREP_BEFORE_LOCK_MS)
-      .filter(t => t > now + 5 * 60_000)[0]
+      .filter(t => t > now + MIN_TICK_MINUTES * 60_000)[0]
     if (prep !== undefined && prep - now < delay) delay = prep - now
     this.schedule(index, delay)
   }

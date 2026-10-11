@@ -7,10 +7,10 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Service } from '../service.ts'
-import { COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, type Credentials } from './auth.ts'
+import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
-import { EFFORTS, MODELS, type Effort } from '../strategist/strategist.ts'
+import { EFFORTS, MODELS, isKnownModel, type Effort } from '../strategist/strategist.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
 import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
@@ -54,11 +54,16 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!)
 }
 
-function cookies(req: IncomingMessage): Record<string, string> {
+export function cookies(req: IncomingMessage): Record<string, string> {
   const out: Record<string, string> = {}
   for (const part of (req.headers.cookie ?? '').split(';')) {
     const i = part.indexOf('=')
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+    if (i <= 0) continue
+    try {
+      out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+    } catch {
+      // A malformed escape (a lone %): the cookie is dropped, not an error before any authentication.
+    }
   }
   return out
 }
@@ -153,6 +158,7 @@ export function raisesLimit(current: AgentSettings, patch: Partial<AgentSettings
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {
   const sessions = new Sessions(creds.secretKey, creds.passwordHash)
   const throttle = new LoginThrottle()
+  const loginWork = new BoundedQueue()
   const secureCookie = process.env.WEB_UI_INSECURE_COOKIE !== '1'
   const cookieFlags = `HttpOnly; SameSite=Lax; Path=/${secureCookie ? '; Secure' : ''}`
   /** The password again for a sensitive change, under the login's lockout (throws 429 or 403). */
@@ -262,7 +268,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         const username = form.get('username') ?? ''
         const password = form.get('password') ?? ''
         // Both checks always run, so the timing does not reveal which one failed.
-        const passOk = verifyPassword(password, creds.passwordHash)
+        // Off the event loop and one at a time: a flood of attempts must not stall the executor or the kill switch.
+        const passOk = await loginWork.run(() => verifyPasswordAsync(password, creds.passwordHash), ip)
+        if (passOk === null) return loginPage(res, 429, 'Busy: too many sign-in attempts at once. Try again in a few seconds.')
         const userOk = username.length === creds.username.length && username === creds.username
         if (!(passOk && userOk)) {
           throttle.recordFailure(ip)
@@ -473,7 +481,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         const body = JSON.parse((await readBody(req)) || '{}') as { model?: unknown; effort?: unknown }
         const model = String(body.model ?? '')
         const effort = String(body.effort ?? '') as Effort
-        if (!MODELS[model]) throw new HttpFail(400, `unknown model ${model}`)
+        if (!isKnownModel(model)) throw new HttpFail(400, `unknown model ${model}`)
         if (!EFFORTS.includes(effort)) throw new HttpFail(400, `unknown effort ${effort}`)
         try {
           return json(res, 200, { ok: true, message: service.setStrategist(model, effort, `web UI, ${user}`) })

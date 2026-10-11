@@ -318,6 +318,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
   switch (a.type) {
     case 'swap_egld_for_foxsy': {
+      // Whether the team exists decides the swap's allowance (setup budget or daily cap): unknown is not "unregistered".
+      if (s.registration.profileUnreadable) return refuse('team registration state could not be read (profile route failed): no swap this tick, the next plan tries again')
       if (!cfg.dex_swap_enabled) return refuse('the FoxLeague swap is switched off (dex_swap_enabled false)')
       const max = Math.min(ctx.settings.maxSwapFoxsy, typeof cfg.dex_swap_max_foxsy === 'number' ? cfg.dex_swap_max_foxsy : 50_000)
       if (a.foxsy > max) return refuse(`swap of ${a.foxsy} FOXSY exceeds the per-swap limit ${max}`)
@@ -326,12 +328,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'register': {
       const r = s.registration
+      if (r.profileUnreadable) return refuse('team registration state could not be read (profile route failed): nothing paid, the next plan tries again', 'setup')
       if (r.registered) return refuse('already registered', 'setup')
       if (r.whitelisted === false) return refuse('wallet not whitelisted (registration.whitelist_required is on)', 'setup')
       if (!r.relayerEnabled) return refuse('registration relayer is off', 'setup')
       if ((r.relaysRemaining ?? 0) <= 0) return refuse('relayer daily cap reached', 'setup')
       if ((r.starterStock ?? 0) < 18) return refuse('starter squads out of stock', 'setup')
       if (r.feePaidOnChain) return allow(0, { feePaid: true }, 'setup', ['fee already paid on chain: only POST /api/register'])
+      // Unknown is not unpaid: a failed profile read also looks like an unregistered team, and the fee path below
+      // would pay 5,000 FOXSY again. Nothing is paid; the next plan tries again.
+      if (r.feePaidOnChain === null) return refuse('registration fee state could not be read (isRegistrationPaid failed): nothing paid, the next plan tries again', 'setup')
       const fee = BigInt(cfg.registration_fee_wei)
       if (cfg.registration_fee_foxsy_wei && BigInt(cfg.registration_fee_foxsy_wei) !== fee) return refuse('registration fee misconfigured (contract and relay disagree)', 'setup')
       if (foxsyBal < fee) return refuse(`needs ${cfg.registration_fee_foxsy} FOXSY for the fee (swap first)`, 'setup')

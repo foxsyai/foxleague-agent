@@ -102,7 +102,7 @@ export class Telegram {
           ok: boolean
           result?: {
             update_id: number
-            message?: { chat: { id: number }; from?: { id: number }; date?: number; text?: string }
+            message?: { chat: { id: number }; from?: { id: number }; date?: number; text?: string } & ForwardMarkers
             callback_query?: { id: string; data?: string; from?: { id: number }; message?: { message_id: number; chat: { id: number } } }
           }[]
         }
@@ -127,6 +127,8 @@ export class Telegram {
           }
           const msg = u.message
           if (!msg?.text || String(msg.chat.id) !== this.chatId || String(msg.from?.id) !== this.chatId) continue
+          // A forwarded message carries the owner as its sender, but the words are someone else's: never a command.
+          if (isForwarded(msg)) continue
           if (typeof msg.date === 'number' && msg.date < since) continue
           const parsed = parseCommand(msg.text)
           if (parsed) {
@@ -147,6 +149,26 @@ export class Telegram {
     this.stopped = true
     this.abort.abort()
   }
+}
+
+/** The fields Telegram sets on a forwarded message (the current and the legacy ones). */
+export interface ForwardMarkers {
+  forward_origin?: unknown
+  forward_date?: unknown
+  forward_from?: unknown
+  forward_from_chat?: unknown
+  forward_sender_name?: unknown
+}
+
+/**
+ * True for a message whose words are not the owner's own: forwarded (any `forward_*` field, so a field Telegram adds
+ * later is covered too), posted automatically from a linked channel, sent through a bot, or answering a message of
+ * another chat (`external_reply`).
+ */
+export function isForwarded(message: object): boolean {
+  const m = message as Record<string, unknown>
+  if (Object.keys(m).some(k => k.startsWith('forward_') && m[k] !== undefined)) return true
+  return m.is_automatic_forward === true || m.via_bot !== undefined || m.external_reply !== undefined
 }
 
 export function parseCommand(text: string): { command: string; args: string[]; rawArgs: string } | null {

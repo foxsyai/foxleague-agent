@@ -794,7 +794,11 @@ export class Executor {
           if (detail.tournament.status === 'open' && detail.tournament.sc_tournament_id !== null) break
           await sleep(3000)
         }
-        if (!detail || detail.tournament.sc_tournament_id === null) return finish('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
+        if (!detail || detail.tournament.sc_tournament_id === null) {
+          // Nothing was signed: the booked seat is not spent (it would otherwise stay counted until the tournament ends).
+          if (!booking.sent) this.unbook(booking)
+          return finish('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
+        }
         const spec = joinTournamentTx(detail.tournament.sc_tournament_id, v.foxsy)
         return this.payAndJoin(agent, wallet, snap, created.id, spec, v, usd, fees, `${desc} (T${created.id})`, costText, finish, now, booking)
       }
