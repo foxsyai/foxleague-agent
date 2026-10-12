@@ -4,7 +4,10 @@ Every cost, reward, cap, cooldown and rule a team manager has to plan around, ea
 number comes from and where a client can read the live value.
 
 - **Snapshot:** `origin/release/mainnet-1.0` at `0800dce5` (rc.31, 2026-09-28). Paths are relative to
-  the FoxLeague monorepo (`SOURCES.md`).
+  the FoxLeague monorepo (`SOURCES.md`). **Updated for the 12 October 2026 switch** (`origin/main` at
+  `4521c811`; players contract upgrade `86f38740`, gates live from 2026-10-12 16:30 UTC): the match gate
+  per rarity, the per-rarity match waiver, the partial cooldown waiver, the transfer lock of a card moved
+  under its gate, ranked pairs once per 24 hours, the removed `GET /api/register/pool-status`.
 - **Deployed values can differ from code defaults.** The deploy seeds many registry keys over the code
   defaults and an admin can change any key at runtime. Section 15 lists every value where the code
   default and the mainnet value disagree. When a public endpoint serves a value, read it there.
@@ -79,6 +82,7 @@ effects); Manual `mechanics/matches.mdx:11-54`.
 | Casual + ranked matches you start per day | **5** (being drawn in as a ranked opponent, tournaments and 1v1s do not count) | EM:23; Manual `mechanics/matches.mdx:51`; `max_matches_per_day` default 5 (CR:1141-1142), SEED:105 | `GET /api/matches/daily-allowance` (auth): `today_count`, `daily_limit`, `reset_hour_utc` |
 | Cooldown between match starts | **30 s** from the start of your previous match (any kind) | EM:24; `match.cooldown_ms` 30000 (CR:2499-2500), fallback `match_cooldown_seconds` 30 (CR:936-937) | not public |
 | Ranked cooldown | **15 min** from the start of your last ranked game, started or drawn into | EM:24; `match.ranked_cooldown_ms` 900000 (CR:2513-2514) | not public |
+| Ranked pair | the same two teams meet in ranked at most **once every 24 hours**, whoever started it (a game still being played counts); a team played in the last 24 h, or one whose eleven is not all match-fit, is not drawn, and the AI stands in when no other team fits; a second game of the pair inside 24 h records the result but moves no rating (since 2026-10-12) | Manual `mechanics/matches.mdx` | not public |
 | Pre-match lockout | no casual or ranked from **1 h** before any of your unrevealed tournament or 1v1 matches; you are not drawn as a ranked opponent then either | Manual `mechanics/matches.mdx:54`, `mechanics/one-v-one.mdx:115`; const `TOURNAMENT_BUSY_LEAD_HOURS` (`matches.rs:331`) | not a key |
 | Ranked matchmaking bands | 150, then 300, then 500 ELO, then an AI stand-in (ELO clamped to 150 of yours, no ELO change) | Manual `mechanics/matches.mdx:37-38`; `matchmaker.elo_tier_1/2/3` (CR:2437-2446) | not public |
 | Squad needed to start | saved 11 + 7, all owned and unlisted, no starter at condition 0, none of the 18 in a transfer cooldown | `matches.rs:1268-1525`; Manual `mechanics/tactics.md` (Squad Readiness) | |
@@ -112,7 +116,7 @@ effects); Manual `mechanics/matches.mdx:11-54`.
 
 | Rule | Mainnet value | Sources | Live value from |
 |---|---|---|---|
-| What is **competitive** | Silver or Gold tournament matches and Silver or Gold 1v1s against a real opponent, with match stats recorded. Ranked counts only while ranked XP is on (off at launch). Never casual, AI games, Bronze or developer games | EM:26; Manual `mechanics/fusion.mdx:32`; `matches.rs:3448-3451`, `:3868-3883` | |
+| What is **competitive** | Silver or Gold tournament matches and Silver or Gold 1v1s against a real opponent, with match stats recorded. Ranked never moves the match counter (it gives XP only while ranked XP is on, off on mainnet). Never casual, AI games, Bronze or developer games | EM:26; Manual `mechanics/fusion.mdx:32`; `matches.rs:3448-3451`, `:3868-3883` | |
 | Ranked XP | off | `xp.ranked_enabled` default 0 (CR:1029-1030); `backend/migrations/104_economy_rebalance_keys.sql:7` | not public |
 | Competitive counter | every competitive appearance increments `competitive_matches`; sync writes it on chain as the card's `matches_played`, which fusion and listing read. No daily cap on the counter | `matches.rs:3868-3883`; `backend/src/routes/sync.rs:1910-1979`; EM:25 | `GET /api/players/{address}` `competitive_matches` (off chain); on-chain attribute after sync |
 | XP-earning matches per card per day | **3** (a 4th still counts for ELO, career stats and the competitive counter) | EM:25; `xp.max_matches_per_player_per_day` (CR:1036-1037), SEED:98 | not public |
@@ -179,7 +183,7 @@ Every product is paid with `shopPay` into the players contract treasury and conf
 | Condition recovery | up to **100 FOXSY** per card, pro-rated | none beyond ownership | section 6 | section 6 |
 | Reduce Cooldown (transfer waiver) | per day above a **72 h floor**, by rarity: **Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY**; whole days rounded up; all remaining days or nothing. The rate is the 10 percent marketplace fee on the rarity reference price (5,000 / 15,000 / 40,000 / 100,000 / 250,000) spread over 20 days | per card | EM:47; Manual `mechanics/shop.mdx:99-113`; `shop.cooldown_waiver_fee_multiple_pct` 100 (CR:702-703), `shop.cooldown_waiver_floor_hours` 72 (CR:758-759), both SEED:96-97; reference prices CR:1996-2005; `shop.rs:554-612` (SEED:93 `shop.cooldown_waiver_price_per_day 15000` is only the unused flat fallback) | `GET /api/shop/waive-cooldown/quote` (auth) |
 | Badge re-roll | **1,000 FOXSY** after 3 free | | section 2 | |
-| Fusion waivers | 75 FOXSY per day, 20 FOXSY per match | | section 10 | section 10 |
+| Fusion waivers | 75 FOXSY per day (every day or some); per match Uncommon 20, Rare to Legendary 100, none for Common | | section 10 | section 10 |
 | Automatic refunds | a payment that cannot be delivered is refunded automatically; an unconfirmed settled payment is refunded after **30 min**; at most **10 automatic refunds per wallet per hour** (then by hand); contract cap 1,000,000 FOXSY per day for all refunds | | Manual `legal/terms.md:47`, `mechanics/shop.mdx:142`; `shop.unconfirmed_refund_grace_secs` 1800 (CR:3039-3042); `shop.refund_max_per_wallet_window` 10, `shop.refund_window_secs` 3600 (CR:3051-3057); CC:46-49 `TREASURY_REFUND_DAILY_CAP_FOXSY=1000000` | |
 
 ---
@@ -190,12 +194,12 @@ Every product is paid with `shopPay` into the players contract treasury and conf
 |---|---|---|---|
 | Inputs | 3 cards of the same rarity, synced, in the wallet, not listed; one output of the next rarity from a pre-minted pool (per rarity and position); inputs are burned | EM:38; Manual `mechanics/fusion.mdx:19-26`, `:84`; PNFT:2289-2531 | VIEW `getFusionPoolCount(level, position)` |
 | Fee | **Common to Uncommon 100, Uncommon to Rare 200, Rare to Epic 400, Epic to Legendary 800 FOXSY**; at least the fee, excess refunded; returned with the cards if the fusion reverts; Legendary cannot be fused | EM:39; Manual `mechanics/fusion.mdx:44-49`; CC:20-23 `FUSION_COST_0..3` | CFG `fusion_costs_foxsy`; VIEW `getFusionCost(level)` |
-| Competitive matches per input | **20** (waived matches count) | EM:38; CC:26 `FUSION_MIN_MATCHES=20` | CFG `fusion_min_matches`; VIEW `getFusionMinMatches` |
-| Matches that must really be played | **5** per input | EM:38; CC:36 floor 5; PNFT:144 | CFG `fusion_match_waiver_floor`; VIEW `getFusionMatchWaiverFloor` |
+| Competitive matches per input | **The match gate of its rarity** since 2026-10-12: Common **5**, Uncommon **15**, Rare **45**, Epic **135** (Legendary 405, for listing); waived matches count | EM:38; players contract `setRarityMatchGate` rows (deploys.yaml 2026-10-12) | CFG `rarity_match_gate.rarities[].gate`; VIEW `getRarityMatchGate(level)`. The old `fusion_min_matches` (20) is still served but no longer applies |
+| Matches that must really be played | Common **5**, Uncommon **5**, Rare **15**, Epic **45**, Legendary **135** | EM:38; the same rows | CFG `rarity_match_gate.rarities[].floor` |
 | Wallet spacing | **20 h** between two fusions of one wallet; not for sale | EM:41; CC:27-33 `FUSION_COOLDOWN_SECONDS=72000` (the contract default if unset would be 7 days, PNFT:2868-2875) | CFG `fusion_cooldown_seconds`; VIEW `getFusionCooldownSeconds`, `getLastFusionTimestamp(address)` |
 | Card cooldown | **14 days** on every fusion output before it can be an input; travels with the card; does not block play or listing | EM:40; CC:34 `FUSION_CARD_COOLDOWN_SECONDS=1209600` | CFG `fusion_card_cooldown_seconds`; VIEW `getFusionReadyAt(nonce)` |
-| Cooldown waiver | **75 FOXSY per waived day**, down to a **3-day floor**: at most 11 days and 825 FOXSY per card | EM:40; CC:35-37 (price 75, floor 259,200 s); PNFT:2542-2631 | CFG `fusion_cooldown_waiver_price_per_day`, `_wei`, `fusion_cooldown_waiver_floor_seconds`; VIEW `getFusionCooldownWaiverQuote(nonce)` |
-| Match waiver | **20 FOXSY per waived match**, at most 15 per card (the 5-match floor stays); the credit stays on the card after a sale | EM:38; CC:36-38; PNFT:2641-2710 | CFG `fusion_match_waiver_price_per_match`, `_wei`; `GET /api/players/nonce/{nonce}/match-waiver-quote`; VIEW `getFusionMatchCredit(nonce)` |
+| Cooldown waiver | **75 FOXSY per waived day**, down to a **3-day floor**: at most 11 days and 825 FOXSY per card. Since 2026-10-12 any number of the quoted days can be bought (`payFusionCooldownWaiver(nonce, days)`, the ready time moves that many days earlier) | EM:40; CC:35-37 (price 75, floor 259,200 s); PNFT:2542-2631 | CFG `fusion_cooldown_waiver_price_per_day`, `_wei`, `fusion_cooldown_waiver_floor_seconds`; VIEW `getFusionCooldownWaiverQuote(nonce)` |
+| Match waiver | Per waived match by rarity: Uncommon **20 FOXSY** (at most 10), Rare **100** (30), Epic **100** (90), Legendary **100** (270); **none for Common**; the floor of each gate stays; the credit stays on the card after a sale | EM:38; CC:36-38; PNFT:2641-2710 | CFG `fusion_match_waiver_price_per_match`, `_wei`; `GET /api/players/nonce/{nonce}/match-waiver-quote`; VIEW `getFusionMatchCredit(nonce)` |
 | Transfer lock inheritance | a fusion output inherits the longest remaining transfer cooldown of its inputs | EM:38; `backend/src/chain_indexer.rs:3646-3656` | |
 
 Worked paths (EM, section "How long and how much from A to B"): first Uncommon from the starter
@@ -253,9 +257,9 @@ squad in 7 days for 100 FOXSY (2 days for 1,000 FOXSY with match waivers); Commo
 | Cancel | only while there are no bids | EM:42; PNFT:2210-2230 | |
 | Fee | **10 percent** of the winning bid, paid by the seller, only on a sale; no royalty | EM:44; CC:25 `MARKETPLACE_FEE_PERCENT=10` (the contract's `init` value is 5, PNFT:183) | CFG `marketplace_fee_percent`; VIEW `getMarketplaceFee` |
 | Relist cooldown | **48 h** after a sale (per card) | EM:45; CC:55 | CFG `auction_relist_cooldown_seconds`; VIEW `getLastPurchaseTimestamp(nonce)` |
-| Listing gate | **20 competitive matches, 5 of them really played** (waived credit counts), synced | EM:43; PNFT:2650-2673 | `GET /api/marketplace/can-list?nonce=` |
+| Listing gate | **The match gate of the card's rarity**: Common 5 (5 played), Uncommon 15 (5), Rare 45 (15), Epic 135 (45), Legendary 405 (135); waived credit counts, synced | EM:43; PNFT:2650-2673 | `GET /api/marketplace/can-list?nonce=` |
 | Settlement | anyone can settle after the end; a backend keeper does it every minute and pays the gas | `backend/src/auction_settle_keeper.rs:1-7` | VIEW `getAuction(nonce)` |
-| Transfer cooldown | a card received **wallet to wallet** cannot play or join tournaments for **21 days (504 h)**; **63 days (1,512 h)** if it had fewer than 20 competitive matches when it moved; auction wins, fusion outputs and shop mints start none, but a running lock passes to a buyer | EM:47; Manual `mechanics/marketplace.mdx:68`, `legal/terms.md:67`; `match.transfer_cooldown_hours` 504 and `..._unplayed` 1512 (CR:656-677), SEED:89, `:92` | CFG `transfer_cooldown_hours`, `transfer_cooldown_hours_unplayed`; per card `transferred_at`, `transfer_cooldown_hours` |
+| Transfer cooldown | a card received **wallet to wallet** cannot play or join tournaments for **21 days (504 h)**; since 2026-10-12, **21 days plus 6 hours for every missing match** if it moved before its match gate (each match waiver bought afterwards takes 6 hours off, never below 21 days plus 6 hours per match it must still really play; Reduce Cooldown does not apply to that lock); auction wins, fusion outputs and shop mints start none, but a running lock passes to a buyer | EM:47; Manual `mechanics/marketplace.mdx:68`, `legal/terms.md:67`; `match.transfer_cooldown_hours` 504 and `..._unplayed` 1512 (CR:656-677), SEED:89, `:92` | CFG `transfer_cooldown_hours`, `transfer_cooldown_hours_unplayed`; per card `transferred_at`, `transfer_cooldown_hours` |
 
 ---
 
@@ -338,7 +342,10 @@ Public, raw JSON (no envelope), whole FOXSY unless the field ends in `_wei`
 FOXSY value), `fusion_costs_foxsy[4]`, `fusion_min_matches`, `fusion_cooldown_seconds`,
 `fusion_card_cooldown_seconds`, `fusion_cooldown_waiver_price_per_day` (+ `_wei`),
 `fusion_cooldown_waiver_floor_seconds`, `fusion_match_waiver_price_per_match` (+ `_wei`),
-`fusion_match_waiver_floor`, `marketplace_fee_percent`, `auction_duration_seconds`,
+`fusion_match_waiver_floor`, `rarity_match_gate {rows_live, rules_live, live_from,
+transfer_lock_hours_per_missing_match, rarities[{rarity, level, gate, floor, price_per_match (+ _wei),
+waiver_enabled, row_set}]}` (since 2026-10-12; each row holds what the contract applies),
+`marketplace_fee_percent`, `auction_duration_seconds`,
 `auction_min_increment_percent`, `auction_snipe_window_seconds`, `auction_snipe_extension_seconds`,
 `auction_relist_cooldown_seconds`, `marketplace_min_list_price_foxsy`, `sync_cost_foxsy`,
 `shop_prices_foxsy {condition, xp_booster, training}`, `common_pack_epoch_remaining`.

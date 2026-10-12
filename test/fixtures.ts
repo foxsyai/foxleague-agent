@@ -36,6 +36,14 @@ export const dryWallet: AgentWallet = {
 }
 export const liveWallet: AgentWallet = { ...dryWallet, signTransaction: () => undefined }
 
+/** FoxLeague's match gate per rarity as mainnet's /api/config serves it since 2026-10-12. */
+const row = (rarity: string, level: number, gate: number, floor: number, price: number) =>
+  ({ rarity, level, gate, floor, price_per_match: price, price_per_match_wei: wholeToAtomic(price).toString(), waiver_enabled: price > 0, row_set: true })
+export const MAINNET_GATE = {
+  rows_live: true, rules_live: true, live_from: '2026-10-12T16:30:18Z', transfer_lock_hours_per_missing_match: 6,
+  rarities: [row('Common', 0, 5, 5, 0), row('Uncommon', 1, 15, 5, 20), row('Rare', 2, 45, 15, 100), row('Epic', 3, 135, 45, 100), row('Legendary', 4, 405, 135, 100)],
+}
+
 export function card(nonce: number, position: PlayerView['position'], role: PlayerView['role'], more: Partial<PlayerView> = {}): PlayerView {
   const stats = { speed: 20, accuracy: 20, defense: 20, power: 20, control: 20, vision: 20, stamina: 20 }
   return {
@@ -62,9 +70,9 @@ export function snapshot(extra: PlayerView[] = []): AgentSnapshot {
       one_v_one_prize_split: { winner_percent: 90, platform_fee_percent: 10 },
       tournament_defaults: { match_stagger_minutes: 15, deadline_grace_minutes: 30, knockout_min_participants: 2, swiss_min_participants: 3, groups_knockout_group_size: 4, one_v_one_max_active_per_user: 1, one_v_one_prize_delivery_seconds: 180 },
       min_field_condition: 30, condition_regen_points_per_day: 48, condition_loss_per_match: 10, condition_loss_per_match_ranked: 5, fusion_costs_foxsy: [100, 200, 400, 800], auction_enabled: true,
-      marketplace_min_list_price_foxsy: 500, foxsy_token_id: 'FOXSY-5d5f3e',
+      marketplace_min_list_price_foxsy: 500, foxsy_token_id: 'FOXSY-5d5f3e', rarity_match_gate: MAINNET_GATE,
     } as AgentSnapshot['config'],
-    registration: { registered: true, teamName: 'Agent', feePaidOnChain: true, whitelisted: true, relayerEnabled: true, relaysRemaining: 5000, starterStock: 100 },
+    registration: { registered: true, teamName: 'Agent', feePaidOnChain: true, whitelisted: true, relayerEnabled: true, relaysRemaining: 5000 },
     profile: { id: 100, wallet_address: ADDR, username: null, elo_rating: 1200, league: 'Bronze', matches_won: 0, matches_lost: 0, matches_drawn: 0, team_name: 'Agent', badge: null, verified: false, tournament_wins: 0, active_title: null, player_count: 18 },
     team: { id: 1, user_id: 100, name: 'Agent', coach_name: null, formation: '4-4-2', lineup: players.slice(0, 11).map(p => p.nonce), substitutes: players.slice(11).map(p => p.nonce), team_overall: 20, badge: null },
     players: [...players, ...extra],

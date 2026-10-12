@@ -7,7 +7,8 @@ import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
-import type { CanFuse, CanList, Tournament, TournamentDetail } from '../foxleague/types.ts'
+import type { CanFuse, CanList, MatchWaiverQuote, Tournament, TournamentDetail } from '../foxleague/types.ts'
+import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
@@ -68,7 +69,7 @@ export interface RulesContext {
   pendingJoin?: boolean
   /** Fusion waiver quotes, fetched for the waiver actions; null = unreadable. */
   cooldownQuote?: { days: number; costAtomic: bigint } | null
-  matchQuote?: { max_purchasable: number; chain_played: number; credit: number; price_wei: string } | null
+  matchQuote?: MatchWaiverQuote | null
   /** A transfer lock the card at auction carries (inherited by the buyer); null = its details could not be read. */
   cardLock?: { until: Date | null } | null
   now: Date
@@ -263,9 +264,6 @@ function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
   return null
 }
 
-/** Contract floor: 5 competitive matches must really be played per fusion input or listed card. */
-const PLAYED_FLOOR = 5
-
 /**
  * The agent's own team could not be read (FoxLeague answered without its lineup, or not at all). Nothing that
  * depends on who plays may run blind: no lineup or formation change, no match, and no card leaves the squad.
@@ -330,7 +328,6 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (r.whitelisted === false) return refuse('wallet not whitelisted (registration.whitelist_required is on)', 'setup')
       if (!r.relayerEnabled) return refuse('registration relayer is off', 'setup')
       if ((r.relaysRemaining ?? 0) <= 0) return refuse('relayer daily cap reached', 'setup')
-      if ((r.starterStock ?? 0) < 18) return refuse('starter squads out of stock', 'setup')
       if (r.feePaidOnChain) return allow(0, { feePaid: true }, 'setup', ['fee already paid on chain: only POST /api/register'])
       const fee = BigInt(cfg.registration_fee_wei)
       if (cfg.registration_fee_foxsy_wei && BigInt(cfg.registration_fee_foxsy_wei) !== fee) return refuse('registration fee misconfigured (contract and relay disagree)', 'setup')
@@ -588,15 +585,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const rarity = inputs[0]!.rarity
       if (inputs.some(c => c.rarity !== rarity)) return refuse('all three cards must be the same rarity')
       if (rarity === 'Legendary') return refuse('a Legendary cannot be fused')
-      const minMatches = cfg.fusion_min_matches ?? 20
+      // FoxLeague's match gate of the rarity (2026-10-12): Common 5, Uncommon 15, Rare 45, Epic 135, part really played.
+      const g = matchGate(cfg, rarity)
       for (const c of inputs) {
         if (c.listed) return refuse(`#${c.nonce} is listed for sale`)
         if (c.transferLockedUntil) return refuse(`#${c.nonce} is in a transfer cooldown until ${c.transferLockedUntil}`)
         if (c.fusionReadyAt) return refuse(`#${c.nonce} is in its fusion cooldown until ${c.fusionReadyAt}`)
         if (inSquad(s, c.nonce)) return refuse(`#${c.nonce} is in the lineup or on the bench: set a squad without it first`)
         if (c.dirty) return refuse(`#${c.nonce} has unsynced stats: sync first (the contract reads the on-chain match count)`)
-        if (c.competitiveMatches < PLAYED_FLOOR) return refuse(`#${c.nonce} has played ${c.competitiveMatches} competitive matches; ${PLAYED_FLOOR} must really be played`)
-        if (c.competitiveMatches + c.fusionMatchCredit < minMatches) return refuse(`#${c.nonce} has ${c.competitiveMatches + c.fusionMatchCredit} of the ${minMatches} competitive matches fusion needs`)
+        if (c.competitiveMatches < g.floor) return refuse(`#${c.nonce} has played ${c.competitiveMatches} competitive matches; ${aRarity(rarity)} must really play ${g.floor} of its ${g.gate}`)
+        if (c.competitiveMatches + c.fusionMatchCredit < g.gate) return refuse(`#${c.nonce} has ${c.competitiveMatches + c.fusionMatchCredit} of the ${g.gate} competitive matches ${aRarity(rarity)} needs for fusion`)
       }
       const left = s.players.filter(p => !p.listed).length - 2
       if (left < 18) return refuse(`fusion would leave ${left} cards; a match needs 18`)
@@ -645,7 +643,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (inSquad(s, a.nonce)) return refuse(`#${a.nonce} is in the lineup or on the bench: set a squad without it first`)
       if (s.players.filter(p => !p.listed).length - 1 < 18) return refuse('listing would leave fewer than 18 cards; a match needs 18')
       if (c.dirty) return refuse(`#${a.nonce} has unsynced stats: sync first (the contract reads the on-chain match count)`)
-      if (c.competitiveMatches < PLAYED_FLOOR || c.competitiveMatches + c.fusionMatchCredit < 20) return refuse(`#${a.nonce} needs 20 competitive matches, ${PLAYED_FLOOR} of them played, to be listed`)
+      const gate = matchGate(cfg, c.rarity)
+      if (c.competitiveMatches < gate.floor || c.competitiveMatches + c.fusionMatchCredit < gate.gate) {
+        return refuse(`#${a.nonce} needs ${gate.gate} competitive matches, ${gate.floor} of them played, to be listed (${aRarity(c.rarity)}); it has ${c.competitiveMatches} played${c.fusionMatchCredit ? ` + ${c.fusionMatchCredit} waived` : ''}`)
+      }
       const platformMin = cfg.marketplace_min_list_price_foxsy ?? 500
       if (a.reserve_foxsy < platformMin) return refuse(`reserve below the platform minimum of ${platformMin} FOXSY`)
       const rarityMin = MIN_RESERVE_FOXSY[c.rarity] ?? platformMin
@@ -671,21 +672,30 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (blocked) return refuse(`no fusion is possible with #${a.nonce} yet (${blocked}): a waiver would be wasted`)
       let costAtomic: bigint
       const notes: string[] = []
+      const extra: Record<string, unknown> = {}
       if (a.type === 'fusion_cooldown_waiver') {
         if (!c.fusionReadyAt) return refuse(`#${a.nonce} has no fusion cooldown running`)
         const q = ctx.cooldownQuote
         if (!q) return refuse(`the cooldown waiver quote for #${a.nonce} could not be read`)
         if (q.days <= 0 || q.costAtomic <= 0n) return refuse(`nothing to waive on #${a.nonce}: its cooldown is at the 3-day floor already`)
-        costAtomic = q.costAtomic
-        notes.push(`#${a.nonce} ready for fusion ${q.days} day${q.days > 1 ? 's' : ''} sooner (3 days left)`)
+        // Since 2026-10-12 some of the days can be bought: the ready time moves that many days earlier.
+        if (a.days !== undefined && a.days > q.days) return refuse(`#${a.nonce} has ${q.days} day${q.days > 1 ? 's' : ''} above the 3-day floor to waive, not ${a.days}`)
+        const days = a.days ?? q.days
+        costAtomic = (q.costAtomic / BigInt(q.days)) * BigInt(days)
+        if (days < q.days) extra.days = days
+        notes.push(days === q.days ? `#${a.nonce} ready for fusion ${q.days} day${q.days > 1 ? 's' : ''} sooner (3 days left)` : `#${a.nonce} ready for fusion ${days} of its ${q.days} waivable days sooner`)
       } else {
+        const g = matchGate(cfg, c.rarity)
+        if (!g.waiver) return refuse(`${aRarity(c.rarity)} has no match waiver: its ${g.gate} competitive matches must really be played`)
         // The quote counts the matches on chain: unsynced ones would be bought again. Sync first.
-        if (c.dirty) return refuse(`#${a.nonce} has unsynced stats: sync first, its unsynced matches may already cover part of the 20`)
+        if (c.dirty) return refuse(`#${a.nonce} has unsynced stats: sync first, its unsynced matches may already cover part of the ${g.gate}`)
         const q = ctx.matchQuote
         if (!q) return refuse(`the match waiver quote for #${a.nonce} could not be read`)
         if (c.competitiveMatches > q.chain_played) return refuse(`#${a.nonce} has ${c.competitiveMatches - q.chain_played} competitive matches not on chain yet: sync first`)
-        const minMatches = cfg.fusion_min_matches ?? 20
-        if (q.chain_played < PLAYED_FLOOR) return refuse(`#${a.nonce} has really played ${q.chain_played} competitive matches on chain; ${PLAYED_FLOOR} must be played before credit can be bought`)
+        // The quote names the gate the contract holds this card to; the config's row is the fallback.
+        const minMatches = q.gate ?? g.gate
+        const floor = q.floor ?? g.floor
+        if (q.chain_played < floor) return refuse(`#${a.nonce} has really played ${q.chain_played} competitive matches on chain; ${aRarity(c.rarity)} must play ${floor} before credit can be bought`)
         const needed = minMatches - q.chain_played - q.credit
         if (needed <= 0) return refuse(`#${a.nonce} already has the ${minMatches} matches fusion needs`)
         if (ctx.piece) {
@@ -699,13 +709,14 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         }
         if (needed > q.max_purchasable) return refuse(`#${a.nonce} needs ${needed} more but only ${q.max_purchasable} can be bought: play more matches first`)
         costAtomic = BigInt(q.price_wei) * BigInt(a.matches)
+        extra.matches = a.matches
         notes.push(a.matches === needed ? `#${a.nonce} reaches ${minMatches} competitive matches for fusion` : `#${a.nonce} +${a.matches} toward the ${minMatches} matches for fusion (${needed - a.matches} to go)`)
       }
       const whole = Number(costAtomic / 10n ** 18n)
       // The first piece of a split waiver answers for the whole group, as the unsplit action would.
       const groupWhole = ctx.piece?.index === 1 ? whole * ctx.piece.of : whole
       if (groupWhole > ctx.settings.maxShopPaymentFoxsy) return refuse(`${groupWhole} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy} (Max shop payment)`)
-      return needFoxsy(whole, allow(costAtomic, { costAtomic, nonce: a.nonce, ...(a.type === 'fusion_match_waiver' ? { matches: a.matches } : {}) }, 'play', notes))
+      return needFoxsy(whole, allow(costAtomic, { costAtomic, nonce: a.nonce, ...extra }, 'play', notes))
     }
 
     case 'cancel_listing': {

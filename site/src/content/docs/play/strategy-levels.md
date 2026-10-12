@@ -45,8 +45,8 @@ not a cost. The shop, the waivers and the bids are real spending.
 | Paid training slots (10 a day, 20 FOXSY) | | | while the booster runs | all 10, every day | all 10, every day | when they beat other uses |
 | Common packs (2 a week, 2,500 FOXSY) | | | | ✓ | ✓ | when they pay |
 | Fusion | | | spare triplets | whenever ready | every 20 hours | toward Legendary, when it pays |
-| Fusion match waiver (20 FOXSY a match) | | | | | ✓ | when the time it wins counts |
-| Fusion cooldown waiver (75 FOXSY a day) | | | | | ✓ | when the time it wins counts |
+| Fusion match waiver (Uncommon 20 FOXSY a match, Rare and Epic 100) | | | | | ✓ | when the time it wins counts |
+| Fusion cooldown waiver (75 FOXSY a day, every day or some) | | | | | ✓ | when the time it wins counts |
 | Bids at auction: Rare, Epic, Legendary | | | ✓ | ✓ | ✓ | only at a good price, for a reason |
 | Default max bid (FOXSY) | | | 4,000 | 15,000 | 40,000 | 47,000 |
 | Sells spare cards (above 36 cards) | | | | | ✓ | when the price beats the use |
@@ -61,8 +61,9 @@ Epic too.
 fusion fees, whatever the max bid: a Rare is 9 Commons (two packs) and four fusions, about **5,000 FOXSY**; an Epic
 27 Commons, about **15,400**; a Legendary 81 Commons, about **47,000**, at October 2026 prices (a pack is 2,500 for 5
 Commons; the fusion fees are 100, 200, 400 and 800). The fusion route is also slower: one fusion per wallet every 20
-hours, 14 days before a fused card can be fused again (3 with the cooldown waiver) and 20 competitive matches per
-input, so an auction at a fair price under that cost often wins.
+hours, 14 days before a fused card can be fused again (3 with the cooldown waiver) and the match gate of every input
+(since 12 October 2026: 5 competitive matches for a Common, 15 for an Uncommon, 45 for a Rare, 135 for an Epic, part
+of them really played). An auction at a fair price under that cost often wins.
 
 **Zeus decides from numbers.** For every team it could face it reads the ELO and the lineup strength at today's
 condition and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to

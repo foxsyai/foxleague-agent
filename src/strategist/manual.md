@@ -1,12 +1,12 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, release/mainnet-1.0 at 858cfe30e 2026-10-08.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 1c0c76233 2026-10-12.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
 # Economy map
 (docs.foxleague.ai/mechanics/economy-map/)
 
-This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values at launch. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
+This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values of 12 October 2026. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
 
 Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours. Daily allowances reset at a fixed **14:00 UTC**, not on a rolling 24 hour window.
 
@@ -21,7 +21,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Casual plus ranked matches per day** | 5 | The matches you may start yourself per day, casual and ranked combined | Being drawn in as someone's ranked opponent does not count. Tournament and 1v1 games do not count either | Not for sale |
 | **Match cooldown** | 30 seconds from the start of your previous match; 15 minutes from the start of your last ranked game | Pacing between the matches you start | Both clocks run from the start of the match, not from full time. The ranked cooldown counts from your last ranked game, started or drawn into | Not for sale |
 | **XP-eligible matches per player per day** | 3 | How many matches a day a player card can earn attribute XP in | A fourth competitive match that day still counts for ELO, career stats and the fusion counter. It awards no XP | Not for sale |
-| **What counts as competitive** | Silver or Gold tournament matches, 1v1 challenges, ranked while ranked XP is on (off at launch) | The matches that award XP and move the on-chain fusion counter | A real opponent and a paid seat. Casual games against the AI never count. Bronze tournaments never count | Fusion match waiver (see fusion row) |
+| **What counts as competitive** | Silver or Gold tournament matches plus 1v1 challenges. XP also comes from ranked while ranked XP is on (off on mainnet), but ranked never moves the match counter | The matches that move the on-chain match counter the match gates read | A real opponent and a paid seat. Casual games against the AI never count. Bronze tournaments never count | Fusion match waiver (see fusion row) |
 | **XP per match** | Up to 900 XP spread over the 7 stats | Attribute XP a starter earns from one competitive match | Nine match actions (distance, dribbles, goals, passes, shots, completed passes, tackles, interceptions, saves) each score 0 to 100 against a normaliser and the scores are distributed to stats. The normalisers are set so a median performance scores about half of each term | XP booster doubles it (next row) |
 | **XP booster** | 2,000 FOXSY, 2x XP, 24 hours | Doubles training XP and match XP for one day | One active at a time. Buying again restarts the 24 hour clock. Featured tournament rewards (2x for 48 h to the winner, 1.5x for 24 h to the runner-up) do not stack with it; the highest single multiplier applies | This row is the shortcut. No floor |
 | **XP per stat bump** | 2,000 XP | XP a stat meter needs before the stat goes up by 1 | Surplus carries into the next meter, unless the bump lands on the rarity cap | None |
@@ -33,16 +33,16 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Condition regeneration** | 48 points per day (2 per hour) until age 30, falling to 24 per day (1 per hour) at age 39 | Passive recovery, slower with age | A young player at 0 is back to 100 in about 2 days, a 39-year-old in about 4 | Condition recovery (next row) |
 | **Condition recovery** | 100 FOXSY for a full 0 to 100 restore, pro-rated per missing point | Instantly restores a player's condition | You pay about 1 FOXSY per missing point; a player at 70 costs 30 FOXSY. Recover All sums every player below 100 | This row is the shortcut. No floor |
 | **Minimum field condition** | 30 | The match-fit line for tournaments, 1v1s plus training | Below it a player cannot train. In a tournament or 1v1 match a starter below it is auto-substituted by a fit bench player; fewer than 11 fit players forfeits 3-0. Casual and ranked games do not apply it: they refuse only a starter at 0 condition, so a tired starter still plays there with every stat scaled down by condition | Condition recovery brings a player back above it |
-| **Fusion inputs** | 3 players of the same rarity, each with 20 competitive matches | What one fusion burns | Inputs must be synced, in your wallet, not listed, not under a transfer cooldown. A fused player inherits the longest remaining transfer cooldown of its inputs. The contract reads the on-chain competitive counter | Fusion match waiver: 20 FOXSY per missing match, at most 15 per card, so 5 matches must really be played |
+| **Fusion inputs** | 3 players of the same rarity, each at the match gate of its rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 | What one fusion burns | Inputs must be synced, in your wallet, not listed, not under a transfer cooldown. A fused player inherits the longest remaining transfer cooldown of its inputs. The contract reads the on-chain competitive counter plus the waived credit | Fusion match waiver per missing match: Uncommon 20 FOXSY (at most 10, so 5 really played), Rare 100 (at most 30, 15 played), Epic 100 (at most 90, 45 played). None for Common |
 | **Fusion fee** | Common to Uncommon 100, Uncommon to Rare 200, Rare to Epic 400, Epic to Legendary 800 FOXSY | The fee paid with the three cards | Refunded with the cards if the fusion fails. Legendary cannot be fused further | None |
 | **Fusion card cooldown** | 14 days per fused card | A fusion output waits before it can be an input again | Belongs to the card and travels with it if sold. Does not block play, listing or your other fusions | Fusion cooldown waiver: 75 FOXSY per day down to a 3-day floor, at most 11 days and 825 FOXSY per card |
 | **Fusion wallet spacing** | 20 hours between two fusions of one wallet | Pacing on the wallet, whatever the cards | Counts from your last successful fusion | Not for sale |
 | **Marketplace listing** | Reserve between 500 and 1,000,000 FOXSY; every sale is a 24 hour auction | How you sell a player | Listing costs nothing beyond gas. Bids start at the reserve and must beat the top bid by 5 percent. A bid in the last 300 seconds extends the auction by 300 seconds. Cancel only while there are no bids | None. The 500 floor is enforced on chain |
-| **Listing gate** | 20 competitive matches per card, at least 5 really played | What a card needs before it can be auctioned | The same two gates as fusion. The fusion match waiver credit on the card counts (up to 15 matches). Cards out of a pack or a fusion start at 0. The contract refuses the listing otherwise; listings already open are unaffected | Fusion match waiver: 20 FOXSY per match, at most 15 per card, so 5 matches must really be played |
+| **Listing gate** | The match gate of the card's rarity: Common 5 competitive matches (5 really played), Uncommon 15 (5), Rare 45 (15), Epic 135 (45), Legendary 405 (135) | What a card needs before it can be auctioned | The same two gates as fusion. The fusion match waiver credit on the card counts. Cards out of a pack or a fusion start at 0. The contract refuses the listing otherwise; listings already open on 12 October 2026 at 14:00 UTC, when these gates replaced the single gate of 20 matches, finish normally | Fusion match waiver: Uncommon 20 FOXSY per match; Rare, Epic plus Legendary 100 (a Legendary at most 270, so 135 really played). None for Common |
 | **Marketplace fee** | 10 percent of the winning bid | Platform fee on a completed sale | Paid by the seller out of the bid, only when the auction sells | None |
 | **Relist cooldown** | 48 hours after a sale | A just-sold player cannot be auctioned again | Per player, enforced on chain | Not for sale |
 | **Creator royalty** | 2.5 percent of a tournament or 1v1 prize pool | Paid to the provider of the AI binary the matches ran on | Comes out of the 10 percent platform fee, in the same distribution transaction as the prizes. It never reduces a winner's share. Capped on chain at 2.5 percent. Marketplace sales carry no royalty | None |
-| **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card with at least 20 competitive matches; 63 days (1,512 hours) for a card moved before that | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The 63 days close the alt-wallet path: a second wallet's untouched Legendary cannot be moved and played the same season | Reduce Cooldown: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days, the same rate for both lengths). Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY; of a fresh 63-day one: 60 days, from 1,500 to 75,000 FOXSY |
+| **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card at its match gate; 21 days plus 6 hours for every missing match for a card moved under it | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer; each fusion match waiver bought afterwards for a card moved under its gate takes 6 hours off, down to 21 days plus 6 hours for every match it still has to really play. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The longer lock closes the alt-wallet path: a second wallet's untouched Legendary is locked for 122 days and 6 hours. Locks already running on 12 October 2026 at 14:30 UTC were never made longer | Reduce Cooldown, for a card moved at its gate only: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days), every day or only some of them. Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY. Under the gate: the fusion match waiver, 6 hours a match |
 | **Tournament seat fee** | Bronze free; Silver 1,000 to 4,999 FOXSY; Gold 5,000 FOXSY and up | What a seat costs, chosen by the creator inside the tier | Paid exactly, on chain, into a free seat. Refunded if you leave before the registration deadline or the tournament is cancelled | None. Bronze is the free tier |
 | **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a Silver or Gold pool is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
 | **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the broadcast ends. Unaccepted challenges refund in full at the deadline | None |
@@ -52,7 +52,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **ELO leagues** | Bronze below 1,300; Silver 1,300; Gold 1,600; Platinum 2,000; Diamond 2,700 | Your league bracket, from your ELO | New teams start at 1,200. Ranked games against another manager move rating with K = 24. Silver tournaments and Silver 1v1s use K = 12, Gold ones K = 18. Bronze tournaments move no ELO. The bands are 300 to 700 points wide: Gold is a season of wins, Platinum about three in either direction | Not for sale |
 | **ELO decay** | On. After 10 idle days you lose 5 points every 20 hours (6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a finished Silver or Gold tournament match resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
 | **Aging** | Minted at 18; one in-game week per real day; ramp from age 30 to the peak at 39 | Older players lose more condition per match and per training while regenerating less | Stats never drop. Every condition cost climbs to 3x its base at 39: matches from 10 or 5 to 30 or 15, training from 5 to 15; regeneration falls from 48 to 24 a day. A 39-year-old plays three tournament matches from full, then rests about 4 days | Condition recovery keeps a veteran on the pitch. Age itself is not for sale |
-| **Onboarding EGLD bonus** | 0.1 EGLD to each of the first 100 wallets that register with less than 0.01 EGLD | Covers roughly 100 on-chain actions of gas | The whole 10 EGLD reserve can go out on one day, so the first 100 wallets are paid whenever they arrive. After the 100 wallets you top up EGLD yourself | None |
+| **Onboarding EGLD bonus** | Spent. The first 101 wallets that registered with less than 0.01 EGLD received 0.1 EGLD each | Covered roughly 100 on-chain actions of gas for a new manager | All 101 were paid. A wallet that registers today gets no EGLD from FoxLeague and tops up EGLD itself: the swap window's Ramp Network link, xPortal or an exchange | None |
 | **Registration relayer** | 3 attempts per wallet per 10 minutes; 5,000 relayed registrations per day platform-wide | Rate limits on the gas-free registration | Past the daily cap the gas-free registration closes (the registration screen says "Onboarding closed for today"): try again tomorrow or ask the team on Telegram. There is no path where you pay the registration gas yourself | Not for sale |
 
 ## How long and how much from A to B
@@ -61,12 +61,12 @@ Each path is computed from the table above. The arithmetic sits in the last colu
 
 ### (a) Starter squad to your first Uncommon by fusion
 
-Three of your ten Commons, each to 20 competitive matches, then one fusion.
+Three of your ten Commons, each to the Common match gate of 5 competitive matches, then one fusion.
 
 | Route | Days | FOXSY | Arithmetic |
 |---|---|---|---|
-| Free: play the matches | 7 | 100 | 20 matches at 3 XP-eligible matches a day = 6 full days plus 2 matches on day 7. All three Commons start in the same eleven, so they finish together. Fusion fee 100 |
-| Fully paid: match waivers plus the fee | 2 | 1,000 | 15 waived matches per card at 20 = 300, times 3 cards = 900. The 5 real matches per card take 2 days at 3 a day. Fusion fee 100 |
+| Play the matches | 2 | 100 | 5 matches at 3 XP-eligible matches a day = 1 full day plus 2 matches on day 2. All three Commons start in the same eleven, so they finish together. Fusion fee 100 |
+| Paid | | | None: a Common has no match waiver, its 5 matches are played |
 | What the matches cost to play | included above | at least 1,000 per seat | Competitive matches come from paid seats: a Silver seat is at least 1,000 FOXSY. A round robin with 20 teams gives 19 matches for one seat; a 1v1 gives one. Prizes flow back from the same pool (see path g) |
 
 The fusion counter itself has no daily cap, only the XP has one, so a manager who fits more tournament games into a day finishes sooner. Condition then sets the pace: 10 per match, 48 back per day. A starter below 30 is swapped for a fit bench player in tournament and 1v1 matches.
@@ -77,13 +77,14 @@ The output of a fusion starts at 0 competitive matches and carries its own 14-da
 
 | Route | Days | FOXSY | Arithmetic |
 |---|---|---|---|
-| Free: wait it out, play meanwhile | 14 | 0 | The 14-day card cooldown. The 20 matches fit inside it (7 days at 3 a day) |
-| Paid: cooldown waiver plus match waiver | 3 | 1,125 | 11 days waived at 75 = 825, down to the 3-day floor. 15 matches waived at 20 = 300. The 5 real matches take 2 days, inside the 3 |
+| Free: wait it out, play meanwhile | 14 | 0 | A fused Uncommon: the 14-day card cooldown. Its 15 matches fit inside it (5 days at 3 a day) |
+| Paid: cooldown waiver plus match waiver | 3 | 1,025 | A fused Uncommon: 11 days waived at 75 = 825, down to the 3-day floor. 10 matches waived at 20 = 200. The 5 real matches take 2 days, inside the 3 |
+| Rarer outputs | | | A fused Rare needs 45 matches (15 days at 3 a day), a fused Epic 135 (45 days): longer than the cooldown. With every match waiver (30 at 100 = 3,000 for a Rare, 90 at 100 = 9,000 for an Epic) the real matches still take 5 and 15 days |
 | Both routes | | | The 20-hour wallet spacing since your last fusion also has to be over; it fits inside either route |
 
 ### (c) Common to Legendary by fusion, one lineage
 
-81 Commons become 27 Uncommons, then 9 Rares, then 3 Epics, then 1 Legendary: 40 fusions. This path counts the wallet spacing, the per-rung card cooldowns and the fusion fees. It does not count the 20 competitive matches every input needs.
+81 Commons become 27 Uncommons, then 9 Rares, then 3 Epics, then 1 Legendary: 40 fusions. This path counts the wallet spacing, the per-rung card cooldowns and the fusion fees. It does not count the competitive matches every input needs (the match gate of its rarity).
 
 | Route | Days | FOXSY | Arithmetic |
 |---|---|---|---|
@@ -91,7 +92,7 @@ The output of a fusion starts at 0 competitive matches and carries its own 14-da
 | Free: 14-day cooldowns | 63.7 | 6,500 | The 27 Common fusions run back to back: 26 gaps x 20 h = 520 h. The last Uncommon, the last Rare and the last Epic each wait 14 days before feeding the next rung: 520 h + 3 x 336 h = 1,528 h = 63.7 days. The other fusions fit inside those waits |
 | Fully paid: every fused card waived to 3 days | 35.2 | 38,675 | 27 Common plus 9 Uncommon fusions back to back: 35 gaps x 20 h = 700 h to the last Rare. Then 3 days to the last Epic and 3 more to the Legendary: 700 h + 144 h = 844 h = 35.2 days. Waivers: 39 fused cards x 11 days x 75 = 32,175, plus the 6,500 in fees |
 | Floor that no money removes | 32.5 | | 40 fusions need 39 spacing gaps: 39 x 20 h = 780 h = 32.5 days |
-| Not counted: the matches | | up to 36,000 | 81 Commons plus 39 fused cards = 120 inputs x 20 matches. Fully waived that is 120 x 15 x 20 = 36,000 FOXSY, with 5 real matches per card still to play |
+| Not counted: the matches | | up to 59,400 | 81 Commons x 5 + 27 Uncommons x 15 + 9 Rares x 45 + 3 Epics x 135 = 1,620 matches. Fully waived that is 27 x 10 x 20 + 9 x 30 x 100 + 3 x 90 x 100 = 5,400 + 27,000 + 27,000 = 59,400 FOXSY, with 810 matches still to really play (81 x 5 + 27 x 5 + 9 x 15 + 3 x 45; a Common has no match waiver) |
 
 In the fully paid route the early Uncommons sit idle for more than 14 days anyway, so a careful manager waives only the cards on the critical path and pays less than 32,175. The realistic path mixes marketplace purchases at higher rarities with your own fusions.
 
@@ -103,23 +104,23 @@ The 81 Commons of path (c) bought as Common packs, 5 cards for 2,500 FOXSY at mo
 |---|---|---|---|
 | The packs | 56 | 42,500 | 81 Commons need 17 packs (85 cards, 4 spare) at 2,500 = 42,500. The cap is 2 packs per rolling 7 days: packs 1-2 on day 0, packs 3-4 on day 7, pack 17 on day 7 x 8 = 56 |
 | The fusions | 32.5 at least | 6,500 | 40 fusions need 39 spacing gaps: 39 x 20 h = 780 h = 32.5 days, about 33 days. Fees 27 x 100 + 9 x 200 + 3 x 400 + 1 x 800 = 6,500. The Common fusions start with the first packs, so most of the spacing runs inside the 8 weeks; the last rungs then follow path (c) |
-| The matches, played | included | seat fees | Every input needs 20 competitive matches and pack cards arrive at 0: 81 Commons plus 39 fused cards = 120 inputs x 20 matches. The fusion counter has no daily cap, only XP has one, so a card plays as often as you can field it |
-| The matches, waived | | up to 36,000 | 120 x 15 x 20 = 36,000 if every card is waived to the 5-match floor. Waiving only the last matches of the cards on the critical path costs a fraction of that |
+| The matches, played | included | seat fees | Every input needs the match gate of its rarity and pack cards arrive at 0: 81 Commons x 5 + 27 Uncommons x 15 + 9 Rares x 45 + 3 Epics x 135 = 1,620 matches. The match counter has no daily cap, only XP has one, so a card plays as often as you can field it |
+| The matches, waived | | up to 59,400 | 27 x 10 x 20 + 9 x 30 x 100 + 3 x 90 x 100 = 59,400 if every card is waived to its floor; 810 matches still have to be really played. Waiving only the last matches of the cards on the critical path costs a fraction of that |
 | Floor that no money removes | 56 | | The 2-packs-a-week cap: 17 packs take 8 weeks (56 days) whatever you spend. The 39 spacing gaps fit inside them |
 
-Extend it to a full Legendary XI (ten more Legendaries, 149 packs) and the arithmetic gives the shape of the game: a manager who buys at the cap and waives everything is bound by the pack cap and the spacing and needs about 17 months. In our estimate a daily player who plays every match needs about 32 months; the match waiver on the last matches of each card, about 22,000 FOXSY a year, brings that down to about 22 months.
+Extend it to a full Legendary XI (ten more Legendaries, 149 packs) and the arithmetic gives the shape of the game: a manager who buys at the cap is bound by the pack cap alone for about 17 months; the 810 real matches every Legendary lineage needs come on top of that.
 
 ### (e) Moving a Legendary between your own wallets
 
-The card's competitive matches at the moment of the transfer decide the length: 21 days at 20 or more, 63 days under that.
+The card's match gate at the moment of the transfer decides the length: 21 days at its gate (405 competitive matches, 135 of them really played), 21 days plus 6 hours for every missing match under it.
 
 | Route | Days | FOXSY | Arithmetic |
 |---|---|---|---|
-| Wallet-to-wallet transfer, wait, card with 20 competitive matches | 21 | 0 | The full 504-hour transfer cooldown before the card can play in the new wallet |
-| Wallet-to-wallet transfer, wait, card under 20 competitive matches | 63 | 0 | The 1,512-hour cooldown of an unplayed card |
-| Wallet-to-wallet transfer, Reduce Cooldown, card with 20 competitive matches | 3 | 22,500 | 18 days above the 3-day floor x 1,250 per day. The rate is the 10 percent marketplace fee on the 250,000 FOXSY Legendary reference price spread over 20 days |
-| Wallet-to-wallet transfer, Reduce Cooldown, card under 20 competitive matches | 3 | 75,000 | 60 days above the 3-day floor x 1,250 per day, the same rate |
-| Sell it on the marketplace, buy it back | 1 | 10 percent of the price | A 24-hour auction, then the 10 percent fee on the winning bid: 50 FOXSY at the 500 floor, 25,000 at the 250,000 reference price. The auction starts no transfer cooldown, so a card that carries none arrives playable. Anyone can outbid your other wallet. The card cannot be listed again for 48 hours. The card needs 20 competitive matches to be listed at all |
+| Wallet-to-wallet transfer, wait, card at its gate | 21 | 0 | The full 504-hour transfer cooldown before the card can play in the new wallet |
+| Wallet-to-wallet transfer, wait, card at 0 competitive matches | 122.25 | 0 | 21 days plus 405 missing matches x 6 hours = 504 + 2,430 = 2,934 hours |
+| Wallet-to-wallet transfer, Reduce Cooldown, card at its gate | 3 | 22,500 | 18 days above the 3-day floor x 1,250 per day. The rate is the 10 percent marketplace fee on the 250,000 FOXSY Legendary reference price spread over 20 days |
+| Wallet-to-wallet transfer, every match waiver, card at 0 competitive matches | 54.75 | 27,000 | 270 waivers x 100 = 27,000 take 270 x 6 hours off: 2,934 - 1,620 = 1,314 hours, 21 days plus the 135 matches it still has to really play x 6 hours. Reduce Cooldown does not apply to this lock |
+| Sell it on the marketplace, buy it back | 1 | 10 percent of the price | A 24-hour auction, then the 10 percent fee on the winning bid: 50 FOXSY at the 500 floor, 25,000 at the 250,000 reference price. The auction starts no transfer cooldown, so a card that carries none arrives playable. Anyone can outbid your other wallet. The card cannot be listed again for 48 hours. The card needs its match gate to be listed at all: 405 competitive matches, 135 of them really played |
 
 ### (f) One month of training
 
@@ -147,16 +148,16 @@ The card's competitive matches at the moment of the transfer decide the length: 
 
 ### (h) One Legendary from a fresh squad
 
-The starter squad carries one Legendary. Four ways to a second one, from the day the squad lands. The alt-wallet routes register a second wallet (5,000 FOXSY, its own starter Legendary) and move that card. The pack routes build it: the fresh squad already holds 1 Epic, 2 Rares, 4 Uncommons and 10 Commons, so the missing inputs are 2 Epics from 6 Rares, 4 of them from 12 Uncommons, 8 of them from 24 Commons, 14 of which come from 3 packs. That is 15 fusions (8 Common, 4 Uncommon, 2 Rare, 1 Epic; fees 800 + 800 + 800 + 800 = 3,200) and 45 inputs with 20 competitive matches each.
+The starter squad carries one Legendary. Four ways to a second one, from the day the squad lands. The alt-wallet routes register a second wallet (5,000 FOXSY, its own starter Legendary) and move that card. The pack routes build it: the fresh squad already holds 1 Epic, 2 Rares, 4 Uncommons and 10 Commons, so the missing inputs are 2 Epics from 6 Rares, 4 of them from 12 Uncommons, 8 of them from 24 Commons, 14 of which come from 3 packs. That is 15 fusions (8 Common, 4 Uncommon, 2 Rare, 1 Epic; fees 800 + 800 + 800 + 800 = 3,200) and 45 inputs, each at the match gate of its rarity: 24 Commons at 5 competitive matches, 12 Uncommons at 15, 6 Rares at 45 plus 3 Epics at 135.
 
 | Route | Days | FOXSY | Arithmetic |
 |---|---|---|---|
-| Alt wallet, wait | 63 | 5,000 | The second wallet's Legendary has 0 competitive matches, so the transfer locks it for 63 days. The registration fee is the whole cost |
-| Packs, wait | about 62 | 10,700 | 3 packs at 2,500 = 7,500 plus 3,200 in fusion fees. The third pack lands on day 7 and its cards play 20 matches in 7 days; the 8 Common fusions take 6 days of wallet spacing; each of the three fused rungs then waits its 14-day card cooldown, playing its 20 matches inside it because the cooldown does not block play: 7 + 7 + 6 + 3 x 14 = 62 |
-| Packs, every waiver | about 30 | about 36,050 | The 10,700 above, plus 45 inputs x 15 waived matches x 20 = 13,500, plus 14 fused inputs x 11 waived days x 75 = 11,550, plus about 300 of sync fees at 10 per card. Days: 7 for the packs, 2 for the 5 real matches per card, 14 spacing gaps x 20 h = 12, three 3-day floors = 9 |
-| Alt wallet, Reduce Cooldown | 3 | about 80,000 | 5,000 for the second wallet plus 60 days above the 3-day floor x 1,250 = 75,000 |
+| Alt wallet, wait | 122.25 | 5,000 | The second wallet's Legendary has 0 competitive matches, so the transfer locks it for 21 days plus 405 x 6 hours. The registration fee is the whole cost |
+| Alt wallet, every match waiver | 54.75 | 32,000 | 5,000 for the second wallet plus 270 match waivers at 100 = 27,000, each 6 hours off the lock, down to 21 days plus the 135 matches still to really play x 6 hours. Reduce Cooldown does not apply to this lock |
+| Packs, wait | about 89 | 10,700 | 3 packs at 2,500 = 7,500 plus 3,200 in fusion fees. The third pack lands on day 7 and its Commons play their 5 matches in 2 days; the 8 Common fusions take 6 days of wallet spacing. The fused Uncommons play their 15 matches inside the 14-day card cooldown, the fused Rares need 15 days for 45 matches and the fused Epics 45 days for 135, because the cooldown does not block play: 7 + 2 + 6 + 14 + 15 + 45 = 89 |
+| Packs, every waiver | about 44 | about 70,000 | The 10,700 above, plus the match waivers of 12 Uncommons x 10 x 20 = 2,400, 6 Rares x 30 x 100 = 18,000 and 3 Epics x 90 x 100 = 27,000, plus 14 fused inputs x 11 waived days x 75 = 11,550, plus about 300 of sync fees at 10 per card. Days: 7 for the packs, 2 for the 5 real matches of the Commons, 14 spacing gaps x 20 h = 12, then the three fused rungs: 3 (the floor), 5 (15 real matches of a Rare) and 15 (45 real matches of an Epic) |
 
-The alt wallet is the fast route only for a manager who pays about 80,000 FOXSY for it; at 5,000 it is the slow one. Packs plus fusion sit in between on both axes, which is the shape the 63-day rule is there to give.
+Moving a second wallet's Legendary is the slowest route when nothing is paid and still takes about 55 days with every match waiver bought. The pack routes build a Legendary whose inputs have played: about 89 days for 10,700 FOXSY or about 44 days for about 70,000 FOXSY. That is the shape the match gates are there to give.
 
 ## Which manager are you?
 
@@ -166,9 +167,9 @@ Time-rich, budget-light. You log in every day and you like to earn it.
 
 - Play the free 5 casual and ranked games for the leaderboard and use Bronze tournaments to learn without stakes.
 - Take the 5 free training sessions every day and sync before matches that matter (10 FOXSY per player).
-- Reach fusion by playing: 20 competitive matches per card at 3 a day is one week, then a 100 FOXSY fee. Rotate your 18 so nobody drops below 30 condition.
+- Reach fusion by playing: a Common needs 5 competitive matches, 2 days at 3 a day, then a 100 FOXSY fee. The rarer rungs need 15, 45 and 135 matches per card. Rotate your 18 so nobody drops below 30 condition.
 - Grow the roster with the Common pack when you need inputs: 2,500 FOXSY for 5 Commons, at most 2 packs a week, the same cap every wallet has.
-- Your one shortcut is the match waiver on a card's last matches: a card at 15 of 20 finishes for 100 FOXSY instead of two more days of seats. About 22,000 FOXSY a year spent that way brings a full Legendary XI from about 32 months to about 22. Every other floor is your normal pace.
+- Your one shortcut is the match waiver on a card's last matches: an Uncommon at 10 of 15 finishes for 100 FOXSY instead of two more days of seats. Every other floor is your normal pace.
 
 **What you pay, what you get:** seat fees that mostly return as prizes, a few hundred FOXSY a month in sync and fusion fees, packs when you want inputs faster than the market sells them. You get a squad that improves a rung every couple of weeks.
 
@@ -177,7 +178,7 @@ Time-rich, budget-light. You log in every day and you like to earn it.
 Limited evenings, some budget. You cannot play every day, so you buy back the days you miss.
 
 - Buy the 2,000 FOXSY booster at the start of a long session and stack paid training slots under it (20 FOXSY each, 10 a day): 40 XP a session instead of 20.
-- Use the match waiver on the last few matches only: a card at 15 of 20 costs 100 FOXSY to finish, not 300.
+- Use the match waiver on the last few matches only: a Rare at 40 of 45 costs 500 FOXSY to finish, not 3,000.
 - Use the cooldown waiver only when a triplet is ready and one card is the holdout: 75 FOXSY per day, never below 3 days.
 - Skip Reduce Cooldown by buying on the marketplace instead of receiving transfers: an auction starts no transfer cooldown. Check the listing for a lock the card still carries from an earlier transfer, because you would inherit it.
 
@@ -188,9 +189,9 @@ Limited evenings, some budget. You cannot play every day, so you buy back the da
 You build value in cards and move them.
 
 - Every sale is a 24-hour auction with a 500 FOXSY reserve floor and a 10 percent fee on the winning bid. Bids climb by at least 5 percent and the last 300 seconds extend on every bid.
-- An auction win starts no transfer cooldown, though a card sold inside a running one passes the rest to you (the listing shows it). A player sent wallet-to-wallet waits 21 days, 63 if it had fewer than 20 competitive matches when it moved, unless you pay the rarity price per day down to 3 days.
-- The waiver is priced at the marketplace fee on the card's reference price spread over 20 days, so a private transfer plus a full waiver costs about what a sale at the reference price would, three times that for a card under 20 competitive matches. The market stays the cheap path by design.
-- A card can be auctioned only with 20 competitive matches, 5 of them really played, the same gate fusion has. Pack cards and fusion outputs start at 0, so a fresh card is never a same-day flip.
+- An auction win starts no transfer cooldown, though a card sold inside a running one passes the rest to you (the listing shows it). A player sent wallet-to-wallet at its match gate waits 21 days, unless you pay the rarity price per day down to 3 days. Under its gate it waits 21 days plus 6 hours for every missing match; only match waivers shorten that.
+- The waiver is priced at the marketplace fee on the card's reference price spread over 20 days, so a private transfer plus a full waiver costs about what a sale at the reference price would. A card under its match gate cannot be bought down to 3 days at all. The market stays the cheap path by design.
+- A card can be auctioned only at the match gate of its rarity (from 5 competitive matches for a Common to 405 for a Legendary, a part of them really played), the same gate fusion has. Pack cards and fusion outputs start at 0, so a fresh card is never a same-day flip.
 - Fused cards keep their cooldown and any waived-match credit when sold; price them accordingly. Sync before listing: bidders see on-chain stats only.
 - A just-sold card cannot be relisted for 48 hours, so flipping is slow by design.
 
@@ -209,7 +210,7 @@ You create the events other managers play in.
 
 ## What money cannot buy
 
-- **The floors.** 3 days of every fused card's cooldown, 5 real competitive matches per fusion input or listed card, 3 days of every transfer cooldown, the 20-hour wallet spacing between fusions and the 2 Common packs a week.
+- **The floors.** 3 days of every fused card's cooldown, the matches of every gate that must really be played (5 for a Common or an Uncommon, 15 for a Rare, 45 for an Epic, 135 for a Legendary), 3 days of the transfer cooldown of a card moved at its gate (21 days plus 6 hours for every match it still has to really play for a card moved under it), the 20-hour wallet spacing between fusions and the 2 Common packs a week.
 - **The daily caps.** 5 casual and ranked games you start, 3 XP-eligible matches per player, 5 free plus 10 paid training sessions, all resetting at 14:00 UTC.
 - **Aging.** Every player is 18 at mint and grows a week older every day. From 30 the condition bill rises with every season, the natural recovery slows and nothing reverses it. Paid recovery keeps a veteran playing; it does not make them younger.
 - **Ranked pacing.** 30 seconds between matches, 15 minutes between ranked games and a rating that decays after 10 idle days.
@@ -286,15 +287,15 @@ All three input players must:
 - Be in your wallet (not listed on the marketplace, not in an auction)
 - Share the **same rarity** (e.g. three Commons)
 - Be **synced** (unsynced players can't be fused)
-- Not be under a **transfer cooldown**. A player still inside its wallet-to-wallet cooldown is hidden from the fusion picker, so you cannot use fusion to wash a cooled-down player into a fresh one. If such a player is fused anyway, the new player inherits the longest remaining transfer cooldown among the three inputs. See [Marketplace](/mechanics/marketplace/) for the cooldown rules
-- Have played at least **20 competitive matches** each. The contract checks the on-chain match counter, so only synced matches count. The Fusion tab shows every candidate as "played / 20" and lists any selected player still below the threshold. A card that still needs matches or is inside its own fusion cooldown carries a red **no-entry sign** (a red disc with a white bar) in its top-left corner. Hover over it (tap it on a phone) to see why. An unsynced card carries no sign: the Fusion tab names it once you select it. The same two gates (20 matches with credit, 5 really played) now also apply to listing a card on the [Marketplace](/mechanics/marketplace/)
+- Not be under a **transfer cooldown**. A player still inside its wallet-to-wallet cooldown cannot be selected: the Fusion tab lists it under the grid as locked (**In a transfer lock: these cannot be fused until it ends**), so you cannot use fusion to wash a cooled-down player into a fresh one. Its waivers can still be bought there: matches waived for a locked card count toward its gate and, on a card moved before its gate, each takes 6 hours off its lock. If such a player is fused anyway, the new player inherits the longest remaining transfer cooldown among the three inputs. When any of the three is still inside a cooldown it got by moving before its match gate, the new player's lock is of that kind too: it ends when that longest cooldown ends, neither Reduce Cooldown nor a match waiver shortens it. See [Marketplace](/mechanics/marketplace/) for the cooldown rules
+- Have reached the **match gate** of their rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 (Legendary 405, for listing). Waived matches count, but a part must really be played: 5 for a Common or an Uncommon, 15 for a Rare, 45 for an Epic, 135 for a Legendary. The contract checks the on-chain match counter, so only synced matches count. The Fusion tab shows how far every candidate is and lists any selected player still below its gate. A card that still needs matches or is inside its own fusion cooldown carries a red **no-entry sign** (a red disc with a white bar) in its top-left corner. Hover over it (tap it on a phone) to see why. An unsynced card carries no sign: the Fusion tab names it once you select it. The same two gates also apply to listing a card on the [Marketplace](/mechanics/marketplace/)
 - Not be inside its own **fusion cooldown**. A player that came out of a fusion waits **14 days** before it can go into another one (see below)
 
 You also need enough FOXSY in your wallet to cover the fusion fee. The app reads your FOXSY balance before your wallet opens. When the fee is higher than the balance it tells you so and asks nothing to sign. If your balance cannot be read at that moment the fusion is not blocked: the chain has the last word.
 
 ### What counts as a competitive match
 
-A **competitive match** is a match that is eligible for player XP: a **Silver or Gold tournament** match or a **1v1 challenge**. Ranked matches do not count at the moment. All of them are played against a real opponent for a paid seat. Casual games against the AI never count. Bronze tournaments never count either. The daily 3-match XP cap does not apply to the counter: every competitive appearance counts, even one that earned no XP that day.
+A **competitive match** is a match that is eligible for player XP: a **Silver or Gold tournament** match or a **1v1 challenge**. Ranked matches never count, whether ranked XP is on or off. All of them are played against a real opponent for a paid seat. Casual games against the AI never count. Bronze tournaments never count either. The daily 3-match XP cap does not apply to the counter: every competitive appearance counts, even one that earned no XP that day.
 
 Your player's career **matches played** stat still counts every appearance, AI games included. Only the fusion counter is limited to competitive play. The on-chain counter written by [Sync](/mechanics/sync/) is the competitive one, which is what the contract reads.
 
@@ -323,13 +324,13 @@ Two shortcuts let you pay FOXSY instead of waiting or playing, each with a floor
 | Shortcut | Buys | Price | Floor money cannot cross | Maximum per card |
 |----------|------|-------|--------------------------|------------------|
 | **Fusion cooldown waiver** | Days off a fused card's own 14-day cooldown | 75 FOXSY per day | The last **3 days** always remain | 11 days, 825 FOXSY (full 14 to 3) |
-| **Fusion match waiver** | Competitive matches the card still needs | 20 FOXSY per match | **5 matches** must really be played | 15 matches, 300 FOXSY |
+| **Fusion match waiver** | Competitive matches the card still needs | Uncommon 20 FOXSY per match; Rare, Epic plus Legendary 100. None for Common | The matches of the gate that must really be played: 5 (Uncommon), 15 (Rare), 45 (Epic), 135 (Legendary) | Uncommon 10 matches, 200 FOXSY; Rare 30, 3,000; Epic 90, 9,000; Legendary 270, 27,000 |
 | Wallet spacing (20 h) | nothing | not for sale | always waits in full | none |
 
 How each one works:
 
-- **Waive cooldown**. Pick the card in the Fusion tab and click **Waive cooldown**. The quote is the number of whole days between now and the 3-day floor, rounded up, times the per-day price; the button shows the days and the FOXSY before you sign. Paying lands the card exactly at the floor, so it is all or nothing: there is no partial reduction and a card already at or below 3 days has nothing to waive. The card must be in your wallet (not listed, not in an auction); nobody can waive a card that sits in escrow.
-- **Waive matches**. Click **Waive matches**, pick how many (1 up to the maximum the card can still take) and sign. Each waived match is a **credit** that stays on the card: it is added to the card's competitive matches when the contract checks the 20-match requirement, it survives a sale to another wallet and it is consumed when the card is burned in a fusion. You can never credit a card past 15 waived matches, so at least 5 competitive matches have to be played for real. The card shows "12 + 3 waived / 20" once credit is on it.
+- **Waive cooldown**. Pick the card in the Fusion tab and click **Waive cooldown**. The quote is the number of whole days between now and the 3-day floor, rounded up, times the per-day price; the button shows the days and the FOXSY before you sign. You can buy every day (the card lands exactly at the floor) or only some of them (its ready time moves that many days earlier). A card already at or below 3 days has nothing to waive. The card must be in your wallet (not listed, not in an auction); nobody can waive a card that sits in escrow.
+- **Waive matches**. Click **Waive matches**, pick how many (1 up to the maximum the card can still take) and sign. Each waived match is a **credit** that stays on the card: it is added to the card's competitive matches when the contract checks the match gate, it survives a sale to another wallet and it is consumed when the card is burned in a fusion. You can never credit a card past its gate minus the matches it must really play (10 for an Uncommon, 30 for a Rare, 90 for an Epic, 270 for a Legendary). The card shows its played and waived matches once credit is on it. On a card that moved to your wallet before its gate, each waived match also takes 6 hours off its transfer lock.
 
 Both waivers are FOXSY payments to the players contract, signed the same way as a fusion. A wrong amount is refused by the contract before anything changes.
 
@@ -345,7 +346,7 @@ Both waivers are FOXSY payments to the players contract, signed the same way as 
 8. Wait for confirmation
 9. The new player appears in your Squad at the next rarity tier, with its own 14-day fusion cooldown already running
 
-The burned NFTs are destroyed on-chain. The new NFT is not minted on the spot: it is drawn from a pre-minted **fusion pool** for the output rarity and your chosen position, with its own pre-rolled stats inside the new tier's range (expect to train it up to the new cap). If that pool happens to be empty the transaction fails with a "try again later" message; nothing is burned and your FOXSY stays in your wallet.
+The burned NFTs are destroyed on-chain. The new NFT is not minted on the spot: it is a **random card** of the pre-minted **fusion pool** for the output rarity and your chosen position, drawn by the contract when your fusion is processed: choosing the position does not choose the card. It comes with its own pre-rolled stats inside the new tier's range (expect to train it up to the new cap). If that pool happens to be empty the transaction fails with a "try again later" message; nothing is burned and your FOXSY stays in your wallet.
 
 ## Stat caps after fusion
 
@@ -368,10 +369,10 @@ A fusion still waiting for its on-chain result shows as **Pending**; the platfor
 ## Tips
 
 - **Don't fuse your best Common**. Burning a near-cap Common (OVR close to 30) to mint a fresh Uncommon that starts much lower is often a net loss early on. Sell the Common on the marketplace and train an Uncommon you already have.
-- **Sync first**. An unsynced player can't be fused (fusion reads on-chain stats only), so any training or matches that aren't synced yet are invisible to it, including the 20-match requirement.
-- **Play the matches where they count**. Casual games against the AI keep your players fit and fill the career stats, but they never move the fusion counter. A card that only ever played the AI stays at 0 / 20 however many games it has. Silver and Gold tournaments plus 1v1 challenges are what get a card fusion-ready.
-- **Buy time only when the queue is the problem**. The cooldown waiver saves at most 11 days per card and the match waiver at most 15 matches per card; the 20-hour wallet spacing still applies to every fusion. If several cards are cooling down at once, waiving the one you need first is cheaper than waiving all of them.
-- **Legendary is a commitment**. Reaching Legendary by pure fusion takes **3⁴ = 81 Commons**, condensed through 27 Uncommons, then 9 Rares, then 3 Epics, then 1 Legendary. That's **40 fusions** in total. Cumulative fees: 27 × 100 + 9 × 200 + 3 × 400 + 1 × 800 = **6,500 FOXSY**. With one fusion per wallet every 20 hours those 40 fusions alone take at least 39 × 20 h = **32.5 days**. On top of that every fused card sits out its own 14-day cooldown (3 days with a paid waiver) before it can be an input at the next tier, before counting the 20 competitive matches each input still has to play. Realistic path is to mix marketplace purchases at higher rarities with your own fusions instead of grinding the whole pyramid from Common.
+- **Sync first**. An unsynced player can't be fused (fusion reads on-chain stats only), so any training or matches that aren't synced yet are invisible to it, including the match gate.
+- **Play the matches where they count**. Casual games against the AI keep your players fit and fill the career stats, but they never move the fusion counter. A card that only ever played the AI stays at 0 competitive matches however many games it has. Silver and Gold tournaments plus 1v1 challenges are what get a card fusion-ready.
+- **Buy time only when the queue is the problem**. The cooldown waiver saves at most 11 days per card and the match waiver at most the waivable part of the card's gate (10 matches for an Uncommon up to 270 for a Legendary); the 20-hour wallet spacing still applies to every fusion. If several cards are cooling down at once, waiving the one you need first is cheaper than waiving all of them.
+- **Legendary is a commitment**. Reaching Legendary by pure fusion takes **3⁴ = 81 Commons**, condensed through 27 Uncommons, then 9 Rares, then 3 Epics, then 1 Legendary. That's **40 fusions** in total. Cumulative fees: 27 × 100 + 9 × 200 + 3 × 400 + 1 × 800 = **6,500 FOXSY**. With one fusion per wallet every 20 hours those 40 fusions alone take at least 39 × 20 h = **32.5 days**. On top of that every fused card sits out its own 14-day cooldown (3 days with a paid waiver) before it can be an input at the next tier, before counting the competitive matches each input still has to play: 5 per Common, 15 per Uncommon, 45 per Rare, 135 per Epic. Realistic path is to mix marketplace purchases at higher rarities with your own fusions instead of grinding the whole pyramid from Common.
 
 # Marketplace
 (docs.foxleague.ai/mechanics/marketplace/)
@@ -395,14 +396,22 @@ A **marketplace fee** (currently **10%**) is charged **only when the auction act
 
 A player who has just been sold cannot be auctioned again for **48 hours**. The countdown is per player, enforced on chain, so a card cannot be bounced between wallets to fake volume.
 
-### The listing gate: 20 competitive matches
+### The listing gate: the match gate of the card's rarity
 
-A card can be put up for auction only once it has **20 competitive matches**, the same two gates [Fusion](/mechanics/fusion/) uses:
+A card can be put up for auction only once it reaches the **match gate** of its rarity, the same two gates [Fusion](/mechanics/fusion/) uses:
 
-- Waived matches count: the **fusion match waiver** credit on the card (up to 15 matches bought at 20 FOXSY each) is added to the card's competitive matches
-- At least **5 matches must really be played**. No amount of credit takes a card with fewer than 5 played matches onto the market
+| Rarity | Competitive matches | Really played, at least | Fusion match waiver |
+|---|---|---|---|
+| Common | 5 | 5 | None |
+| Uncommon | 15 | 5 | Up to 10, at 20 FOXSY each |
+| Rare | 45 | 15 | Up to 30, at 100 FOXSY each |
+| Epic | 135 | 45 | Up to 90, at 100 FOXSY each |
+| Legendary | 405 | 135 | Up to 270, at 100 FOXSY each |
 
-The players contract refuses the listing otherwise, so the Sell form disables the button with the reason: **Sell after 20 competitive matches (waived matches count, 5 must be played)**. The card shows its count as "played + waived / 20". Cards straight out of a Common pack or a fusion start at 0. Listings that were already open when the gate arrived are unaffected. What counts as a competitive match is explained on the [Fusion](/mechanics/fusion/) page: Silver or Gold tournament matches plus 1v1 challenges, never games against the AI.
+- Waived matches count: the **fusion match waiver** credit on the card is added to the card's competitive matches
+- The matches in the third column must **really be played**. No amount of credit takes a card with fewer played matches onto the market
+
+The players contract refuses the listing otherwise, so the Sell form disables the button with the reason, for an Epic: **Epic needs 135 matches (45 played) to be listed**, with what the card has under it (for example **This card has 12 played + 3 waived of 135**). In the Sell grid such a card reads **Not sellable yet** with the same count. Cards straight out of a Common pack or a fusion start at 0. Listings already open on Monday 12 October 2026 at 14:00 UTC, when these gates replaced the single gate of 20 matches, finish normally. What counts as a competitive match is explained on the [Fusion](/mechanics/fusion/) page: Silver or Gold tournament matches plus 1v1 challenges, never games against the AI.
 
 > **Sync first**
 > An **unsynced player cannot be listed** as-is. The marketplace shows the on-chain stats to bidders; if your Squad shows newer values than the chain, you'd be advertising a different player than what's actually on sale. If the player has unsynced training, the button reads **SYNC & AUCTION** instead: you sign a sync transaction first (10 FOXSY per unsynced player on your roster), then the listing transaction, so the auction matches what bidders see.
@@ -414,7 +423,7 @@ The players contract refuses the listing otherwise, so the Sell form disables th
 3. Click a card to see the player's full details plus the time left on the auction
 4. Enter a whole-FOXSY amount, click **PLACE BID**, approve the FOXSY transaction
 
-The grid opens sorted by **Ending Soon**: the auction closing next sits on top, the other live auctions follow by time left, then any fixed-price listings (newest first), then auctions that have ended but are not settled yet. An auction moves down on its own the moment its clock runs out. The **Sort By** menu in the sidebar switches to **Newest First**, to price (low to high or high to low) or to OVR.
+The grid opens sorted by **Ending Soon**: the auction closing next sits on top, the other live auctions follow by time left, then auctions that have ended but are not settled yet. An auction moves down on its own the moment its clock runs out. The **Sort By** menu in the sidebar switches to **Newest First**, to price (low to high or high to low) or to OVR.
 
 The bidding rules are enforced by the smart contract:
 
@@ -428,7 +437,7 @@ When the clock runs out the platform settles the auction for you: the NFT goes t
 
 The **My bids** chip next to the filters counts the live auctions you have bid on. Tap it to see every auction you bid on in four groups: **Leading** (your bid is the highest, also once the auction has ended and waits to settle), **Outbid** (someone bid more; your FOXSY is already back in your wallet and **Bid again** opens the auction), **Won** plus **Lost**. Tap it again to go back to the grid.
 
-Winning an auction does **not start** a transfer cooldown. It does not clear one either: a card sold while it is still inside a transfer cooldown from an earlier wallet-to-wallet move keeps the rest of that lock, so the buyer inherits it. The listing shows the lock ("Transfer lock") before you bid. A card without one can be fielded as soon as the auction settles.
+Winning an auction does **not start** a transfer cooldown. It does not clear one either: a card sold while it is still inside a transfer cooldown from an earlier wallet-to-wallet move keeps the rest of that lock, so the buyer inherits it. The listing shows the lock ("Transfer lock") before you bid. When the lock comes from a move before the card's match gate, the listing card, its detail and the bid button also say **Reduce Cooldown does not apply to this lock.** A card lists only once it meets its gate and by then its match waivers have taken such a lock down to its floor, so nothing a buyer does shortens it: it runs to the end shown. A card without a lock can be fielded as soon as the auction settles.
 
 ## Canceling a listing
 
@@ -438,11 +447,11 @@ Cancelling only works while the auction has **zero bids**. Once a bid lands you 
 
 ## Wallet-to-wallet transfers (transfer cooldown)
 
-If someone sends you a player NFT directly (not through the marketplace), the player has a **transfer cooldown** before you can use them in matches. The cooldown is **21 days (504 hours)** for a card that had at least **20 competitive matches** when it moved. A card moved before 20 competitive matches is locked for **63 days (1,512 hours)** in the new wallet: a fresh starter card, a pack card or a fusion output cannot be handed to another wallet and played there the same season. The length is fixed on the card at the moment of the transfer, so a later rule change never shortens or extends a cooldown already running. It encourages fair play plus marketplace use, preventing off-market roster manipulation right before a tournament. Auction wins, fusion results, distribute events plus shop mints never start one; only direct wallet-to-wallet transfers do. A lock that is already running stays on the card through a sale (see above). A cooled-down player also cannot be used as a fusion input, so you cannot launder the cooldown through fusion.
+If someone sends you a player NFT directly (not through the marketplace), the player has a **transfer cooldown** before you can use them in matches. The cooldown is **21 days (504 hours)** for a card that had reached the match gate of its rarity (see the table above) when it moved. A card moved before its match gate is locked for **21 days plus 6 hours for every missing match** in the new wallet: a fresh starter card, a pack card or a fusion output cannot be handed to another wallet and played there the same season. A Legendary moved at 0 matches is locked for 122 days and 6 hours (2,934 hours); an Uncommon moved with 5 played and nothing waived, for 23 days and 12 hours. Each fusion match waiver bought for the card in the new wallet takes 6 hours off that lock, down to 21 days plus 6 hours for every match it still has to really play (54 days and 18 hours for the Legendary at 0, 21 days for the Uncommon). The length is fixed on the card at the moment of the transfer. Locks already running on Monday 12 October 2026 at 14:30 UTC, when this rule replaced the 63-day lock for a card under 20 competitive matches, were never made longer: each ends at the shorter of its own length and the new length for the card. It encourages fair play plus marketplace use, preventing off-market roster manipulation right before a tournament. Auction wins, fusion results, distribute events plus shop mints never start one; only direct wallet-to-wallet transfers do. A lock that is already running stays on the card through a sale (see above). A cooled-down player also cannot be used as a fusion input, so you cannot launder the cooldown through fusion.
 
 The player card shows the cooldown countdown while it's active. The transfer dialog states the rule before you sign.
 
-You can **pay to reduce** a transfer cooldown down to the floor the shop shows (currently **3 days**, 72 hours; the remaining floor can never be waived). Open **Marketplace → Shop → Reduce Cooldown**, pick the player, then pay the FOXSY price shown. The price is per day reduced and depends on the player's rarity (Common 25 up to Legendary 1,250 FOXSY per day), the same rate for a 21-day and a 63-day cooldown. See the [Shop](/mechanics/shop/) for the full table.
+You can **pay to reduce** a transfer cooldown down to the floor the shop shows (currently **3 days**, 72 hours; the remaining floor can never be waived). Open **Marketplace → Shop → Reduce Cooldown**, pick the player, then pay the FOXSY price shown for every day or only some of them. The price is per day reduced and depends on the player's rarity (Common 25 up to Legendary 1,250 FOXSY per day). Reduce Cooldown does not apply to a card moved before its match gate: that lock gets shorter only with the fusion match waivers bought for the card. See the [Shop](/mechanics/shop/) for the full table.
 
 The transfer cooldown is not the only clock a player can carry. A card that came out of a fusion has its own 14-day **fusion cooldown**, which only limits fusion, never play or listing. See [Fusion](/mechanics/fusion/).
 
@@ -456,13 +465,13 @@ Two more price signals sit at the top of the page: **floor-price pills** above t
 
 ## Tips
 
-- **Play before listing**. A card needs 20 competitive matches to be auctioned, 5 of them really played; the rest can be waived at 20 FOXSY a match. A fresh pack card or a fresh fusion output is not sellable on day one.
+- **Play before listing**. A card needs the match gate of its rarity to be auctioned: from 5 competitive matches for a Common to 405 for a Legendary, a part of them really played (see the table above). A fresh pack card or a fresh fusion output is not sellable on day one.
 - **Sync before listing**. Otherwise the button turns into **SYNC & AUCTION** and you sign two transactions (the sync at 10 FOXSY per unsynced player, then the listing). Bidders only ever see synced stats, not what you've trained since.
 - **Wait for the button after listing**. Once a listing confirms, the Sell button stays held for up to 20 seconds until the NFT has visibly left your wallet, so a second listing does not fail on stale wallet state.
 - **Watch the Recent Sales feed**. It's the cleanest signal for what the market is paying for similar players today.
 - **Set the reserve as your real walk-away price**. The auction can close at the reserve if only one bidder turns up, so never list at a number you would regret. Pricing too high instead ends the 24 hours with no bids and the player back in your squad.
 - **Bid early enough to matter**. The last 300 seconds extend on every bid, so waiting for the final tick wins nothing. It only hands the other bidders another five minutes.
-- **Avoid wallet-to-wallet for active rosters**. Send via the marketplace if the buyer needs the player immediately; direct transfers cost the recipient the full 21-day (504-hour) cooldown, 63 days for a card under 20 competitive matches, unless they pay to reduce it down to the 3-day floor.
+- **Avoid wallet-to-wallet for active rosters**. Send via the marketplace if the buyer needs the player immediately; direct transfers cost the recipient the full 21-day (504-hour) cooldown, unless they pay to reduce it down to the 3-day floor. A card under its match gate is locked longer: 21 days plus 6 hours for every missing match.
 
 # Match-Day Strategy
 (docs.foxleague.ai/mechanics/match-day-strategy/)
@@ -504,6 +513,10 @@ The **Tactics** page shows a banner for your next match with the same lock count
 
 Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. If your squad is short for any reason (for example you sold a player without replacing it) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped for the best fit substitute automatically. If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
 
+## Your team name
+
+Your team name is **locked during your tournament matches**: from each match's strategy lock until that match ends. A rename in that window is refused with a message that says so. In a tournament with a group stage every team's name stays locked from the strategy lock of the stage's last group match until every group match has ended. In a Swiss tournament it stays locked until every match of your round has ended. Rename before a lock or once the match is over. Developer tournaments play under your dev team name, so they leave your team name free.
+
 ## Which player stats are used
 
 The match uses each player's **on-chain synced** attributes as they stand at lock time, so training you sync before a match counts for it. Player **condition** is read live at the same moment. Training or syncing done after a match has locked applies to your following games.
@@ -526,6 +539,8 @@ Attribute XP for your players comes only from paid play: Silver and Gold tournam
 
 Each player earns attribute XP in at most **3 matches per day**. A fourth XP-earning match that day still counts for career stats and ELO, but it awards no XP. The daily count resets at 14:00 UTC.
 
+The same paid play is what counts toward a card's **competitive matches**, the number behind its match gate for fusion, listing and the transfer lock (see [Marketplace](/mechanics/marketplace/)): every Silver or Gold tournament match and every 1v1 challenge the card takes the pitch in. Ranked, casual, Bronze and developer games never count.
+
 ## Casual
 
 The relaxed mode. You play against an AI-generated team. No ELO change, no player XP; only career stats update.
@@ -542,6 +557,7 @@ The competitive mode. ELO points move between you and your opponent based on the
 
 - **Best for**: climbing the leaderboard, qualifying for league promotions
 - **Matchmaking**: a random opponent within 150 ELO of you. The search widens to 300, then 500, if nobody fits; after that an AI team stands in. Your league is not used.
+- **Once a day per opponent**: the same two teams meet in ranked at most once every 24 hours, whoever started the game. A team you played in ranked in the last 24 hours is not drawn again; when no other team fits, the AI stands in. A team whose starting XI is not all match-fit right now (each player at condition 30 or more, none in a transfer cooldown) is not drawn either. A game still being played counts as a meeting; one that failed or was abandoned does not. Should a second ranked game of the same two teams still take place inside the 24 hours, it records the result but moves no rating.
 - **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO.
 - **Condition**: only you, the player who started the match, pay condition. The opponent drawn into your game pays nothing.
 - **ELO**: the winner gains exactly what the loser drops. The size of the swing depends on the rating gap: beating a stronger opponent moves more points than beating a weaker one. A draw moves a few points from the higher-rated player to the lower-rated one; between equal ratings it changes nothing. Ranked games move your rating with a K-factor of **24**.
@@ -604,13 +620,13 @@ A **1v1 Challenge** is a one-match showdown between two players. You stake FOXSY
 ## How it works
 
 1. Open **1vs1 Challenges** from the sidebar (icon next to Play Match)
-2. Click **Create 1v1**
+2. Click **Create 1vs1**
 3. Give the challenge a **title** (e.g. "Bob vs Alice") and optionally a short description. Trash talk lives here
 4. Pick a **tier**: Silver or Gold. Bronze is unlocked only for free developer challenges (both players run their uploaded binary, nothing is staked)
 5. Pick the **entry fee** within the tier's bounds (Silver 1,000-4,999 FOXSY, Gold 5,000+). The form shows a live pool calculator next to the input (exactly how much the winner takes home and how much goes to the platform fee)
 6. Optionally pick a **specific opponent** by searching their team name or wallet address (leave empty for an open challenge, so any wallet can take it)
 7. Pick a **deadline**: 30 min / 1 h / 2 h / 4 h (default 30 min)
-8. Click **Create Challenge**: your FOXSY entry fee is locked into the challenge pool
+8. Click **Create challenge**: your FOXSY entry fee is locked into the challenge pool
 
 The entry fee is written to the tournaments contract when the challenge is created. Accepting it transfers **exactly** that amount, so a payment that is even slightly off is rejected on chain rather than half-seating you.
 
@@ -646,7 +662,7 @@ A quarter of the platform fee (2.5% of the pool, so 50 FOXSY in the example abov
 
 ## The match
 
-When the opponent accepts, the match kicks off and plays out exactly like a regular FoxLeague match, streaming live to both players. Kickoff is normally scheduled straight away (plus a short queue delay when the runner is busy). If either player already has another match booked within the next 2 hours, the 1v1 slides to the next free slot after it, keeping a 20-minute window clear for its own broadcast, so the countdown can run longer than expected.
+When the opponent accepts, the match kicks off and plays out exactly like a regular FoxLeague match, streaming live to both players. Kickoff is normally scheduled a few minutes later; the wait grows when several tournament matches kick off in the next five minutes. If either player already has another match booked within the next 2 hours, the 1v1 slides to the next free slot after it, keeping a 20-minute window clear for its own broadcast, so the countdown can run longer than expected.
 
 - Match length: **~10 minutes minimum** (longer if it goes to extra time and penalties)
 - Both players watch the live game on the challenge detail page
@@ -678,7 +694,9 @@ If the deadline passes and nobody has accepted (or the targeted opponent never j
 
 You'll see the refund transaction in your wallet history. The challenge shows a **Cancelled** chip in the lobby; no reason text is displayed.
 
-The refund is **exact**: the contract returns the same amount it holds for your entry. If the game server cannot push it back to you, your entry simply stays in the contract and you can pull it yourself by calling the contract's `claimRefund` endpoint with the challenge id.
+The refund is **exact**: the contract returns the same amount it holds for your entry. If the game server cannot push it back to you, your entry stays in the contract and you can pull it yourself by calling the contract's `claimRefund` endpoint with the challenge id. An entry that landed on chain but never took a seat (for example a join whose page was closed before it was confirmed) shows a **Claim my entry back** button to the wallet that paid it, on the page of the completed challenge.
+
+While your challenge still waits for an opponent, its page also shows **Delete Challenge**. Deleting it refunds your entry fee on chain.
 
 ## One active challenge at a time
 
@@ -702,11 +720,11 @@ Once the challenge fills and its strategy lock passes:
 - Training/sync after the lock doesn't apply to this match
 - Individual players are not locked. Instead your **account** is blocked from starting casual or ranked matches from **1 hour before** the 1v1 (or any of your tournament matches) is scheduled until its broadcast ends
 - An open challenge still waiting for an opponent doesn't restrict you at all
-- You cannot create or join a 1v1 while you're inside a standard tournament's blocking window (from 1 hour before it starts until 1 hour after its estimated end). The error reads "You have a tournament match within the hour"
+- You cannot create or join a 1v1 while you're inside a standard tournament's blocking window (from 1 hour before it starts until 1 hour after its booked play time, about 3 minutes per match without the time between games, so a long tournament can keep playing after its window ends). The error reads "You have a tournament match within the hour"
 - Once the broadcast ends, you're free to play again immediately
 
 > **Post-transfer cooldown**
-> Any player that arrived in your wallet via a **wallet-to-wallet transfer** within the transfer cooldown (**21 days / 504 hours**, **63 days** for a card that had fewer than 20 competitive matches when it moved) **cannot** be staked into a 1v1. Same anti-rental rule that applies to ranked matches plus tournaments. Marketplace purchases, fusion outputs, distribute events, shop mints do **not** trigger the cooldown. Only direct wallet-to-wallet transfers do. You can pay to cut a transfer cooldown down to a 3-day floor in **Marketplace → Shop → Reduce Cooldown**.
+> Any player that arrived in your wallet via a **wallet-to-wallet transfer** within the transfer cooldown (**21 days / 504 hours**; for a card moved before its match gate, **21 days plus 6 hours for every missing match**) **cannot** be staked into a 1v1. Same anti-rental rule that applies to ranked matches plus tournaments. Marketplace purchases, fusion outputs, distribute events, shop mints do **not** trigger the cooldown. Only direct wallet-to-wallet transfers do. You can pay to cut a 21-day transfer cooldown down to a 3-day floor, every day of it or only some, in **Marketplace → Shop → Reduce Cooldown**; the longer lock of a card moved before its gate gets shorter only with match waivers.
 
 ## After the challenge
 
@@ -745,9 +763,9 @@ The Shop panel always shows the **live** price at the top of every item (check t
 | **Condition Recovery** | up to 100 FOXSY per player (pro-rated by missing condition) | Instantly restores one player to full condition |
 | **XP Booster** | 2,000 FOXSY | 2× XP on every training session and eligible match for 24h |
 | **Training Slot** | 20 FOXSY per slot | +1 extra training session on today's cap |
-| **Reduce Cooldown** | per day reduced, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY | Cuts a transferred player's cooldown down to a 3-day floor |
-| **Fusion Cooldown Waiver** | 75 FOXSY per day | Cuts a fused card's own fusion cooldown down to a 3-day floor. Bought per card in the **Fusion** tab |
-| **Fusion Match Waiver** | 20 FOXSY per match | Credits competitive matches a card still needs to fuse, down to 5 that must be played. Bought per card in the **Fusion** tab |
+| **Reduce Cooldown** | per day reduced, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY | Cuts a transferred player's cooldown down to a 3-day floor, every day or only some of them. Not for a card moved before its match gate |
+| **Fusion Cooldown Waiver** | 75 FOXSY per day | Cuts a fused card's own fusion cooldown down to a 3-day floor, every day or only some of them. Bought per card in the **Fusion** tab |
+| **Fusion Match Waiver** | per match, by rarity: Uncommon 20, Rare 100, Epic 100, Legendary 100 FOXSY; none for Common | Credits competitive matches a card still needs for the match gate of its rarity, never the matches that must really be played. Bought per card in the **Fusion** tab |
 | **Badge Regeneration** | 1,000 FOXSY (first 3 re-rolls are free) | Re-roll your team badge with a fresh AI-generated image. Sold from **Settings**, not the Shop tab |
 
 ---
@@ -761,10 +779,10 @@ The only Shop item that adds players to your roster. One pack is **5 Common play
 - **What you get**: 5 Commons with random positions, weighted like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD out of 18), so over a few packs you end up with a normal spread. Within a position the card is uniformly random. Stats are the pre-rolled Common stats of the card, inside the Common range
 - **Where they come from**: the pre-minted Common pool the platform also uses for starter squads. The Shop card reads **sold out** in two cases: fewer than 5 Commons are free in the pool; the platform's daily pack budget is spent (100 packs a day for all managers together, reset once a day at the MultiversX epoch change, about 16:35 UTC). In both cases the purchase is refused without charging you. Try again once the pool is restocked or the budget resets
 - **Delivery**: the game server sends the 5 cards to your wallet about a minute after the payment confirms. The Shop card shows **5 players on the way** until they land in your Squad. If the delivery fails the FOXSY is refunded through the usual refund sweep
-- **What the cards carry**: 0 competitive matches and no cooldown of any kind. They can play at once. They can be fused or auctioned only after the 20 competitive matches every card needs for that (see [Fusion](/mechanics/fusion/) and [Marketplace](/mechanics/marketplace/))
+- **What the cards carry**: 0 competitive matches and no cooldown of any kind. They can play at once. They can be fused or auctioned only once they reach the Common match gate: 5 competitive matches, all really played (see [Fusion](/mechanics/fusion/) and [Marketplace](/mechanics/marketplace/))
 
 > **Packs and fusion**
-> Three Commons from one pack are a fusion triplet once each has 20 competitive matches (5 must really be played, the rest can be waived at 20 FOXSY a match). A full Common-to-Legendary lineage needs 81 Commons: 17 packs, 8 weeks (56 days) at 2 packs per rolling week. The worked path is on the [Economy map](/mechanics/economy-map/).
+> Three Commons from one pack are a fusion triplet once each has played 5 competitive matches (a Common has no match waiver). A full Common-to-Legendary lineage needs 81 Commons: 17 packs, 8 weeks (56 days) at 2 packs per rolling week. The worked path is on the [Economy map](/mechanics/economy-map/).
 
 ---
 
@@ -815,23 +833,23 @@ Each **Training Slot** you buy adds **1 extra training session** on top of the f
 
 ## Reduce Cooldown
 
-A player received through a direct **wallet-to-wallet transfer** carries a transfer cooldown before it can play: **21 days** for a card that had at least 20 competitive matches when it moved, **63 days** for a card that had fewer (the length is fixed on the card at the moment of the transfer). An auction win never starts one. A card sold while its cooldown is still running keeps the rest of it, so the buyer inherits that remainder; the listing shows it before anyone bids. The **Reduce Cooldown** item lets you pay FOXSY to bring that cooldown down to a hard **3-day floor** (72 hours). The last 3 days can never be waived. Anyone has to wait at least three days no matter how much they pay.
+A player received through a direct **wallet-to-wallet transfer** carries a transfer cooldown before it can play: **21 days** for a card that had reached the match gate of its rarity when it moved, **21 days plus 6 hours for every missing match** for a card that had not (the length is fixed on the card at the moment of the transfer; see [Marketplace](/mechanics/marketplace/)). An auction win never starts one. A card sold while its cooldown is still running keeps the rest of it, so the buyer inherits that remainder; the listing shows it before anyone bids. The **Reduce Cooldown** item lets you pay FOXSY to bring the cooldown of a card that had reached its match gate down to a hard **3-day floor** (72 hours). The last 3 days can never be waived. Anyone has to wait at least three days no matter how much they pay.
 
 Pick a cooled-down player in the picker. The Shop shows the exact cost, which depends on the player's rarity and on how much cooldown is left:
 
-- The cost is charged **per whole day above the floor**. The per-day price depends on the **rarity** of the player: it is the 10% marketplace fee on that rarity's reference price, spread over 20 days. The rate is the same for a 21-day and a 63-day cooldown; the longer one simply has more days to buy.
+- The cost is charged **per whole day above the floor**. The per-day price depends on the **rarity** of the player: it is the 10% marketplace fee on that rarity's reference price, spread over 20 days.
 - Time is rounded **up** to whole days. A player with 9 days and 4 hours left has 6 days and 4 hours above the floor, so you pay for **7** days to reach it. A player with exactly 4 days left pays for **1** day.
-- It is **all or nothing**. You pay the full amount to land on exactly 3 days. There is no partial reduction.
+- You choose **how many days** to buy: every day lands exactly on 3 days; fewer days end the cooldown that many days earlier, at the same price per day.
 
-| Rarity | Per day reduced | Full waiver, fresh 21-day transfer (18 days) | Full waiver, fresh 63-day transfer (60 days) |
-|--------|-----------------|----------------------------------------------|----------------------------------------------|
-| Common | 25 FOXSY | 450 FOXSY | 1,500 FOXSY |
-| Uncommon | 75 FOXSY | 1,350 FOXSY | 4,500 FOXSY |
-| Rare | 200 FOXSY | 3,600 FOXSY | 12,000 FOXSY |
-| Epic | 500 FOXSY | 9,000 FOXSY | 30,000 FOXSY |
-| Legendary | 1,250 FOXSY | 22,500 FOXSY | 75,000 FOXSY |
+| Rarity | Per day reduced | Full waiver, fresh 21-day transfer (18 days) |
+|--------|-----------------|----------------------------------------------|
+| Common | 25 FOXSY | 450 FOXSY |
+| Uncommon | 75 FOXSY | 1,350 FOXSY |
+| Rare | 200 FOXSY | 3,600 FOXSY |
+| Epic | 500 FOXSY | 9,000 FOXSY |
+| Legendary | 1,250 FOXSY | 22,500 FOXSY |
 
-Only players currently in cooldown appear in the picker. The waiver does nothing for a player already at or below the 3-day floor. The Shop card and the transfer dialog both state the rule: moving a card before 20 competitive matches locks it for 63 days in the new wallet.
+Only players currently in cooldown appear in the picker. The waiver does nothing for a player already at or below the 3-day floor. Reduce Cooldown is refused for a card that moved before its match gate: that lock gets shorter by 6 hours with each fusion match waiver bought for the card, down to 21 days plus 6 hours for every match it still has to really play. A lock that was already running on Monday 12 October 2026 at 14:30 UTC (the earlier rule locked a card under 20 competitive matches for 63 days) keeps Reduce Cooldown; it was never made longer and ends at the shorter of its own length and the new length for the card.
 
 ---
 
@@ -839,8 +857,8 @@ Only players currently in cooldown appear in the picker. The waiver does nothing
 
 Two items for the [Fusion](/mechanics/fusion/) flow. You buy them per card from the **Fusion** tab (the Shop card just points you there), with a floor that money never crosses:
 
-- **Fusion Cooldown Waiver**: every fused card carries its own 14-day fusion cooldown before it can be fused again. Pay **75 FOXSY per day** to bring it down to the **3-day floor**; the last 3 days can never be waived. A fresh output waived all the way costs 11 days, 825 FOXSY. The card must be in your wallet, not listed and not in an auction.
-- **Fusion Match Waiver**: fusion needs 20 competitive matches per card. Pay **20 FOXSY per missing match** for up to **15** of them; at least **5** competitive matches must be played for real. The credit stays on the card, also when it is sold.
+- **Fusion Cooldown Waiver**: every fused card carries its own 14-day fusion cooldown before it can be fused again. Pay **75 FOXSY per day** to bring it down to the **3-day floor**; buy only some of the days and its ready time moves that many days earlier. The last 3 days can never be waived. A fresh output waived all the way costs 11 days, 825 FOXSY. The card must be in your wallet, not listed and not in an auction.
+- **Fusion Match Waiver**: fusion needs the match gate of the card's rarity. Pay per missing match: **20 FOXSY** for an Uncommon (up to **10** of its 15), **100 FOXSY** for a Rare (up to **30** of 45), an Epic (up to **90** of 135) or a Legendary (up to **270** of 405). A Common has no match waiver. The rest must be played for real. The credit stays on the card, also when it is sold. On a card moved before its gate each waived match takes 6 hours off its transfer lock.
 
 The per-card details, quotes and the exact floors are on the [Fusion](/mechanics/fusion/) page.
 
@@ -922,7 +940,7 @@ Match play does NOT require sync. You just play with the previous synced values.
 
 ## What about XP?
 
-The per-stat XP meters (Speed XP, Accuracy XP, etc.) are **purely off-chain**. They don't push on chain at all. They're tracked privately for your team. A sync writes the full on-chain player record: the seven stat values, level, total XP, shirt number, current condition plus the career counters (matches played, goals, assists). Name, position, rarity and country travel along unchanged. One detail: the on-chain matches played counter carries the player's **competitive** matches only (the number the fusion contract reads for its 20-match rule). The career total that includes games against the AI stays in the app. See [Fusion](/mechanics/fusion/).
+The per-stat XP meters (Speed XP, Accuracy XP, etc.) are **purely off-chain**. They don't push on chain at all. They're tracked privately for your team. A sync writes the full on-chain player record: the seven stat values, level, total XP, shirt number, current condition plus the career counters (matches played, goals, assists). Name, position, rarity and country travel along unchanged. One detail: the on-chain matches played counter carries the player's **competitive** matches only, the number the match gate of its rarity reads (Common 5, Uncommon 15, Rare 45, Epic 135, Legendary 405) for fusion, listing and the match waiver. The career total that includes games against the AI stays in the app. See [Fusion](/mechanics/fusion/).
 
 This means a stat bump never costs a network fee of its own. What limits training is the daily allowance: the first **5 sessions a day** per wallet are free, sessions 6 to 15 each use a paid **Training Slot** (20 FOXSY) and after 15 the day is over until the **14:00 UTC** reset. Sync is only the gate to APPLYING those gains in matches.
 
@@ -930,7 +948,7 @@ This means a stat bump never costs a network fee of its own. What limits trainin
 
 New players from the shop, fusion or marketplace purchases arrive **fully synced**. Their on-chain stats match their current stats from the moment you receive them. No sync needed until you start training them.
 
-The exception: **wallet-to-wallet transfers** (gifts, OTC trades) come with a **transfer cooldown** (currently 21 days / 504 hours, 63 days for a card that had fewer than 20 competitive matches when it moved) before the new owner can use the player in matches. This is anti-snipe protection. Winning an auction starts no transfer cooldown. A card that is still inside one when it sells keeps the rest, so the buyer inherits it; the listing shows it before you bid.
+The exception: **wallet-to-wallet transfers** (gifts, OTC trades) come with a **transfer cooldown** (currently 21 days / 504 hours; for a card moved before its match gate, 21 days plus 6 hours for every missing match) before the new owner can use the player in matches. This is anti-snipe protection. Winning an auction starts no transfer cooldown. A card that is still inside one when it sells keeps the rest, so the buyer inherits it; the listing shows it before you bid.
 
 ## TL;DR
 
@@ -986,9 +1004,9 @@ Each slot shows the position requirement (GK / DEF / MID / FWD) and the assigned
 
 ## Save your lineup
 
-Click **Save Lineup** at the bottom. The lineup is now committed. The Squad Readiness widget on PlayMatch shows the formation you saved next to its **ready / owned** count.
+On the formation you have saved, every change you make to the lineup (a drag, a tap swap, **BEST XI**) is saved at once. A different formation card opens as an unsaved draft: the **SAVE** button appears at the top of the page next to **BEST XI**. The draft (with any change you make to it) is committed only when you click it. The saved formation carries a green **Saved** badge. The Squad Readiness widget on PlayMatch shows the formation you saved next to its **ready / owned** count.
 
-If you don't save, the previous lineup stays in effect.
+If you leave a draft unsaved, your saved formation and lineup stay in effect.
 
 ## Rotating reserves in
 
@@ -996,11 +1014,11 @@ If you own more than 18 players (e.g. you've bought extras on the marketplace or
 
 The flow is **tap-to-select, tap-to-place**:
 
-1. **Tap a Reserve card**. It highlights with an orange outline ("Selecting…"). All slots that this player can legally occupy (matching position, in either the XI or the bench) light up with a yellow pulse.
+1. **Tap a Reserve card**. It gets an orange outline and the hint above the strip reads *Tap a highlighted lineup or sub slot to swap. Tap reserve again to cancel.* Only the slots of the same position (in the XI or on the bench) accept the tap; an empty one reads *Tap to swap here*.
 2. **Tap a highlighted slot**. The Reserve swaps in. Whichever player was occupying that slot is displaced. They drop back into the Reserves pool.
-3. **Save Lineup** to commit the new arrangement.
+3. On your saved formation the swap is saved at once. On an unsaved formation draft, click **SAVE** to commit it.
 
-You can cancel a selection by tapping the same Reserve again or by clicking anywhere outside a highlighted slot.
+You can cancel a selection by tapping the same Reserve again.
 
 Position still matches strictly. A Forward Reserve can only swap into Forward slots. Listing or fusing a Reserve still happens on the **Marketplace → Fusion** / **Marketplace → Sell** flows.
 
@@ -1025,7 +1043,7 @@ Reasons a player might NOT be ready:
 
 Reasons a player can't be fielded even when ready:
 
-- **In transfer cooldown**: 21 days (504h) after a wallet-to-wallet receive, 63 days for a card that had fewer than 20 competitive matches when it moved. You can pay to cut it to a 3-day floor in **Marketplace → Shop → Reduce Cooldown**
+- **In transfer cooldown**: 21 days (504h) after a wallet-to-wallet receive, which you can pay to cut to a 3-day floor, every day of it or only some, in **Marketplace → Shop → Reduce Cooldown**. A card moved before its match gate: 21 days plus 6 hours for every missing match, shorter only with match waivers
 - **Listed for sale**: escrowed on the marketplace until you cancel the listing
 
 Kickoff can also be blocked at the **account** level: from 1 hour before one of your tournament or 1v1 matches is scheduled until its broadcast ends, casual and ranked play is off.
@@ -1035,7 +1053,7 @@ The widget breaks down by position so you see if you're short of, e.g., midfield
 ## Tips
 
 - **Match stats to position**. A high-Defense Defender is worth more than a high-Defense Forward. Stats interact with their role on the pitch.
-- **Save your lineup before syncing**. Sync updates the on-chain stats of your active squad, so save your XI first to make sure the right 11 get the update applied.
+- **Sync and lineup are independent**. A sync writes every card of yours that has unsynced training (or the one card you sync from its profile), whether or not it is in your XI. Saving the lineup changes nothing about what is synced.
 
 # Tournaments
 (docs.foxleague.ai/mechanics/tournaments/)
@@ -1059,7 +1077,7 @@ The entry fee and the number of seats are written to the tournaments contract wh
 > Joining does not freeze your team. Each match uses your players' **synced** stats at its strategy lock, so training you **sync before a match locks** counts for that match. See [Match-day strategy](/mechanics/match-day-strategy/).
 
 > **Post-transfer cooldown**
-> Any player that arrived in your wallet via a **wallet-to-wallet transfer** within the transfer cooldown (**21 days / 504 hours**, **63 days** for a card that had fewer than 20 competitive matches when it moved) **cannot** be staked into any tournament (Bronze, Silver or Gold). Same anti-rental rule already in effect for ranked plus 1v1 matches. Marketplace purchases, fusion outputs, distribute events plus shop mints do **not** trigger the cooldown. Only direct wallet-to-wallet transfers do. A sale does not clear a lock that is already running: the buyer inherits the rest. You can pay to cut a transfer cooldown down to a 3-day floor in **Marketplace → Shop → Reduce Cooldown**.
+> Any player that arrived in your wallet via a **wallet-to-wallet transfer** within the transfer cooldown (**21 days / 504 hours**; for a card moved before its match gate, **21 days plus 6 hours for every missing match**) **cannot** be staked into any tournament (Bronze, Silver or Gold). Same anti-rental rule already in effect for ranked plus 1v1 matches. Marketplace purchases, fusion outputs, distribute events plus shop mints do **not** trigger the cooldown. Only direct wallet-to-wallet transfers do. A sale does not clear a lock that is already running: the buyer inherits the rest. You can pay to cut a 21-day transfer cooldown down to a 3-day floor, every day of it or only some, in **Marketplace → Shop → Reduce Cooldown**; the longer lock of a card moved before its gate gets shorter only with match waivers.
 
 You can also create your own tournament via **Tournaments → Create**.
 
@@ -1179,6 +1197,10 @@ On any tournament (Bronze included), flip **Organizer only** to run the event wi
 
 This is the clean way to host a private event for a fixed set of invited teams. Invite the full field (for an 8-team tournament, invite 8 teams), since you do not take a slot yourself.
 
+### Deleting your tournament
+
+While your tournament is still open for registration, its page shows **Delete Tournament** to you as its creator, at the bottom of the page. Once it has started or finished it cannot be deleted. On a Silver or Gold tournament the delete first refunds the entry fee of every team that paid one, on chain. The tournament is removed only once its contract entry is closed and FoxLeague's records show every entry fee returned; until then it stays cancelled.
+
 ---
 
 ## How your team is used in matches
@@ -1212,7 +1234,7 @@ If one of the two teams in a match is busy with a match in another tournament at
 
 ### Blocking window (anti-overlap)
 
-Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its estimated end. The estimate counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other tournament on the platform that is not completed or cancelled, otherwise creation fails with a time-slot conflict. Joining has no window check. 1v1 challenges cannot be created or joined while you are inside the blocking window of a tournament you are in; they never reserve a window of their own.
+Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its booked play time. The booked play time counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other tournament on the platform that is not completed or cancelled, otherwise creation fails with a time-slot conflict. Joining has no window check. 1v1 challenges cannot be created or joined while you are inside the blocking window of a tournament you are in; they never reserve a window of their own.
 
 You do not have to guess a free time. On the Schedule step the form tells you whether the start you picked is free and, when it is not, proposes the **next free slot** with a **Use this slot** button. **See free times** opens a calendar in your own time zone: every start where your tournament fits is green. The windows of other tournaments are shown with their titles. A gray block is another tournament's start window: the hour before its kickoff, the time it needs to get its first round under way and an hour after. Hover over it or tap it to see the tournament and its booked times. A tournament that runs for days books only this window; its later rounds run alongside other tournaments, so they do not block the calendar. A new tournament cannot start inside a gray block. One tap on a green start sets the start and the registration deadline and keeps the rest of the form. The calendar and the creation check use the same rule, so a green start is one that creation accepts.
 
@@ -1383,7 +1405,7 @@ These rules apply to every manager from the moment a team is created. They sit a
 
 ## 1. Fair play
 
-FoxLeague is a game of skill. A manager competes with the players they own, the tactics they set and the AI binary they bring, against opponents doing the same, in matches decided by the simulation. Fair play means every team competes on its own merits: its own players, its own tactics, its own results. It means playing every match to win. It means using only the interfaces, smart contracts and rules that FoxLeague publishes, in the way they are meant to be used. It means treating other managers, their teams and the community with respect.
+FoxLeague is a game of skill. A manager competes with the players they own, the tactics they set and the AI binary they bring, against opponents doing the same, in matches decided by the match engine. Fair play means every team competes on its own merits: its own players, its own tactics, its own results. It means playing every match to win. It means using only the interfaces, smart contracts and rules that FoxLeague publishes, in the way they are meant to be used. It means treating other managers, their teams and the community with respect.
 
 ## 2. What is not allowed
 
@@ -1391,7 +1413,8 @@ The following conduct breaks these rules. The list gives examples, it is not a c
 
 - **Multiple-account abuse**: using more than one wallet or team, directly or through others, to manipulate ELO, leaderboards, leagues, tournament brackets, prize pools or promotional distributions. Holding several wallets is not in itself a breach; abusing them is.
 - **Collusion and match fixing**: arranging results with an opponent, losing on purpose, rotating prize pools between partners or entering an event only to feed one. Playing friends or club mates is fine; fixing the outcome is not.
-- **Exploits**: taking advantage of a bug, a simulation quirk, a timing window, a pricing error, the relayer's gas coverage, onboarding bonuses or any other platform mechanism in a way that was not intended.
+- **Exploits**: taking advantage of a bug, a match engine quirk, a timing window, a pricing error, the relayer's gas coverage, onboarding bonuses or any other platform mechanism in a way that was not intended.
+- **Developers Hub abuse**: uploaded team code that tries to reach anything beyond its own match server, to read other matches or to control its match through the server port.
 - **Automation abuse**: automation is allowed. A manager may run a bot or script that performs, on their own wallets, the actions the FoxLeague interface offers, through the same published API and smart contracts. It becomes abuse when it bypasses a rule, a limit or a check the interface enforces (crafting or replaying transactions, signatures or API calls the interface does not offer), loads the platform or the network beyond normal use or its rate limits, uses information the interface does not show, coordinates several teams against other managers (see multiple-account abuse and collusion) or harvests onboarding bonuses, relayer gas coverage or promotional distributions across wallets. A manager is responsible for everything their automation does.
 - **Abuse of others**: harassment, threats, impersonation of FoxLeague or of other managers. Team names, coach names or badges that are offensive, misleading or infringe someone's rights count as abuse too.
 - **Anything prohibited by the Terms of Use**, including the use of the Services from a restricted jurisdiction or by a person under 18.

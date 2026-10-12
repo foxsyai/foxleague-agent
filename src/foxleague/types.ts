@@ -36,7 +36,12 @@ export interface FoxConfig {
   condition_loss_per_match: number
   condition_loss_per_match_ranked: number
   fusion_costs_foxsy: number[]
+  /** The single gate of before 2026-10-12 (still served, no longer what the contract applies once the rows are live). */
   fusion_min_matches?: number
+  fusion_match_waiver_floor?: number
+  fusion_match_waiver_price_per_match?: number
+  /** One match gate per rarity for fusion inputs, listing and the match waiver (live on mainnet from 2026-10-12 16:30 UTC). */
+  rarity_match_gate?: RarityMatchGate
   auction_enabled: boolean
   marketplace_min_list_price_foxsy?: number
   transfer_cooldown_hours?: number
@@ -191,11 +196,37 @@ export interface LeaderboardPage {
   offset: number
 }
 
-export interface PoolStatus {
-  total: number
-  available: number
-  allocated: number
-  by_rarity: { rarity: string; position: string; available: number; total: number }[]
+export interface RarityMatchGate {
+  rows_live: boolean
+  rules_live: boolean
+  live_from: string | null
+  transfer_lock_hours_per_missing_match: number
+  rarities: {
+    rarity: string
+    level: number
+    /** Competitive matches (played plus waived credit) a card needs to be fused or listed. */
+    gate: number
+    /** Of those, the matches that must really be played. */
+    floor: number
+    price_per_match: number
+    price_per_match_wei: string
+    waiver_enabled: boolean
+    row_set: boolean
+  }[]
+}
+
+/** GET /api/players/nonce/{nonce}/match-waiver-quote (your own card). */
+export interface MatchWaiverQuote {
+  max_purchasable: number
+  chain_played: number
+  credit: number
+  price_wei: string
+  /** Since 2026-10-12: the gate the contract holds this card to. */
+  rarity?: string
+  gate?: number
+  floor?: number
+  price_per_match?: number
+  meets_gate?: boolean
 }
 
 export interface ShopStatus {

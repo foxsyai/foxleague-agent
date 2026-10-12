@@ -8,7 +8,7 @@ import type {
   DailyAllowance,
   FoxConfig,
   PlayerCard,
-  PoolStatus,
+  MatchWaiverQuote,
   ShopStatus,
   Team,
   Tournament,
@@ -189,10 +189,6 @@ export class FoxLeague {
     return this.call<LeaderboardPage>(`/leaderboard?limit=${limit}&offset=${offset}`)
   }
 
-  poolStatus(): Promise<PoolStatus> {
-    return this.call<PoolStatus>('/register/pool-status')
-  }
-
   async isWhitelisted(address: string): Promise<boolean> {
     return (await this.call<{ is_whitelisted: boolean }>(`/whitelist/check?wallet_address=${address}`)).is_whitelisted
   }
@@ -280,7 +276,7 @@ export class FoxLeague {
   // ---- fusion and the marketplace (docs 13 and 14) ----
 
   /** How many fusion match credits the card can still take and their price (your own card; the view is shard-bound). */
-  matchWaiverQuote(w: AgentWallet, nonce: number): Promise<{ max_purchasable: number; chain_played: number; credit: number; price_wei: string }> {
+  matchWaiverQuote(w: AgentWallet, nonce: number): Promise<MatchWaiverQuote> {
     return this.call(`/players/nonce/${nonce}/match-waiver-quote`, { wallet: w })
   }
 

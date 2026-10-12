@@ -97,7 +97,6 @@ export interface AgentSnapshot {
     whitelisted: boolean | null
     relayerEnabled: boolean | null
     relaysRemaining: number | null
-    starterStock: number | null
   }
   profile: UserProfile | null
   team: Team | null
@@ -234,17 +233,16 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // Registration readiness only matters before the team exists.
   let feePaidOnChain: boolean | null = registered ? true : null
   let whitelisted: boolean | null = null
-  let starterStock: number | null = null
   if (!registered) {
     const pubkeyHex = wallet?.pubkeyHex ?? null
-    const [paid, wl, stock] = await Promise.all([
+    // The starter stock is no longer public (FoxLeague removed GET /api/register/pool-status on 2026-10-12):
+    // registration itself answers when no squad is left, as it does for FoxLeague's own app.
+    const [paid, wl] = await Promise.all([
       pubkeyHex ? attempt(warnings, 'isRegistrationPaid', async () => b64ToBigInt((await chain.query(MAINNET.playersContract, 'isRegistrationPaid', [pubkeyHex]))[0]) === 1n) : Promise.resolve(null),
       attempt(warnings, 'whitelist', () => fox.isWhitelisted(address)),
-      attempt(warnings, 'pool status', async () => (await fox.poolStatus()).available),
     ])
     feePaidOnChain = paid
     whitelisted = wl
-    starterStock = stock
   }
 
   // The agent's own authed state (never in watch mode: that would need someone else's key).
@@ -356,7 +354,6 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       whitelisted,
       relayerEnabled: config?.relayer_v3_enabled ?? null,
       relaysRemaining: config?.relays_remaining_today ?? null,
-      starterStock,
     },
     profile,
     team,

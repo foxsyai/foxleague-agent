@@ -212,11 +212,14 @@ export function fusionTx(agentAddress: string, feeAtomic: bigint, nonces: number
 }
 
 /**
- * Fusion waivers (fusionWaivers.ts:248-290): the exact FOXSY and the card go to the players contract and the
- * card comes straight back, receiver = the agent itself. args: the nonce (and the match count for the match waiver).
+ * Fusion waivers (fusionWaivers.ts): the exact FOXSY and the card go to the players contract and the card comes
+ * straight back, receiver = the agent itself. args: the nonce, then the match count (match waiver) or the days
+ * when only some are bought (cooldown waiver).
  */
-export function fusionWaiverTx(agentAddress: string, nonce: number, costAtomic: bigint, endpoint: 'payFusionCooldownWaiver' | 'payFusionMatchWaiver', matches?: number): TxSpec {
-  const args = `@${numberToHex(nonce)}${endpoint === 'payFusionMatchWaiver' ? `@${numberToHex(matches ?? 0)}` : ''}`
+export function fusionWaiverTx(agentAddress: string, nonce: number, costAtomic: bigint, endpoint: 'payFusionCooldownWaiver' | 'payFusionMatchWaiver', count?: number): TxSpec {
+  // The match waiver names its match count; the cooldown waiver names days only when it buys some of them
+  // (fusionWaivers.ts fusionCooldownWaiverTxData: every quoted day = no days argument).
+  const args = `@${numberToHex(nonce)}${endpoint === 'payFusionMatchWaiver' ? `@${numberToHex(count ?? 0)}` : count ? `@${numberToHex(count)}` : ''}`
   return {
     label: endpoint,
     receiver: agentAddress,

@@ -57,9 +57,15 @@ export type Action =
   | { type: 'bid'; nonce: number; foxsy: number }
   | { type: 'list_card'; nonce: number; reserve_foxsy: number }
   | { type: 'cancel_listing'; nonce: number }
-  /** Shortens a fused card's 14-day fusion cooldown to the 3-day floor (75 FOXSY per waived day). */
-  | { type: 'fusion_cooldown_waiver'; nonce: number }
-  /** Buys competitive-match credit toward the 20 fusion needs (20 FOXSY per match, 5 must really be played). */
+  /**
+   * Shortens a fused card's 14-day fusion cooldown (75 FOXSY per waived day): to the 3-day floor, or by `days` of
+   * the waivable days only (since 2026-10-12).
+   */
+  | { type: 'fusion_cooldown_waiver'; nonce: number; days?: number }
+  /**
+   * Buys competitive-match credit toward the match gate of the card's rarity (since 2026-10-12: Uncommon 20 FOXSY a
+   * match, Rare to Legendary 100; a Common has no waiver; the floor of each gate must really be played).
+   */
   | { type: 'fusion_match_waiver'; nonce: number; matches: number }
 
 export type ActionType = Action['type']
@@ -183,9 +189,10 @@ export function parseAction(raw: unknown): Action {
     case 'cancel_listing':
       return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40) }
     case 'fusion_cooldown_waiver':
-      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40) }
+      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), ...(o.days === undefined || o.days === null ? {} : { days: int(o, 'days', 1, 60) }) }
     case 'fusion_match_waiver':
-      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), matches: int(o, 'matches', 1, 15) }
+      // The largest waivable part of a gate: a Legendary's 405 minus the 135 it must really play.
+      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), matches: int(o, 'matches', 1, 270) }
     default:
       throw new ParseError(`unknown action type '${String(o.type)}'`)
   }
@@ -210,7 +217,7 @@ export function describeAction(a: Action): string {
     case 'bid': return `bid ${a.foxsy} FOXSY on #${a.nonce}`
     case 'list_card': return `list #${a.nonce} at auction, reserve ${a.reserve_foxsy} FOXSY`
     case 'cancel_listing': return `cancel the auction of #${a.nonce}`
-    case 'fusion_cooldown_waiver': return `shorten the fusion cooldown of #${a.nonce}`
+    case 'fusion_cooldown_waiver': return a.days ? `shorten the fusion cooldown of #${a.nonce} by ${a.days} day${a.days > 1 ? 's' : ''}` : `shorten the fusion cooldown of #${a.nonce} to the 3-day floor`
     case 'fusion_match_waiver': return `buy ${a.matches} fusion match credit${a.matches > 1 ? 's' : ''} for #${a.nonce}`
   }
 }

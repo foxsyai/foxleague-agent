@@ -4,7 +4,7 @@
 
 import { execFileSync } from 'node:child_process'
 
-export const MANUAL_BRANCH = 'origin/release/mainnet-1.0'
+export const MANUAL_BRANCH = 'origin/main'
 const ROOT = 'docs/manual/src/content/docs'
 /** What shapes play decisions: the economy map first, every mechanics page, fair play. A new page in these folders is taken in. */
 const FOLDERS = ['mechanics/economy-map.mdx', 'mechanics', 'legal/fair-play.md']

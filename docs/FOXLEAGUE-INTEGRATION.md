@@ -8,6 +8,10 @@ the web app does today; it adds no new interface.
   `path:line` below points into that commit of the FoxLeague monorepo (see `SOURCES.md` for how to
   read it). Read the live values at runtime: most numbers are admin-tunable and several deployed
   values differ from code defaults (see `ECONOMY-AND-RULES.md`).
+- **12 October 2026 switch** (`origin/main` at `4521c811`, players contract upgrade `86f38740`, live from
+  16:30 UTC): the fusion, listing and match waiver sections below are brought to the match gate per
+  rarity (`getRarityMatchGate(level)`, `/api/config` `rarity_match_gate`), the partial cooldown waiver
+  and the random fusion draw; `GET /api/register/pool-status` is removed.
 - **Network:** MultiversX mainnet, chain id `1`, throughout.
 - **Scope:** public routes and the player-callable contract endpoints only. Admin routes, internal
   jobs and anything the game hides before a reveal are named in one line and not documented.
@@ -433,7 +437,7 @@ Both tokens have 18 decimals. The web app flags "low EGLD" under 0.01 EGLD
 | Not yet registered | `GET /api/users/{addr}` has `team_name` null | `backend/src/routes/leaderboard.rs:437-477` |
 | Fee not already paid on chain | view `isRegistrationPaid(<pubkey hex>)` on the players contract | `frontend/src/pages/Onboarding.tsx:370-393` |
 | Registration open | `/api/config` `relayer_v3_enabled` true and `relays_remaining_today` > 0 | `backend/src/routes/config.rs:558-607` |
-| Starter stock | `GET /api/register/pool-status` (public): `{total, available, allocated, by_rarity:[{rarity, position, available, total}]}` | `registration.rs:1728-1777` |
+| Starter stock | Not public since 2026-10-12: `GET /api/register/pool-status` was removed (audit, Low); the operator's numbers are admin-only. Registration answers itself when no squad is left | FoxLeague #420 |
 | Whitelist | `GET /api/whitelist/check?wallet_address=` (public) returns `{is_whitelisted}`; always true when the whitelist switch is off | `backend/src/routes/admin.rs:148`, `:5902-5957` |
 | FOXSY balance | at least the fee (section 3.4; buy it with section 5) | `Onboarding.tsx:818-830` |
 | Team name | see 4.3 | |
@@ -1318,13 +1322,15 @@ Check `/api/shop/status` `common_pack_available`, `common_pack_remaining_this_we
 Success: `Common pack purchased: 5 players on the way (delivered by the game server within a few minutes).`
 
 **E. Transfer-cooldown waiver ("Reduce Cooldown")**: shortens the lock on a card received wallet to
-wallet (504 h; 1,512 h for a card that had under 20 competitive matches when it moved) down to a
-72 h floor.
+wallet (504 h for a card at its match gate) down to a 72 h floor. Since 2026-10-12 a card moved before
+its gate is locked 504 h plus 6 h per missing match, and Reduce Cooldown does not apply to that lock
+(each match waiver takes 6 h off instead).
 
 1. `GET /api/shop/waive-cooldown/quote?player_nonce=` (auth):
    `{player_nonce, remaining_seconds, days_paid, cost_foxsy, price_per_day, floor_hours}` (`shop.rs:3553-3580`).
    Price per day by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY; all
-   remaining days above the floor, rounded up, all or nothing (`shop.rs:554-612`).
+   remaining days above the floor, rounded up. Since 2026-10-12 `?days=N` (1 to `max_days`) quotes and
+   buys only some of them; the answer adds `max_days`.
 2. Pay `shopPay` with exactly `cost_foxsy`.
 3. `POST /api/shop/waive-cooldown {wallet_address, player_nonce, tx_hash}` (auth); answer
    `{player_nonce, cost_foxsy, remaining_hours}` (`shop.rs:3387-3393`, `:3614-3990`).
@@ -1347,13 +1353,14 @@ is recomputed at confirm and must match exactly, so confirm promptly.
 
 ### 13.1 What it does and its gates
 
-Burns 3 cards of the same rarity plus a FOXSY fee and hands you 1 card of the next rarity, taken from a
-pre-minted pool for that rarity and the chosen input's position (`player_nft.rs:2289-2531`, `:2461-2494`).
+Burns 3 cards of the same rarity plus a FOXSY fee and hands you 1 card of the next rarity: since 2026-10-12
+a **random card** of the pre-minted pool for that rarity and the chosen input's position, drawn by the
+contract (`player_nft.rs:2289-2531`, `:2461-2494`). Choosing the position does not choose the card.
 Fees: Common 100, Uncommon 200, Rare 400, Epic 800 FOXSY (Legendary cannot be fused). Pay at least the
 fee; excess is refunded. The binding on-chain gates, in the contract's order:
 
-1. **20 competitive matches per input**, counting waived matches: `matches_played + fusionMatchCredit >= getFusionMinMatches` (`player_nft.rs:2346-2367`).
-2. **At least 5 really played** per input: `matches_played >= getFusionMatchWaiverFloor` (`:2368-2391`).
+1. **The match gate of the input's rarity**, counting waived matches: `matches_played + fusionMatchCredit >= gate`, with `(gate, floor, price)` = `getRarityMatchGate(level)`: Common 5, Uncommon 15, Rare 45, Epic 135 on mainnet since 2026-10-12 (before: `getFusionMinMatches` = 20 for all).
+2. **The gate's floor really played**: `matches_played >= floor`: Common 5, Uncommon 5, Rare 15, Epic 45 (before: 5 for all).
 3. **Wallet spacing 20 h** since your last fusion (`getFusionCooldownSeconds` = 72,000 s), not waivable (`:2393-2411`).
 4. **Per-card cooldown**: each input's `getFusionReadyAt(nonce) <= now`; every fusion output is stamped
    now + 14 days (`getFusionCardCooldownSeconds` = 1,209,600 s) (`:2413-2431`, `:2502-2506`).
@@ -1424,16 +1431,20 @@ MultiESDTNFTTransfer@<players SC hex>@02@464f5853592d356435663365@00@<exact cost
 The card goes to the contract and comes back in the same transaction. The chain indexer mirrors the
 result (`backend/src/chain_indexer.rs:3867-3925`). A listed or auctioned card cannot be waived.
 
-- **Cooldown waiver** `payFusionCooldownWaiver(nonce)`, args `@<nonce hex>`: 75 FOXSY per day down to a
-  3-day floor, at most 11 days (825 FOXSY) per card. Quote with the view
+- **Cooldown waiver** `payFusionCooldownWaiver(nonce, days?)`, args `@<nonce hex>` for every quoted day or
+  `@<nonce hex>@<days hex>` for 1 to the quoted days (since 2026-10-12; the ready time moves that many days
+  earlier, never inside the floor; reverts `Cooldown waiver exceeds the floor` above the quote): 75 FOXSY
+  per day down to a 3-day floor, at most 11 days (825 FOXSY) per card. Quote with the view
   `getFusionCooldownWaiverQuote(nonce)` returning `(days, cost)` (storage-only, any shard). Sign
   `fusion_cooldown_waiver_price_per_day_wei x days` from `/api/config`, never a rounded whole-FOXSY
   value (`player_nft.rs:2542-2631`, `:2951-2955`; `fusionWaivers.ts:266-279`). Reverts:
   `Fusion cooldown waiver disabled`, `Wrong waiver payment`, `Caller does not own this NFT`, `Nothing to waive`.
-- **Match waiver** `payFusionMatchWaiver(nonce, matches)`, args `@<nonce hex>@<matches hex>`: 20 FOXSY
-  per match, at most 15 per card (5 must really be played). The credit stays on the card, also after a
-  sale. Quote with `GET /api/players/nonce/{nonce}/match-waiver-quote` (auth, your card):
-  `{max_purchasable, chain_played, credit, price_wei}` (`backend/src/routes/players.rs:25`, `:627-726`).
+- **Match waiver** `payFusionMatchWaiver(nonce, matches)`, args `@<nonce hex>@<matches hex>`: since
+  2026-10-12 priced by rarity, Uncommon 20 FOXSY per match (at most 10), Rare 100 (30), Epic 100 (90),
+  Legendary 100 (270), none for a Common; the gate's floor must really be played. The credit stays on the
+  card, also after a sale. Quote with `GET /api/players/nonce/{nonce}/match-waiver-quote` (auth, your card):
+  `{max_purchasable, chain_played, credit, price_wei, rarity, gate, floor, price_per_match, meets_gate,
+  row_set, transfer_lock}` (`backend/src/routes/players.rs`).
   Do not use the view `getFusionMatchWaiverQuote` from another shard: it answers `(0, price)` there
   (`player_nft.rs:2957-2988`). Reverts: `Fusion match waiver disabled`, `Wrong waiver payment`,
   `Failed to decode NFT`, `Match waiver exceeds the floor`.
@@ -1452,8 +1463,9 @@ Live: `/api/config` `auction_*`, `marketplace_min_list_price_foxsy`, `marketplac
 
 ### 14.1 List
 
-1. **Gate**: the card needs `matches_played + credit >= 20` and `matches_played >= 5` on chain, so sync
-   first (`player_nft.rs:2650-2673`). Pre-check with `GET /api/marketplace/can-list?nonce=` (auth,
+1. **Gate**: the card needs `matches_played + credit >= gate` and `matches_played >= floor` of its rarity on
+   chain (since 2026-10-12: Common 5 / 5, Uncommon 15 / 5, Rare 45 / 15, Epic 135 / 45, Legendary 405 / 135;
+   before: 20 / 5 for all), so sync first (`player_nft.rs:2650-2673`). Pre-check with `GET /api/marketplace/can-list?nonce=` (auth,
    advisory): `{can_list:false, reason:"below_match_floor"|"needs_competitive_matches", ...}` or
    `{can_list, can_relist_at, cooldown_remaining_seconds}` (`backend/src/routes/marketplace.rs:434-543`, `:698-734`).
 2. **Transaction** (`frontend/src/pages/Marketplace.tsx:1099-1134`): **receiver = your own address**,

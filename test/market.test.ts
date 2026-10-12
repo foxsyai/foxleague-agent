@@ -68,7 +68,7 @@ function snap(extra: PlayerView[] = []): AgentSnapshot {
     chain: { egld: wholeToAtomic(2), nonce: 3, foxsy: wholeToAtomic(3000), wegld: 0n, nftCount: 18 + extra.length },
     prices: { egldUsd: 4.5, egldPerFoxsy: 0.0005, foxsyUsd: 0.00225 },
     config: { fusion_costs_foxsy: [100, 200, 400, 800], auction_enabled: true, marketplace_min_list_price_foxsy: 500 } as AgentSnapshot['config'],
-    registration: { registered: true, teamName: 'Agent', feePaidOnChain: true, whitelisted: true, relayerEnabled: true, relaysRemaining: 1, starterStock: 1 },
+    registration: { registered: true, teamName: 'Agent', feePaidOnChain: true, whitelisted: true, relayerEnabled: true, relaysRemaining: 1 },
     profile: null,
     team: { id: 1, user_id: 1, name: 'Agent', coach_name: null, formation: '4-4-2', lineup: players.slice(0, 11).map(p => p.nonce), substitutes: players.slice(11).map(p => p.nonce), team_overall: 20, badge: null },
     players: [...players, ...extra], auth: null,

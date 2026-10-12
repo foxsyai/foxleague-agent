@@ -468,7 +468,7 @@ export class Executor {
       case 'cancel_listing':
         return { ...none, txs: [auctionCancelTx(a.nonce)] }
       case 'fusion_cooldown_waiver':
-        return { ...none, txs: [fusionWaiverTx(wallet.address, a.nonce, v.facts.costAtomic as bigint, 'payFusionCooldownWaiver')] }
+        return { ...none, txs: [fusionWaiverTx(wallet.address, a.nonce, v.facts.costAtomic as bigint, 'payFusionCooldownWaiver', v.facts.days as number | undefined)] }
       case 'fusion_match_waiver':
         return { ...none, txs: [fusionWaiverTx(wallet.address, a.nonce, v.facts.costAtomic as bigint, 'payFusionMatchWaiver', a.matches)] }
       case 'create_tournament':
@@ -927,8 +927,10 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
       break
     }
     case 'fusion_cooldown_waiver': {
+      // As the contract sets it: earlier by the days bought, never inside the 3-day floor.
       const p = card(a.nonce)
-      if (p) p.fusionReadyAt = new Date(Date.now() + 3 * 86_400_000).toISOString()
+      const floor = Date.now() + 3 * 86_400_000
+      if (p) p.fusionReadyAt = new Date(a.days && p.fusionReadyAt ? Math.max(Date.parse(p.fusionReadyAt) - a.days * 86_400_000, floor) : floor).toISOString()
       break
     }
     case 'fusion_match_waiver': {

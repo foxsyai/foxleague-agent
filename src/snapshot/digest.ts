@@ -5,6 +5,7 @@ import { lineupStrength } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
+import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 
 /**
  * Text written by other players or servers (titles, team, card and listing names, error messages) as
@@ -38,15 +39,17 @@ function statLine(p: PlayerView): string {
     .join(' ')
 }
 
-export function playerLine(p: PlayerView): string {
+/** One card. With its rarity's match gate, the competitive matches read "played+credit of gate" and "at-gate" marks a card that can be fused or listed. */
+export function playerLine(p: PlayerView, gate?: MatchGate): string {
   const tags = [
     p.role === 'starter' ? `XI#${p.slot}` : p.role === 'bench' ? 'bench' : 'res',
     p.dirty ? 'dirty' : '',
     p.listed ? 'LISTED' : '',
     p.transferLockedUntil ? `locked-until ${p.transferLockedUntil.slice(0, 16)}` : '',
     p.fusionReadyAt ? `fusion-cooldown-until ${p.fusionReadyAt.slice(0, 16)}` : '',
+    gate && p.competitiveMatches >= gate.floor && p.competitiveMatches + p.fusionMatchCredit >= gate.gate ? 'at-gate' : '',
   ].filter(Boolean)
-  const comp = p.fusionMatchCredit ? `${p.competitiveMatches}+${p.fusionMatchCredit} credit` : `${p.competitiveMatches}`
+  const comp = (p.fusionMatchCredit ? `${p.competitiveMatches}+${p.fusionMatchCredit} credit` : `${p.competitiveMatches}`) + (gate ? ` of ${gate.gate}` : '')
   return `#${p.nonce} ${txt(p.name, 30)} ${p.position} ${p.rarity}(cap ${p.cap}) cond ${p.condition} age ${p.ageYears} comp ${comp} | ${statLine(p)} | tot ${p.syncedTotal} [${tags.join(',')}]`
 }
 
@@ -68,7 +71,7 @@ export function renderDigest(s: AgentSnapshot): string {
   const r = s.registration
   if (!r.registered) {
     out.push(
-      `NOT REGISTERED: fee paid on chain ${r.feePaidOnChain ?? '?'}, whitelisted ${r.whitelisted ?? '?'}, relayer ${r.relayerEnabled ?? '?'} (${r.relaysRemaining ?? '?'} relays left today), starter stock ${r.starterStock ?? '?'}, fee ${s.config?.registration_fee_foxsy ?? '?'} FOXSY`,
+      `NOT REGISTERED: fee paid on chain ${r.feePaidOnChain ?? '?'}, whitelisted ${r.whitelisted ?? '?'}, relayer ${r.relayerEnabled ?? '?'} (${r.relaysRemaining ?? '?'} relays left today), fee ${s.config?.registration_fee_foxsy ?? '?'} FOXSY`,
     )
   } else if (s.profile) {
     const p = s.profile
@@ -91,9 +94,11 @@ export function renderDigest(s: AgentSnapshot): string {
   }
 
   if (s.players.length) {
-    out.push(`Squad (${s.players.length}; stats synced>live):`)
+    out.push(`Squad (${s.players.length}; stats synced>live; comp = competitive matches of the rarity's match gate):`)
+    if (s.config) out.push(`Match gates (fusion input or listing; ranked, casual and Bronze never count): ${gateLine(s.config)}`)
     const order = { starter: 0, bench: 1, reserve: 2 }
-    for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p)}`)
+    const cfg = s.config
+    for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p, cfg ? matchGate(cfg, p.rarity) : undefined)}`)
   }
 
   const m = s.market

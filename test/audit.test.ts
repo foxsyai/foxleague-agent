@@ -89,7 +89,7 @@ test('M3 S4 sync pays exactly the checked FOXSY, only to syncMyStats, with bound
 
 test('M4 A3 the agent never sells cheap: unknown floor, a dragged floor, a core card', async () => {
   const strongest = card(60, 'FWD', 'reserve', { rarity: 'Legendary', cap: 100, syncedTotal: 600 })
-  const weakLegend = card(63, 'FWD', 'reserve', { rarity: 'Legendary', cap: 100, syncedTotal: 50 })
+  const weakLegend = card(63, 'FWD', 'reserve', { rarity: 'Legendary', cap: 100, syncedTotal: 50, competitiveMatches: 405 })
   const spare = card(62, 'MID', 'reserve', { syncedTotal: 90 })
   const mk = (floorPrices: unknown) => setup({ fox: { user: async () => null, canList: async () => ({ can_list: true }), floorPrices } })
   const list = async (m: ReturnType<typeof setup>, nonce: number, reserve: number) =>
