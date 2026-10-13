@@ -2,8 +2,9 @@
 # merge-check (owner decision 2026-10-13: nothing runs on opening or updating a pull request, so nobody can spend
 # the review token by opening pull requests; adding a label needs triage or write access, which this repo gives
 # only to its maintainers). The job name ("claude-review")
-# is a required status check of main: a pull request merges only after the agent has reviewed it and found
-# nothing blocking. The job is red when Claude records a "block" verdict, red when no verdict was recorded
+# reports to main as the commit status "foxleague-agent/review", posted by the project's own GitHub App (FoxLeague
+# Agent Checks) from the job "report", which runs on a fresh runner after the review: main requires that status
+# from that App, so a pull request merges only after the agent has reviewed it and found nothing blocking. The job is red when Claude records a "block" verdict, red when no verdict was recorded
 # (crash, timeout, interruption), red when no credential is set and red when merge-check is not on the pull
 # request. A commit pushed after the review has no result: remove merge-check and add it again.
 #
@@ -322,3 +323,31 @@ jobs:
             exit 1
           fi
           echo "Claude review PASS: $summary"
+
+  report:
+    name: report review
+    needs: claude-review
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    steps:
+      - name: The App's token (this job only, never where the review ran)
+        id: app
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.CHECKS_APP_ID }}
+          private-key: ${{ secrets.CHECKS_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+
+      - name: Post foxleague-agent/review
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RESULT: ${{ needs.claude-review.result }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "$RESULT" == "success" ]]; then state=success; text="Claude review: PASS"
+          else state=failure; text="Claude review: no PASS ($RESULT)"; fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state="$state" -f context=foxleague-agent/review \
+            -f description="$text" -f target_url="$RUN" --jq '"posted \(.context): \(.state)"'
