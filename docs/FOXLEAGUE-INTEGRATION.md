@@ -1096,7 +1096,11 @@ Payment verification (10 s budget; `backend/src/chain_verify.rs:316-347`, `tourn
 
 **Do not pay twice.** `Your entry payment is confirmed {EM} we're finalizing your seat and this page updates automatically. Do NOT pay again.`
 (`tournaments.rs:4297-4353`) means the cross-shard proof is not attached yet: retry `/join` **without a
-hash** (the web app retries 5 times, 6 s apart; `frontend/src/lib/paidJoin.ts:71-87`).
+hash** (the web app retries 5 times, 6 s apart; `frontend/src/lib/paidJoin.ts:71-87`). A retry is not required:
+the fee is verified, and FoxLeague's reconciler seats a paid wallet from its standing escrow on an open
+tournament by itself (`tournament_reconcile.rs` `seat_unseated_escrow`, a quick pass every 60 s, on while
+`tournament.seat_from_escrow_enabled` is 1, the default; checked on origin/main 2026-10-13). Only with that switch
+off does the 15-minute sweep refund the escrow instead. The web app's retry loop only polls that recovery.
 
 Contract reverts on the payment (atomic; `tournament_manager.rs:260-310`): `Contract is paused`,
 `Must pay with FOXSY token`, `Payment must be > 0`, `Tournament is not open for joining`,
