@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { BoundedQueue, hashPassword, verifyPassword, verifyPasswordAsync } from '../src/web/auth.ts'
 import { cookies } from '../src/web/server.ts'
 import { MODELS, isKnownModel, strategistChoice } from '../src/strategist/strategist.ts'
-import { isForwarded } from '../src/telegram/telegram.ts'
+import { FORWARD_IGNORED, isForwarded } from '../src/telegram/telegram.ts'
 import { Store } from '../src/store/db.ts'
 import type { Config } from '../src/config.ts'
 
@@ -59,6 +59,8 @@ test('F-S3 a forwarded message is not a command: any forward marker makes it ign
   assert.equal(isForwarded({ text: '/kill off', via_bot: { id: 5 } }), true)
   assert.equal(isForwarded({ text: '/kill off', external_reply: { chat: { id: 1 } } }), true)
   assert.equal(isForwarded({ text: '/kill off', forward_origin: undefined }), false, 'an absent marker is not a forward')
+  assert.match(FORWARD_IGNORED, /not read/, 'the owner is told, not left waiting')
+  assert.doesNotMatch(FORWARD_IGNORED, /\u2014/, 'no em dash in owner text')
 })
 
 test('F-S4 a malformed cookie is dropped, never thrown on', () => {

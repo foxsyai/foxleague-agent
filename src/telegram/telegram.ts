@@ -127,9 +127,13 @@ export class Telegram {
           }
           const msg = u.message
           if (!msg?.text || String(msg.chat.id) !== this.chatId || String(msg.from?.id) !== this.chatId) continue
-          // A forwarded message carries the owner as its sender, but the words are someone else's: never a command.
-          if (isForwarded(msg)) continue
           if (typeof msg.date === 'number' && msg.date < since) continue
+          // A forwarded message carries the owner as its sender, but the words are someone else's: never a command,
+          // never a question for the manager. Say so, or the owner waits for an answer that never comes.
+          if (isForwarded(msg)) {
+            this.send(FORWARD_IGNORED)
+            continue
+          }
           const parsed = parseCommand(msg.text)
           if (parsed) {
             h.command(parsed.command, parsed.args, parsed.rawArgs).then(reply => reply && this.send(reply), fail)
@@ -150,6 +154,8 @@ export class Telegram {
     this.abort.abort()
   }
 }
+
+export const FORWARD_IGNORED = "A forwarded message is not read, because its words are someone else's. To ask about it, type or paste it as your own message."
 
 /** The fields Telegram sets on a forwarded message (the current and the legacy ones). */
 export interface ForwardMarkers {

@@ -299,6 +299,10 @@ Open, not changed here: **F-M3** (low, plausible) `pending.ts` treats "Do NOT pa
 seat is finalised by itself; **F-O7** (low) `cli plan N` and `cli dry-run N` insert an unpaused agent row;
 **F-O8** (low, plausible) the 150 s stop budget can be used up inside a snapshot, after which an action starts.
 
+Merged on 2026-10-13 onto 3e1774e (FoxLeague's 12 October switch; the starter stock it read is gone). Follow-ups at the
+merge: a forwarded message gets a short reply saying it was not read (the owner was left waiting for an answer), and
+`WEB_UI_HOST` is documented in `.env.example`. F-M3, F-O7 and F-O8 go to the whole-project review.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
