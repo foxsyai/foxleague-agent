@@ -108,7 +108,7 @@ export class Telegram {
     let resumed = !this.offsets
     while (!this.stopped) {
       try {
-        // Nothing is polled before the saved offset is read: an unreadable one is tried again, never taken as 0.
+        // Nothing is polled before the saved offset is read: a read that fails is tried again, never taken as 0.
         if (!resumed) {
           this.offset = Math.max(this.offset, this.offsets!.read())
           resumed = true

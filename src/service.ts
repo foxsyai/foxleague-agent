@@ -1,6 +1,7 @@
 // The long-running service: every tick (randomised inside a window, within active hours) each
 // active agent takes a snapshot, asks the strategist for a plan, and hands the actions to the
-// executor spread over the next window, each re-checked against a fresh snapshot.
+// executor spread over the next window, each re-checked against a fresh snapshot. Payments sent but not
+// confirmed with FoxLeague yet are confirmed again on their own timer, about every minute.
 
 import { envFilePath, loadConfig, type Config } from './config.ts'
 import { Chain } from './chain/gateway.ts'
@@ -973,7 +974,7 @@ export class Service {
    * Retire: parks an agent the owner no longer uses. It is paused at once (a plan under way stops before its
    * next step) and leaves the active agents: no plans, no snapshots, no warnings, no place in the agent limit.
    * Nothing is sold or moved. Refused, the agent left paused, while an action it started is still finishing or
-   * a payment waits for FoxLeague's confirmation (only the agent's own ticks confirm one).
+   * a payment waits for FoxLeague's confirmation (the pending retry asks about it every minute, paused or not).
    */
   async retireAgent(index: number, who: string): Promise<string> {
     const agent = this.store.agent(index)
@@ -988,7 +989,7 @@ export class Service {
     if (snap?.profile?.id) this.store.setKv(`agent_user_id:${index}`, String(snap.profile.id))
     // Checked after the read, with no wait before the retire itself: an action that was already signing has finished.
     if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: retire it in a minute`)
-    if (this.store.pending(index).length) throw new Error(`${agentName(index)} is paused, but a payment waits for FoxLeague's confirmation: resume it until the payment is confirmed, then retire it`)
+    if (this.store.pending(index).length) throw new Error(`${agentName(index)} is paused, but a payment waits for FoxLeague's confirmation: it is asked again every minute, paused or not; retire it once the payment is settled (within an hour)`)
     const usd = fundsUsd(snap)
     this.store.retireAgent(index, {
       at: new Date().toISOString(),
