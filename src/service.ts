@@ -55,6 +55,8 @@ const PREP_BEFORE_LOCK_MS = 60 * 60_000
 const SESSION_GAP_MS = 2 * 3600_000
 /** A plan's actions finish at least this long before the agent's next strategy lock. */
 const LOCK_MARGIN_MS = 10 * 60_000
+/** How often payments sent but not confirmed with FoxLeague are confirmed again (src/executor/pending.ts). */
+const PENDING_RETRY_MS = 60_000
 
 /** The pid of the running service on this data folder, or null. A second process must not run plans next to it. */
 export function serviceRunning(dataDir: string): number | null {
@@ -153,6 +155,10 @@ export class Service {
   private readonly pendingImports = new Map<string, { key: UserSecretKey; address: string; team: string; expires: number }>()
   private stopping = false
   private readonly stopSignal = new AbortController()
+  /** The pending-payment retry: its own timer, one pass at a time (a test shortens the interval). */
+  private pendingRetryMs = PENDING_RETRY_MS
+  private pendingTimer: NodeJS.Timeout | undefined
+  private retrying = false
 
   constructor(cfg: Config) {
     if (!cfg.mnemonic) throw new Error('AGENT_MNEMONIC is not set: run `npm run cli -- setup` first')
@@ -1008,6 +1014,7 @@ export class Service {
     )
     this.startTelegram()
     this.armSummary()
+    this.armPendingRetry()
     // Each agent's FoxLeague user id, for one that was never noted (retired or added before this version): a Zeus
     // private tournament never invites the owner's own teams.
     void this.noteOwnUserIds().catch(() => undefined)
@@ -1049,6 +1056,7 @@ export class Service {
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)
     clearTimeout(this.summaryTimer)
+    clearTimeout(this.pendingTimer)
     this.telegram?.stop()
     const until = Date.now() + 150_000
     // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
@@ -1270,9 +1278,41 @@ export class Service {
     }
   }
 
-  /** Payments sent but not confirmed with FoxLeague yet: confirmed again with the same hash, never paid twice. */
+  /**
+   * Payments sent but not confirmed with FoxLeague yet: confirmed again with the same hash, never paid twice. Under the
+   * agent's action lock, so a hash is never confirmed while the action that sent it still waits for its outcome.
+   */
   private async retryPending(agent: AgentRow): Promise<void> {
-    await retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t), alert: t => this.notify(t) }, agent.index, this.wallet(agent.index))
+    await this.executor.exclusive(agent.index, () =>
+      retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t), alert: t => this.notify(t) }, agent.index, this.wallet(agent.index)),
+    )
+  }
+
+  /**
+   * The pending-payment retry on its own timer, about every minute. The ticks alone come too rarely (every 2 hours
+   * by default, none outside the active hours, while paused, retired or under the kill switch), and a confirm signs
+   * and pays nothing, so only a stop ends it: a paid product or seat is delivered and a refund is credited.
+   */
+  private armPendingRetry(): void {
+    clearTimeout(this.pendingTimer)
+    if (this.stopping) return
+    this.pendingTimer = setTimeout(() => void this.retryAllPending().finally(() => this.armPendingRetry()), this.pendingRetryMs)
+  }
+
+  /** One pass over every agent with a pending payment (retired ones too); a pass still running skips the next. */
+  private async retryAllPending(): Promise<void> {
+    if (this.retrying || this.stopping) return
+    this.retrying = true
+    try {
+      for (const index of this.store.pendingAgents()) {
+        if (this.stopping) return
+        const agent = this.store.agent(index)
+        if (!agent) continue
+        await this.retryPending(agent).catch(err => console.error(`${agentName(index)}: pending payment retry failed:`, err instanceof Error ? err.message : err))
+      }
+    } finally {
+      this.retrying = false
+    }
   }
 
   // ---- Telegram commands ----

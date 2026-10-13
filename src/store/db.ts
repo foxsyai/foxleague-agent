@@ -455,6 +455,11 @@ export class Store {
     }))
   }
 
+  /** The agents with a payment still pending (retired ones included). */
+  pendingAgents(): number[] {
+    return (this.db.prepare("SELECT DISTINCT agent_idx FROM pending_tx WHERE state = 'pending' ORDER BY agent_idx").all() as { agent_idx: number }[]).map(r => Number(r.agent_idx))
+  }
+
   resolvePending(hash: string, state: 'done' | 'failed' | 'abandoned'): void {
     this.db.prepare('UPDATE pending_tx SET state = ? WHERE hash = ?').run(state, hash)
   }

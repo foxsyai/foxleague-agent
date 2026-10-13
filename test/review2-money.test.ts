@@ -1,0 +1,236 @@
+// Proof tests for the second review round of 2026-10-13 (money and limits, chain and FoxLeague). Each test is named
+// after its finding (R2A = the money reviewer, R2C = the fresh reviewer) and failed on main 733a8d5 before the fix;
+// a "control" passed before and after.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import type { Config } from '../src/config.ts'
+import { ADDR, STRANGER, dryWallet, encodeAuction, liveWallet, setup, snapshot, withLive } from './fixtures.ts'
+import { ApiRefusal } from '../src/foxleague/api.ts'
+import { retryPendingPayments } from '../src/executor/pending.ts'
+import { creditRefunds } from '../src/executor/refunds.ts'
+import { Store } from '../src/store/db.ts'
+import { DEFAULT_SETTINGS, LEVEL_SETTINGS } from '../src/store/settings.ts'
+import { wholeToAtomic } from '../src/util/encoding.ts'
+import type { PlannedAction } from '../src/executor/actions.ts'
+
+const TEST_WORDS = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
+const act = (action: unknown): PlannedAction[] => [{ action: action as PlannedAction['action'], reason: '' }]
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
+const serviceConfig = () => ({
+  mnemonic: TEST_WORDS, dataDir: mkdtempSync(join(tmpdir(), 'foxagent-r2-')),
+  gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5,
+  anthropicApiKey: undefined, model: 'claude-sonnet-5', telegramToken: undefined, telegramChatId: undefined, isServer: false, defaultDryRun: true, maxAgents: 5,
+}) as Config
+
+type Fox = { shopConfirm: (w: unknown, b: { tx_hash: string }) => Promise<{ purchase_id: number; message: string }>; joinTournament: (w: unknown, id: number, hash?: string) => Promise<{ participant_id: number }> }
+const foxCounting = (confirms: string[]): Fox => ({
+  shopConfirm: async (_w, b) => (confirms.push(b.tx_hash), { purchase_id: 1, message: 'XP booster activated' }),
+  joinTournament: async (_w, _id, hash) => (confirms.push(hash ?? ''), { participant_id: 1 }),
+})
+
+// ---- R2A-1 + R2C-2: a payment whose confirm answered tx_pending is confirmed again in routine operation ----
+
+test('R2A-1 a shop payment FoxLeague refunded is confirmed once at the next routine tick (any age) and its FOXSY stops counting', async () => {
+  let answer: () => never = () => { throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending') }
+  let asked = 0
+  const m = setup({ chain: { send: async () => 'hpack' }, fox: { user: async () => null, shopConfirm: async () => { asked++; return answer() } } })
+  const live = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'common_pack' }))
+    assert.equal(r!.status, 'unconfirmed', r!.summary)
+    assert.ok(live() > 5.6, 'the 2,500 FOXSY pack is booked')
+    // The next routine tick, tickMinutes later. FoxLeague's sweep refunded the unconfirmed payment meanwhile
+    // (docs 12.1: 30 min) and answers so to any confirm of the hash.
+    answer = () => { throw new ApiRefusal('This payment was already refunded and cannot be used for a purchase.') }
+    const told: string[] = []
+    await retryPendingPayments({ store: m.store, fox: m.exec['d'].fox, notify: t => void told.push(t), alert: t => void told.push(`ALERT ${t}`) }, 0, liveWallet, Date.now() + DEFAULT_SETTINGS.tickMinutes * 60_000)
+    assert.equal(asked, 2, `the next tick must confirm the hash once before giving it up (FoxLeague's answer is final at any age); told: ${told.join(' | ')}`)
+    assert.ok(live() < 0.01, `FoxLeague refunded the 2,500 FOXSY: they must stop counting (A9), got $${live().toFixed(2)}`)
+    assert.equal(m.store.pending(0).length, 0)
+  })
+})
+
+test('R2A-1 a paid seat still pending at the next routine tick is joined with its hash, not abandoned unasked', async () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, ADDR)
+  store.addPending('hj', 0, 'join', { tournamentId: 555 })
+  const calls: unknown[] = []
+  const fox = { joinTournament: async (_w: unknown, id: number, hash?: string) => (calls.push([id, hash]), { participant_id: 1 }), shopConfirm: async () => ({ message: 'ok' }) }
+  const alerted: string[] = []
+  await retryPendingPayments({ store, fox: fox as never, notify: () => undefined, alert: t => void alerted.push(t) }, 0, dryWallet, Date.now() + DEFAULT_SETTINGS.tickMinutes * 60_000)
+  assert.deepEqual(calls, [[555, 'hj']], `the seat must be joined with its hash at the next tick; instead: ${alerted.join(' | ')}`)
+  assert.equal(store.pending(0).length, 0)
+})
+
+test('R2C-2 at the default cycle the next routine tick comes long after the paid confirm: it still confirms the hash', async () => {
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service(serviceConfig())
+  svc.ensureAgents()
+  assert.equal(DEFAULT_SETTINGS.tickMinutes, 120)
+  assert.equal(LEVEL_SETTINGS.zeus!.tickMinutes, 60)
+  const paidAt = Date.now()
+  ;(svc as unknown as { scheduleNext: (i: number, now: number) => void }).scheduleNext(0, paidAt)
+  const nextTickAt = (svc as unknown as { nextAt: Map<number, number> }).nextAt.get(0)!
+  clearTimeout((svc as unknown as { timers: Map<number, NodeJS.Timeout> }).timers.get(0))
+  const minutesLater = (nextTickAt - paidAt) / 60_000
+  assert.ok(minutesLater >= 110 && minutesLater <= 130, `next tick in ${minutesLater} min`)
+  svc.store.addPending('hashA', 0, 'shop', { tx_hash: 'hashA', product: 'xp_booster' })
+  const confirms: string[] = []
+  const alerts: string[] = []
+  await retryPendingPayments({ store: svc.store, fox: foxCounting(confirms) as never, notify: () => undefined, alert: t => void alerts.push(t) }, 0, dryWallet, nextTickAt)
+  await svc.stop()
+  assert.deepEqual(confirms, ['hashA'], `the 2,000 FOXSY booster payment was never confirmed again; instead: ${alerts.join(' | ') || '(no alert)'}`)
+})
+
+/** A service started with no Telegram, no ticks and no network; the pending retry every `everyMs`. */
+async function startedService(everyMs: number) {
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service(serviceConfig())
+  const s = svc as unknown as Record<string, unknown>
+  s.startTelegram = () => undefined
+  s.schedule = () => undefined
+  s.snapshot = async () => snapshot()
+  s.pendingRetryMs = everyMs
+  return svc
+}
+
+async function withoutWebUi<T>(fn: () => Promise<T>): Promise<T> {
+  const env = { ...process.env }
+  delete process.env.WEB_UI_USER
+  delete process.env.WEB_UI_PASSWORD_HASH
+  try {
+    return await fn()
+  } finally {
+    Object.assign(process.env, env)
+  }
+}
+
+async function until(pred: () => boolean, ms = 3000): Promise<void> {
+  const end = Date.now() + ms
+  while (!pred() && Date.now() < end) await sleep(10)
+}
+
+test('R2C-2 the service confirms pending payments on its own timer, also outside the active hours, paused, retired and under the kill switch', async () => {
+  const svc = await startedService(20)
+  svc.ensureAgents()
+  const confirms: string[] = []
+  ;(svc as unknown as { fox: Fox }).fox = foxCounting(confirms)
+  const h = new Date().getUTCHours()
+  // Agent 1: the active hours have just closed (the plan runner may pay until their last second), and it is paused.
+  svc.store.updateSettings(0, { activeHoursUtc: [(h + 2) % 24, (h + 3) % 24] })
+  svc.store.setPaused(0, true)
+  // Agent 2: retired after its last payment.
+  svc.store.addAgent(1, svc.wallet(1).address)
+  svc.store.retireAgent(1, { at: new Date().toISOString(), by: 'test', team: null, egld: null, foxsy: null, usd: null })
+  svc.store.setKillSwitch(true)
+  svc.store.addPending('hashB', 0, 'shop', { tx_hash: 'hashB', product: 'common_pack' })
+  svc.store.addPending('hashS', 1, 'join', { tournamentId: 77 })
+  assert.equal(await svc.tick(0), 'kill switch is on', 'no tick runs: only the pending timer can confirm the payment')
+  await withoutWebUi(async () => {
+    await svc.start()
+    await until(() => confirms.length >= 2)
+    await svc.stop()
+  })
+  assert.deepEqual(confirms.sort(), ['hashB', 'hashS'], 'a confirm signs and pays nothing: the paid pack and the paid seat are confirmed whatever the agent may do')
+  assert.equal(svc.store.pending(0).length + svc.store.pending(1).length, 0)
+})
+
+test('R2A-1 the pending retry never runs alongside an action of the same agent (it waits for the executor lock)', async () => {
+  const svc = await startedService(60_000)
+  svc.ensureAgents()
+  const confirms: string[] = []
+  ;(svc as unknown as { fox: Fox }).fox = foxCounting(confirms)
+  svc.store.addPending('hashL', 0, 'shop', { tx_hash: 'hashL', product: 'xp_booster' })
+  let release!: () => void
+  const held = new Promise<void>(r => (release = r))
+  const exclusive = (svc.executor as unknown as { exclusive?: (i: number, fn: () => Promise<void>) => Promise<void> }).exclusive
+  assert.equal(typeof exclusive, 'function', 'the executor offers its per-agent lock')
+  const action = exclusive!.call(svc.executor, 0, () => held) // an action of agent 1, mid-flight
+  const retry = (svc as unknown as { retryAllPending: () => Promise<void> }).retryAllPending()
+  await sleep(50)
+  assert.deepEqual(confirms, [], 'the confirm waits while the agent\'s action holds the lock')
+  release()
+  await action
+  await retry
+  assert.deepEqual(confirms, ['hashL'])
+  await svc.stop()
+})
+
+test('R2A-1 a confirm still not final past the window is given up with an alert that says what is known', async () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, ADDR)
+  store.addPending('hseat', 0, 'join', { tournamentId: 7 })
+  store.addPending('hshop', 0, 'shop', { tx_hash: 'hshop', product: 'common_pack' })
+  const asked: string[] = []
+  const pending = () => { throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending') }
+  const fox = { joinTournament: async (_w: unknown, _id: number, hash?: string) => (asked.push(hash!), pending()), shopConfirm: async (_w: unknown, b: { tx_hash: string }) => (asked.push(b.tx_hash), pending()) }
+  const alerted: string[] = []
+  await retryPendingPayments({ store, fox: fox as never, notify: () => undefined, alert: t => void alerted.push(t) }, 0, dryWallet, Date.now() + 3 * 3600_000)
+  assert.deepEqual(asked.sort(), ['hseat', 'hshop'], 'asked once more before giving up')
+  assert.equal(store.pending(0).length, 0, 'given up after the window')
+  const seat = alerted.find(t => t.includes('hseat'))!
+  assert.match(seat, /tournament seat payment hseat was never confirmed/)
+  assert.doesNotMatch(seat, /refunds it automatically/, 'FoxLeague\'s reconciler may have seated a paid wallet: no promise of a refund')
+  assert.match(seat, /Could not verify the payment state/, 'the last answer is told')
+  assert.match(alerted.find(t => t.includes('hshop'))!, /shop payment hshop was never confirmed/)
+})
+
+test('R2A-1 control: a tx_pending answer within the window keeps the payment pending for the next retry', async () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, ADDR)
+  store.addPending('hshop', 0, 'shop', { tx_hash: 'hshop', product: 'common_pack' })
+  const fox = { shopConfirm: async () => { throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending') } }
+  const alerted: string[] = []
+  await retryPendingPayments({ store, fox: fox as never, notify: () => undefined, alert: t => void alerted.push(t) }, 0, dryWallet, Date.now() + 5 * 60_000)
+  assert.equal(store.pending(0).length, 1)
+  assert.deepEqual(alerted, [])
+})
+
+// ---- R2A-2: a tx_pending answer is never read as final for its wording ----
+
+// backend/src/routes/shop.rs on origin/main (code tx_pending, grace from the registry).
+const SHOP_TIMEOUT = 'Transaction verification timed out. The payment is not lost: it is recognized when this same transaction is confirmed again within 30 minutes; after that it is refunded automatically.'
+// backend/src/routes/tournaments.rs on origin/main, both answered with retry_same_tx (code tx_pending).
+const JOIN_RETRY = "We couldn't confirm your entry escrow is backing your seat right now. Please retry in a moment. If it was refunded (e.g. you left this tournament), your FOXSY is already back in your wallet."
+const JOIN_REFUND_IN_FLIGHT = 'A refund of your entry fee for this tournament was started and is not confirmed yet. Please retry in a moment and do not pay again meanwhile: once the refund is confirmed your FOXSY is back in your wallet and you can pay again to join; if it does not go through, your payment still stands and counts for your seat.'
+
+test('R2A-2 a tx_pending timeout answer at the retry keeps the shop payment pending (the hash must be confirmed again)', async () => {
+  let confirms = 0
+  const m = setup({ chain: { send: async () => 'hpack' }, fox: { user: async () => null, shopConfirm: async () => { confirms++; throw new ApiRefusal(SHOP_TIMEOUT, 'tx_pending') } } })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'common_pack' }))
+    assert.equal(r!.status, 'unconfirmed', r!.summary)
+    assert.equal(m.store.pending(0).length, 1, 'pending after the first tx_pending answer')
+    await retryPendingPayments({ store: m.store, fox: m.exec['d'].fox, notify: () => undefined }, 0, liveWallet, Date.now() + 5 * 60_000)
+    assert.equal(confirms, 2)
+    assert.equal(m.store.pending(0).length, 1, 'FoxLeague said tx_pending (the payment can still be confirmed within its grace): the hash must stay pending for the next retry, not be resolved as done')
+  })
+})
+
+test('R2A-2 a tx_pending "please retry" answer of /join keeps the paid seat pending for the next retry (both texts)', async () => {
+  for (const said of [JOIN_RETRY, JOIN_REFUND_IN_FLIGHT]) {
+    const store = new Store('', ':memory:')
+    store.addAgent(0, ADDR)
+    store.addPending('hj', 0, 'join', { tournamentId: 555 })
+    const fox = { joinTournament: async () => { throw new ApiRefusal(said, 'tx_pending') }, shopConfirm: async () => ({ message: 'ok' }) }
+    await retryPendingPayments({ store, fox: fox as never, notify: () => undefined }, 0, dryWallet, Date.now() + 5 * 60_000)
+    assert.equal(store.pending(0).length, 1, `FoxLeague asked for a retry of the same hash (tx_pending): the seat payment must stay pending, not be resolved as done: ${said}`)
+  }
+})
+
+test('R2A-2 control: FoxLeague\'s final answers still resolve the payment (no tx_pending code)', async () => {
+  for (const [kind, said] of [['shop', 'Transaction already processed'], ['join', 'You are already in this tournament'], ['join', 'Tournament is not open for registration (status: in_progress)']] as const) {
+    const store = new Store('', ':memory:')
+    store.addAgent(0, ADDR)
+    store.addPending('h', 0, kind, kind === 'shop' ? { tx_hash: 'h', product: 'common_pack' } : { tournamentId: 5 })
+    const refuse = async () => { throw new ApiRefusal(said) }
+    await retryPendingPayments({ store, fox: { joinTournament: refuse, shopConfirm: refuse } as never, notify: () => undefined }, 0, dryWallet, Date.now() + 5 * 60_000)
+    assert.equal(store.pending(0).length, 0, said)
+  }
+})
+

@@ -129,18 +129,26 @@ export class Executor {
   }
 
   /** Serialized per agent, so the cap check and the booking of one action never interleave with another's. */
-  async runOne(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, planned: PlannedAction): Promise<ExecutionResult> {
-    const before = this.locks.get(agent.index) ?? Promise.resolve()
+  runOne(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, planned: PlannedAction): Promise<ExecutionResult> {
+    return this.exclusive(agent.index, () => this.runOneLocked(agent, wallet, snap, planned))
+  }
+
+  /**
+   * Runs `fn` under the agent's lock, in turn with its actions: the pending-payment retry uses it, so a confirm of a
+   * hash never runs while the action that sent it is still waiting for its outcome or confirming it.
+   */
+  async exclusive<T>(index: number, fn: () => Promise<T>): Promise<T> {
+    const before = this.locks.get(index) ?? Promise.resolve()
     let release!: () => void
     const mine = new Promise<void>(r => (release = r))
     const tail = before.then(() => mine)
-    this.locks.set(agent.index, tail)
+    this.locks.set(index, tail)
     await before
     try {
-      return await this.runOneLocked(agent, wallet, snap, planned)
+      return await fn()
     } finally {
       release()
-      if (this.locks.get(agent.index) === tail) this.locks.delete(agent.index)
+      if (this.locks.get(index) === tail) this.locks.delete(index)
     }
   }
 
@@ -865,7 +873,7 @@ export class Executor {
   ): Promise<ExecutionResult> {
     const hash = await this.send(wallet, spec, booking)
     // Pending from the send on, as a shop payment: a stop or a crash in the outcome wait (up to 2 min) keeps the
-    // hash, so the next tick confirms this seat with it and the next plan does not pay it again.
+    // hash, so the pending retry (src/executor/pending.ts) confirms this seat with it and the next plan does not pay it again.
     this.d.store.addPending(hash, agent.index, 'join', { tournamentId })
     const outcome = await this.outcome(hash)
     if (outcome.kind === 'failed') {
@@ -885,7 +893,7 @@ export class Executor {
         await sleep(6000)
       }
     }
-    return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the next tick retries the join without paying again`, usd, hash)
+    return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the join is retried with the same hash, never paid again`, usd, hash)
   }
 }
 
