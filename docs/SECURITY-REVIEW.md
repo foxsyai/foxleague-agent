@@ -303,6 +303,37 @@ Merged on 2026-10-13 onto 3e1774e (FoxLeague's 12 October switch; the starter st
 merge: a forwarded message gets a short reply saying it was not read (the owner was left waiting for an answer), and
 `WEB_UI_HOST` is documented in `.env.example`. F-M3, F-O7 and F-O8 go to the whole-project review.
 
+## CI and the agent review, 2026-10-13
+
+CI and the agent review run when a maintainer adds the label merge-check to a pull request into main (nothing runs on
+opening or updating one). An independent Fable 5.1 review of the workflows (W) and the agent's review of PR #5 (P5):
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| W1 | high | Required checks match by name: a workflow a pull request brings could post green checks named ci and claude-review | Both results are commit statuses (foxleague-agent/ci, foxleague-agent/review) of the project's GitHub App, required from that App only |
+| W2 | medium | The review checked out the merge ref as it was at fetch time, not the head the result attaches to | The merge commit's second parent must be the labelled head, in CI and the review |
+| W3 | medium | Nested CLAUDE.md, CLAUDE.local.md, .claude/ and .mcp.json of a pull request survived the clean-up and steer Claude Code | Removed at any depth before the review; the instruction files come from main |
+| W4 | low | Triage access can add labels too | Documented: the repository gives no one outside the maintainers triage or write access |
+| W5 | low | Scripts and instructions read from the event's base, which can be stale | Read from the merge commit's first parent (current main) |
+| P5-1 | high | Running the pull request's code under pull_request_target put it in main's cache scope, which the review restores from (claude-code-action's Bun) | CI runs under pull_request again (its own cache scope, no secret); report-ci.yml posts its result as the App from main via workflow_run |
+| P5-2 | medium | The App's key was a repository secret: a workflow on any branch could mint its token | The key is a secret of the environment "checks", usable from main only |
+| P5-3 | low | The token action by a moving tag, its token not limited | Pinned to v2.2.2's commit, permission-statuses only |
+| P5-4 | note | A pull request changing ci.yml is judged by its own copy | The review fails any change to .github/ or scripts/ci/: the maintainer checks it by hand |
+| P5-5 | medium | report-ci posted the result of any CI run: a manual run on another branch, or a pull request into another branch whose own ci.yml was tested | Only pull request runs into main (the run's pull request, or for a fork an open pull request into main with that head) and pushes to main |
+| P5-6 | low | A file renamed out of .github/ or scripts/ci/, or one with a quoted name, escaped the hand check | git diff --no-renames with a pathspec instead of a grep of the names |
+| P5-7 | low | The fork fallback of report-ci also vouched for a run of a branch of this repository that named no pull request | Such a run is refused; only a fork's run uses the fallback |
+
+Settings that go with it: the ruleset "main: changes through a pull request" requires foxleague-agent/ci and
+foxleague-agent/review from the App FoxLeague Agent Checks (id 5301257); the App's key is a secret of the environment
+"checks" (deployment branches: main only) and nowhere else; the App may only write commit statuses.
+
+Open: someone with write access could still create a branch whose own ci.yml passes and open a fork pull request
+into main from a head that also has that branch's run, which the fork path above cannot tell apart; the maintainer's
+approval of every pull request by others is the gate for that. The same holds for a branch of this repository
+that opens a pull request into another branch and closes it before its run ends, if GitHub then lists only the
+pull request into main for the run (not verified). When the repository goes public, outside contributors'
+workflows need the maintainer's approval to run (set on launch day).
+
 ## xExchange paused every pool, 2026-10-13
 
 At 10:39 UTC xExchange's router admin paused about 700 pairs, FOXSY/WEGLD among them (swaps fail with "Swap is not

@@ -1,13 +1,16 @@
 # CI for foxleague-agent (owner decision 2026-10-13). It runs when a maintainer marks a pull request into main
 # as a merge candidate with the label merge-check (adding a label needs triage or write access, which this repo
-# gives only to its maintainers), on every push to main and
-# on demand. Opening or updating a pull request starts nothing, so nobody can spend the project's CI minutes by
-# opening pull requests. The job name ("ci") is a required status check of main (the ruleset "main: changes
-# through a pull request"):
-#   - a run started by any other label fails at once unless merge-check is on the pull request, and a job that is
-#     skipped would count as passed, so no step here is skipped on a label condition;
-#   - a commit pushed after the run has no result, so the pull request cannot merge until merge-check is added
-#     again (remove it and add it), which runs CI on the new code.
+# gives only to its maintainers), on every push to main and on demand. Opening or updating a pull request starts
+# nothing, so nobody can spend the project's CI minutes by opening pull requests.
+#
+# The pull request's code runs here under the plain pull_request event: GitHub's sandbox for it, with no secret, a
+# read-only token and its own cache scope (never main's, which the agent review restores from; review of PR #5).
+# The result reaches main as the commit status "foxleague-agent/ci", posted by the project's GitHub App from the
+# separate workflow report-ci.yml, which runs from main and never sees this code. A pull request that changes
+# this file, or anything else in .github/ or scripts/ci/, fails the agent review: the maintainer checks such a
+# change by hand, so no pull request rewrites the CI that judges it.
+#   - a run started by any other label fails unless merge-check is on the pull request (a skipped job would count
+#     as passed), and a commit pushed after the run has no result: add merge-check again.
 name: CI
 
 on:
@@ -45,9 +48,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # The merge commit of the event is tested, while the result attaches to the pull request's head: a label
-      # added seconds after a push could test the merge commit of the head before. Its second parent must be the
-      # head (read from the commit object, which a shallow checkout has).
+      # The merge commit of the event is tested, while the result attaches to the pull request's head: its second
+      # parent must be that head (read from the commit object, which a shallow checkout has).
       - name: The code tested is the head that gets the result
         if: ${{ github.event_name == 'pull_request' }}
         env:
@@ -62,7 +64,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22.18'
-          cache: npm
 
       - name: Install (no install scripts)
         run: npm ci --ignore-scripts

@@ -2,8 +2,9 @@
 # merge-check (owner decision 2026-10-13: nothing runs on opening or updating a pull request, so nobody can spend
 # the review token by opening pull requests; adding a label needs triage or write access, which this repo gives
 # only to its maintainers). The job name ("claude-review")
-# is a required status check of main: a pull request merges only after the agent has reviewed it and found
-# nothing blocking. The job is red when Claude records a "block" verdict, red when no verdict was recorded
+# reports to main as the commit status "foxleague-agent/review", posted by the project's own GitHub App (FoxLeague
+# Agent Checks) from the job "report", which runs on a fresh runner after the review: main requires that status
+# from that App, so a pull request merges only after the agent has reviewed it and found nothing blocking. The job is red when Claude records a "block" verdict, red when no verdict was recorded
 # (crash, timeout, interruption), red when no credential is set and red when merge-check is not on the pull
 # request. A commit pushed after the review has no result: remove merge-check and add it again.
 #
@@ -77,6 +78,19 @@ jobs:
         run: |
           if [[ "$(git rev-parse HEAD^2)" != "$HEAD_SHA" ]]; then
             echo "::error::The pull request changed since merge-check was added: add merge-check again to review its newest commit."
+            exit 1
+          fi
+
+      # A pull request that changes the CI or the review itself (.github/, scripts/ci/) is not judged by them: CI
+      # runs the pull request's own copy of ci.yml, so its result would be the author's. Such a change fails here
+      # and the maintainer checks it by hand (and merges it with the admin bypass when it is sound).
+      - name: A change to the CI or the review is checked by hand
+        run: |
+          # --no-renames: a file renamed out of these folders counts as a change to them; the pathspec, not a grep
+          # of the names, so a quoted name (special characters) cannot slip past (reviews of PR #5).
+          changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD -- .github scripts/ci)
+          if [[ -n "$changed" ]]; then
+            echo "::error::This pull request changes the CI or the review, so they cannot judge it: a maintainer checks it by hand. Files: $(echo $changed)"
             exit 1
           fi
 
@@ -322,3 +336,35 @@ jobs:
             exit 1
           fi
           echo "Claude review PASS: $summary"
+
+  report:
+    name: report review
+    needs: claude-review
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions: {}
+    # The App's key is a secret of the environment "checks", which only main may use (review of PR #5): no
+    # workflow on another branch can mint the App's token.
+    environment: checks
+    steps:
+      - name: The App's token, for commit statuses only (this job only, never where the review ran)
+        id: app
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.CHECKS_APP_ID }}
+          private-key: ${{ secrets.CHECKS_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-statuses: write
+
+      - name: Post foxleague-agent/review
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          RESULT: ${{ needs.claude-review.result }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [[ "$RESULT" == "success" ]]; then state=success; text="Claude review: PASS"
+          else state=failure; text="Claude review: no PASS ($RESULT)"; fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state="$state" -f context=foxleague-agent/review \
+            -f description="$text" -f target_url="$RUN" --jq '"posted \(.context): \(.state)"'
