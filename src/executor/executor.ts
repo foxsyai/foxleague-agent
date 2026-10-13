@@ -363,11 +363,13 @@ export class Executor {
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
     if (a.type === 'buy' && a.product === 'xp_booster') {
-      // The agent's own booster purchase, confirmed (or simulated, in the dry-run ledger): FoxLeague's status alone
-      // reads "none active" when its own booster query fails.
+      // The agent's own booster purchase that may have paid (simulated, in the dry-run ledger): FoxLeague's status
+      // alone reads "none active" when its own booster query fails. As for the bid limit: confirmed, unconfirmed (the
+      // pending retry may have confirmed it since; the log row keeps its first status) and sent with the answer lost.
+      // A refused, reverted or unsigned purchase paid nothing.
       const last = store
         .activityOf(agent.index, ['buy'], since((24 - XP_BOOSTER_RENEW_HOURS) * 3600_000))
-        .find(r => r.status === (dry ? 'dry_run' : 'confirmed') && detailOf(r).action?.product === 'xp_booster')
+        .find(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'xp_booster')
       market.lastBoosterAt = last ? new Date(last.at) : null
     }
     if (a.type === 'fuse') {

@@ -325,3 +325,52 @@ test('R2A-5 the same in dry run: a simulated booster holds the next simulated on
   const [again] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
   assert.equal(again!.status, 'refused', again!.summary)
 })
+
+/** FoxLeague's shop status after its own booster query failed: "none active". */
+const noBoosterSeen = () => {
+  const s = snapshot()
+  s.auth!.shop!.xp_booster_active = false
+  s.auth!.shop!.xp_booster_expires_at = null
+  return s
+}
+
+/** Moves the agent's activity rows of a kind back in time (the log has no setter: a test reaches the table). */
+const ageActivity = (store: Store, kind: string, ms: number) =>
+  (store as unknown as { db: { prepare: (q: string) => { run: (...a: unknown[]) => unknown } } }).db
+    .prepare('UPDATE activity SET at = ? WHERE kind = ?')
+    .run(new Date(Date.now() - ms).toISOString(), kind)
+
+test('R2A-5 (review of #12) a booster whose first confirm answered tx_pending, confirmed later by the pending retry, holds the next one an hour later', async () => {
+  let answer: () => { message: string } = () => { throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending') }
+  const m = setup({ chain: { send: async () => 'hb3' }, fox: { user: async () => null, shopConfirm: async () => answer() } })
+  await withLive(m.store, async () => {
+    const [first] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+    assert.equal(first!.status, 'unconfirmed', first!.summary)
+    // The pending timer confirms it a minute later: the booster runs, its log row stays "unconfirmed".
+    answer = () => ({ message: 'XP booster activated' })
+    await retryPendingPayments({ store: m.store, fox: m.exec['d'].fox, notify: () => undefined }, 0, liveWallet)
+    assert.equal(m.store.pending(0).length, 0, 'confirmed by the retry')
+    ageActivity(m.store, 'buy', 3600_000)
+    const [again] = await m.exec.run(m.agent(), liveWallet, noBoosterSeen(), act({ type: 'buy', product: 'xp_booster' }))
+    assert.equal(again!.status, 'refused', `an hour-old booster purchase that may have paid (logged unconfirmed) must hold the next one: ${again!.summary}`)
+    assert.match(again!.summary, /an XP booster was bought 1 h ago/)
+  })
+})
+
+test('R2A-5 (review of #12) a booster sent whose answer was lost holds the next one; a refused or reverted one does not', async () => {
+  const booster = { action: { type: 'buy', product: 'xp_booster' } }
+  const lost = setup({ chain: { send: async () => 'hb4' }, fox: { user: async () => null, shopConfirm: async () => ({ message: 'XP booster activated' }) } })
+  lost.store.log({ agentIndex: 0, kind: 'buy', status: 'error', summary: 'buy xp_booster: answer lost', detail: { ...booster, sent: true } })
+  await withLive(lost.store, async () => {
+    const [r] = await lost.exec.run(lost.agent(), liveWallet, noBoosterSeen(), act({ type: 'buy', product: 'xp_booster' }))
+    assert.equal(r!.status, 'refused', `a booster payment that was signed and sent may have landed: ${r!.summary}`)
+  })
+  const none = setup({ chain: { send: async () => 'hb5' }, fox: { user: async () => null, shopConfirm: async () => ({ message: 'XP booster activated' }) } })
+  none.store.log({ agentIndex: 0, kind: 'buy', status: 'refused', summary: 'buy xp_booster: refused', detail: booster })
+  none.store.log({ agentIndex: 0, kind: 'buy', status: 'failed', summary: 'buy xp_booster: payment reverted', detail: booster })
+  none.store.log({ agentIndex: 0, kind: 'buy', status: 'error', summary: 'buy xp_booster: no signature', detail: booster })
+  await withLive(none.store, async () => {
+    const [r] = await none.exec.run(none.agent(), liveWallet, noBoosterSeen(), act({ type: 'buy', product: 'xp_booster' }))
+    assert.equal(r!.status, 'confirmed', `nothing was paid by a refused, reverted or unsigned purchase: ${r!.summary}`)
+  })
+})
