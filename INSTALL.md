@@ -1,8 +1,9 @@
 # Run your own FoxLeague Agent
 
 FoxLeague Agent manages FoxLeague teams for you: it trains your players, sets the lineup, plays matches and
-enters tournaments and 1v1s. It can also fuse cards and bid at auctions. An AI plans every half hour; plain
-code checks every action against the game rules and your spending limits before anything is paid.
+enters tournaments and 1v1s. It can also fuse cards and bid at auctions. An AI plans every two hours by default
+(every hour at the Zeus level); plain code checks every action against the game rules and your spending limits
+before anything is paid.
 
 Everything runs on your own computer. Your wallet words and your keys never leave it.
 
@@ -13,8 +14,8 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 - About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
-- Optional: a Telegram bot for notifications and commands on your phone, and a CEX (Binance) API key for automatic
-  top-ups (a later feature).
+- Optional: a Telegram bot for notifications and commands on your phone, and a Binance API key for EGLD top-ups
+  of the agent wallets, each one approved by you on Telegram with a one-time code.
 
 ## Install
 

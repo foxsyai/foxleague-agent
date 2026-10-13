@@ -55,12 +55,14 @@ abuse. The agent:
 - protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two a week
   against the same team; an open challenge, which any team may take, at most once a day and only at your lowest
   Silver amount);
-- never creates a private tournament and joins one only when your team is invited.
+- creates a private tournament only at the Zeus level (it invites rival teams, never your other agents) and joins
+  one only when your team is invited.
 
 You remain responsible for your agents.
 
 ## Reviewed
 
-The code went through thirteen adversarial reviews that tried to break the money limits, attack it from outside and
-break its security. Every finding was fixed with a test that proves it, except two low ones that were weighed and
-accepted; all are listed in the review record.
+The code went through fourteen numbered adversarial reviews that tried to break the money limits, attack it from
+outside and break its security, then the reviews of CI and of the xExchange pause and a whole-project review on
+13 October 2026. Every finding was fixed with a test that proves it or weighed and decided; the few still open are
+listed in the review record.

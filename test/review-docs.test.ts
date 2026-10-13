@@ -17,9 +17,36 @@ const REPO = resolve(import.meta.dirname, '..')
 const read = (p: string) => readFileSync(join(REPO, p), 'utf8')
 const DOCS = 'site/src/content/docs'
 
+test('D1 the docs give the default tick: every two hours (Zeus every hour), never every half hour', () => {
+  assert.equal(DEFAULT_SETTINGS.tickMinutes, 120)
+  assert.equal(LEVEL_SETTINGS.zeus!.tickMinutes, 60)
+  for (const f of ['README.md', 'INSTALL.md', `${DOCS}/index.mdx`]) {
+    assert.doesNotMatch(read(f), /half hour/i, `${f} says the agent plans every half hour`)
+    assert.match(read(f), /every two hours/i, `${f} does not give the default tick`)
+  }
+})
+
 test('D2 the strategist prompt gives the match gate per rarity, not 20 per card', () => {
   assert.doesNotMatch(SYSTEM_PROMPT, /20 per card/)
   assert.match(SYSTEM_PROMPT, /the match gate of each card's rarity \(below\)/)
+})
+
+test('D3 the safety page says Zeus creates private tournaments, which the rules allow', () => {
+  const doc = read(`${DOCS}/play/safety.md`)
+  assert.doesNotMatch(doc, /never creates a private tournament/)
+  assert.match(doc, /private tournament only at the Zeus level/)
+  const invite = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
+  const v = checkAction(parseAction(invite), snapshot(), { settings: TEST_SETTINGS, now: new Date(), zeus: true, ownUserIds: [99] })
+  assert.equal(v.ok, true, `a Zeus agent's private tournament is refused: ${v.ok ? "" : v.refusal}`)
+})
+
+test('D4 picking a level opens a proposal with ticks, and Accept and save saves the ticked rows', () => {
+  for (const f of [`${DOCS}/use/settings.md`, `${DOCS}/play/strategy-levels.md`]) {
+    const doc = read(f).replace(/\s+/g, ' ')
+    assert.doesNotMatch(doc, /[Cc]heck them and press Save/, `${f} says to check the filled form and press Save`)
+    assert.doesNotMatch(doc, /fills (its default limits|them)/, `${f} says a level fills the form`)
+    assert.match(doc, /\*\*Accept and save\*\* saves the ticked ones/, `${f} does not explain the proposal`)
+  }
 })
 
 test('D5 a low-funds warning waits for the morning summary in the default quiet mode: the docs say so', async () => {
@@ -44,10 +71,43 @@ test('D5 a low-funds warning waits for the morning summary in the default quiet 
   assert.deepEqual(told, [], 'the warning went to Telegram at once in the quiet mode')
 })
 
+test('D6 the settings page counts the presets the code has', () => {
+  const words: Record<number, string> = { 5: 'Five', 6: 'Six', 7: 'Seven' }
+  const n = Object.keys(STRATEGY_PRESETS).length
+  assert.match(read(`${DOCS}/use/settings.md`), new RegExp(`${words[n]} presets set it for you`), `the code has ${n} presets`)
+})
+
+test('D7 a version named in the README is the package version', () => {
+  const pkg = (JSON.parse(read('package.json')) as { version: string }).version
+  for (const m of read('README.md').matchAll(/version (\d+\.\d+)/gi)) assert.ok(pkg.startsWith(`${m[1]}.`), `the README says version ${m[1]}, package.json is ${pkg}`)
+})
+
+test('D8 the review count is not the stale thirteen, and the open items point at the review record', () => {
+  for (const f of ['README.md', `${DOCS}/play/safety.md`]) {
+    const doc = read(f).replace(/\s+/g, ' ')
+    assert.doesNotMatch(doc, /thirteen adversarial reviews/i, `${f} still counts thirteen reviews`)
+    assert.doesNotMatch(doc, /except two low ones/, `${f} still says only two low findings stay open`)
+    assert.match(doc, /Fourteen numbered adversarial reviews/i, `${f} does not give the review count`)
+  }
+})
+
+test('D9 INSTALL.md says Binance top-ups are built, each approved by a code', () => {
+  const doc = read('INSTALL.md').replace(/\s+/g, ' ')
+  assert.doesNotMatch(doc, /a later feature/)
+  assert.doesNotMatch(doc, /for automatic top-ups/)
+  assert.match(doc, /Optional: a Telegram bot [^.]*Binance API key for EGLD top-ups[^.]*one-time code/)
+})
+
 test('D10 the dashboard Tick input allows what the server allows: the floor is MIN_TICK_MINUTES', () => {
   const m = read('src/web/dashboard.html').match(/id="sTick" type="number" min="(\d+)"/)
   assert.ok(m, 'no Tick input')
   assert.equal(Number(m[1]), MIN_TICK_MINUTES)
+})
+
+test('D11 the economy reference does not offer the removed pool-status route as a live value', () => {
+  for (const line of read('docs/ECONOMY-AND-RULES.md').split('\n').filter(l => l.includes('/api/register/pool-status'))) {
+    assert.match(line, /removed|not public/i, `still read as a live value: ${line.slice(0, 120)}`)
+  }
 })
 
 test('the server guide sets WEB_UI_TRUST_PROXY=1 behind nginx, so strangers cannot lock the owner out', () => {

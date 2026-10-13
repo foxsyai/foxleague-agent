@@ -6,7 +6,7 @@ against the game rules and your spending limits before anything is paid. It uses
 smart contracts, exactly like the player app, from your own computer or server. Your wallet words and keys never
 leave it.
 
-Status: version 0.10, in internal testing. Everything below works live on mainnet.
+Status: in internal testing (the newest version is on the releases page). Everything below works live on mainnet.
 
 ## Install
 
@@ -25,8 +25,9 @@ Anthropic API key for the AI. Telegram and Binance are optional.
 
 ## What it does
 
-Every half hour (randomised, inside the active hours you choose) each agent reads its team and the platform, asks
-the AI for a plan and runs the actions spread over the next minutes:
+Every two hours by default (randomised, inside the active hours you choose; Zeus plans every hour and the tick is
+yours to set) each agent reads its team and the platform, asks the AI for a plan and runs the actions spread over the
+next minutes:
 
 - **Daily routine:** the free training sessions on the starters who gain most, syncing stats to chain when it
   matters, lineup and formation, ranked and casual matches.
@@ -51,7 +52,9 @@ the dashboard or by chatting with it on Telegram.
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only, a human pace, never a 1v1 or trade between your own agents; guards
   against rivals who try to farm an agent (1v1s only against teams of similar strength, at most two a week each).
-- **Reviewed.** Thirteen adversarial reviews, every confirmed finding fixed or decided: [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Fourteen numbered adversarial reviews, the reviews of CI and of the xExchange pause and a
+  whole-project review on 13 October 2026. Every confirmed finding is fixed or decided; the few still open are listed
+  in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 
