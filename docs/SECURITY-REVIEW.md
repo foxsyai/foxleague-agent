@@ -414,6 +414,29 @@ extension cuts a shop payment into pieces (`splitAction`, `src/extensions.ts`), 
 refused while an earlier piece's confirm is `tx_pending` (the pending shop guard, M9) and the rest of the group is
 dropped, so the next plan decides again.
 
+## Third review round, 2026-10-13
+
+One read-only reviewer on main d8ea6f5, after the second round's fixes (the always-on pending retry, the booster
+rule, the env rewrite). A finding counted only when it was proven with a test that failed on d8ea6f5. The fixes were
+made by Claude Opus 5.5, test first: both tests, adapted into `test/review3.test.ts`, were seen failing on d8ea6f5
+and passing after the fix.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R3-1 | low | A booster payment FoxLeague refunded held the next booster for 22 hours. R2A-5 reads the agent's booster rows in the activity log and counts `unconfirmed` ones on purpose, but when the pending retry hears "already refunded" it credits the ledger row (`shop:xp_booster:refunded`) and never touches the log row, which stays `unconfirmed`: nothing was delivered and the FOXSY came back, yet the rule refused "an XP booster was bought n h ago" | One store query (`refundedHashes`) reads the hashes of the agent's booster payments credited as refunded, and the rule skips a log row with one of them. Every other row counted before still counts |
+| R3-T | hardening | The pending-retry timer's errors were not caught. The store calls of a pass (`pendingAgents`, `agent`) ran outside the per-agent catch and the timer had no `.catch`, so a store error (SQLITE_BUSY while a CLI command writes the same database) became an unhandled rejection, which `panic()` turns into the kill switch for every agent, again at every pass | A pass catches and logs its own error (as the morning summary's timer does) and the next pass asks again; this timer never reaches `panic()` |
+
+Found sound by the reviewer's probes: the timer's pass and the tick's own retry for the same agent confirm a hash
+exactly once (the executor's per-agent lock); `stop()` neither cuts a confirm in flight nor hangs, it waits for it
+and returns; the env rewrite keeps the backup and names it when a write is cut halfway and the next rewrite refuses
+until it is removed, leaves the words in exactly one place with mode 600 after a success and changes nothing when the
+backup directory cannot be created.
+
+Open, listed by the reviewer and not proven by a test: `stop()` waits for a confirm in flight up to the 150 s bound,
+not longer; a failing Telegram kv write (the update offset) fetches the batch again without dispatching it; a
+refunded seat answer resolves the pending row without crediting `join:<id>` until the tournament is closed; the order
+of Retire's messages.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
