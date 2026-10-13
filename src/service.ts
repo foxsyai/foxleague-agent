@@ -1332,7 +1332,11 @@ export class Service {
     this.pendingTimer = setTimeout(() => void this.retryAllPending().finally(() => this.armPendingRetry()), this.pendingRetryMs)
   }
 
-  /** One pass over every agent with a pending payment (retired ones too); a pass still running skips the next. */
+  /**
+   * One pass over every agent with a pending payment (retired ones too); a pass still running skips the next. Never
+   * throws: a pass that fails (the database busy with a CLI command next to the service) is logged and the next one
+   * asks again; an error of this timer must never reach panic() and turn the kill switch on.
+   */
   private async retryAllPending(): Promise<void> {
     if (this.retrying || this.stopping) return
     this.retrying = true
@@ -1343,6 +1347,8 @@ export class Service {
         if (!agent) continue
         await this.retryPending(agent).catch(err => console.error(`${agentName(index)}: pending payment retry failed:`, err instanceof Error ? err.message : err))
       }
+    } catch (err) {
+      console.error('pending payment retry pass failed (the next pass asks again):', err instanceof Error ? err.message : err)
     } finally {
       this.retrying = false
     }

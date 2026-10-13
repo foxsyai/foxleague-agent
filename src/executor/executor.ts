@@ -366,10 +366,12 @@ export class Executor {
       // The agent's own booster purchase that may have paid (simulated, in the dry-run ledger): FoxLeague's status
       // alone reads "none active" when its own booster query fails. As for the bid limit: confirmed, unconfirmed (the
       // pending retry may have confirmed it since; the log row keeps its first status) and sent with the answer lost.
-      // A refused, reverted or unsigned purchase paid nothing.
+      // A refused, reverted or unsigned purchase paid nothing, and one FoxLeague refunded (the pending retry heard
+      // so and credited its ledger row; the log row keeps "unconfirmed") delivered nothing and the FOXSY came back.
+      const refunded = store.refundedHashes(agent.index, 'shop:xp_booster')
       const last = store
         .activityOf(agent.index, ['buy'], since((24 - XP_BOOSTER_RENEW_HOURS) * 3600_000))
-        .find(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'xp_booster')
+        .find(r => !(r.txHash && refunded.has(r.txHash)) && (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'xp_booster')
       market.lastBoosterAt = last ? new Date(last.at) : null
     }
     if (a.type === 'fuse') {

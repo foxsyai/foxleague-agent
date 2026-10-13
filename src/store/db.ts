@@ -412,6 +412,13 @@ export class Store {
     this.db.prepare("UPDATE spend SET usd = 0, foxsy_atomic = '0', action = action || ':refunded' WHERE id = ?").run(id)
   }
 
+  /** The hashes of this agent's payments tagged so (shop:xp_booster) whose money came back (creditSpend). */
+  refundedHashes(agentIndex: number, tag: string): Set<string> {
+    return new Set((this.db
+      .prepare('SELECT tx_hash FROM spend WHERE agent_idx = ? AND action = ? AND tx_hash IS NOT NULL')
+      .all(agentIndex, `${tag}:refunded`) as { tx_hash: string }[]).map(r => String(r.tx_hash)))
+  }
+
   /** A booked payment that never left the wallet (refused before sending, or reverted). */
   deleteSpend(id: number): void {
     this.db.prepare('DELETE FROM spend WHERE id = ?').run(id)
