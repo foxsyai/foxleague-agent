@@ -351,7 +351,7 @@ async function main(): Promise<void> {
       await ask('BINANCE_API_KEY', 'Binance API key (withdraw-only, IP-restricted)')
       await ask('BINANCE_API_SECRET', 'Binance API secret')
       if (Object.keys(values).length) {
-        setEnvValues(envFile, values)
+        setEnvValues(envFile, values, cfg.dataDir)
         // The env file is now the source for these keys: drop the web UI's overrides of them.
         writeSecrets(secretsFile(cfg.dataDir), Object.fromEntries(Object.keys(values).map(k => [k, ''])))
       }
@@ -369,7 +369,7 @@ async function main(): Promise<void> {
       if ((await promptHidden('Repeat the password: ')) !== pw) throw new Error('the passwords differ; nothing saved')
       const values: Record<string, string> = { WEB_UI_USER: username, WEB_UI_PASSWORD_HASH: hashPassword(pw) }
       if (!process.env.WEB_UI_SECRET || process.env.WEB_UI_SECRET.length < 32) values.WEB_UI_SECRET = randomBytes(32).toString('hex')
-      setEnvValues(envFilePath(), values)
+      setEnvValues(envFilePath(), values, cfg.dataDir)
       console.log(`Saved the web UI login for "${username}" in ${envFilePath()}. Restart the service to apply it.`)
       return
     }

@@ -2,7 +2,8 @@
 // the terminal log or a chat), and checks that each key is what the README requires.
 
 import { createHmac } from 'node:crypto'
-import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fsyncSync, ftruncateSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, unlinkSync, writeSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import Anthropic from '@anthropic-ai/sdk'
 import { whitelisted } from '../cex/binance.ts'
 
@@ -38,8 +39,32 @@ export function promptHidden(question: string): Promise<string> {
   })
 }
 
-/** Sets KEY=value lines in an env file (mode 600), replacing existing ones. */
-export function setEnvValues(file: string, values: Record<string, string>): void {
+/** The write that puts new content into an open env file (a test passes one that fails halfway). */
+export interface EnvWriteIo {
+  write?: (fd: number, data: Buffer) => void
+}
+
+/** Writes all of `data` from the start of the file. */
+function writeAll(fd: number, data: Buffer): void {
+  for (let done = 0; done < data.length; ) done += writeSync(fd, data, done, data.length - done, done)
+}
+
+/** A new file (mode 600, never over an existing one), its content synced to disk before it returns. */
+function writeNewDurably(path: string, data: Buffer): void {
+  const fd = openSync(path, 'wx', 0o600)
+  try {
+    writeAll(fd, data)
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+
+/**
+ * Sets KEY=value lines in an env file (mode 600), replacing existing ones. `backupDir` (the data directory) holds the
+ * copy of the old file while it is rewritten in place, when its own directory refuses a new file.
+ */
+export function setEnvValues(file: string, values: Record<string, string>, backupDir = resolve(process.env.AGENT_DATA_DIR ?? 'data'), io: EnvWriteIo = {}): void {
   let text = existsSync(file) ? readFileSync(file, 'utf8') : ''
   for (const [k, v] of Object.entries(values)) {
     if (!/^[A-Z0-9_]+$/.test(k)) throw new Error(`bad key ${k}`)
@@ -48,21 +73,81 @@ export function setEnvValues(file: string, values: Record<string, string>): void
     const re = new RegExp(`^\\s*${k}\\s*=.*$`, 'm')
     text = re.test(text) ? text.replace(re, () => line) : `${text}${text && !text.endsWith('\n') ? '\n' : ''}${line}\n`
   }
-  // Written aside and renamed over: a full disk or a power cut never leaves a half-written file (it holds the mnemonic).
+  // First choice: written aside, synced and renamed over, so a full disk or a power cut never leaves a half-written
+  // file (it holds the recovery words).
   const tmp = `${file}.tmp-${process.pid}`
   try {
-    writeFileSync(tmp, text, { mode: 0o600 })
+    writeNewDurably(tmp, Buffer.from(text))
   } catch (err) {
+    try {
+      unlinkSync(tmp) // a partial copy of the words never stays behind
+    } catch {
+      // never created
+    }
     // A server built by deploy/bootstrap.sh: /etc/foxleague-agent is root's (750) and only the env file is the
     // service user's, so nothing can be created next to it. The file itself is rewritten in place instead.
     const code = (err as NodeJS.ErrnoException).code
     if ((code !== 'EACCES' && code !== 'EPERM') || !existsSync(file)) throw err
-    writeFileSync(file, text, { mode: 0o600 })
-    chmodSync(file, 0o600)
+    rewriteInPlace(file, Buffer.from(text), backupDir, io)
     return
   }
   chmodSync(tmp, 0o600)
   renameSync(tmp, file)
+}
+
+/**
+ * Rewrites the env file where it is. A rewrite in place can be cut short (a full disk, a power cut), so the current
+ * content is first copied to <backupDir>/env.backup (mode 600) and synced; the new content is then written over the
+ * old, cut to its length and synced. A failure names the backup. The backup is removed once the new file is on disk,
+ * so the recovery words stay in one place, and one left by an earlier failure stops the next try: a damaged env file
+ * never overwrites the good copy.
+ */
+function rewriteInPlace(file: string, data: Buffer, backupDir: string, io: EnvWriteIo): void {
+  const backup = join(backupDir, 'env.backup')
+  if (existsSync(backup)) throw new Error(`${backup} holds the env file from an earlier rewrite that failed: compare it with ${file}, restore it if ${file} is damaged, delete it and try again`)
+  try {
+    mkdirSync(backupDir, { recursive: true, mode: 0o700 })
+    writeNewDurably(backup, readFileSync(file))
+    syncDirectory(backupDir)
+  } catch (err) {
+    try {
+      rmSync(backup, { force: true })
+    } catch {
+      // nothing to remove
+    }
+    throw new Error(`could not back up ${file} to ${backup} before rewriting it (${err instanceof Error ? err.message : String(err)}); ${file} was not changed`, { cause: err })
+  }
+  let fd: number | undefined
+  try {
+    fd = openSync(file, 'r+')
+    ;(io.write ?? writeAll)(fd, data)
+    ftruncateSync(fd, data.length)
+    fsyncSync(fd)
+  } catch (err) {
+    throw new Error(`could not rewrite ${file} (${err instanceof Error ? err.message : String(err)}); its previous content is in ${backup}`, { cause: err })
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
+  chmodSync(file, 0o600)
+  try {
+    rmSync(backup)
+  } catch (err) {
+    // The new file is saved; the copy only blocks the next rewrite until it is deleted (the error then says so).
+    console.error(`saved ${file}, but could not delete ${backup} (${err instanceof Error ? err.message : String(err)}): delete it yourself`)
+  }
+}
+
+/** Makes a new file's name durable too (a directory fsync); a platform that cannot do it has nothing to sync. */
+function syncDirectory(dir: string): void {
+  let fd: number | undefined
+  try {
+    fd = openSync(dir, 'r')
+    fsyncSync(fd)
+  } catch {
+    // not supported here
+  } finally {
+    if (fd !== undefined) closeSync(fd)
+  }
 }
 
 // ---- checks ----

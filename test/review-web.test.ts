@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
 import { spawnSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, ftruncateSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
@@ -109,9 +109,10 @@ test('B3 the CLI updates an env file it owns inside a directory it may not creat
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-b3-'))
   const file = join(dir, 'env')
   writeFileSync(file, 'AGENT_COUNT="1"\nWEB_UI_USER="old"\n', { mode: 0o644 })
+  const data = mkdtempSync(join(tmpdir(), 'foxagent-b3-data-'))
   chmodSync(dir, 0o500) // /etc/foxleague-agent as the service user sees it (root:foxleague-agent 750): r-x, no w
   try {
-    setEnvValues(file, { WEB_UI_USER: 'admin', ANTHROPIC_API_KEY: 'sk-ant-x' })
+    setEnvValues(file, { WEB_UI_USER: 'admin', ANTHROPIC_API_KEY: 'sk-ant-x' }, data)
     assert.equal(readFileSync(file, 'utf8'), 'AGENT_COUNT="1"\nWEB_UI_USER="admin"\nANTHROPIC_API_KEY="sk-ant-x"\n')
     assert.equal(statSync(file).mode & 0o777, 0o600, 'the env file is not mode 600 after the write')
   } finally {
@@ -119,9 +120,46 @@ test('B3 the CLI updates an env file it owns inside a directory it may not creat
   }
   // Where the directory allows it, the file is still written aside and renamed over (a new inode).
   const before = statSync(file).ino
-  setEnvValues(file, { WEB_UI_USER: 'owner' })
+  setEnvValues(file, { WEB_UI_USER: 'owner' }, data)
   assert.notEqual(statSync(file).ino, before, 'a writable directory no longer gets the atomic write')
   assert.match(readFileSync(file, 'utf8'), /^WEB_UI_USER="owner"$/m)
+})
+
+test('B3 (review of #8) a rewrite in place that fails leaves the previous env file in a backup in the data directory', () => {
+  if (process.getuid?.() === 0) return // root ignores directory modes: nothing to prove here
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-b3-'))
+  const data = mkdtempSync(join(tmpdir(), 'foxagent-b3-data-'))
+  const file = join(dir, 'env')
+  const backup = join(data, 'env.backup')
+  const old = `AGENT_MNEMONIC="${TEST_WORDS}"\nWEB_UI_USER="old"\n`
+  writeFileSync(file, old, { mode: 0o600 })
+  chmodSync(dir, 0o500) // the aside write is refused, as on a server built by deploy/bootstrap.sh
+  try {
+    // A full disk right after the file was cut to nothing: the env file is left empty.
+    const fullDisk = (fd: number) => {
+      ftruncateSync(fd, 0)
+      throw Object.assign(new Error('ENOSPC: no space left on device, write'), { code: 'ENOSPC' })
+    }
+    assert.throws(() => setEnvValues(file, { WEB_UI_USER: 'admin' }, data, { write: fullDisk }), (e: Error) => {
+      assert.ok(e.message.includes(backup), `the error does not say where the previous content is: ${e.message}`)
+      return true
+    })
+    assert.equal(readFileSync(file, 'utf8'), '', 'the simulated failure did not damage the env file')
+    assert.ok(existsSync(backup), 'no backup was written before the env file was touched')
+    assert.equal(readFileSync(backup, 'utf8'), old, 'the backup does not hold the previous env file')
+    assert.equal(statSync(backup).mode & 0o777, 0o600)
+    // A second try while that backup is there is refused: the damaged file never overwrites the good copy.
+    assert.throws(() => setEnvValues(file, { WEB_UI_USER: 'admin' }, data), /env\.backup/)
+    assert.equal(readFileSync(backup, 'utf8'), old)
+    // Restored by hand and tried again: the rewrite works and the backup goes (the words stay in one place).
+    writeFileSync(file, readFileSync(backup))
+    rmSync(backup)
+    setEnvValues(file, { WEB_UI_USER: 'admin' }, data)
+    assert.equal(readFileSync(file, 'utf8'), `AGENT_MNEMONIC="${TEST_WORDS}"\nWEB_UI_USER="admin"\n`)
+    assert.equal(existsSync(backup), false, 'the backup stays after a rewrite that worked')
+  } finally {
+    chmodSync(dir, 0o700)
+  }
 })
 
 test('B4 an activity limit that is not a whole number falls back to the default or is rounded down, never a 500', async () => {
