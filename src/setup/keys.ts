@@ -39,9 +39,10 @@ export function promptHidden(question: string): Promise<string> {
   })
 }
 
-/** The write that puts new content into an open env file (a test passes one that fails halfway). */
+/** The write that puts new content into an open env file and the mode change after it (a test passes failing ones). */
 export interface EnvWriteIo {
   write?: (fd: number, data: Buffer) => void
+  chmod?: (path: string, mode: number) => void
 }
 
 /** Writes all of `data` from the start of the file. */
@@ -96,44 +97,56 @@ export function setEnvValues(file: string, values: Record<string, string>, backu
 }
 
 /**
- * Rewrites the env file where it is. A rewrite in place can be cut short (a full disk, a power cut), so the current
- * content is first copied to <backupDir>/env.backup (mode 600) and synced; the new content is then written over the
- * old, cut to its length and synced. A failure names the backup. The backup is removed once the new file is on disk,
- * so the recovery words stay in one place, and one left by an earlier failure stops the next try: a damaged env file
- * never overwrites the good copy.
+ * Rewrites the env file where it is. It is opened for writing first, so a file this user may read but not write
+ * fails before anything is copied. A rewrite in place can be cut short (a full disk, a power cut), so the current
+ * content is then copied to <backupDir>/env.backup (mode 600) and synced; the new content is written over the old,
+ * cut to its length and synced. A failure names the backup. The backup is removed as soon as the new content is on
+ * disk (a mode change that fails afterwards does not keep it), so the recovery words stay in one place, and one left
+ * by an earlier failure stops the next try: a damaged env file never overwrites the good copy.
  */
 function rewriteInPlace(file: string, data: Buffer, backupDir: string, io: EnvWriteIo): void {
   const backup = join(backupDir, 'env.backup')
   if (existsSync(backup)) throw new Error(`${backup} holds the env file from an earlier rewrite that failed: compare it with ${file}, restore it if ${file} is damaged, delete it and try again`)
-  try {
-    mkdirSync(backupDir, { recursive: true, mode: 0o700 })
-    writeNewDurably(backup, readFileSync(file))
-    syncDirectory(backupDir)
-  } catch (err) {
-    try {
-      rmSync(backup, { force: true })
-    } catch {
-      // nothing to remove
-    }
-    throw new Error(`could not back up ${file} to ${backup} before rewriting it (${err instanceof Error ? err.message : String(err)}); ${file} was not changed`, { cause: err })
-  }
-  let fd: number | undefined
+  let fd: number
   try {
     fd = openSync(file, 'r+')
-    ;(io.write ?? writeAll)(fd, data)
-    ftruncateSync(fd, data.length)
-    fsyncSync(fd)
   } catch (err) {
-    throw new Error(`could not rewrite ${file} (${err instanceof Error ? err.message : String(err)}); its previous content is in ${backup}`, { cause: err })
-  } finally {
-    if (fd !== undefined) closeSync(fd)
+    throw new Error(`could not open ${file} for writing (${err instanceof Error ? err.message : String(err)}); ${file} was not changed`, { cause: err })
   }
-  chmodSync(file, 0o600)
+  try {
+    try {
+      mkdirSync(backupDir, { recursive: true, mode: 0o700 })
+      writeNewDurably(backup, readFileSync(file))
+      syncDirectory(backupDir)
+    } catch (err) {
+      try {
+        rmSync(backup, { force: true })
+      } catch {
+        // nothing to remove
+      }
+      throw new Error(`could not back up ${file} to ${backup} before rewriting it (${err instanceof Error ? err.message : String(err)}); ${file} was not changed`, { cause: err })
+    }
+    try {
+      ;(io.write ?? writeAll)(fd, data)
+      ftruncateSync(fd, data.length)
+      fsyncSync(fd)
+    } catch (err) {
+      throw new Error(`could not rewrite ${file} (${err instanceof Error ? err.message : String(err)}); its previous content is in ${backup}`, { cause: err })
+    }
+  } finally {
+    closeSync(fd)
+  }
+  // The new content is on disk: the copy goes now, whatever happens to the mode below.
   try {
     rmSync(backup)
   } catch (err) {
     // The new file is saved; the copy only blocks the next rewrite until it is deleted (the error then says so).
     console.error(`saved ${file}, but could not delete ${backup} (${err instanceof Error ? err.message : String(err)}): delete it yourself`)
+  }
+  try {
+    ;(io.chmod ?? chmodSync)(file, 0o600)
+  } catch (err) {
+    throw new Error(`saved ${file}, but could not set its mode to 600 (${err instanceof Error ? err.message : String(err)}): run chmod 600 ${file}`, { cause: err })
   }
 }
 
