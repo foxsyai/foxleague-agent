@@ -232,7 +232,13 @@ export interface MatchWaiverQuote {
 export interface ShopStatus {
   prices?: Record<string, number>
   training?: { daily_free: number; premium_cap: number; used_today: number; premium_used_today: number; slots_banked: number }
-  xp_booster?: { active: boolean; expires_at?: string | null } | null
+  /**
+   * The XP booster, flat as FoxLeague serialises it (backend/src/routes/shop.rs ShopStatus, :810-816): active when a
+   * booster was verified within the last 24 h, and then its expiry (verified_at + 24 h, RFC 3339). Optional only
+   * because a missing field is unknown: the rules refuse a purchase unless `xp_booster_active` is a boolean.
+   */
+  xp_booster_active?: boolean
+  xp_booster_expires_at?: string | null
   common_pack_available?: boolean
   common_pack_remaining_this_week?: number
   common_pack_epoch_remaining?: number

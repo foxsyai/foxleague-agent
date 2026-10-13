@@ -77,7 +77,7 @@ export function snapshot(extra: PlayerView[] = []): AgentSnapshot {
     team: { id: 1, user_id: 100, name: 'Agent', coach_name: null, formation: '4-4-2', lineup: players.slice(0, 11).map(p => p.nonce), substitutes: players.slice(11).map(p => p.nonce), team_overall: 20, badge: null },
     players: [...players, ...extra],
     auth: {
-      shop: { training: { daily_free: 5, premium_cap: 10, used_today: 0, premium_used_today: 0, slots_banked: 0 } },
+      shop: { xp_booster_active: false, xp_booster_expires_at: null, training: { daily_free: 5, premium_cap: 10, used_today: 0, premium_used_today: 0, slots_banked: 0 } },
       allowance: { today_count: 0, daily_limit: 5, reset_hour_utc: 14 },
       activeMatch: null,
       myTournaments: { active: [], completed: [] },
