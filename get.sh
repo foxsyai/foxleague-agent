@@ -5,7 +5,7 @@
 #
 # Downloads the newest release into ~/foxleague-agent (no git needed) and starts the guided installer. Run
 # it again to update: the code is replaced, your wallet words (.env), data, PEM files and keys are kept.
-#   FOXAGENT_VERSION=v0.10.0  a given release instead of the newest; FOXAGENT_VERSION=main for untested code
+#   FOXAGENT_VERSION=v0.11.0  a given release instead of the newest; FOXAGENT_VERSION=main for untested code
 #   FOXAGENT_DIR              another folder; FOXAGENT_SOURCE another archive (tests, mirrors)
 set -euo pipefail
 
