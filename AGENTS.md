@@ -33,9 +33,15 @@ rules and the owner's caps before anything is signed. Treat every change to that
 ## How to change the code
 - **Test first.** Write the test, run it, see it fail for the right reason, then fix. One test per finding, named after
   it. Helpers: `test/fixtures.ts` (`setup()`, `snapshot()`, `dryWallet`, `card()`); tests use `:memory:` stores.
-- Contributors (and their AI agents): small commits on a branch and a pull request; only the maintainer merges into
-  `main`. The maintainer's own sessions commit to `main` when the maintainer asks. Never force-push `main`. Stage
-  files by name; never `git add -A`.
+- Every change reaches `main` through a pull request, the maintainer's own included: small commits on a branch, then
+  a pull request. Opening or updating one runs nothing. When the maintainer decides to merge it, they add the label
+  `merge-check`, which runs CI (`ci`: type check, tests, the dashboard script, the reviewer gate's tests, the manual
+  build) and the agent review (`claude-review`, Claude Opus 5.5). `main` takes the merge only when both are green and
+  a maintainer approved; a commit pushed afterwards needs `merge-check` added again. Only the maintainer may bypass
+  this in an emergency. Never force-push `main`. Stage files by name; never `git add -A`.
+- Releases are tags on `main` (`v1.0.0`, `v1.0.1`, ...) with a GitHub release; the one-line installer (`get.sh`)
+  installs the newest release, and users update by running it again. A release is cut from a `main` commit that
+  passed both checks and already ran on the maintainer's own server.
 - Do not touch `src/strategist/prompt.ts` casually: it is byte-stable so that it is served from the prompt cache. Dates and
   live values go in the user message.
 - The game rules are mirrored in `docs/ECONOMY-AND-RULES.md`, `docs/FOXLEAGUE-INTEGRATION.md` and

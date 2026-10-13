@@ -1,0 +1,89 @@
+# CI for foxleague-agent (owner decision 2026-10-13). It runs when a maintainer marks a pull request into main
+# as a merge candidate with the label merge-check (adding a label needs triage or write access, which this repo
+# gives only to its maintainers), on every push to main and
+# on demand. Opening or updating a pull request starts nothing, so nobody can spend the project's CI minutes by
+# opening pull requests. The job name ("ci") is a required status check of main (the ruleset "main: changes
+# through a pull request"):
+#   - a run started by any other label fails at once unless merge-check is on the pull request, and a job that is
+#     skipped would count as passed, so no step here is skipped on a label condition;
+#   - a commit pushed after the run has no result, so the pull request cannot merge until merge-check is added
+#     again (remove it and add it), which runs CI on the new code.
+name: CI
+
+on:
+  pull_request:
+    types: [labeled]
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Only a merge candidate is tested
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'merge-check') }}
+        run: |
+          if [[ "$HAS_LABEL" != "true" ]]; then
+            echo "::error::This pull request is not marked merge-check: CI runs only when a maintainer adds that label."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # The merge commit of the event is tested, while the result attaches to the pull request's head: a label
+      # added seconds after a push could test the merge commit of the head before. Its second parent must be the
+      # head (read from the commit object, which a shallow checkout has).
+      - name: The code tested is the head that gets the result
+        if: ${{ github.event_name == 'pull_request' }}
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          second=$(git cat-file -p HEAD | awk '/^parent /{print $2}' | sed -n 2p)
+          if [[ "$second" != "$HEAD_SHA" ]]; then
+            echo "::error::The pull request changed since merge-check was added: add merge-check again to test its newest commit."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.18'
+          cache: npm
+
+      - name: Install (no install scripts)
+        run: npm ci --ignore-scripts
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: The dashboard script parses
+        run: |
+          sed -n '/^<script>$/,/^<\/script>/p' src/web/dashboard.html | sed '1d;$d' > "$RUNNER_TEMP/dashboard.js"
+          test -s "$RUNNER_TEMP/dashboard.js"
+          node --check "$RUNNER_TEMP/dashboard.js"
+
+      - name: The reviewer's workspace gate holds
+        run: python3 scripts/ci/test_review_gate.py
+
+      - name: The manual builds
+        working-directory: site
+        run: |
+          npm ci --ignore-scripts
+          npm run build
