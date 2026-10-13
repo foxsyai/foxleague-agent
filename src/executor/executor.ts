@@ -947,7 +947,10 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
     case 'buy':
       if (a.product === 'condition_recovery') for (const n of a.player_nonces ?? []) { const p = card(n); if (p) p.condition = 100 }
       if (a.product === 'training_slot' && s.auth?.shop?.training) s.auth.shop.training.slots_banked += a.quantity ?? 1
-      if (a.product === 'xp_booster' && s.auth?.shop) s.auth.shop.xp_booster = { active: true, expires_at: new Date(Date.now() + 86_400_000).toISOString() }
+      if (a.product === 'xp_booster' && s.auth?.shop) {
+        s.auth.shop.xp_booster_active = true
+        s.auth.shop.xp_booster_expires_at = new Date(Date.now() + 86_400_000).toISOString()
+      }
       break
     default:
       break

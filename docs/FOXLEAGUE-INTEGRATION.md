@@ -393,7 +393,7 @@ Both tokens have 18 decimals. The web app flags "low EGLD" under 0.01 EGLD
 
 | Route | Auth | Returns | Source |
 |---|---|---|---|
-| `GET /api/shop/status?wallet_address=` | auth, must match | booster state, shop prices, training quota (`daily_free`, `premium_cap`, `used_today`, `premium_used_today`, `slots_banked`), Common pack quota | `backend/src/routes/shop.rs:52-142`, `:730-910` |
+| `GET /api/shop/status?wallet_address=` | auth, must match | booster state, flat (`xp_booster_active` bool, `xp_booster_expires_at` RFC 3339 or null; a failed booster query on the server reads as inactive, `shop.rs:794-816`), shop prices, training quota (`daily_free`, `premium_cap`, `used_today`, `premium_used_today`, `slots_banked`), Common pack quota | `backend/src/routes/shop.rs:52-142`, `:730-910` |
 | `GET /api/matches/daily-allowance?wallet_address=` | auth, must match | `{today_count, daily_limit, reset_hour_utc}` | `backend/src/routes/matches.rs:527-570` |
 | `GET /api/matches/active?wallet_address=` | auth, must match | the match you are in right now or `null`: `{match_id, is_home, home_team_name, away_team_name, status, tm_game_id, created_at, kind ("ranked"/"challenge"/"tournament"), tournament_id, tournament_title, opponent_badge}` | `matches.rs:4471-4640` |
 | `GET /api/tournaments/my` | auth | `{active[], completed[]}` tournaments you play in or created | `backend/src/routes/tournaments.rs:6652-6907` |
@@ -1298,7 +1298,8 @@ and others (`shop.rs:1316-1345`).
   `Could not price the recovery right now. Please retry in a moment.` (`tx_pending`) (`shop.rs:640-667`, `:2285`, `:2346`).
 
 **B. XP booster** (`xp_booster`): **2,000 FOXSY**, exact. 2x training and match XP for 24 h from the
-verified purchase; buying again restarts the clock (no stacking); the highest active multiplier wins
+verified purchase; buying again restarts the clock (no stacking), so the agent buys another only when
+`/api/shop/status` shows `xp_booster_active` false or at most 2 h to `xp_booster_expires_at`; the highest active multiplier wins
 over the featured-tournament ones (`shop.rs:771-789`, `:3057-3080`; `config_registry.rs:738-744`). Useful
 only with XP sources: training plus Silver/Gold tournament and 1v1 matches.
 

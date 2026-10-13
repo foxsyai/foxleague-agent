@@ -1,11 +1,12 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { freeGaps } from '../executor/slots.ts'
-import { lineupStrength } from '../executor/rules.ts'
+import { lineupStrength, XP_BOOSTER_RENEW_HOURS } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
+import type { ShopStatus } from '../foxleague/types.ts'
 
 /**
  * Text written by other players or servers (titles, team, card and listing names, error messages) as
@@ -53,6 +54,19 @@ export function playerLine(p: PlayerView, gate?: MatchGate): string {
   return `#${p.nonce} ${txt(p.name, 30)} ${p.position} ${p.rarity}(cap ${p.cap}) cond ${p.condition} age ${p.ageYears} comp ${comp} | ${statLine(p)} | tot ${p.syncedTotal} [${tags.join(',')}]`
 }
 
+/**
+ * The XP booster as FoxLeague's shop status reports it (flat fields). An unreadable status is said to be unknown,
+ * never "none active". The expiry is printed as parsed, so no raw server text reaches the prompt.
+ */
+export function boosterLine(shop: ShopStatus | null | undefined, takenAt: string): string {
+  if (!shop || typeof shop.xp_booster_active !== 'boolean') return 'XP booster: status unknown (shop status could not be read)'
+  if (!shop.xp_booster_active) return 'XP booster: none active'
+  const until = typeof shop.xp_booster_expires_at === 'string' ? Date.parse(shop.xp_booster_expires_at) : NaN
+  if (!Number.isFinite(until)) return 'XP booster active, expiry unknown (no new one is bought until it is known)'
+  const left = Math.max(0, (until - Date.parse(takenAt)) / 3600_000)
+  return `XP booster active until ${new Date(until).toISOString()} (${left.toFixed(1)} h left; a new one restarts the 24 h and is refused while more than ${XP_BOOSTER_RENEW_HOURS} h are left)`
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
@@ -84,7 +98,7 @@ export function renderDigest(s: AgentSnapshot): string {
     if (a.allowance) out.push(`Matches started today: ${a.allowance.today_count}/${a.allowance.daily_limit}`)
     const t = a.shop?.training
     if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid used ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
-    if (a.shop?.xp_booster) out.push(`XP booster: ${JSON.stringify(a.shop.xp_booster)}`)
+    out.push(boosterLine(a.shop, s.takenAt))
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]`)
