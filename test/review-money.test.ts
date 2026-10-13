@@ -9,6 +9,9 @@ import { Chain } from '../src/chain/gateway.ts'
 import { ApiRefusal } from '../src/foxleague/api.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
 import { creditRefunds } from '../src/executor/refunds.ts'
+import { Store } from '../src/store/db.ts'
+import { TopUps } from '../src/topup.ts'
+import { neverUsedOrWhy } from '../src/delete-agent.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
 
 const act = (action: unknown): PlannedAction[] => [{ action: action as PlannedAction['action'], reason: '' }]
@@ -316,6 +319,36 @@ test('C3 another owner: the bid is credited only once the card stayed away for t
   assert.deepEqual(bids(), ['bid:4881'])
   assert.equal(await creditRefunds(deps, m.agent(), false, now + 11 * 60_000), 1, 'gone for good, someone else won: credited')
   assert.equal(m.store.spentUsd(0, { category: 'play', dryRun: false }), 0)
+})
+
+// ---- A7: an agent with a Binance top-up on its way is not deleted as never used ----
+
+function topUpRig(sentMinutesAgo: number, more: Record<string, unknown> = {}) {
+  const A = (n: number) => `erd1${String(n).padStart(58, 'q')}`
+  const store = new Store('', ':memory:')
+  for (let i = 0; i < 4; i++) store.addAgent(i, A(i))
+  store.setLiveMode(true)
+  const binance = { egldOnBinance: async () => { throw new Error('not read here') }, travelRuleCountry: async () => 'NIL', withdrawEgld: async () => 'x', findWithdrawal: async () => null, whitelisted: async () => true }
+  const topups = new TopUps({ store, key: () => ({ apiKey: 'k', secret: 's' }), accountType: () => undefined, live: () => true, binance, send: () => undefined })
+  const at = new Date(Date.now() - sentMinutesAgo * 60_000)
+  store.setKv('topups', JSON.stringify([{
+    id: 'fla4-abc', agentIndex: 3, address: A(3), codeHash: 'h', withdrawEgld: 2, receiveEgld: 1.998, feeEgld: 0.002, playableUsd: 0, warningUsd: 10, targetUsd: 150, egldUsd: 25,
+    createdAt: at.toISOString(), expiresAt: new Date(at.getTime() + 3600_000).toISOString(), status: 'sent', binanceId: 'bn-1', ...more,
+  }]))
+  return { store, topups, deps: { store, chain: { account: async (address: string) => ({ address, nonce: 0, balance: 0n }), esdts: async () => [] }, fox: { user: async () => null }, topups, agentCount: 1 } }
+}
+
+test('A7 an agent with a Binance top-up on its way (sent two minutes ago, not arrived) is not deleted as never used', async () => {
+  const { deps } = topUpRig(2)
+  await assert.rejects(neverUsedOrWhy(deps, 3), /top-up/, 'EGLD is on its way to this wallet: it is not "never used"')
+  // Sent at its last minute: the hour counts from the sending, not from the offer.
+  const late = topUpRig(70, { sentAt: new Date(Date.now() - 10 * 60_000).toISOString() })
+  await assert.rejects(neverUsedOrWhy(late.deps, 3), /top-up/)
+})
+
+test('A7 control: a top-up sent more than an hour ago has landed (or the wallet read says so): it no longer holds the delete', async () => {
+  const { deps } = topUpRig(130, { sentAt: new Date(Date.now() - 125 * 60_000).toISOString() })
+  assert.equal((await neverUsedOrWhy(deps, 3)).index, 3)
 })
 
 test('C3 the owner unreadable: the bid keeps counting, even after the grace period', async () => {
