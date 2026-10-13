@@ -5,6 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { OTHER, STRANGER, card, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
+import { Chain } from '../src/chain/gateway.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
 
 const act = (action: unknown): PlannedAction[] => [{ action: action as PlannedAction['action'], reason: '' }]
@@ -168,4 +169,44 @@ test('A1 a seat payment that reverted is no longer pending (nothing to confirm, 
     assert.equal(r!.status, 'failed', r!.summary)
     assert.deepEqual(m.store.pending(0), [])
   })
+})
+
+// ---- A10: a broadcast the gateway refused (its error answer) is no sent payment: the booking goes ----
+
+/** A bid sent through the real Chain.send over a gateway that answers `answer` (or never answers). */
+async function bidThroughGateway(answer: () => Promise<Response>) {
+  const chain = new Chain({ gatewayUrl: 'http://gw.test', apiUrl: 'http://api.test', gatewayRps: 50, apiRps: 50 })
+  const realFetch = globalThis.fetch
+  globalThis.fetch = answer as typeof fetch
+  const auction = [encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: 0n, bidder: null, endsInS: 3600 })]
+  const m = setup({
+    chain: { account: async () => ({ nonce: 1, balance: wholeToAtomic(10) }), send: (tx: never) => chain.send(tx), query: async (_sc: string, fn: string) => (fn === 'getAuction' ? auction : []), esdts: async () => [] },
+    fox: { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, rarity: 'Rare' }) },
+  })
+  try {
+    return await withLive(m.store, async () => {
+      const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'bid', nonce: 9, foxsy: 1000 }))
+      return { r: r!, live: m.store.spentUsd(0, { category: 'play', dryRun: false }) }
+    })
+  } finally {
+    globalThis.fetch = realFetch
+  }
+}
+const gatewayAnswer = (status: number, error: string) => async () => new Response(JSON.stringify({ data: null, error, code: 'bad_request' }), { status, headers: { 'content-type': 'application/json' } })
+
+test('A10 a broadcast the gateway refused (its error envelope, no hash) is not a sent payment: nothing stays booked', async () => {
+  const { r, live } = await bidThroughGateway(gatewayAnswer(400, 'transaction nonce is lower than account nonce'))
+  assert.equal(r.status, 'error')
+  assert.match(r.summary, /broadcast refused: transaction nonce is lower/)
+  assert.equal(r.sent, undefined, 'nothing left the wallet: the result does not say "sent"')
+  assert.ok(live < 0.01, `the gateway said no, nothing left the wallet: the 1,000 FOXSY must not stay booked, got $${live.toFixed(2)}`)
+})
+
+test('A10 control: a broadcast without an answer (transport error, or a gateway 5xx) may have gone out: it stays booked', async () => {
+  for (const answer of [async () => { throw new TypeError('fetch failed') }, gatewayAnswer(500, 'sending transaction to observers failed')]) {
+    const { r, live } = await bidThroughGateway(answer as () => Promise<Response>)
+    assert.equal(r.status, 'error', r.summary)
+    assert.equal(r.sent, true, r.summary)
+    assert.ok(live > 2, `an unclear broadcast keeps its booking, got $${live.toFixed(2)}`)
+  }
 })

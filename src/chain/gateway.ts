@@ -52,6 +52,14 @@ export interface SimulationResult {
   raw: unknown
 }
 
+/** The gateway answered a broadcast with its refusal: the transaction did not reach the network. */
+export class BroadcastRefused extends Error {
+  constructor(detail: string) {
+    super(`broadcast refused: ${detail}`)
+    this.name = 'BroadcastRefused'
+  }
+}
+
 export class Chain {
   private readonly gw: string
   private readonly api: string
@@ -130,15 +138,22 @@ export class Chain {
     return interpretSimulation(json.data)
   }
 
+  /**
+   * Broadcasts a signed transaction. The gateway's own refusal (a 4xx answer with its error envelope: nonce too low,
+   * insufficient funds, a bad signature) throws BroadcastRefused, a definite "nothing was sent". Anything else without
+   * a hash (no answer, a 5xx, an unreadable body) may have reached the network and throws a plain error.
+   */
   async send(tx: PlainTx): Promise<string> {
-    const { json } = await requestJson<GatewayEnvelope<{ txHash: string }>>(this.gwLimiter, `${this.gw}/transaction/send`, {
+    const { status, json } = await requestJson<GatewayEnvelope<{ txHash: string }>>(this.gwLimiter, `${this.gw}/transaction/send`, {
       method: 'POST',
       body: tx,
       retries: 0,
     })
     const hash = json?.data?.txHash
-    if (!hash) throw new Error(`broadcast refused: ${json?.error ?? 'no hash'}`)
-    return hash
+    if (hash) return hash
+    const detail = json?.error || 'no hash'
+    if (status >= 400 && status < 500 && json && typeof json === 'object') throw new BroadcastRefused(detail)
+    throw new Error(`broadcast unclear (HTTP ${status}, no hash): ${detail}`)
   }
 
   /**

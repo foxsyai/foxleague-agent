@@ -10,7 +10,7 @@ import { isZeus } from '../store/settings.ts'
 import { winChance } from '../snapshot/winchance.ts'
 import { Address } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
-import type { Chain, TxOutcome } from '../chain/gateway.ts'
+import { BroadcastRefused, type Chain, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { TournamentDetail } from '../foxleague/types.ts'
@@ -571,8 +571,17 @@ export class Executor {
     const tx = buildTransaction(spec, wallet.address, account.nonce)
     this.assertNotStopped(wallet.index)
     wallet.signTransaction(tx)
+    const sentBefore = booking.sent
     booking.sent = true
-    const hash = await this.d.chain.send(toPlain(tx))
+    let hash: string
+    try {
+      hash = await this.d.chain.send(toPlain(tx))
+    } catch (err) {
+      // The gateway's own refusal is a definite "not sent": the booking is released by the caller's catch. No
+      // answer at all (or an unclear one) may still have reached the network: the payment stays booked.
+      if (err instanceof BroadcastRefused) booking.sent = sentBefore
+      throw err
+    }
     this.settle(booking, hash)
     return hash
   }
