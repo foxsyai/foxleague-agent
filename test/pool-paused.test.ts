@@ -37,3 +37,15 @@ test('the snapshot keeps its prices while the pair is paused and tells the plan 
   assert.equal(s.prices?.egldPerFoxsy, 0.0005, 'FOXSY is still valued, so paid play goes on with the FOXSY held')
   assert.ok(s.warnings.some(w => w.startsWith('xExchange pool: xExchange has paused the FOXSY/WEGLD pair')), s.warnings.join('; '))
 })
+
+test('a frozen price adds no sample to the two-day median the caps use', async () => {
+  const { setup, snapshot } = await import('./fixtures.ts')
+  const { exec, store } = setup()
+  const value = (prices: object) => (exec as unknown as { valuationPrices(p: object): { foxsyUsd: number } }).valuationPrices(prices)
+  store.setKv('foxsy_usd_seen', JSON.stringify([{ t: Date.now() - 700_000, p: 0.003 }]))
+  value({ ...snapshot().prices!, foxsyUsd: 0.001, frozen: true })
+  assert.equal(JSON.parse(store.getKv('foxsy_usd_seen')!).length, 1, 'no sample while paused')
+  assert.equal(value({ ...snapshot().prices!, foxsyUsd: 0.001, frozen: true }).foxsyUsd, 0.003, 'the median still floors the value')
+  value({ ...snapshot().prices!, foxsyUsd: 0.001 })
+  assert.equal(JSON.parse(store.getKv('foxsy_usd_seen')!).length, 2, 'a live price is sampled again')
+})

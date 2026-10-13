@@ -88,7 +88,8 @@ export interface AgentSnapshot {
   agent: { index: number | null; address: string; shard: number | null }
   gameDay: { resetHourUtc: number; nextResetAt: string; hoursToReset: number }
   chain: { egld: bigint; nonce: number; foxsy: bigint; wegld: bigint; nftCount: number } | null
-  prices: { egldUsd: number; egldPerFoxsy: number; foxsyUsd: number } | null
+  /** frozen: xExchange has paused the pair, so the FOXSY price is its last trade (not a new observation). */
+  prices: { egldUsd: number; egldPerFoxsy: number; foxsyUsd: number; frozen?: boolean } | null
   config: FoxConfig | null
   registration: {
     registered: boolean
@@ -353,7 +354,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     // Balances unreadable are unknown, never "0 FOXSY": with either route failed the whole section is unknown, so the
     // rules refuse blind (and no swap is planned for FOXSY the wallet already holds).
     chain: account && esdts ? { egld: account.balance, nonce: account.nonce, foxsy: bal(MAINNET.foxsyToken), wegld: bal(MAINNET.wegldToken), nftCount } : null,
-    prices: egldUsd && egldPerFoxsy ? { egldUsd, egldPerFoxsy, foxsyUsd: egldUsd * egldPerFoxsy } : null,
+    prices: egldUsd && egldPerFoxsy ? { egldUsd, egldPerFoxsy, foxsyUsd: egldUsd * egldPerFoxsy, ...(pool && !pool.active ? { frozen: true } : {}) } : null,
     config,
     registration: {
       registered,
