@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { Mnemonic } from '@multiversx/sdk-core'
+import { Mnemonic, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import type { Config } from '../src/config.ts'
 import { ADDR, OTHER, STRANGER, card, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
@@ -184,33 +184,87 @@ test('A1 a seat payment that reverted is no longer pending (nothing to confirm, 
 
 // ---- A10: a broadcast the gateway refused (its error answer) is no sent payment: the booking goes ----
 
-/** A bid sent through the real Chain.send over a gateway that answers `answer` (or never answers). */
-async function bidThroughGateway(answer: () => Promise<Response>) {
-  const chain = new Chain({ gatewayUrl: 'http://gw.test', apiUrl: 'http://api.test', gatewayRps: 50, apiRps: 50 })
+const envelope = (status: number, error: string, data: unknown = null) => new Response(JSON.stringify({ data, error, code: error ? 'bad_request' : 'successful' }), { status, headers: { 'content-type': 'application/json' } })
+const gatewayAnswer = (status: number, error: string) => async () => envelope(status, error)
+
+/**
+ * A bid sent through the real Chain over a gateway that answers the broadcast with `send` and a look-up of a
+ * transaction by its hash with `lookup` (none: the test fails on a look-up). Returns the hashes looked up and the
+ * hash of the signed transaction the broadcast carried, computed locally.
+ */
+async function bidThroughGateway(send: () => Promise<Response>, lookup?: () => Promise<Response>) {
+  const chain = new Chain({ gatewayUrl: 'http://gw.test', apiUrl: 'http://api.test', gatewayRps: 50, apiRps: 50 }, { refusalLookupDelayMs: 0 })
   const realFetch = globalThis.fetch
-  globalThis.fetch = answer as typeof fetch
+  const looked: string[] = []
+  let sentHash: string | undefined
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (url.endsWith('/transaction/send')) {
+      sentHash = new TransactionComputer().computeTransactionHash(Transaction.newFromPlainObject(JSON.parse(String(init!.body))))
+      return send()
+    }
+    const m = /\/transaction\/([0-9a-f]{64})(\?|$)/.exec(url)
+    if (m && lookup) return (looked.push(m[1]!), lookup())
+    throw new Error(`unexpected gateway call ${url}`)
+  }) as typeof fetch
   const auction = [encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: 0n, bidder: null, endsInS: 3600 })]
   const m = setup({
-    chain: { account: async () => ({ nonce: 1, balance: wholeToAtomic(10) }), send: (tx: never) => chain.send(tx), query: async (_sc: string, fn: string) => (fn === 'getAuction' ? auction : []), esdts: async () => [] },
+    chain: {
+      account: async () => ({ nonce: 1, balance: wholeToAtomic(10) }),
+      send: (tx: never) => chain.send(tx),
+      lookupTransaction: (hash: string) => chain.lookupTransaction(hash),
+      query: async (_sc: string, fn: string) => (fn === 'getAuction' ? auction : []),
+      esdts: async () => [],
+    },
     fox: { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, rarity: 'Rare' }) },
   })
   try {
     return await withLive(m.store, async () => {
       const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'bid', nonce: 9, foxsy: 1000 }))
-      return { r: r!, live: m.store.spentUsd(0, { category: 'play', dryRun: false }) }
+      return { r: r!, live: m.store.spentUsd(0, { category: 'play', dryRun: false }), looked, sentHash, bidRows: m.store.openSpend(0, 'bid:', false) }
     })
   } finally {
     globalThis.fetch = realFetch
   }
 }
-const gatewayAnswer = (status: number, error: string) => async () => new Response(JSON.stringify({ data: null, error, code: 'bad_request' }), { status, headers: { 'content-type': 'application/json' } })
 
-test('A10 a broadcast the gateway refused (its error envelope, no hash) is not a sent payment: nothing stays booked', async () => {
-  const { r, live } = await bidThroughGateway(gatewayAnswer(400, 'transaction nonce is lower than account nonce'))
+test('A10 a definite refusal (insufficient funds) whose signed transaction the gateway does not know: nothing stays booked', async () => {
+  const { r, live, looked, sentHash } = await bidThroughGateway(gatewayAnswer(400, 'insufficient funds for address erd1...'), async () => envelope(500, 'transaction not found'))
   assert.equal(r.status, 'error')
-  assert.match(r.summary, /broadcast refused: transaction nonce is lower/)
+  assert.match(r.summary, /broadcast refused: insufficient funds/)
+  assert.deepEqual(looked, [sentHash], 'the look-up asks for the hash of the signed transaction, computed locally')
   assert.equal(r.sent, undefined, 'nothing left the wallet: the result does not say "sent"')
-  assert.ok(live < 0.01, `the gateway said no, nothing left the wallet: the 1,000 FOXSY must not stay booked, got $${live.toFixed(2)}`)
+  assert.ok(live < 0.01, `the gateway said no and does not know the transaction: the 1,000 FOXSY must not stay booked, got $${live.toFixed(2)}`)
+})
+
+test('A10 a nonce or duplicate refusal may follow a broadcast that went through (the gateway retried another observer): it stays booked', async () => {
+  for (const said of ['transaction nonce is lower than account nonce', 'lower nonce in transaction', 'nonce too low', 'duplicated transaction', 'transaction already exists in pool']) {
+    const { r, live, sentHash, bidRows } = await bidThroughGateway(gatewayAnswer(400, said), async () => envelope(500, 'transaction not found'))
+    assert.equal(r.status, 'error', r.summary)
+    assert.equal(r.sent, true, `${said}: the payment may have gone out`)
+    assert.ok(live > 2, `${said}: it keeps its booking, got $${live.toFixed(2)}`)
+    assert.deepEqual(bidRows.map(b => b.txHash), [sentHash], `${said}: booked under its own hash, so the refund check can read what became of the bid`)
+  }
+})
+
+test('A10 a definite refusal whose transaction the gateway does know (pending or executed) stays booked', async () => {
+  for (const status of ['pending', 'success']) {
+    const { r, live, looked } = await bidThroughGateway(gatewayAnswer(400, 'insufficient funds'), async () => envelope(200, '', { transaction: { status, nonce: 1 } }))
+    assert.equal(looked.length, 1)
+    assert.equal(r.sent, true, `${status}: it is on the network`)
+    assert.ok(live > 2, `${status}: it keeps its booking, got $${live.toFixed(2)}`)
+  }
+})
+
+test('A10 a definite refusal whose look-up fails, or a refusal of unknown meaning, stays booked', async () => {
+  for (const [said, lookup] of [
+    ['insufficient funds', async () => envelope(500, 'no observer online')],
+    ['invalid signature', async () => new Response('<html>bad gateway</html>', { status: 500 })],
+    ['bad request', async () => envelope(500, 'transaction not found')],
+  ] as const) {
+    const { r, live } = await bidThroughGateway(gatewayAnswer(400, said), lookup)
+    assert.equal(r.sent, true, `${said}: not surely refused`)
+    assert.ok(live > 2, `${said}: it keeps its booking, got $${live.toFixed(2)}`)
+  }
 })
 
 test('A10 control: a broadcast without an answer (transport error, or a gateway 5xx) may have gone out: it stays booked', async () => {

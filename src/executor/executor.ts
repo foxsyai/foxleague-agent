@@ -8,9 +8,9 @@
 import { randomUUID } from 'node:crypto'
 import { isZeus } from '../store/settings.ts'
 import { winChance } from '../snapshot/winchance.ts'
-import { Address } from '@multiversx/sdk-core'
+import { Address, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
-import { BroadcastRefused, type Chain, type TxOutcome } from '../chain/gateway.ts'
+import { BroadcastRefused, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { TournamentDetail } from '../foxleague/types.ts'
@@ -582,17 +582,36 @@ export class Executor {
     wallet.signTransaction(tx)
     const sentBefore = booking.sent
     booking.sent = true
+    const plain = toPlain(tx)
     let hash: string
     try {
-      hash = await this.d.chain.send(toPlain(tx))
+      hash = await this.d.chain.send(plain)
     } catch (err) {
-      // The gateway's own refusal is a definite "not sent": the booking is released by the caller's catch. No
-      // answer at all (or an unclear one) may still have reached the network: the payment stays booked.
-      if (err instanceof BroadcastRefused) booking.sent = sentBefore
-      throw err
+      // No answer at all (or an unclear one) may still have reached the network: the payment stays booked.
+      if (!(err instanceof BroadcastRefused)) throw err
+      // The gateway's refusal releases the booking (in the caller's catch) only when it names the transaction itself
+      // and the gateway does not know the signed transaction. A nonce or duplicate answer, an unknown one, a known
+      // transaction or a failed look-up: it may have gone out after all (the gateway retries another observer), so
+      // it stays booked under its own hash, where the refund check can still read what became of it.
+      const local = transactionHash(plain)
+      if (local && err.definite && (await this.lookup(local)) === 'not_found') {
+        booking.sent = sentBefore
+        throw err
+      }
+      if (local) this.settle(booking, local)
+      throw new Error(`${err.message}; it may have gone out all the same, so it stays counted${local ? ` (transaction ${local})` : ''}`)
     }
     this.settle(booking, hash)
     return hash
+  }
+
+  /** The gateway's answer for a transaction hash, or null when the look-up failed. */
+  private async lookup(hash: string): Promise<'known' | 'not_found' | null> {
+    try {
+      return await this.d.chain.lookupTransaction(hash)
+    } catch {
+      return null
+    }
   }
 
   /** The outcome, or 'unconfirmed' when it cannot be read (the payment stays booked). */
@@ -876,6 +895,17 @@ export class Executor {
 function retryable(err: unknown, wording: RegExp): boolean {
   if (err instanceof ApiRefusal) return err.isTxPending || wording.test(err.message)
   return true
+}
+
+const txComputer = new TransactionComputer()
+
+/** The hash of the signed transaction a broadcast carried, computed locally as the network does; null when it cannot be. */
+function transactionHash(plain: PlainTx): string | null {
+  try {
+    return txComputer.computeTransactionHash(Transaction.newFromPlainObject(plain))
+  } catch {
+    return null
+  }
 }
 
 /** Last byte of the public key, which the relayer shard rule reads. */

@@ -52,12 +52,36 @@ export interface SimulationResult {
   raw: unknown
 }
 
-/** The gateway answered a broadcast with its refusal: the transaction did not reach the network. */
+/**
+ * A refusal that names the transaction itself (its funds, signature, gas, data, chain or version). A nonce or
+ * duplicate answer is never one: the gateway retries another observer when the first one timed out or dropped the
+ * connection after it had broadcast, and by then the transaction may have executed ("lower nonce") or sit in the pool
+ * ("already exists"). A refusal of unknown meaning is not one either.
+ */
+export function definiteRefusal(detail: string): boolean {
+  if (/nonce|duplicat|already|exist|known|in pool/i.test(detail)) return false
+  return /insufficient (funds|balance)|signature|gas|data field|data too|chain ?id|transaction version|invalid version|invalid value|negative value/i.test(detail)
+}
+
+/**
+ * The gateway answered a broadcast with its refusal. Not always "nothing was sent" (see definiteRefusal): the
+ * executor releases a booking only for a definite refusal whose transaction the gateway does not know.
+ */
 export class BroadcastRefused extends Error {
+  readonly detail: string
+  /** The refusal names the transaction itself, not its nonce or a duplicate (definiteRefusal). */
+  readonly definite: boolean
   constructor(detail: string) {
     super(`broadcast refused: ${detail}`)
     this.name = 'BroadcastRefused'
+    this.detail = detail
+    this.definite = definiteRefusal(detail)
   }
+}
+
+export interface ChainOptions {
+  /** Before a refused transaction is looked up, so an observer that did take it has passed it on. */
+  refusalLookupDelayMs?: number
 }
 
 export class Chain {
@@ -65,15 +89,17 @@ export class Chain {
   private readonly api: string
   private readonly gwLimiter: RateLimiter
   private readonly apiLimiter: RateLimiter
+  private readonly refusalLookupDelayMs: number
   private priceCache: { usd: number; at: number } | undefined
   private acceptedPrice: number | undefined
   private candidatePrice: { price: number; seen: number; since: number } | undefined
 
-  constructor(cfg: Pick<Config, 'gatewayUrl' | 'apiUrl' | 'gatewayRps' | 'apiRps'>) {
+  constructor(cfg: Pick<Config, 'gatewayUrl' | 'apiUrl' | 'gatewayRps' | 'apiRps'>, opts: ChainOptions = {}) {
     this.gw = cfg.gatewayUrl
     this.api = cfg.apiUrl
     this.gwLimiter = new RateLimiter(cfg.gatewayRps)
     this.apiLimiter = new RateLimiter(cfg.apiRps, 2)
+    this.refusalLookupDelayMs = opts.refusalLookupDelayMs ?? 3000
   }
 
   private async gwGet<T>(path: string): Promise<T> {
@@ -140,8 +166,9 @@ export class Chain {
 
   /**
    * Broadcasts a signed transaction. The gateway's own refusal (a 4xx answer with its error envelope: nonce too low,
-   * insufficient funds, a bad signature) throws BroadcastRefused, a definite "nothing was sent". Anything else without
-   * a hash (no answer, a 5xx, an unreadable body) may have reached the network and throws a plain error.
+   * insufficient funds, a bad signature) throws BroadcastRefused; whether it went out after all is the executor's to
+   * decide (definite refusal and lookupTransaction). Anything else without a hash (no answer, a 5xx, an unreadable
+   * body) may have reached the network and throws a plain error.
    */
   async send(tx: PlainTx): Promise<string> {
     const { status, json } = await requestJson<GatewayEnvelope<{ txHash: string }>>(this.gwLimiter, `${this.gw}/transaction/send`, {
@@ -154,6 +181,18 @@ export class Chain {
     const detail = json?.error || 'no hash'
     if (status >= 400 && status < 500 && json && typeof json === 'object') throw new BroadcastRefused(detail)
     throw new Error(`broadcast unclear (HTTP ${status}, no hash): ${detail}`)
+  }
+
+  /**
+   * Whether the gateway knows a transaction (in the pool or executed) by its hash, after a short wait. 'not_found'
+   * only on the gateway's own "not found" answer; any other answer without the transaction, or no answer, throws.
+   */
+  async lookupTransaction(hash: string): Promise<'known' | 'not_found'> {
+    if (this.refusalLookupDelayMs > 0) await sleep(this.refusalLookupDelayMs)
+    const { status, json } = await requestJson<GatewayEnvelope<{ transaction?: unknown }>>(this.gwLimiter, `${this.gw}/transaction/${hash}`)
+    if (json?.data?.transaction) return 'known'
+    if (json && typeof json === 'object' && !json.data && /not found/i.test(json.error ?? '')) return 'not_found'
+    throw new Error(`transaction ${hash}: the look-up is unclear (HTTP ${status}, ${json?.error || 'no transaction'})`)
   }
 
   /**
