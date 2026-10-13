@@ -88,9 +88,14 @@ function card(s: AgentSnapshot, nonce: number): PlayerView | undefined {
   return s.players.find(p => p.nonce === nonce)
 }
 
-/** Unrevealed tournament or 1v1 match of ours within the next hour (casual/ranked lockout, 1v1 accept gate). */
+/**
+ * Unrevealed tournament or 1v1 match of ours within the next hour (casual/ranked lockout, 1v1 accept gate). The
+ * upcoming matches unreadable is no "none": the reason then says so and the caller refuses.
+ */
 function tournamentMatchWithinHour(s: AgentSnapshot, now: Date): string | null {
-  for (const m of s.auth?.upcoming?.matches ?? []) {
+  const upcoming = s.auth?.upcoming
+  if (!upcoming) return 'your upcoming matches could not be read'
+  for (const m of upcoming.matches) {
     if (m.phase === 'finished') continue
     const at = new Date(m.scheduled_at).getTime()
     if (at - now.getTime() <= 3600_000 && at + 15 * 60_000 > now.getTime()) return `T${m.tournament_id} match at ${m.scheduled_at}`
@@ -251,6 +256,21 @@ function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | n
   }
   return null
 }
+
+/**
+ * The 1v1 gates FoxLeague applies after the stake is paid (one active 1v1 at a time, no tournament match within the
+ * hour), checked from the agent's own state. Either route unreadable is no "none": the stake is not paid blind.
+ */
+function oneVOneStateRefusal(s: AgentSnapshot, now: Date): string | null {
+  const mine = s.auth?.myTournaments
+  if (!mine) return 'your current tournaments could not be read (an active 1v1 is unknown): not paying a stake blind'
+  if (mine.active.some(x => x.max_teams === 2)) return 'already in an active 1v1'
+  if (!s.auth?.upcoming) return 'your upcoming matches could not be read (a match within the hour is unknown): not paying a stake blind'
+  const busy = tournamentMatchWithinHour(s, now)
+  if (busy) return `tournament match within the hour: ${busy}`
+  return null
+}
+
 /**
  * Why no fusion with this card could happen soon, or null: three cards of its rarity (not Legendary, not
  * listed, not in a transfer lock) and at least 18 cards left after it. Waivers are bought only then.
@@ -400,7 +420,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (al.today_count >= al.daily_limit) return refuse(`daily match limit reached (${al.today_count}/${al.daily_limit})`)
       if (s.auth?.activeMatch) return refuse(`already in match #${s.auth.activeMatch.match_id ?? s.auth.activeMatch.tournament_match_id ?? '?'}`)
       const busy = tournamentMatchWithinHour(s, ctx.now)
-      if (busy) return refuse(`pre-match lockout: ${busy}`)
+      if (busy) return refuse(s.auth?.upcoming ? `pre-match lockout: ${busy}` : `${busy} (the pre-match lockout is unknown): no match started blind`)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
       const exhausted = s.team.lineup.filter(n => (card(s, n)?.condition ?? 0) <= 0)
@@ -432,9 +452,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (d.participants.length < 1) return refuse('1v1 creator has not paid yet')
         const opp = oneVOneOpponentRefusal(s, ctx)
         if (opp) return refuse(opp)
-        if (s.auth?.myTournaments?.active.some(x => x.max_teams === 2)) return refuse('already in an active 1v1')
-        const busy = tournamentMatchWithinHour(s, ctx.now)
-        if (busy) return refuse(`tournament match within the hour: ${busy}`)
+        const blind = oneVOneStateRefusal(s, ctx.now)
+        if (blind) return refuse(blind)
         const fit = s.team!.lineup.concat(s.team!.substitutes).filter(n => {
           const p = card(s, n)
           return p && p.condition >= cfg.min_field_condition && !p.transferLockedUntil
@@ -532,9 +551,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const bounds = tierBounds(s, a.tier)
       if (!bounds || a.stake_foxsy < bounds[0] || a.stake_foxsy > bounds[1]) return refuse(`stake outside the ${a.tier} bounds`)
       if (a.stake_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`stake exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
-      if (s.auth?.myTournaments?.active.some(t => t.max_teams === 2)) return refuse('already in an active 1v1')
-      const busy = tournamentMatchWithinHour(s, ctx.now)
-      if (busy) return refuse(`tournament match within the hour: ${busy}`)
+      const blind = oneVOneStateRefusal(s, ctx.now)
+      if (blind) return refuse(blind)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
       return needFoxsy(a.stake_foxsy, allow(a.stake_foxsy, { fee: a.stake_foxsy }))
