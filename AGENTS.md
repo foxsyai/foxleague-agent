@@ -33,7 +33,9 @@ rules and the owner's caps before anything is signed. Treat every change to that
 ## How to change the code
 - **Test first.** Write the test, run it, see it fail for the right reason, then fix. One test per finding, named after
   it. Helpers: `test/fixtures.ts` (`setup()`, `snapshot()`, `dryWallet`, `card()`); tests use `:memory:` stores.
-- Small commits on a branch, never on `main`, never `--force`. Stage files by name; never `git add -A`.
+- Contributors (and their AI agents): small commits on a branch and a pull request; only the maintainer merges into
+  `main`. The maintainer's own sessions commit to `main` when the maintainer asks. Never force-push `main`. Stage
+  files by name; never `git add -A`.
 - Do not touch `src/strategist/prompt.ts` casually: it is byte-stable so that it is served from the prompt cache. Dates and
   live values go in the user message.
 - The game rules are mirrored in `docs/ECONOMY-AND-RULES.md`, `docs/FOXLEAGUE-INTEGRATION.md` and
