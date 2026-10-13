@@ -50,7 +50,17 @@ export function setEnvValues(file: string, values: Record<string, string>): void
   }
   // Written aside and renamed over: a full disk or a power cut never leaves a half-written file (it holds the mnemonic).
   const tmp = `${file}.tmp-${process.pid}`
-  writeFileSync(tmp, text, { mode: 0o600 })
+  try {
+    writeFileSync(tmp, text, { mode: 0o600 })
+  } catch (err) {
+    // A server built by deploy/bootstrap.sh: /etc/foxleague-agent is root's (750) and only the env file is the
+    // service user's, so nothing can be created next to it. The file itself is rewritten in place instead.
+    const code = (err as NodeJS.ErrnoException).code
+    if ((code !== 'EACCES' && code !== 'EPERM') || !existsSync(file)) throw err
+    writeFileSync(file, text, { mode: 0o600 })
+    chmodSync(file, 0o600)
+    return
+  }
   chmodSync(tmp, 0o600)
   renameSync(tmp, file)
 }

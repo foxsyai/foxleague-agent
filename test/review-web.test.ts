@@ -103,3 +103,23 @@ test('B2 the dashboard asks for the password before it switches to a dearer AI, 
   assert.match(level, /aiCostsMore\(/, 'the level dialog never checks whether the AI gets dearer')
   assert.match(html, /k_strat: \['Strategist', `[^`]*dearer model or a higher effort asks for your password/, 'the Strategist bubble does not say a dearer AI asks for the password')
 })
+
+test('B3 the CLI updates an env file it owns inside a directory it may not create files in', () => {
+  if (process.getuid?.() === 0) return // root ignores directory modes: nothing to prove here
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-b3-'))
+  const file = join(dir, 'env')
+  writeFileSync(file, 'AGENT_COUNT="1"\nWEB_UI_USER="old"\n', { mode: 0o644 })
+  chmodSync(dir, 0o500) // /etc/foxleague-agent as the service user sees it (root:foxleague-agent 750): r-x, no w
+  try {
+    setEnvValues(file, { WEB_UI_USER: 'admin', ANTHROPIC_API_KEY: 'sk-ant-x' })
+    assert.equal(readFileSync(file, 'utf8'), 'AGENT_COUNT="1"\nWEB_UI_USER="admin"\nANTHROPIC_API_KEY="sk-ant-x"\n')
+    assert.equal(statSync(file).mode & 0o777, 0o600, 'the env file is not mode 600 after the write')
+  } finally {
+    chmodSync(dir, 0o700)
+  }
+  // Where the directory allows it, the file is still written aside and renamed over (a new inode).
+  const before = statSync(file).ino
+  setEnvValues(file, { WEB_UI_USER: 'owner' })
+  assert.notEqual(statSync(file).ino, before, 'a writable directory no longer gets the atomic write')
+  assert.match(readFileSync(file, 'utf8'), /^WEB_UI_USER="owner"$/m)
+})
