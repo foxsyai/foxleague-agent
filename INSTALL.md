@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 ```
 
 It downloads the newest release into `~/foxleague-agent` and starts the guided installer. To install a
-given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=v0.10.0 bash`. On Windows, first install WSL2
+given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. On Windows, first install WSL2
 (Ubuntu) from the Microsoft Store and paste the line in its terminal. If you prefer git:
 `git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`.
 
