@@ -35,6 +35,11 @@ test('the snapshot keeps its prices while the pair is paused and tells the plan 
   const fox = new Proxy({}, { get: () => down }) as never
   const s = await takeSnapshot({ chain, fox }, { watch: ADDR })
   assert.equal(s.prices?.egldPerFoxsy, 0.0005, 'FOXSY is still valued, so paid play goes on with the FOXSY held')
+  assert.equal(s.prices?.frozen, true, 'marked frozen, so the median takes no sample from it')
+  const live = await takeSnapshot({ chain: { ...(pair(1n) as object), account: async () => ({ balance: 0n, nonce: 0 }), esdts: async () => [], egldUsd: async () => 25 } as never, fox }, { watch: ADDR })
+  assert.equal(live.prices?.egldPerFoxsy, 0.0005)
+  assert.equal('frozen' in (live.prices ?? {}), false, 'a live pool is not marked frozen')
+  assert.equal(live.warnings.some(w => w.startsWith('xExchange pool')), false)
   assert.ok(s.warnings.some(w => w.startsWith('xExchange pool: xExchange has paused the FOXSY/WEGLD pair')), s.warnings.join('; '))
 })
 
