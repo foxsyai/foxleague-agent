@@ -622,6 +622,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       }
       const left = s.players.filter(p => !p.listed).length - 2
       if (left < 18) return refuse(`fusion would leave ${left} cards; a match needs 18`)
+      // The wallet fusion cooldown and the dirty-card check live in the pre-check: unreadable is no "yes".
+      if (ctx.canFuse === null) return refuse('the fusion pre-check is unavailable: not fusing blind')
       if (ctx.canFuse && !ctx.canFuse.can_fuse) return refuse(`FoxLeague says not now: ${canFuseReason(ctx.canFuse)}`)
       const output = `${NEXT_RARITY[RARITY_LEVEL[rarity]]} ${inputs[a.position_of]!.position}`
       if (ctx.fusionPool === 0) return refuse(`no ${output} left in the fusion pool; try later`)

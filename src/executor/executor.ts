@@ -361,7 +361,8 @@ export class Executor {
     if (a.type === 'fusion_match_waiver') market.matchQuote = await soft(() => fox.matchWaiverQuote(wallet, a.nonce))
     if (a.type === 'bid' || a.type === 'cancel_listing') market.auction = await getAuction(this.d.chain, a.nonce)
     if (a.type === 'bid') {
-      market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent') && detailOf(r).action?.nonce === a.nonce).length
+      // On the safe side: a bid that errored after its signature (the answer lost) may have landed.
+      market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent' || r.status === 'error') && detailOf(r).action?.nonce === a.nonce).length
       try {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours
