@@ -17,13 +17,35 @@ permissions: {}
 jobs:
   report:
     name: report ci
-    # Only the real CI file: a pull request may add another workflow named CI elsewhere. A pull request that
-    # changes ci.yml itself fails the agent review, so its CI result never merges on its own.
-    if: ${{ github.event.workflow_run.path == '.github/workflows/ci.yml' }}
+    # Only the real CI file (a pull request may add another workflow named CI elsewhere), and only runs of a pull
+    # request or of a push to main: a manual run on another branch skips the label and the merge-commit checks
+    # (review of PR #5, medium). A pull request that changes ci.yml itself fails the agent review.
+    if: ${{ github.event.workflow_run.path == '.github/workflows/ci.yml' && (github.event.workflow_run.event == 'pull_request' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: checks
+    # Reads which pull requests a commit belongs to (below); writes nothing.
+    permissions:
+      pull-requests: read
     steps:
+      # A pull request run counts only when it was a pull request INTO main: a run of a pull request into another
+      # branch tests that branch's copy of ci.yml, while its result would land on the same head commit. GitHub
+      # names the run's pull request when the head is in this repository; for a fork it names none, and then an
+      # open pull request into main must have exactly this head.
+      - name: The run belongs to a pull request into main
+        if: ${{ github.event.workflow_run.event == 'pull_request' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          BASES: ${{ join(github.event.workflow_run.pull_requests.*.base.ref, ' ') }}
+        run: |
+          if [[ -n "$BASES" ]]; then
+            [[ " $BASES " == *" main "* && "$(wc -w <<<"$BASES")" -eq 1 ]] || { echo "::error::this CI run belongs to a pull request into: $BASES, not main"; exit 1; }
+          else
+            n=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/pulls" --jq "[.[] | select(.state == \"open\" and .base.ref == \"main\" and .head.sha == \"$SHA\")] | length")
+            [[ "$n" -ge 1 ]] || { echo "::error::no open pull request into main has this head"; exit 1; }
+          fi
+
       - name: The App's token, for commit statuses only
         id: app
         uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
