@@ -28,7 +28,7 @@ import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
 import { creditRefunds } from './executor/refunds.ts'
 import { ensureBadge } from './setup/badge.ts'
-import { Telegram, type TextReply } from './telegram/telegram.ts'
+import { Telegram, type OffsetStore, type TextReply } from './telegram/telegram.ts'
 import { KEY_FIELDS, keyFormatError, maskKey, readSecrets, secretsFile, writeSecrets, type KeyName, type KeyValues } from './store/secrets.ts'
 import { checkKeys, pickOwnerChat, telegramMe, telegramRecentChats, type KeyCheck } from './setup/keys.ts'
 import { TopUps } from './topup.ts'
@@ -57,6 +57,32 @@ const SESSION_GAP_MS = 2 * 3600_000
 const LOCK_MARGIN_MS = 10 * 60_000
 /** How often payments sent but not confirmed with FoxLeague are confirmed again (src/executor/pending.ts). */
 const PENDING_RETRY_MS = 60_000
+
+/**
+ * Telegram's update offset in kv telegram_offset, with the bot's number (the public part of the token before the
+ * colon, never the token itself): update ids are counted per bot. An offset older than a day is not used: after a
+ * week without updates Telegram may number them anew, and a message older than five minutes is skipped by its date
+ * at a start anyway.
+ */
+export function telegramOffsets(store: Store, token: string): OffsetStore {
+  const bot = token.split(':')[0] ?? ''
+  return {
+    read: () => {
+      const raw = store.getKv('telegram_offset')
+      if (!raw) return 0
+      let saved: { bot?: unknown; offset?: unknown; at?: unknown }
+      try {
+        saved = JSON.parse(raw) as typeof saved
+      } catch {
+        return 0
+      }
+      const at = typeof saved.at === 'string' ? Date.parse(saved.at) : NaN
+      if (saved.bot !== bot || typeof saved.offset !== 'number' || !Number.isSafeInteger(saved.offset) || !(Date.now() - at < 86_400_000)) return 0
+      return saved.offset
+    },
+    write: offset => store.setKv('telegram_offset', JSON.stringify({ bot, offset, at: new Date().toISOString() })),
+  }
+}
 
 /** The pid of the running service on this data folder, or null. A second process must not run plans next to it. */
 export function serviceRunning(dataDir: string): number | null {
@@ -166,7 +192,7 @@ export class Service {
     this.store = new Store(cfg.dataDir)
     this.chain = new Chain(cfg)
     this.fox = new FoxLeague(cfg.foxleagueUrl, cfg.foxleagueRps)
-    this.telegram = cfg.telegramToken && cfg.telegramChatId ? new Telegram(cfg.telegramToken, cfg.telegramChatId) : null
+    this.telegram = this.makeTelegram()
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
     this.executor = new Executor({
@@ -590,6 +616,12 @@ export class Service {
     return `${agentName(agent.index)} waits for funds: no team yet and about $${playable.toFixed(2)} to play with, the registration needs about $${needUsd.toFixed(2)} (${fee.toLocaleString('en-US')} FOXSY) besides the ${agent.settings.egldGasReserve} EGLD gas reserve. No AI call until EGLD arrives at ${agent.address}`
   }
 
+  /** The owner's Telegram for the configured bot and chat, its update offset kept in the database (one per bot). */
+  private makeTelegram(): Telegram | null {
+    const { telegramToken: token, telegramChatId: chat } = this.cfg
+    return token && chat ? new Telegram(token, chat, telegramOffsets(this.store, token)) : null
+  }
+
   private startTelegram(): void {
     this.telegram?.startPolling({ command: (c, a, r) => this.command(c, a, r), text: t => this.chatFromTelegram(t), button: d => this.button(d) })
     this.telegram?.setCommands(TELEGRAM_MENU)
@@ -633,7 +665,7 @@ export class Service {
       this.cfg.telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined
       this.cfg.telegramChatId = process.env.TELEGRAM_CHAT_ID?.trim() || undefined
       this.telegram?.stop()
-      this.telegram = this.cfg.telegramToken && this.cfg.telegramChatId ? new Telegram(this.cfg.telegramToken, this.cfg.telegramChatId) : null
+      this.telegram = this.makeTelegram()
       this.startTelegram()
       // A chat linked after the start gets its morning summary too; no chat, no timer.
       this.armSummary()

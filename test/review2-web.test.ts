@@ -79,3 +79,117 @@ test('R2B-1 the backup goes once the new content is synced, even when setting th
   }
 })
 
+// ---- R2B-2: a Telegram command is never run twice across a restart ----
+
+const CHAT = '42'
+
+/** A fake Telegram server with the real confirmation rule. `dead`: the agent process is gone, requests never arrive. */
+function fakeTelegram(updates: { update_id: number; message: object }[]) {
+  const state = { confirmedBelow: 0, dead: false, polls: [] as number[] }
+  const ok = (body: unknown) => ({ ok: true, status: 200, json: async () => body }) as unknown as Response
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = new URL(String(input))
+    if (!url.pathname.endsWith('/getUpdates')) return ok({ ok: true, result: true }) // sendMessage, setMyCommands...
+    if (state.dead) return new Promise<Response>(() => undefined) // the process died: this request never reaches Telegram
+    const offset = Number(url.searchParams.get('offset') ?? 0)
+    state.polls.push(offset)
+    if (offset > 0) state.confirmedBelow = Math.max(state.confirmedBelow, offset) // confirmed on arrival, as Telegram does
+    const result = updates.filter(u => u.update_id >= Math.max(state.confirmedBelow, offset))
+    if (!result.length) await sleep(15) // the long poll
+    return ok({ ok: true, result })
+  }) as typeof fetch
+  return state
+}
+
+const handlers = (ran: string[], onRun?: () => void): Handlers => ({
+  command: async (command, args) => {
+    ran.push(`/${command} ${args.join(' ')}`.trim())
+    onRun?.()
+    return `${command} done`
+  },
+  text: async () => ({ text: '' }),
+  button: async () => '',
+})
+
+async function until(pred: () => boolean, ms = 2000): Promise<void> {
+  const end = Date.now() + ms
+  while (!pred() && Date.now() < end) await sleep(5)
+}
+
+/** What the service's kv keeps across a restart. */
+function savedOffset() {
+  let saved = 0
+  return { read: () => saved, write: (n: number) => void (saved = n) }
+}
+
+test('R2B-2 a command dispatched in the instant before a crash does not run again after the restart', async () => {
+  const realFetch = globalThis.fetch
+  const ran: string[] = []
+  const nowS = Math.floor(Date.now() / 1000)
+  // The owner's /do with a shop payment, a minute before the restart (inside the 5-minute backlog cut).
+  const updates = [{ update_id: 101, message: { chat: { id: 42 }, from: { id: 42 }, date: nowS - 60, text: '/do 3 {"type":"buy_xp_booster"}' } }]
+  const tg = fakeTelegram(updates)
+  const kv = savedOffset()
+  try {
+    // First life: the command is dispatched, then the process dies before its confirming getUpdates reaches Telegram.
+    const first = new Telegram('token', CHAT, kv)
+    void first.startPolling(handlers(ran, () => { tg.dead = true }))
+    await until(() => ran.length === 1)
+    assert.deepEqual(ran, ['/do 3 {"type":"buy_xp_booster"}'])
+    first.stop()
+    assert.equal(tg.confirmedBelow, 0, 'the update was never confirmed to Telegram')
+    // Second life: systemd restarts the service.
+    tg.dead = false
+    const second = new Telegram('token', CHAT, kv)
+    void second.startPolling(handlers(ran))
+    await until(() => ran.length >= 2 || tg.polls.length >= 2, 1000)
+    await sleep(50)
+    second.stop()
+    assert.equal(ran.length, 1, `the same /do ran ${ran.length} times across the restart: ${JSON.stringify(ran)}`)
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
+test('R2B-2 control: once the confirming getUpdates reached Telegram, a restart does not replay the command', async () => {
+  const realFetch = globalThis.fetch
+  const ran: string[] = []
+  const nowS = Math.floor(Date.now() / 1000)
+  const tg = fakeTelegram([{ update_id: 101, message: { chat: { id: 42 }, from: { id: 42 }, date: nowS - 60, text: '/kill off' } }])
+  try {
+    const first = new Telegram('token', CHAT)
+    void first.startPolling(handlers(ran))
+    await until(() => tg.confirmedBelow === 102)
+    first.stop()
+    await sleep(50)
+    const second = new Telegram('token', CHAT)
+    void second.startPolling(handlers(ran))
+    await sleep(100)
+    second.stop()
+    assert.deepEqual(ran, ['/kill off'])
+  } finally {
+    globalThis.fetch = realFetch
+  }
+})
+
+test('R2B-2 the service keeps the offset in its database, per bot: a new bot token starts from the beginning', async () => {
+  const { Service } = await import('../src/service.ts')
+  const dataDir = mkdtempSync(join(tmpdir(), 'foxagent-r2b-2-'))
+  const cfg = (token: string) => ({
+    mnemonic: TEST_WORDS, dataDir, gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5,
+    anthropicApiKey: undefined, model: 'claude-sonnet-5', telegramToken: token, telegramChatId: CHAT, isServer: false, defaultDryRun: true, maxAgents: 5,
+  }) as Config
+  type Offsets = { read: () => number; write: (n: number) => void }
+  const offsetsOf = (svc: { telegram: unknown }) => (svc.telegram as { offsets?: Offsets }).offsets
+  const a = new Service(cfg('111:secret'))
+  assert.ok(offsetsOf(a), 'the service hands Telegram a place to keep the offset')
+  assert.equal(offsetsOf(a)!.read(), 0)
+  offsetsOf(a)!.write(102)
+  assert.equal(new Service(cfg('111:secret')).store.getKv('telegram_offset') !== undefined, true, 'kept in the database (kv telegram_offset)')
+  assert.equal(offsetsOf(new Service(cfg('111:secret')))!.read(), 102, 'the restarted service starts after the dispatched batch')
+  assert.equal(offsetsOf(new Service(cfg('222:other')))!.read(), 0, 'another bot numbers its updates on its own')
+  assert.doesNotMatch(a.store.getKv('telegram_offset')!, /secret/, 'the token itself is never stored')
+  a.store.setKv('telegram_offset', JSON.stringify({ bot: '111', offset: 500, at: new Date(Date.now() - 2 * 86_400_000).toISOString() }))
+  assert.equal(offsetsOf(a)!.read(), 0, 'an offset older than a day is not used (Telegram may number its updates anew after a quiet week)')
+})
+
