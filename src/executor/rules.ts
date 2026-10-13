@@ -65,6 +65,8 @@ export interface RulesContext {
   priorBids?: number
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
   pendingShop?: Set<string>
+  /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
+  lastBoosterAt?: Date | null
   /** A seat in this tournament is paid and waiting for FoxLeague's confirmation (retried with the same hash). */
   pendingJoin?: boolean
   /** Fusion waiver quotes, fetched for the waiver actions; null = unreadable. */
@@ -589,6 +591,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
             const until = typeof shop.xp_booster_expires_at === 'string' ? Date.parse(shop.xp_booster_expires_at) : NaN
             if (!Number.isFinite(until)) return refuse('XP booster active, expiry unknown')
             if (until - ctx.now.getTime() > XP_BOOSTER_RENEW_HOURS * 3600_000) return refuse(`XP booster active until ${new Date(until).toISOString()}: another one now would throw away the hours left`)
+          }
+          // FoxLeague also reads "none active" when its own booster query fails: the agent's own purchase still runs.
+          if (ctx.lastBoosterAt) {
+            const hours = (ctx.now.getTime() - ctx.lastBoosterAt.getTime()) / 3600_000
+            if (hours < 24 - XP_BOOSTER_RENEW_HOURS) return refuse(`an XP booster was bought ${Math.max(0, Math.floor(hours))} h ago: another one now would throw away the hours left`)
           }
           amount = prices.xp_booster
           break

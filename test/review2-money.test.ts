@@ -301,3 +301,27 @@ test('R2A-4 a won card relisted by the agent before the won-close: the bid it pa
   assert.deepEqual(m.store.openSpend(0, 'bid:', false).map(r => r.action), ['bid:9:won'], 'closed as won for good')
 })
 
+// ---- R2A-5: the agent's own booster purchase holds the next one, whatever FoxLeague's status says ----
+
+test('R2A-5 a booster this agent bought and confirmed an hour ago is not bought again while FoxLeague reports none active', async () => {
+  const m = setup({ chain: { send: async () => 'hb2' }, fox: { user: async () => null, shopConfirm: async () => ({ message: 'XP booster activated' }) } })
+  await withLive(m.store, async () => {
+    const [first] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+    assert.equal(first!.status, 'confirmed', first!.summary)
+    // The next plan: FoxLeague's shop status lost its booster query and says "none active" (shop.rs, defaulting inactive).
+    const s = snapshot()
+    s.auth!.shop!.xp_booster_active = false
+    s.auth!.shop!.xp_booster_expires_at = null
+    const [again] = await m.exec.run(m.agent(), liveWallet, s, act({ type: 'buy', product: 'xp_booster' }))
+    assert.equal(again!.status, 'refused', `the ledger holds a confirmed booster purchase (24 h of hours left): ${again!.summary}`)
+    assert.match(again!.summary, /an XP booster was bought \d+ h ago/)
+  })
+})
+
+test('R2A-5 the same in dry run: a simulated booster holds the next simulated one', async () => {
+  const m = setup()
+  const [first] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+  assert.equal(first!.status, 'dry_run', first!.summary)
+  const [again] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+  assert.equal(again!.status, 'refused', again!.summary)
+})

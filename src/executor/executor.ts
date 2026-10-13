@@ -22,7 +22,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
-import { checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
+import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -314,7 +314,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string } }
       } catch {
         return {}
       }
@@ -362,6 +362,14 @@ export class Executor {
     }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
+    if (a.type === 'buy' && a.product === 'xp_booster') {
+      // The agent's own booster purchase, confirmed (or simulated, in the dry-run ledger): FoxLeague's status alone
+      // reads "none active" when its own booster query fails.
+      const last = store
+        .activityOf(agent.index, ['buy'], since((24 - XP_BOOSTER_RENEW_HOURS) * 3600_000))
+        .find(r => r.status === (dry ? 'dry_run' : 'confirmed') && detailOf(r).action?.product === 'xp_booster')
+      market.lastBoosterAt = last ? new Date(last.at) : null
+    }
     if (a.type === 'fuse') {
       market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
       const first = snap.players.find(p => p.nonce === a.player_nonces[0])
