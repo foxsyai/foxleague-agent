@@ -3,11 +3,12 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { OTHER, STRANGER, card, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
+import { ADDR, OTHER, STRANGER, card, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { Chain } from '../src/chain/gateway.ts'
 import { ApiRefusal } from '../src/foxleague/api.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
+import { creditRefunds } from '../src/executor/refunds.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
 
 const act = (action: unknown): PlannedAction[] => [{ action: action as PlannedAction['action'], reason: '' }]
@@ -246,4 +247,45 @@ test('A9 control: a shop payment FoxLeague used ("already processed") or may sti
   assert.equal(used.after, used.booked, 'a delivered purchase stays spent')
   const timeout = await packThenRetry('Transaction verification timed out: rpc. The payment is not lost: it is recognized when this same transaction is confirmed again within 25 minutes; after that it is refunded automatically.')
   assert.equal(timeout.after, timeout.booked, 'not refunded yet: it keeps counting')
+})
+
+// ---- A5: a seat FoxLeague refunded (the agent never sat in the completed tournament) is credited, not closed ----
+
+function seatRig(detail: Record<string, unknown>, participants: { user_id: number; wallet_address?: string }[], userId: string | null = '100') {
+  const m = setup()
+  if (userId) m.store.setKv('agent_user_id:0', userId)
+  m.store.recordSpend({ agentIndex: 0, at: new Date(Date.now() - 20 * 60_000), gameDay: '2026-10-13', category: 'play', action: 'join:77', foxsyAtomic: wholeToAtomic(1000), egldAtomic: 0n, usd: 2.25, txHash: 'hseat', dryRun: false })
+  const chain = { query: async (_sc: string, fn: string) => (fn === 'getEntryAmount' ? [''] : []), esdts: async () => [] }
+  const fox = { tournament: async () => ({ ...(tournament(77, { status: 'completed', winner_user_id: 900 }, participants) as object), ...detail }) }
+  return { m, deps: { store: m.store, chain: chain as never, fox: fox as never } }
+}
+const seat = (m: ReturnType<typeof setup>) => m.store.spentUsd(0, { category: 'play', dryRun: false })
+
+test('A5 control: a seat the agent really played stays counted once the tournament is over, for good', async () => {
+  for (const [detail, participants] of [[{}, [{ user_id: 900 }, { user_id: 100 }]], [{}, [{ user_id: 900 }, { user_id: 555, wallet_address: ADDR }]], [{ user_is_participant: true }, [{ user_id: 900 }]]] as const) {
+    const { m, deps } = seatRig(detail, [...participants])
+    assert.equal(await creditRefunds(deps, m.agent(), false), 0)
+    assert.equal(seat(m), 2.25)
+    assert.equal(m.store.openSpend(0, 'join:', false)[0]!.action, 'join:77:played', 'closed as played: never looked at again')
+  }
+})
+
+test('A5 a seat FoxLeague refunded (the agent never sat in the completed tournament) gives its budget back', async () => {
+  const { m, deps } = seatRig({}, [{ user_id: 900 }, { user_id: 901 }])
+  const n = await creditRefunds(deps, m.agent(), false)
+  assert.equal(n, 1, 'the refunded seat is credited')
+  assert.equal(seat(m), 0, 'the refunded stake no longer counts against the daily cap and the monthly budget')
+})
+
+test('A5 the detail read with the agent\'s wallet answers user_is_participant false: the refunded seat is credited', async () => {
+  const { m, deps } = seatRig({ user_is_participant: false }, [{ user_id: 900 }, { user_id: 901 }], null)
+  assert.equal(await creditRefunds({ ...deps, wallet: liveWallet }, m.agent(), false), 1)
+  assert.equal(seat(m), 0)
+})
+
+test('A5 who sat in it unknown (no user id noted, no wallet in the detail): the seat keeps counting and stays open', async () => {
+  const { m, deps } = seatRig({}, [{ user_id: 900 }, { user_id: 901 }], null)
+  assert.equal(await creditRefunds(deps, m.agent(), false), 0)
+  assert.equal(seat(m), 2.25)
+  assert.equal(m.store.openSpend(0, 'join:', false)[0]!.action, 'join:77', 'asked again next tick')
 })

@@ -11,20 +11,26 @@
 // Seats and stakes too (tag join:<tournament>): FoxLeague refunds them by itself when a tournament or a
 // 1v1 is cancelled for not filling. Credited once the tournament is cancelled and the contract holds no
 // entry for the agent any more; a finished tournament's seat is closed (it was really spent) once the
-// contract holds nothing for the agent, so a seat it still holds can still be claimed and credited.
+// contract holds nothing for the agent, so a seat it still holds can still be claimed and credited. A
+// finished tournament the agent never sat in (FoxLeague refunded a seat it could not give) is credited;
+// one whose detail cannot tell keeps counting.
 
 import { Address } from '@multiversx/sdk-core'
 import { MAINNET } from '../config.ts'
 import { getAuction } from '../chain/players.ts'
 import type { Chain } from '../chain/gateway.ts'
 import type { FoxLeague } from '../foxleague/api.ts'
+import type { TournamentDetail } from '../foxleague/types.ts'
 import type { AgentRow, Store } from '../store/db.ts'
+import type { AgentWallet } from '../wallet/wallet.ts'
 import { b64ToBigInt, u64Hex } from '../util/encoding.ts'
 
 export interface RefundDeps {
   store: Store
   chain: Pick<Chain, 'query' | 'esdts'>
   fox?: Pick<FoxLeague, 'tournament'>
+  /** The agent's wallet: the tournament detail read with it says whether this team sat in it (user_is_participant). */
+  wallet?: AgentWallet
 }
 
 /** A bid this young may still be between its signature and its outcome (the executor waits up to 2 min). */
@@ -80,20 +86,42 @@ export async function creditRefunds(d: RefundDeps, agent: AgentRow, dryRun: bool
   return credited
 }
 
+/**
+ * Whether the agent sat in a tournament, from its detail: true, false, or null when the detail cannot tell. A seat
+ * is recognised by the agent's wallet or its FoxLeague user id (noted by every snapshot) among the participants, or
+ * by user_is_participant; "not seated" needs the user id (the participants carry it) or a detail read with the
+ * agent's wallet (only then is user_is_participant about this team).
+ */
+function seatedIn(d: TournamentDetail, agent: AgentRow, userId: number | null, withWallet: boolean): boolean | null {
+  if (d.user_is_participant === true) return true
+  if (d.participants.some(p => p.wallet_address === agent.address || (userId !== null && p.user_id === userId))) return true
+  if (withWallet && d.user_is_participant === false) return false
+  return userId !== null ? false : null
+}
+
 async function creditCancelledEntries(d: RefundDeps & { fox: Pick<FoxLeague, 'tournament'> }, agent: AgentRow, now: number): Promise<number> {
   let credited = 0
+  const noted = Number(d.store.getKv(`agent_user_id:${agent.index}`))
+  const userId = Number.isInteger(noted) && noted > 0 ? noted : null
   for (const r of d.store.openSpend(agent.index, 'join:', false)) {
     const m = /^join:(\d+)$/.exec(r.action)
     if (!m || now - new Date(r.at).getTime() < SETTLE_MS) continue
     try {
-      const t = (await d.fox.tournament(Number(m[1]))).tournament
+      const detail = await d.fox.tournament(Number(m[1]), d.wallet)
+      const t = detail.tournament
       if (t.status !== 'completed' && t.status !== 'cancelled') continue
       const [amount] = await d.chain.query(MAINNET.tournamentsContract, 'getEntryAmount', [u64Hex(t.sc_tournament_id ?? t.id), Address.newFromBech32(agent.address).toHex()])
       // Still held by the contract (an unseated escrow, a refund not sent yet): a claim_refund gets it back and credits it.
       if (b64ToBigInt(amount) !== 0n) continue
       if (t.status === 'completed') {
-        d.store.closeSpend(r.id, 'played') // played, so really spent: never looked at again
-        continue
+        // Seated: played, so really spent, never looked at again. Never seated (a join gate after the payment, the
+        // 15-minute sweep): FoxLeague refunded the entry, credited below. Unknown: keeps counting, asked next tick.
+        const sat = seatedIn(detail, agent, userId, Boolean(d.wallet))
+        if (sat === null) continue
+        if (sat) {
+          d.store.closeSpend(r.id, 'played')
+          continue
+        }
       }
       d.store.creditSpend(r.id)
       credited++

@@ -1114,7 +1114,7 @@ export class Service {
     this.busy.add(index)
     try {
       await this.retryPending(agent)
-      const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
+      const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
       const snap = await this.snapshot(index)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
