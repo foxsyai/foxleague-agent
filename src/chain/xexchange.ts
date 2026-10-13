@@ -57,6 +57,9 @@ export function swapWegldToFoxsyData(foxsyOut: bigint, maxIn: bigint): string {
   return `ESDTTransfer@${hexOfString(MAINNET.wegldToken)}@${numberToHex(maxIn)}@${hexOfString('swapTokensFixedOutput')}@${hexOfString(MAINNET.foxsyToken)}@${numberToHex(foxsyOut)}`
 }
 
+/** Said when xExchange has paused the pair: swaps fail on chain with "Swap is not enabled". */
+export const PAIR_PAUSED = 'xExchange has paused the FOXSY/WEGLD pair: no swap until it is active again (FOXSY is valued at the last pool price)'
+
 export interface SwapQuote {
   foxsyOut: bigint
   /** EGLD the pair wants for exactly `foxsyOut`. */
@@ -70,11 +73,15 @@ export interface SwapQuote {
   spotEgldPerFoxsy: number
 }
 
-/** Reads the pool state; throws when the pair is not the FOXSY/WEGLD pool or not active. */
-export async function poolState(chain: Chain): Promise<{ reserveFoxsy: bigint; reserveWegld: bigint; spotEgldPerFoxsy: number }> {
+/**
+ * Reads the pool; throws when the pair is not the FOXSY/WEGLD pool or empty. `active` is false while xExchange has
+ * paused the pair (on 2026-10-13 xExchange paused every pool at once): nobody can swap then, so its reserves hold
+ * the price of the last trade and still value FOXSY, but no swap is quoted.
+ */
+export async function poolState(chain: Chain): Promise<{ active: boolean; reserveFoxsy: bigint; reserveWegld: bigint; spotEgldPerFoxsy: number }> {
   const pair = MAINNET.foxsyWegldPair
   const [state] = await chain.query(pair, 'getState')
-  if (b64ToBigInt(state) !== 1n) throw new Error('xExchange FOXSY/WEGLD pair is not active')
+  const active = b64ToBigInt(state) === 1n
   const [first] = await chain.query(pair, 'getFirstTokenId')
   const [second] = await chain.query(pair, 'getSecondTokenId')
   if (b64ToString(first) !== MAINNET.foxsyToken || b64ToString(second) !== MAINNET.wegldToken) {
@@ -84,11 +91,12 @@ export async function poolState(chain: Chain): Promise<{ reserveFoxsy: bigint; r
   const reserveFoxsy = b64ToBigInt(rf)
   const reserveWegld = b64ToBigInt(rw)
   if (reserveFoxsy <= 0n || reserveWegld <= 0n) throw new Error('empty pool')
-  return { reserveFoxsy, reserveWegld, spotEgldPerFoxsy: Number(reserveWegld) / Number(reserveFoxsy) }
+  return { active, reserveFoxsy, reserveWegld, spotEgldPerFoxsy: Number(reserveWegld) / Number(reserveFoxsy) }
 }
 
 export async function quoteEgldForFoxsy(chain: Chain, foxsyOut: bigint, slippageBps: number): Promise<SwapQuote> {
   const pool = await poolState(chain)
+  if (!pool.active) throw new Error(PAIR_PAUSED)
   const [amountInB64] = await chain.query(MAINNET.foxsyWegldPair, 'getAmountIn', [hexOfString(MAINNET.foxsyToken), numberToHex(foxsyOut)])
   const amountIn = b64ToBigInt(amountInB64)
   if (amountIn <= 0n) throw new Error('pair returned no quote')

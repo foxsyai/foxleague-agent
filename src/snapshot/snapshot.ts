@@ -4,7 +4,7 @@
 import { slotWindows, type SlotWindow } from '../executor/slots.ts'
 import { MAINNET } from '../config.ts'
 import type { Chain } from '../chain/gateway.ts'
-import { poolState } from '../chain/xexchange.ts'
+import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import { winChance } from './winchance.ts'
@@ -343,6 +343,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   }
 
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null
+  // The plan is told, so it does not plan a swap that would only be refused.
+  if (pool && !pool.active) warnings.push(`xExchange pool: ${PAIR_PAUSED}`)
   return {
     takenAt: now.toISOString(),
     watchOnly: !wallet,
