@@ -31,7 +31,7 @@ export async function neverUsedOrWhy(d: DeleteDeps, index: number): Promise<Agen
   if (index < d.agentCount) throw new Error(`${name} is one of the first ${d.agentCount} (AGENT_COUNT), which come back at every start: lower AGENT_COUNT first`)
   if (d.store.everUsed(index)) throw new Error(`${name} has signed transactions before: retire it instead`)
   if (d.store.pending(index).length) throw new Error(`${name} has a payment waiting for FoxLeague's confirmation: retire it instead`)
-  if (d.topups?.waitingFor(index)) throw new Error(`${name} has a Binance top-up waiting: let it arrive or expire first`)
+  if (d.topups?.waitingFor(index)) throw new Error(`${name} has a Binance top-up waiting or on its way: let it arrive or expire first`)
   let read: [Awaited<ReturnType<Chain['account']>>, Awaited<ReturnType<Chain['esdts']>>, Awaited<ReturnType<FoxLeague['user']>>]
   try {
     read = await Promise.all([d.chain.account(agent.address), d.chain.esdts(agent.address), d.fox.user(agent.address)])

@@ -12,6 +12,8 @@ export const TOPUP_CODE_MINUTES = 60
 /** An agent that stays low is offered a top-up again after this long (an owner's /topup N asks at once). */
 const REOFFER_HOURS = 24
 const KEPT = 50
+/** A withdrawal Binance sent counts as on its way to the wallet for this long. */
+const SENT_LANDS_WITHIN_MS = 3600_000
 
 export interface TopUpRequest {
   /** Also Binance's withdrawOrderId, to find the withdrawal again. */
@@ -30,6 +32,8 @@ export interface TopUpRequest {
   createdAt: string
   expiresAt: string
   status: 'open' | 'sending' | 'sent' | 'failed' | 'expired' | 'unknown'
+  /** When Binance took the withdrawal (or this process learnt that it had). */
+  sentAt?: string
   binanceId?: string
   note?: string
 }
@@ -129,7 +133,7 @@ export class TopUps {
       const found = await this.d.binance.findWithdrawal(k, r.id).catch(() => undefined)
       if (found === undefined) continue
       if (found && [0, 2, 4, 6].includes(found.status)) {
-        this.update(r.id, { status: 'sent', binanceId: found.id })
+        this.update(r.id, { status: 'sent', binanceId: found.id, sentAt: new Date(this.now()).toISOString() })
         this.d.store.log({ agentIndex: r.agentIndex, kind: 'topup', status: 'confirmed', summary: `top-up order ${r.id} found on Binance (status ${found.status}): sent` })
         out.push(`${agentName(r.agentIndex)}: the top-up of order ${r.id} did go out (Binance id ${found.id}).`)
       } else if (found) {
@@ -148,9 +152,15 @@ export class TopUps {
   private readonly claimed = new Set<string>()
 
   /** How many requests wait for their code now. */
-  /** True while a top-up for the agent waits for its code or has no known outcome: EGLD may still reach its wallet. */
+  /**
+   * True while a top-up for the agent waits for its code, has no known outcome or was sent by Binance within the
+   * hour (on its way, maybe not landed yet): EGLD may still reach its wallet.
+   */
   waitingFor(agentIndex: number): boolean {
-    return this.expire().some(r => r.agentIndex === agentIndex && (r.status === 'open' || r.status === 'sending' || r.status === 'unknown'))
+    const now = this.now()
+    // A sent request from before sentAt was kept: sent by its code's expiry at the latest.
+    const onItsWay = (r: TopUpRequest) => r.status === 'sent' && now - new Date(r.sentAt ?? r.expiresAt).getTime() < SENT_LANDS_WITHIN_MS
+    return this.expire().some(r => r.agentIndex === agentIndex && (r.status === 'open' || r.status === 'sending' || r.status === 'unknown' || onItsWay(r)))
   }
 
   openCount(): number {
@@ -308,7 +318,7 @@ export class TopUps {
   }
 
   private sent(r: TopUpRequest, amount: number, binanceId: string): string {
-    this.update(r.id, { status: 'sent', binanceId, withdrawEgld: amount })
+    this.update(r.id, { status: 'sent', binanceId, withdrawEgld: amount, sentAt: new Date(this.now()).toISOString() })
     const text = `top-up of ${egld(amount)} sent from Binance to ${agentName(r.agentIndex)} (${r.address}), Binance id ${binanceId}; it arrives in a few minutes`
     this.d.store.log({ agentIndex: r.agentIndex, kind: 'topup', status: 'confirmed', summary: text })
     return `Done: ${text}.`

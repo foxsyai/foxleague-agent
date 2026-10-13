@@ -221,6 +221,8 @@ test('FR4 a completed tournament whose contract still holds the seat stays claim
   const t5 = () => tournament(5, { status, participant_count: 3, min_teams: 4 }, seats)
   const chain = { query: async (_sc: string, fn: string) => (fn === 'getEntryAmount' ? [b64(entry)] : []), esdts: async () => [] }
   const m = setup({ chain, fox: { user: async () => null, tournament: async () => t5(), joinTournament: async () => (seats.push({ user_id: 100 }), {}) } })
+  // The agent's FoxLeague user id, as every snapshot notes it: the refund check knows its seat by it (A5).
+  m.store.setKv('agent_user_id:0', '100')
   const spent = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
   const later = Date.now() + 11 * 60_000
   await withLive(m.store, async () => {

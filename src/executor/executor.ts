@@ -8,9 +8,9 @@
 import { randomUUID } from 'node:crypto'
 import { isZeus } from '../store/settings.ts'
 import { winChance } from '../snapshot/winchance.ts'
-import { Address } from '@multiversx/sdk-core'
+import { Address, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
-import type { Chain, TxOutcome } from '../chain/gateway.ts'
+import { BroadcastRefused, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { TournamentDetail } from '../foxleague/types.ts'
@@ -64,6 +64,8 @@ export interface ExecutorDeps {
   store: Store
   /** Every action's result as text; the result too, so a payment with an unclear outcome can be said at once. */
   notify?: (agentIndex: number, text: string, result?: ExecutionResult) => void
+  /** The service is stopping (SIGTERM, a deploy): nothing more is signed; an action already sent finishes. */
+  stopping?: () => boolean
 }
 
 interface Built {
@@ -154,7 +156,8 @@ export class Executor {
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
-      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}) }, costUsd: costUsdValue || null, txHash })
+      // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
+      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}) }, costUsd: costUsdValue || null, txHash })
       const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
       // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
       const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
@@ -303,7 +306,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; action?: { nonce?: number; target_user_id?: number | null } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null } }
       } catch {
         return {}
       }
@@ -361,7 +364,9 @@ export class Executor {
     if (a.type === 'fusion_match_waiver') market.matchQuote = await soft(() => fox.matchWaiverQuote(wallet, a.nonce))
     if (a.type === 'bid' || a.type === 'cancel_listing') market.auction = await getAuction(this.d.chain, a.nonce)
     if (a.type === 'bid') {
-      market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent') && detailOf(r).action?.nonce === a.nonce).length
+      // On the safe side: a bid that errored after its signature (sent, the answer lost) may have landed. An error
+      // before any signature (an unreadable auction, the kill switch, a refusal released) is no bid.
+      market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.nonce === a.nonce).length
       try {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours
@@ -505,14 +510,20 @@ export class Executor {
 
   /**
    * Books the spend (and a swap's EGLD) in the ledger of the mode; returns the rows for a live payment.
-   * A bid's or an entry's FOXSY gets its own row tagged bid:<nonce> or join:<tournament>, so the budget
-   * gets it back when it is refunded (outbid, left, cancelled); the gas stays in an untagged row.
+   * A bid's, an entry's or a shop payment's FOXSY gets its own row tagged bid:<nonce>, join:<tournament> or
+   * shop:<product>, so the budget gets it back when it is refunded (outbid, left, cancelled, a shop payment
+   * FoxLeague could not use); the gas stays in an untagged row.
    */
   private book(agent: AgentRow, v: Verdict, usd: number, fees: bigint, swapUsd: number | undefined, dryRun: boolean, now: Date, snap: AgentSnapshot, a?: Action, prices?: Prices | null): Booking {
     const booking: Booking = { ids: [], sent: false }
     const gameDay = gameDayKey(now, snap.gameDay.resetHourUtc)
     // Tagged so a refund can be credited later; a created tournament gets its id once the create answers.
-    const tag = a?.type === 'bid' ? `bid:${a.nonce}` : a?.type === 'join_tournament' ? `join:${a.tournament_id}` : a?.type === 'create_tournament' || a?.type === 'create_challenge' ? 'join:new' : null
+    const tag =
+      a?.type === 'bid' ? `bid:${a.nonce}`
+      : a?.type === 'join_tournament' ? `join:${a.tournament_id}`
+      : a?.type === 'create_tournament' || a?.type === 'create_challenge' ? 'join:new'
+      : a?.type === 'buy' ? `shop:${a.product}`
+      : null
     try {
       if (tag && v.foxsy > 0n && prices) {
         const foxsyUsd = costUsd(v.foxsy, 0n, prices)
@@ -558,10 +569,11 @@ export class Executor {
 
   // ---- live ----
 
-  /** The kill switch or a pause pressed while an action was being prepared stops it before the signature. */
+  /** The kill switch, a pause or a graceful stop while an action was being prepared stops it before the signature. */
   private assertNotStopped(agentIndex: number): void {
     if (this.d.store.killSwitch) throw new Error('the kill switch was turned on before signing: nothing sent')
     if (this.d.store.agent(agentIndex)?.paused) throw new Error('the agent was paused before signing: nothing sent')
+    if (this.d.stopping?.()) throw new Error('the service is stopping (a restart or a deploy) before signing: nothing sent')
   }
 
   /** Signs and sends; from the signature on the payment counts as possibly sent. */
@@ -570,10 +582,38 @@ export class Executor {
     const tx = buildTransaction(spec, wallet.address, account.nonce)
     this.assertNotStopped(wallet.index)
     wallet.signTransaction(tx)
+    const sentBefore = booking.sent
     booking.sent = true
-    const hash = await this.d.chain.send(toPlain(tx))
+    const plain = toPlain(tx)
+    let hash: string
+    try {
+      hash = await this.d.chain.send(plain)
+    } catch (err) {
+      // No answer at all (or an unclear one) may still have reached the network: the payment stays booked.
+      if (!(err instanceof BroadcastRefused)) throw err
+      // The gateway's refusal releases the booking (in the caller's catch) only when it names the transaction itself
+      // and the gateway does not know the signed transaction. A nonce or duplicate answer, an unknown one, a known
+      // transaction or a failed look-up: it may have gone out after all (the gateway retries another observer), so
+      // it stays booked under its own hash, where the refund check can still read what became of it.
+      const local = transactionHash(plain)
+      if (local && err.definite && (await this.lookup(local)) === 'not_found') {
+        booking.sent = sentBefore
+        throw err
+      }
+      if (local) this.settle(booking, local)
+      throw new Error(`${err.message}; it may have gone out all the same, so it stays counted${local ? ` (transaction ${local})` : ''}`)
+    }
     this.settle(booking, hash)
     return hash
+  }
+
+  /** The gateway's answer for a transaction hash, or null when the look-up failed. */
+  private async lookup(hash: string): Promise<'known' | 'not_found' | null> {
+    try {
+      return await this.d.chain.lookupTransaction(hash)
+    } catch {
+      return null
+    }
   }
 
   /** The outcome, or 'unconfirmed' when it cannot be read (the payment stays booked). */
@@ -823,9 +863,15 @@ export class Executor {
     now: Date,
     booking: Booking,
   ): Promise<ExecutionResult> {
-    const { hash, outcome } = await this.sendAndWait(wallet, spec, booking)
-    if (outcome.kind === 'failed') return finish('failed', `${desc}: seat payment reverted (${outcome.reason})`, this.revert(booking, agent, v, fees, hash, now, snap), hash)
+    const hash = await this.send(wallet, spec, booking)
+    // Pending from the send on, as a shop payment: a stop or a crash in the outcome wait (up to 2 min) keeps the
+    // hash, so the next tick confirms this seat with it and the next plan does not pay it again.
     this.d.store.addPending(hash, agent.index, 'join', { tournamentId })
+    const outcome = await this.outcome(hash)
+    if (outcome.kind === 'failed') {
+      this.d.store.resolvePending(hash, 'failed')
+      return finish('failed', `${desc}: seat payment reverted (${outcome.reason})`, this.revert(booking, agent, v, fees, hash, now, snap), hash)
+    }
     let withHash = true
     for (let i = 0; i < 6; i++) {
       try {
@@ -851,6 +897,17 @@ export class Executor {
 function retryable(err: unknown, wording: RegExp): boolean {
   if (err instanceof ApiRefusal) return err.isTxPending || wording.test(err.message)
   return true
+}
+
+const txComputer = new TransactionComputer()
+
+/** The hash of the signed transaction a broadcast carried, computed locally as the network does; null when it cannot be. */
+function transactionHash(plain: PlainTx): string | null {
+  try {
+    return txComputer.computeTransactionHash(Transaction.newFromPlainObject(plain))
+  } catch {
+    return null
+  }
 }
 
 /** Last byte of the public key, which the relayer shard rule reads. */
