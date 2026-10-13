@@ -77,6 +77,14 @@ function agentIndex(arg: string | undefined): number {
   return numberToIndex(arg) ?? usage()
 }
 
+/**
+ * The CLI never adds an agent to the real database: a row written here would be scheduled by the running service at
+ * its next start and shown in the dashboard, unpaused and past AGENT_MAX_AGENTS. Agents are added in the dashboard.
+ */
+function existingAgent(store: Store, index: number): void {
+  if (!store.agent(index)) throw new Error(`no ${agentName(index)}: add it in the dashboard (simulate-as runs a throwaway wallet)`)
+}
+
 /** An agent's wallet: an imported team's own key, else account N-1 of the recovery words. */
 function walletOf(store: Store, index: number): AgentWallet {
   const row = store.agent(index)
@@ -232,8 +240,8 @@ async function main(): Promise<void> {
       if (cmd === 'dry-run') {
         index = agentIndex(args[0])
         store = new Store(cfg.dataDir)
+        existingAgent(store, index)
         wallet = walletOf(store, index)
-        if (!store.agent(index)) store.addAgent(index, wallet.address)
       } else {
         const addr = args[0] ?? ''
         if (!/^erd1[0-9a-z]{58}$/.test(addr)) usage()
@@ -255,8 +263,9 @@ async function main(): Promise<void> {
       const isWatch = target.startsWith('erd1')
       const index = isWatch ? 900 : agentIndex(target)
       const store = isWatch ? new Store(cfg.dataDir, ':memory:') : new Store(cfg.dataDir)
+      if (!isWatch) existingAgent(store, index)
       const wallet = isWatch ? watchWallet(target) : walletOf(store, index)
-      if (!store.agent(index)) store.addAgent(index, wallet.address)
+      if (isWatch) store.addAgent(index, wallet.address) // the throwaway in-memory store
       const agent = { ...store.agent(index)!, dryRun: true }
       const snap = await takeSnapshot({ chain, fox }, isWatch ? { watch: wallet.address } : { wallet })
       const input = { snapshot: snap, settings: agent.settings, budget: budgetView(store, index, agent.settings, true, new Date()), recent: store.activity(index, 20), dryRun: true }
