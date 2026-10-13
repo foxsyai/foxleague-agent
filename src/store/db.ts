@@ -22,6 +22,17 @@ export interface AgentRow {
 }
 
 /** When and by whom an agent was retired, and what its wallet held then (shown in Retired, to restore it). */
+/** An agent deleted for good because its wallet was never used (newest last, at most 200 kept). */
+export interface DeletedAgent {
+  index: number
+  address: string
+  at: string
+  by: string
+}
+
+/** The stored values that belong to one agent, keyed by its number (deleteAgent clears them). */
+const PER_AGENT_KV = ['agent_user_id:', 'summary_elo:', 'waiting_funds:', 'last_plan_']
+
 export interface RetiredInfo {
   at: string
   by: string
@@ -214,6 +225,57 @@ export class Store {
   retireAgent(index: number, info: RetiredInfo): void {
     const r = this.db.prepare('UPDATE agents SET retired = ?, paused = 1 WHERE idx = ? AND removed_at IS NULL AND retired IS NULL').run(JSON.stringify(info), index)
     if (r.changes !== 1) throw new Error(`${agentName(index)} is not an active agent`)
+  }
+
+  /** True once the agent signed anything live: a live ledger row or an activity row with a transaction hash. */
+  everUsed(index: number): boolean {
+    return (
+      this.db.prepare('SELECT 1 FROM spend WHERE agent_idx = ? AND dry_run = 0 LIMIT 1').get(index) !== undefined ||
+      this.db.prepare('SELECT 1 FROM activity WHERE agent_idx = ? AND tx_hash IS NOT NULL LIMIT 1').get(index) !== undefined
+    )
+  }
+
+  /**
+   * Deletes an agent from the recovery words for good: its row, history, ledger, waiting payments and stored values,
+   * so its number is free and + Add agent can take it again (the same wallet). Only for a wallet that was never used:
+   * the caller checks it (neverUsedOrWhy). An imported team is removed with removeImportedAgent instead.
+   */
+  deleteAgent(index: number, by: string): DeletedAgent {
+    const row = this.db.prepare('SELECT address, source FROM agents WHERE idx = ?').get(index) as { address: string; source: string } | undefined
+    if (!row) throw new Error(`no ${agentName(index)}`)
+    if (row.source === 'imported') throw new Error(`${agentName(index)} is an imported team: remove it instead`)
+    const gone: DeletedAgent = { index, address: row.address, at: new Date().toISOString(), by }
+    this.db.exec('BEGIN')
+    try {
+      for (const table of ['activity', 'spend', 'pending_tx']) this.db.prepare(`DELETE FROM ${table} WHERE agent_idx = ?`).run(index)
+      const keys = PER_AGENT_KV.map(p => `${p}${index}`)
+      this.db.prepare(`DELETE FROM kv WHERE key IN (${keys.map(() => '?').join(', ')})`).run(...keys)
+      this.db.prepare('DELETE FROM agents WHERE idx = ?').run(index)
+      this.setKv('deleted_agents', JSON.stringify([...this.deletedAgents(), gone].slice(-200)))
+      this.db.exec('COMMIT')
+    } catch (err) {
+      this.db.exec('ROLLBACK')
+      throw err
+    }
+    return gone
+  }
+
+  /** The agents deleted so far (deploy/sync-pems.sh removes their PEM files on the owner's computer). */
+  deletedAgents(): DeletedAgent[] {
+    try {
+      const v: unknown = JSON.parse(this.getKv('deleted_agents') ?? '[]')
+      return Array.isArray(v) ? (v as DeletedAgent[]) : []
+    } catch {
+      return []
+    }
+  }
+
+  /** The lowest number no agent holds (an imported team, removed or not, keeps its number): where + Add agent goes. */
+  freeIndex(): number {
+    const used = new Set((this.db.prepare('SELECT idx FROM agents').all() as { idx: number }[]).map(r => r.idx))
+    let i = 0
+    while (used.has(i)) i++
+    return i
   }
 
   /** Brings a retired agent back among the active ones, still paused: the owner resumes it. */

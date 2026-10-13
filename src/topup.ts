@@ -148,6 +148,11 @@ export class TopUps {
   private readonly claimed = new Set<string>()
 
   /** How many requests wait for their code now. */
+  /** True while a top-up for the agent waits for its code or has no known outcome: EGLD may still reach its wallet. */
+  waitingFor(agentIndex: number): boolean {
+    return this.expire().some(r => r.agentIndex === agentIndex && (r.status === 'open' || r.status === 'sending' || r.status === 'unknown'))
+  }
+
   openCount(): number {
     return this.expire().filter(r => r.status === 'open').length
   }

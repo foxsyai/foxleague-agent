@@ -13,6 +13,7 @@ import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
 import { ChangedWordsError, assertSameWords, walletFromSecretKey, deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
 import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
 import type { UserSecretKey } from '@multiversx/sdk-core'
@@ -684,7 +685,7 @@ export class Service {
   ensureAgents(): AgentRow[] {
     // A server reads its words from the env file systemd loads (AGENT_ENV_FILE points nowhere there).
     assertSameWords([...this.store.agents(), ...this.store.retiredAgents()], this.cfg.mnemonic!, this.cfg.isServer ? 'the env file' : envFilePath(), this.cfg.dataDir)
-    const count = Math.min(this.cfg.maxAgents, Math.max(1, Number(process.env.AGENT_COUNT ?? 1)))
+    const count = this.agentCount()
     for (let i = 0; i < count; i++) if (!this.store.importedAt(i)) this.store.addAgent(i, this.wallet(i).address)
     const agents = this.store.agents()
     for (const b of agents) this.exportLocalPem(b.index)
@@ -791,9 +792,51 @@ export class Service {
     return row
   }
 
-  /** The number the next agent from the recovery words takes (never one an imported team held). */
+  /** AGENT_COUNT: the agents 1..N that exist at every start (at least one, within AGENT_MAX_AGENTS). */
+  agentCount(): number {
+    return Math.min(this.cfg.maxAgents, Math.max(1, Number(process.env.AGENT_COUNT ?? 1)))
+  }
+
+  /**
+   * The number the next agent from the recovery words takes: the lowest free one, so the wallet of a deleted agent
+   * comes back first (never a number an imported team holds or held).
+   */
   nextIndex(): number {
-    return this.store.maxIndex() + 1
+    return this.store.freeIndex()
+  }
+
+  /**
+   * Delete: for an agent whose wallet was never used (no transaction, nothing in it, no FoxLeague team, nothing ever
+   * signed), checked again now from the chain and FoxLeague. Its row, history and stored values go and, on a local
+   * install, its PEM file; on a server deploy/sync-pems.sh removes the file on the owner's computer. + Add agent
+   * makes the same wallet again. Anything used is refused: retire it instead.
+   */
+  async deleteAgent(index: number, who: string): Promise<string> {
+    if (this.stopping) throw new Error('the service is stopping; try again after the restart')
+    const busy = () => this.busy.has(index) || !this.executor.idleFor(index)
+    if (busy()) throw new Error(`${agentName(index)} is busy; try again in a minute`)
+    const agent = await neverUsedOrWhy({ store: this.store, chain: this.chain, fox: this.fox, topups: this.topups, agentCount: this.agentCount() }, index)
+    // No await from here to the delete: a plan that started while the wallet was read wins.
+    if (busy()) throw new Error(`${agentName(index)} is busy; try again in a minute`)
+    clearTimeout(this.timers.get(index))
+    this.timers.delete(index)
+    this.nextAt.delete(index)
+    this.snapshots.delete(index)
+    this.lastRefresh.delete(index)
+    this.wallets.delete(index)
+    this.store.deleteAgent(index, who)
+    const pem = this.deleteLocalPem(index, agent.address)
+    this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `${agentName(index)} (${agent.address}) deleted by ${who}: its wallet was never used.${pem}` })
+    this.notify(`${agentName(index)} deleted by ${who} (${agent.address}): its wallet was never used.${pem} + Add agent makes the same wallet again.`)
+    return `${agentName(index)} deleted.${pem}`
+  }
+
+  /** A local install's PEM file of a deleted agent goes too, once its first line names that wallet. */
+  private deleteLocalPem(index: number, address: string): string {
+    if (this.cfg.isServer) return ' Run ./deploy/sync-pems.sh on your computer to remove its PEM file there.'
+    const dir = process.env.AGENT_PEM_DIR?.trim()
+    const done = dir ? removePemFile(dir, index, address) : 'none'
+    return done === 'deleted' ? ` Its PEM file ${pemName(index)} was deleted.` : done === 'kept' ? ` ${pemName(index)} was kept: it is not this wallet's file.` : ''
   }
 
   /**

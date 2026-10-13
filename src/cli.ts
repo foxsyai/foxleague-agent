@@ -22,6 +22,8 @@ import { createInterface } from 'node:readline/promises'
 import { hashPassword } from './web/auth.ts'
 import { numberToIndex, agentName } from './names.ts'
 import { loadImportedWallet } from './wallet/imported.ts'
+import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
+import { TopUps } from './topup.ts'
 
 const REPO_ROOT = resolve(import.meta.dirname, '..')
 
@@ -34,6 +36,9 @@ function usage(): never {
                                 installer runs it before it starts the agent)
   address <N>                   print agent N's address and shard
   agents                        list this install's agents: number and address, one per line
+  delete-agent <N> [N...]       delete agents whose wallet was never used (checked on chain and on FoxLeague
+                                first); + Add agent makes the same wallet again
+  deleted-agents                list the deleted agents (number and address), read by deploy/sync-pems.sh
   export-pem <N> <path>         write agent N's PEM under pem/ or outside the repo (local only; never on the server)
   sync-manual [foxleague-repo]  rebuild src/strategist/manual.md from the FoxLeague repo's mainnet branch
                                 (default ../next-foxleague); commit and deploy it afterwards
@@ -123,6 +128,48 @@ async function main(): Promise<void> {
       // are listed too, so their PEM files exist when the owner wants to play such a team by hand.
       const store = new Store(cfg.dataDir)
       for (const b of [...store.agents(), ...store.retiredAgents()].sort((x, y) => x.index - y.index)) console.log(`${b.index + 1} ${b.address}${b.source === 'imported' ? ' imported' : ''}`)
+      return
+    }
+    case 'delete-agent': {
+      // The same check as the dashboard's Delete. A running service stops scheduling an agent once it is gone.
+      if (!args.length) usage()
+      const store = new Store(cfg.dataDir)
+      const deps = {
+        store,
+        chain: new Chain(cfg),
+        fox: new FoxLeague(cfg.foxleagueUrl, cfg.foxleagueRps),
+        // Only read here: whether a Binance top-up still waits for the agent.
+        topups: new TopUps({ store, key: () => null, accountType: () => undefined, live: () => false } as never),
+        agentCount: Math.min(cfg.maxAgents, Math.max(1, Number(process.env.AGENT_COUNT ?? 1))),
+      }
+      let failed = false
+      for (const n of args) {
+        const index = agentIndex(n)
+        try {
+          const agent = await neverUsedOrWhy(deps, index)
+          store.deleteAgent(index, 'the CLI')
+          store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `${agentName(index)} (${agent.address}) deleted from the CLI: its wallet was never used` })
+          const pem = cfg.isServer ? 'none' : removePemFile(process.env.AGENT_PEM_DIR?.trim() || join(REPO_ROOT, 'pem'), index, agent.address)
+          console.log(`${agentName(index)} (${agent.address}) deleted.${pem === 'deleted' ? ' Its PEM file is deleted too.' : pem === 'kept' ? ' Its PEM file was kept: it is not this wallet\'s file.' : ''}`)
+        } catch (err) {
+          failed = true
+          console.error(`${agentName(index)} kept: ${err instanceof Error ? err.message : String(err)}`)
+        }
+      }
+      if (cfg.isServer) console.log('On your computer, ./deploy/sync-pems.sh removes the PEM files of the deleted agents.')
+      if (failed) process.exit(1)
+      return
+    }
+    case 'deleted-agents': {
+      // For deploy/sync-pems.sh: the agents deleted for good, unless the same number is an agent with that wallet again.
+      const store = new Store(cfg.dataDir)
+      const now = new Map([...store.agents(), ...store.retiredAgents()].map(b => [b.index, b.address]))
+      const seen = new Set<number>()
+      for (const d of [...store.deletedAgents()].reverse()) {
+        if (seen.has(d.index)) continue
+        seen.add(d.index)
+        if (now.get(d.index) !== d.address) console.log(`${d.index + 1} ${d.address}`)
+      }
       return
     }
     case 'export-pem': {

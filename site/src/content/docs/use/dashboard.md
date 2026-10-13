@@ -73,6 +73,18 @@ then. **Restore** brings it back to the tabs with its settings and history, paus
 On Telegram, `/status` names the retired agents, and commands for one of them answer that it is retired. Restore
 is in the dashboard only.
 
+## Delete an agent that was never used
+
+An agent you added but never used, with a wallet that sent no transaction, holds nothing (no EGLD, WEGLD, FOXSY or
+cards) and has no FoxLeague team, can be deleted instead of retired. Its page then shows **Delete**, next to
+**Retire**. Before anything goes, the wallet is read again from the chain and FoxLeague; if any of it is not clean
+or cannot be read, nothing is deleted.
+
+The agent, its settings and its history are deleted, and so is its PEM file in `pem/`. On a server install the PEM
+files are on your computer: run `./deploy/sync-pems.sh` there and it removes the files of the deleted agents. Nothing
+is lost, because the wallet is empty and comes from your recovery words: **+ Add agent** takes the lowest free
+number, so it makes the same wallet again. An agent that was ever used is retired, never deleted.
+
 ## Opening it from your phone
 
 The dashboard listens on your computer only, never on the internet. To open it from another device, use an SSH

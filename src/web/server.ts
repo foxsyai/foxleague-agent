@@ -101,6 +101,12 @@ function send(res: ServerResponse, status: number, body: string, type: string, e
 const json = (res: ServerResponse, status: number, data: unknown) =>
   send(res, status, JSON.stringify(data, (_k, v) => (typeof v === 'bigint' ? v.toString() : v)), 'application/json; charset=utf-8')
 
+/** The last reading shows an untouched wallet: no transaction, no EGLD, WEGLD, FOXSY or cards, no team. */
+export function looksUnused(s: AgentSnapshot | undefined): boolean {
+  const c = s?.chain
+  return Boolean(c && c.nonce === 0 && c.egld === 0n && c.wegld === 0n && c.foxsy === 0n && c.nftCount === 0 && !s!.registration.registered && !s!.registration.profileUnreadable)
+}
+
 function snapshotSummary(s: AgentSnapshot | undefined) {
   if (!s) return null
   const p = s.profile
@@ -229,6 +235,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           snapshot: snapshotSummary(snap),
           funds: { usd: fundsUsd(snap), playable: playableUsd(snap, b.settings.egldGasReserve), low: lowOnFunds(playableUsd(snap, b.settings.egldGasReserve), b.settings.topUpWarningUsd) },
           lastPlan: service.store.getKv(`last_plan_${b.index}`) ?? null,
+          // Delete is offered only for a wallet that looks untouched; pressing it checks again from the chain.
+          deletable: b.source !== 'imported' && b.index >= service.agentCount() && looksUnused(snap) && !service.store.everUsed(b.index),
         }
       }),
       // Parked with Retire: what the Retired list shows to restore them.
@@ -361,6 +369,13 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
             case 'retire':
               try {
                 return json(res, 200, { ok: true, message: await service.retireAgent(index, user) })
+              } catch (err) {
+                throw new HttpFail(400, err instanceof Error ? err.message : String(err))
+              }
+            case 'delete':
+              if (data.confirm !== 'DELETE') throw new HttpFail(400, 'confirm the delete first')
+              try {
+                return json(res, 200, { ok: true, message: await service.deleteAgent(index, user) })
               } catch (err) {
                 throw new HttpFail(400, err instanceof Error ? err.message : String(err))
               }

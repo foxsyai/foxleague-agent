@@ -301,6 +301,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <button class="btn go" id="tickBtn">Plan now</button><i class="info" data-tip="plan_now">i</i>
           <button class="btn warn" id="pauseBtn">Pause</button><i class="info" data-tip="pause">i</i>
           <button class="btn" id="retireBtn">Retire</button><i class="info" data-tip="retire">i</i>
+          <button class="btn danger" id="deleteBtn" hidden>Delete</button><i class="info" data-tip="delete" id="deleteTip" hidden>i</i>
           <button class="btn danger" id="removeBtn" hidden>Remove</button><i class="info" data-tip="remove" id="removeTip" hidden>i</i>
         </div>
         <div class="note" id="ctlNote"></div>
@@ -585,6 +586,7 @@ function renderAgent() {
   $('lastPlan').textContent = b.lastPlan || 'No plan yet.' + (S.instance.model ? '' : ' The strategist is off (no ANTHROPIC_API_KEY).')
 
   $('removeBtn').hidden = $('removeTip').hidden = b.source !== 'imported'
+  $('deleteBtn').hidden = $('deleteTip').hidden = !b.deletable
   $('pauseBtn').textContent = b.paused ? 'Resume' : 'Pause'
   $('pauseBtn').className = 'btn ' + (b.paused ? 'go' : 'warn')
   $('tickBtn').disabled = b.busy || b.paused || S.instance.killSwitch
@@ -733,6 +735,13 @@ $('removeBtn').onclick = async () => {
   if (!r) return
   act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && S.agents[0]) select(S.agents[0].index) })
 }
+// Delete: only for a wallet never used; the server reads the chain again before anything goes.
+$('deleteBtn').onclick = async () => {
+  const b = agent(); if (!b || !b.deletable) return
+  const ok = await dialog({ title: 'Delete agent ' + (b.index + 1) + '?', text: 'Its wallet was never used: no transaction, nothing in it, no team. The agent, its settings, its history and its PEM file are deleted. Nothing is lost: + Add agent makes the same wallet again, still empty.', detail: b.address, ok: 'Delete', tone: 'danger' })
+  if (!ok) return
+  act('Deleted', () => api('POST', '/api/agents/' + b.index + '/delete', { confirm: 'DELETE' })).then(() => { if (S && !S.agents.some(x => x.index === b.index) && S.agents[0]) select(S.agents[0].index) })
+}
 // Retire parks an agent (paused, out of the tabs); Retired lists the parked ones, each with Restore.
 $('retireBtn').onclick = async () => {
   const b = agent(); if (!b) return
@@ -842,6 +851,9 @@ const TIPS = {
     <p><b>Retire</b> (on an agent's page) parks an agent you no longer use: it leaves the tabs for <b>Retired</b> and no longer counts toward the maximum. Restore brings it back.</p>`],
   remove: ['Remove', `<p>Only for an imported team. The agent stops managing it and its key is deleted from this install. The team, its cards and its funds stay in the wallet. You keep your own key file. Its history stays here.</p>
     <p>Pause it first. It cannot be removed while a payment waits for FoxLeague's confirmation. To only park the team and keep its key, use Retire.</p>`],
+  delete: ['Delete', `<p>Only for an agent whose wallet was never used: no transaction, no EGLD, WEGLD, FOXSY or cards, no FoxLeague team. The button shows only then.</p>
+    <p>The agent goes for good: its tab, settings and history, and its PEM file in pem/. On a server install the file is on your computer: run ./deploy/sync-pems.sh there to remove it. Nothing is lost, because the wallet is empty and + Add agent makes the same wallet again.</p>
+    <p>Before anything is deleted, the wallet is read again from the chain and FoxLeague. An agent that was ever used is retired instead.</p>`],
   retire: ['Retire and restore', `<p>Parks an agent you no longer use: it is paused and moved out of the tabs, into <b>Retired</b> (next to + Add agent). It makes no plans, costs nothing and sends no warnings, and it does not count toward the agent limit.</p>
     <p>Nothing is sold or moved: the wallet keeps its funds and cards, and the team stays in FoxLeague, so tournaments it already joined go on without it. An imported team keeps its key.</p>
     <p><b>Restore</b> brings it back to the tabs with its settings and history, paused: press Resume when it should play again. It cannot be retired while a payment waits for FoxLeague's confirmation.</p>`],

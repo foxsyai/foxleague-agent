@@ -2,7 +2,8 @@
 # Writes pem/agentN.pem on THIS computer for every agent your server runs, from the same recovery words
 # (AGENT_MNEMONIC in this folder's .env). PEM files never go to the server. Run it after adding an agent in the
 # server's dashboard; deploy.sh runs it at the end too. An existing file is never overwritten. An imported
-# team's key is yours already, so it gets no file here.
+# team's key is yours already, so it gets no file here. The file of an agent the server deleted for good (its wallet
+# was never used) is removed, once its first line names that wallet.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 HOST=${DEPLOY_HOST:-$(cat deploy/.host 2>/dev/null || true)}
@@ -12,6 +13,17 @@ SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$HOME/.ssh/cm-%r@%h-%p" -o Contr
 agents=$(ssh "${SSH_OPTS[@]}" "$HOST" /opt/foxleague-agent/app/deploy/agentctl.sh agents)
 [ -n "$agents" ] || { echo "The server listed no agents." >&2; exit 1; }
 mkdir -p pem && chmod 700 pem
+# A server without the command (an older version) lists nothing: no file is removed.
+if deleted=$(ssh "${SSH_OPTS[@]}" "$HOST" /opt/foxleague-agent/app/deploy/agentctl.sh deleted-agents 2>/dev/null); then
+  while read -r num addr; do
+    [ -n "${num:-}" ] || continue
+    [[ $num =~ ^[0-9]+$ && $addr =~ ^erd1[0-9a-z]{58}$ ]] || { echo "Unexpected line from the server: $num $addr" >&2; exit 1; }
+    if [ -f "pem/agent$num.pem" ] && head -n 1 "pem/agent$num.pem" | grep -qF "$addr"; then
+      rm -f "pem/agent$num.pem"
+      echo "agent $num: deleted on the server, pem/agent$num.pem removed"
+    fi
+  done <<< "$deleted"
+fi
 while read -r num addr source; do
   [[ $num =~ ^[0-9]+$ && $addr =~ ^erd1[0-9a-z]{58}$ ]] || { echo "Unexpected line from the server: $num $addr" >&2; exit 1; }
   if [ "${source:-}" = imported ]; then

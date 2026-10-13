@@ -53,5 +53,8 @@ the server, get a certificate (for example `certbot --nginx`) and reload nginx. 
 
 PEM files are written on your own computer, never on the server. Keep a copy of the repository with the same
 recovery words in its `.env`, and run `./deploy/sync-pems.sh`: it asks the server which agents it runs, checks
-that your words give the same addresses and writes each missing `pem/agentN.pem`. `deploy.sh` runs it at the end,
-and the dashboard reminds you when you add an agent.
+that your words give the same addresses and writes each missing `pem/agentN.pem`. It also removes the file of an
+agent the server deleted (Delete is only for a wallet that was never used), once the file names that wallet.
+`deploy.sh` runs it at the end, and the dashboard reminds you when you add an agent. To delete never-used agents
+from the server's command line: `sudo /opt/foxleague-agent/app/deploy/agentctl.sh delete-agent 11 12` (each one is
+checked on chain and on FoxLeague first; a used one is kept and named).
