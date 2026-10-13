@@ -31,7 +31,7 @@ export interface DeletedAgent {
 }
 
 /** The stored values that belong to one agent, keyed by its number (deleteAgent clears them). */
-const PER_AGENT_KV = ['agent_user_id:', 'summary_elo:', 'waiting_funds:', 'last_plan_']
+const PER_AGENT_KV = ['agent_user_id:', 'summary_elo:', 'waiting_funds:', 'last_plan_', 'bid_gone:']
 
 export interface RetiredInfo {
   at: string

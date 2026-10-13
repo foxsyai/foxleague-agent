@@ -289,3 +289,39 @@ test('A5 who sat in it unknown (no user id noted, no wallet in the detail): the 
   assert.equal(seat(m), 2.25)
   assert.equal(m.store.openSpend(0, 'join:', false)[0]!.action, 'join:77', 'asked again next tick')
 })
+
+// ---- C3: a settled auction whose card is not in the wallet yet does not credit a bid the agent may have won ----
+
+/** A bid placed yesterday on #4881; the auction is gone (settled) and the card is not in the wallet. */
+function settledRig(player: () => Promise<unknown>) {
+  const m = setup()
+  m.store.recordSpend({ agentIndex: 0, at: new Date(Date.now() - 25 * 3600_000), gameDay: '2026-10-12', category: 'play', action: 'bid:4881', foxsyAtomic: wholeToAtomic(1100), egldAtomic: 0n, usd: 2.5, txHash: 'h1', dryRun: false })
+  const chain = { query: async () => [], esdts: async () => [{ tokenIdentifier: 'FOXSY-5d5f3e', balance: 1n, nonce: 0 }] }
+  const deps = { store: m.store, chain: chain as never, fox: { tournament: async () => assert.fail('no seat here'), player } as never }
+  const bids = () => m.store.openSpend(0, 'bid:', false).map(r => r.action)
+  return { m, deps, bids }
+}
+
+test('C3 a won bid is not credited on the first sighting of the settled auction while the card is still in flight', async () => {
+  const { m, deps, bids } = settledRig(async () => ({ nft_nonce: 4881, owner_address: ADDR }))
+  assert.equal(await creditRefunds(deps, m.agent(), false), 0, 'the bid was credited back although the agent won the card')
+  assert.deepEqual(bids(), ['bid:4881:won'], 'FoxLeague names the agent as the owner: closed as won, it keeps counting for good')
+})
+
+test('C3 another owner: the bid is credited only once the card stayed away for the grace period (a stale owner is not trusted at once)', async () => {
+  const { m, deps, bids } = settledRig(async () => ({ nft_nonce: 4881, owner_address: STRANGER }))
+  const now = Date.now()
+  assert.equal(await creditRefunds(deps, m.agent(), false, now), 0, 'first sighting: the card may still be crossing shards')
+  assert.equal(await creditRefunds(deps, m.agent(), false, now + 5 * 60_000), 0, 'still within the grace')
+  assert.deepEqual(bids(), ['bid:4881'])
+  assert.equal(await creditRefunds(deps, m.agent(), false, now + 11 * 60_000), 1, 'gone for good, someone else won: credited')
+  assert.equal(m.store.spentUsd(0, { category: 'play', dryRun: false }), 0)
+})
+
+test('C3 the owner unreadable: the bid keeps counting, even after the grace period', async () => {
+  const { m, deps, bids } = settledRig(async () => { throw new Error('HTTP 502') })
+  const now = Date.now()
+  assert.equal(await creditRefunds(deps, m.agent(), false, now), 0)
+  assert.equal(await creditRefunds(deps, m.agent(), false, now + 30 * 60_000), 0)
+  assert.deepEqual(bids(), ['bid:4881'])
+})

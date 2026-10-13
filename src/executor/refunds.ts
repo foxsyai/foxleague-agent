@@ -6,7 +6,10 @@
 // Only the chain decides: the auction's top bidder while it runs, the wallet's own cards once it is
 // settled. A won bid is closed (bid:<nonce>:won) so a later state of the same card (the agent listing
 // it, an API lag) can never credit money that really left. A bid younger than a few minutes may still
-// be in flight and is left alone; dry-run bids never reached the chain and always keep counting.
+// be in flight and is left alone; dry-run bids never reached the chain and always keep counting. Right
+// after the settlement the card may still be crossing to the agent's shard: FoxLeague naming the agent
+// as its owner closes the bid as won, and otherwise it is credited only once the card stayed out of the
+// wallet for ten minutes after the settled auction was first seen (an unreadable owner keeps counting).
 //
 // Seats and stakes too (tag join:<tournament>): FoxLeague refunds them by itself when a tournament or a
 // 1v1 is cancelled for not filling. Credited once the tournament is cancelled and the contract holds no
@@ -28,7 +31,7 @@ import { b64ToBigInt, u64Hex } from '../util/encoding.ts'
 export interface RefundDeps {
   store: Store
   chain: Pick<Chain, 'query' | 'esdts'>
-  fox?: Pick<FoxLeague, 'tournament'>
+  fox?: Pick<FoxLeague, 'tournament' | 'player'>
   /** The agent's wallet: the tournament detail read with it says whether this team sat in it (user_is_participant). */
   wallet?: AgentWallet
 }
@@ -60,6 +63,22 @@ export async function creditRefunds(d: RefundDeps, agent: AgentRow, dryRun: bool
     if (holdings === null) throw new Error('holdings unreadable')
     return holdings.has(nonce)
   }
+  /** The card's owner as FoxLeague names it; throws when it cannot be read. */
+  const ownerOf = async (nonce: number): Promise<string> => {
+    if (!d.fox?.player) throw new Error('owner unreadable')
+    const owner = (await d.fox.player(nonce)).owner_address
+    if (typeof owner !== 'string' || !owner) throw new Error('owner unreadable')
+    return owner
+  }
+  // Settled auctions whose card was not in the wallet: nonce -> first sighting (ms), kept across ticks.
+  const goneKey = `bid_gone:${agent.index}`
+  let gone: Record<string, number> = {}
+  try {
+    gone = JSON.parse(d.store.getKv(goneKey) ?? '{}') as Record<string, number>
+  } catch {
+    gone = {}
+  }
+  const goneBefore = JSON.stringify(gone)
   for (const [nonce, rows] of byNonce) {
     const latest = rows[rows.length - 1]!
     if (!latest.txHash || now - new Date(latest.at).getTime() < SETTLE_MS) continue
@@ -72,16 +91,31 @@ export async function creditRefunds(d: RefundDeps, agent: AgentRow, dryRun: bool
         // Settled and the card is in the wallet: the agent won; that bid stays counted for good.
         d.store.closeSpend(latest.id, 'won')
         standing = true
-      } else standing = false
+      } else if ((await ownerOf(nonce)) === agent.address) {
+        // Settled, and FoxLeague already names the agent as the owner: the card is still crossing from the
+        // contract's shard. Won, so it stays counted for good.
+        d.store.closeSpend(latest.id, 'won')
+        standing = true
+      } else {
+        // Someone else won, or FoxLeague still names the seller while the card is in flight to the agent: credited
+        // only once the card stayed out of the wallet for SETTLE_MS after the settled auction was first seen.
+        const first = gone[nonce]
+        if (first === undefined) gone[nonce] = now
+        if (first === undefined || now - first < SETTLE_MS) continue
+        standing = false
+      }
     } catch {
-      continue // unknown: keep counting (the safe side)
+      continue // unknown (the auction, the wallet or the owner unreadable): keep counting (the safe side)
     }
+    delete gone[nonce]
     for (const r of rows) {
       if (standing && r === latest) continue
       d.store.creditSpend(r.id)
       credited++
     }
   }
+  for (const k of Object.keys(gone)) if (!byNonce.has(Number(k))) delete gone[k]
+  if (JSON.stringify(gone) !== goneBefore) d.store.setKv(goneKey, JSON.stringify(gone))
   if (d.fox) credited += await creditCancelledEntries({ ...d, fox: d.fox }, agent, now)
   return credited
 }
