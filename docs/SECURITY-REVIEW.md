@@ -344,10 +344,23 @@ enabled"). The agent read no FOXSY price from a paused pair, so every paid actio
 | XP1 | medium | A paused pair left the snapshot without prices: no entry, sync or shop payment, even with FOXSY held | A paused pair cannot trade, so its reserves hold the last price: FOXSY is valued at it (still the higher of spot and the two-day median), swaps are refused with a plain reason and the plan is told (PR #3) |
 | XP2 | low | Sampling the frozen price into the two-day median would let a price moved just before the pause set the caps after about a day | No samples while the pair is paused (agent review of PR #3) |
 
+## Whole-project review, 2026-10-13
+
+A whole-project audit with adversarial reviewers (chain of calls C, money paths A), each finding proven by a test
+that failed on the code before its fix (`test/xp-booster.test.ts` for the first). Later fixes add their rows here.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| C1/A4 | high | FoxLeague's GET /api/shop/status sends the XP booster flat (`xp_booster_active`, `xp_booster_expires_at`; `shop.rs:56-72`), the agent read a nested `xp_booster` the server never sends: the "booster active" refusal never fired, the digest never said one ran, and buying again restarts the 24 h (`shop.rs:794-816`). Live: 20 boosters bought while one still ran, about 13,800 FOXSY of hours thrown away. An unreadable shop status or an active booster without an expiry also let a purchase through | The type, the rule, the digest and the effect after a purchase read and write the flat fields. A booster is refused when the shop status is unreadable or does not say whether one runs, when one is active with no readable expiry and while more than 2 h are left (`XP_BOOSTER_RENEW_HOURS`). The digest says "XP booster active until ..." or "status unknown" |
+
+Open: FoxLeague itself reports a booster as inactive when its own booster query fails (`shop.rs:794-808`, logged
+and defaulted to false), which the agent cannot tell from "none bought"; the pending shop payment guard (M9) and
+the ledger cover only the agent's own recent purchases.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
-`MAX_BIDS_PER_AUCTION`, `MAX_INHERITED_LOCK_HOURS`, `MIN_RESERVE_FOXSY`, `CORE_CARDS`), `src/executor/executor.ts`
+`MAX_BIDS_PER_AUCTION`, `MAX_INHERITED_LOCK_HOURS`, `MIN_RESERVE_FOXSY`, `CORE_CARDS`, `XP_BOOSTER_RENEW_HOURS`), `src/executor/executor.ts`
 (per-agent lock, booking before signing, swap allowance, price valuation), `src/executor/tx.ts` (`syncTx`),
 `src/chain/gateway.ts` (EGLD price band), `src/snapshot/digest.ts` (`txt`), `src/telegram/telegram.ts`,
 `src/web/server.ts` and `src/web/auth.ts`.
