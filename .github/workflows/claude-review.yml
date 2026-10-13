@@ -86,8 +86,10 @@ jobs:
       # and the maintainer checks it by hand (and merges it with the admin bypass when it is sound).
       - name: A change to the CI or the review is checked by hand
         run: |
-          # --no-renames: a file renamed out of these folders counts as a change to them (review of PR #5).
-          if changed=$(git diff --no-renames --name-only HEAD^1 HEAD | grep -E '^(\.github/|scripts/ci/)'); then
+          # --no-renames: a file renamed out of these folders counts as a change to them; the pathspec, not a grep
+          # of the names, so a quoted name (special characters) cannot slip past (reviews of PR #5).
+          changed=$(git -c core.quotePath=false diff --no-renames --name-only HEAD^1 HEAD -- .github scripts/ci)
+          if [[ -n "$changed" ]]; then
             echo "::error::This pull request changes the CI or the review, so they cannot judge it: a maintainer checks it by hand. Files: $(echo $changed)"
             exit 1
           fi

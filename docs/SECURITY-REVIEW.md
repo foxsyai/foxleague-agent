@@ -320,7 +320,8 @@ opening or updating one). An independent Fable 5.1 review of the workflows (W) a
 | P5-3 | low | The token action by a moving tag, its token not limited | Pinned to v2.2.2's commit, permission-statuses only |
 | P5-4 | note | A pull request changing ci.yml is judged by its own copy | The review fails any change to .github/ or scripts/ci/: the maintainer checks it by hand |
 | P5-5 | medium | report-ci posted the result of any CI run: a manual run on another branch, or a pull request into another branch whose own ci.yml was tested | Only pull request runs into main (the run's pull request, or for a fork an open pull request into main with that head) and pushes to main |
-| P5-6 | low | A file renamed out of .github/ or scripts/ci/ escaped the hand check | git diff --no-renames |
+| P5-6 | low | A file renamed out of .github/ or scripts/ci/, or one with a quoted name, escaped the hand check | git diff --no-renames with a pathspec instead of a grep of the names |
+| P5-7 | low | The fork fallback of report-ci also vouched for a run of a branch of this repository that named no pull request | Such a run is refused; only a fork's run uses the fallback |
 
 Settings that go with it: the ruleset "main: changes through a pull request" requires foxleague-agent/ci and
 foxleague-agent/review from the App FoxLeague Agent Checks (id 5301257); the App's key is a secret of the environment

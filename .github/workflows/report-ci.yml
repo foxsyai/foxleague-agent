@@ -38,9 +38,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           SHA: ${{ github.event.workflow_run.head_sha }}
           BASES: ${{ join(github.event.workflow_run.pull_requests.*.base.ref, ' ') }}
+          HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
         run: |
           if [[ -n "$BASES" ]]; then
             [[ " $BASES " == *" main "* && "$(wc -w <<<"$BASES")" -eq 1 ]] || { echo "::error::this CI run belongs to a pull request into: $BASES, not main"; exit 1; }
+          elif [[ "$HEAD_REPO" == "$GITHUB_REPOSITORY" ]]; then
+            # A head in this repository always comes with its pull request; without one (closed, or the head moved
+            # before the run ended) nothing vouches for the run (third review of PR #5).
+            echo "::error::this CI run of a branch of this repository names no pull request into main"; exit 1
           else
             n=$(gh api "repos/$GITHUB_REPOSITORY/commits/$SHA/pulls" --jq "[.[] | select(.state == \"open\" and .base.ref == \"main\" and .head.sha == \"$SHA\")] | length")
             [[ "$n" -ge 1 ]] || { echo "::error::no open pull request into main has this head"; exit 1; }
