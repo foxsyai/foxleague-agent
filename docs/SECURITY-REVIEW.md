@@ -303,6 +303,16 @@ Merged on 2026-10-13 onto 3e1774e (FoxLeague's 12 October switch; the starter st
 merge: a forwarded message gets a short reply saying it was not read (the owner was left waiting for an answer), and
 `WEB_UI_HOST` is documented in `.env.example`. F-M3, F-O7 and F-O8 go to the whole-project review.
 
+## xExchange paused every pool, 2026-10-13
+
+At 10:39 UTC xExchange's router admin paused about 700 pairs, FOXSY/WEGLD among them (swaps fail with "Swap is not
+enabled"). The agent read no FOXSY price from a paused pair, so every paid action of every agent was refused.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| XP1 | medium | A paused pair left the snapshot without prices: no entry, sync or shop payment, even with FOXSY held | A paused pair cannot trade, so its reserves hold the last price: FOXSY is valued at it (still the higher of spot and the two-day median), swaps are refused with a plain reason and the plan is told (PR #3) |
+| XP2 | low | Sampling the frozen price into the two-day median would let a price moved just before the pause set the caps after about a day | No samples while the pair is paused (agent review of PR #3) |
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

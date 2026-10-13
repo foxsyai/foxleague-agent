@@ -268,7 +268,9 @@ export class Executor {
     } catch {
       seen = []
     }
-    if (!seen.length || now - Math.max(...seen.map(o => o.t)) >= 600_000) {
+    // A frozen price (xExchange paused the pair) is no new observation: sampling it would let a price moved just
+    // before the pause take over the median within a day (review of PR #3).
+    if (!p.frozen && (!seen.length || now - Math.max(...seen.map(o => o.t)) >= 600_000)) {
       seen = [...seen, { t: now, p: p.foxsyUsd }].slice(-288) // two days at one sample per 10 minutes
       this.d.store.setKv('foxsy_usd_seen', JSON.stringify(seen))
     }
