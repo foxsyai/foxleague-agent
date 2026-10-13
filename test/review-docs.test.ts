@@ -17,6 +17,11 @@ const REPO = resolve(import.meta.dirname, '..')
 const read = (p: string) => readFileSync(join(REPO, p), 'utf8')
 const DOCS = 'site/src/content/docs'
 
+test('D2 the strategist prompt gives the match gate per rarity, not 20 per card', () => {
+  assert.doesNotMatch(SYSTEM_PROMPT, /20 per card/)
+  assert.match(SYSTEM_PROMPT, /the match gate of each card's rarity \(below\)/)
+})
+
 test('the server guide sets WEB_UI_TRUST_PROXY=1 behind nginx, so strangers cannot lock the owner out', () => {
   const step3 = read('docs/SERVER.md').split('\n3. ')[1]!.split('\n4. ')[0]!
   assert.match(step3, /WEB_UI_TRUST_PROXY=1/, 'step 3 of the first setup does not set WEB_UI_TRUST_PROXY')
