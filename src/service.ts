@@ -163,7 +163,12 @@ export class Service {
     this.telegram = cfg.telegramToken && cfg.telegramChatId ? new Telegram(cfg.telegramToken, cfg.telegramChatId) : null
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
-    this.executor = new Executor({ cfg, chain: this.chain, fox: this.fox, store: this.store, notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)) })
+    this.executor = new Executor({
+      cfg, chain: this.chain, fox: this.fox, store: this.store,
+      notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)),
+      // A graceful stop: an action still being prepared signs nothing (one already sent finishes and is booked).
+      stopping: () => this.stopping,
+    })
     this.topups = new TopUps({
       store: this.store,
       key: () => {
@@ -1244,6 +1249,8 @@ export class Service {
         continue
       }
       const snap = await this.snapshot(agent.index)
+      // A stop that came while the snapshot was read (tens of seconds): the action is not started.
+      if (this.stopping) return
       if (!planned.piece && extensions.splitAction && !beforeLock) {
         const pieces = extensions.splitAction(planned, snap, current.settings)
         if (pieces && pieces.length > 1) {

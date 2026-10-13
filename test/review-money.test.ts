@@ -3,6 +3,11 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Mnemonic } from '@multiversx/sdk-core'
+import type { Config } from '../src/config.ts'
 import { ADDR, OTHER, STRANGER, card, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { Chain } from '../src/chain/gateway.ts'
@@ -319,6 +324,59 @@ test('C3 another owner: the bid is credited only once the card stayed away for t
   assert.deepEqual(bids(), ['bid:4881'])
   assert.equal(await creditRefunds(deps, m.agent(), false, now + 11 * 60_000), 1, 'gone for good, someone else won: credited')
   assert.equal(m.store.spentUsd(0, { category: 'play', dryRun: false }), 0)
+})
+
+// ---- A2: no action is prepared, signed or sent after a graceful stop was requested ----
+
+test('A2 no action starts after a graceful stop was requested during the snapshot taken for it', async () => {
+  const { Service } = await import('../src/service.ts')
+  const cfg = {
+    mnemonic: Mnemonic.generate().toString(), dataDir: mkdtempSync(join(tmpdir(), 'foxagent-')), gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9',
+    gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: undefined, model: 'claude-sonnet-5', telegramToken: undefined, telegramChatId: undefined, isServer: false, defaultDryRun: true, maxAgents: 5,
+  } as Config
+  const svc = new Service(cfg)
+  svc.ensureAgents()
+  svc.store.updateSettings(0, { minGapSeconds: 0 })
+  const ran: string[] = []
+  let stopped: Promise<void> | undefined
+  // SIGTERM (a deploy) arrives while the action's snapshot is being read.
+  ;(svc as unknown as { snapshot: unknown }).snapshot = async () => {
+    stopped = svc.stop()
+    return snapshot()
+  }
+  ;(svc as unknown as { executor: unknown }).executor = {
+    liveEnabled: false,
+    idle: true,
+    run: async (_b: unknown, _w: unknown, _s: unknown, a: PlannedAction[]) => {
+      ran.push(a[0]!.action.type)
+      return [{ action: a[0]!.action, reason: '', status: 'dry_run', summary: '', costUsd: 0 }]
+    },
+  }
+  const runPlan = (svc as unknown as { runPlan: (b: unknown, a: PlannedAction[], r: boolean) => Promise<void> }).runPlan.bind(svc)
+  await runPlan(svc.store.agent(0), [{ action: { type: 'buy', product: 'training_slot' }, reason: 'r' }, { action: { type: 'play_match', match_type: 'casual' }, reason: 'r' }], false)
+  await stopped
+  assert.deepEqual(ran, [], 'stop() was called before the action: nothing may be prepared, signed or sent after it')
+})
+
+test('A2 the executor signs nothing once the service is stopping (asked before the booking and again before the signature)', async () => {
+  for (const at of ['context', 'send'] as const) {
+    let stopping = false
+    let signed = 0
+    const m = setup({
+      chain: { account: async () => ((at === 'send' && (stopping = true)), { nonce: 1, balance: wholeToAtomic(10) }) },
+      fox: { user: async () => null, shopConfirm: async () => ({ message: 'ok' }) },
+    })
+    m.exec['d'].stopping = () => stopping
+    if (at === 'context') stopping = true // the stop came while the action waited for its turn
+    const wallet = { ...liveWallet, signTransaction: () => void signed++ }
+    await withLive(m.store, async () => {
+      const [r] = await m.exec.run(m.agent(), wallet, snapshot(), act({ type: 'buy', product: 'training_slot' }))
+      assert.equal(r!.status, 'error', `${at}: ${r!.summary}`)
+      assert.match(r!.summary, /stopping/)
+      assert.equal(signed, 0, `${at}: nothing signed after the stop`)
+      assert.equal(m.store.spentUsd(0, { category: 'play', dryRun: false }), 0, `${at}: nothing stays booked`)
+    })
+  }
 })
 
 // ---- A7: an agent with a Binance top-up on its way is not deleted as never used ----

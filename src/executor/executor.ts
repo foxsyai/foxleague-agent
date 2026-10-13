@@ -64,6 +64,8 @@ export interface ExecutorDeps {
   store: Store
   /** Every action's result as text; the result too, so a payment with an unclear outcome can be said at once. */
   notify?: (agentIndex: number, text: string, result?: ExecutionResult) => void
+  /** The service is stopping (SIGTERM, a deploy): nothing more is signed; an action already sent finishes. */
+  stopping?: () => boolean
 }
 
 interface Built {
@@ -565,10 +567,11 @@ export class Executor {
 
   // ---- live ----
 
-  /** The kill switch or a pause pressed while an action was being prepared stops it before the signature. */
+  /** The kill switch, a pause or a graceful stop while an action was being prepared stops it before the signature. */
   private assertNotStopped(agentIndex: number): void {
     if (this.d.store.killSwitch) throw new Error('the kill switch was turned on before signing: nothing sent')
     if (this.d.store.agent(agentIndex)?.paused) throw new Error('the agent was paused before signing: nothing sent')
+    if (this.d.stopping?.()) throw new Error('the service is stopping (a restart or a deploy) before signing: nothing sent')
   }
 
   /** Signs and sends; from the signature on the payment counts as possibly sent. */
