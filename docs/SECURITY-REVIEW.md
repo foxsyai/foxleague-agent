@@ -388,6 +388,32 @@ could be credited; the booster rule could also check the agent's own last booste
 review of #7); Telegram's update offset lives in memory, so a command in the instant before a crash could run again
 after the restart.
 
+## Second review round, 2026-10-13
+
+The same method on main 733a8d5, after the first round's fixes: three read-only reviewers in parallel, money and
+limits (R2A), web, Telegram and install (R2B) and a fresh reviewer over the whole project (R2C). A finding counted
+only when its reviewer proved it with a test that failed on 733a8d5. The fixes were made by Claude Opus 5.5, test
+first: every test, adapted into `test/review2-money.test.ts` and `test/review2-web.test.ts`, was seen failing on
+733a8d5 and passing after its fix. No phantom. The four items the first round left open as unproven are among them
+(R2A-2, R2A-4, R2A-5, R2B-2).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R2A-1/R2C-2 | medium | The pending-payment retry never ran in routine operation. `retryPendingPayments` abandoned a row older than 25 minutes before any confirm, and its only caller, the tick, comes every 120 +-10 minutes (Zeus 60) and returns first outside the active hours, while paused, retired or under the kill switch. A shop payment or a seat whose confirm answered `tx_pending` was never confirmed again: the product was not delivered and A9's credit never ran | The service runs the retry on its own timer, about every minute from the start; only a stop ends it, since a confirm signs and pays nothing. One pass at a time, every agent with a pending row (retired ones too), under the executor's per-agent lock, so a hash is never confirmed while the action that sent it is mid-flight. Every row is confirmed once at any age (FoxLeague's answer for a known hash is final); a row is given up only when the answer is still not final (`tx_pending`, no answer, unknown wording) after 60 minutes, past FoxLeague's 30-minute shop grace and its 5-minute refund sweep. The alert gives the last answer and, for a seat, says FoxLeague may still seat the team or refund it |
+| R2A-2 | medium | The final-answer wording checks also matched FoxLeague's `tx_pending` texts: the shop timeout ("after that it is refunded automatically"), the join's `retry_same_tx` ("If it was refunded ..., your FOXSY is already back") and `REFUND_IN_FLIGHT_ANSWER` ("do not pay again"). A payment FoxLeague asked to confirm again was resolved as done | An `ApiRefusal` with the `tx_pending` code keeps the row pending before any wording check |
+| R2A-3 | medium | Regression of C3: a lost bid whose winner fused the card kept counting all month. FoxLeague deletes burned cards and answers "Player not found" (`players.rs`), which the refund check read as "owner unreadable" | "Player not found" for a settled auction whose card is not in the wallet counts like another owner (the grace, then the credit), unless the agent's own log holds a fusion of that card since the bid: a confirmed one closes the bid as won, one sent with an unknown outcome keeps it counting. No answer and a 5xx stay unknown |
+| R2A-4 | low | A won card the agent listed again before the won-close ran made the bid look outbid (the agent is not the top bidder of its own auction), so it was credited | A live auction whose seller is the agent closes the bid as won |
+| R2A-5 | low | The booster rule trusted `xp_booster_active` alone, which FoxLeague reports as false when its own booster query fails | The executor reads the agent's own confirmed booster purchases of the last 22 hours (24 less `XP_BOOSTER_RENEW_HOURS`; simulated ones in the dry-run ledger) and the rule refuses: "an XP booster was bought n h ago" |
+| R2B-1 | low | The in-place env rewrite (B3) copied the env file, with the recovery words, to the data directory before it knew the file could be opened for writing: an env file the service user can read but not write left the copy behind and blocked every later rewrite | The env file is opened for writing first. The backup goes as soon as the new content is synced, before the mode change; a failing chmod says the file is saved |
+| R2B-2 | low | Telegram's update offset lived in memory: a command dispatched just before a crash or a restart came back after it and a /do ran twice | Kept in the database per bot (kv `telegram_offset`, the bot's public number, never the token), read before the first poll and written after each batch before any of it is dispatched: at most once. An offset more than a day old is not used |
+| R2C-1 | low | The README promised "never a 1v1 or trade between your own agents", a rule the owner removed on 2026-09-30 | The safety page's wording: the agents are never coordinated and may meet by chance |
+
+Open, noted by the money reviewer as design observations: a shop payment whose broadcast got a nonce or an unknown
+refusal (A10 keeps its booking) leaves no pending row, so no confirm is tried for it if it did go through; and when an
+extension cuts a shop payment into pieces (`splitAction`, `src/extensions.ts`), a later piece of the same product is
+refused while an earlier piece's confirm is `tx_pending` (the pending shop guard, M9) and the rest of the group is
+dropped, so the next plan decides again.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
