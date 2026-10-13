@@ -361,7 +361,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sSilver">Silver amounts<i class="info" data-tip="silver">i</i></label><input id="sSilver" placeholder="1000, 1500, 2000"><div class="hint">Round amounts for creating</div></div>
           <div><label for="sGold">Gold amounts<i class="info" data-tip="gold">i</i></label><input id="sGold" placeholder="5000"></div>
           <div class="sep">Timing</div>
-          <div><label for="sTick">Tick (minutes)<i class="info" data-tip="tick">i</i></label><input id="sTick" type="number" min="5" max="240" step="1"></div>
+          <div><label for="sTick">Tick (minutes)<i class="info" data-tip="tick">i</i></label><input id="sTick" type="number" min="10" max="240" step="1"></div>
           <div><label for="sJitter">Random window (± min)<i class="info" data-tip="jitter">i</i></label><input id="sJitter" type="number" min="0" max="60" step="1"></div>
           <div><label for="sFrom">Active from (UTC hour)<i class="info" data-tip="hours">i</i></label><input id="sFrom" type="number" min="0" max="23" step="1"></div>
           <div><label for="sTo">Active until (UTC hour)<i class="info" data-tip="hours">i</i></label><input id="sTo" type="number" min="1" max="24" step="1"></div>
@@ -401,7 +401,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
   <div class="controls"><button class="btn go" type="button" id="lvlOk">Accept and save</button><button class="btn" type="button" id="lvlKeep">Cancel</button></div>
 </div></div>
 <div id="retwrap"><div id="retbox" role="dialog" aria-modal="true" aria-labelledby="retTitle"><h3 id="retTitle">Retired agents<i class="info" data-tip="retire">i</i></h3>
-  <p>Parked agents: no plans, no AI cost, no warnings, and they don't count toward the agent limit. Each wallet keeps its funds. Restore brings an agent back paused, with its settings and history.</p>
+  <p>Parked agents: no plans, no AI cost and no warnings. They don't count toward the agent limit. Each wallet keeps its funds. Restore brings an agent back paused, with its settings and history.</p>
   <div id="retList"></div>
   <div class="controls"><button class="btn" type="button" id="retClose">Close</button></div>
 </div></div>
@@ -704,8 +704,13 @@ async function askPassword(title, text) {
   return r ? r.password : null
 }
 $('pwwrap').addEventListener('click', e => { if (e.target.id === 'pwwrap') $('pwCancel').click() })
+// Answers whether the change itself went through (the error is shown once, here).
 async function act(label, fn) {
-  try { const r = await fn(); toast(r && r.message ? r.message : label) ; await loadState(); await loadActivity() } catch (e) { toast(e.message, true) }
+  let r
+  try { r = await fn() } catch (e) { toast(e.message, true); return false }
+  toast(r && r.message ? r.message : label)
+  try { await loadState(); await loadActivity() } catch (e) { toast(e.message, true) }
+  return true
 }
 async function addAgent() {
   const n = S.instance.next; if (!n) return
@@ -828,9 +833,25 @@ $('modeBtn').onclick = async () => {
   if (r) act('Live', () => api('POST', '/api/mode', { live: true, confirm: 'GO LIVE', password: r.password }))
 }
 $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; renderStrat() }
-$('stratApply').onclick = async () => {
-  await act('Strategist updated', () => api('POST', '/api/strategist', { model: $('sModel').value, effort: $('sEffort').value }))
+// A dearer model (any list price higher) or more effort raises the AI spend, which has no cap: the server asks for
+// the password then (raisesAiSpend in server.ts). A cheaper model or less effort is one click.
+function aiCostsMore(model, effort) {
+  const i = S.instance, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
+  return !cur || !pick || pick.price.some((p, k) => p > cur.price[k]) || i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
+}
+const AI_RAISE_TEXT = 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+// password: already asked for (the level dialog asks once for the settings and the AI). Answers whether the AI was
+// switched: false when the password was not given or the server refused it (a mistyped one is a 403).
+$('stratApply').onclick = async (e, password) => {
+  const body = { model: $('sModel').value, effort: $('sEffort').value }
+  if (aiCostsMore(body.model, body.effort)) {
+    if (!password) password = await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+    if (!password) { toast('Strategist unchanged', true); return false }
+    body.password = password
+  }
+  const ok = await act('Strategist updated', () => api('POST', '/api/strategist', body))
   stratDirty = false; renderHeader()
+  return ok
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
 const TIPS = {
@@ -864,6 +885,7 @@ const TIPS = {
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
     <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well; <b>Sonnet 5.5</b> is the newer Sonnet at the same price. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b>, the most capable, 5x.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
+    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
@@ -879,7 +901,7 @@ const TIPS = {
     <p>To stop every agent at once, use the kill switch. To stop signing but keep planning, use Back to dry run.</p>`],
   mine: ['In tournaments', `<p>The tournaments and 1v1 challenges the agent is in right now. While one is still open, <b>Leave</b> gives the seat or stake back to the wallet.</p>
     <p>On a 1v1 the agent created and nobody accepted, Leave also closes the challenge, so the agent can take another one. The agent can do the same by itself when it sees a better 1v1.</p>`],
-  wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation, today's matches and training, and the tournaments it is in.</p>
+  wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation and the tournaments it is in, with today's matches and training.</p>
     <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
@@ -892,7 +914,7 @@ const TIPS = {
     <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
   funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD, its WEGLD and its FOXSY. "To play with" is the same without the EGLD gas reserve, which is never swapped: it is what the agent can still spend on the game.</p>
-    <p>It turns orange, and the agent's tab shows "low funds", when what it can play with is worth less than the Top-up warning in Settings. You also get one message on Telegram when it falls under that level, and the next one only after a top-up to well above it. Nothing is paused: the agent plays on with what it has.</p>
+    <p>It turns orange, and the agent's tab shows "low funds", when what it can play with is worth less than the Top-up warning in Settings. On Telegram it shows in the morning summary, or at once with /updates all; with a Binance key a top-up proposal comes at once. It warns again only after a top-up to well above that level. Nothing is paused: the agent plays on with what it has.</p>
     <p>To top up, send EGLD to the address above on the MultiversX network: the agent buys FOXSY with it by itself. You can send FOXSY or WEGLD too. When a swap fits in the wallet's WEGLD, the agent spends that first and all of it if needed, because WEGLD pays no network fees and needs no reserve. Otherwise it swaps EGLD, down to the gas reserve.</p>`],
   topup: ['Top-up warning', `<p>You are warned when what this agent can play with (its EGLD, WEGLD and FOXSY, the EGLD gas reserve aside) is worth less than this amount in USD: the value turns orange here and it shows in the morning summary on Telegram; with a Binance key a top-up proposal comes at once. It warns again only after a top-up to at least 20 percent above this level and a new fall.</p>
     <p>Each level's default is about two days of play at its daily cap ($10 for steady, $200 for beast). 0 switches the warning off.</p>`],
@@ -903,7 +925,7 @@ const TIPS = {
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Six levels. The first five go from careful to all-in, each doing everything the level below does and more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. <b>Zeus</b> is different: everything a beast may do, but only what pays, aiming at No. 1. It weighs a win chance for every team, plays a 1v1 only from 55 percent and a tournament only with a real chance of the top three, and can create private tournaments. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that fall short of its recommendation (each with a tick) and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit asks for your password.</p>
+    <p>Six levels. The first five go from careful to all-in, each doing everything the level below does and more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. <b>Zeus</b> is different: everything a beast may do, but only what pays, aiming at No. 1. It weighs a win chance for every team, plays a 1v1 only from 55 percent and a tournament only with a real chance of the top three, and can create private tournaments. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that fall short of its recommendation (each with a tick) and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
@@ -1198,8 +1220,19 @@ function openLevel(k) {
     for (const [, f] of short) if (ticks[f].checked) pick[f] = dir === 'up' && Array.isArray(l[f]) ? [...new Set([...cur[f], ...l[f]])].sort((x, y) => x - y) : l[f]
     fillForm(cur); $('sPreset').value = k; $('sStrategy').value = S.instance.presets[k]
     fillLevel({ ...cur, ...pick }); formDirty = true
-    if ($('lvlAi').checked && ai) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; await $('stratApply').onclick() }
-    $('settingsForm').requestSubmit()
+    // One password for both when the AI gets dearer too; without the password nothing is switched.
+    const aiTake = $('lvlAi').checked && ai, aiMore = aiTake && aiCostsMore(ai.model, ai.effort), limitsMore = raisesForm(readForm(), cur)
+    let password = null
+    if (aiMore) {
+      password = limitsMore
+        ? await askPassword('Raise a limit and switch to a dearer AI', 'Some of these settings let the agent spend more and the new AI costs more on every plan of every agent. Your password confirms both.')
+        : await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+      if (!password) return toast('Nothing saved', true)
+    }
+    // A refused switch (a mistyped password) stops here: its error is shown once and nothing else is saved.
+    if (aiTake) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; if (!(await $('stratApply').onclick(null, password))) return }
+    // The form's own checks run first; the submit handler takes the password at once (submit fires synchronously).
+    formPassword = password; $('settingsForm').requestSubmit(); formPassword = null
   }
   $('lvlKeep').onclick = () => { $('lvlwrap').classList.remove('on'); formDirty = false; fillForm(agent().settings) }
   $('lvlwrap').classList.add('on'); $('lvlOk').focus()
@@ -1212,22 +1245,26 @@ $('sPreset').onchange = () => {
 }
 $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
-// Settings that let the agent spend more; the server asks for the password when one goes up.
+// Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
 const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy']
-$('settingsForm').onsubmit = async e => {
-  e.preventDefault()
-  const form = readForm()
-  const cur = agent().settings
+const RAISE_TEXT = 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.'
+function raisesForm(form, cur) {
   const hours = h => (h[1] - h[0] + 24) % 24 || 24
-  const more = LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)
+  return LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)
     || (form.entryFeesGold.length > 0 && cur.entryFeesGold.length === 0) || form.tickMinutes < cur.tickMinutes || hours(form.activeHoursUtc) > hours(cur.activeHoursUtc)
-  if (more) {
-    const password = await askPassword('Raise a limit', 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.')
+}
+// password: already asked for (the level dialog asks once for the settings and the AI).
+async function saveSettings(password) {
+  const form = readForm()
+  if (raisesForm(form, agent().settings)) {
+    if (!password) password = await askPassword('Raise a limit', RAISE_TEXT)
     if (!password) return toast('Nothing saved', true)
     form.password = password
   }
   act('Settings saved', async () => { const r = await api('POST', '/api/agents/' + sel + '/settings', form); formDirty = false; return r })
 }
+let formPassword = null
+$('settingsForm').onsubmit = e => { e.preventDefault(); saveSettings(formPassword) }
 
 // ---- Getting started: the three keys explained step by step, funding and going live ----
 const GUIDE = [
@@ -1242,7 +1279,7 @@ const GUIDE = [
     ],
     note: 'It costs about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick; you pick them in the Strategist box and in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
-    intro: 'A summary of every agent each morning, any detail on request (/status, /plan, /log), and you can talk to your manager in plain words.',
+    intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
       ['On your phone, open Telegram and start a chat with BotFather, the official bot that makes bots.', 'https://t.me/BotFather'],
       ['Send /newbot. Give it a name, then a username that ends in bot, for example myfox_manager_bot.'],

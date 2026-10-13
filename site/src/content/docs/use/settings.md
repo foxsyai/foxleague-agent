@@ -9,15 +9,18 @@ shrinking the gas reserve) asks for your password.
 ## Strategy
 
 The direction the AI follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to
-take. Five presets set it for you, from careful to all-in: **steady**, **climber**, **hunter**, **predator** and
-**beast**. Each level does everything the level below does and adds more spending to grow the squad;
+take. Six presets set it for you. The first five go from careful to all-in: **steady**, **climber**, **hunter**,
+**predator** and **beast**. Each of them does everything the level below does and adds more spending to grow the
+squad. The sixth, **Zeus**, may do everything a beast does but only what pays, aiming at No. 1 on the leaderboard.
 [Strategy levels](/play/strategy-levels/) lists every action level by level and the limits to set for each. Edit the
 text freely, or let [Talk to your manager](/use/talk-to-your-manager/) rewrite it for you. Your limits always win:
 the strategy guides the choices, the code enforces the limits.
 
-**Picking a level also fills its default limits** in the form: the daily cap, the monthly budget, the top-up warning,
-the per-action maximums, the Silver and Gold amounts and the tick. Check them and press Save; raising a limit asks for
-your password. The defaults below are the steady level's, the one every new agent starts with;
+**Picking a level opens a proposal** with its default limits: each setting that does not fit the level yet (the daily
+cap, the monthly budget, the top-up warning, the per-action maximums, the Silver and Gold amounts or the tick) gets a
+row with a tick, and the level's recommended AI is offered apart. **Accept and save** saves the ticked ones; untick a
+row to keep your own value, and **Cancel** keeps everything as it is saved. Raising a limit or switching to a dearer
+AI asks for your password. The defaults below are the steady level's, the one every new agent starts with;
 [Strategy levels](/play/strategy-levels/#the-default-limits-of-each-level) lists every level's.
 
 ## Spending (USD)

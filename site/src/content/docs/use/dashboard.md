@@ -24,7 +24,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   higher of its spot price and its two-day median, so a sudden dip never makes a payment look cheaper.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
 - **Strategist**: the AI model and effort for every agent. Sonnet 5 is the default and plays well; Sonnet 5.5 is the
-  newer Sonnet at the same price; higher models or effort think harder and cost more.
+  newer Sonnet at the same price; higher models or effort think harder and cost more. A dearer model or a higher
+  effort asks for your password, because the AI spend has no cap of its own; a cheaper one is one click.
 
 ## An agent's page
 
@@ -35,7 +36,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once). **Value** is what
   the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
   reserve aside); it turns orange, and the agent's tab shows **low funds**, when that falls under your **Top-up
-  warning** (you also get one message on Telegram). To top up, send EGLD to the agent's
+  warning** (it shows in the morning summary on Telegram, at once with `/updates all`; with a Binance key a top-up
+  proposal comes at once). To top up, send EGLD to the agent's
   address: it buys FOXSY by itself (WEGLD and FOXSY work too). **In tournaments** lists the tournaments and 1v1s the agent is in, each open
   one with a **Leave** button.
 - **Last plan**: the agent's latest reading of the situation, each action with a one-line reason and the cost of

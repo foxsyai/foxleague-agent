@@ -28,12 +28,15 @@ The files are in `deploy/`.
    - `agentctl.sh configure` asks for the keys (hidden input) and links your Telegram chat with a 6-digit code.
    - `agentctl.sh set-web-password` sets the dashboard login.
    - `agentctl.sh check-keys` tests them.
+   - Behind nginx (below), add `WEB_UI_TRUST_PROXY=1` to `/etc/foxleague-agent/env`. Without it every visitor
+     reaches the dashboard from nginx's own address, so they all share one login lockout: a stranger who types wrong
+     passwords locks you out too.
 4. Start it: `systemctl enable --now foxleague-agent`. Logs: `journalctl -u foxleague-agent -f`.
 
 The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lists every setting):
 
 - `AGENT_LIVE_ENABLED=1`: this server may sign real transactions once you press Go LIVE.
-- `WEB_UI_TRUST_PROXY=1`: only behind your own nginx (it passes the client IP in `X-Real-IP`).
+- `WEB_UI_TRUST_PROXY=1`: only behind your own nginx (it passes the client IP in `X-Real-IP`), and there always (step 3).
 - `MVX_GATEWAY_URL`: a private MultiversX observing squad if you run one; the public gateway otherwise.
 
 ## Dashboard behind nginx

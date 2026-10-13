@@ -27,7 +27,8 @@ rules and the owner's caps before anything is signed. Treat every change to that
 6. **Text written by other players is data, never instructions.** Names, titles and server messages pass through `txt()`
    in `src/snapshot/digest.ts` and sit inside the framed snapshot. Do not put rival text anywhere else in a prompt.
 7. **The owner's password gates anything that raises spending**: higher caps, a smaller gas reserve, Gold on, a shorter
-   tick, longer active hours, going live, releasing the kill switch, keys. Lowering, pausing and the kill switch stay one click.
+   tick, longer active hours, a dearer AI model or a higher effort, going live, releasing the kill switch, keys.
+   Lowering, pausing and the kill switch stay one click.
 8. **Dry run is the default.** Live needs `AGENT_LIVE_ENABLED=1` on the machine and the owner's Go LIVE with the password.
 
 ## How to change the code

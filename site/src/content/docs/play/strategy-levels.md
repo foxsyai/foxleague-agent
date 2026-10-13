@@ -78,8 +78,9 @@ never arranges a result with any team.
 
 The presets set the direction and your limits always win: an agent stops at its daily cap, its monthly budget and
 its largest single payment, whatever its strategy says. So each level comes with its own limits, and **picking a
-level in Settings fills them** in the form; check them and press Save (raising a limit asks for your password). You
-can change any of them afterwards. Values at a FOXSY price of about $0.0027 (October 2026):
+level in Settings proposes them**: each setting that does not fit the level yet gets a row with a tick, and
+**Accept and save** saves the ticked ones (raising a limit asks for your password). You can change any of them
+afterwards. Values at a FOXSY price of about $0.0027 (October 2026):
 
 | Setting | Steady | Climber | Hunter | Predator | Beast | Zeus |
 |---|---|---|---|---|---|---|
