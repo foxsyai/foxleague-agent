@@ -3,7 +3,7 @@
 // an expiry, constant-time comparisons, per-IP exponential lockout plus a global burst limiter.
 // Standard library only.
 
-import { createHmac, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
+import { createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto'
 
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 128 * 2 ** 15 * 8 * 2 }
 export const SESSION_TTL_S = 12 * 3600
@@ -12,6 +12,63 @@ export const COOKIE_NAME = 'foxagent_session'
 export function hashPassword(password: string, salt: Buffer = randomBytes(16)): string {
   const dk = scryptSync(password, salt, 32, SCRYPT)
   return `scrypt$${salt.toString('base64')}$${dk.toString('base64')}`
+}
+
+/**
+ * The same check as verifyPassword, off the event loop (the login route: a flood of attempts must not stall the
+ * executor, the kill switch or Telegram). Same format rules, same answers.
+ */
+export function verifyPasswordAsync(password: string, stored: string): Promise<boolean> {
+  const parts = stored.split('$')
+  if (parts.length !== 3 || parts[0] !== 'scrypt') return Promise.resolve(false)
+  let salt: Buffer
+  let expected: Buffer
+  try {
+    salt = Buffer.from(parts[1]!, 'base64')
+    expected = Buffer.from(parts[2]!, 'base64')
+  } catch {
+    return Promise.resolve(false)
+  }
+  if (!salt.length || !expected.length) return Promise.resolve(false)
+  return new Promise(resolve => {
+    try {
+      scrypt(password, salt, expected.length, SCRYPT, (err, dk) => resolve(!err && dk.length === expected.length && timingSafeEqual(dk, expected)))
+    } catch {
+      resolve(false)
+    }
+  })
+}
+
+/**
+ * Runs jobs one at a time (a login verification holds about 32 MiB while it runs; jobs waiting hold nothing).
+ * Two bounds, null = turned away (answer 429): `maxPerKey` for one client address, so a single source cannot take the
+ * queue, and `maxInSystem` overall, large enough that a flood adds seconds of latency rather than locking the owner
+ * out, small enough that the wait stays short. The login throttle still counts every failed attempt per address.
+ */
+export class BoundedQueue {
+  private inSystem = 0
+  private tail: Promise<unknown> = Promise.resolve()
+  private readonly perKey = new Map<string, number>()
+  private readonly maxInSystem: number
+  private readonly maxPerKey: number
+  constructor(maxInSystem = 32, maxPerKey = 2) {
+    this.maxInSystem = maxInSystem
+    this.maxPerKey = maxPerKey
+  }
+
+  run<T>(job: () => Promise<T>, key = ''): Promise<T | null> {
+    if (this.inSystem >= this.maxInSystem || (this.perKey.get(key) ?? 0) >= this.maxPerKey) return Promise.resolve(null)
+    this.inSystem++
+    this.perKey.set(key, (this.perKey.get(key) ?? 0) + 1)
+    const p = this.tail.then(job)
+    this.tail = p.then(() => undefined, () => undefined)
+    return p.finally(() => {
+      this.inSystem--
+      const left = (this.perKey.get(key) ?? 1) - 1
+      if (left > 0) this.perKey.set(key, left)
+      else this.perKey.delete(key)
+    })
+  }
 }
 
 export function verifyPassword(password: string, stored: string): boolean {

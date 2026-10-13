@@ -274,6 +274,31 @@ a refused invite list never costs a seat, and only Zeus can create one.
 | Z10 | low | A rewrite without the level name dropped Zeus mode | The manager keeps the level name |
 | Z11 | note | The AI was not told the 55 percent threshold, and the strength units were unclear | Both stated |
 
+## Fourteenth review, 2026-10-11 (an independent audit: money and chain, web and Telegram, orchestration and deployment)
+
+Three Claude Fable 5.1 reviewers (read-only) went through the whole code in three areas, and each re-checked the earlier
+fixes: every money and security id listed above still holds. Nothing high. Every finding accepted as real was read in the
+code again before the fix and got a test that failed first (`test/audit-fable.test.ts`, `test/executor.test.ts`).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R-1 | medium | `register` read an unreadable fee state (`isRegistrationPaid` failed) as unpaid: with the profile read also failing, a registered team could pay the 5,000 FOXSY fee again | An unknown fee state is refused, nothing paid, the next plan retries |
+| F-O1 | medium | The ESDT route failing became "0 FOXSY, 0 WEGLD": the model planned EGLD to FOXSY swaps for FOXSY the wallet held and a false low-funds warning | The chain section is unknown (null) when either balance route fails; the rules refuse blind |
+| F-M2 / F-O4 | low | A failed profile read looked like an unregistered team: swaps moved to the setup allowance (up to the setup budget instead of the daily cap) and `register` was planned | `registration.profileUnreadable`; swaps and `register` are refused while the profile cannot be read |
+| F-M1 | low | A created tournament or 1v1 whose seat was never paid (not on chain after 60 s) stayed booked until it ended | The booking is released (nothing was signed) |
+| F-S1 | medium | The login hashed with `scryptSync` on the event loop, with no limit for addresses that had not failed yet: a flood stalls the executor, the kill-switch re-reads and Telegram (behind nginx) | Asynchronous scrypt through a queue: one at a time, at most 2 per client address and 32 in all, 429 beyond |
+| F-S2 | low | `{"model":"constructor"}` passed `!MODELS[model]`, was saved and failed every plan | `isKnownModel` (own keys only), also on read |
+| F-S3 | low | A forwarded message carries the owner as its sender and ran as a command (`/kill off`, `/do`) | Any `forward_*` field, `is_automatic_forward`, `via_bot` or `external_reply` is ignored |
+| F-S4 | low | A malformed cookie (`%`) threw before authentication and logged a stack trace per request | The cookie is dropped |
+| F-O5 | low | `/ask` sent the snapshot outside the data fence the plans use | Same fence |
+| F-O6 | low | The preparation tick could undercut the 10-minute floor (5 minutes) | Uses `MIN_TICK_MINUTES` |
+| F-O9 | low | The dashboard bind was fixed to 127.0.0.1, which forces `network_mode: host` in a container | `WEB_UI_HOST` (default 127.0.0.1) |
+
+Open, not changed here: **F-M3** (low, plausible) `pending.ts` treats "Do NOT pay again" as done while
+`docs/FOXLEAGUE-INTEGRATION.md` says the join must be retried without a hash: it needs FoxLeague's answer on whether the
+seat is finalised by itself; **F-O7** (low) `cli plan N` and `cli dry-run N` insert an unpaused agent row;
+**F-O8** (low, plausible) the 150 s stop budget can be used up inside a snapshot, after which an action starts.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

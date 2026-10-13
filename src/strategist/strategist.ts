@@ -37,6 +37,9 @@ export const MODELS: Record<string, { label: string; price: [number, number, num
   'claude-opus-5-5': { label: 'Opus 5.5', price: [4, 20, 0.2] },
   'claude-fable-5-1': { label: 'Fable 5.1', price: [10, 50, 0.25] },
 }
+/** MODELS is a plain object: "constructor" or "toString" would pass a bare lookup, so ask for an own key. */
+export const isKnownModel = (id: string): boolean => Object.hasOwn(MODELS, id)
+
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 
@@ -45,7 +48,8 @@ const WITH_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5', 'claude-opu
 
 /** The web UI's choice (kv), else AGENT_MODEL / AGENT_MODEL_EFFORT from the env. */
 export function strategistChoice(store: Store, cfg: Config): { model: string; effort: Effort } {
-  const model = store.getKv('strategist_model') ?? cfg.model
+  const picked = store.getKv('strategist_model')
+  const model = picked && isKnownModel(picked) ? picked : cfg.model
   const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? 'medium'
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
 }
@@ -373,7 +377,8 @@ export class Strategist {
       messages: [
         {
           role: 'user',
-          content: `## Snapshot\n${renderDigest(snapshot)}\n\n## The owner asks (answer briefly, plain text, no tool call, in the language of the question; English if that is unclear)\n${question}`,
+          // Framed like a plan request: rival-written text inside the fence is data, never an instruction.
+          content: `${SNAPSHOT_HEADING}\n<<<SNAPSHOT\n${renderDigest(snapshot)}\nSNAPSHOT>>>\n\n## The owner asks (answer briefly, plain text, no tool call, in the language of the question; English if that is unclear)\n${question}`,
         },
       ],
     })

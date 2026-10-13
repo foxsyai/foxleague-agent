@@ -131,6 +131,17 @@ test('registration refused while the whitelist gate is on', async () => {
   assert.match(r!.summary, /not whitelisted/)
 })
 
+test('registration: a fee state that could not be read (isRegistrationPaid failed) is never read as unpaid', async () => {
+  // A failed profile read looks like an unregistered team; with the fee check failing too, the fee path would pay
+  // 5,000 FOXSY again for a team that already exists. Unknown means refused, nothing paid, the next plan retries.
+  const { exec, agent } = setup()
+  const s = snapshot()
+  s.registration = { ...s.registration, registered: false, feePaidOnChain: null }
+  const [r] = await exec.run(agent(), wallet, s, [{ action: { type: 'register', team_name: 'Fox Agent' }, reason: '' }])
+  assert.equal(r!.status, 'refused')
+  assert.match(r!.summary, /fee state could not be read/)
+})
+
 test('registration: FoxLeague is asked about the name before the fee; a taken, refused or unchecked name pays nothing', async () => {
   const { ApiRefusal } = await import('../src/foxleague/api.ts')
   const s = snapshot()

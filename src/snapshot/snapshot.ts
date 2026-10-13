@@ -97,6 +97,8 @@ export interface AgentSnapshot {
     whitelisted: boolean | null
     relayerEnabled: boolean | null
     relaysRemaining: number | null
+    /** The profile route failed (not "not found"): whether the team exists is unknown, which is not "unregistered". */
+    profileUnreadable?: boolean
   }
   profile: UserProfile | null
   team: Team | null
@@ -225,6 +227,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   const bal = (id: string) => esdts?.find(e => e.tokenIdentifier === id && e.nonce === 0)?.balance ?? 0n
   const nftCount = esdts?.filter(e => e.tokenIdentifier.startsWith(`${MAINNET.playerCollection}-`)).length ?? 0
   const registered = Boolean(profile?.team_name)
+  // fox.user() answers null for "not found" and the attempt wrapper answers null for a failure: only the latter leaves a warning.
+  const profileUnreadable = warnings.some(w => w.startsWith('profile: '))
 
   const players = registered
     ? ((await attempt(warnings, 'players', () => fox.players(address, wallet ?? undefined))) ?? []).map(p => playerView(p, team, now))
@@ -344,7 +348,9 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     watchOnly: !wallet,
     agent: { index: wallet?.index ?? null, address, shard: wallet?.shard ?? null },
     gameDay: gameDay(now, auth?.allowance?.reset_hour_utc ?? 14),
-    chain: account ? { egld: account.balance, nonce: account.nonce, foxsy: bal(MAINNET.foxsyToken), wegld: bal(MAINNET.wegldToken), nftCount } : null,
+    // Balances unreadable are unknown, never "0 FOXSY": with either route failed the whole section is unknown, so the
+    // rules refuse blind (and no swap is planned for FOXSY the wallet already holds).
+    chain: account && esdts ? { egld: account.balance, nonce: account.nonce, foxsy: bal(MAINNET.foxsyToken), wegld: bal(MAINNET.wegldToken), nftCount } : null,
     prices: egldUsd && egldPerFoxsy ? { egldUsd, egldPerFoxsy, foxsyUsd: egldUsd * egldPerFoxsy } : null,
     config,
     registration: {
@@ -354,6 +360,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       whitelisted,
       relayerEnabled: config?.relayer_v3_enabled ?? null,
       relaysRemaining: config?.relays_remaining_today ?? null,
+      profileUnreadable,
     },
     profile,
     team,
