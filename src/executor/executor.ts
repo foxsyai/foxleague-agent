@@ -22,7 +22,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
-import { checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
+import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -129,18 +129,26 @@ export class Executor {
   }
 
   /** Serialized per agent, so the cap check and the booking of one action never interleave with another's. */
-  async runOne(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, planned: PlannedAction): Promise<ExecutionResult> {
-    const before = this.locks.get(agent.index) ?? Promise.resolve()
+  runOne(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, planned: PlannedAction): Promise<ExecutionResult> {
+    return this.exclusive(agent.index, () => this.runOneLocked(agent, wallet, snap, planned))
+  }
+
+  /**
+   * Runs `fn` under the agent's lock, in turn with its actions: the pending-payment retry uses it, so a confirm of a
+   * hash never runs while the action that sent it is still waiting for its outcome or confirming it.
+   */
+  async exclusive<T>(index: number, fn: () => Promise<T>): Promise<T> {
+    const before = this.locks.get(index) ?? Promise.resolve()
     let release!: () => void
     const mine = new Promise<void>(r => (release = r))
     const tail = before.then(() => mine)
-    this.locks.set(agent.index, tail)
+    this.locks.set(index, tail)
     await before
     try {
-      return await this.runOneLocked(agent, wallet, snap, planned)
+      return await fn()
     } finally {
       release()
-      if (this.locks.get(agent.index) === tail) this.locks.delete(agent.index)
+      if (this.locks.get(index) === tail) this.locks.delete(index)
     }
   }
 
@@ -306,7 +314,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string } }
       } catch {
         return {}
       }
@@ -354,6 +362,16 @@ export class Executor {
     }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
+    if (a.type === 'buy' && a.product === 'xp_booster') {
+      // The agent's own booster purchase that may have paid (simulated, in the dry-run ledger): FoxLeague's status
+      // alone reads "none active" when its own booster query fails. As for the bid limit: confirmed, unconfirmed (the
+      // pending retry may have confirmed it since; the log row keeps its first status) and sent with the answer lost.
+      // A refused, reverted or unsigned purchase paid nothing.
+      const last = store
+        .activityOf(agent.index, ['buy'], since((24 - XP_BOOSTER_RENEW_HOURS) * 3600_000))
+        .find(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'xp_booster')
+      market.lastBoosterAt = last ? new Date(last.at) : null
+    }
     if (a.type === 'fuse') {
       market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
       const first = snap.players.find(p => p.nonce === a.player_nonces[0])
@@ -865,7 +883,7 @@ export class Executor {
   ): Promise<ExecutionResult> {
     const hash = await this.send(wallet, spec, booking)
     // Pending from the send on, as a shop payment: a stop or a crash in the outcome wait (up to 2 min) keeps the
-    // hash, so the next tick confirms this seat with it and the next plan does not pay it again.
+    // hash, so the pending retry (src/executor/pending.ts) confirms this seat with it and the next plan does not pay it again.
     this.d.store.addPending(hash, agent.index, 'join', { tournamentId })
     const outcome = await this.outcome(hash)
     if (outcome.kind === 'failed') {
@@ -885,7 +903,7 @@ export class Executor {
         await sleep(6000)
       }
     }
-    return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the next tick retries the join without paying again`, usd, hash)
+    return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the join is retried with the same hash, never paid again`, usd, hash)
   }
 }
 

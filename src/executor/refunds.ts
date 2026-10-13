@@ -10,6 +10,9 @@
 // after the settlement the card may still be crossing to the agent's shard: FoxLeague naming the agent
 // as its owner closes the bid as won, and otherwise it is credited only once the card stayed out of the
 // wallet for ten minutes after the settled auction was first seen (an unreadable owner keeps counting).
+// A card FoxLeague no longer knows ("Player not found": it deletes cards burned in a fusion) counts like
+// another owner, unless the agent's own log holds a fusion of it. The agent's own live auction of the
+// card means it won the bid and listed the card again before the won-close ran.
 //
 // Seats and stakes too (tag join:<tournament>): FoxLeague refunds them by itself when a tournament or a
 // 1v1 is cancelled for not filling. Credited once the tournament is cancelled and the contract holds no
@@ -22,7 +25,7 @@ import { Address } from '@multiversx/sdk-core'
 import { MAINNET } from '../config.ts'
 import { getAuction } from '../chain/players.ts'
 import type { Chain } from '../chain/gateway.ts'
-import type { FoxLeague } from '../foxleague/api.ts'
+import { ApiRefusal, type FoxLeague } from '../foxleague/api.ts'
 import type { TournamentDetail } from '../foxleague/types.ts'
 import type { AgentRow, Store } from '../store/db.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
@@ -63,12 +66,37 @@ export async function creditRefunds(d: RefundDeps, agent: AgentRow, dryRun: bool
     if (holdings === null) throw new Error('holdings unreadable')
     return holdings.has(nonce)
   }
-  /** The card's owner as FoxLeague names it; throws when it cannot be read. */
-  const ownerOf = async (nonce: number): Promise<string> => {
+  /**
+   * The card's owner as FoxLeague names it, or null when FoxLeague no longer knows the card (it deletes a card burned
+   * in a fusion; its answer is "Player not found"). Throws when it cannot be read (no answer, a 5xx, no owner).
+   */
+  const ownerOf = async (nonce: number): Promise<string | null> => {
     if (!d.fox?.player) throw new Error('owner unreadable')
-    const owner = (await d.fox.player(nonce)).owner_address
+    let owner: unknown
+    try {
+      owner = (await d.fox.player(nonce)).owner_address
+    } catch (err) {
+      if (err instanceof ApiRefusal && /not found/i.test(err.message)) return null
+      throw err
+    }
     if (typeof owner !== 'string' || !owner) throw new Error('owner unreadable')
     return owner
+  }
+  /** The agent's own fusion of this card since the bid: 'confirmed', 'maybe' (sent, outcome unknown) or null. */
+  const ownFusion = (nonce: number, since: string): 'confirmed' | 'maybe' | null => {
+    let found: 'confirmed' | 'maybe' | null = null
+    for (const r of d.store.activityOf(agent.index, ['fuse'], new Date(since))) {
+      let detail: { sent?: boolean; action?: { player_nonces?: unknown } }
+      try {
+        detail = JSON.parse(r.detail ?? '{}') as typeof detail
+      } catch {
+        detail = {}
+      }
+      if (!Array.isArray(detail.action?.player_nonces) || !detail.action.player_nonces.includes(nonce)) continue
+      if (r.status === 'confirmed') return 'confirmed'
+      if (r.status === 'unconfirmed' || r.status === 'sent' || detail.sent === true) found = 'maybe'
+    }
+    return found
   }
   // Settled auctions whose card was not in the wallet: nonce -> first sighting (ms), kept across ticks.
   const goneKey = `bid_gone:${agent.index}`
@@ -86,19 +114,31 @@ export async function creditRefunds(d: RefundDeps, agent: AgentRow, dryRun: bool
     let standing: boolean
     try {
       const auction = await getAuction(d.chain as Chain, nonce)
-      if (auction) standing = auction.highestBidder === agent.address
+      let owner: string | null | undefined
+      if (auction && auction.seller === agent.address) {
+        // The agent's own auction of the card: it won the bid and listed the card again before the won-close ran.
+        d.store.closeSpend(latest.id, 'won')
+        standing = true
+      } else if (auction) standing = auction.highestBidder === agent.address
       else if (await holds(nonce)) {
         // Settled and the card is in the wallet: the agent won; that bid stays counted for good.
         d.store.closeSpend(latest.id, 'won')
         standing = true
-      } else if ((await ownerOf(nonce)) === agent.address) {
+      } else if ((owner = await ownerOf(nonce)) === agent.address) {
         // Settled, and FoxLeague already names the agent as the owner: the card is still crossing from the
         // contract's shard. Won, so it stays counted for good.
         d.store.closeSpend(latest.id, 'won')
         standing = true
+      } else if (owner === null && ownFusion(nonce, latest.at) === 'confirmed') {
+        // FoxLeague no longer knows the card because the agent itself burned it in a fusion: it had won the bid.
+        d.store.closeSpend(latest.id, 'won')
+        standing = true
       } else {
-        // Someone else won, or FoxLeague still names the seller while the card is in flight to the agent: credited
-        // only once the card stayed out of the wallet for SETTLE_MS after the settled auction was first seen.
+        // A fusion of it the agent sent whose outcome is unknown: it may have won and burned the card. Asked again.
+        if (owner === null && ownFusion(nonce, latest.at) === 'maybe') continue
+        // Someone else won (and may have burned the card since), or FoxLeague still names the seller while the card
+        // is in flight to the agent: credited only once the card stayed out of the wallet for SETTLE_MS after the
+        // settled auction was first seen.
         const first = gone[nonce]
         if (first === undefined) gone[nonce] = now
         if (first === undefined || now - first < SETTLE_MS) continue

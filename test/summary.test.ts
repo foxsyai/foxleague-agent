@@ -90,7 +90,7 @@ test('urgent stays urgent: an AI account problem once an hour, 3 failed plans in
   const Anthropic = (await import('@anthropic-ai/sdk')).default
   const { isModelAccountError } = await import('../src/strategist/strategist.ts')
   const { Service } = await import('../src/service.ts')
-  const { retryPendingPayments } = await import('../src/executor/pending.ts')
+  const { retryPendingPayments, ABANDON_AFTER_MIN } = await import('../src/executor/pending.ts')
   const err = (status: number, message: string) => Anthropic.APIError.generate(status, { error: { message } }, message, new Headers())
   assert.equal(isModelAccountError(err(401, 'invalid x-api-key')), true)
   assert.equal(isModelAccountError(err(403, 'permission denied')), true)
@@ -129,7 +129,7 @@ test('urgent stays urgent: an AI account problem once an hour, 3 failed plans in
   const told: string[] = []
   const alerted: string[] = []
   svc.store.addPending('0xold', 0, 'join', { tournamentId: 7 })
-  await retryPendingPayments({ store: svc.store, fox: {} as never, notify: t => void told.push(t), alert: t => void alerted.push(t) }, 0, svc.wallet(0), Date.now() + 26 * 60_000)
+  await retryPendingPayments({ store: svc.store, fox: {} as never, notify: t => void told.push(t), alert: t => void alerted.push(t) }, 0, svc.wallet(0), Date.now() + (ABANDON_AFTER_MIN + 1) * 60_000)
   assert.match(alerted[0]!, /tournament seat payment 0xold was never confirmed/)
   assert.deepEqual(told, [])
 })

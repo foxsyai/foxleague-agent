@@ -1,6 +1,7 @@
 // The long-running service: every tick (randomised inside a window, within active hours) each
 // active agent takes a snapshot, asks the strategist for a plan, and hands the actions to the
-// executor spread over the next window, each re-checked against a fresh snapshot.
+// executor spread over the next window, each re-checked against a fresh snapshot. Payments sent but not
+// confirmed with FoxLeague yet are confirmed again on their own timer, about every minute.
 
 import { envFilePath, loadConfig, type Config } from './config.ts'
 import { Chain } from './chain/gateway.ts'
@@ -28,7 +29,7 @@ import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
 import { creditRefunds } from './executor/refunds.ts'
 import { ensureBadge } from './setup/badge.ts'
-import { Telegram, type TextReply } from './telegram/telegram.ts'
+import { Telegram, type OffsetStore, type TextReply } from './telegram/telegram.ts'
 import { KEY_FIELDS, keyFormatError, maskKey, readSecrets, secretsFile, writeSecrets, type KeyName, type KeyValues } from './store/secrets.ts'
 import { checkKeys, pickOwnerChat, telegramMe, telegramRecentChats, type KeyCheck } from './setup/keys.ts'
 import { TopUps } from './topup.ts'
@@ -55,6 +56,34 @@ const PREP_BEFORE_LOCK_MS = 60 * 60_000
 const SESSION_GAP_MS = 2 * 3600_000
 /** A plan's actions finish at least this long before the agent's next strategy lock. */
 const LOCK_MARGIN_MS = 10 * 60_000
+/** How often payments sent but not confirmed with FoxLeague are confirmed again (src/executor/pending.ts). */
+const PENDING_RETRY_MS = 60_000
+
+/**
+ * Telegram's update offset in kv telegram_offset, with the bot's number (the public part of the token before the
+ * colon, never the token itself): update ids are counted per bot. An offset older than a day is not used: after a
+ * week without updates Telegram may number them anew, and a message older than five minutes is skipped by its date
+ * at a start anyway.
+ */
+export function telegramOffsets(store: Store, token: string): OffsetStore {
+  const bot = token.split(':')[0] ?? ''
+  return {
+    read: () => {
+      const raw = store.getKv('telegram_offset')
+      if (!raw) return 0
+      let saved: { bot?: unknown; offset?: unknown; at?: unknown }
+      try {
+        saved = JSON.parse(raw) as typeof saved
+      } catch {
+        return 0
+      }
+      const at = typeof saved.at === 'string' ? Date.parse(saved.at) : NaN
+      if (saved.bot !== bot || typeof saved.offset !== 'number' || !Number.isSafeInteger(saved.offset) || !(Date.now() - at < 86_400_000)) return 0
+      return saved.offset
+    },
+    write: offset => store.setKv('telegram_offset', JSON.stringify({ bot, offset, at: new Date().toISOString() })),
+  }
+}
 
 /** The pid of the running service on this data folder, or null. A second process must not run plans next to it. */
 export function serviceRunning(dataDir: string): number | null {
@@ -153,6 +182,10 @@ export class Service {
   private readonly pendingImports = new Map<string, { key: UserSecretKey; address: string; team: string; expires: number }>()
   private stopping = false
   private readonly stopSignal = new AbortController()
+  /** The pending-payment retry: its own timer, one pass at a time (a test shortens the interval). */
+  private pendingRetryMs = PENDING_RETRY_MS
+  private pendingTimer: NodeJS.Timeout | undefined
+  private retrying = false
 
   constructor(cfg: Config) {
     if (!cfg.mnemonic) throw new Error('AGENT_MNEMONIC is not set: run `npm run cli -- setup` first')
@@ -160,7 +193,7 @@ export class Service {
     this.store = new Store(cfg.dataDir)
     this.chain = new Chain(cfg)
     this.fox = new FoxLeague(cfg.foxleagueUrl, cfg.foxleagueRps)
-    this.telegram = cfg.telegramToken && cfg.telegramChatId ? new Telegram(cfg.telegramToken, cfg.telegramChatId) : null
+    this.telegram = this.makeTelegram()
     const choice = strategistChoice(this.store, cfg)
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
     this.executor = new Executor({
@@ -584,6 +617,12 @@ export class Service {
     return `${agentName(agent.index)} waits for funds: no team yet and about $${playable.toFixed(2)} to play with, the registration needs about $${needUsd.toFixed(2)} (${fee.toLocaleString('en-US')} FOXSY) besides the ${agent.settings.egldGasReserve} EGLD gas reserve. No AI call until EGLD arrives at ${agent.address}`
   }
 
+  /** The owner's Telegram for the configured bot and chat, its update offset kept in the database (one per bot). */
+  private makeTelegram(): Telegram | null {
+    const { telegramToken: token, telegramChatId: chat } = this.cfg
+    return token && chat ? new Telegram(token, chat, telegramOffsets(this.store, token)) : null
+  }
+
   private startTelegram(): void {
     this.telegram?.startPolling({ command: (c, a, r) => this.command(c, a, r), text: t => this.chatFromTelegram(t), button: d => this.button(d) })
     this.telegram?.setCommands(TELEGRAM_MENU)
@@ -627,7 +666,7 @@ export class Service {
       this.cfg.telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined
       this.cfg.telegramChatId = process.env.TELEGRAM_CHAT_ID?.trim() || undefined
       this.telegram?.stop()
-      this.telegram = this.cfg.telegramToken && this.cfg.telegramChatId ? new Telegram(this.cfg.telegramToken, this.cfg.telegramChatId) : null
+      this.telegram = this.makeTelegram()
       this.startTelegram()
       // A chat linked after the start gets its morning summary too; no chat, no timer.
       this.armSummary()
@@ -935,7 +974,7 @@ export class Service {
    * Retire: parks an agent the owner no longer uses. It is paused at once (a plan under way stops before its
    * next step) and leaves the active agents: no plans, no snapshots, no warnings, no place in the agent limit.
    * Nothing is sold or moved. Refused, the agent left paused, while an action it started is still finishing or
-   * a payment waits for FoxLeague's confirmation (only the agent's own ticks confirm one).
+   * a payment waits for FoxLeague's confirmation (the pending retry asks about it every minute, paused or not).
    */
   async retireAgent(index: number, who: string): Promise<string> {
     const agent = this.store.agent(index)
@@ -950,7 +989,7 @@ export class Service {
     if (snap?.profile?.id) this.store.setKv(`agent_user_id:${index}`, String(snap.profile.id))
     // Checked after the read, with no wait before the retire itself: an action that was already signing has finished.
     if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: retire it in a minute`)
-    if (this.store.pending(index).length) throw new Error(`${agentName(index)} is paused, but a payment waits for FoxLeague's confirmation: resume it until the payment is confirmed, then retire it`)
+    if (this.store.pending(index).length) throw new Error(`${agentName(index)} is paused, but a payment waits for FoxLeague's confirmation: it is asked again every minute, paused or not; retire it once the payment is settled (within an hour)`)
     const usd = fundsUsd(snap)
     this.store.retireAgent(index, {
       at: new Date().toISOString(),
@@ -1008,6 +1047,7 @@ export class Service {
     )
     this.startTelegram()
     this.armSummary()
+    this.armPendingRetry()
     // Each agent's FoxLeague user id, for one that was never noted (retired or added before this version): a Zeus
     // private tournament never invites the owner's own teams.
     void this.noteOwnUserIds().catch(() => undefined)
@@ -1049,6 +1089,7 @@ export class Service {
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)
     clearTimeout(this.summaryTimer)
+    clearTimeout(this.pendingTimer)
     this.telegram?.stop()
     const until = Date.now() + 150_000
     // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
@@ -1270,9 +1311,41 @@ export class Service {
     }
   }
 
-  /** Payments sent but not confirmed with FoxLeague yet: confirmed again with the same hash, never paid twice. */
+  /**
+   * Payments sent but not confirmed with FoxLeague yet: confirmed again with the same hash, never paid twice. Under the
+   * agent's action lock, so a hash is never confirmed while the action that sent it still waits for its outcome.
+   */
   private async retryPending(agent: AgentRow): Promise<void> {
-    await retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t), alert: t => this.notify(t) }, agent.index, this.wallet(agent.index))
+    await this.executor.exclusive(agent.index, () =>
+      retryPendingPayments({ store: this.store, fox: this.fox, notify: t => this.report(t), alert: t => this.notify(t) }, agent.index, this.wallet(agent.index)),
+    )
+  }
+
+  /**
+   * The pending-payment retry on its own timer, about every minute. The ticks alone come too rarely (every 2 hours
+   * by default, none outside the active hours, while paused, retired or under the kill switch), and a confirm signs
+   * and pays nothing, so only a stop ends it: a paid product or seat is delivered and a refund is credited.
+   */
+  private armPendingRetry(): void {
+    clearTimeout(this.pendingTimer)
+    if (this.stopping) return
+    this.pendingTimer = setTimeout(() => void this.retryAllPending().finally(() => this.armPendingRetry()), this.pendingRetryMs)
+  }
+
+  /** One pass over every agent with a pending payment (retired ones too); a pass still running skips the next. */
+  private async retryAllPending(): Promise<void> {
+    if (this.retrying || this.stopping) return
+    this.retrying = true
+    try {
+      for (const index of this.store.pendingAgents()) {
+        if (this.stopping) return
+        const agent = this.store.agent(index)
+        if (!agent) continue
+        await this.retryPending(agent).catch(err => console.error(`${agentName(index)}: pending payment retry failed:`, err instanceof Error ? err.message : err))
+      }
+    } finally {
+      this.retrying = false
+    }
   }
 
   // ---- Telegram commands ----

@@ -19,6 +19,12 @@ export interface Handlers {
 
 const MAX_LEN = 4000
 
+/** Where the update offset outlives a restart (the service's database), so a command never runs twice. */
+export interface OffsetStore {
+  read(): number
+  write(offset: number): void
+}
+
 export class Telegram {
   private readonly base: string
   private readonly chatId: string
@@ -26,10 +32,12 @@ export class Telegram {
   private offset = 0
   private stopped = false
   private readonly abort = new AbortController()
+  private readonly offsets: OffsetStore | undefined
 
-  constructor(token: string, chatId: string) {
+  constructor(token: string, chatId: string, offsets?: OffsetStore) {
     this.base = `https://api.telegram.org/bot${token}`
     this.chatId = chatId
+    this.offsets = offsets
   }
 
   /** Queued, at most about one message per second (Telegram's per-chat limit). */
@@ -88,13 +96,23 @@ export class Telegram {
    * Obeys only the owner: the configured chat AND a sender whose user id is that chat id (a private
    * chat), so other members of a group cannot command the agent. Messages older than a few minutes before
    * polling started are not replayed. A 409 means a webhook took the bot token over: say so.
+   *
+   * At most once: Telegram confirms a batch only when the next getUpdates reaches it, so the offset after each batch
+   * is saved before any of its updates is dispatched, and the next start polls from the saved one. A crash in between
+   * loses a command (the owner sees no answer and asks again), it never runs one twice (a payment would repeat).
    */
   async startPolling(h: Handlers): Promise<void> {
     const fail = (err: unknown) => this.send(`error: ${err instanceof Error ? err.message : String(err)}`)
     const since = Math.floor(Date.now() / 1000) - 300
     let conflictSaid = false
+    let resumed = !this.offsets
     while (!this.stopped) {
       try {
+        // Nothing is polled before the saved offset is read: a read that fails is tried again, never taken as 0.
+        if (!resumed) {
+          this.offset = Math.max(this.offset, this.offsets!.read())
+          resumed = true
+        }
         const res = await fetch(`${this.base}/getUpdates?timeout=50&offset=${this.offset}&allowed_updates=${encodeURIComponent('["message","callback_query"]')}`, {
           signal: AbortSignal.any([AbortSignal.timeout(60_000), this.abort.signal]),
         })
@@ -115,8 +133,13 @@ export class Telegram {
           await sleep(10_000)
           continue
         }
-        for (const u of body.result ?? []) {
-          this.offset = u.update_id + 1
+        const updates = body.result ?? []
+        if (updates.length) {
+          const next = Math.max(...updates.map(u => u.update_id)) + 1
+          this.offsets?.write(next) // saved first: if this fails, nothing of the batch runs and it is fetched again
+          this.offset = next
+        }
+        for (const u of updates) {
           const cq = u.callback_query
           if (cq) {
             if (!cq.message || String(cq.message.chat.id) !== this.chatId || String(cq.from?.id) !== this.chatId) continue
