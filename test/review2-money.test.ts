@@ -234,3 +234,70 @@ test('R2A-2 control: FoxLeague\'s final answers still resolve the payment (no tx
   }
 })
 
+// ---- R2A-3: a lost bid whose winner fused (burned) the card is credited, not kept for the month ----
+
+/** A bid placed yesterday on #4881; the auction is gone (settled) and the card is not in the wallet (esdts readable). */
+function settledRig(player: () => Promise<unknown>) {
+  const m = setup()
+  m.store.recordSpend({ agentIndex: 0, at: new Date(Date.now() - 25 * 3600_000), gameDay: '2026-10-12', category: 'play', action: 'bid:4881', foxsyAtomic: wholeToAtomic(1100), egldAtomic: 0n, usd: 2.5, txHash: 'h1', dryRun: false })
+  const chain = { query: async () => [], esdts: async () => [{ tokenIdentifier: 'FOXSY-5d5f3e', balance: 1n, nonce: 0 }] }
+  const deps = { store: m.store, chain: chain as never, fox: { tournament: async () => assert.fail('no seat here'), player } as never }
+  const bids = () => m.store.openSpend(0, 'bid:', false).map(r => r.action)
+  const spent = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
+  return { m, deps, bids, spent }
+}
+
+// players.rs get_player_by_nonce: a card FoxLeague deleted (burned in a fusion, chain_indexer) answers this, HTTP 200.
+const notFound = async () => { throw new ApiRefusal('Player not found') }
+
+test('R2A-3 the winner fused the card after the first sighting: the lost bid is credited once the grace passed, not kept for the month', async () => {
+  let owner = async (): Promise<unknown> => ({ nft_nonce: 4881, owner_address: STRANGER })
+  const { m, deps, bids, spent } = settledRig(() => owner())
+  const now = Date.now()
+  assert.equal(await creditRefunds(deps, m.agent(), false, now), 0, 'first sighting: the grace starts')
+  owner = notFound
+  const credited = await creditRefunds(deps, m.agent(), false, now + 11 * 60_000) + (await creditRefunds(deps, m.agent(), false, now + 2 * 3600_000)) + (await creditRefunds(deps, m.agent(), false, now + 20 * 86_400_000))
+  assert.equal(credited, 1, `the card is neither in the wallet nor known to FoxLeague any more (burned by its new owner): the 1,100 FOXSY came back and must stop counting; rows: ${bids().join(',')}, counted $${spent()}`)
+})
+
+test('R2A-3 the winner fused the card before the first sighting (the auction ended overnight): credited after the grace', async () => {
+  const { m, deps, bids, spent } = settledRig(notFound)
+  const now = Date.now()
+  assert.equal(await creditRefunds(deps, m.agent(), false, now), 0, 'first sighting: the grace starts')
+  assert.equal(await creditRefunds(deps, m.agent(), false, now + 5 * 60_000), 0, 'still within the grace')
+  const credited = await creditRefunds(deps, m.agent(), false, now + 11 * 60_000) + (await creditRefunds(deps, m.agent(), false, now + 20 * 86_400_000))
+  assert.equal(credited, 1, `burned card, not in the wallet: the bid must be credited after the grace; rows: ${bids().join(',')}, counted $${spent()}`)
+})
+
+test('R2A-3 control: a card the agent fused itself (it won the bid) keeps counting; a FoxLeague 5xx is unknown', async () => {
+  const own = settledRig(notFound)
+  own.m.store.log({ agentIndex: 0, kind: 'fuse', status: 'confirmed', summary: 'fuse #4881 #4882 #4883', detail: { action: { type: 'fuse', player_nonces: [4881, 4882, 4883], position_of: 0 } }, txHash: 'hf' })
+  const now = Date.now()
+  assert.equal(await creditRefunds(own.deps, own.m.agent(), false, now) + (await creditRefunds(own.deps, own.m.agent(), false, now + 20 * 60_000)), 0)
+  assert.ok(own.spent() >= 2.5, 'the agent burned the card it won: the bid stays spent')
+  const maybe = settledRig(notFound)
+  maybe.m.store.log({ agentIndex: 0, kind: 'fuse', status: 'unconfirmed', summary: 'fuse #4881 #4882 #4883', detail: { action: { type: 'fuse', player_nonces: [4881, 4882, 4883], position_of: 0 }, sent: true }, txHash: 'hf' })
+  assert.equal(await creditRefunds(maybe.deps, maybe.m.agent(), false, now) + (await creditRefunds(maybe.deps, maybe.m.agent(), false, now + 20 * 60_000)), 0)
+  assert.deepEqual(maybe.bids(), ['bid:4881'], 'a fusion of the card the agent sent with an unknown outcome: it may have won and burned it, so it keeps counting')
+  const down = settledRig(async () => { throw new ApiRefusal('unexpected answer from /players/nonce/4881 (HTTP 500)') })
+  assert.equal(await creditRefunds(down.deps, down.m.agent(), false, now) + (await creditRefunds(down.deps, down.m.agent(), false, now + 20 * 60_000)), 0)
+  assert.deepEqual(down.bids(), ['bid:4881'], 'an unreadable owner keeps counting')
+})
+
+// ---- R2A-4: a won card relisted before the won-close ran is not credited ----
+
+test('R2A-4 a won card relisted by the agent before the won-close: the bid it paid is not credited', async () => {
+  const m = setup()
+  m.store.recordSpend({ agentIndex: 0, at: new Date(Date.now() - 3 * 86_400_000), gameDay: '2026-10-10', category: 'play', action: 'bid:9', foxsyAtomic: wholeToAtomic(2000), egldAtomic: 0n, usd: 4.5, txHash: 'hashbid', dryRun: false })
+  // The agent's own auction of #9 (seller = the agent, no bid yet); the card sits in the auction contract.
+  const chain = {
+    query: async (_sc: string, fn: string) => (fn === 'getAuction' ? [encodeAuction({ seller: ADDR, min: wholeToAtomic(3000), top: 0n, bidder: null, endsInS: 3600 })] : []),
+    esdts: async () => [],
+  }
+  const fox = { tournament: async () => assert.fail('no seat'), player: async () => ({ nft_nonce: 9, owner_address: ADDR }) }
+  const n = await creditRefunds({ store: m.store, chain: chain as never, fox: fox as never }, m.agent(), false)
+  assert.equal(n, 0, 'the agent is the seller of the live auction: it owns the card, so it won the bid; nothing came back')
+  assert.ok(m.store.spentUsd(0, { category: 'play', dryRun: false }) >= 4.5, 'the 2,000 FOXSY paid for the card keep counting')
+  assert.deepEqual(m.store.openSpend(0, 'bid:', false).map(r => r.action), ['bid:9:won'], 'closed as won for good')
+})
+
