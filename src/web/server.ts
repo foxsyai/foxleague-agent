@@ -344,7 +344,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         const index = agentIndex(m[1])
         const action = m[2]
         if (method === 'GET' && action === 'activity') {
-          const limit = Math.min(300, Math.max(1, Number(url.searchParams.get('limit') ?? 100)))
+          // SQLite takes only a whole number for LIMIT: anything else (abc, 2.5, empty) would be a 500.
+          const asked = Number(url.searchParams.get('limit') || 100)
+          const limit = Math.min(300, Math.max(1, Number.isFinite(asked) ? Math.floor(asked) : 100))
           return json(res, 200, service.store.activity(index, limit))
         }
         if (method === 'POST') {

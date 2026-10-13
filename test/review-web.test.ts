@@ -123,3 +123,17 @@ test('B3 the CLI updates an env file it owns inside a directory it may not creat
   assert.notEqual(statSync(file).ino, before, 'a writable directory no longer gets the atomic write')
   assert.match(readFileSync(file, 'utf8'), /^WEB_UI_USER="owner"$/m)
 })
+
+test('B4 an activity limit that is not a whole number falls back to the default or is rounded down, never a 500', async () => {
+  const { svc, server, get } = await webService()
+  for (let i = 0; i < 5; i++) svc.store.log({ agentIndex: 0, kind: 'control', status: 'info', summary: `line ${i}` })
+  try {
+    for (const [limit, rows] of [['abc', 5], ['NaN', 5], ['', 5], ['2.5', 2], ['1e999', 5], ['-3', 1]] as const) {
+      const res = await get(`/api/agents/0/activity?limit=${encodeURIComponent(limit)}`)
+      assert.equal(res.status, 200, `limit=${JSON.stringify(limit)} answered ${res.status}`)
+      assert.equal(((await res.json()) as unknown[]).length, rows, `limit=${JSON.stringify(limit)}`)
+    }
+  } finally {
+    server.close()
+  }
+})
