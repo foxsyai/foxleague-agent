@@ -107,3 +107,10 @@ manual, rebuilt with `npm run cli -- sync-manual <path to the FoxLeague reposito
 FoxLeague's Fair Play rules allow automation on your own wallets for the actions the app offers, and prohibit
 its abuse: bypassing an enforced rule, overloading the platform, using hidden information, coordinating teams or
 harvesting bonuses. Every agent must stay inside them. You are responsible for your agents.
+
+## Contributing
+
+Pull requests are welcome. Read [AGENTS.md](AGENTS.md) first: it holds the rules that keep money safe, how to run
+the tests and how a change reaches `main`. Opening a pull request runs nothing; when a maintainer decides to merge
+it, the label `merge-check` runs the tests and an agent review, and `main` takes the change once both pass and a
+maintainer approved it. New versions reach users as releases: the installer always takes the newest one.
