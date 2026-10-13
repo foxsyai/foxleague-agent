@@ -81,6 +81,16 @@ jobs:
             exit 1
           fi
 
+      # A pull request that changes the CI or the review itself (.github/, scripts/ci/) is not judged by them: CI
+      # runs the pull request's own copy of ci.yml, so its result would be the author's. Such a change fails here
+      # and the maintainer checks it by hand (and merges it with the admin bypass when it is sound).
+      - name: A change to the CI or the review is checked by hand
+        run: |
+          if changed=$(git diff --name-only HEAD^1 HEAD | grep -E '^(\.github/|scripts/ci/)'); then
+            echo "::error::This pull request changes the CI or the review, so they cannot judge it: a maintainer checks it by hand. Files: $(echo $changed)"
+            exit 1
+          fi
+
       # Everything that steers Claude Code comes from main (the merge commit's first parent, HEAD^1), never from
       # the pull request under review: every .claude/ and .claude-plugin/ (settings and hooks run commands), every
       # .mcp.json (servers are processes) and every CLAUDE.md, CLAUDE.local.md and AGENTS.md at any depth (Claude
@@ -331,14 +341,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions: {}
+    # The App's key is a secret of the environment "checks", which only main may use (review of PR #5): no
+    # workflow on another branch can mint the App's token.
+    environment: checks
     steps:
-      - name: The App's token (this job only, never where the review ran)
+      - name: The App's token, for commit statuses only (this job only, never where the review ran)
         id: app
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
         with:
           app-id: ${{ vars.CHECKS_APP_ID }}
           private-key: ${{ secrets.CHECKS_APP_PRIVATE_KEY }}
           repositories: ${{ github.event.repository.name }}
+          permission-statuses: write
 
       - name: Post foxleague-agent/review
         env:

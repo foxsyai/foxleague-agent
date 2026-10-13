@@ -1,21 +1,20 @@
 # CI for foxleague-agent (owner decision 2026-10-13). It runs when a maintainer marks a pull request into main
 # as a merge candidate with the label merge-check (adding a label needs triage or write access, which this repo
-# gives only to its maintainers), on every push to main and
-# on demand. Opening or updating a pull request starts nothing, so nobody can spend the project's CI minutes by
-# opening pull requests. Its result reaches main as the commit status "foxleague-agent/ci", posted by the
-# project's own GitHub App (FoxLeague Agent Checks), and main requires that status from that App: a workflow a
-# pull request brings can name a check "ci", but it cannot post as the App (review of these workflows, finding 1).
-#   - pull_request_target: this file and its steps always come from main, never from the pull request; the
-#     pull request's code is checked out and tested in the job "ci", which holds no secret, can only read the
-#     repository and uses no cache (no workflow here restores one, so nothing it writes is ever used);
-#   - the job "report" runs afterwards on a fresh runner that never sees the pull request's code: it alone mints
-#     the App's token and posts the result;
-#   - a run started by any other label fails unless merge-check is on the pull request, and a commit pushed after
-#     the run has no result, so the pull request cannot merge until merge-check is added again.
+# gives only to its maintainers), on every push to main and on demand. Opening or updating a pull request starts
+# nothing, so nobody can spend the project's CI minutes by opening pull requests.
+#
+# The pull request's code runs here under the plain pull_request event: GitHub's sandbox for it, with no secret, a
+# read-only token and its own cache scope (never main's, which the agent review restores from; review of PR #5).
+# The result reaches main as the commit status "foxleague-agent/ci", posted by the project's GitHub App from the
+# separate workflow report-ci.yml, which runs from main and never sees this code. A pull request that changes
+# this file, or anything else in .github/ or scripts/ci/, fails the agent review: the maintainer checks such a
+# change by hand, so no pull request rewrites the CI that judges it.
+#   - a run started by any other label fails unless merge-check is on the pull request (a skipped job would count
+#     as passed), and a commit pushed after the run has no result: add merge-check again.
 name: CI
 
 on:
-  pull_request_target:
+  pull_request:
     types: [labeled]
     branches: [main]
   push:
@@ -36,7 +35,7 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Only a merge candidate is tested
-        if: ${{ github.event_name == 'pull_request_target' }}
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           HAS_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'merge-check') }}
         run: |
@@ -45,17 +44,14 @@ jobs:
             exit 1
           fi
 
-      # A pull request: its merge onto main, as GitHub computes it now. A push or a dispatch: that commit.
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'pull_request_target' && format('refs/pull/{0}/merge', github.event.pull_request.number) || github.sha }}
           persist-credentials: false
 
-      # The result attaches to the pull request's head: the merge commit tested must have it as its second parent
-      # (read from the commit object, which a shallow checkout has), or a push during the run would be tested
-      # under the old head's name.
+      # The merge commit of the event is tested, while the result attaches to the pull request's head: its second
+      # parent must be that head (read from the commit object, which a shallow checkout has).
       - name: The code tested is the head that gets the result
-        if: ${{ github.event_name == 'pull_request_target' }}
+        if: ${{ github.event_name == 'pull_request' }}
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
@@ -65,7 +61,6 @@ jobs:
             exit 1
           fi
 
-      # No cache: under pull_request_target the pull request's code runs in main's cache scope.
       - uses: actions/setup-node@v4
         with:
           node-version: '22.18'
@@ -93,31 +88,3 @@ jobs:
         run: |
           npm ci --ignore-scripts
           npm run build
-
-  report:
-    name: report ci
-    needs: ci
-    if: ${{ always() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: The App's token (this job only, never where the pull request's code ran)
-        id: app
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ vars.CHECKS_APP_ID }}
-          private-key: ${{ secrets.CHECKS_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-
-      - name: Post foxleague-agent/ci
-        env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          SHA: ${{ github.event_name == 'pull_request_target' && github.event.pull_request.head.sha || github.sha }}
-          RESULT: ${{ needs.ci.result }}
-          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          if [[ "$RESULT" == "success" ]]; then state=success; text="type check, tests, dashboard script, gate tests and the manual passed"
-          else state=failure; text="CI did not pass ($RESULT)"; fi
-          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state="$state" -f context=foxleague-agent/ci \
-            -f description="$text" -f target_url="$RUN" --jq '"posted \(.context): \(.state)"'
