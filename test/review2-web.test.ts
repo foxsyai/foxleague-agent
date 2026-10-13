@@ -193,3 +193,22 @@ test('R2B-2 the service keeps the offset in its database, per bot: a new bot tok
   assert.equal(offsetsOf(a)!.read(), 0, 'an offset older than a day is not used (Telegram may number its updates anew after a quiet week)')
 })
 
+// ---- R2C-1: the README promises no rule the code does not have ----
+
+test('R2C-1 the README does not promise a rule the executor does not have (agents know nothing of each other)', () => {
+  const now = new Date()
+  const sibling = 777 // the FoxLeague user id of the owner's other agent, which the service notes (kv agent_user_id:N)
+  const oneVOne = tournament(5001, { max_teams: 2, min_teams: 2, creator_user_id: sibling, target_user_id: null }, [{ user_id: sibling, wallet_address: OTHER }]) as TournamentDetail
+  const seat = checkAction({ type: 'join_tournament', tournament_id: 5001 }, snapshot(), {
+    settings: TEST_SETTINGS, now, tournament: oneVOne, ownUserIds: [sibling],
+    opponent: { userId: sibling, elo: 1200, strength: 1200 }, oneVOneWithOpponentThisWeek: 0,
+  })
+  const bid = checkAction({ type: 'bid', nonce: 4242, foxsy: 1000 }, snapshot(), {
+    settings: TEST_SETTINGS, now, priorBids: 0, cardLock: { until: null },
+    auction: { seller: OTHER, minPrice: wholeToAtomic(1000), highestBid: 0n, highestBidder: null, endsAt: new Date(now.getTime() + 3600_000) } as never,
+  })
+  assert.ok(seat.ok && bid.ok, 'the rules allow a 1v1 and a bid between the owner\'s own agents (the owner removed the sibling rule on 2026-09-30)')
+  const readme = readFileSync(join(REPO, 'README.md'), 'utf8').replace(/\s+/g, ' ')
+  assert.doesNotMatch(readme, /never a 1v1 or trade between your own agents/, 'README.md promises a check the executor does not have')
+  assert.match(readme, /two of them may meet in a tournament or a 1v1, or bid on the same card, by chance/, 'the README says what the safety page says')
+})
