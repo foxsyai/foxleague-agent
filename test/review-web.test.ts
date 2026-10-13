@@ -104,6 +104,22 @@ test('B2 the dashboard asks for the password before it switches to a dearer AI, 
   assert.match(html, /k_strat: \['Strategist', `[^`]*dearer model or a higher effort asks for your password/, 'the Strategist bubble does not say a dearer AI asks for the password')
 })
 
+test('B2 (review of #8) a refused AI switch in the level dialog stops it before the settings are saved', () => {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const start = html.indexOf("$('stratApply').onclick")
+  const apply = html.slice(start, html.indexOf('\n}\n', start))
+  // The switch answers whether it worked: false when cancelled or refused (a mistyped password is a 403).
+  assert.match(apply, /const ok = await act\([\s\S]*\breturn ok$/, 'the Apply handler does not say whether the server took the switch')
+  assert.match(apply, /return false/, 'the Apply handler does not say when the password was not given')
+  // act() answers whether the change went through, so a 403 is not swallowed.
+  const act = html.slice(html.indexOf('async function act('), html.indexOf('\n}\n', html.indexOf('async function act(')))
+  assert.match(act, /return false/)
+  assert.match(act, /return true/)
+  const level = html.slice(html.indexOf("$('lvlOk').onclick"), html.indexOf("$('lvlKeep').onclick"))
+  assert.match(level, /if \(!\(await \$\('stratApply'\)\.onclick\(null, password\)\)\) return/, 'the level dialog saves the settings even when the AI switch was refused')
+  assert.ok(level.indexOf("onclick(null, password)") < level.indexOf('requestSubmit()'), 'the settings are submitted before the AI switch is known')
+})
+
 test('B3 the CLI updates an env file it owns inside a directory it may not create files in', () => {
   if (process.getuid?.() === 0) return // root ignores directory modes: nothing to prove here
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-b3-'))

@@ -704,8 +704,13 @@ async function askPassword(title, text) {
   return r ? r.password : null
 }
 $('pwwrap').addEventListener('click', e => { if (e.target.id === 'pwwrap') $('pwCancel').click() })
+// Answers whether the change itself went through (the error is shown once, here).
 async function act(label, fn) {
-  try { const r = await fn(); toast(r && r.message ? r.message : label) ; await loadState(); await loadActivity() } catch (e) { toast(e.message, true) }
+  let r
+  try { r = await fn() } catch (e) { toast(e.message, true); return false }
+  toast(r && r.message ? r.message : label)
+  try { await loadState(); await loadActivity() } catch (e) { toast(e.message, true) }
+  return true
 }
 async function addAgent() {
   const n = S.instance.next; if (!n) return
@@ -835,16 +840,18 @@ function aiCostsMore(model, effort) {
   return !cur || !pick || pick.price.some((p, k) => p > cur.price[k]) || i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
 }
 const AI_RAISE_TEXT = 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
-// password: already asked for (the level dialog asks once for the settings and the AI).
+// password: already asked for (the level dialog asks once for the settings and the AI). Answers whether the AI was
+// switched: false when the password was not given or the server refused it (a mistyped one is a 403).
 $('stratApply').onclick = async (e, password) => {
   const body = { model: $('sModel').value, effort: $('sEffort').value }
   if (aiCostsMore(body.model, body.effort)) {
     if (!password) password = await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
-    if (!password) return toast('Strategist unchanged', true)
+    if (!password) { toast('Strategist unchanged', true); return false }
     body.password = password
   }
-  await act('Strategist updated', () => api('POST', '/api/strategist', body))
+  const ok = await act('Strategist updated', () => api('POST', '/api/strategist', body))
   stratDirty = false; renderHeader()
+  return ok
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
 const TIPS = {
@@ -1222,7 +1229,8 @@ function openLevel(k) {
         : await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
       if (!password) return toast('Nothing saved', true)
     }
-    if (aiTake) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; await $('stratApply').onclick(null, password) }
+    // A refused switch (a mistyped password) stops here: its error is shown once and nothing else is saved.
+    if (aiTake) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; if (!(await $('stratApply').onclick(null, password))) return }
     // The form's own checks run first; the submit handler takes the password at once (submit fires synchronously).
     formPassword = password; $('settingsForm').requestSubmit(); formPassword = null
   }
