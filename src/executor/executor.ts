@@ -506,14 +506,20 @@ export class Executor {
 
   /**
    * Books the spend (and a swap's EGLD) in the ledger of the mode; returns the rows for a live payment.
-   * A bid's or an entry's FOXSY gets its own row tagged bid:<nonce> or join:<tournament>, so the budget
-   * gets it back when it is refunded (outbid, left, cancelled); the gas stays in an untagged row.
+   * A bid's, an entry's or a shop payment's FOXSY gets its own row tagged bid:<nonce>, join:<tournament> or
+   * shop:<product>, so the budget gets it back when it is refunded (outbid, left, cancelled, a shop payment
+   * FoxLeague could not use); the gas stays in an untagged row.
    */
   private book(agent: AgentRow, v: Verdict, usd: number, fees: bigint, swapUsd: number | undefined, dryRun: boolean, now: Date, snap: AgentSnapshot, a?: Action, prices?: Prices | null): Booking {
     const booking: Booking = { ids: [], sent: false }
     const gameDay = gameDayKey(now, snap.gameDay.resetHourUtc)
     // Tagged so a refund can be credited later; a created tournament gets its id once the create answers.
-    const tag = a?.type === 'bid' ? `bid:${a.nonce}` : a?.type === 'join_tournament' ? `join:${a.tournament_id}` : a?.type === 'create_tournament' || a?.type === 'create_challenge' ? 'join:new' : null
+    const tag =
+      a?.type === 'bid' ? `bid:${a.nonce}`
+      : a?.type === 'join_tournament' ? `join:${a.tournament_id}`
+      : a?.type === 'create_tournament' || a?.type === 'create_challenge' ? 'join:new'
+      : a?.type === 'buy' ? `shop:${a.product}`
+      : null
     try {
       if (tag && v.foxsy > 0n && prices) {
         const foxsyUsd = costUsd(v.foxsy, 0n, prices)

@@ -6,6 +6,8 @@ import assert from 'node:assert/strict'
 import { OTHER, STRANGER, card, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { Chain } from '../src/chain/gateway.ts'
+import { ApiRefusal } from '../src/foxleague/api.ts'
+import { retryPendingPayments } from '../src/executor/pending.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
 
 const act = (action: unknown): PlannedAction[] => [{ action: action as PlannedAction['action'], reason: '' }]
@@ -209,4 +211,39 @@ test('A10 control: a broadcast without an answer (transport error, or a gateway 
     assert.equal(r.sent, true, r.summary)
     assert.ok(live > 2, `an unclear broadcast keeps its booking, got $${live.toFixed(2)}`)
   }
+})
+
+// ---- A9: a shop payment FoxLeague refunded stops counting against the caps (the gas stays) ----
+
+/** A Common pack paid live whose first confirm answers tx_pending; the retry then hears `retry`. */
+async function packThenRetry(retry: string) {
+  let answer: () => never = () => { throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending') }
+  const m = setup({ chain: { send: async () => 'hpack' }, fox: { user: async () => null, shopConfirm: async () => answer() } })
+  const live = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
+  return withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'common_pack' }))
+    assert.equal(r!.status, 'unconfirmed', r!.summary)
+    const booked = live()
+    assert.ok(booked > 5.6, 'the 2,500 FOXSY pack is booked while the confirm is pending')
+    answer = () => { throw new ApiRefusal(retry) }
+    await retryPendingPayments({ store: m.store, fox: m.exec['d'].fox, notify: () => undefined }, 0, liveWallet)
+    return { booked, after: live(), pending: m.store.pending(0).length }
+  })
+}
+
+test('A9 a shop payment FoxLeague refunded gives its budget back when the retry learns of the refund (the gas stays)', async () => {
+  for (const said of ['This payment was already refunded and cannot be used for a purchase.', 'Common pack sold out this week. Your payment is being refunded automatically.']) {
+    const { booked, after, pending } = await packThenRetry(said)
+    assert.equal(pending, 0, `${said}: the pending payment is resolved`)
+    assert.ok(after < 0.01, `${said}: the refunded 2,500 FOXSY must stop counting against the caps (only the gas may stay), got $${after.toFixed(2)}`)
+    assert.ok(after > 0 && after < booked, `${said}: the gas of the payment stays counted`)
+  }
+})
+
+test('A9 control: a shop payment FoxLeague used ("already processed") or may still confirm keeps counting', async () => {
+  const used = await packThenRetry('Transaction already processed')
+  assert.equal(used.pending, 0)
+  assert.equal(used.after, used.booked, 'a delivered purchase stays spent')
+  const timeout = await packThenRetry('Transaction verification timed out: rpc. The payment is not lost: it is recognized when this same transaction is confirmed again within 25 minutes; after that it is refunded automatically.')
+  assert.equal(timeout.after, timeout.booked, 'not refunded yet: it keeps counting')
 })
