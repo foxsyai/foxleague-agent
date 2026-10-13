@@ -110,6 +110,20 @@ test('D11 the economy reference does not offer the removed pool-status route as 
   }
 })
 
+test('D12 no comma before the last "and" or "or" of a list in these user texts (owner rule)', () => {
+  const bad: string[] = []
+  const check = (file: string, re: RegExp) => { if (re.test(read(file))) bad.push(`${file}: ${re.source}`) }
+  check('INSTALL.md', /details on request, and you can talk to your manager/)
+  check(`${DOCS}/start/keys.mdx`, /any detail on request, and you can talk to your manager/)
+  check('src/web/dashboard.html', /any detail on request \(\/status, \/plan, \/log\), and you can talk/)
+  check(`${DOCS}/use/talk-to-your-manager.md`, /a payment whose outcome is unclear, and top-up codes/)
+  check('src/web/dashboard.html', /no plans, no AI cost, no warnings, and they don't count/)
+  check('src/web/dashboard.html', /today's matches and training, and the tournaments it is in/)
+  check('src/store/settings.ts', /a fusion input, a resale margin, or a clear upgrade/)
+  check('src/store/settings.ts', /how often a team plays and accepts 1v1s, and the engine facts/)
+  assert.deepEqual(bad, [], `Oxford commas:\n${bad.join('\n')}`)
+})
+
 test('the server guide sets WEB_UI_TRUST_PROXY=1 behind nginx, so strangers cannot lock the owner out', () => {
   const step3 = read('docs/SERVER.md').split('\n3. ')[1]!.split('\n4. ')[0]!
   assert.match(step3, /WEB_UI_TRUST_PROXY=1/, 'step 3 of the first setup does not set WEB_UI_TRUST_PROXY')

@@ -401,7 +401,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
   <div class="controls"><button class="btn go" type="button" id="lvlOk">Accept and save</button><button class="btn" type="button" id="lvlKeep">Cancel</button></div>
 </div></div>
 <div id="retwrap"><div id="retbox" role="dialog" aria-modal="true" aria-labelledby="retTitle"><h3 id="retTitle">Retired agents<i class="info" data-tip="retire">i</i></h3>
-  <p>Parked agents: no plans, no AI cost, no warnings, and they don't count toward the agent limit. Each wallet keeps its funds. Restore brings an agent back paused, with its settings and history.</p>
+  <p>Parked agents: no plans, no AI cost and no warnings. They don't count toward the agent limit. Each wallet keeps its funds. Restore brings an agent back paused, with its settings and history.</p>
   <div id="retList"></div>
   <div class="controls"><button class="btn" type="button" id="retClose">Close</button></div>
 </div></div>
@@ -894,7 +894,7 @@ const TIPS = {
     <p>To stop every agent at once, use the kill switch. To stop signing but keep planning, use Back to dry run.</p>`],
   mine: ['In tournaments', `<p>The tournaments and 1v1 challenges the agent is in right now. While one is still open, <b>Leave</b> gives the seat or stake back to the wallet.</p>
     <p>On a 1v1 the agent created and nobody accepted, Leave also closes the challenge, so the agent can take another one. The agent can do the same by itself when it sees a better 1v1.</p>`],
-  wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation, today's matches and training, and the tournaments it is in.</p>
+  wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation and the tournaments it is in, with today's matches and training.</p>
     <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
@@ -1271,7 +1271,7 @@ const GUIDE = [
     ],
     note: 'It costs about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick; you pick them in the Strategist box and in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
-    intro: 'A summary of every agent each morning, any detail on request (/status, /plan, /log), and you can talk to your manager in plain words.',
+    intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
       ['On your phone, open Telegram and start a chat with BotFather, the official bot that makes bots.', 'https://t.me/BotFather'],
       ['Send /newbot. Give it a name, then a username that ends in bot, for example myfox_manager_bot.'],

@@ -82,7 +82,7 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
    It is shown only once.
 5. Paste it in the installer, or in the dashboard: Keys, Anthropic API key, your password, Save.
 
-**2. Telegram (optional): a morning summary of every agent, details on request, and you can talk to your manager**
+**2. Telegram (optional): a morning summary of every agent and details on request; you can also talk to your manager**
 
 1. In Telegram, open [BotFather](https://t.me/BotFather), the official bot that makes bots.
 2. Send `/newbot`. Give it a name, then a username that ends in `bot`.
