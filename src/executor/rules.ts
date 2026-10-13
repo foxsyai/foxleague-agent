@@ -152,6 +152,8 @@ export const MAX_INHERITED_LOCK_HOURS = 72
 export const MIN_RESERVE_FOXSY: Record<string, number> = { Common: 500, Uncommon: 1500, Rare: 4000, Epic: 10000, Legendary: 25000 }
 /** The strongest cards (by synced total) are the squad's core and never sold. */
 export const CORE_CARDS = 18
+/** An XP booster may be bought again only when the running one has at most this many hours left (no stacking). */
+export const XP_BOOSTER_RENEW_HOURS = 2
 
 const NEXT_RARITY = ['Uncommon', 'Rare', 'Epic', 'Legendary'] as const
 
@@ -561,8 +563,15 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           break
         }
         case 'xp_booster': {
-          const b = s.auth?.shop?.xp_booster
-          if (b && b.active && b.expires_at && new Date(b.expires_at).getTime() - ctx.now.getTime() > 2 * 3600_000) return refuse(`XP booster active until ${b.expires_at}`)
+          // Buying again restarts FoxLeague's 24 h from the new purchase: the hours left are lost. Only a booster
+          // about to end may be renewed. An unreadable shop status or expiry is unknown, never "no booster".
+          const shop = s.auth?.shop
+          if (!shop || typeof shop.xp_booster_active !== 'boolean') return refuse('XP booster status unknown (shop status unavailable)')
+          if (shop.xp_booster_active) {
+            const until = typeof shop.xp_booster_expires_at === 'string' ? Date.parse(shop.xp_booster_expires_at) : NaN
+            if (!Number.isFinite(until)) return refuse('XP booster active, expiry unknown')
+            if (until - ctx.now.getTime() > XP_BOOSTER_RENEW_HOURS * 3600_000) return refuse(`XP booster active until ${new Date(until).toISOString()}: another one now would throw away the hours left`)
+          }
           amount = prices.xp_booster
           break
         }

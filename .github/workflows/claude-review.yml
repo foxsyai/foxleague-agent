@@ -63,7 +63,7 @@ jobs:
 
       # The pull request merged onto main, as GitHub computes it: HEAD is that merge commit and HEAD^1 the base,
       # so a diff between them is exactly what the pull request brings. Read only, never built or run here.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
           fetch-depth: 0
@@ -193,7 +193,7 @@ jobs:
         id: review
         # The verdict file is the gate ("Enforce verdict"), not this step's exit code.
         continue-on-error: true
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -305,7 +305,7 @@ jobs:
       - name: Claude Code review on the backup token
         if: ${{ steps.started.outputs.retry == 'true' }}
         continue-on-error: true
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
