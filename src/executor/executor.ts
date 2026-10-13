@@ -156,7 +156,8 @@ export class Executor {
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
-      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}) }, costUsd: costUsdValue || null, txHash })
+      // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
+      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}) }, costUsd: costUsdValue || null, txHash })
       const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
       // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
       const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
@@ -305,7 +306,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; action?: { nonce?: number; target_user_id?: number | null } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null } }
       } catch {
         return {}
       }
@@ -363,8 +364,9 @@ export class Executor {
     if (a.type === 'fusion_match_waiver') market.matchQuote = await soft(() => fox.matchWaiverQuote(wallet, a.nonce))
     if (a.type === 'bid' || a.type === 'cancel_listing') market.auction = await getAuction(this.d.chain, a.nonce)
     if (a.type === 'bid') {
-      // On the safe side: a bid that errored after its signature (the answer lost) may have landed.
-      market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent' || r.status === 'error') && detailOf(r).action?.nonce === a.nonce).length
+      // On the safe side: a bid that errored after its signature (sent, the answer lost) may have landed. An error
+      // before any signature (an unreadable auction, the kill switch, a refusal released) is no bid.
+      market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.nonce === a.nonce).length
       try {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours

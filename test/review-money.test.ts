@@ -112,13 +112,13 @@ test('A6 a fusion is not signed while the can-fuse pre-check could not be read',
 
 // ---- A8: a bid that errored after its signature counts toward the two bids per auction ----
 
-const bidRig = () =>
+const bidRig = (chain: Record<string, unknown> = {}) =>
   setup({
-    chain: { query: async (_sc: string, fn: string) => (fn === 'getAuction' ? [encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: wholeToAtomic(1000), bidder: STRANGER, endsInS: 3600 })] : []) },
+    chain: { query: async (_sc: string, fn: string) => (fn === 'getAuction' ? [encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: wholeToAtomic(1000), bidder: STRANGER, endsInS: 3600 })] : []), ...chain },
     fox: { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, rarity: 'Rare' }) },
   })
 const bid = act({ type: 'bid', nonce: 9, foxsy: 1100 })
-const bidRow = (status: 'dry_run' | 'confirmed' | 'error', foxsy: number) => ({ agentIndex: 0, kind: 'bid', status, summary: `bid ${foxsy} FOXSY on #9`, detail: { action: { type: 'bid', nonce: 9, foxsy } } })
+const bidRow = (status: 'dry_run' | 'confirmed' | 'error', foxsy: number, sent = false) => ({ agentIndex: 0, kind: 'bid', status, summary: `bid ${foxsy} FOXSY on #9`, detail: { action: { type: 'bid', nonce: 9, foxsy }, ...(sent ? { sent: true } : {}) } })
 
 test('A8 control: two bids out on the auction, a third is refused', async () => {
   const m = bidRig()
@@ -129,16 +129,44 @@ test('A8 control: two bids out on the auction, a third is refused', async () => 
   assert.match(r!.summary, /no bidding war/)
 })
 
-test('A8 a bid that errored after it was signed may have landed: it counts toward the two bids per auction', async () => {
+test('A8 a bid that errored after it was signed (sent) may have landed: it counts toward the two bids per auction', async () => {
   for (const ledger of ['dry_run', 'confirmed'] as const) {
     const m = bidRig()
     m.store.log(bidRow(ledger, 600))
-    m.store.log(bidRow('error', 800))
+    m.store.log(bidRow('error', 800, true))
     const run = () => m.exec.run(m.agent(), ledger === 'dry_run' ? dryWallet : liveWallet, snapshot(), bid)
     const [r] = ledger === 'dry_run' ? await run() : await withLive(m.store, run)
-    assert.equal(r!.status, 'refused', `${ledger}: an errored bid is not counted, yet: ${r!.summary}`)
+    assert.equal(r!.status, 'refused', `${ledger}: an errored bid that was sent is not counted, yet: ${r!.summary}`)
     assert.match(r!.summary, /no bidding war/)
   }
+})
+
+test('A8 (review of #10) an error before any signature (not sent) does not count toward the two bids per auction', async () => {
+  const m = bidRig()
+  m.store.log(bidRow('confirmed', 600))
+  m.store.log(bidRow('error', 800))
+  const [r] = await withLive(m.store, () => m.exec.run(m.agent(), liveWallet, snapshot(), bid))
+  assert.equal(r!.status, 'confirmed', `an error before the signature counted as a bid: ${r!.summary}`)
+})
+
+test('A8 (review of #10) the executor notes in the log whether an errored bid was sent, and only those count', async () => {
+  // Two read hiccups before any signature: the auction can still be bid on.
+  let auctionDown = true
+  const reads = bidRig({ query: async (_sc: string, fn: string) => { if (auctionDown) throw new Error('vm-values: HTTP 502'); return fn === 'getAuction' ? [encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: wholeToAtomic(1000), bidder: STRANGER, endsInS: 3600 })] : [] } })
+  await withLive(reads.store, async () => {
+    for (let i = 0; i < 2; i++) assert.equal((await reads.exec.run(reads.agent(), liveWallet, snapshot(), bid))[0]!.status, 'error')
+    auctionDown = false
+    const [r] = await reads.exec.run(reads.agent(), liveWallet, snapshot(), bid)
+    assert.equal(r!.status, 'confirmed', `two read errors blocked the auction: ${r!.summary}`)
+  })
+  // Two bids signed whose broadcast got no answer: a third is refused.
+  const lost = bidRig({ send: async () => { throw new TypeError('fetch failed') } })
+  await withLive(lost.store, async () => {
+    for (let i = 0; i < 2; i++) assert.equal((await lost.exec.run(lost.agent(), liveWallet, snapshot(), bid))[0]!.sent, true)
+    const [r] = await lost.exec.run(lost.agent(), liveWallet, snapshot(), bid)
+    assert.equal(r!.status, 'refused', r!.summary)
+    assert.match(r!.summary, /no bidding war/)
+  })
 })
 
 // ---- A1: a paid seat is pending (its hash on disk) from the send on, before the outcome wait ----
