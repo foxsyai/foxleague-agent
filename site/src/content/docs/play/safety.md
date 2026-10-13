@@ -26,7 +26,8 @@ it. Text written by other players (team names, tournament titles) reaches it onl
   live in the dashboard needs you to type `GO LIVE` and your password; on Telegram it takes `/mode live confirm`,
   which only your own chat can send.
 - **Back to dry run** is one click. **Pause** stops one agent; the **Kill switch** stops every agent, even free actions.
-- In the dashboard, raising a limit, releasing the kill switch and changing a key all ask for your password again.
+- In the dashboard, raising a limit, switching to a dearer AI, releasing the kill switch and changing a key all ask
+  for your password again.
   Telegram obeys your own chat only (`/kill off` releases the switch there).
 - Your recovery words and keys stay on your computer. The dashboard is not on the internet.
 - **Top-ups from Binance** move only with a one-time code you send on Telegram, only to an agent's own wallet,

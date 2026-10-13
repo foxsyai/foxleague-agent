@@ -828,8 +828,22 @@ $('modeBtn').onclick = async () => {
   if (r) act('Live', () => api('POST', '/api/mode', { live: true, confirm: 'GO LIVE', password: r.password }))
 }
 $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; renderStrat() }
-$('stratApply').onclick = async () => {
-  await act('Strategist updated', () => api('POST', '/api/strategist', { model: $('sModel').value, effort: $('sEffort').value }))
+// A dearer model (any list price higher) or more effort raises the AI spend, which has no cap: the server asks for
+// the password then (raisesAiSpend in server.ts). A cheaper model or less effort is one click.
+function aiCostsMore(model, effort) {
+  const i = S.instance, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
+  return !cur || !pick || pick.price.some((p, k) => p > cur.price[k]) || i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
+}
+const AI_RAISE_TEXT = 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+// password: already asked for (the level dialog asks once for the settings and the AI).
+$('stratApply').onclick = async (e, password) => {
+  const body = { model: $('sModel').value, effort: $('sEffort').value }
+  if (aiCostsMore(body.model, body.effort)) {
+    if (!password) password = await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+    if (!password) return toast('Strategist unchanged', true)
+    body.password = password
+  }
+  await act('Strategist updated', () => api('POST', '/api/strategist', body))
   stratDirty = false; renderHeader()
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
@@ -864,6 +878,7 @@ const TIPS = {
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
     <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well; <b>Sonnet 5.5</b> is the newer Sonnet at the same price. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b>, the most capable, 5x.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
+    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
@@ -903,7 +918,7 @@ const TIPS = {
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Six levels. The first five go from careful to all-in, each doing everything the level below does and more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. <b>Zeus</b> is different: everything a beast may do, but only what pays, aiming at No. 1. It weighs a win chance for every team, plays a 1v1 only from 55 percent and a tournament only with a real chance of the top three, and can create private tournaments. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that fall short of its recommendation (each with a tick) and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit asks for your password.</p>
+    <p>Six levels. The first five go from careful to all-in, each doing everything the level below does and more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Rare, Epic and Legendary players (never Common or Uncommon); the max bid decides which are in reach. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions) but never a waiver. <b>Beast</b>: plus both fusion waivers and selling spare cards above 36. <b>Zeus</b> is different: everything a beast may do, but only what pays, aiming at No. 1. It weighs a win chance for every team, plays a 1v1 only from 55 percent and a tournament only with a real chance of the top three, and can create private tournaments. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that fall short of its recommendation (each with a tick) and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
@@ -1198,8 +1213,18 @@ function openLevel(k) {
     for (const [, f] of short) if (ticks[f].checked) pick[f] = dir === 'up' && Array.isArray(l[f]) ? [...new Set([...cur[f], ...l[f]])].sort((x, y) => x - y) : l[f]
     fillForm(cur); $('sPreset').value = k; $('sStrategy').value = S.instance.presets[k]
     fillLevel({ ...cur, ...pick }); formDirty = true
-    if ($('lvlAi').checked && ai) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; await $('stratApply').onclick() }
-    $('settingsForm').requestSubmit()
+    // One password for both when the AI gets dearer too; without the password nothing is switched.
+    const aiTake = $('lvlAi').checked && ai, aiMore = aiTake && aiCostsMore(ai.model, ai.effort), limitsMore = raisesForm(readForm(), cur)
+    let password = null
+    if (aiMore) {
+      password = limitsMore
+        ? await askPassword('Raise a limit and switch to a dearer AI', 'Some of these settings let the agent spend more and the new AI costs more on every plan of every agent. Your password confirms both.')
+        : await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+      if (!password) return toast('Nothing saved', true)
+    }
+    if (aiTake) { $('sModel').value = ai.model; $('sEffort').value = ai.effort; await $('stratApply').onclick(null, password) }
+    // The form's own checks run first; the submit handler takes the password at once (submit fires synchronously).
+    formPassword = password; $('settingsForm').requestSubmit(); formPassword = null
   }
   $('lvlKeep').onclick = () => { $('lvlwrap').classList.remove('on'); formDirty = false; fillForm(agent().settings) }
   $('lvlwrap').classList.add('on'); $('lvlOk').focus()
@@ -1212,22 +1237,26 @@ $('sPreset').onchange = () => {
 }
 $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
-// Settings that let the agent spend more; the server asks for the password when one goes up.
+// Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
 const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy']
-$('settingsForm').onsubmit = async e => {
-  e.preventDefault()
-  const form = readForm()
-  const cur = agent().settings
+const RAISE_TEXT = 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.'
+function raisesForm(form, cur) {
   const hours = h => (h[1] - h[0] + 24) % 24 || 24
-  const more = LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)
+  return LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)
     || (form.entryFeesGold.length > 0 && cur.entryFeesGold.length === 0) || form.tickMinutes < cur.tickMinutes || hours(form.activeHoursUtc) > hours(cur.activeHoursUtc)
-  if (more) {
-    const password = await askPassword('Raise a limit', 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.')
+}
+// password: already asked for (the level dialog asks once for the settings and the AI).
+async function saveSettings(password) {
+  const form = readForm()
+  if (raisesForm(form, agent().settings)) {
+    if (!password) password = await askPassword('Raise a limit', RAISE_TEXT)
     if (!password) return toast('Nothing saved', true)
     form.password = password
   }
   act('Settings saved', async () => { const r = await api('POST', '/api/agents/' + sel + '/settings', form); formDirty = false; return r })
 }
+let formPassword = null
+$('settingsForm').onsubmit = e => { e.preventDefault(); saveSettings(formPassword) }
 
 // ---- Getting started: the three keys explained step by step, funding and going live ----
 const GUIDE = [

@@ -65,3 +65,41 @@ test('B1 cli dry-run N and plan N never add an agent: an unknown N is refused an
     assert.match(r.stderr, /no agent 7: add it in the dashboard \(simulate-as runs a throwaway wallet\)/)
   }
 })
+
+test('B2 a dearer model or a higher effort for every agent needs the password; a cheaper one is one click', async () => {
+  const { svc, server, password, post } = await webService('sk-ant-not-a-real-key-for-this-test-only')
+  svc.setStrategist('claude-sonnet-5', 'medium', 'test')
+  try {
+    let res = await post('/api/strategist', { model: 'claude-fable-5-1', effort: 'max' })
+    assert.equal(res.status, 403, 'a dearer model was switched on without the password')
+    assert.equal(svc.strategist?.model, 'claude-sonnet-5')
+    res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'high' })
+    assert.equal(res.status, 403, 'a higher effort was switched on without the password')
+    assert.equal(svc.strategist?.effort, 'medium')
+    res = await post('/api/strategist', { model: 'claude-opus-5-5', effort: 'medium', password: 'wrong' })
+    assert.equal(res.status, 403, 'a wrong password let a dearer model through')
+    res = await post('/api/strategist', { model: 'claude-opus-5-5', effort: 'high', password })
+    assert.equal(res.status, 200, await res.text())
+    assert.equal(svc.strategist?.model, 'claude-opus-5-5')
+    assert.equal(svc.strategist?.effort, 'high')
+    // Cheaper or the same price, and less effort: no password.
+    res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'low' })
+    assert.equal(res.status, 200, await res.text())
+    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low' })
+    assert.equal(res.status, 200, await res.text())
+    assert.equal(svc.strategist?.model, 'claude-sonnet-5-5')
+  } finally {
+    server.close()
+  }
+})
+
+test('B2 the dashboard asks for the password before it switches to a dearer AI, from the card and from the level dialog', () => {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 900)
+  assert.match(apply, /aiCostsMore\(/, 'the Apply button never checks whether the AI gets dearer')
+  assert.match(apply, /askPassword\(/, 'the Apply button never asks for the password')
+  assert.match(apply, /password/, 'the password is not sent with the switch')
+  const level = html.slice(html.indexOf("$('lvlOk').onclick"), html.indexOf("$('lvlKeep').onclick"))
+  assert.match(level, /aiCostsMore\(/, 'the level dialog never checks whether the AI gets dearer')
+  assert.match(html, /k_strat: \['Strategist', `[^`]*dearer model or a higher effort asks for your password/, 'the Strategist bubble does not say a dearer AI asks for the password')
+})

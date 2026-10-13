@@ -161,6 +161,17 @@ export function raisesLimit(current: AgentSettings, patch: Partial<AgentSettings
   return patch.activeHoursUtc !== undefined && windowHours(patch.activeHoursUtc) > windowHours(current.activeHoursUtc)
 }
 
+/**
+ * A dearer model (any of its list prices higher) or a higher effort: the AI spend has no cap of its own, so like a
+ * shorter tick it needs the password. A model without a known price counts as dearer.
+ */
+export function raisesAiSpend(current: { model: string; effort: string }, next: { model: string; effort: Effort }): boolean {
+  const was = isKnownModel(current.model) ? MODELS[current.model]!.price : null
+  const will = MODELS[next.model]!.price
+  if (!was || will.some((p, i) => p > was[i]!)) return true
+  return EFFORTS.indexOf(next.effort) > (EFFORTS as readonly string[]).indexOf(current.effort)
+}
+
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {
   const sessions = new Sessions(creds.secretKey, creds.passwordHash)
   const throttle = new LoginThrottle()
@@ -493,11 +504,13 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
       }
       if (path === '/api/admin/keys/test' && method === 'POST') return json(res, 200, { results: await service.testKeys() })
       if (method === 'POST' && path === '/api/strategist') {
-        const body = JSON.parse((await readBody(req)) || '{}') as { model?: unknown; effort?: unknown }
+        const body = JSON.parse((await readBody(req)) || '{}') as { model?: unknown; effort?: unknown; password?: unknown }
         const model = String(body.model ?? '')
         const effort = String(body.effort ?? '') as Effort
         if (!isKnownModel(model)) throw new HttpFail(400, `unknown model ${model}`)
         if (!EFFORTS.includes(effort)) throw new HttpFail(400, `unknown effort ${effort}`)
+        // A cheaper model or less effort is one click; a dearer one needs the password again.
+        if (service.strategist && raisesAiSpend(service.strategist, { model, effort })) recheckPassword(req, body.password)
         try {
           return json(res, 200, { ok: true, message: service.setStrategist(model, effort, `web UI, ${user}`) })
         } catch (err) {
