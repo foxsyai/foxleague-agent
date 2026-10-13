@@ -346,16 +346,47 @@ enabled"). The agent read no FOXSY price from a paused pair, so every paid actio
 
 ## Whole-project review, 2026-10-13
 
-A whole-project audit with adversarial reviewers (chain of calls C, money paths A), each finding proven by a test
-that failed on the code before its fix (`test/xp-booster.test.ts` for the first). Later fixes add their rows here.
+The owner's method: four Claude Fable 5.1 reviewers at max effort, read-only and in parallel, one per area: money
+and limits (A), outside attackers, web, Telegram, install and CI (B), chain and FoxLeague integration (C), docs and
+user text against the code (D). A finding counted only when its reviewer proved it with a test that failed on main
+(5ab42c2); something no test could make fail was listed as unproven and not changed. The fixes were made by Claude
+Opus 5.5 at extra-high effort, test first (each test seen failing, then passing), in four pull requests (#7 to #10),
+each through CI and the agent review before the merge (#9, a change to the workflows, by hand). No phantom: every
+finding's test failed first. Thirty findings, two high, none critical; no cap, signing gate or key was reachable.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | C1/A4 | high | FoxLeague's GET /api/shop/status sends the XP booster flat (`xp_booster_active`, `xp_booster_expires_at`; `shop.rs:56-72`), the agent read a nested `xp_booster` the server never sends: the "booster active" refusal never fired, the digest never said one ran, and buying again restarts the 24 h (`shop.rs:794-816`). Live: 20 boosters bought while one still ran, about 13,800 FOXSY of hours thrown away. An unreadable shop status or an active booster without an expiry also let a purchase through | The type, the rule, the digest and the effect after a purchase read and write the flat fields. A booster is refused when the shop status is unreadable or does not say whether one runs, when one is active with no readable expiry and while more than 2 h are left (`XP_BOOSTER_RENEW_HOURS`). The digest says "XP booster active until ..." or "status unknown" |
+| A1 | medium | A paid seat was recorded as pending only after the outcome wait: a stop or crash inside it lost the hash and the next plan paid again | Pending right after the send, failed on a revert (#10) |
+| A2 | medium | A stop during an action's snapshot could still prepare, sign and send it (F-O8) | runPlan re-checks the stop after the snapshot; the executor checks it before the booking and before signing (#10) |
+| A3/C2 | medium | A 1v1 join or a created challenge paid with the agent's tournaments or upcoming matches unreadable (read as "none") | Refused while either cannot be read; the within-the-hour check refuses on unknown, so play_match too (#10) |
+| A5 | medium | A seat FoxLeague refunded because the agent was never seated was closed as played and kept counting | Credited when the agent is not among the participants; unknown keeps counting (#10) |
+| A9 | medium | A shop payment FoxLeague refunded was resolved as done but never credited | The FOXSY row (shop:product) is credited on a refund answer, the gas stays (#10) |
+| A10 | medium | A definite broadcast refusal stayed booked like a timeout | Released only for a definite refusal whose locally computed hash the gateway does not know; nonce or duplicate answers, unknown wording, a known or unreadable transaction keep the booking (#10, after its agent review) |
+| A6 | low | Fusion went ahead with FoxLeague's pre-check unreadable | Refused (#10) |
+| A7 | low | An agent whose Binance top-up was sent but not landed could be deleted as never used | A sent top-up counts for an hour (#10) |
+| A8 | low | A bid whose answer was lost after signing did not count toward two bids per auction | Error rows count when the bid was sent; errors before any signature do not (#10) |
+| C3 | low | A won bid could be credited during the cross-shard settlement | Closed as won when FoxLeague names the agent as owner, credited only after 10 minutes when it names someone else, kept when unreadable (#10) |
+| B2 | medium | A dearer AI model or a higher effort for every agent needed no password, while a shorter tick did | The password whenever a model price or the effort goes up; the dashboard asks once, also from the level dialog (#8) |
+| B1 | low | cli dry-run N and cli plan N wrote an unpaused agent row past the agent limit (F-O7) | Refused for an agent that does not exist (#8) |
+| B3 | low | agentctl configure and set-web-password failed on a server built by bootstrap.sh (no new file allowed next to the env file) | A durable in-place rewrite with a synced backup copy in the data directory first, removed after success (#8, after its agent review) |
+| B4 | low | A non-numeric activity limit answered 500 with a stack trace | Floored, 100 when not a number (#8) |
+| B5 | low | The workflow holding the review token used moving action tags | Every action pinned to its release commit, with a test (#9) |
+| D1-D12 | medium to low | Docs and user text against the code: "every half hour" (2 hours by default), the prompt's old 20-match line, the safety page on private tournaments, the level dialog described as fill-and-save, low funds on Telegram in quiet mode, five presets, the README version, the review count, top-ups as "a later feature", the tick input's minimum, the removed starter stock route, eight Oxford commas; docs/SERVER.md now names WEB_UI_TRUST_PROXY=1 behind nginx | Corrected, most with a test that reads the text (#8) |
 
 Open: FoxLeague itself reports a booster as inactive when its own booster query fails (`shop.rs:794-808`, logged
 and defaulted to false), which the agent cannot tell from "none bought"; the pending shop payment guard (M9) and
 the ledger cover only the agent's own recent purchases.
+
+F-M3 is refuted: FoxLeague's answer "Do NOT pay again" means the fee is verified and its reconciler seats a paid
+wallet from its standing escrow (tournament_reconcile.rs seat_unseated_escrow, on by default), so treating it as done
+is right.
+
+Also open, seen while fixing and not yet proven by a test: pending.ts resolves a shop payment as done on any answer
+containing "refunded", which FoxLeague's timeout wording also contains; a won bid relisted before the won-close ran
+could be credited; the booster rule could also check the agent's own last booster purchase in the ledger (agent
+review of #7); Telegram's update offset lives in memory, so a command in the instant before a crash could run again
+after the restart.
 
 ## Where the limits live
 
