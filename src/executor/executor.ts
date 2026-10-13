@@ -824,9 +824,15 @@ export class Executor {
     now: Date,
     booking: Booking,
   ): Promise<ExecutionResult> {
-    const { hash, outcome } = await this.sendAndWait(wallet, spec, booking)
-    if (outcome.kind === 'failed') return finish('failed', `${desc}: seat payment reverted (${outcome.reason})`, this.revert(booking, agent, v, fees, hash, now, snap), hash)
+    const hash = await this.send(wallet, spec, booking)
+    // Pending from the send on, as a shop payment: a stop or a crash in the outcome wait (up to 2 min) keeps the
+    // hash, so the next tick confirms this seat with it and the next plan does not pay it again.
     this.d.store.addPending(hash, agent.index, 'join', { tournamentId })
+    const outcome = await this.outcome(hash)
+    if (outcome.kind === 'failed') {
+      this.d.store.resolvePending(hash, 'failed')
+      return finish('failed', `${desc}: seat payment reverted (${outcome.reason})`, this.revert(booking, agent, v, fees, hash, now, snap), hash)
+    }
     let withHash = true
     for (let i = 0; i < 6; i++) {
       try {

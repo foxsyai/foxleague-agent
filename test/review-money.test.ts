@@ -128,3 +128,44 @@ test('A8 a bid that errored after it was signed may have landed: it counts towar
     assert.match(r!.summary, /no bidding war/)
   }
 })
+
+// ---- A1: a paid seat is pending (its hash on disk) from the send on, before the outcome wait ----
+
+test('A1 a paid seat is pending (hash kept) from the moment it is sent, before the outcome wait, like a shop payment', async () => {
+  let release!: () => void
+  let waiting = false
+  const m = setup({
+    chain: {
+      send: async () => 'seat-hash',
+      waitForOutcome: async () => {
+        waiting = true
+        await new Promise<void>(r => (release = r))
+        return { kind: 'success' }
+      },
+    },
+    fox: { user: async () => null, tournament: async () => tournament(570, { participant_count: 3 }), joinTournament: async () => ({ participant_id: 1 }) },
+  })
+  await withLive(m.store, async () => {
+    const running = m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 570 }))
+    while (!waiting) await new Promise(r => setTimeout(r, 5))
+    // Signed and sent; the outcome wait may take 120 s. A stop or a crash here must still find the hash on disk.
+    const pending = m.store.pending(0).map(p => [p.kind, p.hash, (p.payload as { tournamentId: number }).tournamentId])
+    release()
+    const [r] = await running
+    assert.equal(r!.status, 'confirmed', r!.summary)
+    assert.deepEqual(pending, [['join', 'seat-hash', 570]], 'the seat payment must be pending while its outcome is awaited (a shop payment is)')
+    assert.equal(m.store.pending(0).length, 0, 'seated: no longer pending')
+  })
+})
+
+test('A1 a seat payment that reverted is no longer pending (nothing to confirm, a new seat may be paid)', async () => {
+  const m = setup({
+    chain: { send: async () => 'seat-hash', waitForOutcome: async () => ({ kind: 'failed', reason: 'insufficient funds' }) },
+    fox: { user: async () => null, tournament: async () => tournament(570, { participant_count: 3 }), joinTournament: async () => assert.fail('a reverted seat is not confirmed') },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 570 }))
+    assert.equal(r!.status, 'failed', r!.summary)
+    assert.deepEqual(m.store.pending(0), [])
+  })
+})
