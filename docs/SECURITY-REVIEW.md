@@ -329,7 +329,9 @@ foxleague-agent/review from the App FoxLeague Agent Checks (id 5301257); the App
 
 Open: someone with write access could still create a branch whose own ci.yml passes and open a fork pull request
 into main from a head that also has that branch's run, which the fork path above cannot tell apart; the maintainer's
-approval of every pull request by others is the gate for that. When the repository goes public, outside contributors'
+approval of every pull request by others is the gate for that. The same holds for a branch of this repository
+that opens a pull request into another branch and closes it before its run ends, if GitHub then lists only the
+pull request into main for the run (not verified). When the repository goes public, outside contributors'
 workflows need the maintainer's approval to run (set on launch day).
 
 ## xExchange paused every pool, 2026-10-13
