@@ -845,7 +845,7 @@ Body `{wallet_address, match_type: "casual"|"ranked"}` (auth) (`backend/src/rout
 | 2 | Registered | `Not registered` |
 | 3 | 18 unlisted cards (only when `match.gate_enabled` is "true"; code default "false", not seeded) | `You need at least 18 unlisted players to enter a match. ...` (370-423) |
 | 4 | One request in flight per user | `A match is already being processed. Please wait.` (1021) |
-| 5 | No unrevealed tournament or 1v1 match of yours within 1 h (`TOURNAMENT_BUSY_LEAD_HOURS`, `:331`) | `Your squad is preparing for '{t}' {EM} next match in {m}m. ...`, `... is currently playing in the '{t}' tournament. ...`, `... is about to play in the '{t}' tournament. ...` (944-970) |
+| 5 | Not busy with a tournament: an unrevealed tournament or 1v1 match of yours from 1 h before kickoff until its broadcast ends, plus your group (`groups_knockout`) or your Swiss round until all of it has ended (`TOURNAMENT_BUSY_LEAD_HOURS`, `tournament_busy_rows_sql`; the same rows as the 1v1 gate of 10.4) | `Your squad is preparing for '{t}' {EM} next match in {m}m. ...`, `... is currently playing in the '{t}' tournament. ...`, `... is about to play in the '{t}' tournament. ...` (944-970) |
 | 6 | Not already in a match (home or away; pending, simulating or inside its playback) | `Already in match #{id}. Wait for it to finish before starting another.` (1109-1133) |
 | 7 | 30 s since the start of your last match of any kind (`match.cooldown_ms`) | `Match cooldown: wait {s} seconds` (1147-1173) |
 | 8 | Ranked only: 15 min since your last ranked match, including ones you were drawn into (`match.ranked_cooldown_ms`) | `Ranked cooldown: your squad needs to rest {EM} wait {m}m ({s}s) before the next ranked match.` (1189-1228) |
@@ -951,6 +951,7 @@ transactions are `joinTournament` (pay a seat) and `claimRefund`.
 | `groups_knockout` | 8, 16, 32, 64 | `min_teams` must equal `max_teams`; groups of 4, top 2 advance | `tournaments.rs:46`, `:2039-2044` |
 | `round_robin` | 3 to 20 | `home_and_away` allowed only here | `tournaments.rs:50`, `:2545` |
 | `swiss` | 3 to 32 | | `tournaments.rs:54-56` |
+| `league_knockout` | 36 | Since 2026-10-15: a league phase drawn from pots, then a play-off and two-legged knockout ties, a third place match and a final. Created by an admin only while `tournament.league_knockout_enabled` is 1 (it ships 0). The agent neither joins nor creates a format it does not know (`unsupportedFormat`, `src/executor/rules.ts`) | `tournaments.rs:62`, `:74`, `league_knockout_create_refusal` (FoxLeague c2b24727c) |
 
 | Tier | Seat fee (mainnet) | Pool | ELO | XP and competitive count |
 |---|---|---|---|---|
@@ -1079,7 +1080,7 @@ same request when you sent a hash and are not seated (`tournaments.rs:314-445`):
 | 1v1: 11 match-fit players (R) | `Your squad isn't rested enough to play {EM} fewer than 11 players are match-fit (condition too low or in transfer cooldown). ...` |
 | No card in a transfer cooldown (R) | `{name} was recently transferred {EM} cooldown {h}h {m}m remaining. Tournaments cannot be joined with a recently-rented NFT.` |
 | 1v1: one active 1v1 (R) | `You already have an active 1v1. Finish it or cancel it first.` |
-| 1v1: no tournament match within 1 h (R) | `You have a tournament match within the hour {EM} finish it first.` |
+| 1v1: not busy with a tournament (R). Busy: from 1 h before one of your own unrevealed matches until its broadcast ends (no other end); in `groups_knockout` every team of a group from 1 h before the group's last kickoff until every group match has ended; in `swiss` every team of a round from 1 h before its own match in it until every match of the round has ended. The play gate's rows (`matches.rs` `tournament_busy_rows_sql`, `tournament_busy_now`) since #512 (2026-10-15); before, the tournament's whole `blocking_window`. A failed read answers "retry" here (fail closed) and is treated as free at create (fail open, nothing paid there). `GET /api/tournaments/{id}?wallet_address=` answers the same rows for a 1v1 in `viewer_blocked_tournament_window` (false on its own failed read) | `You have a tournament match within the hour. Finish it first.` |
 | One seat, capacity | `You are already in this tournament`; `Tournament is full` (refund if paid) |
 
 Payment verification (10 s budget; `backend/src/chain_verify.rs:316-347`, `tournaments.rs:4057-4495`):
@@ -1195,7 +1196,8 @@ Errors (`tournaments.rs:2055-2248`): `1v1 challenges (max_teams=2) require forma
 `You cannot challenge yourself {EM} choose a different opponent`,
 `Targeted opponent not found {EM} they need to register on the platform first`,
 `You already have an active 1v1. Finish it or cancel it first.` (one active 1v1 per wallet, created or
-joined; `tournament.one_v_one_max_active_per_user`), `You have a tournament match within the hour {EM} finish it first.`
+joined; `tournament.one_v_one_max_active_per_user`), `You have a tournament match within the hour. Finish it first.`
+(busy with a tournament, the rows of the join gate in section 10.4).
 
 **The creator pays first.** After create, the creator pays `joinTournament` and calls `/join` like any
 joiner (`Create1v1Challenge.tsx:442-475`). Until then others get `Creator must join first {EM} slot 1 is reserved`.
@@ -1209,7 +1211,10 @@ creator_team_name, entry_fee_foxsy, deadline}]`, up to 20 (`backend/src/routes/l
 **Accept** = the paid join of section 10.4 (same fee). A targeted challenge accepts only the creator and
 the target; the contract enforces it through the `allowed` list (`tournament_manager.rs:290-295`).
 There is no decline route: ignore it. Accepting needs 11 match-fit players, no card in a transfer
-cooldown, no other active 1v1 and no tournament match within the hour.
+cooldown, no other active 1v1 and a team not busy with a tournament (section 10.4: an own match from 1 h before
+kickoff until its broadcast ends, a group or a Swiss round until all of it has ended). The agent refuses the join
+and the create while FoxLeague's `viewer_blocked_tournament_window` says so and wherever its own fixtures cannot
+show that a group or round has ended (`oneVOneBusy`, `src/executor/rules.ts`).
 
 **When it fills** the deadline becomes now and the match is scheduled 3 to 12 minutes later depending on
 queue load, pushed past either side's busy windows (`tournaments.rs:4922-5147`;

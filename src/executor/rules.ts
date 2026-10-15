@@ -7,7 +7,7 @@ import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
-import type { CanFuse, CanList, MatchWaiverQuote, Tournament, TournamentDetail } from '../foxleague/types.ts'
+import type { CanFuse, CanList, MatchWaiverQuote, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
@@ -91,8 +91,10 @@ function card(s: AgentSnapshot, nonce: number): PlayerView | undefined {
 }
 
 /**
- * Unrevealed tournament or 1v1 match of ours within the next hour (casual/ranked lockout, 1v1 accept gate). The
- * upcoming matches unreadable is no "none": the reason then says so and the caller refuses.
+ * Unrevealed tournament or 1v1 match of ours within the next hour (the casual and ranked lockout of play_match). The
+ * upcoming matches unreadable is no "none": the reason then says so and the caller refuses. FoxLeague's play gate
+ * reads the same rows as its 1v1 gate (see oneVOneBusy), unchanged on 2026-10-15; a casual or ranked start pays
+ * nothing, so this window stays as it was and the 1v1 gate, where a stake is paid first, reads the full rule.
  */
 function tournamentMatchWithinHour(s: AgentSnapshot, now: Date): string | null {
   const upcoming = s.auth?.upcoming
@@ -101,6 +103,73 @@ function tournamentMatchWithinHour(s: AgentSnapshot, now: Date): string | null {
     if (m.phase === 'finished') continue
     const at = new Date(m.scheduled_at).getTime()
     if (at - now.getTime() <= 3600_000 && at + 15 * 60_000 > now.getTime()) return `T${m.tournament_id} match at ${m.scheduled_at}`
+  }
+  return null
+}
+
+/** FoxLeague's statuses of a running tournament, the only ones its busy rows read (matches.rs tournament_busy_rows_sql). */
+const RUNNING_STATUSES = new Set(['active', 'simulating', 'simulation_delayed'])
+/** Before the start: no fixtures yet; FoxLeague creates them when the tournament goes active. */
+const NOT_STARTED_STATUSES = new Set(['open', 'pending_sc'])
+/** FoxLeague's TOURNAMENT_BUSY_LEAD_HOURS (matches.rs): a team is busy from this long before a kickoff. */
+const BUSY_LEAD_MS = 3600_000
+/** Rows of GET /api/tournaments/upcoming-matches without `limit` (tournaments.rs UPCOMING_DEFAULT_LIMIT). */
+const UPCOMING_PAGE = 50
+
+/**
+ * Why FoxLeague would call this team busy with a tournament right now and refuse a 1v1 create or join, or null
+ * (#512, 2026-10-15: the 1v1 gates read the play gate's rows, matches.rs tournament_busy_rows_sql). Busy: from an
+ * hour before one of your own fixtures kicks off until its broadcast ends, however late that is; in groups_knockout
+ * every team of a group from an hour before the group's last kickoff until every match of the group has ended; in
+ * Swiss every team of a round from an hour before its own kickoff in it until every match of the round has ended.
+ * The agent sees only its own fixtures (GET /api/tournaments/upcoming-matches), so it stays busy wherever it cannot
+ * tell that a group or a round has ended: an own knockout fixture is listed only once the whole group has ended, the
+ * next Swiss round only once the round before it has. Unknown is busy: a format or status the agent does not know,
+ * fixtures missing from the list, a tournament about to start whose fixtures are not out yet.
+ */
+function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
+  const upcoming = s.auth?.upcoming
+  const mine = s.auth?.myTournaments
+  if (!upcoming) return 'your upcoming matches could not be read'
+  if (!mine) return 'your current tournaments could not be read'
+  const t0 = now.getTime()
+  const at = (m: UpcomingMatch) => new Date(m.scheduled_at).getTime()
+  for (const m of upcoming.matches) {
+    if (m.phase !== 'finished' && at(m) - t0 <= BUSY_LEAD_MS) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
+  }
+  // The route is read without a limit: FoxLeague's page of 50, soonest first, the last day's finished games first.
+  if (upcoming.matches.length >= UPCOMING_PAGE) return `your upcoming matches fill FoxLeague's page of ${UPCOMING_PAGE}: a match within the hour may be cut from it`
+  for (const t of mine.active) {
+    // A 1v1's only match is a row above; another active 1v1 is refused before this check (one at a time).
+    if (t.max_teams === 2 || t.status === 'completed' || t.status === 'cancelled') continue
+    if (NOT_STARTED_STATUSES.has(t.status)) {
+      // It can go active, with its fixtures, at any moment once the start is near.
+      if (new Date(t.starts_at).getTime() - t0 <= BUSY_LEAD_MS) return `T${t.id} starts at ${t.starts_at} and its fixtures are not out yet`
+      continue
+    }
+    if (!RUNNING_STATUSES.has(t.status)) return `T${t.id} has the status ${t.status}, which the agent does not know: whether it keeps you busy is unknown`
+    const own = upcoming.matches.filter(m => m.tournament_id === t.id).sort((x, y) => at(x) - at(y))
+    switch (t.format) {
+      case 'knockout':
+      case 'round_robin':
+        continue // only the own fixtures, read above
+      case 'groups_knockout': {
+        if (own.some(m => m.group_name === undefined)) return `T${t.id}: FoxLeague did not say which of your fixtures are group matches: whether your group has ended is unknown`
+        const group = own.filter(m => m.group_name !== null && m.group_name !== '3rd Place')
+        if (own.length > group.length) continue // an own knockout fixture is listed: the whole group has ended
+        if (!group.length) return `T${t.id}: none of your group fixtures is in the list: whether your group has ended is unknown`
+        // The group's last kickoff is no earlier than your own last group match: busy from an hour before that.
+        if (at(group[group.length - 1]!) - t0 <= BUSY_LEAD_MS) return `T${t.id}: your group has not ended for every team yet (no knockout fixture of yours is listed)`
+        continue
+      }
+      case 'swiss': {
+        if (!own.length) return `T${t.id}: none of your Swiss fixtures is in the list: whether your round has ended is unknown`
+        if (own[own.length - 1]!.phase === 'finished') return `T${t.id}: your Swiss round has not ended for every team yet (the next round is not out)`
+        continue // the next round is listed, so every round before it has ended; its own match is read above
+      }
+      default:
+        return `T${t.id} is a ${t.format} tournament, a format the agent does not know: whether it keeps you busy is unknown`
+    }
   }
   return null
 }
@@ -117,6 +186,15 @@ const VALID_SIZES: Record<string, (n: number) => boolean> = {
   groups_knockout: n => [8, 16, 32, 64].includes(n),
   round_robin: n => n >= 3 && n <= 20,
   swiss: n => n >= 3 && n <= 32,
+}
+
+/**
+ * The formats the agent knows (their sizes, matches and windows above). Any other one, such as FoxLeague's
+ * admin-only league_knockout of 2026-10-15 (a 36-team league and a two-legged knockout), is neither joined nor
+ * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat.
+ */
+function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
+  return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
 }
 
 /** Largest size worth creating: what recently filled plus a margin (README: 16-20 is the norm, not 64). */
@@ -177,6 +255,7 @@ export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boo
     case 'swiss':
       return rounds(maxTeams) + 1
     default:
+      // Never joined or created (unsupportedFormat); only a tournament already held could have one: counted as a league.
       return maxTeams - 1
   }
 }
@@ -262,16 +341,16 @@ function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | n
 }
 
 /**
- * The 1v1 gates FoxLeague applies after the stake is paid (one active 1v1 at a time, no tournament match within the
- * hour), checked from the agent's own state. Either route unreadable is no "none": the stake is not paid blind.
+ * The 1v1 gates FoxLeague applies after the stake is paid (one active 1v1 at a time, not busy with a tournament),
+ * checked from the agent's own state. Either route unreadable is no "none": the stake is not paid blind.
  */
 function oneVOneStateRefusal(s: AgentSnapshot, now: Date): string | null {
   const mine = s.auth?.myTournaments
   if (!mine) return 'your current tournaments could not be read (an active 1v1 is unknown): not paying a stake blind'
   if (mine.active.some(x => x.max_teams === 2)) return 'already in an active 1v1'
-  if (!s.auth?.upcoming) return 'your upcoming matches could not be read (a match within the hour is unknown): not paying a stake blind'
-  const busy = tournamentMatchWithinHour(s, now)
-  if (busy) return `tournament match within the hour: ${busy}`
+  if (!s.auth?.upcoming) return 'your upcoming matches could not be read (whether a tournament keeps you busy is unknown): not paying a stake blind'
+  const busy = oneVOneBusy(s, now)
+  if (busy) return `busy with a tournament, FoxLeague refuses a 1v1 now: ${busy}`
   return null
 }
 
@@ -443,6 +522,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (new Date(t.deadline) <= ctx.now) return refuse(`T${t.id} registration deadline passed`)
       if (t.is_private && d.user_can_join_private !== true) return refuse(`T${t.id} is private and this team is not invited`)
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
+      const unknownJoin = unsupportedFormat(t.format, 'joining')
+      if (unknownJoin) return refuse(unknownJoin)
       if (t.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
       const myId = s.profile.id
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
@@ -456,6 +537,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (d.participants.length < 1) return refuse('1v1 creator has not paid yet')
         const opp = oneVOneOpponentRefusal(s, ctx)
         if (opp) return refuse(opp)
+        // FoxLeague's own answer by the rows of its join gate (it answers false on its own failed read: the rules below still decide).
+        if (d.viewer_blocked_tournament_window === true) return refuse('FoxLeague says this team is busy with a tournament (viewer_blocked_tournament_window): it would refuse the join after the stake is paid')
         const blind = oneVOneStateRefusal(s, ctx.now)
         if (blind) return refuse(blind)
         const fit = s.team!.lineup.concat(s.team!.substitutes).filter(n => {
@@ -513,6 +596,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const bounds = tierBounds(s, a.tier)
       if (!bounds || a.entry_fee_foxsy < bounds[0] || a.entry_fee_foxsy > bounds[1]) return refuse(`fee outside the ${a.tier} bounds`)
       if (a.entry_fee_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`entry fee exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
+      // parseAction lets only the known formats through; the rules hold even for an action built another way.
+      const unknownCreate = unsupportedFormat(a.format, 'creating')
+      if (unknownCreate) return refuse(unknownCreate)
       if (!VALID_SIZES[a.format]!(a.max_teams)) return refuse(`${a.max_teams} teams is not a valid ${a.format} size`)
       if ((a.format === 'knockout' || a.format === 'groups_knockout') && a.min_teams !== a.max_teams) return refuse(`${a.format} needs min_teams = max_teams`)
       if (a.min_teams > a.max_teams || a.min_teams < 3) return refuse('min_teams must be 3..max_teams')
