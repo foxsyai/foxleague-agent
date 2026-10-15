@@ -951,6 +951,7 @@ transactions are `joinTournament` (pay a seat) and `claimRefund`.
 | `groups_knockout` | 8, 16, 32, 64 | `min_teams` must equal `max_teams`; groups of 4, top 2 advance | `tournaments.rs:46`, `:2039-2044` |
 | `round_robin` | 3 to 20 | `home_and_away` allowed only here | `tournaments.rs:50`, `:2545` |
 | `swiss` | 3 to 32 | | `tournaments.rs:54-56` |
+| `league_knockout` | 36 | Since 2026-10-15: a league phase drawn from pots, then a play-off and two-legged knockout ties, a third place match and a final. Created by an admin only while `tournament.league_knockout_enabled` is 1 (it ships 0). The agent neither joins nor creates a format it does not know (`unsupportedFormat`, `src/executor/rules.ts`) | `tournaments.rs:62`, `:74`, `league_knockout_create_refusal` (FoxLeague c2b24727c) |
 
 | Tier | Seat fee (mainnet) | Pool | ELO | XP and competitive count |
 |---|---|---|---|---|

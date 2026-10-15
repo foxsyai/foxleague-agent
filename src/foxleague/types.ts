@@ -146,7 +146,8 @@ export interface Tournament {
   creator_user_id: number
   title: string
   description: string | null
-  format: 'knockout' | 'groups_knockout' | 'round_robin' | 'swiss'
+  /** The four formats the agent knows; FoxLeague serves others too (league_knockout since 2026-10-15), never joined. */
+  format: 'knockout' | 'groups_knockout' | 'round_robin' | 'swiss' | (string & {})
   tier: 'bronze' | 'silver' | 'gold'
   featured: boolean
   max_teams: number

@@ -1,10 +1,10 @@
 // Proof tests for the agent review of PR #14 (FoxLeague's manual of 2026-10-15). Each test is named after its
-// finding (R14A-1) and failed on 5bbe423 before the fix.
+// finding (R14A-1, R14A-2) and failed before its fix (R14A-1 on 5bbe423, R14A-2 on 208c4f9); a control says so.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { STRANGER, dryWallet, setup, snapshot, tournament } from './fixtures.ts'
-import type { PlannedAction } from '../src/executor/actions.ts'
+import { parseAction, type PlannedAction } from '../src/executor/actions.ts'
 import type { AgentSnapshot } from '../src/snapshot/snapshot.ts'
 import type { Tournament, UpcomingMatch } from '../src/foxleague/types.ts'
 
@@ -131,4 +131,30 @@ test('R14A-1 control: play_match keeps its pre-match lockout (an own match withi
   const [r] = await m.exec.run(m.agent(), dryWallet, withRows([running(211, 'knockout')], [fixture(211, 30, 'upcoming')]), act({ type: 'play_match', match_type: 'casual' }))
   assert.equal(r!.status, 'refused', r!.summary)
   assert.match(r!.summary, /pre-match lockout/)
+})
+
+// ---- R14A-2: a tournament of a format the agent does not know is neither joined nor created ----
+
+test('R14A-2 a league_knockout tournament (36 teams, a daily round) is not joined: the format is not supported yet', async () => {
+  const m = setup({
+    fox: { tournament: async () => tournament(600, { format: 'league_knockout', max_teams: 36, min_teams: 36, round_interval_minutes: 1440 }) },
+  })
+  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 600 }))
+  assert.equal(r!.status, 'refused', r!.summary)
+  assert.match(r!.summary, /format league_knockout is not supported yet: not joining blind/)
+  // Control: the four known formats still join.
+  for (const [format, max] of [['knockout', 8], ['groups_knockout', 8], ['round_robin', 6], ['swiss', 6]] as const) {
+    const k = setup({ fox: { tournament: async () => tournament(601, { format, max_teams: max, min_teams: max }) } })
+    const [ok] = await k.exec.run(k.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 601 }))
+    assert.equal(ok!.status, 'dry_run', `${format}: ${ok!.summary}`)
+  }
+})
+
+test('R14A-2 a create of an unknown format is refused by the rules, not left to a crash (parseAction already refuses it)', async () => {
+  const create = { type: 'create_tournament', title: 'League Cup', format: 'league_knockout', tier: 'silver', max_teams: 36, min_teams: 36, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
+  assert.throws(() => parseAction(create), /format must be one of/)
+  const m = setup()
+  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), act(create))
+  assert.equal(r!.status, 'refused', r!.summary)
+  assert.match(r!.summary, /format league_knockout is not supported yet/)
 })

@@ -188,6 +188,15 @@ const VALID_SIZES: Record<string, (n: number) => boolean> = {
   swiss: n => n >= 3 && n <= 32,
 }
 
+/**
+ * The formats the agent knows (their sizes, matches and windows above). Any other one, such as FoxLeague's
+ * admin-only league_knockout of 2026-10-15 (a 36-team league and a two-legged knockout), is neither joined nor
+ * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat.
+ */
+function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
+  return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
+}
+
 /** Largest size worth creating: what recently filled plus a margin (README: 16-20 is the norm, not 64). */
 export function sizeCeiling(s: AgentSnapshot): number {
   const seated = s.market.recentStandard.filter(t => t.status === 'completed').map(t => t.seated)
@@ -246,6 +255,7 @@ export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boo
     case 'swiss':
       return rounds(maxTeams) + 1
     default:
+      // Never joined or created (unsupportedFormat); only a tournament already held could have one: counted as a league.
       return maxTeams - 1
   }
 }
@@ -512,6 +522,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (new Date(t.deadline) <= ctx.now) return refuse(`T${t.id} registration deadline passed`)
       if (t.is_private && d.user_can_join_private !== true) return refuse(`T${t.id} is private and this team is not invited`)
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
+      const unknownJoin = unsupportedFormat(t.format, 'joining')
+      if (unknownJoin) return refuse(unknownJoin)
       if (t.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
       const myId = s.profile.id
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
@@ -584,6 +596,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const bounds = tierBounds(s, a.tier)
       if (!bounds || a.entry_fee_foxsy < bounds[0] || a.entry_fee_foxsy > bounds[1]) return refuse(`fee outside the ${a.tier} bounds`)
       if (a.entry_fee_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`entry fee exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
+      // parseAction lets only the known formats through; the rules hold even for an action built another way.
+      const unknownCreate = unsupportedFormat(a.format, 'creating')
+      if (unknownCreate) return refuse(unknownCreate)
       if (!VALID_SIZES[a.format]!(a.max_teams)) return refuse(`${a.max_teams} teams is not a valid ${a.format} size`)
       if ((a.format === 'knockout' || a.format === 'groups_knockout') && a.min_teams !== a.max_teams) return refuse(`${a.format} needs min_teams = max_teams`)
       if (a.min_teams > a.max_teams || a.min_teams < 3) return refuse('min_teams must be 3..max_teams')
