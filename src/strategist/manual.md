@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 1c0c76233 2026-10-12.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at ed129a895 2026-10-15.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -416,6 +416,8 @@ The players contract refuses the listing otherwise, so the Sell form disables th
 > **Sync first**
 > An **unsynced player cannot be listed** as-is. The marketplace shows the on-chain stats to bidders; if your Squad shows newer values than the chain, you'd be advertising a different player than what's actually on sale. If the player has unsynced training, the button reads **SYNC & AUCTION** instead: you sign a sync transaction first (10 FOXSY per unsynced player on your roster), then the listing transaction, so the auction matches what bidders see.
 
+Right before your wallet opens, the listing reads your squad again. A card that is no longer in your wallet (for example one you sent or listed a moment ago) signs nothing: **This player is no longer in your squad. Nothing was signed or sent now.** With **Batch Mode** on, nothing of the batch is signed: the message names each such card and takes it out of your selection. When your squad cannot be read, nothing is signed either: **Your squad could not be reloaded from the server. Nothing was signed or sent now. Try again in a moment.**
+
 ## Bidding on a player
 
 1. **Marketplace** → **Browse** sub-tab
@@ -450,6 +452,8 @@ Cancelling only works while the auction has **zero bids**. Once a bid lands you 
 If someone sends you a player NFT directly (not through the marketplace), the player has a **transfer cooldown** before you can use them in matches. The cooldown is **21 days (504 hours)** for a card that had reached the match gate of its rarity (see the table above) when it moved. A card moved before its match gate is locked for **21 days plus 6 hours for every missing match** in the new wallet: a fresh starter card, a pack card or a fusion output cannot be handed to another wallet and played there the same season. A Legendary moved at 0 matches is locked for 122 days and 6 hours (2,934 hours); an Uncommon moved with 5 played and nothing waived, for 23 days and 12 hours. Each fusion match waiver bought for the card in the new wallet takes 6 hours off that lock, down to 21 days plus 6 hours for every match it still has to really play (54 days and 18 hours for the Legendary at 0, 21 days for the Uncommon). The length is fixed on the card at the moment of the transfer. Locks already running on Monday 12 October 2026 at 14:30 UTC, when this rule replaced the 63-day lock for a card under 20 competitive matches, were never made longer: each ends at the shorter of its own length and the new length for the card. It encourages fair play plus marketplace use, preventing off-market roster manipulation right before a tournament. Auction wins, fusion results, distribute events plus shop mints never start one; only direct wallet-to-wallet transfers do. A lock that is already running stays on the card through a sale (see above). A cooled-down player also cannot be used as a fusion input, so you cannot launder the cooldown through fusion.
 
 The player card shows the cooldown countdown while it's active. The transfer dialog states the rule before you sign.
+
+When you send a card yourself (**Transfer** on its profile), the dialog reads your squad again right before your wallet opens. A card that is no longer in your wallet signs nothing: **This card is not in your wallet right now: it was sent or listed a moment ago or it is still on its way back from a sync. Nothing was sent by this try. The list refreshes in a moment.** When your squad cannot be read, nothing is signed either: **Your squad could not be reloaded from the server. Nothing was signed or sent now. Try again in a moment.**
 
 You can **pay to reduce** a transfer cooldown down to the floor the shop shows (currently **3 days**, 72 hours; the remaining floor can never be waived). Open **Marketplace → Shop → Reduce Cooldown**, pick the player, then pay the FOXSY price shown for every day or only some of them. The price is per day reduced and depends on the player's rarity (Common 25 up to Legendary 1,250 FOXSY per day). Reduce Cooldown does not apply to a card moved before its match gate: that lock gets shorter only with the fusion match waivers bought for the card. See the [Shop](/mechanics/shop/) for the full table.
 
@@ -720,7 +724,7 @@ Once the challenge fills and its strategy lock passes:
 - Training/sync after the lock doesn't apply to this match
 - Individual players are not locked. Instead your **account** is blocked from starting casual or ranked matches from **1 hour before** the 1v1 (or any of your tournament matches) is scheduled until its broadcast ends
 - An open challenge still waiting for an opponent doesn't restrict you at all
-- You cannot create or join a 1v1 while you're inside a standard tournament's blocking window (from 1 hour before it starts until 1 hour after its booked play time, about 3 minutes per match without the time between games, so a long tournament can keep playing after its window ends). The error reads "You have a tournament match within the hour"
+- You cannot create or join a 1v1 while you are busy with a tournament: from 1 hour before one of your own tournament matches kicks off until its broadcast ends. In a tournament with a group stage every team of a group also stays busy from 1 hour before the group's last match until every match of the group has ended. In a Swiss tournament you stay busy from 1 hour before your match until every match of your round has ended. The span of the whole tournament does not count. The error reads "You have a tournament match within the hour"
 - Once the broadcast ends, you're free to play again immediately
 
 > **Post-transfer cooldown**
@@ -1035,7 +1039,9 @@ Level does not change in-match performance. Condition does: every stat of a star
 
 ## Squad Readiness widget
 
-The widget on **PlayMatch** shows ready / owned players, where **ready** means the player's condition is at or above the match floor (currently **30**). It's a health check, not the kickoff gate. To kick off you need a saved lineup of 11 starters + 7 substitutes, at least **18 unlisted players** in your wallet, no starter at 0 condition and none of the 18 (starters or bench) in a transfer cooldown.
+The widget on **PlayMatch** shows ready / owned players, where **ready** means the player's condition is at or above the match floor (currently **30**). It's a health check, not the kickoff gate. To kick off you need a saved lineup of 11 starters + 7 substitutes, at least **18 unlisted players** in your wallet, no starter at 0 condition and none of the 18 (starters or bench) in a transfer cooldown or listed for sale.
+
+While one of your 18 is listed for sale, **KICK OFF** stays disabled and the line under it reads **1 player is listed for sale: cancel the listing or swap it out** (with two of them: **2 players are listed for sale: cancel the listing or swap them out**). Below it, **My Listings** opens your listings to cancel one; **Open Tactics** lets you swap the player for a reserve.
 
 Reasons a player might NOT be ready:
 
@@ -1234,7 +1240,7 @@ If one of the two teams in a match is busy with a match in another tournament at
 
 ### Blocking window (anti-overlap)
 
-Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its booked play time. The booked play time counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other tournament on the platform that is not completed or cancelled, otherwise creation fails with a time-slot conflict. Joining has no window check. 1v1 challenges cannot be created or joined while you are inside the blocking window of a tournament you are in; they never reserve a window of their own.
+Each tournament reserves a **blocking window** from one hour before its first kickoff until one hour after its booked play time. The booked play time counts about 3 minutes per scheduled match and ignores the time between games, so the window is a coarse reservation rather than the real span. The check runs when a tournament is **created**: the new window may not overlap the window of any other tournament on the platform that is not completed or cancelled, otherwise creation fails with a time-slot conflict. Joining has no window check. A 1v1 challenge never reserves a window of its own. You cannot create or join one while you are busy with a tournament: from 1 hour before your own match until its broadcast ends. In a group stage every team of a group also stays busy from 1 hour before the group's last match until every match of the group has ended. In a Swiss round you stay busy until every match of your round has ended. The blocking window itself does not stop a 1v1.
 
 You do not have to guess a free time. On the Schedule step the form tells you whether the start you picked is free and, when it is not, proposes the **next free slot** with a **Use this slot** button. **See free times** opens a calendar in your own time zone: every start where your tournament fits is green. The windows of other tournaments are shown with their titles. A gray block is another tournament's start window: the hour before its kickoff, the time it needs to get its first round under way and an hour after. Hover over it or tap it to see the tournament and its booked times. A tournament that runs for days books only this window; its later rounds run alongside other tournaments, so they do not block the calendar. A new tournament cannot start inside a gray block. One tap on a green start sets the start and the registration deadline and keeps the rest of the form. The calendar and the creation check use the same rule, so a green start is one that creation accepts.
 
