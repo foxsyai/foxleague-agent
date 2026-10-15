@@ -437,6 +437,23 @@ not longer; a failing Telegram kv write (the update offset) fetches the batch ag
 refunded seat answer resolves the pending row without crediting `join:<id>` until the tournament is closed; the order
 of Retire's messages.
 
+## Agent review of PR #14, 2026-10-15
+
+The agent review (Claude Opus 5.5) of PR #14, which synced the game knowledge to FoxLeague's manual of 2026-10-15
+(main ed129a895, rc.68 on mainnet), found two claims of the PR untrue. The fixes were made by Claude Opus 5.5, test
+first: every test in `test/review14.test.ts` was seen failing on 5bbe423 and passing after its fix.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R14A-1 | medium | FoxLeague's 1v1 busy gate changed on 2026-10-15 (#512, ad47adc58): the create and join gates read the play gate's rows (`matches.rs` `tournament_busy_rows_sql`): an own unrevealed match from 1 h before kickoff until its broadcast ends, however late; in `groups_knockout` every team of a group from 1 h before the group's last kickoff until the whole group has ended; in Swiss every team of a round from 1 h before its own match until the whole round has ended. The agent checked only its own matches from 1 h before to 15 min after kickoff, so it paid a 1v1 stake (join) that FoxLeague then refused: the gas lost, the refunded stake counted until credited | `oneVOneBusy` (`src/executor/rules.ts`) mirrors the three rows from the agent's own fixtures (the upcoming route now read with `group_name`, which FoxLeague already sends): an own match until its phase is finished; a group until an own knockout fixture is listed; a Swiss round until the next round is listed. It refuses where it cannot tell: no own fixture listed, no `group_name`, a format or status it does not know, a tournament of its own starting within the hour whose fixtures are not out yet, an upcoming list that fills FoxLeague's page of 50 (a row within the hour may be cut from it). A 1v1 join is also refused when FoxLeague's own answer, `viewer_blocked_tournament_window`, is true. play_match keeps its window (nothing is paid there) |
+
+Open: FoxLeague's play gate reads the same rows (unchanged on 2026-10-15), while play_match keeps the agent's
+window of 1 h before to 15 min after kickoff, so FoxLeague may refuse a casual or ranked start the agent sends; it
+costs nothing; play_match does not read the full page either. A group or round is held busy until the agent's
+next fixture shows, so an agent out after the group stage, or past its last Swiss round, stays out of 1v1s until
+the tournament completes (fail closed: its own fixtures cannot show the rest of the group or round). The prompt's line "no tournament match within the hour" (`src/strategist/prompt.ts`,
+byte-stable) is FoxLeague's error text and stays.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

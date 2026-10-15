@@ -186,6 +186,11 @@ export interface TournamentDetail {
   user_is_participant?: boolean
   /** Only filled for the caller's own session: true when that team is invited to this private tournament. */
   user_can_join_private?: boolean | null
+  /**
+   * A 1v1 read with the caller's wallet: true when FoxLeague's join gate would refuse it because the team is busy with
+   * a tournament (the same rows, matches.rs tournament_busy_exists_sql). FoxLeague answers false on its own failed read.
+   */
+  viewer_blocked_tournament_window?: boolean | null
   [key: string]: unknown
 }
 
@@ -271,6 +276,11 @@ export interface UpcomingMatch {
   tournament_id: number
   tournament_title: string
   round_label: string | null
+  /**
+   * The group of a group-stage fixture ("A", "B", ...); null for a knockout one, "3rd Place" for the third place match.
+   * Optional only because a missing field is unknown: the 1v1 busy rule then cannot tell a group fixture and refuses.
+   */
+  group_name?: string | null
   is_home: boolean
   opponent_name: string | null
   scheduled_at: string
