@@ -480,6 +480,23 @@ Open: the strength edge is the elevens as they played (synced stats and conditio
 rival's formation is the one it played last, which it may change before the lock. A team that has not planned since
 this change is not yet known as one of the install's, so a match against it counts in the pool until it plans.
 
+## Squad growth, 2026-10-22
+
+The owner's direction after the formation record went live: an agent whose record favoured the 4-3-3 family kept
+4-4-2 because it had two strong forwards (two Legendaries, three Commons), and the Beast level sold every spare card
+above 36 although spares are what a team fuses, grows and sells. Only the strategist's text changed (test first:
+`test/squad-growth.test.ts`, each test seen failing before the change); no cap, limit or code path did.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| G1 | design | A card that would let the squad play the formation its record favours did not count as an upgrade: the agent judged a buy against the formation it already played | The prompt (every level) counts the missing player as part of the upgrade: a card of that position at a fair price (a Rare often the best strength per FOXSY, a Legendary only when its price pays) or a fusion into that position, within the level and the caps; until then the formation is tested in ranked |
+| G2 | design | The Beast level listed every spare above 36 cards, and Hunter and Predator, which buy and fuse cards, were never told to sell one | No level counts cards: the prompt says there is no upper limit, and that a card outside the eleven and bench never moves toward its match gate (a spare reaches it by playing, or partly with match credit). Hunter (and so Predator and Beast) lists a spare when its price beats its use, as Zeus does. Steady and Climber still never bid (max bid 0) |
+
+The executor's rules for a listing are unchanged: never one of the 18 strongest cards, 18 left, the match gate met,
+synced stats, a reserve at least the floor and the rarity minimum. The texts of the levels reach an agent when its
+level is chosen; the ten running agents are on Zeus, whose text already sold by value, so for them only the prompt
+changed.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

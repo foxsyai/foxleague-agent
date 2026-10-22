@@ -19,9 +19,9 @@ afterwards or write your own. [Every setting explained](/use/settings/) covers t
 |---|---|---|
 | **1. Steady** | The free game used fully: the 5 free training sessions, lineup and formation, the 5 daily matches, sync before match days, the free team badge. Silver tournaments and 1v1s at your lowest amounts. No shop purchases, no bids | Entries and sync: a few hundred FOXSY |
 | **2. Climber** | The push for ELO: ranked matches whenever allowed, Gold tournaments when the squad can compete, 1v1s at any of your amounts, condition recovery for key starters before a match that matters | Plus Gold entries (5,000 FOXSY) and some recovery |
-| **3. Hunter** | Tournaments and the first purchases: creates its own tournaments, the XP booster on days with 3 sure competitive matches, paid training slots while it runs, a fusion when three spare cards are ready, **bids at auction** (see below) | Plus about 2,000 FOXSY on booster days, and bids |
+| **3. Hunter** | Tournaments and the first purchases: creates its own tournaments, the XP booster on days with 3 sure competitive matches, paid training slots while it runs, a fusion when three spare cards are ready, **bids at auction** (see below), sells a spare card when its price beats its use | Plus about 2,000 FOXSY on booster days, and bids |
 | **4. Predator** | Pays for everything that grows the squad **except waivers**: all 15 training sessions every day, the booster on every match day, recovery whenever it helps, both Common packs a week, a fusion whenever a triplet is ready (real matches, full 14-day cooldown), a higher max bid | About 3,500 FOXSY, plus entries and bids |
-| **5. Beast** | Every paid advantage: the booster always on, **both fusion waivers** so a fusion can happen every 20 hours, 3 competitive matches a day, the highest max bid; keeps 22 to 36 cards and sells the spare ones above 36 | About 6,000 FOXSY, plus entries and bids |
+| **5. Beast** | Every paid advantage: the booster always on, **both fusion waivers** so a fusion can happen every 20 hours, 3 competitive matches a day, the highest max bid; keeps at least 22 cards, with no upper limit, to fuse, grow and sell | About 6,000 FOXSY, plus entries and bids |
 | **6. Zeus** | Not more spending, better decisions: a **win chance** for every team it could face, 1v1s only from 55 percent against active teams that accept them, tournaments only with a real chance of the top three, its own tournaments including **private** ones that invite active teams it should beat, training on the stats each role needs, syncs and recovery only before matches that count, a player bought only at a good price and for a reason that pays. It climbs in steps, from the teams it beats to stronger ones | As little as winning needs, up to its limits |
 
 On average about 90 percent of all entry fees come back as prizes, so entries are mostly a stake that returns,
@@ -50,7 +50,7 @@ not a cost. The shop, the waivers and the bids are real spending.
 | Fusion cooldown waiver (75 FOXSY a day, every day or some) | | | | | ✓ | when the time it wins counts |
 | Bids at auction: Rare, Epic, Legendary | | | ✓ | ✓ | ✓ | only at a good price, for a reason |
 | Default max bid (FOXSY) | | | 4,000 | 15,000 | 40,000 | 47,000 |
-| Sells spare cards (above 36 cards) | | | | | ✓ | when the price beats the use |
+| Sells a spare card when its price beats its use (no upper limit on cards) | | | ✓ | ✓ | ✓ | ✓ |
 
 **Bids.** From the hunter up, an agent bids on Rare, Epic and Legendary players, never on Common or Uncommon
 ones: two Common packs give 10 Commons, which fuse into three Uncommons and then a Rare, so those cost less from the
