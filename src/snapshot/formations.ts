@@ -14,6 +14,12 @@ export interface FormationMatch {
   rivalUserId: number | null
 }
 
+/** A strength gap within this many percent either way counts as an even match: the fair test of a formation. */
+export const EVEN_BAND = 10
+
+/** Won, drawn, lost. */
+export type WDL = [number, number, number]
+
 export interface FormationRecordRow {
   mine: string
   theirs: string
@@ -25,6 +31,8 @@ export interface FormationRecordRow {
   goalsAgainst: number
   /** The mean strength edge in percent, rounded; null when never known. */
   edge: number | null
+  /** The results by strength band: this team more than EVEN_BAND percent stronger, within it, more than it weaker (unknown strength: in none). */
+  bands: { stronger: WDL; even: WDL; weaker: WDL }
 }
 
 export interface FormationRecord {
@@ -44,16 +52,18 @@ export function summariseFormations(games: FormationMatch[], unread = 0): Format
   const field = new Map<string, number>()
   for (const g of games) {
     const k = `${g.mine} ${g.theirs}`
-    const r = rows.get(k) ?? { mine: g.mine, theirs: g.theirs, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, edge: null, edgeSum: 0, edgeN: 0 }
+    const r = rows.get(k) ?? { mine: g.mine, theirs: g.theirs, played: 0, won: 0, drawn: 0, lost: 0, goalsFor: 0, goalsAgainst: 0, edge: null, bands: { stronger: [0, 0, 0], even: [0, 0, 0], weaker: [0, 0, 0] }, edgeSum: 0, edgeN: 0 }
+    const result = g.gf > g.ga ? 0 : g.gf === g.ga ? 1 : 2
     r.played++
-    if (g.gf > g.ga) r.won++
-    else if (g.gf === g.ga) r.drawn++
+    if (result === 0) r.won++
+    else if (result === 1) r.drawn++
     else r.lost++
     r.goalsFor += g.gf
     r.goalsAgainst += g.ga
     if (typeof g.edge === 'number' && Number.isFinite(g.edge)) {
       r.edgeSum += g.edge
       r.edgeN++
+      r.bands[g.edge > EVEN_BAND ? 'stronger' : g.edge < -EVEN_BAND ? 'weaker' : 'even'][result]++
     }
     rows.set(k, r)
     field.set(g.theirs, (field.get(g.theirs) ?? 0) + 1)

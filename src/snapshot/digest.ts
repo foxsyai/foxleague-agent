@@ -5,7 +5,7 @@ import { lineupPositionsOk, lineupStrength, XP_BOOSTER_RENEW_HOURS } from '../ex
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
-import type { FormationRecordRow } from './formations.ts'
+import { EVEN_BAND, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { ShopStatus } from '../foxleague/types.ts'
 
@@ -74,7 +74,16 @@ function formationsText(f: string[] | null): string {
 }
 
 function formationRow(r: FormationRecordRow): string {
-  return `${txt(r.mine, 12)} vs ${txt(r.theirs, 12)}: ${r.played} played, W${r.won} D${r.drawn} L${r.lost}, goals ${r.goalsFor}-${r.goalsAgainst}${r.edge === null ? '' : `, strength edge ${r.edge >= 0 ? '+' : ''}${r.edge}%`}`
+  const bands = (['stronger', 'even', 'weaker'] as const).filter(b => r.bands[b].some(n => n > 0)).map(b => `${b} W${r.bands[b][0]} D${r.bands[b][1]} L${r.bands[b][2]}`)
+  return `${txt(r.mine, 12)} vs ${txt(r.theirs, 12)}: ${r.played} played, W${r.won} D${r.drawn} L${r.lost}, goals ${r.goalsFor}-${r.goalsAgainst}${r.edge === null ? '' : `, strength edge ${r.edge >= 0 ? '+' : ''}${r.edge}%`}${bands.length ? `; by strength: ${bands.join(', ')}` : ''}`
+}
+
+/** A coming rival: its last formations and its best eleven at full condition against yours today. */
+function rivalText(f: string[] | null, strength: number | null | undefined, mine: number): string {
+  const vs = typeof strength === 'number' && strength > 0 && mine > 0
+    ? `their best eleven ${Math.round(strength)} at full condition, yours ${Math.round(mine)} today: you are ${Math.abs(Math.round(((mine - strength) / strength) * 100))}% ${mine >= strength ? 'stronger' : 'weaker'}`
+    : 'their strength: unknown'
+  return `${formationsText(f)}; ${vs}`
 }
 
 export function renderDigest(s: AgentSnapshot): string {
@@ -114,7 +123,7 @@ export function renderDigest(s: AgentSnapshot): string {
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
-      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${formationsText(rf.formations)}]` : ''}`)
+      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
     for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}`)
@@ -131,7 +140,7 @@ export function renderDigest(s: AgentSnapshot): string {
   const fr = s.formationRecord
   if (fr === null) out.push('Formation record: unknown (the match history could not be read)')
   else if (fr) {
-    out.push(fr.matches ? `Formation record (your last ${fr.matches} revealed matches, your formation vs the rival's; strength edge = how much stronger your eleven was than theirs as both played, synced stats x condition, minus means weaker):` : 'Formation record: no revealed match read yet')
+    out.push(fr.matches ? `Formation record (your last ${fr.matches} revealed matches, your formation vs the rival's; strength edge = how much stronger your eleven was than theirs as both played, synced stats x condition, minus means weaker; by strength = the results when you were more than ${EVEN_BAND}% stronger, within ${EVEN_BAND}% (even) and more than ${EVEN_BAND}% weaker):` : 'Formation record: no revealed match read yet')
     for (const r of fr.rows) out.push(`  ${formationRow(r)}`)
     if (fr.unread) out.push(`  (${fr.unread} more finished match${fr.unread === 1 ? '' : 'es'} not read yet)`)
     if (fr.field.length) out.push(`Rival formations in those matches: ${fr.field.map(f => `${txt(f.formation, 12)} ${f.matches}`).join(', ')}`)
