@@ -511,6 +511,8 @@ the four tests under "strength bands" in `test/formations.test.ts` were seen fai
 | S1 | design | A pairing's results were not split by strength, so an even matchup could not be told from a lopsided one | Each row (own and pooled record) carries its results in three bands: this team more than 10 percent stronger, within 10 percent (even), more than 10 percent weaker; a match whose strength is unknown is in none. The prompt calls the even band the fair test of a formation |
 | S2 | design | A coming tournament or 1v1 rival showed its last formations but not its strength next to ours | Its Upcoming line compares its best eleven at full condition (the same public read as 1v1 scouting, kept 20 minutes) with the agent's eleven today, in percent, so the agent reads the band of the coming match; unknown when either cannot be read |
 
+| R17A-1 | low | Agent review of PR #17 (coverage): no test held the guard that keeps the comparison unknown when the agent's own roster read fails (its lineup strength then reads 0, which would print "you are 100% weaker") | A test with a readable rival and a failing own roster expects "their strength: unknown". The guard was already there, so the test passed at once; with the guard removed it fails |
+
 Nothing else changed: no new route, no money path. The rival's eleven is its strongest 11 cards at full condition, so
 the comparison leans against the agent, as the 1v1 rule does.
 

@@ -397,6 +397,28 @@ test('the next opponent\'s eleven is compared with yours on its Upcoming line', 
   assert.match(renderDigest(s), /vs Rival FC .*\[their last formations, newest first: 4-3-3; their best eleven 1694 at full condition, yours 1540 today: you are 9% weaker\]/)
 })
 
+// Agent review of PR #17 (low, coverage): an own roster that cannot be read is unknown strength, never zero, so the
+// line never says "you are 100% weaker".
+test('the comparison with the coming rival is unknown when our own roster cannot be read', async () => {
+  const lock = new Date(Date.now() + 2 * 3600_000).toISOString()
+  const STATS = ['speed', 'accuracy', 'defense', 'power', 'control', 'vision', 'stamina']
+  const rivalCard = (n: number) => ({ nft_nonce: n, ...Object.fromEntries(STATS.map(k => [`${k}_synced`, 22])) })
+  const RIVAL = 'erd1lhyk6d3g02sr9v4wvqvqtvtnmsd6jdlkhx06jwafnwp3c9ejpqhs5vpc9e' // its own wallet: rival strengths are kept 20 minutes
+  const { deps } = fakes({
+    history: { [ADDR]: [], [RIVAL]: [] },
+    facts: {},
+    tournaments: { 8: { tournament: { id: 8 }, participants: [{ user_id: 100, wallet_address: ADDR, team_name: 'Agent' }, { user_id: 901, wallet_address: RIVAL, team_name: 'Other FC' }] } },
+    upcoming: [{ tournament_id: 8, tournament_title: 'Cup', round_label: 'Round 1', is_home: true, opponent_name: 'Other FC', scheduled_at: lock, strategy_locks_at: lock, locked: false, phase: 'upcoming', home_score: null, away_score: null }],
+    players: async (a: string) => {
+      if (a === ADDR) throw new Error('HTTP 502')
+      return Array.from({ length: 11 }, (_, i) => rivalCard(9101 + i))
+    },
+  })
+  const d = renderDigest(await takeSnapshot(deps, { wallet: dryWallet }, new Date(), { matchFacts: cache() } as never))
+  assert.match(d, /vs Other FC .*their strength: unknown\]/)
+  assert.doesNotMatch(d, /100% weaker/)
+})
+
 test('the prompt judges a formation on matches at the strength gap of the coming one', async () => {
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
   assert.match(SYSTEM_PROMPT, /the even band is the fair test of a formation/)
