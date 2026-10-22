@@ -6,10 +6,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseAction } from '../src/executor/actions.ts'
+import { ApiRefusal } from '../src/foxleague/api.ts'
 import { takeSnapshot } from '../src/snapshot/snapshot.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import { Store } from '../src/store/db.ts'
-import { ADDR, OTHER, dryWallet, liveWallet, setup, snapshot, withLive } from './fixtures.ts'
+import { ADDR, OTHER, dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 // The fixture's squad starts in 4-4-2: 1 GK, 2-5 DEF, 6-9 MID, 10-11 FWD; bench 12 GK, 13-14 DEF, 15-16 MID, 17-18 FWD.
 const XI_433 = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 17]
@@ -49,13 +50,70 @@ test('formation and lineup are saved back to back, and a refused lineup puts the
   assert.deepEqual(calls, ['formation 4-3-3', `lineup ${XI_433.join(',')}`])
 
   calls.length = 0
-  const bad = setup({ fox: { setFormation: async (_w: unknown, f: string) => { calls.push(`formation ${f}`) }, setLineup: async () => { calls.push('lineup'); throw new Error('Some players are not owned by you or are listed for sale') } } })
+  const bad = setup({ fox: { setFormation: async (_w: unknown, f: string) => { calls.push(`formation ${f}`) }, setLineup: async () => { calls.push('lineup'); throw new ApiRefusal('Some players are not owned by you or are listed for sale') }, team: async () => { calls.push('read'); return snapshot().team } } })
   await withLive(bad.store, async () => {
     const [r] = await bad.exec.run(bad.agent(), liveWallet, snapshot(), [{ action: { type: 'set_formation', formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 }, reason: '' }])
     assert.notEqual(r!.status, 'confirmed')
     assert.match(r!.summary, /formation 4-4-2 restored/)
   })
   assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'formation 4-4-2'])
+})
+
+const TO_433 = { type: 'set_formation' as const, formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 }
+const recorder = (calls: string[], over: Record<string, unknown>) => ({
+  setFormation: async (_w: unknown, f: string) => { calls.push(`formation ${f}`) },
+  setLineup: async (_w: unknown, l: number[]) => { calls.push(`lineup ${l.join(',')}`) },
+  ...over,
+})
+
+// Review of PR #15 (medium): a failure that is not FoxLeague's refusal (a timeout, a 502 after the save) may have
+// saved the eleven, so the old formation is not put back blind: the team is read back first.
+test('a lineup call that fails without a refusal is read back before the old formation goes back', async () => {
+  const calls: string[] = []
+  const timeout = async () => { calls.push('lineup'); throw new Error('timeout after 30000 ms') }
+  const saved = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 } } }) })
+  await withLive(saved.store, async () => {
+    const [r] = await saved.exec.run(saved.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+    assert.match(r!.summary, /read back/)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read'], 'a saved eleven keeps its new formation')
+
+  calls.length = 0
+  const lost = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3' } } }) })
+  await withLive(lost.store, async () => {
+    const [r] = await lost.exec.run(lost.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.match(r!.summary, /formation 4-4-2 restored/)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read', 'formation 4-4-2'], 'an eleven not saved: the old formation goes back')
+
+  calls.length = 0
+  const blind = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); throw new Error('HTTP 502') } }) })
+  await withLive(blind.store, async () => {
+    const [r] = await blind.exec.run(blind.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'error')
+    assert.match(r!.summary, /could not be read back/)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read'], 'unknown: nothing is changed blind')
+})
+
+test('a formation call that fails without a refusal is read back, and the lineup follows when it was saved', async () => {
+  const calls: string[] = []
+  const timeout = async (_w: unknown, f: string) => { calls.push(`formation ${f}`); throw new Error('timeout after 30000 ms') }
+  const saved = setup({ fox: recorder(calls, { setFormation: timeout, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3' } } }) })
+  await withLive(saved.store, async () => {
+    const [r] = await saved.exec.run(saved.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'read', `lineup ${XI_433.join(',')}`])
+
+  calls.length = 0
+  const unsaved = setup({ fox: recorder(calls, { setFormation: timeout, team: async () => { calls.push('read'); return snapshot().team } }) })
+  await withLive(unsaved.store, async () => {
+    const [r] = await unsaved.exec.run(unsaved.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'read'], 'the formation was not saved: its lineup is not sent')
 })
 
 test('no match, entry or 1v1 while the saved eleven does not fit the saved formation', async () => {
@@ -66,6 +124,14 @@ test('no match, entry or 1v1 while the saved eleven does not fit the saved forma
   assert.equal(r!.status, 'refused', r!.summary)
   assert.match(r!.summary, /does not fit the formation 4-3-3/)
   assert.match(renderDigest(s), /LINEUP DOES NOT FIT 4-3-3/)
+  // Review of PR #15 (low): the entries that pay FOXSY too.
+  const t = setup({ fox: { tournament: async () => tournament(7) } })
+  const [join] = await t.exec.run(t.agent(), dryWallet, s, [{ action: { type: 'join_tournament', tournament_id: 7 }, reason: '' }])
+  assert.equal(join!.status, 'refused', join!.summary)
+  assert.match(join!.summary, /does not fit the formation 4-3-3/)
+  const [duel] = await exec.run(agent(), dryWallet, s, [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 }, reason: '' }])
+  assert.equal(duel!.status, 'refused', duel!.summary)
+  assert.match(duel!.summary, /does not fit the formation 4-3-3/)
 })
 
 // ---- the formation record ----

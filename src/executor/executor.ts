@@ -739,17 +739,32 @@ export class Executor {
       }
       case 'set_formation': {
         const before = snap.team?.formation
-        await fox.setFormation(wallet, a.formation)
+        // A failure that is not FoxLeague's refusal (a timeout, a 502) may come after the save: the team read back says.
+        const readBack = () => fox.team(wallet.address, wallet).then(t => (t && !t.hidden ? t : null), () => null)
+        const failure = (err: unknown) => (err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err))
+        try {
+          await fox.setFormation(wallet, a.formation)
+        } catch (err) {
+          if (err instanceof ApiRefusal || !a.lineup || (await readBack())?.formation !== a.formation) throw err
+        }
         if (a.lineup) {
           try {
             await fox.setLineup(wallet, a.lineup, a.substitutes ?? [])
           } catch (err) {
+            const why = failure(err)
+            if (!(err instanceof ApiRefusal)) {
+              const team = await readBack()
+              if (!team) return finish('error', `${desc}: lineup unknown (${why}) and the team could not be read back: nothing is changed blind; no match is started until the saved eleven fits its formation`)
+              if (team.lineup.join(',') === a.lineup.join(',')) {
+                applyEffect(a, v, snap, built)
+                return finish('confirmed', `${desc}: saved (the lineup call answered ${why}, the team read back shows it saved)`)
+              }
+            }
             // The new shape with the old eleven would play players out of position: the old formation goes back.
-            const why = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
             const back = before
               ? await fox.setFormation(wallet, before).then(
                   () => `formation ${before} restored`,
-                  e => `formation ${before} NOT restored (${e instanceof Error ? e.message : String(e)}): no match is started until a lineup fits ${a.formation}`,
+                  e => `formation ${before} NOT restored (${failure(e)}): no match is started until a lineup fits ${a.formation}`,
                 )
               : 'the previous formation is unknown'
             return finish('error', `${desc}: lineup not saved (${why}); ${back}`)
