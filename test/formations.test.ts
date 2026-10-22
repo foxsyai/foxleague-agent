@@ -116,6 +116,33 @@ test('a formation call that fails without a refusal is read back, and the lineup
   assert.deepEqual(calls, ['formation 4-3-3', 'read'], 'the formation was not saved: its lineup is not sent')
 })
 
+// Re-review of PR #15 (low): a formation call that failed without a refusal, on a team that cannot be read back,
+// may have saved the new shape with the old eleven; its lineup was never sent, so the old formation is saved again.
+test('a formation call that failed on a team that cannot be read back puts the old formation back and says the state is unknown', async () => {
+  const calls: string[] = []
+  let first = true
+  const flaky = async (_w: unknown, f: string) => { calls.push(`formation ${f}`); if (first) { first = false; throw new Error('timeout after 30000 ms') } }
+  const m = setup({ fox: recorder(calls, { setFormation: flaky, team: async () => { calls.push('read'); throw new Error('HTTP 502') } }) })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    assert.match(r!.summary, /formation 4-4-2 saved again/)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'read', 'formation 4-4-2'])
+})
+
+// Re-review of PR #15 (not verified, closed): an answer that is not FoxLeague's envelope ("unexpected answer") is no
+// refusal: the eleven may have been saved, so it is read back like a timeout.
+test('an unexpected answer to the lineup call is read back, not taken as a refusal', async () => {
+  const calls: string[] = []
+  const m = setup({ fox: recorder(calls, { setLineup: async () => { calls.push('lineup'); throw new ApiRefusal('unexpected answer from /teams/lineup (HTTP 502)') }, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 } } }) })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read'])
+})
+
 test('no match, entry or 1v1 while the saved eleven does not fit the saved formation', async () => {
   const { exec, agent } = setup()
   const s = snapshot()

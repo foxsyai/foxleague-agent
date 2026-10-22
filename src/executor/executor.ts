@@ -739,20 +739,31 @@ export class Executor {
       }
       case 'set_formation': {
         const before = snap.team?.formation
-        // A failure that is not FoxLeague's refusal (a timeout, a 502) may come after the save: the team read back says.
+        // Only FoxLeague's own refusal says nothing was saved. A timeout, a 502 or an answer that is not its envelope
+        // may come after the save: the team read back says.
+        const refused = (err: unknown) => err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)
         const readBack = () => fox.team(wallet.address, wallet).then(t => (t && !t.hidden ? t : null), () => null)
         const failure = (err: unknown) => (err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err))
         try {
           await fox.setFormation(wallet, a.formation)
         } catch (err) {
-          if (err instanceof ApiRefusal || !a.lineup || (await readBack())?.formation !== a.formation) throw err
+          if (refused(err) || !a.lineup) throw err
+          const team = await readBack()
+          if (!team) {
+            // The lineup was never sent, so the old formation fits the saved eleven whether or not the new one was saved.
+            const back = before
+              ? await fox.setFormation(wallet, before).then(() => `formation ${before} saved again`, e => `formation ${before} NOT saved again (${failure(e)})`)
+              : 'the previous formation is unknown'
+            return finish('error', `${desc}: formation unknown (${failure(err)}) and the team could not be read back; ${back}; no match is started until the saved eleven fits its formation`)
+          }
+          if (team.formation !== a.formation) throw err
         }
         if (a.lineup) {
           try {
             await fox.setLineup(wallet, a.lineup, a.substitutes ?? [])
           } catch (err) {
             const why = failure(err)
-            if (!(err instanceof ApiRefusal)) {
+            if (!refused(err)) {
               const team = await readBack()
               if (!team) return finish('error', `${desc}: lineup unknown (${why}) and the team could not be read back: nothing is changed blind; no match is started until the saved eleven fits its formation`)
               if (team.lineup.join(',') === a.lineup.join(',')) {
