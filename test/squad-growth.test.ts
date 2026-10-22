@@ -24,3 +24,11 @@ test('no level sells by a fixed card count', () => {
   assert.match(STRATEGY_PRESETS.predator!, /everything a hunter does/)
   assert.match(STRATEGY_PRESETS.beast!, /with no upper limit: hold spares to fuse, to grow and to sell/)
 })
+
+// Agent review of PR #16 (low): the dashboard's help for the levels still said the old thing.
+test('the dashboard tells the levels the same: Hunter and up sell spares by value, no card count', async () => {
+  const { readFileSync } = await import('node:fs')
+  const html = readFileSync(new URL('../src/web/dashboard.html', import.meta.url), 'utf8')
+  assert.doesNotMatch(html, /above 36|more than 36/)
+  assert.match(html, /<b>Hunter<\/b>: [^<]*sells a spare card when its price beats its use/)
+})
