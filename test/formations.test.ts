@@ -10,7 +10,7 @@ import { ApiRefusal } from '../src/foxleague/api.ts'
 import { takeSnapshot } from '../src/snapshot/snapshot.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import { Store } from '../src/store/db.ts'
-import { ADDR, OTHER, dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
+import { ADDR, OTHER, STRANGER, dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 // The fixture's squad starts in 4-4-2: 1 GK, 2-5 DEF, 6-9 MID, 10-11 FWD; bench 12 GK, 13-14 DEF, 15-16 MID, 17-18 FWD.
 const XI_433 = [1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 17]
@@ -172,13 +172,13 @@ const row = (key: string, home: number, away: number, score: [number, number] | 
   home_elo_at_match: 1200, away_elo_at_match: 1200, tournament_id: null, ...more,
 })
 
-function fakes(o: { history: Record<string, Row[]>; facts: Record<string, unknown>; tournaments?: Record<number, unknown>; upcoming?: unknown[] }) {
+function fakes(o: { history: Record<string, Row[]>; facts: Record<string, unknown>; tournaments?: Record<number, unknown>; upcoming?: unknown[]; players?: (a: string) => Promise<unknown[]> }) {
   const reads: string[] = []
   const fox: Record<string, unknown> = {
     config: async () => snapshot().config,
     user: async (a: string) => (a === ADDR ? snapshot().profile : null),
     team: async () => snapshot().team,
-    players: async () => [],
+    players: o.players ?? (async () => []),
     tournaments: async () => [],
     leaderboard: async () => ({ users: [], total: 0, limit: 200, offset: 0 }),
     listings: async () => [],
@@ -285,7 +285,7 @@ test('the next opponent\'s recent formations are on its Upcoming line', async ()
     upcoming: [{ tournament_id: 7, tournament_title: 'Cup', round_label: 'Round 1', is_home: true, opponent_name: 'Rival FC', scheduled_at: lock, strategy_locks_at: lock, locked: false, phase: 'upcoming', home_score: null, away_score: null }],
   })
   const s = await takeSnapshot(deps, { wallet: dryWallet }, new Date(), { matchFacts: cache() } as never)
-  assert.match(renderDigest(s), /Upcoming: T7 "Cup" Round 1 vs Rival FC .*\[their last formations, newest first: 4-3-3w, 4-3-3w, 4-2-3-1\]/)
+  assert.match(renderDigest(s), /Upcoming: T7 "Cup" Round 1 vs Rival FC .*\[their last formations, newest first: 4-3-3w, 4-3-3w, 4-2-3-1; their strength: unknown\]/)
 })
 
 test('the store keeps the facts of a read match', () => {
@@ -321,7 +321,7 @@ test('the pooled record adds the matches of every team the install runs, and lea
 
 test('the plan sees the pooled record without the names of the teams in it', () => {
   const s = snapshot() as ReturnType<typeof snapshot> & { formationPool?: unknown }
-  s.formationPool = { matches: 3, unread: 0, rows: [{ mine: '4-3-3b', theirs: '4-4-2', played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 7, goalsAgainst: 1, edge: 5 }], field: [{ formation: '4-4-2', matches: 3 }] }
+  s.formationPool = { matches: 3, unread: 0, rows: [{ mine: '4-3-3b', theirs: '4-4-2', played: 3, won: 3, drawn: 0, lost: 0, goalsFor: 7, goalsAgainst: 1, edge: 5, bands: { stronger: [0, 0, 0], even: [3, 0, 0], weaker: [0, 0, 0] } }], field: [{ formation: '4-4-2', matches: 3 }] }
   const d = renderDigest(s)
   assert.match(d, /Pooled formation record \(3 matches of the last 14 days of every team your owner runs here, yours included, matches between them left out; names not shown\):/)
   assert.match(d, /\n {2}4-3-3b vs 4-4-2: 3 played, W3 D0 L0, goals 7-1, strength edge \+5%/)
@@ -359,4 +359,68 @@ test('the prompt starts a test with the formation that does best in the pooled r
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
   assert.match(SYSTEM_PROMPT, /pooled formation record/)
   assert.match(SYSTEM_PROMPT, /test first the formation that does best in the pooled record against the formations your rivals play most/)
+})
+
+// ---- strength bands (owner, 2026-10-23): a formation is judged on matches at a like strength gap ----
+
+test('each pairing splits its results by strength: more than 10 percent stronger, within 10 percent, more than 10 percent weaker', async () => {
+  const { summariseFormations } = await import('../src/snapshot/formations.ts')
+  const g = (gf: number, ga: number, edge: number | null) => ({ key: `k${Math.random()}`, at: new Date().toISOString(), mine: '4-4-2', theirs: '4-3-3', gf, ga, edge, rivalUserId: 1 })
+  const [row] = summariseFormations([g(3, 0, 25), g(1, 1, 8), g(0, 2, -4), g(0, 1, -10), g(0, 3, -30), g(2, 2, null)]).rows as unknown as { bands: Record<string, [number, number, number]> }[]
+  assert.deepEqual(row!.bands, { stronger: [1, 0, 0], even: [0, 1, 2], weaker: [0, 0, 1] }, 'a match whose strength is unknown is in no band')
+})
+
+test('the digest shows each pairing by strength band', () => {
+  const s = snapshot() as ReturnType<typeof snapshot> & { formationRecord?: unknown }
+  s.formationRecord = { matches: 12, unread: 0, rows: [{ mine: '4-4-2', theirs: '4-3-3', played: 12, won: 0, drawn: 2, lost: 10, goalsFor: 6, goalsAgainst: 25, edge: 2, bands: { stronger: [0, 0, 1], even: [0, 2, 9], weaker: [0, 0, 0] } }], field: [{ formation: '4-3-3', matches: 12 }] }
+  assert.match(renderDigest(s), /4-4-2 vs 4-3-3: 12 played, W0 D2 L10, goals 6-25, strength edge \+2%; by strength: stronger W0 D0 L1, even W0 D2 L9\n/)
+})
+
+test('the next opponent\'s eleven is compared with yours on its Upcoming line', async () => {
+  const lock = new Date(Date.now() + 2 * 3600_000).toISOString()
+  const POS = ['GK', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'MID', 'FWD', 'FWD', 'GK', 'DEF', 'DEF', 'MID', 'MID', 'FWD', 'FWD']
+  const STATS = ['speed', 'accuracy', 'defense', 'power', 'control', 'vision', 'stamina']
+  const card = (n: number, position: string, stat: number) => ({
+    nft_nonce: n, name: `P${n}`, position, rarity: 'Common', condition: 100, stats_dirty: false, competitive_matches: 0, listed_for_sale: false,
+    created_at: '2026-10-01T00:00:00Z', ...Object.fromEntries(STATS.flatMap(k => [[k, stat], [`${k}_synced`, stat], [`${k}_xp`, 0]])),
+  })
+  // A wallet no other test reads: rival strengths are kept for 20 minutes within the process.
+  const { deps } = fakes({
+    history: { [ADDR]: [], [STRANGER]: [row('R1', 900, 700, [2, 1])] },
+    facts: { R1: { home: '4-3-3', away: '4-4-2', homeStrength: 1, awayStrength: 1 } },
+    tournaments: { 7: { tournament: { id: 7 }, participants: [{ user_id: 100, wallet_address: ADDR, team_name: 'Agent' }, { user_id: 900, wallet_address: STRANGER, team_name: 'Rival FC' }] } },
+    upcoming: [{ tournament_id: 7, tournament_title: 'Cup', round_label: 'Round 1', is_home: true, opponent_name: 'Rival FC', scheduled_at: lock, strategy_locks_at: lock, locked: false, phase: 'upcoming', home_score: null, away_score: null }],
+    // Ours: 11 starters with every stat at 20 at full condition (1540); theirs: every stat at 22 (1694).
+    players: async (a: string) => (a === ADDR ? POS.map((p, i) => card(i + 1, p, 20)) : POS.slice(0, 11).map((p, i) => card(9001 + i, p, 22))),
+  })
+  const s = await takeSnapshot(deps, { wallet: dryWallet }, new Date(), { matchFacts: cache() } as never)
+  assert.match(renderDigest(s), /vs Rival FC .*\[their last formations, newest first: 4-3-3; their best eleven 1694 at full condition, yours 1540 today: you are 9% weaker\]/)
+})
+
+// Agent review of PR #17 (low, coverage): an own roster that cannot be read is unknown strength, never zero, so the
+// line never says "you are 100% weaker".
+test('the comparison with the coming rival is unknown when our own roster cannot be read', async () => {
+  const lock = new Date(Date.now() + 2 * 3600_000).toISOString()
+  const STATS = ['speed', 'accuracy', 'defense', 'power', 'control', 'vision', 'stamina']
+  const rivalCard = (n: number) => ({ nft_nonce: n, ...Object.fromEntries(STATS.map(k => [`${k}_synced`, 22])) })
+  const RIVAL = 'erd1lhyk6d3g02sr9v4wvqvqtvtnmsd6jdlkhx06jwafnwp3c9ejpqhs5vpc9e' // its own wallet: rival strengths are kept 20 minutes
+  const { deps } = fakes({
+    history: { [ADDR]: [], [RIVAL]: [] },
+    facts: {},
+    tournaments: { 8: { tournament: { id: 8 }, participants: [{ user_id: 100, wallet_address: ADDR, team_name: 'Agent' }, { user_id: 901, wallet_address: RIVAL, team_name: 'Other FC' }] } },
+    upcoming: [{ tournament_id: 8, tournament_title: 'Cup', round_label: 'Round 1', is_home: true, opponent_name: 'Other FC', scheduled_at: lock, strategy_locks_at: lock, locked: false, phase: 'upcoming', home_score: null, away_score: null }],
+    players: async (a: string) => {
+      if (a === ADDR) throw new Error('HTTP 502')
+      return Array.from({ length: 11 }, (_, i) => rivalCard(9101 + i))
+    },
+  })
+  const d = renderDigest(await takeSnapshot(deps, { wallet: dryWallet }, new Date(), { matchFacts: cache() } as never))
+  assert.match(d, /vs Other FC .*their strength: unknown\]/)
+  assert.doesNotMatch(d, /100% weaker/)
+})
+
+test('the prompt judges a formation on matches at the strength gap of the coming one', async () => {
+  const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
+  assert.match(SYSTEM_PROMPT, /the even band is the fair test of a formation/)
+  assert.match(SYSTEM_PROMPT, /look at the band of the coming match/)
 })

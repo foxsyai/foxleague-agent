@@ -498,6 +498,24 @@ synced stats, a reserve at least the floor and the rarity minimum. The texts of 
 level is chosen; the ten running agents are on Zeus, whose text already sold by value, so for them only the prompt
 changed.
 
+## Strength bands, 2026-10-23
+
+The owner's direction after the formation record went live: a formation should be judged on matches between
+elevens of like strength, since a much stronger or weaker squad wins or loses whatever it plays. Each row of the
+record showed only the mean strength edge, which mixed lopsided matches with even ones: in the live pooled record of
+2026-10-22, 4-4-2 against 4-3-3 read 15-5-18 over all matches but 0-2-10 within 10 percent strength. Test first:
+the four tests under "strength bands" in `test/formations.test.ts` were seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| S1 | design | A pairing's results were not split by strength, so an even matchup could not be told from a lopsided one | Each row (own and pooled record) carries its results in three bands: this team more than 10 percent stronger, within 10 percent (even), more than 10 percent weaker; a match whose strength is unknown is in none. The prompt calls the even band the fair test of a formation |
+| S2 | design | A coming tournament or 1v1 rival showed its last formations but not its strength next to ours | Its Upcoming line compares its best eleven at full condition (the same public read as 1v1 scouting, kept 20 minutes) with the agent's eleven today, in percent, so the agent reads the band of the coming match; unknown when either cannot be read |
+
+| R17A-1 | low | Agent review of PR #17 (coverage): no test held the guard that keeps the comparison unknown when the agent's own roster read fails (its lineup strength then reads 0, which would print "you are 100% weaker") | A test with a readable rival and a failing own roster expects "their strength: unknown". The guard was already there, so the test passed at once; with the guard removed it fails |
+
+Nothing else changed: no new route, no money path. The rival's eleven is its strongest 11 cards at full condition, so
+the comparison leans against the agent, as the 1v1 rule does.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

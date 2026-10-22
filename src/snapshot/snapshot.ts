@@ -132,7 +132,7 @@ export interface AgentSnapshot {
   /** Planning snapshots only, added by the service: every team the install runs, matches between them left out. */
   formationPool?: FormationRecord
   /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
-  rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null }[]
+  rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null; strength?: number | null }[]
   leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null })[]
   warnings: string[]
 }
@@ -370,13 +370,17 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     rivalFormations = []
     for (const m of (auth?.upcoming?.matches ?? []).filter(x => x.phase === 'upcoming' && x.opponent_name).slice(0, 2)) {
       let formations: string[] | null = null
+      let strength: number | null = null
       try {
         const rival = (await fox.tournament(m.tournament_id)).participants.find(p => p.user_id !== profile.id && p.team_name === m.opponent_name && p.wallet_address)
-        if (rival) formations = await recentFormations(fox, facts, rivalBudget, rival.wallet_address!, rival.user_id)
+        if (rival) {
+          formations = await recentFormations(fox, facts, rivalBudget, rival.wallet_address!, rival.user_id)
+          strength = await rivalStrengthCached(fox, rival.wallet_address!)
+        }
       } catch {
         // unknown, said as such on the Upcoming line
       }
-      rivalFormations.push({ tournamentId: m.tournament_id, opponent: m.opponent_name!, formations })
+      rivalFormations.push({ tournamentId: m.tournament_id, opponent: m.opponent_name!, formations, strength })
     }
   }
 
