@@ -737,10 +737,53 @@ export class Executor {
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: done`)
       }
-      case 'set_formation':
-        await fox.setFormation(wallet, a.formation)
+      case 'set_formation': {
+        const before = snap.team?.formation
+        // Only FoxLeague's own refusal says nothing was saved. A timeout, a 502 or an answer that is not its envelope
+        // may come after the save: the team read back says.
+        const refused = (err: unknown) => err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)
+        const readBack = () => fox.team(wallet.address, wallet).then(t => (t && !t.hidden ? t : null), () => null)
+        const failure = (err: unknown) => (err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err))
+        try {
+          await fox.setFormation(wallet, a.formation)
+        } catch (err) {
+          if (refused(err) || !a.lineup) throw err
+          const team = await readBack()
+          if (!team) {
+            // The lineup was never sent, so the old formation fits the saved eleven whether or not the new one was saved.
+            const back = before
+              ? await fox.setFormation(wallet, before).then(() => `formation ${before} saved again`, e => `formation ${before} NOT saved again (${failure(e)})`)
+              : 'the previous formation is unknown'
+            return finish('error', `${desc}: formation unknown (${failure(err)}) and the team could not be read back; ${back}; no match is started until the saved eleven fits its formation`)
+          }
+          if (team.formation !== a.formation) throw err
+        }
+        if (a.lineup) {
+          try {
+            await fox.setLineup(wallet, a.lineup, a.substitutes ?? [])
+          } catch (err) {
+            const why = failure(err)
+            if (!refused(err)) {
+              const team = await readBack()
+              if (!team) return finish('error', `${desc}: lineup unknown (${why}) and the team could not be read back: nothing is changed blind; no match is started until the saved eleven fits its formation`)
+              if (team.lineup.join(',') === a.lineup.join(',')) {
+                applyEffect(a, v, snap, built)
+                return finish('confirmed', `${desc}: saved (the lineup call answered ${why}, the team read back shows it saved)`)
+              }
+            }
+            // The new shape with the old eleven would play players out of position: the old formation goes back.
+            const back = before
+              ? await fox.setFormation(wallet, before).then(
+                  () => `formation ${before} restored`,
+                  e => `formation ${before} NOT restored (${failure(e)}): no match is started until a lineup fits ${a.formation}`,
+                )
+              : 'the previous formation is unknown'
+            return finish('error', `${desc}: lineup not saved (${why}); ${back}`)
+          }
+        }
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: saved`)
+      }
       case 'set_lineup':
         await fox.setLineup(wallet, a.lineup, a.substitutes)
         applyEffect(a, v, snap, built)
@@ -941,7 +984,7 @@ function apiCallsFor(a: Action): string | null {
     case 'register': return 'POST /api/onboarding/relay, POST /api/register'
     case 'sync': return 'POST /api/sync/confirm'
     case 'train': return `POST /api/training/train {player_nonce: ${a.player_nonce}, attribute: ${a.attribute}}`
-    case 'set_formation': return `POST /api/teams/formation {formation: ${a.formation}}`
+    case 'set_formation': return `POST /api/teams/formation {formation: ${a.formation}}${a.lineup ? ', then POST /api/teams/lineup' : ''}`
     case 'set_lineup': return 'POST /api/teams/lineup'
     case 'play_match': return `POST /api/matches/play {match_type: ${a.match_type}}`
     case 'join_tournament': return `POST /api/tournaments/${a.tournament_id}/join`
@@ -978,15 +1021,15 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
       break
     }
     case 'set_formation':
-      if (s.team) s.team.formation = a.formation
-      break
     case 'set_lineup':
-      if (s.team) {
+      if (s.team && a.type === 'set_formation') s.team.formation = a.formation
+      if (s.team && a.lineup) {
+        const substitutes = a.substitutes ?? []
         s.team.lineup = [...a.lineup]
-        s.team.substitutes = [...a.substitutes]
+        s.team.substitutes = [...substitutes]
         for (const p of s.players) {
           const slot = a.lineup.indexOf(p.nonce)
-          p.role = slot >= 0 ? 'starter' : a.substitutes.includes(p.nonce) ? 'bench' : 'reserve'
+          p.role = slot >= 0 ? 'starter' : substitutes.includes(p.nonce) ? 'bench' : 'reserve'
           if (slot >= 0) p.slot = slot
           else delete p.slot
         }

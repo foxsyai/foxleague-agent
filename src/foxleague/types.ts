@@ -300,6 +300,40 @@ export interface UpcomingMatches {
   matches: UpcomingMatch[]
 }
 
+/**
+ * A row of GET /api/matches/history (public for any wallet, newest first, at most 50): revealed matches only, with
+ * scores and ELO null until the reveal (backend/src/models.rs MatchHistoryView). A tournament or 1v1 match has its
+ * public `tournament_match_id` and no `id`; a ranked or casual match has its `id`.
+ */
+export interface MatchHistoryRow {
+  id: number | null
+  tournament_match_id: string | null
+  home_user_id: number | null
+  away_user_id: number | null
+  home_team_name: string
+  away_team_name: string
+  home_score: number | null
+  away_score: number | null
+  match_type: string
+  status: string
+  finished_at: string | null
+  home_elo_at_match: number | null
+  away_elo_at_match: number | null
+  tournament_id: number | null
+}
+
+/**
+ * What a match's public statistics tell after its reveal: both formations as played, and each eleven's strength as
+ * the engine fielded it (the sum over the starters of their seven stats scaled by condition, the unit of "lineup
+ * strength"); null when that side's eleven is not in the statistics.
+ */
+export interface MatchFormations {
+  home: string
+  away: string
+  homeStrength: number | null
+  awayStrength: number | null
+}
+
 export interface ChallengeForMe {
   tournament_id: number
   title: string

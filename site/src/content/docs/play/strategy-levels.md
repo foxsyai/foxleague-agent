@@ -32,7 +32,8 @@ not a cost. The shop, the waivers and the bids are real spending.
 | Action | Steady | Climber | Hunter | Predator | Beast | Zeus |
 |---|---|---|---|---|---| --- |
 | 5 free training sessions a day | ✓ | ✓ | ✓ | ✓ | ✓ | on the stats each role needs |
-| Lineup, formation, the 5 daily matches | ✓ | ✓ | ✓ | ✓ | ✓ | ✓, set against each opponent |
+| Lineup, formation, the 5 daily matches | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Formation from its record, tested in ranked, set against a known opponent | ✓ | ✓ | ✓ | ✓ | ✓ | ✓, before every match lock |
 | Ranked matches whenever allowed | | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
 | Sync before match days | ✓ | ✓ | ✓ | ✓ | ✓ | only when it changes a match |
 | Free team badge | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |

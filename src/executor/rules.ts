@@ -393,10 +393,32 @@ function squadLegal(s: AgentSnapshot): string | null {
     if (p.listed) return `#${n} is listed for sale`
     if (p.transferLockedUntil) return `#${n} is in a transfer cooldown until ${p.transferLockedUntil}`
   }
+  const fit = lineupPositionsOk(s, s.team.formation, s.team.lineup)
+  if (fit) return `the saved lineup does not fit the formation ${s.team.formation} (${fit}): save one that fits first (set_formation with lineup and substitutes, or set_lineup)`
   return null
 }
 
-function lineupPositionsOk(s: AgentSnapshot, formation: string, lineup: number[]): string | null {
+/** An eleven and bench for `formation`: cards in the wallet, free to play, each starter in a slot of its position. */
+function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], substitutes: number[], minCondition: number): Verdict {
+  const all = [...lineup, ...substitutes]
+  if (new Set(all).size !== all.length) return refuse('a card appears twice')
+  for (const n of all) {
+    const p = card(s, n)
+    if (!p) return refuse(`#${n} is not in the wallet`)
+    if (p.listed) return refuse(`#${n} is listed for sale`)
+    if (p.transferLockedUntil) return refuse(`#${n} is in a transfer cooldown`)
+  }
+  const bad = lineupPositionsOk(s, formation, lineup)
+  if (bad) return refuse(bad)
+  const notes: string[] = []
+  if (substitutes.length < 7) notes.push('fewer than 7 substitutes: the server fills the bench')
+  const tired = lineup.filter(n => (card(s, n)?.condition ?? 0) < minCondition)
+  if (tired.length) notes.push(`starters under condition ${minCondition}: ${tired.map(n => `#${n}`).join(',')}`)
+  return allow(0, {}, 'play', notes)
+}
+
+/** Why `lineup` does not fit `formation` (slot order GK, DEF, MID, FWD; the server does not check), or null. */
+export function lineupPositionsOk(s: AgentSnapshot, formation: string, lineup: number[]): string | null {
   const slots = FORMATION_SLOTS[formation]
   if (!slots) return `unknown formation ${formation}`
   const expected = ['GK', ...Array(slots.DEF).fill('DEF'), ...Array(slots.MID).fill('MID'), ...Array(slots.FWD).fill('FWD')]
@@ -470,29 +492,18 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
     case 'set_formation': {
       if (!registered) return refuse('not registered')
       if (!s.team) return refuse(TEAM_UNREADABLE)
-      if (s.team.formation === a.formation) return refuse(`formation is already ${a.formation}`)
+      if (s.team.formation === a.formation) return refuse(`formation is already ${a.formation}${a.lineup ? ' (a new eleven alone is set_lineup)' : ''}`)
+      // Saved apart, a match between the two saves would play the old eleven in the new shape (the server does not check).
+      if (a.lineup) return lineupVerdict(s, a.formation, a.lineup, a.substitutes ?? [], cfg.min_field_condition)
       const mismatch = lineupPositionsOk(s, a.formation, s.team.lineup)
-      return allow(0, {}, 'play', mismatch ? [`current lineup does not fit ${a.formation} (${mismatch}): set a new lineup next`] : [])
+      if (mismatch) return refuse(`${a.formation} needs a lineup that fits it (${mismatch}): send set_formation with lineup and substitutes in its slot order`)
+      return allow(0, {}, 'play')
     }
 
     case 'set_lineup': {
       if (!registered) return refuse('not registered')
       if (!s.team) return refuse(TEAM_UNREADABLE)
-      const all = [...a.lineup, ...a.substitutes]
-      if (new Set(all).size !== all.length) return refuse('a card appears twice')
-      for (const n of all) {
-        const p = card(s, n)
-        if (!p) return refuse(`#${n} is not in the wallet`)
-        if (p.listed) return refuse(`#${n} is listed for sale`)
-        if (p.transferLockedUntil) return refuse(`#${n} is in a transfer cooldown`)
-      }
-      const bad = lineupPositionsOk(s, s.team.formation, a.lineup)
-      if (bad) return refuse(bad)
-      const notes: string[] = []
-      if (a.substitutes.length < 7) notes.push('fewer than 7 substitutes: the server fills the bench')
-      const tired = a.lineup.filter(n => (card(s, n)?.condition ?? 0) < cfg.min_field_condition)
-      if (tired.length) notes.push(`starters under condition ${cfg.min_field_condition}: ${tired.map(n => `#${n}`).join(',')}`)
-      return allow(0, {}, 'play', notes)
+      return lineupVerdict(s, s.team.formation, a.lineup, a.substitutes, cfg.min_field_condition)
     }
 
     case 'play_match': {

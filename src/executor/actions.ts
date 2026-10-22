@@ -29,7 +29,8 @@ export type Action =
   | { type: 'register'; team_name: string }
   | { type: 'sync'; nonce?: number }
   | { type: 'train'; player_nonce: number; attribute: Stat }
-  | { type: 'set_formation'; formation: string }
+  /** With `lineup` and `substitutes` (in the new formation's slot order) the eleven is saved right after the formation. */
+  | { type: 'set_formation'; formation: string; lineup?: number[]; substitutes?: number[] }
   | { type: 'set_lineup'; lineup: number[]; substitutes: number[] }
   | { type: 'play_match'; match_type: 'casual' | 'ranked' }
   | { type: 'join_tournament'; tournament_id: number }
@@ -136,8 +137,12 @@ export function parseAction(raw: unknown): Action {
       return { type: o.type }
     case 'train':
       return { type: o.type, player_nonce: int(o, 'player_nonce', 1, 2 ** 40), attribute: oneOf(o, 'attribute', STATS) }
-    case 'set_formation':
-      return { type: o.type, formation: oneOf(o, 'formation', Object.keys(FORMATION_SLOTS).filter(f => !FORMATIONS_COMING_SOON.has(f))) }
+    case 'set_formation': {
+      const formation = oneOf(o, 'formation', Object.keys(FORMATION_SLOTS).filter(f => !FORMATIONS_COMING_SOON.has(f)))
+      if (o.lineup === undefined && o.substitutes === undefined) return { type: o.type, formation }
+      // The eleven a new shape needs travels with it: both or neither.
+      return { type: o.type, formation, lineup: nonces(o, 'lineup', 11, 11), substitutes: nonces(o, 'substitutes', 0, 7) }
+    }
     case 'set_lineup':
       return { type: o.type, lineup: nonces(o, 'lineup', 11, 11), substitutes: nonces(o, 'substitutes', 0, 7) }
     case 'play_match':
@@ -204,7 +209,7 @@ export function describeAction(a: Action): string {
     case 'register': return `register team "${a.team_name}"`
     case 'sync': return a.nonce === undefined ? 'sync dirty cards to chain' : `sync #${a.nonce} to chain`
     case 'train': return `train #${a.player_nonce} ${a.attribute}`
-    case 'set_formation': return `formation ${a.formation}`
+    case 'set_formation': return `formation ${a.formation}${a.lineup ? ` with lineup ${a.lineup.join(',')} | bench ${(a.substitutes ?? []).join(',')}` : ''}`
     case 'set_lineup': return `lineup ${a.lineup.join(',')} | bench ${a.substitutes.join(',')}`
     case 'play_match': return `play ${a.match_type} match`
     case 'join_tournament': return `join tournament T${a.tournament_id}`
