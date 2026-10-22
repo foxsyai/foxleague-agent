@@ -802,7 +802,9 @@ Body `{wallet_address, lineup:[11 nonces], substitutes:[0..7 nonces]}` (auth).
   (`frontend/src/lib/formations.ts:8-100`, for example `4-4-2`: GK, DEF x4, MID x4, FW x2). The match
   launches the eleven in this order (`backend/src/routes/matches.rs:1459-1460`).
 - **The server does not check positions**; the web app does (manual `mechanics/tactics.md:37-41`).
-  Keep positions matching yourself.
+  Keep positions matching yourself. The agent saves a new formation together with its eleven (`set_formation`
+  with `lineup` and `substitutes`, the formation first, the lineup right after; the old formation is saved back when
+  the lineup is refused) and starts no match or entry while the saved eleven does not fit the saved formation.
 - Fewer than 7 substitutes: the server fills the bench from your eligible reserves (unlisted, not in a
   transfer cooldown, highest total stats first) (`teams.rs:285-322`).
 
@@ -1548,7 +1550,14 @@ Live auction state: view `getAuction(nonce)` returns
 | `GET /api/matches/history?wallet_address=&limit=&offset=` | public (any wallet) | `MatchHistoryView[]`, limit default 10, max 50; excludes errors, developer tests and unrevealed tournament matches; scores and `*_elo_after` null until revealed | `backend/src/routes/matches.rs:4658-4765`; `backend/src/models.rs:907-980` |
 | `GET /api/matches/{id}` | public | section 9.2 | `matches.rs:4297-4331` |
 | `GET /api/matches/{id}/stats` | public | before the reveal only `{gated: true, ...}`; after it the analysis, formations and lineups | `matches.rs:8392-8605` |
+| `GET /api/public/tournament-match/{id}/stats` | public | the same for a tournament or 1v1 match by its public id (`tournament_match_id` of a history row, which has no `id`) | `matches.rs:10886` |
 | `GET /api/public/match/{id}` | public, raw JSON | tournament and 1v1 matches only; names `TBD` and scores null while hidden | `matches.rs:612-791` |
+
+The statistics (about 120 KB) carry `home_formation` and `away_formation` as played, and `home_lineup` /
+`away_lineup` (`{lineup, players, formation, substitutes, wallet_address}`, each player with its seven stats,
+`condition` and `is_starter` as fielded). The agent reads them for its formation record: its own last 50 revealed
+matches and the last 3 of each of its next rivals, at most 16 new reads per plan, each match read once
+(`src/snapshot/snapshot.ts`, `src/store/db.ts` `match_facts`).
 
 `Invalid window '{x}'. Use one of: 7d, 30d, 90d, all` for a bad window. Windowed records and recent form
 count only revealed matches (`leaderboard.rs:149-166`).

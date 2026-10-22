@@ -18,7 +18,11 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Training**: the 5 free sessions of the day, on the starters who gain most, on stats below their rarity cap.
 - **Sync**: training and match XP change a card's live stats; matches use the stats synced on chain. The agent
   syncs when it matters, typically before a match day, not after every session.
-- **Lineup and formation**: fit starters in the right slots, a formation that suits the squad.
+- **Lineup and formation**: fit starters in the right slots, a formation that suits the squad. The agent keeps a
+  record of its results by its formation against the rival's (from FoxLeague's public match statistics, with how
+  much stronger each eleven was), also sees the same record pooled over all the agents of your install (no team
+  named), tests another formation in ranked matches when its own record is thin or keeps losing, starting with the
+  one that does best in the pooled record, and saves a new formation together with the eleven it needs.
 - **Ranked and casual matches**: the daily allowance, spaced like a person playing.
 
 ## Competition
@@ -35,7 +39,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   stronger one too: always Silver at your lowest Silver amount, so the stake stays small. It can leave its own
   unaccepted challenge when a better one appears.
 - **Match preparation**: about an hour before each match session locks (inside its active hours), it syncs if the gains matter, sets the
-  lineup for that opponent and recovers condition only for key starters in a match that matters.
+  formation and lineup for that opponent (from the formations it played last) and recovers condition only for key starters in a match that matters.
 - **Refunds**: seats and stakes that come back (a tournament that did not fill, an expired challenge) are claimed
   when needed and stop counting against your budget.
 

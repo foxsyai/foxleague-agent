@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { agentName } from '../names.ts'
 import { DEFAULT_SETTINGS, type AgentSettings } from './settings.ts'
+import type { MatchFormations } from '../foxleague/types.ts'
+import { summariseFormations, type FormationMatch, type FormationRecord } from '../snapshot/formations.ts'
 
 export interface AgentRow {
   index: number
@@ -145,6 +147,20 @@ export class Store {
         state TEXT NOT NULL DEFAULT 'pending'
       );
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS match_facts (key TEXT PRIMARY KEY, facts TEXT NOT NULL, read_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS formation_results (
+        agent_idx INTEGER NOT NULL,
+        match_key TEXT NOT NULL,
+        at TEXT NOT NULL,
+        own_user_id INTEGER NOT NULL,
+        rival_user_id INTEGER,
+        mine TEXT NOT NULL,
+        theirs TEXT NOT NULL,
+        gf INTEGER NOT NULL,
+        ga INTEGER NOT NULL,
+        edge REAL,
+        PRIMARY KEY (agent_idx, match_key)
+      );
     `)
     // Added with Import team: where the key comes from and when a team was removed (the row stays for the history).
     const cols = new Set((this.db.prepare('PRAGMA table_info(agents)').all() as { name: string }[]).map(c => c.name))
@@ -328,6 +344,44 @@ export class Store {
 
   setKv(key: string, value: string): void {
     this.db.prepare('INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value)
+  }
+
+  // ---- public match facts ----
+
+  /** Both formations of a revealed match and the strength of each eleven, as read once from its public statistics. */
+  matchFacts(key: string): MatchFormations | undefined {
+    const r = this.db.prepare('SELECT facts FROM match_facts WHERE key = ?').get(key) as { facts: string } | undefined
+    return r ? (JSON.parse(r.facts) as MatchFormations) : undefined
+  }
+
+  /** Kept 90 days: the formation record reads a team's last 50 matches, about a week of play. */
+  putMatchFacts(key: string, facts: MatchFormations): void {
+    const now = new Date()
+    this.db.prepare('INSERT INTO match_facts (key, facts, read_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET facts = excluded.facts, read_at = excluded.read_at').run(key, JSON.stringify(facts), now.toISOString())
+    this.db.prepare('DELETE FROM match_facts WHERE read_at < ?').run(new Date(now.getTime() - 90 * 86_400_000).toISOString())
+  }
+
+  /** An agent's counted matches (its formation record), kept for the pooled record; read again each plan, stored once. */
+  putFormationResults(index: number, ownUserId: number, games: FormationMatch[]): void {
+    const put = this.db.prepare(
+      'INSERT INTO formation_results (agent_idx, match_key, at, own_user_id, rival_user_id, mine, theirs, gf, ga, edge) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(agent_idx, match_key) DO NOTHING',
+    )
+    for (const g of games) put.run(index, g.key, g.at, ownUserId, g.rivalUserId, g.mine, g.theirs, g.gf, g.ga, g.edge)
+    this.db.prepare('DELETE FROM formation_results WHERE at < ?').run(new Date(Date.now() - 30 * 86_400_000).toISOString())
+  }
+
+  /**
+   * The pooled formation record: the last 14 days of every team this install runs (its matches against a team of its
+   * own left out, they say nothing about the field). It names no team.
+   */
+  formationPool(): FormationRecord {
+    const rows = this.db
+      .prepare(
+        `SELECT match_key, at, mine, theirs, gf, ga, edge, rival_user_id FROM formation_results
+         WHERE at >= ? AND (rival_user_id IS NULL OR rival_user_id NOT IN (SELECT DISTINCT own_user_id FROM formation_results))`,
+      )
+      .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[]
+    return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: r.theirs, gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: r.rival_user_id })))
   }
 
   // ---- activity ----

@@ -737,10 +737,27 @@ export class Executor {
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: done`)
       }
-      case 'set_formation':
+      case 'set_formation': {
+        const before = snap.team?.formation
         await fox.setFormation(wallet, a.formation)
+        if (a.lineup) {
+          try {
+            await fox.setLineup(wallet, a.lineup, a.substitutes ?? [])
+          } catch (err) {
+            // The new shape with the old eleven would play players out of position: the old formation goes back.
+            const why = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+            const back = before
+              ? await fox.setFormation(wallet, before).then(
+                  () => `formation ${before} restored`,
+                  e => `formation ${before} NOT restored (${e instanceof Error ? e.message : String(e)}): no match is started until a lineup fits ${a.formation}`,
+                )
+              : 'the previous formation is unknown'
+            return finish('error', `${desc}: lineup not saved (${why}); ${back}`)
+          }
+        }
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: saved`)
+      }
       case 'set_lineup':
         await fox.setLineup(wallet, a.lineup, a.substitutes)
         applyEffect(a, v, snap, built)
@@ -941,7 +958,7 @@ function apiCallsFor(a: Action): string | null {
     case 'register': return 'POST /api/onboarding/relay, POST /api/register'
     case 'sync': return 'POST /api/sync/confirm'
     case 'train': return `POST /api/training/train {player_nonce: ${a.player_nonce}, attribute: ${a.attribute}}`
-    case 'set_formation': return `POST /api/teams/formation {formation: ${a.formation}}`
+    case 'set_formation': return `POST /api/teams/formation {formation: ${a.formation}}${a.lineup ? ', then POST /api/teams/lineup' : ''}`
     case 'set_lineup': return 'POST /api/teams/lineup'
     case 'play_match': return `POST /api/matches/play {match_type: ${a.match_type}}`
     case 'join_tournament': return `POST /api/tournaments/${a.tournament_id}/join`
@@ -978,15 +995,15 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
       break
     }
     case 'set_formation':
-      if (s.team) s.team.formation = a.formation
-      break
     case 'set_lineup':
-      if (s.team) {
+      if (s.team && a.type === 'set_formation') s.team.formation = a.formation
+      if (s.team && a.lineup) {
+        const substitutes = a.substitutes ?? []
         s.team.lineup = [...a.lineup]
-        s.team.substitutes = [...a.substitutes]
+        s.team.substitutes = [...substitutes]
         for (const p of s.players) {
           const slot = a.lineup.indexOf(p.nonce)
-          p.role = slot >= 0 ? 'starter' : a.substitutes.includes(p.nonce) ? 'bench' : 'reserve'
+          p.role = slot >= 0 ? 'starter' : substitutes.includes(p.nonce) ? 'bench' : 'reserve'
           if (slot >= 0) p.slot = slot
           else delete p.slot
         }

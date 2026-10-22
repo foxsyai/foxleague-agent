@@ -7,6 +7,7 @@ import { envFilePath, loadConfig, type Config } from './config.ts'
 import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
+import type { MatchFormations } from './foxleague/types.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
 import { MIN_TICK_MINUTES, STRATEGY_PRESETS, isZeus, validateSettingsPatch } from './store/settings.ts'
@@ -758,9 +759,16 @@ export class Service {
     return this.busy.has(index)
   }
 
-  private async snapshot(index: number): Promise<AgentSnapshot> {
+  /** `plan`: the snapshot a plan is made from also reads the formation record (the checks before each action do not). */
+  private async snapshot(index: number, plan = false): Promise<AgentSnapshot> {
     const research = isZeus(this.store.agent(index)?.settings.strategy ?? '')
-    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research })
+    const matchFacts = plan ? { get: (k: string) => this.store.matchFacts(k), put: (k: string, f: MatchFormations) => this.store.putMatchFacts(k, f) } : undefined
+    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts })
+    // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
+    if (plan && snap.formationRecord?.games && snap.profile) {
+      this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)
+      snap.formationPool = this.store.formationPool()
+    }
     this.noteTeams(index, snap)
     this.snapshots.set(index, snap)
     this.lastRefresh.set(index, Date.now())
@@ -1162,7 +1170,7 @@ export class Service {
       await this.retryPending(agent)
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
-      const snap = await this.snapshot(index)
+      const snap = await this.snapshot(index, true)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
       const waiting = this.waitingForFunds(agent, snap)

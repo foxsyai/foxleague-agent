@@ -1,10 +1,11 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { freeGaps } from '../executor/slots.ts'
-import { lineupStrength, XP_BOOSTER_RENEW_HOURS } from '../executor/rules.ts'
+import { lineupPositionsOk, lineupStrength, XP_BOOSTER_RENEW_HOURS } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
+import type { FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { ShopStatus } from '../foxleague/types.ts'
 
@@ -67,10 +68,19 @@ export function boosterLine(shop: ShopStatus | null | undefined, takenAt: string
   return `XP booster active until ${new Date(until).toISOString()} (${left.toFixed(1)} h left; a new one restarts the 24 h and is refused while more than ${XP_BOOSTER_RENEW_HOURS} h are left)`
 }
 
+/** A rival's formations in its last revealed matches (written by FoxLeague's server, still read as data). */
+function formationsText(f: string[] | null): string {
+  return f?.length ? `their last formations, newest first: ${f.map(x => txt(x, 12)).join(', ')}` : 'their formations: unknown'
+}
+
+function formationRow(r: FormationRecordRow): string {
+  return `${txt(r.mine, 12)} vs ${txt(r.theirs, 12)}: ${r.played} played, W${r.won} D${r.drawn} L${r.lost}, goals ${r.goalsFor}-${r.goalsAgainst}${r.edge === null ? '' : `, strength edge ${r.edge >= 0 ? '+' : ''}${r.edge}%`}`
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
-    return r ? ` [rival ELO ${r.elo ?? 'unknown'}, lineup ${r.strength === null ? 'unknown' : r.strength} at full condition]` : ''
+    return r ? ` [rival ELO ${r.elo ?? 'unknown'}, lineup ${r.strength === null ? 'unknown' : r.strength} at full condition${r.formations === undefined ? '' : `, ${formationsText(r.formations)}`}]` : ''
   }
   const out: string[] = []
   const who = s.agent.index !== null ? agentName(s.agent.index) : 'watch'
@@ -92,6 +102,8 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`Team "${txt(p.team_name, 20)}" (user ${p.id}): ELO ${p.elo_rating} ${p.league}, W/D/L ${p.matches_won}/${p.matches_drawn}/${p.matches_lost}, tournament wins ${p.tournament_wins}, ${p.player_count} cards`)
   }
   if (s.team) out.push(s.team.hidden ? 'Formation and lineup: not public (FoxLeague shows them to the team itself only)' : `Formation ${s.team.formation}; XI ${s.team.lineup.join(',')}; bench ${s.team.substitutes.join(',')}`)
+  const misfit = s.team && !s.team.hidden && s.players.length ? lineupPositionsOk(s, s.team.formation, s.team.lineup) : null
+  if (misfit) out.push(`LINEUP DOES NOT FIT ${s.team!.formation} (${misfit}): no match, entry or 1v1 runs until set_formation with lineup and substitutes (or set_lineup) saves one that fits`)
 
   if (s.auth) {
     const a = s.auth
@@ -101,7 +113,8 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(boosterLine(a.shop, s.takenAt))
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
-      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]`)
+      const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
+      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${formationsText(rf.formations)}]` : ''}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
     for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}`)
@@ -113,6 +126,21 @@ export function renderDigest(s: AgentSnapshot): string {
     const order = { starter: 0, bench: 1, reserve: 2 }
     const cfg = s.config
     for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p, cfg ? matchGate(cfg, p.rarity) : undefined)}`)
+  }
+
+  const fr = s.formationRecord
+  if (fr === null) out.push('Formation record: unknown (the match history could not be read)')
+  else if (fr) {
+    out.push(fr.matches ? `Formation record (your last ${fr.matches} revealed matches, your formation vs the rival's; strength edge = how much stronger your eleven was than theirs as both played, synced stats x condition, minus means weaker):` : 'Formation record: no revealed match read yet')
+    for (const r of fr.rows) out.push(`  ${formationRow(r)}`)
+    if (fr.unread) out.push(`  (${fr.unread} more finished match${fr.unread === 1 ? '' : 'es'} not read yet)`)
+    if (fr.field.length) out.push(`Rival formations in those matches: ${fr.field.map(f => `${txt(f.formation, 12)} ${f.matches}`).join(', ')}`)
+  }
+  const pool = s.formationPool
+  if (pool?.matches) {
+    out.push(`Pooled formation record (${pool.matches} matches of the last 14 days of every team your owner runs here, yours included, matches between them left out; names not shown):`)
+    for (const r of pool.rows.slice(0, 20)) out.push(`  ${formationRow(r)}`)
+    if (pool.field.length) out.push(`Rival formations in the pooled matches: ${pool.field.map(f => `${txt(f.formation, 12)} ${f.matches}`).join(', ')}`)
   }
 
   const m = s.market

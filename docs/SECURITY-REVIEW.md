@@ -456,6 +456,27 @@ next fixture shows, so an agent out after the group stage, or past its last Swis
 the tournament completes (fail closed: its own fixtures cannot show the rest of the group or round). The prompt's line "no tournament match within the hour" (`src/strategist/prompt.ts`,
 byte-stable) is FoxLeague's error text and stays.
 
+## Formations, 2026-10-22
+
+Nine of the ten agents played one formation in all of their last 50 matches (seven 4-4-2, one 4-3-3b, one 5-3-2);
+the tenth played 5-3-2 three times on 14 October, then 4-4-2. Across those 483 matches (13 to 22 October) 4-4-2
+scored 0.13 a match below what the strength of the two elevens predicted against the 4-3-3 family (a win counting 1
+and a draw a half; 102 matches, about three times the noise). The agents could change formation, but they saw no
+record of what each formation did against which, and the change itself was not safe. The fixes were made by Claude
+Opus 5.5, test first: every test in `test/formations.test.ts` was seen failing on 0267386 before its fix and passing
+after it, except "the record is read only when asked", a control.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| F1 | medium | A formation change ran as its own action, apart from the lineup it needs, and set_lineup is checked against the saved formation, so the lineup could only come later. The actions of a plan run at random moments over 80 percent of the cycle, so a ranked match or a strategy lock between the two played the old eleven in the new shape (FoxLeague does not check positions: a midfielder in a forward's slot), and a refused lineup left it so until the next plan | `set_formation` takes `lineup` and `substitutes` (both or neither), checked against the new formation; the executor saves the formation and then the lineup at once, and when the lineup is refused it saves the old formation back and says so. A formation the current eleven does not fit is refused without them |
+| F2 | medium | Nothing stopped a match or an entry while the saved eleven did not fit the saved formation | `squadLegal` refuses it (ranked and casual matches, joins, created tournaments, 1v1s), and the digest says LINEUP DOES NOT FIT until it is fixed |
+| F3 | low | New reads from FoxLeague: a team's match history and each match's public statistics (about 120 KB each) | Read only for the snapshot a plan is made from, never for the checks before each action: at most 10 new matches of the agent's own and 6 of its next rivals' per plan, each kept in `match_facts` (90 days) and never read twice. A failed or hidden read is "not read yet", never counted as a result. Formation names from the server pass through `txt()` |
+| F4 | design | The owner chose (2026-10-22) that the agents learn from one table: an agent alone has only its own formations, so it learns what another does only by testing it | Each plan stores the agent's counted matches (`formation_results`, 30 days) and is shown the pooled record of the last 14 days of every team the install runs, its own included. It names no team, and a match between two of the install's teams is left out (it says nothing about the field). The agents still know nothing else of each other |
+
+Open: the strength edge is the elevens as they played (synced stats and condition at the match), not today's. A
+rival's formation is the one it played last, which it may change before the lock. A team that has not planned since
+this change is not yet known as one of the install's, so a match against it counts in the pool until it plans.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

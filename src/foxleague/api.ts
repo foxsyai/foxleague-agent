@@ -23,7 +23,10 @@ import type {
   CanList,
   FloorPrice,
   MarketListing,
+  MatchFormations,
+  MatchHistoryRow,
 } from './types.ts'
+import { STATS } from './types.ts'
 
 export class ApiRefusal extends Error {
   readonly code: string | undefined
@@ -131,6 +134,26 @@ export class FoxLeague {
 
   config(): Promise<FoxConfig> {
     return this.call<FoxConfig>('/config', { raw: true })
+  }
+
+  /** A team's revealed matches, newest first (public for any wallet). */
+  matchHistory(address: string, limit = 50): Promise<MatchHistoryRow[]> {
+    return this.call<MatchHistoryRow[]>(`/matches/history?wallet_address=${encodeURIComponent(address)}&limit=${limit}`)
+  }
+
+  /**
+   * Both formations of a revealed match and each eleven's strength, from its public statistics (about 120 KB:
+   * GET /api/public/tournament-match/{id}/stats for a tournament or 1v1 match, /api/matches/{id}/stats for ranked
+   * and casual). null while FoxLeague still hides them (before the reveal) or the match has no such id.
+   */
+  async matchFormations(m: Pick<MatchHistoryRow, 'id' | 'tournament_match_id'>): Promise<MatchFormations | null> {
+    const path = typeof m.tournament_match_id === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(m.tournament_match_id)
+      ? `/public/tournament-match/${m.tournament_match_id}/stats`
+      : Number.isSafeInteger(m.id) && (m.id as number) > 0 ? `/matches/${m.id}/stats` : null
+    if (!path) return null
+    const s = await this.call<{ gated?: boolean; home_formation?: unknown; away_formation?: unknown; home_lineup?: unknown; away_lineup?: unknown } | null>(path)
+    if (!s || s.gated || typeof s.home_formation !== 'string' || typeof s.away_formation !== 'string') return null
+    return { home: s.home_formation, away: s.away_formation, homeStrength: elevenStrength(s.home_lineup), awayStrength: elevenStrength(s.away_lineup) }
   }
 
   /** null when the wallet never logged in (`User not found`). */
@@ -330,6 +353,25 @@ export class FoxLeague {
  * own eleven is no longer public, and this is never less than it, so a check against it is at least as
  * strict as one against the real lineup. null when the rival holds fewer than eleven cards.
  */
+/**
+ * One side's eleven as a match fielded it (a lineup of its public statistics), in the unit of lineup strength: the
+ * sum over the 11 starters of their seven stats scaled by condition (stat x (50 + condition / 2) / 100). null
+ * unless exactly 11 starters with every stat and their condition are there.
+ */
+export function elevenStrength(side: unknown): number | null {
+  const players = (side as { players?: unknown } | null)?.players
+  if (!Array.isArray(players)) return null
+  const xi = players.filter(p => (p as { is_starter?: unknown })?.is_starter === true) as Record<string, unknown>[]
+  if (xi.length !== 11) return null
+  let sum = 0
+  for (const p of xi) {
+    const stats = STATS.map(k => p[k])
+    if (!stats.every(v => typeof v === 'number' && Number.isFinite(v)) || typeof p.condition !== 'number' || !Number.isFinite(p.condition)) return null
+    sum += ((stats as number[]).reduce((a, b) => a + b, 0) * (50 + (p.condition as number) / 2)) / 100
+  }
+  return Math.round(sum)
+}
+
 export async function rivalStrength(fox: Pick<FoxLeague, 'players'>, wallet: string): Promise<number | null> {
   const cards = await fox.players(wallet)
   if (cards.length < 11) return null

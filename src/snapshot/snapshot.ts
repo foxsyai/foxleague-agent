@@ -8,6 +8,7 @@ import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import { winChance } from './winchance.ts'
+import { summariseFormations, type FormationMatch, type FormationRecord } from './formations.ts'
 
 /** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
 const rivalSeen = new Map<string, { at: number; strength: number | null }>()
@@ -35,6 +36,8 @@ import {
   type UserProfile,
   type MarketListing,
   type FloorPrice,
+  type MatchFormations,
+  type MatchHistoryRow,
 } from '../foxleague/types.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 
@@ -73,12 +76,18 @@ export interface MarketSummary {
   /** Recently finished standard tournaments, to size new ones from what really fills. */
   recentStandard: { id: number; tier: string; format: string; max_teams: number; seated: number; fee: number; status: string; starts_at: string }[]
   /** The rival behind each 1v1 the agent could take (at most 4, only while it has no 1v1 of its own): ELO and lineup strength at full condition. */
-  scouted?: { id: number; elo: number | null; strength: number | null }[]
+  scouted?: { id: number; elo: number | null; strength: number | null; formations?: string[] | null }[]
   /** Platform-wide time slots a created tournament may not overlap (open and running standard tournaments). */
   slots: SlotWindow[]
   /** Open auctions, strongest cards first (public listings), and the reserve floor of each rarity. */
   auctions: MarketListing[]
   floors: FloorPrice[]
+}
+
+/** Public facts of revealed matches, kept across ticks (the store's match_facts), so each match is read once. */
+export interface MatchFactsCache {
+  get(key: string): MatchFormations | undefined
+  put(key: string, facts: MatchFormations): void
 }
 
 export interface AgentSnapshot {
@@ -118,6 +127,12 @@ export interface AgentSnapshot {
    * team's record so far (its activity is the change over days); a Zeus agent also reads each team's lineup
    * strength and its own win chance against it.
    */
+  /** Planning snapshots only (absent otherwise); null when the match history could not be read. */
+  formationRecord?: FormationRecord | null
+  /** Planning snapshots only, added by the service: every team the install runs, matches between them left out. */
+  formationPool?: FormationRecord
+  /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
+  rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null }[]
   leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null })[]
   warnings: string[]
 }
@@ -191,6 +206,67 @@ export async function recentChallenges(fox: FoxLeague, now: Date): Promise<Tourn
   return rows
 }
 
+/** New match statistics read per planning snapshot (about 120 KB each): the agent's own matches, then its rivals'. */
+const OWN_READS_PER_TICK = 10
+const RIVAL_READS_PER_TICK = 6
+/** A rival's formations: those of its last revealed matches. */
+const RIVAL_MATCHES = 3
+
+const revealed = (m: MatchHistoryRow) => m.status === 'finished' && typeof m.home_score === 'number' && typeof m.away_score === 'number'
+
+/** Both formations of a revealed match: kept ones first, else one read within this tick's budget. A failed read is null, never a guess. */
+async function factsOf(fox: FoxLeague, cache: MatchFactsCache, budget: { left: number }, m: MatchHistoryRow): Promise<MatchFormations | null> {
+  const key = m.tournament_match_id ? `t:${m.tournament_match_id}` : typeof m.id === 'number' ? `m:${m.id}` : null
+  if (!key) return null
+  const kept = cache.get(key)
+  if (kept) return kept
+  if (budget.left <= 0) return null
+  budget.left--
+  const f = await fox.matchFormations(m).catch(() => null)
+  if (f) cache.put(key, f)
+  return f
+}
+
+/** The agent's results by its formation against the rival's, over its last 50 revealed matches. */
+async function formationRecord(fox: FoxLeague, cache: MatchFactsCache, address: string, userId: number): Promise<FormationRecord> {
+  const budget = { left: OWN_READS_PER_TICK }
+  const games: FormationMatch[] = []
+  let unread = 0
+  for (const m of await fox.matchHistory(address, 50)) {
+    if (!revealed(m)) continue
+    const home = m.home_user_id === userId
+    if (!home && m.away_user_id !== userId) continue
+    const f = await factsOf(fox, cache, budget, m)
+    if (!f) {
+      unread++
+      continue
+    }
+    const [ms, ts] = home ? [f.homeStrength, f.awayStrength] : [f.awayStrength, f.homeStrength]
+    games.push({
+      key: m.tournament_match_id ? `t:${m.tournament_match_id}` : `m:${m.id}`,
+      at: m.finished_at ?? new Date(0).toISOString(),
+      mine: home ? f.home : f.away,
+      theirs: home ? f.away : f.home,
+      gf: home ? m.home_score! : m.away_score!,
+      ga: home ? m.away_score! : m.home_score!,
+      edge: typeof ms === 'number' && typeof ts === 'number' && ts > 0 ? ((ms - ts) / ts) * 100 : null,
+      rivalUserId: home ? m.away_user_id : m.home_user_id,
+    })
+  }
+  return { ...summariseFormations(games, unread), games }
+}
+
+/** A rival's formations in its last revealed matches, newest first (only those read; an empty list is unknown). */
+async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: { left: number }, wallet: string, userId: number): Promise<string[]> {
+  const out: string[] = []
+  const theirs = (await fox.matchHistory(wallet, 10)).filter(m => revealed(m) && (m.home_user_id === userId || m.away_user_id === userId)).slice(0, RIVAL_MATCHES)
+  for (const m of theirs) {
+    const f = await factsOf(fox, cache, budget, m)
+    if (f) out.push(m.home_user_id === userId ? f.home : f.away)
+  }
+  return out
+}
+
 async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>): Promise<T | null> {
   try {
     return await fn()
@@ -204,8 +280,11 @@ async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>
  * Builds the snapshot for an agent (`wallet`), or a public-only view of any address (`watch`).
  * Every section is independent: a failing route leaves a warning, not a failed tick.
  */
-/** `research`: a Zeus agent reads every team it could challenge (its lineup strength) to weigh its win chance. */
-export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean } = {}): Promise<AgentSnapshot> {
+/**
+ * `research`: a Zeus agent reads every team it could challenge (its lineup strength) to weigh its win chance.
+ * `matchFacts`: a planning snapshot also reads the formation record and the formations of the next rivals.
+ */
+export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache } = {}): Promise<AgentSnapshot> {
   const { chain, fox } = deps
   const warnings: string[] = []
   const wallet = 'wallet' in target ? target.wallet : null
@@ -281,6 +360,26 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     .slice(0, 20)
     .map(t => ({ id: t.id, tier: t.tier, format: t.format, max_teams: t.max_teams, seated: t.participant_count ?? 0, fee: t.entry_fee_foxsy, status: t.status, starts_at: t.starts_at }))
 
+  // What formation wins against which: the agent's own record, then what its next rivals play.
+  const facts = opts.matchFacts
+  const rivalBudget = { left: RIVAL_READS_PER_TICK }
+  let record: FormationRecord | null | undefined
+  let rivalFormations: AgentSnapshot['rivalFormations']
+  if (facts && registered && profile) {
+    record = await attempt(warnings, 'match history', () => formationRecord(fox, facts, address, profile.id))
+    rivalFormations = []
+    for (const m of (auth?.upcoming?.matches ?? []).filter(x => x.phase === 'upcoming' && x.opponent_name).slice(0, 2)) {
+      let formations: string[] | null = null
+      try {
+        const rival = (await fox.tournament(m.tournament_id)).participants.find(p => p.user_id !== profile.id && p.team_name === m.opponent_name && p.wallet_address)
+        if (rival) formations = await recentFormations(fox, facts, rivalBudget, rival.wallet_address!, rival.user_id)
+      } catch {
+        // unknown, said as such on the Upcoming line
+      }
+      rivalFormations.push({ tournamentId: m.tournament_id, opponent: m.opponent_name!, formations })
+    }
+  }
+
   // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse.
   const openAllChallenges = (openAll ?? []).filter(t => t.max_teams === 2)
   const scouted: { id: number; elo: number | null; strength: number | null }[] = []
@@ -293,10 +392,12 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     for (const id of ids) {
       try {
         const d = await fox.tournament(id)
-        const rival = d.participants.find(p => p.user_id !== profile.id && p.wallet_address)?.wallet_address
-        if (!rival) continue
+        const seat = d.participants.find(p => p.user_id !== profile.id && p.wallet_address)
+        const rival = seat?.wallet_address
+        if (!seat || !rival) continue
         const elo = (board?.users ?? []).find(u => u.wallet_address === rival)?.elo_rating ?? (await fox.user(rival))?.elo_rating ?? null
-        scouted.push({ id, elo, strength: await rivalStrength(fox, rival).catch(() => null) })
+        const formations = facts ? await recentFormations(fox, facts, rivalBudget, rival, seat.user_id).catch(() => null) : undefined
+        scouted.push({ id, elo, strength: await rivalStrength(fox, rival).catch(() => null), ...(formations !== undefined ? { formations } : {}) })
       } catch {
         // unknown: the executor refuses a 1v1 against an unreadable rival anyway
       }
@@ -378,6 +479,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       auctions: (listings ?? []).filter(l => l.is_auction && l.owner_address !== address).slice(0, 15),
       floors: floors ?? [],
     },
+    ...(record !== undefined ? { formationRecord: record } : {}),
+    ...(rivalFormations ? { rivalFormations } : {}),
     leaderboardNeighbours,
     warnings,
   }
