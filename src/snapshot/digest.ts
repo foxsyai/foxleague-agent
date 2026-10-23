@@ -86,6 +86,18 @@ function rivalText(f: string[] | null, strength: number | null | undefined, mine
   return `${formationsText(f)}; ${vs}`
 }
 
+/**
+ * What a seat's schedule brings, as the executor counts it (matchesAtMost, scheduleRefusal): a home-and-away round
+ * robin plays every other team twice, and the round interval spaces the matches. Only what FoxLeague says is shown.
+ */
+function scheduleText(t: { format: string; max_teams: number; home_and_away?: boolean | null; round_interval_minutes?: number | null }): string {
+  const parts = [
+    t.format === 'round_robin' && t.home_and_away === true ? `home and away (2 x ${t.max_teams - 1} matches)` : '',
+    typeof t.round_interval_minutes === 'number' && t.round_interval_minutes > 0 ? `rounds every ${t.round_interval_minutes} min` : '',
+  ].filter(Boolean)
+  return parts.length ? `, ${parts.join(', ')}` : ''
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
@@ -155,7 +167,7 @@ export function renderDigest(s: AgentSnapshot): string {
   const m = s.market
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${t.is_private ? (t.invited ? ' private, you are invited' : ' private') : ''}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}`)
   }
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
