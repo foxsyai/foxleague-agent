@@ -5,8 +5,11 @@ import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { Executor } from '../src/executor/executor.ts'
+import { budgetView, gameDayKey } from '../src/executor/budget.ts'
 import { Store } from '../src/store/db.ts'
-import { wholeToAtomic } from '../src/util/encoding.ts'
+import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
+import { renderPlanRequest } from '../src/strategist/strategist.ts'
+import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { ADDR, OTHER, STRANGER, TEST_SETTINGS, dryWallet, liveWallet, rivalSquad, setup, snapshot, withLive } from './fixtures.ts'
 
 // ---- A1: a 1v1 that errored before any FoxLeague call keeps no rival ----
@@ -95,6 +98,55 @@ test('A2: so does a removed imported team whose 1v1 is still out', async () => {
   const [r] = await m.exec.run(m.agent(), dryWallet, rivalSnap(), [{ action: { ...CHALLENGE, deadline_minutes: 60 }, reason: '' }])
   assert.equal(r!.status, 'refused', r!.summary)
   assert.match(r!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
+})
+
+// ---- A3 = B3: the buying power line reads the swap allowances the executor holds swaps to ----
+
+test('A3: the buying power line promises no more FOXSY from the EGLD than the daily swap allowance still lets the agent swap', async () => {
+  const settings = { ...DEFAULT_SETTINGS, egldGasReserve: '1', maxSwapFoxsy: 50_000, dailyCapUsd: 150, monthlyBudgetUsd: 3000 }
+  const { store, exec, agent } = setup()
+  store.updateSettings(0, settings)
+  const now = new Date()
+  // $140 of EGLD swapped away earlier this game day (the dry ledger the plan is judged in): $10 may still be swapped today.
+  store.recordSpend({ agentIndex: 0, at: now, gameDay: gameDayKey(now, 14), category: 'swap', action: '', foxsyAtomic: 0n, egldAtomic: wholeToAtomic(31), usd: 140, txHash: null, dryRun: true })
+  const s = snapshot()
+  s.chain!.egld = wholeToAtomic(200)
+  s.chain!.foxsy = wholeToAtomic(2270)
+  // The executor: a swap of 10,000 FOXSY (about $22.50 of EGLD) is refused by the daily swap allowance.
+  const b64 = (n: bigint) => Buffer.from(numberToHex(n), 'hex').toString('base64')
+  const answers: Record<string, string[]> = {
+    getState: [b64(1n)],
+    getFirstTokenId: [Buffer.from('FOXSY-5d5f3e').toString('base64')],
+    getSecondTokenId: [Buffer.from('WEGLD-bd4d79').toString('base64')],
+    getReservesAndTotalSupply: [b64(wholeToAtomic(1_000_000)), b64(wholeToAtomic(500)), b64(1n)],
+    getAmountIn: [b64(wholeToAtomic(5))],
+  }
+  ;(exec as unknown as { d: { chain: unknown } }).d.chain = { simulate: async () => ({ ok: true, detail: 'success', raw: {} }), query: async (_sc: string, fn: string) => answers[fn] ?? assert.fail(`unexpected query ${fn}`) }
+  const [r] = await exec.run(agent(), dryWallet, s, [{ action: { type: 'swap_egld_for_foxsy', foxsy: 10_000 }, reason: '' }])
+  assert.equal(r!.status, 'refused', r!.summary)
+  assert.match(r!.summary, /daily swap allowance: \$\d+\.\d\d needed, \$140\.00 of \$150\.00 already swapped today/)
+  // The plan request: no more FOXSY from the EGLD than the $10 left to swap buys, and what was swapped already.
+  const text = renderPlanRequest({ snapshot: s, settings, budget: budgetView(store, 0, settings, true, now), recent: [], dryRun: true })
+  const line = /Buying power:[^\n]*/.exec(text)?.[0] ?? '(no buying power line)'
+  const promised = Number(/plus about ([\d,]+) FOXSY from/.exec(line)?.[1]?.replace(/,/g, '') ?? NaN)
+  const swappable = Math.floor(10 / s.prices!.foxsyUsd)
+  assert.ok(promised <= swappable, `the line promises ${promised} FOXSY from the EGLD while at most ${swappable} ($10) may be swapped today:\n${line}`)
+  assert.match(line, /\$140\.00 of \$150\.00 today, \$140\.00 of \$3000\.00 this month/)
+})
+
+test('B3: with the daily swap allowance used up, the plan is not told that a swap still buys FOXSY today', () => {
+  const { store } = setup()
+  const now = new Date()
+  const settings = { ...DEFAULT_SETTINGS, egldGasReserve: '1', maxSwapFoxsy: 50_000, dailyCapUsd: 150 }
+  store.recordSpend({ agentIndex: 0, at: now, gameDay: gameDayKey(now, 14), category: 'swap', action: '', foxsyAtomic: 0n, egldAtomic: 0n, usd: 150, txHash: null, dryRun: true })
+  const s = snapshot()
+  s.chain!.egld = wholeToAtomic(200)
+  s.chain!.foxsy = wholeToAtomic(2270)
+  const text = renderPlanRequest({ snapshot: s, settings, budget: budgetView(store, 0, settings, true, now, 14), recent: [], dryRun: true })
+  const line = text.split('\n').find(l => l.startsWith('Buying power:'))!
+  assert.doesNotMatch(line, /buys about 66,667 FOXSY/, `a swap of that is refused by the daily swap allowance: ${line}`)
+  assert.match(line, /plus about 0 FOXSY from the 199 EGLD above the gas reserve/)
+  assert.match(line, /\$150\.00 of \$150\.00 today/)
 })
 
 // ---- E2: the formations test does not depend on the calendar ----

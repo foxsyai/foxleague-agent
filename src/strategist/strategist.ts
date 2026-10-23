@@ -198,10 +198,14 @@ const PREVIOUS_PLAN_CHARS = 2000
 /**
  * What the agent can spend (owner, 2026-10-23): an agent with 199 EGLD wrote "770 FOXSY, so no bids are possible".
  * The FOXSY held plus what the EGLD above the gas reserve (and any WEGLD) swaps into, next to the swap and day limits.
+ * The executor holds every swap to its swap allowances (the USD swapped this game day against the daily cap, this
+ * month against the monthly budget): the EGLD counts only for what they still let through (audit A3/B3, 2026-10-23).
  */
 function buyingPower(p: PlanInput): string {
   const s = p.snapshot
+  const b = p.budget
   const n = (x: number) => Math.round(x).toLocaleString('en-US')
+  const usd = (x: number) => `$${x.toFixed(2)}`
   if (!s.chain) return 'Buying power: unknown (the wallet could not be read)'
   const held = `${n(atomicToFloat(s.chain.foxsy))} FOXSY held`
   if (!s.prices || !(s.prices.egldPerFoxsy > 0) || !(s.prices.foxsyUsd > 0)) return `Buying power: ${held}; what the EGLD swaps into is unknown (no price)`
@@ -209,8 +213,13 @@ function buyingPower(p: PlanInput): string {
   // The reserve the executor keeps (the same decimal setting it reads); an EGLD balance under it buys nothing.
   const egldAbove = s.chain.egld - decimalToAtomic(p.settings.egldGasReserve)
   const above = atomicToFloat(egldAbove > 0n ? egldAbove : 0n) + atomicToFloat(s.chain.wegld)
-  const today = p.budget.remainingTodayUsd
-  return `Buying power: ${held} plus about ${n(above / s.prices.egldPerFoxsy)} FOXSY from the ${+above.toFixed(2)} EGLD above the gas reserve; one swap at most ${n(p.settings.maxSwapFoxsy)} FOXSY, and today's $${today.toFixed(2)} left buys about ${n(today / s.prices.foxsyUsd)} FOXSY. Judge what you can afford on both, never on the FOXSY alone.`
+  const fromEgld = above / s.prices.egldPerFoxsy
+  // Rounded down: never a FOXSY more than the allowances let the agent swap.
+  const swappable = Math.floor(Math.min(fromEgld, Math.min(b.remainingSwapTodayUsd, b.remainingSwapMonthUsd) / s.prices.foxsyUsd))
+  const bound = swappable < Math.floor(fromEgld) ? `, as much as the swap allowances still let through (the EGLD alone would give about ${n(fromEgld)})` : ''
+  const swapped = `swapped so far ${usd(b.swappedTodayUsd)} of ${usd(b.swapAllowanceTodayUsd)} today, ${usd(b.swappedMonthUsd)} of ${usd(b.swapAllowanceMonthUsd)} this month`
+  const today = b.remainingTodayUsd
+  return `Buying power: ${held} plus about ${n(swappable)} FOXSY from the ${+above.toFixed(2)} EGLD above the gas reserve${bound}; ${swapped}; one swap at most ${n(p.settings.maxSwapFoxsy)} FOXSY, and today's ${usd(today)} left in the daily cap spends about ${n(today / s.prices.foxsyUsd)} FOXSY. Judge what you can afford on both, never on the FOXSY alone.`
 }
 
 export function renderPlanRequest(p: PlanInput): string {
