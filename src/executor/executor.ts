@@ -23,7 +23,7 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
-import { oneVOnesThisWeek, rivalsOutByOthers } from './rivals.ts'
+import { cardsBidByOthers, oneVOnesThisWeek, rivalsOutByOthers } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
@@ -116,6 +116,12 @@ export class Executor {
    * (nothing was created), and a dry-run claim never holds a live agent off.
    */
   private readonly rivalClaims = new Map<number, { agent: number; until: number; dry: boolean }>()
+  /**
+   * The card at auction each agent has just bid on, kept until its auction ends (a bid is logged only after it is
+   * sent and settled): one team per card, checked and set like a rival claim. A bid that placed nothing (refused,
+   * reverted, an error before the signature) releases it.
+   */
+  private readonly bidClaims = new Map<number, { agent: number; until: number; dry: boolean }>()
 
   constructor(deps: ExecutorDeps) {
     this.d = deps
@@ -138,6 +144,11 @@ export class Executor {
   /** The rivals another of the owner's agents holds a 1v1 claim against, as the claim check reads them (for the plan request). */
   rivalsClaimedByOthers(index: number, dry: boolean, now = Date.now()): number[] {
     return [...this.rivalClaims].filter(([, c]) => claimBars(c, index, dry, now)).map(([id]) => id)
+  }
+
+  /** The cards at auction another of the owner's agents holds a bid claim on, as the claim check reads them (for the plan request). */
+  cardsClaimedByOthers(index: number, dry: boolean, now = Date.now()): number[] {
+    return [...this.bidClaims].filter(([, c]) => claimBars(c, index, dry, now)).map(([nonce]) => nonce)
   }
 
   /** Runs a plan in order; each action sees the local effect of the ones before it. */
@@ -188,12 +199,16 @@ export class Executor {
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
     let claimed: number | null = null
+    let claimedCard: number | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
       // An error before FoxLeague was asked to create or seat and before any signature (the kill switch, a pause or a
       // stop before the signature, a booking that failed) left nothing on FoxLeague, as a refusal (audit A1, 2026-10-23).
       const untouched = status === 'error' && REACH_TRACKED.has(a.type) && !booking?.sent && !booking?.reached
       // Every refusal comes before any FoxLeague call or signature: the rival this action claimed is free again.
       if ((status === 'refused' || untouched) && claimed !== null && this.rivalClaims.get(claimed)?.agent === agent.index) this.rivalClaims.delete(claimed)
+      // A bid that placed nothing frees its card: refused, reverted on chain, or an error before it was signed.
+      const placedNothing = status === 'refused' || status === 'failed' || (status === 'error' && !booking?.sent)
+      if (placedNothing && claimedCard !== null && this.bidClaims.get(claimedCard)?.agent === agent.index) this.bidClaims.delete(claimedCard)
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
       // `untouched`: the 1v1 checks after a restart know that this error left no challenge and no seat.
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}), ...(untouched ? { untouched: true } : {}) }, costUsd: costUsdValue || null, txHash })
@@ -223,12 +238,19 @@ export class Executor {
       // No await from here to the claim: another agent's check runs before this one or after its claim, never between.
       const claim = ctx.opponent ? this.rivalClaims.get(ctx.opponent.userId) : undefined
       if (claim && claimBars(claim, agent.index, dry, Date.now())) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
+      const cardClaim = a.type === 'bid' ? this.bidClaims.get(a.nonce) : undefined
+      if (cardClaim && claimBars(cardClaim, agent.index, dry, Date.now()) && !ctx.ownTeamOnCard) ctx.ownTeamOnCard = 'bidder'
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
       if (ctx.opponent && (a.type === 'create_challenge' || a.type === 'join_tournament')) {
         for (const [id, c] of this.rivalClaims) if (c.until <= Date.now()) this.rivalClaims.delete(id)
         this.rivalClaims.set(ctx.opponent.userId, { agent: agent.index, until: Date.now() + ((a.type === 'create_challenge' ? a.deadline_minutes : 0) + 60) * 60_000, dry })
         claimed = ctx.opponent.userId
+      }
+      if (a.type === 'bid' && ctx.auction) {
+        for (const [nonce, c] of this.bidClaims) if (c.until <= Date.now()) this.bidClaims.delete(nonce)
+        this.bidClaims.set(a.nonce, { agent: agent.index, until: Math.max(ctx.auction.endsAt.getTime(), Date.now() + 3_600_000), dry })
+        claimedCard = a.nonce
       }
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
@@ -429,6 +451,10 @@ export class Executor {
       // On the safe side: a bid that errored after its signature (sent, the answer lost) may have landed. An error
       // before any signature (an unreadable auction, the kill switch, a refusal released) is no bid.
       market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.nonce === a.nonce).length
+      // One team per card: another of the owner's teams sells it, leads it on chain or has bid on it (its log rows).
+      const others = new Set(store.agentAddresses().filter(x => x !== agent.address))
+      if (market.auction && others.has(market.auction.seller)) market.ownTeamOnCard = 'seller'
+      else if ((market.auction?.highestBidder && others.has(market.auction.highestBidder)) || cardsBidByOthers(store, agent.index, dry, now).has(a.nonce)) market.ownTeamOnCard = 'bidder'
       try {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours

@@ -160,12 +160,14 @@ test('while xExchange has paused the pair, the buying power is the FOXSY held', 
   assert.match(text, /Buying power: [\d,]+ FOXSY held; no swap is possible while xExchange has paused the FOXSY pair, so the FOXSY held is all there is/)
 })
 
-// Agent review of PR #19 (low, docs): the manual's safety page said the agents share nothing.
-test('the safety page names the two things the agents share', async () => {
+// Agent review of PR #19 (low, docs): the manual's safety page said the agents share nothing. Since 2026-10-23 they
+// share three things: one team per card at auction too (test/sibling-bids.test.ts).
+test('the safety page names the three things the agents share', async () => {
   const { readFileSync } = await import('node:fs')
-  const page = readFileSync(new URL('../site/src/content/docs/play/safety.md', import.meta.url), 'utf8')
+  const page = readFileSync(new URL('../site/src/content/docs/play/safety.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(page, /a pooled formation record with no team named/)
   assert.match(page, /only one of them at a time has a 1v1 out against the same rival/)
+  assert.match(page, /only one of them bids on a card at auction and none on a card another of your teams sells/)
 })
 
 test('the prompt says EGLD above the reserve is buying power, swapped earlier in the same plan when an action needs it', () => {
