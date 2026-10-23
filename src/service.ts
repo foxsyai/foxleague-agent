@@ -26,6 +26,9 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
+import { oneVOnesThisWeek, rivalsOutByOthers, weeklyFreeAt } from './executor/rivals.ts'
+import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
+import { lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
@@ -60,6 +63,61 @@ const SESSION_GAP_MS = 2 * 3600_000
 const LOCK_MARGIN_MS = 10 * 60_000
 /** How often payments sent but not confirmed with FoxLeague are confirmed again (src/executor/pending.ts). */
 const PENDING_RETRY_MS = 60_000
+
+/**
+ * How a plan spaces its matches (audit 2026-10-23, D1): after any casual or ranked start the next waits until that
+ * match is over, and a ranked start waits the ranked cooldown after the last ranked one, plus 30 s for the time the
+ * action before it takes. Before each match the agent's log is read again and the start waits for the real gates.
+ */
+const PLAN_MATCH_GAP_MS = MATCH_RUNS_MS
+const PLAN_RANKED_GAP_MS = RANKED_COOLDOWN_MS + 30_000
+/** How far past the plan's window a match may still start when the action before it took longer than planned. */
+const MATCH_DRIFT_MS = 2 * 60_000
+
+export interface ScheduledAction {
+  p: PlannedAction
+  /** When it runs, in ms after the plan's start. */
+  offset: number
+}
+
+/**
+ * When each action of a plan runs, in ms after its start: at random moments of the window, sorted so the plan's order
+ * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (11 minutes
+ * after its start) and a ranked one until the ranked cooldown after the last ranked start has passed, the agent's last
+ * starts before the plan included (`lastMatchMs` and `lastRankedMs`, in ms after the plan's start, so negative). A
+ * match pushed past the window is dropped (returned with the reason) and pushes nothing; every other action keeps its
+ * random moment unless the action before it now runs later.
+ */
+export function scheduleActions(
+  actions: PlannedAction[],
+  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null },
+): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
+  const raw = actions.map(() => o.random() * o.windowMs).sort((a, b) => a - b)
+  const kept: ScheduledAction[] = []
+  const dropped: { p: PlannedAction; reason: string }[] = []
+  let last = -o.gapMs
+  let lastMatch = o.lastMatchMs ?? null
+  let lastRanked = o.lastRankedMs ?? null
+  actions.forEach((p, i) => {
+    let at = Math.max(raw[i]!, last + o.gapMs)
+    if (p.action.type === 'play_match') {
+      const afterMatch = lastMatch === null ? -Infinity : lastMatch + PLAN_MATCH_GAP_MS
+      const afterRanked = p.action.match_type === 'ranked' && lastRanked !== null ? lastRanked + PLAN_RANKED_GAP_MS : -Infinity
+      const spaced = Math.max(at, afterMatch, afterRanked)
+      // Dropped only when a gate pushes it out of the window (the 30-second gaps alone never drop an action).
+      if (spaced > o.windowMs && spaced > at) {
+        dropped.push({ p, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match runs about 10 minutes)' })
+        return
+      }
+      at = spaced
+      lastMatch = at
+      if (p.action.match_type === 'ranked') lastRanked = at
+    }
+    kept.push({ p, offset: at })
+    last = at
+  })
+  return { kept, dropped }
+}
 
 /**
  * Telegram's update offset in kv telegram_offset, with the bot's number (the public part of the token before the
@@ -767,8 +825,9 @@ export class Service {
     const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts, marketSales })
     // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
-    if (plan && snap.formationRecord?.games && snap.profile) {
-      this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)
+    // Its own matches are kept when they were read; a failed read of them hides none of the others' (audit B2).
+    if (plan && snap.profile) {
+      if (snap.formationRecord?.games) this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)
       snap.formationPool = this.store.formationPool()
     }
     this.noteTeams(index, snap)
@@ -1237,8 +1296,8 @@ export class Service {
 
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
-    const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc)
-    const plan = await this.strategist!.plan({ snapshot: snap, settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
+    const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered)
+    const plan = await this.strategist!.plan({ snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +
@@ -1254,8 +1313,22 @@ export class Service {
   }
 
   /**
-   * Runs the actions at random moments across the next window (at least minGapSeconds apart), each
-   * against a fresh snapshot. Routine actions pass the per-action probability; owner requests always run.
+   * The snapshot a plan is made from, with what the executor reads from the activity log before a 1v1 (the same
+   * helpers, src/executor/rivals.ts): per rival, this agent's 1v1s of the last 7 days and when the weekly limit frees,
+   * and the rivals another of the owner's teams has a 1v1 out against or has just claimed, given only as not
+   * available now (no reason, no team named: the agents know nothing of each other).
+   */
+  private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
+    const now = new Date()
+    const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
+    const unavailable = new Set([...rivalsOutByOthers(this.store, agent.index, dry, now).keys(), ...this.executor.rivalsClaimedByOthers(agent.index, dry, now.getTime())])
+    return { ...snap, oneVOnes: { week, unavailable: [...unavailable] } }
+  }
+
+  /**
+   * Runs the actions at random moments across the next window (at least minGapSeconds apart, the matches spaced by
+   * their cooldowns: scheduleActions), each against a fresh snapshot. Routine actions pass the per-action
+   * probability; owner requests always run.
    */
   private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean): Promise<void> {
     if (!actions.length) return
@@ -1270,17 +1343,42 @@ export class Service {
     const beforeLock = nextLock !== undefined && nextLock - Date.now() - LOCK_MARGIN_MS < windowMs
     if (nextLock !== undefined) windowMs = Math.max(0, Math.min(windowMs, nextLock - Date.now() - LOCK_MARGIN_MS))
     const gapMs = agent.settings.minGapSeconds * 1000
-    const offsets = actions.map(() => Math.random() * windowMs).sort((a, b) => a - b)
-    // Pieces an extension cuts from an action (see src/extensions.ts) queue right behind it, at the usual gap.
-    const queue = actions.map((p, i) => ({ p, offset: offsets[i]! }))
-    let last = -gapMs
     const start = Date.now()
+    // The matches keep FoxLeague's gates apart, the agent's last starts before this plan included (its own log).
+    const before = lastMatchStarts(this.store, agent.index, new Date(start))
+    const { kept, dropped } = scheduleActions(actions, { windowMs, gapMs, random: Math.random, lastMatchMs: before.match ? before.match.getTime() - start : null, lastRankedMs: before.ranked ? before.ranked.getTime() - start : null })
+    for (const d of dropped) {
+      const summary = `dropped from this plan: ${describeAction(d.p.action)}: ${d.reason} leaves no room before the plan's window ends; the next plan can play it`
+      this.store.log({ agentIndex: agent.index, kind: d.p.action.type, status: 'info', summary })
+      // The owner asked for it (Telegram /do): they hear why it did not run, as the executor's refusal told them before.
+      if (!routine) this.notify(`${agentName(agent.index)}: ${summary}`)
+    }
+    // Pieces an extension cuts from an action (see src/extensions.ts) queue right behind it, at the usual gap.
+    const queue: ScheduledAction[] = kept
+    let last = -gapMs
     // The mode the plan was made in: a switch between dry run and live mid-plan ends the plan.
     const plannedDry = agent.dryRun
     while (queue.length) {
       const { offset } = queue[0]!
       let planned = queue.shift()!.p
-      const at = Math.max(offset, last + gapMs)
+      let at = Math.max(offset, last + gapMs)
+      if (planned.action.type === 'play_match') {
+        // The action before it may have taken longer than planned: the real gates from the log, read again now.
+        const starts = lastMatchStarts(this.store, agent.index, new Date())
+        const ready = Math.max(
+          starts.match ? starts.match.getTime() + Math.max(MATCH_RUNS_MS, MATCH_COOLDOWN_MS) : 0,
+          planned.action.match_type === 'ranked' && starts.ranked ? starts.ranked.getTime() + RANKED_COOLDOWN_MS : 0,
+        ) - start
+        if (ready > at) {
+          if (ready > windowMs + MATCH_DRIFT_MS) {
+            const summary = `dropped from this plan: ${describeAction(planned.action)}: the last match started later than planned and its cooldown leaves no room before the plan's window ends; the next plan can play it`
+            this.store.log({ agentIndex: agent.index, kind: planned.action.type, status: 'info', summary })
+            if (!routine) this.notify(`${agentName(agent.index)}: ${summary}`)
+            continue
+          }
+          at = ready
+        }
+      }
       last = at
       const wait = start + at - Date.now()
       if (wait > 0) await this.pause(wait)

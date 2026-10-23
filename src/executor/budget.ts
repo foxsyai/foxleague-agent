@@ -35,16 +35,34 @@ export interface BudgetView {
   setupBudgetUsd: number
   spentSetupUsd: number
   remainingSetupUsd: number
+  /**
+   * The EGLD (and WEGLD) swapped away, in USD, this game day and this calendar month, against the executor's swap
+   * allowances: the daily cap and the monthly budget (each at least the setup budget before registration).
+   */
+  swappedTodayUsd: number
+  swapAllowanceTodayUsd: number
+  remainingSwapTodayUsd: number
+  swappedMonthUsd: number
+  swapAllowanceMonthUsd: number
+  remainingSwapMonthUsd: number
   /** Which ledger these figures come from. */
   dryRun: boolean
 }
 
-export function budgetView(store: Store, agentIndex: number, settings: AgentSettings, dryRun: boolean, now: Date, resetHourUtc = 14): BudgetView {
+/**
+ * `registered`: whether the team exists, which sets the swap allowances as the executor does (its own swap check
+ * reads the same ledger rows; this view only tells the plan what is left).
+ */
+export function budgetView(store: Store, agentIndex: number, settings: AgentSettings, dryRun: boolean, now: Date, resetHourUtc = 14, registered = true): BudgetView {
   const gameDay = gameDayKey(now, resetHourUtc)
   const month = now.toISOString().slice(0, 7)
   const spentTodayUsd = store.spentUsd(agentIndex, { gameDay, category: 'play', dryRun })
   const spentMonthUsd = store.spentUsd(agentIndex, { month, category: 'play', dryRun })
   const spentSetupUsd = store.spentUsd(agentIndex, { category: 'setup', dryRun })
+  const swappedTodayUsd = store.spentUsd(agentIndex, { gameDay, category: 'swap', dryRun })
+  const swappedMonthUsd = store.spentUsd(agentIndex, { month, category: 'swap', dryRun })
+  const swapAllowanceTodayUsd = registered ? settings.dailyCapUsd : Math.max(settings.dailyCapUsd, settings.setupBudgetUsd)
+  const swapAllowanceMonthUsd = registered ? settings.monthlyBudgetUsd : Math.max(settings.monthlyBudgetUsd, settings.setupBudgetUsd)
   return {
     gameDay,
     month,
@@ -57,6 +75,12 @@ export function budgetView(store: Store, agentIndex: number, settings: AgentSett
     setupBudgetUsd: settings.setupBudgetUsd,
     spentSetupUsd,
     remainingSetupUsd: Math.max(0, settings.setupBudgetUsd - spentSetupUsd),
+    swappedTodayUsd,
+    swapAllowanceTodayUsd,
+    remainingSwapTodayUsd: Math.max(0, swapAllowanceTodayUsd - swappedTodayUsd),
+    swappedMonthUsd,
+    swapAllowanceMonthUsd,
+    remainingSwapMonthUsd: Math.max(0, swapAllowanceMonthUsd - swappedMonthUsd),
     dryRun,
   }
 }

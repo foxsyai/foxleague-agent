@@ -59,6 +59,7 @@ the web app does today; it adds no new interface.
 18. [Contract reference](#18-contract-reference)
 19. [Routes a player client does not use](#19-routes-a-player-client-does-not-use)
 20. [Open questions](#20-open-questions)
+21. [Changes from 2026-10-15 to 2026-10-23](#21-changes-from-2026-10-15-to-2026-10-23)
 
 ---
 
@@ -1723,3 +1724,62 @@ Owner or game server only: `createTournament`, `setTournamentTerms`, `startTourn
 - `/healthz/*`: not reachable at the edge (section 1.1). `GET /api/health` answers
   `{status, db, tournament_manager, uptime_seconds}` (raw JSON).
 - The match replay routes (`/api/replay`, `/api/live`, `/api/matches/{id}/log`) are for viewers.
+
+---
+
+## 21. Changes from 2026-10-15 to 2026-10-23
+
+FoxLeague `origin/main` from `ed129a895` (the agent's last sync) to `9ddc0f911` (manual `565a902de`), read by the
+audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
+
+- **Registered wallets only.** Since the owner rule of 2026-10-20, create, train, sync prepare, the match waiver
+  quote, notifications and push take `RegisteredWallet`: a wallet without a team gets HTTP 403 with the envelope
+  "Register your team first." (`backend/src/auth.rs:466`, `:546`); the confirms and onboarding stay open. The agent
+  calls those routes only when registered, and `call()` turns the envelope into an `ApiRefusal`.
+- **Match slots.** `POST /api/matches/play` waits up to 30 s for one of the platform's match slots before it starts
+  the match (`backend/src/routes/matches.rs:2268-2300`, `config_registry.rs:1341` `MATCH_SIM_SLOT_WAIT_MS 30_000`);
+  the web app waits 90 s for the answer (`frontend/src/lib/api.ts:1114`).
+- **League + Knockout ("Champions FoxLeague").** An admin-created format, off by default
+  (`TOURNAMENT_LEAGUE_KNOCKOUT_ENABLED_DEFAULT 0`), seats by invitation in waves from the frozen leaderboard, one seat
+  per team, a sponsor prize. Routes: `GET /api/tournaments/invitations` (own pending invitations: tournament_id,
+  title, tier, entry_fee_foxsy, wave, expires_at, seats_lock_at, can_accept, refusal, prize_atomic;
+  `league_invitations.rs:1632`), `GET /api/tournaments/{id}/invitations`, `POST /api/tournaments/{id}/invitation/decline`,
+  `GET/POST /api/tournaments/{id}/prize[/deposit]`; accepting is the ordinary paid join through the invitation gate
+  (`tournaments.rs:4881`). New join refusals (not invited, expired, declined, left, one seat, "still in <title>"),
+  a leave refusal ("seats are locked since <time>") and create refusals (`snapshot_at`, `sponsor_prize_foxsy`,
+  "Developer Mode needs an admin's approval"). Slot window: `(max_teams x 8 / 2 + 46) x 3` minutes
+  (`tournaments.rs:1177-1181`). The agent refuses this format (`unsupportedFormat`): no manual page, admin-only.
+- **Fusion pre-check.** `can-fuse` gains the reasons `not_in_wallet` and `ownership_unreadable` and the refusal "A
+  fusion takes at most 3 different card nonces." (`marketplace.rs:3486`, `:3512`); the agent refuses on any
+  `can_fuse: false` with its reason.
+- **Match waiver on the profile.** The match waiver is sold on the card's profile for every rarity with a waiver,
+  Legendary included (for the listing gate; `frontend/src/components/CardMatchWaiver.tsx`, quote route
+  `players.rs:1168-1170`, contract `pay_fusion_match_waiver` refuses only a 0 price).
+- **Shop.** New confirm answers: "This payment is being refunded: the money has not been returned yet. It cannot be
+  used for a purchase; if it does not arrive, contact support." (`shop.rs:1530`; the agent treats it as final and does
+  not credit it, the conservative side), "Only a registered FoxLeague wallet can buy a Common pack ...", "Could not
+  check your registration right now." (`tx_pending`), the pack "budget window" texts; the refundable record is
+  consumed after delivery and a refund the contract refuses is handed to an operator (#503).
+- **Sign-in budget.** `POST /api/auth/verify` answers 429 "Too many failed sign-in attempts" after 10 failed or
+  replayed signatures per client or wallet in 60 s (5-minute lock); a fresh valid signature still passes.
+- **Tournaments contract (testnet so far).** The upgrades of 2026-10-16/17/22/23 add invitation tournaments,
+  sponsor prizes (settled after a 24-hour minimum run), royalties only to an approved provider or a seated
+  participant, the owner's close while paused, and `joinTournament` refuses operator keys and contracts
+  (`tournament_manager.rs:457`). Per `contracts/deploys.yaml` mainnet is not upgraded yet. After the upgrade the web
+  app's `JOIN_TOURNAMENT_GAS_LIMIT` is 8,400,000 (`frontend/src/lib/gasLimits.ts:32`; the heaviest join measured
+  5,550,000): the agent's 7,000,000 still covers it, and should follow to 8,400,000 with the mainnet upgrade.
+- **What the agent does with them (audit 2026-10-23).** `playMatch` waits 95 s and reads `GET /api/matches/active`
+  after a lost answer; a ranked or casual match's statistics (`/api/matches/{id}/stats`) carry the cards' current
+  synced stats and `current_condition()` at read time (`launch_squad`), while `/api/public/tournament-match/{id}/stats`
+  carries the lock snapshots, so the agent counts a ranked or casual strength edge only from statistics read within
+  6 hours of `finished_at`; `league_knockout` slot window (max_teams x 8 / 2 + 46) x 3 in `src/executor/slots.ts`;
+  a Legendary's match waiver is bought only for a spare it would list; the XP booster is applied when a match result
+  is applied (`apply_match_results`, a purchase verified within the last 24 h; tournament and 1v1 results at the
+  reveal), and at the Zeus level the agent buys one only with such a fixture within 24 h. A planning snapshot also
+  reads `GET /api/tournaments/{id}` (participants) for up to 4 open Silver or Gold tournaments and each seated team's
+  players (and, when it is not on the leaderboard, its profile), with 20-minute caches. The one-card sync uses
+  `/sync/prepare?wallet_address=&nonce=`.
+- **Config.** `/api/config` adds `tournament_defaults.league_knockout_enabled`,
+  `.league_knockout_min_invite_window_minutes` and `tx_signature_check_mode`; squads carry `shirt_number`; the upcoming
+  route answers `is_home` false instead of null; notification kinds gain `match_ready` and `tournament_eliminated`.
+

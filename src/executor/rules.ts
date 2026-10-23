@@ -199,6 +199,11 @@ function unsupportedFormat(format: string, doing: 'joining' | 'creating'): strin
   return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
 }
 
+/** One of the four formats the agent knows how to join and create. */
+export function supportedFormat(format: string): boolean {
+  return Object.hasOwn(VALID_SIZES, format)
+}
+
 /** Largest size worth creating: what recently filled plus a margin (README: 16-20 is the norm, not 64). */
 export function sizeCeiling(s: AgentSnapshot): number {
   const seated = s.market.recentStandard.filter(t => t.status === 'completed').map(t => t.seated)
@@ -279,6 +284,12 @@ export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidRareFoxsy' |
   return null
 }
 
+/** FoxLeague's 30 seconds between match starts and 15 minutes after a ranked start, each with a margin (play_match). */
+export const MATCH_COOLDOWN_MS = 35_000
+export const RANKED_COOLDOWN_MS = 15.5 * 60_000
+/** A casual or ranked match runs about 10 minutes; another start before it ends is refused ("already in match"). */
+export const MATCH_RUNS_MS = 11 * 60_000
+
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72
 /** Lowest reserve per rarity, whatever the floor says (one junk listing can drag the floor to 500). */
@@ -308,16 +319,91 @@ export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boo
   }
 }
 
+/** The most condition a card can have. */
+const MAX_CONDITION = 100
+
+/** Condition points a card regenerates per hour of rest: FoxLeague's daily rate, half of it after age 30. */
+function regenPerHour(p: PlayerView, cfg: FoxConfig): number {
+  const rate = (cfg.condition_regen_points_per_day ?? 48) / 24
+  return p.ageYears > 30 ? rate / 2 : rate
+}
+
+/** Hours from `now` to an ISO time, 0 when it is past or unreadable. */
+export function hoursUntil(iso: string, now: Date): number {
+  const h = (new Date(iso).getTime() - now.getTime()) / 3600_000
+  return Number.isFinite(h) && h > 0 ? h : 0
+}
+
+/** The squad a schedule wears down: the eleven and the bench. */
+function matchSquad(s: AgentSnapshot): PlayerView[] {
+  return s.team ? [...s.team.lineup, ...s.team.substitutes].map(n => card(s, n)).filter((p): p is PlayerView => Boolean(p)) : []
+}
+
+/**
+ * What the squad's other tournaments (1v1s apart) still bring around a tournament that plays from `start` to `end`:
+ * the matches before its start and those whose play overlaps it. Started: the fixtures still to play; not started:
+ * the most its format can bring. One over by now and before the start (as its schedule says) brings nothing. Null: unreadable.
+ */
+function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, now: Date, start: number, end: number): { before: number; during: number; beforeEnd: number } | null {
+  const mine = s.auth?.myTournaments
+  if (!mine) return null
+  const groupSize = cfg.tournament_defaults?.groups_knockout_group_size ?? 4
+  let before = 0
+  let during = 0
+  // When the last of the matches before the start ends: the squad rests up to it, then pays for them.
+  let beforeEnd = now.getTime()
+  for (const x of mine.active) {
+    if (x.id === id || x.max_teams === 2) continue
+    const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
+    const xStart = new Date(x.starts_at).getTime()
+    const xEnd = xStart + (total - 1) * (x.round_interval_minutes ?? 30) * 60_000
+    if (xStart > end || (xEnd < start && xEnd < now.getTime())) continue
+    const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
+    const n = x.started_at ? Math.max(1, left) : total
+    // An unreadable start overlaps everything (as before the projection): nothing is moved out of the schedule's count.
+    if (xEnd >= start || !Number.isFinite(start)) during += n
+    else {
+      before += n
+      beforeEnd = Math.max(beforeEnd, xEnd)
+    }
+  }
+  return { before, during, beforeEnd }
+}
+
+/**
+ * Each card's condition at a tournament's start: today's plus what it regenerates up to the end of its other
+ * tournaments' matches before then (at most 100), less an even share of what those matches cost, plus what it
+ * regenerates from then to the start (at most 100). Resting is capped before the matches are paid for, so
+ * regeneration that would be wasted at 100 never pays for them (agent review of PR #24). A start that is past or
+ * unreadable is today's condition (a projection never guesses upward). Null: the agent's tournaments are unreadable.
+ */
+export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: string; end?: number }, now: Date): { hours: number; during: number; at: (p: PlayerView) => number } | null {
+  const cfg = s.config
+  if (!cfg) return { hours: 0, during: 0, at: p => p.condition }
+  const start = new Date(t.starts_at).getTime()
+  const owed = otherMatches(s, cfg, t.id, now, start, t.end ?? start)
+  if (!owed) return null
+  const hours = hoursUntil(t.starts_at, now)
+  const squad = matchSquad(s)
+  const spent = hours > 0 && squad.length ? (owed.before * 11 * (cfg.condition_loss_per_match ?? 10)) / squad.length : 0
+  const restBefore = owed.before ? Math.min(hours, Math.max(0, (owed.beforeEnd - now.getTime()) / 3600_000)) : 0
+  const cap = (c: number) => Math.max(0, Math.min(MAX_CONDITION, c))
+  return { hours, during: owed.during, at: p => (hours > 0 ? cap(cap(p.condition + regenPerHour(p, cfg) * restBefore) - spent + regenPerHour(p, cfg) * (hours - restBefore)) : p.condition) }
+}
+
 /**
  * Refuses a tournament whose schedule would wear the squad below the playable condition: every
- * appearance costs 11 starters the match loss, against the squad's condition above the floor plus
- * what it regenerates between rounds (half the rate after age 30). Matches the squad already owes to
- * tournaments it sits in, when their play overlaps, count too: two tournaments at the same hour each
- * look fine alone. Needs the snapshot's team and the agent's tournaments (unreadable = refused).
+ * appearance costs 11 starters the match loss, against the squad's condition above the floor at the
+ * start (conditionAtStart: today's plus what it regenerates until then, less what its other tournaments
+ * cost before then, at most 100) plus what it regenerates between rounds (half the rate after age 30).
+ * Matches the squad already owes to tournaments it sits in, when their play overlaps, count too: two
+ * tournaments at the same hour each look fine alone. Needs the snapshot's team and the agent's
+ * tournaments (unreadable = refused).
  */
 function scheduleRefusal(
   s: AgentSnapshot,
   t: { id?: number; format: string; max_teams: number; home_and_away?: boolean; round_interval_minutes?: number | null; starts_at: string },
+  now: Date,
 ): string | null {
   const cfg = s.config
   if (!cfg || !s.team) return null
@@ -326,49 +412,63 @@ function scheduleRefusal(
   const interval = t.round_interval_minutes ?? 30
   const start = new Date(t.starts_at).getTime()
   const end = start + (own - 1) * interval * 60_000
-  const mine = s.auth?.myTournaments
-  if (!mine) return 'your current tournaments could not be read: not taking on another schedule blind'
-  let owed = 0
-  for (const x of mine.active) {
-    if (x.id === t.id || x.max_teams === 2) continue
-    const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
-    const xStart = new Date(x.starts_at).getTime()
-    const xEnd = xStart + (total - 1) * (x.round_interval_minutes ?? 30) * 60_000
-    if (xEnd < start || xStart > end) continue
-    // Started: the fixtures still to play are known; not started: the most its format can bring.
-    const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
-    owed += x.started_at ? Math.max(1, left) : total
-  }
+  const atStart = conditionAtStart(s, { id: t.id, starts_at: t.starts_at, end }, now)
+  if (!atStart) return 'your current tournaments could not be read: not taking on another schedule blind'
+  const owed = atStart.during
   const matches = own + owed
   if (matches <= 1) return null
   const hours = ((own - 1) * interval) / 60
   const floor = cfg.min_field_condition ?? 30
   const loss = cfg.condition_loss_per_match ?? 10
-  const regenPerHour = (cfg.condition_regen_points_per_day ?? 48) / 24
-  const squad = [...s.team.lineup, ...s.team.substitutes].map(n => card(s, n)).filter((p): p is PlayerView => Boolean(p))
-  const available = squad.reduce((sum, p) => sum + Math.max(0, p.condition - floor) + (p.ageYears > 30 ? regenPerHour / 2 : regenPerHour) * hours, 0)
+  const available = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
   const needed = matches * 11 * loss
   if (needed <= available) return null
   const also = owed ? ` (${own} here plus ${owed} still owed to your other tournaments at the same time)` : ''
-  return `the schedule would wear the squad down: up to ${matches} matches${also} about every ${interval} min need ~${needed} condition, the squad has ~${Math.round(available)} above ${floor} with recovery`
+  const when = atStart.hours > 0 ? ` at its start in ${Math.round(atStart.hours)} h` : ''
+  return `the schedule would wear the squad down: up to ${matches} matches${also} about every ${interval} min need ~${needed} condition, the squad has ~${Math.round(available)} above ${floor}${when} with recovery`
 }
 
 /**
  * Lineup strength as the match engine sees it: synced stats scaled by condition, stat x (50 +
  * condition/2) / 100, summed over the starting eleven. A rival's squad is taken at full condition
- * (it can rest or buy recovery before the match).
+ * (it can rest or buy recovery before the match). Ours at today's condition, or at the one `condition`
+ * gives (a tournament's start, conditionAtStart).
  */
-export function lineupStrength(s: AgentSnapshot): number {
+export function lineupStrength(s: AgentSnapshot, condition: (p: PlayerView) => number = p => p.condition): number {
   return (s.team?.lineup ?? []).reduce((sum, n) => {
     const p = card(s, n)
-    return sum + (p ? (p.syncedTotal * (50 + p.condition / 2)) / 100 : 0)
+    return sum + (p ? (p.syncedTotal * (50 + condition(p) / 2)) / 100 : 0)
   }, 0)
 }
 
 /** A Zeus 1v1 needs at least this win chance; a seated team is clearly stronger with both margins below. */
 export const ZEUS_MIN_1V1_CHANCE = 0.55
-const ZEUS_STRONGER_SQUAD = 1.05
-const ZEUS_STRONGER_ELO = 50
+export const ZEUS_STRONGER_SQUAD = 1.05
+export const ZEUS_STRONGER_ELO = 50
+/** Zeus does not enter a field with this many clearly stronger teams, or this many it could not read. */
+export const ZEUS_FIELD_LIMIT = 3
+
+/** One seated team of a tournament: its lineup strength at full condition and its ELO, null when unread. */
+export interface FieldSeat {
+  userId: number
+  strength: number | null
+  elo: number | null
+}
+
+/**
+ * How a seated field compares with us, the one test the Zeus join rule and the plan's field line both use. Clearly
+ * stronger: ELO more than 50 above ours and a lineup more than 5 percent above ours (a lineup that could not be read
+ * counts when its ELO alone is clearly higher). Clearly weaker: both margins the other way, both known. Unread:
+ * neither known. The rest is even (or known only in part).
+ */
+export function judgeField(field: FieldSeat[], ours: number, myElo: number): { stronger: number; weaker: number; even: number; unread: number; strongestElo: number | null; strongestLineup: number | null } {
+  const stronger = field.filter(f => f.elo !== null && f.elo > myElo + ZEUS_STRONGER_ELO && (f.strength === null || f.strength > ours * ZEUS_STRONGER_SQUAD)).length
+  const weaker = field.filter(f => f.elo !== null && f.elo < myElo - ZEUS_STRONGER_ELO && f.strength !== null && f.strength * ZEUS_STRONGER_SQUAD < ours).length
+  const unread = field.filter(f => f.strength === null && f.elo === null).length
+  const elos = field.map(f => f.elo).filter((e): e is number => e !== null)
+  const lineups = field.map(f => f.strength).filter((x): x is number => x !== null)
+  return { stronger, weaker, unread, even: field.length - stronger - weaker - unread, strongestElo: elos.length ? Math.max(...elos) : null, strongestLineup: lineups.length ? Math.max(...lineups) : null }
+}
 
 /** The 1v1 gates both join and create share: a known, not stronger opponent, not farmed every day. */
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
@@ -414,6 +514,42 @@ function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
   if (peers.length < 3) return `only ${peers.length} ${c.rarity} card${peers.length === 1 ? '' : 's'} free for fusion, 3 are needed`
   const left = s.players.filter(p => !p.listed).length - 2
   if (left < 18) return `a fusion would leave ${left} cards and a match needs 18: get spare cards first`
+  return null
+}
+
+/** Fixture phases a booster bought now still doubles: FoxLeague awards a match's XP when its result is applied. */
+const BOOSTER_PHASES = new Set(['upcoming', 'locked', 'live'])
+
+/**
+ * Why Zeus would buy the XP booster with nothing of its own to double, or null: it needs a Silver or Gold tournament
+ * or 1v1 match of its own listed, not over, kicking off within the booster's 24 hours (Bronze, ranked and casual
+ * matches earn no XP). FoxLeague reads the booster when a match's result is applied (at the reveal of a tournament or
+ * 1v1 match; matches.rs apply_match_results, a purchase verified within the last 24 h), so buying it once the fixture
+ * is drawn loses nothing, while a seat in an open tournament can still come back (audit D9, 2026-10-23). Either list
+ * unreadable is no "none".
+ */
+function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
+  const upcoming = s.auth?.upcoming
+  const mine = s.auth?.myTournaments
+  if (!upcoming || !mine) return 'your fixtures could not be read: Zeus buys the XP booster only for competitive matches of its own'
+  const sure = upcoming.matches.some(m => {
+    const at = Date.parse(m.scheduled_at)
+    const t = mine.active.find(x => x.id === m.tournament_id)
+    return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && (t?.tier === 'silver' || t?.tier === 'gold')
+  })
+  return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): Zeus buys the XP booster once its fixtures are drawn'
+}
+
+/**
+ * Why the agent would not list this card (the squad checks of list_card), or null: outside the lineup and bench, at
+ * least 18 cards left after it and not among the CORE_CARDS strongest. A Legendary's match waiver is bought only then.
+ */
+function listingBlocked(s: AgentSnapshot, c: PlayerView): string | null {
+  if (inSquad(s, c.nonce)) return `#${c.nonce} is in the lineup or on the bench`
+  const unlisted = s.players.filter(p => !p.listed)
+  if (unlisted.length - 1 < 18) return 'listing it would leave fewer than 18 cards; a match needs 18'
+  const rank = [...unlisted].sort((x, y) => y.syncedTotal - x.syncedTotal).findIndex(p => p.nonce === c.nonce)
+  if (rank >= 0 && rank < CORE_CARDS) return `#${c.nonce} is among the ${CORE_CARDS} strongest cards: the agent sells only spares`
   return null
 }
 
@@ -569,8 +705,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (legal) return refuse(legal)
       const exhausted = s.team.lineup.filter(n => (card(s, n)?.condition ?? 0) <= 0)
       if (exhausted.length) return refuse(`starters at condition 0: ${exhausted.map(n => `#${n}`).join(',')}`)
-      if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < 35_000) return refuse('match cooldown (30 s)')
-      if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < 15.5 * 60_000) return refuse('ranked cooldown (15 min)')
+      if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < MATCH_COOLDOWN_MS) return refuse('match cooldown (30 s)')
+      if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < RANKED_COOLDOWN_MS) return refuse('ranked cooldown (15 min)')
       return allow(0)
     }
 
@@ -609,19 +745,18 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (fit.length < 11) return refuse(`only ${fit.length} match-fit players (condition >= ${cfg.min_field_condition})`)
       }
       if (!oneVOne) {
-        const worn = scheduleRefusal(s, t)
+        const worn = scheduleRefusal(s, t, ctx.now)
         if (worn) return refuse(worn)
         // Zeus enters only with a chance of the top three: not when three seated teams are clearly stronger.
         if (ctx.zeus) {
           // Never blind: a field that could not be read is no field to pay into.
           if (!ctx.field) return refuse('the seated teams could not be read: Zeus does not enter a field it cannot judge')
-          const ours = lineupStrength(s)
-          const myElo = s.profile.elo_rating
-          const unread = ctx.field.filter(f => f.strength === null && f.elo === null).length
-          if (unread >= 3) return refuse(`${unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)
-          // A team whose squad could not be read counts as stronger when its ELO alone is clearly higher.
-          const stronger = ctx.field.filter(f => f.elo !== null && f.elo > myElo + ZEUS_STRONGER_ELO && (f.strength === null || f.strength > ours * ZEUS_STRONGER_SQUAD))
-          if (stronger.length >= 3) return refuse(`${stronger.length} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
+          // Our eleven as it will be at the start (the rivals are taken at full condition): rested, less what our other tournaments cost before it.
+          const atStart = conditionAtStart(s, t, ctx.now)
+          if (!atStart) return refuse('your current tournaments could not be read: Zeus does not judge a field blind')
+          const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
+          if (field.unread >= ZEUS_FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)
+          if (field.stronger >= ZEUS_FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
         }
       }
       if (t.tier === 'bronze') return allow(0, { tier: 'bronze', scId: t.sc_tournament_id ?? t.id, fee: 0 })
@@ -676,7 +811,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
         return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(taken.end)} UTC); ${free !== null ? `the first free start for this format and size is starts_in_hours ${free}` : 'no free start in the next 72 hours'}`)
       }
-      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() })
+      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() }, ctx.now)
       if (worn) return refuse(worn)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
@@ -743,6 +878,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (ctx.lastBoosterAt) {
             const hours = (ctx.now.getTime() - ctx.lastBoosterAt.getTime()) / 3600_000
             if (hours < 24 - XP_BOOSTER_RENEW_HOURS) return refuse(`an XP booster was bought ${Math.max(0, Math.floor(hours))} h ago: another one now would throw away the hours left`)
+          }
+          if (ctx.zeus) {
+            const none = noBoosterFixture(s, ctx.now)
+            if (none) return refuse(none)
           }
           amount = prices.xp_booster
           break
@@ -860,9 +999,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
       if (c.listed) return refuse(`#${a.nonce} is listed for sale: a listed card cannot be waived`)
-      // Only for a fusion that can really happen: otherwise the FOXSY buys nothing.
-      const blocked = fusionBlocked(s, c)
-      if (blocked) return refuse(`no fusion is possible with #${a.nonce} yet (${blocked}): a waiver would be wasted`)
+      // Only for a fusion that can really happen: otherwise the FOXSY buys nothing. A Legendary is never fused, but
+      // FoxLeague sells its match waiver for the listing gate (405, 135 played): bought only for a card the agent
+      // would list (audit C1, 2026-10-23). Its cooldown waiver still buys nothing.
+      const forListing = a.type === 'fusion_match_waiver' && c.rarity === 'Legendary'
+      const blocked = forListing ? listingBlocked(s, c) : fusionBlocked(s, c)
+      if (blocked) return refuse(forListing ? `#${a.nonce} is not a card the agent would list (${blocked}): a waiver would be wasted` : `no fusion is possible with #${a.nonce} yet (${blocked}): a waiver would be wasted`)
+      const purpose = forListing ? 'listing' : 'fusion'
       let costAtomic: bigint
       const notes: string[] = []
       const extra: Record<string, unknown> = {}
@@ -890,7 +1033,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const floor = q.floor ?? g.floor
         if (q.chain_played < floor) return refuse(`#${a.nonce} has really played ${q.chain_played} competitive matches on chain; ${aRarity(c.rarity)} must play ${floor} before credit can be bought`)
         const needed = minMatches - q.chain_played - q.credit
-        if (needed <= 0) return refuse(`#${a.nonce} already has the ${minMatches} matches fusion needs`)
+        if (needed <= 0) return refuse(`#${a.nonce} already has the ${minMatches} matches ${purpose} needs`)
         if (ctx.piece) {
           const target = Math.min(needed, q.max_purchasable)
           if (ctx.piece.index === 1 && ctx.piece.of * a.matches !== target) return refuse(`#${a.nonce} needs exactly ${target} to reach ${minMatches}: the pieces would buy ${ctx.piece.of * a.matches}`)
@@ -903,7 +1046,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (needed > q.max_purchasable) return refuse(`#${a.nonce} needs ${needed} more but only ${q.max_purchasable} can be bought: play more matches first`)
         costAtomic = BigInt(q.price_wei) * BigInt(a.matches)
         extra.matches = a.matches
-        notes.push(a.matches === needed ? `#${a.nonce} reaches ${minMatches} competitive matches for fusion` : `#${a.nonce} +${a.matches} toward the ${minMatches} matches for fusion (${needed - a.matches} to go)`)
+        notes.push(a.matches === needed ? `#${a.nonce} reaches ${minMatches} competitive matches for ${purpose}` : `#${a.nonce} +${a.matches} toward the ${minMatches} matches for ${purpose} (${needed - a.matches} to go)`)
       }
       const whole = Number(costAtomic / 10n ** 18n)
       // The first piece of a split waiver answers for the whole group, as the unsplit action would.

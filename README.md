@@ -50,10 +50,12 @@ the dashboard or by chatting with it on Telegram.
   against the game rules first.
 - **Dry run first.** A new install only simulates. Going live needs your Go LIVE (typed, with your password, in
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
-- **Fair play.** Public information only and a human pace. Your agents are never coordinated: each plays its own
-  game without knowing the others, so two of them may meet in a tournament or a 1v1, or bid on the same card, by
-  chance (FoxLeague's Fair Play forbids arranging results, not meeting). Guards against rivals who try to farm an
-  agent (1v1s only against teams of similar strength, at most two a week each).
+- **Fair play.** Public information only and a human pace. Your agents are never coordinated against anyone: each
+  plays its own game without knowing which teams are yours, so two of them may meet in a tournament or a 1v1, or bid
+  on the same card, by chance (FoxLeague's Fair Play forbids arranging results, not meeting). They share two things
+  only: a pooled formation record with no team named, and a rule that only one of them at a time has a 1v1 out
+  against the same rival, so no manager faces several of your teams at once. Guards against rivals who try to farm
+  an agent (1v1s only against teams of similar strength, at most two a week each).
 - **Reviewed.** Fourteen numbered adversarial reviews, the reviews of CI and of the xExchange pause and a
   whole-project review on 13 October 2026. Every confirmed finding is fixed or decided; the few still open are listed
   in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).

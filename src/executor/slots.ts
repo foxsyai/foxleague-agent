@@ -25,6 +25,10 @@ export function estimateMinutes(format: string, maxTeams: number, homeAndAway: b
       return (homeAndAway ? maxTeams * (maxTeams - 1) : Math.floor((maxTeams * (maxTeams - 1)) / 2)) * 3
     case 'swiss':
       return (Math.ceil(Math.log2(maxTeams)) + 1) * Math.floor(maxTeams / 2) * 3
+    case 'league_knockout':
+      // The league phase plays 8 matches a team, the knockout 46 (tournament_engine.rs LEAGUE_MATCHES_PER_TEAM,
+      // LEAGUE_KNOCKOUT_KO_MATCHES): 570 minutes for 36 teams (audit C4, 2026-10-23).
+      return (Math.floor((maxTeams * 8) / 2) + 46) * 3
     default:
       return maxTeams * 3
   }

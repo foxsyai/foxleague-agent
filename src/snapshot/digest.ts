@@ -1,13 +1,13 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { freeGaps } from '../executor/slots.ts'
-import { lineupPositionsOk, lineupStrength, XP_BOOSTER_RENEW_HOURS } from '../executor/rules.ts'
+import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
 import { EVEN_BAND, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
-import type { ShopStatus } from '../foxleague/types.ts'
+import type { ShopStatus, Tournament } from '../foxleague/types.ts'
 
 /**
  * Text written by other players or servers (titles, team, card and listing names, error messages) as
@@ -30,13 +30,19 @@ export function txt(v: unknown, max = 40): string {
 }
 
 const SHORT: Record<string, string> = { speed: 'spd', accuracy: 'acc', defense: 'def', power: 'pow', control: 'ctl', vision: 'vis', stamina: 'sta' }
+/** XP a stat's pool needs for +1 (FoxLeague's stat bump), and the pool from which the squad line shows it. */
+export const XP_PER_POINT = 2000
+export const XP_SHOWN_FROM = 1500
 
+/** A stat's pool is shown only when a few sessions or a match bring the point, and only below the rarity cap (XP on a capped stat is lost). */
 function statLine(p: PlayerView): string {
   return Object.keys(SHORT)
     .map(s => {
       const synced = p.synced[s] ?? 0
       const live = p.live[s] ?? 0
-      return `${SHORT[s]} ${synced}${live !== synced ? `>${live}` : ''}`
+      const xp = p.xp?.[s]
+      const pool = typeof xp === 'number' && xp >= XP_SHOWN_FROM && xp < XP_PER_POINT && live < p.cap ? ` (${xp}/${XP_PER_POINT})` : ''
+      return `${SHORT[s]} ${synced}${live !== synced ? `>${live}` : ''}${pool}`
     })
     .join(' ')
 }
@@ -86,6 +92,59 @@ function rivalText(f: string[] | null, strength: number | null | undefined, mine
   return `${formationsText(f)}; ${vs}`
 }
 
+/**
+ * What a seat's schedule brings, as the executor counts it (matchesAtMost, scheduleRefusal): a home-and-away round
+ * robin plays every other team twice, and the round interval spaces the matches. Only what FoxLeague says is shown.
+ */
+function scheduleText(t: { format: string; max_teams: number; home_and_away?: boolean | null; round_interval_minutes?: number | null }): string {
+  const parts = [
+    t.format === 'round_robin' && t.home_and_away === true ? `home and away (2 x ${t.max_teams - 1} matches)` : '',
+    typeof t.round_interval_minutes === 'number' && t.round_interval_minutes > 0 ? `rounds every ${t.round_interval_minutes} min` : '',
+  ].filter(Boolean)
+  return parts.length ? `, ${parts.join(', ')}` : ''
+}
+
+/**
+ * How an open tournament's seated field compares with this team, by the Zeus join rule's own test (judgeField), with
+ * our eleven at the tournament's start as the rule takes it (conditionAtStart).
+ */
+function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot['market']['fields']>[number]): string {
+  if (!f.seats || !s.profile) return 'field: unknown (the seated teams could not be read)'
+  const atStart = conditionAtStart(s, t, new Date(s.takenAt))
+  const ours = lineupStrength(s, atStart?.at)
+  const j = judgeField(f.seats, ours, s.profile.elo_rating)
+  const read = f.seats.length < f.seated ? ` (${f.seats.length} of ${f.seated} seated teams read)` : ''
+  const strongest = `strongest ELO ${j.strongestElo ?? 'unknown'}, lineup ${j.strongestLineup === null ? 'unknown' : Math.round(j.strongestLineup)}`
+  return `field${read}: ${j.stronger} clearly stronger, ${j.even} even, ${j.weaker} clearly weaker${j.unread ? `, ${j.unread} unknown` : ''} (${strongest}; yours ELO ${s.profile.elo_rating}, lineup ${Math.round(ours)} ${atStart ? 'at its start' : 'today'})`
+}
+
+/**
+ * What the executor's 1v1 checks will count against a rival (planning snapshots, s.oneVOnes): not available now (a
+ * reason the agent is not told), and this agent's 1v1s against it in the last 7 days with the weekly limit.
+ */
+function rivalNote(s: AgentSnapshot, userId: number | null | undefined): string {
+  const o = s.oneVOnes
+  if (!o || typeof userId !== 'number') return ''
+  const notes: string[] = []
+  if (o.unavailable.includes(userId)) notes.push('not available now')
+  const w = o.week.find(x => x.userId === userId)
+  if (w && w.count >= MAX_1V1_PER_OPPONENT_WEEK) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week (the limit), free again ${w.freeAt ? `${w.freeAt.slice(0, 16)} UTC` : 'later'}`)
+  else if (w && w.count > 0) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week`)
+  return notes.map(n => `, ${n}`).join('')
+}
+
+/**
+ * A team with its own open 1v1 (created by it, not accepted yet) cannot accept ours: FoxLeague allows one active 1v1
+ * per team, created or joined. Read from the open challenges in the snapshot, until that challenge's deadline.
+ */
+function ownChallengeOut(s: AgentSnapshot, userId: number): string {
+  const now = Date.parse(s.takenAt)
+  const out = s.market.openChallenges
+    .filter(t => t.max_teams === 2 && t.creator_user_id === userId && Date.parse(t.deadline) > now)
+    .sort((a, b) => b.deadline.localeCompare(a.deadline))[0]
+  return out ? `, has a 1v1 out until ${new Date(Date.parse(out.deadline)).toISOString().slice(0, 16)} UTC: cannot accept yours before` : ''
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
@@ -126,11 +185,11 @@ export function renderDigest(s: AgentSnapshot): string {
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
-    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}`)
+    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}${rivalNote(s, c.creator_user_id)}`)
   }
 
   if (s.players.length) {
-    out.push(`Squad (${s.players.length}; stats synced>live; comp = competitive matches of the rarity's match gate):`)
+    out.push(`Squad (${s.players.length}; stats synced>live, (xp/${XP_PER_POINT}) = that stat's XP pool when ${XP_SHOWN_FROM} or more, ${XP_PER_POINT} gives +1; comp = competitive matches of the rarity's match gate):`)
     if (s.config) out.push(`Match gates (fusion input or listing; ranked, casual and Bronze never count): ${gateLine(s.config)}`)
     const order = { starter: 0, bench: 1, reserve: 2 }
     const cfg = s.config
@@ -154,13 +213,18 @@ export function renderDigest(s: AgentSnapshot): string {
 
   const m = s.market
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
+  // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
+  const zeus = s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')
+  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${ZEUS_STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((ZEUS_STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way${zeus ? `; Zeus never joins a field with ${ZEUS_FIELD_LIMIT} or more clearly stronger teams, or ${ZEUS_FIELD_LIMIT} or more unknown ones` : ''})`)
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${t.is_private ? (t.invited ? ' private, you are invited' : ' private') : ''}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}`)
+    const field = m.fields?.find(f => f.id === t.id)
+    if (field) out.push(`    ${fieldText(s, t, field)}`)
   }
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()
@@ -196,7 +260,7 @@ export function renderDigest(s: AgentSnapshot): string {
   // Zeus: the threshold its 1v1s are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push('Win chances: ELO expectation and lineup strength averaged, ours at today\'s condition, theirs at full condition; Zeus plays a 1v1 from 55 percent.')
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}`).join('; ')}`)
+    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')

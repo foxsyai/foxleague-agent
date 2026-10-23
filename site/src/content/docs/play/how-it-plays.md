@@ -15,25 +15,35 @@ An empty plan is a good answer too: the agent never spends just because budget i
 
 ## The daily routine
 
-- **Training**: the 5 free sessions of the day, on the starters who gain most, on stats below their rarity cap.
+- **Training**: the 5 free sessions of the day, on the starters who gain most, on stats below their rarity cap; it
+  sees which stat is one session from its next point.
 - **Sync**: training and match XP change a card's live stats; matches use the stats synced on chain. The agent
-  syncs when it matters, typically before a match day, not after every session.
+  syncs when it matters, typically before a match day, not after every session, or a single card for 10 FOXSY when
+  only one matters.
 - **Lineup and formation**: fit starters in the right slots, a formation that suits the squad. The agent keeps a
   record of its results by its formation against the rival's (from FoxLeague's public match statistics, split by
   whether its eleven was clearly stronger, about equal or clearly weaker, since even matches are the fair test), also sees the same record pooled over all the agents of your install (no team
   named), tests another formation in ranked matches when its own record is thin or keeps losing, starting with the
   one that does best in the pooled record, and saves a new formation together with the eleven it needs.
-- **Ranked and casual matches**: the daily allowance, spaced like a person playing.
+- **Ranked and casual matches**: the daily allowance, never closer than a match lasts (about 11 minutes) or the
+  ranked cooldown (16 minutes between ranked games), counting the last match before the plan; a match that no longer
+  fits waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
+  were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
 
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. It refuses a schedule that would wear the squad out. Only
+  platform time slot, sized from what recently filled. For each open Silver or Gold tournament it could join, it
+  sees how the seated teams compare (clearly stronger, even, clearly weaker, by rating and starting eleven). It
+  refuses a schedule that would wear the squad out, judged on the condition the squad will have at the start (rested
+  until then, less what its other tournaments cost before it). Only
   Zeus creates private tournaments; every level joins one your team is invited to when it is worth it (only
   your team's own FoxLeague login sees the invitation).
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
   starting eleven), at most twice a week against the same team, and never while another of your agents has a 1v1
-  out against that team (one of your teams at a time per rival). When it
+  out against that team (one of your teams at a time per rival). The plan sees how many 1v1s it played against each
+  team this week and when the limit frees, and a team with its own challenge out is marked (it cannot accept another
+  until that one ends). When it
   creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show
   who took challenges in the last 7 days, and a challenge to a team that never answers only locks the stake until
   its deadline. When no such team fits, it may create one **open** challenge a day, which any team can take, a
@@ -47,7 +57,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Growing the squad
 
 - **XP booster**: doubles training and match XP for 24 hours. The agent weighs it with the numbers: on a day with
-  three sure competitive matches it is roughly 7 stat points for 2,000 FOXSY, far cheaper than paid training.
+  three sure competitive matches it is roughly 7 stat points for 2,000 FOXSY, far cheaper than paid training. At the
+  Zeus level it buys one only once a competitive match of its own is drawn within the booster's 24 hours.
 - **Paid training slots**: mainly while a booster is active.
 - **Common packs**: 5 Common cards, the spare cards the first fusion needs.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
