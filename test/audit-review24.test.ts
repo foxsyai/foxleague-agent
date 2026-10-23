@@ -58,3 +58,28 @@ test('a paid join whose broadcast was definitely refused is untouched; an unclea
   assert.notEqual(unclear.untouched, true, JSON.stringify(unclear))
   assert.equal(unclear.sent, true, 'it may have gone out: it stays counted')
 })
+
+// Re-review of PR #24 (low): the other drop, a requested match whose gate is read again just before it starts and
+// found later than planned (a match started meanwhile), was still only an info row. The owner hears of it too.
+test('a requested match dropped when its gate is read again reaches the owner (R24A-2, second path)', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { Mnemonic } = await import('@multiversx/sdk-core')
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service({ mnemonic: Mnemonic.generate().toString(), dataDir: mkdtempSync(join(tmpdir(), 'foxagent-')), gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5, isServer: false, defaultDryRun: true, maxAgents: 3 } as never)
+  svc.ensureAgents()
+  const s = svc as unknown as { schedule: unknown; notify(t: string): void; snapshot(): Promise<unknown>; runPlan(a: unknown, p: unknown[], routine: boolean): Promise<void>; executor: { run: unknown } }
+  s.schedule = () => undefined
+  const told: string[] = []
+  s.notify = t => void told.push(t)
+  s.snapshot = async () => snapshot()
+  // The first action runs while a match starts elsewhere (its row lands in the log), so the match after it must wait.
+  s.executor.run = async () => {
+    svc.store.log({ agentIndex: 0, kind: 'play_match', status: 'dry_run', summary: 'play casual match' })
+    return [{ status: 'dry_run', summary: 'ok' }]
+  }
+  await s.runPlan(svc.store.agent(0), [{ action: { type: 'sync' }, reason: '' }, { action: { type: 'play_match', match_type: 'casual' }, reason: '' }], false)
+  assert.ok(svc.store.activity(0, 10).some(r => /the last match started later than planned/.test(r.summary)), 'it took the second path')
+  assert.ok(told.some(t => /dropped from this plan: play casual match/.test(t)), told.join(' | '))
+})

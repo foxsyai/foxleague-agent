@@ -1371,7 +1371,9 @@ export class Service {
         ) - start
         if (ready > at) {
           if (ready > windowMs + MATCH_DRIFT_MS) {
-            this.store.log({ agentIndex: agent.index, kind: planned.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(planned.action)}: the last match started later than planned and its cooldown leaves no room before the plan's window ends; the next plan can play it` })
+            const summary = `dropped from this plan: ${describeAction(planned.action)}: the last match started later than planned and its cooldown leaves no room before the plan's window ends; the next plan can play it`
+            this.store.log({ agentIndex: agent.index, kind: planned.action.type, status: 'info', summary })
+            if (!routine) this.notify(`${agentName(agent.index)}: ${summary}`)
             continue
           }
           at = ready
