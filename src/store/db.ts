@@ -376,6 +376,14 @@ export class Store {
     this.db.prepare('DELETE FROM market_sales WHERE sold_at < ?').run(new Date(Date.now() - 120 * 86_400_000).toISOString())
   }
 
+  get salesComplete(): boolean {
+    return this.getKv('market_sales_complete') === '1'
+  }
+
+  markSalesComplete(): void {
+    this.setKv('market_sales_complete', '1')
+  }
+
   salesSince(iso: string): Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[] {
     return this.db.prepare('SELECT rarity, price, sold_at FROM market_sales WHERE sold_at >= ?').all(iso) as Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[]
   }

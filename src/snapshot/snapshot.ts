@@ -271,16 +271,19 @@ async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: 
 }
 
 /**
- * New sales since the last plan: pages from the newest until one holds a sale already kept (or a short page), at
- * most 20 pages (2,000 sales) on the first read of an install.
+ * New sales since the last plan, newest first. Until a first read has gone back to the end of the list (or 120 days),
+ * every plan reads it all, so a failed page or offsets shifted by new sales leave nothing unread for good (agent
+ * review of PR #21); after it, a page whose oldest sale is already kept ends the read. At most 20 pages a plan.
  */
-async function readNewSales(fox: FoxLeague, cache: MarketSalesCache): Promise<void> {
+async function readNewSales(fox: FoxLeague, cache: MarketSalesCache, now: Date): Promise<void> {
+  const oldest = new Date(now.getTime() - 120 * 86_400_000).toISOString()
   for (let page = 0; page < 20; page++) {
     const rows = await fox.recentSales(100, page * 100)
-    if (!Array.isArray(rows) || !rows.length) return
-    const known = rows.some(r => cache.has(r.id))
+    if (!Array.isArray(rows) || !rows.length) return cache.markComplete()
+    const oldestKnown = cache.has(rows.at(-1)!.id)
     cache.put(rows.filter(r => !cache.has(r.id)))
-    if (known || rows.length < 100) return
+    if (rows.length < 100 || (rows.at(-1)!.sold_at ?? '') < oldest) return cache.markComplete()
+    if (oldestKnown && cache.complete()) return
   }
 }
 
@@ -381,7 +384,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   let prices: Record<string, MarketPrice | null> | undefined
   if (opts.marketSales) {
     const sales = opts.marketSales
-    await attempt(warnings, 'marketplace sales', () => readNewSales(fox, sales))
+    await attempt(warnings, 'marketplace sales', () => readNewSales(fox, sales, now))
     prices = marketPrices(sales.since(new Date(now.getTime() - MARKET_WINDOWS.at(-1)! * 86_400_000).toISOString()), now)
   }
 

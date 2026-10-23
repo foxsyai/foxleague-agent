@@ -90,7 +90,8 @@ test('the planning snapshot reads only the new sales and carries the market pric
   } as Record<string, unknown>, { get: (t, k: string) => t[k] ?? (async () => { throw new Error('not in this test') }) })
   const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
   const kept = new Map<number, unknown>()
-  const salesCache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()] }
+  let complete = false
+  const salesCache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true } }
   const s1 = await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: salesCache } as never)
   assert.deepEqual(calls, [0, 100], 'a full first page, then the next one')
   calls.length = 0
@@ -99,6 +100,45 @@ test('the planning snapshot reads only the new sales and carries the market pric
   assert.match(renderDigest(s1), /Market prices \(median of the daily median sale prices; every trading day counts once\): Rare 6,100 \(5 trading days in 30 days\)/)
   const store = setup().store
   assert.match(renderPlanRequest({ snapshot: s1, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true }), /by rarity at most Rare 6000, Epic 12000, Legendary 32000 \(the owner's limits\)/)
+})
+
+// Agent review of PR #21 (medium): a card whose rarity is unknown skipped both its limit and the build cost.
+test('a card whose rarity could not be read is not bid on', () => {
+  const s = snapshot()
+  s.chain!.foxsy = wholeToAtomic(200_000)
+  const auction = { seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }
+  for (const cardRarity of [undefined, 'Mythic']) {
+    const v = checkAction({ type: 'bid', nonce: 9, foxsy: 40_000 }, s, { settings: { ...TEST_SETTINGS, maxBidFoxsy: 47_000 }, now: new Date(), auction, cardRarity } as RulesContext)
+    assert.equal(v.ok, false)
+    assert.match(v.refusal!, /rarity of #9 could not be read: not bidding blind/)
+  }
+})
+
+// Agent review of PR #21 (medium): a first read cut short (a failed page) left the older sales unread for good.
+test('a first read of the sales cut short is completed by the next plan; after it, a known oldest row ends the read', async () => {
+  const page = (from: number) => Array.from({ length: 100 }, (_, i) => ({ ...sale('Legendary', 30_000, 1 + Math.floor((from + i) / 20)), id: 100_000 - from - i }))
+  let failPage1 = true
+  const calls: number[] = []
+  const fox = new Proxy({
+    config: async () => snapshot().config, user: async () => snapshot().profile, team: async () => snapshot().team, players: async () => [],
+    recentSales: async (_l: number, offset: number) => {
+      calls.push(offset)
+      if (offset === 100 && failPage1) { failPage1 = false; throw new Error('HTTP 502') }
+      return offset < 200 ? page(offset) : []
+    },
+  } as Record<string, unknown>, { get: (t, k: string) => t[k] ?? (async () => { throw new Error('not in this test') }) })
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
+  const kept = new Map<number, unknown>()
+  let complete = false
+  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true } }
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual([calls, kept.size, complete], [[0, 100], 100, false], 'page 1 failed: not complete')
+  calls.length = 0
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual([calls, kept.size, complete], [[0, 100, 200], 200, true], 'page 0 is all known, yet the read goes on until the end')
+  calls.length = 0
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual(calls, [0], 'complete: a page whose oldest row is known ends the read')
 })
 
 test('the prompt says to aim below the market price, the limits being the most, never the target', () => {

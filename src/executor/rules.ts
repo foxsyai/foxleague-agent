@@ -810,6 +810,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const min = ceilWhole(minAtomic)
       if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + 5 percent` : 'the reserve'})`)
       if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
+      // Its limit and the build cost both hang on the rarity: unknown, no bid (agent review of PR #21).
+      if (!ctx.cardRarity || !(ctx.cardRarity in RARITY_LEVEL)) return refuse(`the rarity of #${a.nonce} could not be read: not bidding blind`)
       const limit = rarityBidLimit(ctx.settings, ctx.cardRarity)
       if (limit !== null && a.foxsy > limit) return refuse(`bid ${a.foxsy} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
       const ceiling = ctx.cardRarity ? auctionCeiling(cfg, ctx.cardRarity) : null

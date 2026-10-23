@@ -71,7 +71,7 @@ FoxLeague prices time: each competitive match a card needs to reach its gate at 
 rarity (20 FOXSY for an Uncommon, 100 from a Rare up; 20 for a Common, which has none), and each of the 14 days a fused
 card waits before it can be fused again at 75 FOXSY, the price of a day bought off. At October 2026 prices that is
 about **14,450 FOXSY** for a Rare (9 Commons, four fusions and their matches), **60,400** for an Epic and **225,650**
-for a Legendary, so for those two the max bid is usually the limit. The fusion route is slower still than the money
+for a Legendary, so your limits per rarity (above) usually bind first. The fusion route is slower still than the money
 says: one fusion per wallet every 20 hours and two Common packs a week. An auction at a fair price under that cost often wins.
 
 **Zeus decides from numbers.** For every team it could face it reads the ELO and the lineup strength at today's

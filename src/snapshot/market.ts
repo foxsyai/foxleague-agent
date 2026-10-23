@@ -28,6 +28,9 @@ export interface MarketSalesCache {
   has(id: number): boolean
   put(rows: MarketSale[]): void
   since(iso: string): Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[]
+  /** Whether a first read went back to the end of the list (or 120 days): until then every plan reads it all. */
+  complete(): boolean
+  markComplete(): void
 }
 
 /** A rarity needs at least this many trading days in its window to have a market price. */

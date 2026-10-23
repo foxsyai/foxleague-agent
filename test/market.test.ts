@@ -102,7 +102,8 @@ test('fusion: same rarity, 20 competitive matches, synced, outside the squad, 18
 const auction = (more: Partial<Auction> = {}): Auction => ({ seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000), ...more })
 
 test('bids: reserve or top + 5 percent, within the max bid, never with or against own agents', () => {
-  const bid = (foxsy: number, au: Auction | null = auction(), c: Partial<RulesContext> = {}) => checkAction({ type: 'bid', nonce: 9, foxsy }, snap(), ctx({ auction: au, ...c }))
+  // A known rarity is a precondition of every bid (agent review of PR #21); an Uncommon at these amounts meets every limit.
+  const bid = (foxsy: number, au: Auction | null = auction(), c: Partial<RulesContext> = {}) => checkAction({ type: 'bid', nonce: 9, foxsy }, snap(), ctx({ auction: au, cardRarity: 'Uncommon', ...c }))
   assert.equal(bid(500).ok, true)
   assert.match(bid(499).refusal!, /below the minimum 500/)
   assert.match(bid(1049, auction({ highestBid: wholeToAtomic(1000), highestBidder: OTHER })).refusal!, /minimum 1050/)
