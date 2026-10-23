@@ -1347,7 +1347,12 @@ export class Service {
     // The matches keep FoxLeague's gates apart, the agent's last starts before this plan included (its own log).
     const before = lastMatchStarts(this.store, agent.index, new Date(start))
     const { kept, dropped } = scheduleActions(actions, { windowMs, gapMs, random: Math.random, lastMatchMs: before.match ? before.match.getTime() - start : null, lastRankedMs: before.ranked ? before.ranked.getTime() - start : null })
-    for (const d of dropped) this.store.log({ agentIndex: agent.index, kind: d.p.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(d.p.action)}: ${d.reason} leaves no room before the plan's window ends; the next plan can play it` })
+    for (const d of dropped) {
+      const summary = `dropped from this plan: ${describeAction(d.p.action)}: ${d.reason} leaves no room before the plan's window ends; the next plan can play it`
+      this.store.log({ agentIndex: agent.index, kind: d.p.action.type, status: 'info', summary })
+      // The owner asked for it (Telegram /do): they hear why it did not run, as the executor's refusal told them before.
+      if (!routine) this.notify(`${agentName(agent.index)}: ${summary}`)
+    }
     // Pieces an extension cuts from an action (see src/extensions.ts) queue right behind it, at the usual gap.
     const queue: ScheduledAction[] = kept
     let last = -gapMs

@@ -620,6 +620,9 @@ FoxLeague's changes are in `docs/FOXLEAGUE-INTEGRATION.md` section 21 and `docs/
 | E2 | medium | `test/formations.test.ts` hard-coded a match date that leaves the pool's 14-day window on 2026-11-03 and would turn CI red | Its matches end an hour before the test runs; an audit test runs the file under a clock of 2026-11-10 |
 | E3 | low | The test that the market lines are drawn on load matched the Use button's own call and passed with the load call removed | It reads `fillForm` itself |
 | E4 | low | README and the FAQ still said the agents know nothing of each other | They name the two things the agents share, as the safety page does |
+| R24A-1 | medium | Agent review of PR #24: `conditionAtStart` capped at 100 only after taking off the matches owed before the start, so regeneration wasted at the cap paid for them (a squad at 90 with 7 matches ending an hour before a start in 24 h projected about 95, really about 59) and the forfeit guard and the Zeus field test judged too kindly | The squad rests (capped) up to the end of the earlier tournaments' matches, pays for them, then rests (capped) to the start (`otherMatches` returns that end); `test/audit-review24.test.ts` |
+| R24A-2 | low | Agent review of PR #24: a match the scheduler drops from an owner's request was only an info row, where the executor's refusal used to reach the owner | The owner hears of it (Telegram); routine plans keep the info row |
+| R24A-3 | low | Agent review of PR #24 (coverage): the `untouched` paths of a paid join had no test | A test: a broadcast definitely refused for an unknown transaction is untouched; an unclear send error is not and stays counted (a broken reset makes it fail) |
 
 Left to the owner's decision: C3, reading League + Knockout invitations to tell the owner (never joining the format,
 which stays refused); D11, counting only accepted 1v1s toward the weekly limit per rival. The reviewers' proposals

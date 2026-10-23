@@ -344,12 +344,14 @@ function matchSquad(s: AgentSnapshot): PlayerView[] {
  * the matches before its start and those whose play overlaps it. Started: the fixtures still to play; not started:
  * the most its format can bring. One over by now and before the start (as its schedule says) brings nothing. Null: unreadable.
  */
-function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, now: Date, start: number, end: number): { before: number; during: number } | null {
+function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, now: Date, start: number, end: number): { before: number; during: number; beforeEnd: number } | null {
   const mine = s.auth?.myTournaments
   if (!mine) return null
   const groupSize = cfg.tournament_defaults?.groups_knockout_group_size ?? 4
   let before = 0
   let during = 0
+  // When the last of the matches before the start ends: the squad rests up to it, then pays for them.
+  let beforeEnd = now.getTime()
   for (const x of mine.active) {
     if (x.id === id || x.max_teams === 2) continue
     const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
@@ -360,14 +362,19 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
     const n = x.started_at ? Math.max(1, left) : total
     // An unreadable start overlaps everything (as before the projection): nothing is moved out of the schedule's count.
     if (xEnd >= start || !Number.isFinite(start)) during += n
-    else before += n
+    else {
+      before += n
+      beforeEnd = Math.max(beforeEnd, xEnd)
+    }
   }
-  return { before, during }
+  return { before, during, beforeEnd }
 }
 
 /**
- * Each card's condition at a tournament's start: today's, less an even share of what the squad's matches in its other
- * tournaments before then cost, plus what it regenerates until the start, at most 100. A start that is past or
+ * Each card's condition at a tournament's start: today's plus what it regenerates up to the end of its other
+ * tournaments' matches before then (at most 100), less an even share of what those matches cost, plus what it
+ * regenerates from then to the start (at most 100). Resting is capped before the matches are paid for, so
+ * regeneration that would be wasted at 100 never pays for them (agent review of PR #24). A start that is past or
  * unreadable is today's condition (a projection never guesses upward). Null: the agent's tournaments are unreadable.
  */
 export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: string; end?: number }, now: Date): { hours: number; during: number; at: (p: PlayerView) => number } | null {
@@ -379,7 +386,9 @@ export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: 
   const hours = hoursUntil(t.starts_at, now)
   const squad = matchSquad(s)
   const spent = hours > 0 && squad.length ? (owed.before * 11 * (cfg.condition_loss_per_match ?? 10)) / squad.length : 0
-  return { hours, during: owed.during, at: p => (hours > 0 ? Math.max(0, Math.min(MAX_CONDITION, p.condition - spent + regenPerHour(p, cfg) * hours)) : p.condition) }
+  const restBefore = owed.before ? Math.min(hours, Math.max(0, (owed.beforeEnd - now.getTime()) / 3600_000)) : 0
+  const cap = (c: number) => Math.max(0, Math.min(MAX_CONDITION, c))
+  return { hours, during: owed.during, at: p => (hours > 0 ? cap(cap(p.condition + regenPerHour(p, cfg) * restBefore) - spent + regenPerHour(p, cfg) * (hours - restBefore)) : p.condition) }
 }
 
 /**
