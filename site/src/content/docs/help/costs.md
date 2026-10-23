@@ -16,8 +16,8 @@ The agent itself is free. Three things cost money, and you control each one:
 About **5 EGLD**: 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve, the rest plays
 the first games. After that, top up as the agent plays: by hand, or from Binance with top-ups you approve on Telegram
 ([Your keys](/start/keys/#3-cex-top-up-optional)). Each agent's page shows what its wallet is worth, and you are warned there,
-in the morning summary on Telegram (at once with `/updates all`) and, with a Binance key, by a top-up proposal at once
-when it falls under your **Top-up warning** ($10 unless you change it). Send EGLD, the agent buys
+in the morning summary on Telegram (at once with `/updates all`) and, with a Binance key, Telegram and the platform
+LIVE, a top-up proposal comes at once (once a day per agent), when it falls under your **Top-up warning** ($10 unless you change it). Send EGLD, the agent buys
 FOXSY with it by itself; FOXSY and WEGLD work too. When a swap fits in the wallet's WEGLD, the agent spends that
 first, all of it if needed: WEGLD pays no network fees, so none of it is kept as a reserve.
 

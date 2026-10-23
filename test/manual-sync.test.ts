@@ -124,7 +124,8 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
   assert.match(talk, /`\/topup <code> \[EGLD\]` \| Approve it \(with a smaller amount after the code, that much instead; more than proposed is refused\)/, 'B2')
   assert.match(talk, /`\/tick N` \| Plan and run now, inside the agent's active hours \(outside them it says so; `\/do N request` runs anyway\)/, 'B3')
   for (const [name, text] of [['settings', settings], ['tick bubble', tip('tick')]] as const) assert.match(text, /a planning cycle also runs about an hour before each match session locks \(matches whose locks fall within 2 hours of each other share it\)/i, `B4 ${name}`)
-  for (const [name, text] of [['dashboard', dash], ['settings', settings], ['funds bubble', tip('funds')], ['topup bubble', tip('topup')]] as const) {
+  // The Costs page too (agent review of PR #28, low).
+  for (const [name, text] of [['dashboard', dash], ['settings', settings], ['funds bubble', tip('funds')], ['topup bubble', tip('topup')], ['costs', read(`${DOCS}/help/costs.md`)]] as const) {
     assert.match(text, /with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once \(once a day per agent\)/i, `B5 ${name}`)
   }
   assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password, and so do a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
