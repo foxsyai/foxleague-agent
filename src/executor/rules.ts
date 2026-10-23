@@ -411,12 +411,13 @@ function scheduleRefusal(
 /**
  * Lineup strength as the match engine sees it: synced stats scaled by condition, stat x (50 +
  * condition/2) / 100, summed over the starting eleven. A rival's squad is taken at full condition
- * (it can rest or buy recovery before the match).
+ * (it can rest or buy recovery before the match). Ours at today's condition, or at the one `condition`
+ * gives (a tournament's start, conditionAtStart).
  */
-export function lineupStrength(s: AgentSnapshot): number {
+export function lineupStrength(s: AgentSnapshot, condition: (p: PlayerView) => number = p => p.condition): number {
   return (s.team?.lineup ?? []).reduce((sum, n) => {
     const p = card(s, n)
-    return sum + (p ? (p.syncedTotal * (50 + p.condition / 2)) / 100 : 0)
+    return sum + (p ? (p.syncedTotal * (50 + condition(p) / 2)) / 100 : 0)
   }, 0)
 }
 
@@ -670,7 +671,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (ctx.zeus) {
           // Never blind: a field that could not be read is no field to pay into.
           if (!ctx.field) return refuse('the seated teams could not be read: Zeus does not enter a field it cannot judge')
-          const ours = lineupStrength(s)
+          // Our eleven as it will be at the start (the rivals are taken at full condition): rested, less what our other tournaments cost before it.
+          const atStart = conditionAtStart(s, t, ctx.now)
+          if (!atStart) return refuse('your current tournaments could not be read: Zeus does not judge a field blind')
+          const ours = lineupStrength(s, atStart.at)
           const myElo = s.profile.elo_rating
           const unread = ctx.field.filter(f => f.strength === null && f.elo === null).length
           if (unread >= 3) return refuse(`${unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)

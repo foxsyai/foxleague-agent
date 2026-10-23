@@ -215,6 +215,13 @@ test('D5 Zeus judges a field days away against the squad at the condition it wil
   for (const p of tired.players) p.condition = 70 // tonight, after the ranked matches; 100 again by tomorrow noon
   const v = checkAction(join, tired, ctx({ tournament: inThreeDays(), zeus: true, field }))
   assert.equal(v.ok, true, `the same field, the same squad, judged 72 hours early at 70 condition: ${v.refusal}`)
+
+  // A start within the hour leaves the squad tired: the same field is still three clearly stronger teams.
+  const soon = tournament(302, { format: 'swiss', max_teams: 8, min_teams: 3, round_interval_minutes: 60, deadline: hours(0.5), starts_at: hours(1) }, seated) as TournamentDetail
+  assert.match(checkAction(join, tired, ctx({ tournament: soon, zeus: true, field })).refusal ?? '', /3 seated teams are clearly stronger/)
+  // A 1v1 is played now: still judged at today's condition.
+  const oneVOne = checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 501, deadline_minutes: 60 }, tired, ctx({ zeus: true, opponent: { userId: 501, elo: 1200, strength: 1500 } }))
+  assert.match(oneVOne.refusal ?? '', /the opponent's squad is stronger .* at today's condition/)
 })
 
 // ---- D6: the XP pool of a stat about to gain a point ----
