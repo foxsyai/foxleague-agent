@@ -1339,7 +1339,7 @@ const GUIDE = [
       ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $2 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.30 a plan): the game manual the AI reads is cached for an hour, and plans 2 hours apart find it expired. Agents that plan within the same hour share it, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more; you pick them in the Strategist box and in Settings.' },
+    note: 'About $1 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.15 a plan): the game manual the AI reads is cached for an hour only when another plan comes within that hour, so a lone agent sends it at the plain price. Agents that plan within the same hour share the cache, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more; you pick them in the Strategist box and in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [

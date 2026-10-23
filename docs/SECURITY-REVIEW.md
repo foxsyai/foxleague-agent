@@ -723,8 +723,24 @@ windows, the ranked cooldown, the previous plan's length, the Zeus tick) the tes
 | MS-C3..C8 | low | Server, FAQ, Update, INSTALL.md, Costs, Troubleshooting, Keys: the server's processor (x86-64), the fourth thing the agents share (a private tournament never invites your other teams), the low-funds warning on Telegram (in the morning summary), a quiet Telegram (the default), the Binance key (it reads too) and the top-up amount (less, the fee comes off it) | Each page says what the code does |
 | R28A-1 | low | Agent review of PR #28: the Costs page still said a Binance key alone brings a top-up proposal | It names Telegram and LIVE and once a day per agent, as the other pages do; the test reads the Costs page too |
 
-Not changed: the Telegram key fields keep Telegram's own name, "bot token". Open: the cost of a single agent at the
-2-hour tick (MS-C1).
+Not changed: the Telegram key fields keep Telegram's own name, "bot token". The cost of a single agent at the 2-hour
+tick (MS-C1) is closed by CR1 below.
+
+## The game manual cached only when it is read again, 2026-10-24
+
+The owner chose option 1 of MS-C1: the game manual (about 61,000 tokens) is cached for an hour, a one-hour cache
+write costs twice the input and a read a tenth, and a single agent at the 2-hour tick paid the write on every plan.
+Test first: `test/cache-when-reused.test.ts`, each test seen failing before the change (the CLI's default, which keeps
+caching, passed before and stays as a guard).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CR1 | design | A single agent at the 2-hour tick wrote the one-hour cache of the game manual on every plan (about $0.28 a plan on Sonnet 5, about $2 a day) and never read it | The manual carries the cache breakpoint only when the cache is warm (served or stored in the last 55 minutes, per model and effort) or the service's schedule has another call due within 55 minutes: an active agent's next tick (not paused, not waiting for funds, inside its active hours; the planning agent's own next one cycle on). Otherwise it goes uncached at the plain price: about $0.15 a plan, about $1 a day for one agent. Several agents keep the cache as before. Erring towards no cache costs at most the plain price twice; the CLI keeps caching |
+| CR2 | low | The manual's Costs page, Keys, INSTALL.md, README and the Getting started guide gave the cost of the old caching | They give about $1 a day for a single agent and about $0.40 a day each with three or more agents |
+
+The prompt and manual bytes are unchanged, so the cache stays shared by all agents, ticks, chat and /ask. Open: a
+preparation tick before a match session can come sooner than the planning agent's next cycle and is not counted (at
+most a plain-price send where a cache read would have done).
 
 ## Where the limits live
 
