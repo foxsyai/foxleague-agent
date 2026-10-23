@@ -134,7 +134,8 @@ export function parseAction(raw: unknown): Action {
       return { type: o.type, team_name }
     }
     case 'sync':
-      return { type: o.type }
+      // One card (10 FOXSY) instead of every dirty card; validated like every other card nonce.
+      return { type: o.type, ...(o.nonce === undefined || o.nonce === null ? {} : { nonce: int(o, 'nonce', 1, 2 ** 40) }) }
     case 'train':
       return { type: o.type, player_nonce: int(o, 'player_nonce', 1, 2 ** 40), attribute: oneOf(o, 'attribute', STATS) }
     case 'set_formation': {

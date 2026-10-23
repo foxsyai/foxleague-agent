@@ -23,6 +23,8 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
+import { oneVOnesThisWeek, rivalsOutByOthers } from './rivals.ts'
+import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -98,6 +100,11 @@ export function liveSigningAllowed(): boolean {
   return v === '1' || v === 'true'
 }
 
+/** A rival claim that holds this agent off: another agent's, not expired, and a dry-run claim never holds a live agent off. */
+function claimBars(c: { agent: number; until: number; dry: boolean }, index: number, dry: boolean, now: number): boolean {
+  return c.agent !== index && c.until > now && (!c.dry || dry)
+}
+
 export class Executor {
   private readonly d: ExecutorDeps
   /** One action at a time per agent, whatever started it (a plan, Telegram /do, the web UI). */
@@ -126,6 +133,11 @@ export class Executor {
   /** No action running or queued for this agent. */
   idleFor(index: number): boolean {
     return !this.locks.has(index)
+  }
+
+  /** The rivals another of the owner's agents holds a 1v1 claim against, as the claim check reads them (for the plan request). */
+  rivalsClaimedByOthers(index: number, dry: boolean, now = Date.now()): number[] {
+    return [...this.rivalClaims].filter(([, c]) => claimBars(c, index, dry, now)).map(([id]) => id)
   }
 
   /** Runs a plan in order; each action sees the local effect of the ones before it. */
@@ -210,7 +222,7 @@ export class Executor {
       }
       // No await from here to the claim: another agent's check runs before this one or after its claim, never between.
       const claim = ctx.opponent ? this.rivalClaims.get(ctx.opponent.userId) : undefined
-      if (claim && claim.agent !== agent.index && claim.until > Date.now() && (!claim.dry || dry)) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
+      if (claim && claimBars(claim, agent.index, dry, Date.now())) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
       if (ctx.opponent && (a.type === 'create_challenge' || a.type === 'join_tournament')) {
@@ -379,19 +391,10 @@ export class Executor {
       }
       const strength = opponentWallet ? await soft(() => rivalStrength(fox, opponentWallet!)) : null
       market.opponent = { userId: opponentId, elo, strength }
-      market.oneVOneWithOpponentThisWeek = store
-        .activityOf(agent.index, ['join_tournament', 'create_challenge'], since(7 * 86_400_000))
-        .filter(r => counted(r.status) && detailOf(r).opponentUserId === opponentId).length
-      // The owner's other agents, retired and removed ones too (a 1v1 stays out after its team is parked): a 1v1 of
-      // theirs against this rival is out until its deadline (a join: at once) and an hour for the match have passed.
-      // On the safe side, a create that failed or errored may have left a challenge, unless the error came before
-      // FoxLeague was asked or anything was signed (`untouched`).
-      market.otherTeamsOnOpponent = store
-        .agentIndexes()
-        .filter(i => i !== agent.index)
-        .flatMap(i => store.activityOf(i, ['join_tournament', 'create_challenge'], since(6 * 3_600_000)))
-        .filter(r => (counted(r.status) || r.status === 'failed' || (r.status === 'error' && !detailOf(r).untouched)) && detailOf(r).opponentUserId === opponentId)
-        .filter(r => Date.parse(r.at) + ((detailOf(r).action?.deadline_minutes ?? 0) + 60) * 60_000 > now.getTime()).length
+      // The counts the plan request shows too (src/executor/rivals.ts): this agent's 1v1s against the rival this week,
+      // and the 1v1s the owner's other agents have out against it.
+      market.oneVOneWithOpponentThisWeek = oneVOnesThisWeek(store, agent.index, dry, now).get(opponentId)?.length ?? 0
+      market.otherTeamsOnOpponent = rivalsOutByOthers(store, agent.index, dry, now).get(opponentId) ?? 0
     }
     if (a.type === 'create_challenge' && a.target_user_id === null) {
       market.openChallengesToday = store
@@ -463,17 +466,15 @@ export class Executor {
         return { userId: p.user_id, strength, elo }
       }))
     }
-    const recent = store.activityOf(agent.index, ['play_match'], since(86_400_000)).filter(r => r.status === 'confirmed' || r.status === 'dry_run')
-    const lastMatch = recent[0]
-    const lastRanked = recent.find(r => r.summary.includes('ranked'))
+    const starts = lastMatchStarts(store, agent.index, now)
     return {
       settings: agent.settings,
       ...(zeus ? { zeus } : {}),
       ...(tournament !== undefined ? { tournament } : {}),
       ...(entryAmount !== undefined ? { entryAmount } : {}),
       ...market,
-      lastMatchStartAt: lastMatch ? new Date(lastMatch.at) : null,
-      lastRankedStartAt: lastRanked ? new Date(lastRanked.at) : null,
+      lastMatchStartAt: starts.match,
+      lastRankedStartAt: starts.ranked,
       now,
     }
   }
