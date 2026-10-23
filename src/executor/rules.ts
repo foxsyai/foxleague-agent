@@ -270,6 +270,14 @@ export function auctionCeiling(cfg: Pick<FoxConfig, 'common_pack_price_foxsy' | 
   return own === null ? base : Math.round(made + own)
 }
 
+/** The owner's limit for a bid on a card of this rarity (Rare, Epic, Legendary); none below Rare. */
+export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidRareFoxsy' | 'maxBidEpicFoxsy' | 'maxBidLegendaryFoxsy'>, rarity: string | null | undefined): number | null {
+  if (rarity === 'Rare') return settings.maxBidRareFoxsy
+  if (rarity === 'Epic') return settings.maxBidEpicFoxsy
+  if (rarity === 'Legendary') return settings.maxBidLegendaryFoxsy
+  return null
+}
+
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72
 /** Lowest reserve per rarity, whatever the floor says (one junk listing can drag the floor to 500). */
@@ -802,6 +810,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const min = ceilWhole(minAtomic)
       if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + 5 percent` : 'the reserve'})`)
       if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
+      const limit = rarityBidLimit(ctx.settings, ctx.cardRarity)
+      if (limit !== null && a.foxsy > limit) return refuse(`bid ${a.foxsy} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
       const ceiling = ctx.cardRarity ? auctionCeiling(cfg, ctx.cardRarity) : null
       if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what a ${ctx.cardRarity} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
       if ((ctx.priorBids ?? 0) >= MAX_BIDS_PER_AUCTION) return refuse(`already ${MAX_BIDS_PER_AUCTION} bids on #${a.nonce}: no bidding war`)

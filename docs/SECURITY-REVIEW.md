@@ -558,6 +558,24 @@ The owner's max bid (Zeus 47,000) still binds first, so an Epic or a Legendary i
 monthly budget, the third-bid refusal and the inherited-lock refusal are unchanged. What the formula leaves out: the
 wallet's limits (2 Common packs a week, one fusion every 20 hours) and the value of the matches as play (XP and ELO).
 
+## Limits per rarity and the market price, 2026-10-23
+
+The owner's direction: never pay more than the market. The 1,217 sales since mainnet (30 September to 23 October,
+public at `/api/marketplace/recent-sales`) put a typical Rare at about 6,100 FOXSY, an Epic at 11,800 and a
+Legendary at 31,200, measured as the median of the daily median sale prices of the last 30 days, so the sell-off of
+13 October (about 170 cards that day at a third of the usual price) counts as one day. The build-cost ceiling of PR
+#20 (Rare 14,450) sat well above that. The owner chose round limits from the market as defaults any owner may raise.
+Test first: `test/rarity-bid-caps.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| M1 | design | Nothing held a bid to the market: the ceiling was the build cost, the only owner limit the max bid | Three settings, `maxBidRareFoxsy` 6,000, `maxBidEpicFoxsy` 12,000, `maxBidLegendaryFoxsy` 32,000 by default (agents made before them get the defaults); the bid rule refuses above the limit of the card's rarity, under the max bid and the build cost. They are limits like the others: raising one asks for the owner's password, lowering it does not, and choosing a level leaves them as they are |
+| M2 | design | The plan judged a fair price only from the floors and the open listings, never from what cards really sold for | The planning snapshot keeps every public sale (`market_sales`, 120 days) and reads only the new pages, then gives each rarity its market price: the median of the daily median prices over 30 days with at least 5 trading days, else 60, else 90; with fewer, none (shown as unknown, never a guess). The plan sees the prices and each auction's, and is told to aim below them; the dashboard shows today's next to the limits. A failed read leaves the kept sales and a warning |
+
+The market price guides; the owner's limits, the build cost and the max bid bind. Nothing else changed: the daily
+cap, the monthly budget, the third-bid refusal and the inherited-lock refusal hold as before. Open: a price per card
+quality (Legendaries sell for two to six times more at a higher rating) waits for enough sales.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

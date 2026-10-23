@@ -58,6 +58,12 @@ shop than at auction. Your **Max bid** decides which rarities are in reach. With
 Rares, a predator Rares and most Epics, a beast all three. Raise a hunter's max bid and it can take a fairly priced
 Epic too.
 
+**Never above the market.** The agent sees the market price of each rarity, worked out from what cards really sold
+for on FoxLeague (the median of each trading day's median price over the last 30 days, so one day of cheap sales
+counts once), and aims below it: it bids the reserve or the smallest raise that wins. Your limits per rarity are the
+most it may pay: by default 6,000 FOXSY for a Rare, 12,000 for an Epic and 32,000 for a Legendary, the round market
+prices of October 2026. Raising them asks for your password.
+
 **Never above the cost of building it.** A bid never goes above what the same card would cost to build yourself and
 bring to its match gate (only a card at its gate can be listed), whatever the max bid. Building is the Common packs (a
 pack is 2,500 for 5 Commons) and the fusion fees (100, 200, 400 and 800), plus the time it takes, priced the way

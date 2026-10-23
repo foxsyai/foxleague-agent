@@ -2,6 +2,7 @@
 // settings, activity and controls, Add agent, kill switch. Plain node:http, bound to 127.0.0.1
 // behind nginx on a server (TLS).
 
+import { marketPrices } from '../snapshot/market.ts'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
@@ -145,7 +146,7 @@ function snapshotSummary(s: AgentSnapshot | undefined) {
 }
 
 /** Settings that let an agent spend more: raising one needs the password, lowering one never does. */
-const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy'] as const
+const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy'] as const
 
 /** Hours in an active window [from, to), which may cross midnight; [0, 24] is all day. */
 export function windowHours([from, to]: [number, number]): number {
@@ -224,6 +225,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         maxAgents: cfg.maxAgents,
         next: agents.length < cfg.maxAgents ? { index: nextIndex, address: service.wallet(nextIndex).address } : null,
         presets: STRATEGY_PRESETS,
+        // Today's market price per rarity from the kept sales, shown next to the limits per rarity.
+        marketPrices: marketPrices(service.store.salesSince(new Date(Date.now() - 90 * 86_400_000).toISOString()), new Date()),
         levels: LEVEL_SETTINGS,
         levelAi: LEVEL_AI,
         user: creds.username,

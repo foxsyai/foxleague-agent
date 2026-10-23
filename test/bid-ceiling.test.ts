@@ -46,7 +46,8 @@ test('the bid rule uses it: a Rare up to its built price, and the max bid still 
   s.chain!.foxsy = wholeToAtomic(100_000)
   s.config = { ...s.config!, ...LIVE } as typeof s.config
   const auction = { seller: OTHER, minPrice: wholeToAtomic(4000), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }
-  const ctx = (rarity: string): RulesContext => ({ settings: { ...TEST_SETTINGS, maxBidFoxsy: 47_000 }, now: new Date(), auction, cardRarity: rarity })
+  // The owner's limits per rarity (test/rarity-bid-caps.test.ts) raised out of the way: this tests the build cost alone.
+  const ctx = (rarity: string): RulesContext => ({ settings: { ...TEST_SETTINGS, maxBidFoxsy: 47_000, maxBidRareFoxsy: 1e6, maxBidEpicFoxsy: 1e6, maxBidLegendaryFoxsy: 1e6 }, now: new Date(), auction, cardRarity: rarity })
   const bid = (foxsy: number, rarity: string) => checkAction({ type: 'bid', nonce: 9, foxsy }, s, ctx(rarity))
   assert.equal(bid(14_450, 'Rare').ok, true, bid(14_450, 'Rare').refusal)
   assert.match(bid(14_451, 'Rare').refusal!, /above what a Rare costs to build yourself \(14450 FOXSY/)

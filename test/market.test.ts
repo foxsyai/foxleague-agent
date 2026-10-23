@@ -138,7 +138,8 @@ test('a bid never pays more than the card would cost from Common packs and fusio
   const s = snap()
   s.chain!.foxsy = wholeToAtomic(100_000)
   s.config = { ...s.config!, common_pack_price_foxsy: 2500 }
-  const rich = { ...TEST_SETTINGS, maxBidFoxsy: 40_000 }
+  // The owner's limits per rarity raised out of the way: this tests the build cost alone.
+  const rich = { ...TEST_SETTINGS, maxBidFoxsy: 40_000, maxBidRareFoxsy: 1e6, maxBidEpicFoxsy: 1e6, maxBidLegendaryFoxsy: 1e6 }
   const bid = (foxsy: number, rarity: string) => checkAction({ type: 'bid', nonce: 9, foxsy }, s, ctx({ settings: rich, auction: auction({ minPrice: wholeToAtomic(500) }), cardRarity: rarity }))
   assert.equal(bid(15_400, 'Epic').ok, true)
   // No cooldown settings in this config: the ceiling is the packs and fusion fees alone (test/bid-ceiling.test.ts has the full one).

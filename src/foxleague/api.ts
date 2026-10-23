@@ -27,6 +27,7 @@ import type {
   MatchHistoryRow,
 } from './types.ts'
 import { STATS } from './types.ts'
+import type { MarketSale } from '../snapshot/market.ts'
 
 export class ApiRefusal extends Error {
   readonly code: string | undefined
@@ -134,6 +135,11 @@ export class FoxLeague {
 
   config(): Promise<FoxConfig> {
     return this.call<FoxConfig>('/config', { raw: true })
+  }
+
+  /** Marketplace sales, newest first (public; at most 100 a page). */
+  recentSales(limit = 100, offset = 0): Promise<MarketSale[]> {
+    return this.call<MarketSale[]>(`/marketplace/recent-sales?limit=${limit}&offset=${offset}`)
   }
 
   /** A team's revealed matches, newest first (public for any wallet). */
