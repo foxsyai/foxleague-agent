@@ -13,7 +13,7 @@ import type { AgentSettings } from '../store/settings.ts'
 import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
-import { packAndFusionCost } from '../executor/rules.ts'
+import { auctionCeiling } from '../executor/rules.ts'
 import { SUBMIT_PLAN_TOOL_DESCRIPTION, SYSTEM_PROMPT } from './prompt.ts'
 
 export interface Plan {
@@ -179,10 +179,10 @@ const OLD_SIBLING_RULE = /fair.?play|another agent of (this install|this owner)|
 /** The packs-and-fusion cost of each rarity worth bidding on: the executor refuses a bid above it. */
 function bidCeilings(s: AgentSnapshot): string {
   const parts = ['Rare', 'Epic', 'Legendary'].flatMap(r => {
-    const c = packAndFusionCost(s.config, r)
+    const c = auctionCeiling(s.config, r)
     return c === null ? [] : [`${r} ${c}`]
   })
-  return parts.length ? ` and never above what the card costs from Common packs and fusion fees (${parts.join(', ')})` : ''
+  return parts.length ? ` and never above what the card costs to build yourself and bring to its match gate (${parts.join(', ')})` : ''
 }
 
 /**

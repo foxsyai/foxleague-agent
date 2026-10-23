@@ -42,6 +42,10 @@ export interface FoxConfig {
   fusion_match_waiver_price_per_match?: number
   /** One match gate per rarity for fusion inputs, listing and the match waiver (live on mainnet from 2026-10-12 16:30 UTC). */
   rarity_match_gate?: RarityMatchGate
+  /** How long a fused card waits before it can be a fusion input again (1,209,600 s, 14 days, on mainnet). */
+  fusion_card_cooldown_seconds?: number
+  /** FOXSY per day of that wait bought off (75 on mainnet, down to a 3-day floor). */
+  fusion_cooldown_waiver_price_per_day?: number
   auction_enabled: boolean
   marketplace_min_list_price_foxsy?: number
   transfer_cooldown_hours?: number

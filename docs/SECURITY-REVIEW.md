@@ -540,6 +540,22 @@ dry-run agent's error can hold a live agent off that rival for up to 5 hours (it
 an agent's own open challenge is not seen by the others (FoxLeague's one active 1v1 per wallet keeps it from a second
 until the first is over).
 
+## Bid ceiling with the time a card takes, 2026-10-23
+
+The owner's direction: the ceiling a bid may not pass counted only Common packs and fusion fees (a Rare 5,000 FOXSY,
+an Epic 15,400, a Legendary 47,000), while Rares were listed at 9,000 to 17,500, so no agent could buy the third
+forward its formation record asked for. Building a card also takes time, and time is money: the matches every input
+must play to reach its gate, and the days a fused card must wait. A card at auction has already played its gate
+(only such a card can be listed). Test first: `test/bid-ceiling.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| BC1 | design | The bid ceiling left out the time a card takes to build and to bring to its match gate, so it sat far under the market | `auctionCeiling` (`src/executor/rules.ts`): the Common packs and fusion fees, plus every competitive match an input or the card needs to reach its gate at the rarity's price for a bought match (a Common has none: the cheapest match price), plus every day of a fused card's cooldown at the price of a day bought off, whether or not that wait can be bought; all read from `/api/config`. Mainnet, 2026-10-23: Common 600, Uncommon 3,250, Rare 15,500, Epic 61,450, Legendary 226,700 FOXSY. Without the gate rows or the cooldown settings, the packs and fees alone (lower, so stricter); without those, no ceiling, as before |
+
+The owner's max bid (Zeus 47,000) still binds first, so an Epic or a Legendary is limited by it; the daily cap, the
+monthly budget, the third-bid refusal and the inherited-lock refusal are unchanged. What the formula leaves out: the
+wallet's limits (2 Common packs a week, one fusion every 20 hours) and the value of the matches as play (XP and ELO).
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
