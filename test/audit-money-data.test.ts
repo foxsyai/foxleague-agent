@@ -149,6 +149,24 @@ test('B3: with the daily swap allowance used up, the plan is not told that a swa
   assert.match(line, /\$150\.00 of \$150\.00 today/)
 })
 
+// ---- B1: the pool leaves out matches against every team of the install known by its user id ----
+
+test('B1: a match against an own team known by its user id, but without rows of its own, is left out of the pool', () => {
+  const store = new Store('', ':memory:')
+  store.addAgent(0, ADDR)
+  store.addAgent(1, OTHER)
+  store.setKv('agent_user_id:0', '100')
+  store.setKv('agent_user_id:1', '200') // agent 1 is FoxLeague user 200; it has no formation_results rows
+  const at = new Date(Date.now() - 3600_000).toISOString()
+  store.putFormationResults(0, 100, [
+    { key: 't:A', at, mine: '4-4-2', theirs: '4-3-3', gf: 0, ga: 1, edge: -4, rivalUserId: 200 },
+    { key: 't:B', at, mine: '4-4-2', theirs: '5-3-2', gf: 2, ga: 0, edge: 3, rivalUserId: 300 },
+  ])
+  const pool = store.formationPool()
+  assert.deepEqual(pool.rows.map(r => [r.mine, r.theirs]), [['4-4-2', '5-3-2']], 'only the match against the stranger')
+  assert.equal(pool.matches, 1)
+})
+
 // ---- E2: the formations test does not depend on the calendar ----
 
 test('E2: test/formations.test.ts still passes with the clock at 2026-11-10', () => {

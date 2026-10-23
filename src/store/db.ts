@@ -411,15 +411,19 @@ export class Store {
 
   /**
    * The pooled formation record: the last 14 days of every team this install runs (its matches against a team of its
-   * own left out, they say nothing about the field). It names no team.
+   * own left out, they say nothing about the field). It names no team. The install's own teams are the ones with rows
+   * here and every one whose FoxLeague user id the store keeps (agent_user_id:N, retired and removed teams too): a team
+   * that never planned or whose rows were pruned is still the owner's (audit B1, 2026-10-23).
    */
   formationPool(): FormationRecord {
-    const rows = this.db
+    const own = new Set(this.kvWithPrefix('agent_user_id:').map(([, v]) => Number(v)).filter(n => Number.isSafeInteger(n) && n > 0))
+    const rows = (this.db
       .prepare(
         `SELECT match_key, at, mine, theirs, gf, ga, edge, rival_user_id FROM formation_results
          WHERE at >= ? AND (rival_user_id IS NULL OR rival_user_id NOT IN (SELECT DISTINCT own_user_id FROM formation_results))`,
       )
-      .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[]
+      .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[])
+      .filter(r => r.rival_user_id === null || !own.has(Number(r.rival_user_id)))
     return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: r.theirs, gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: r.rival_user_id })))
   }
 
