@@ -62,3 +62,18 @@ test('an auction of an odd rarity has no market price and the digest still rende
     assert.match(renderDigest(s), /#7 Odd FWD .* reserve 500 \| ends/, rarity)
   }
 })
+
+// Review of PR #22 (low): applying a level sets Max bid from code, which fires no input event, so the lines kept
+// the old Max bid until a field was edited.
+test('applying a level draws the market lines again', () => {
+  const fill = html.match(/function fillLevel\(l\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(fill, 'the dashboard defines fillLevel(l)')
+  assert.match(fill, /\$\('sBid'\)\.value = l\.maxBidFoxsy[\s\S]*renderLimitHints\(\)\n\}$/)
+})
+
+// Review of PR #22 (low, docs): the settings page did not say what a Max bid of 0 or under the limit shows.
+test('the settings page says what the line shows when Max bid is 0 or binds', () => {
+  const page = readFileSync(new URL('../site/src/content/docs/use/settings.md', import.meta.url), 'utf8')
+  assert.match(page, /Bids are off: Max bid is 0/)
+  assert.match(page, /Max bid \(4,000\) is the limit here/)
+})
