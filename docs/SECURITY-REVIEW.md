@@ -540,6 +540,24 @@ dry-run agent's error can hold a live agent off that rival for up to 5 hours (it
 an agent's own open challenge is not seen by the others (FoxLeague's one active 1v1 per wallet keeps it from a second
 until the first is over).
 
+## Bid ceiling with the time a card takes, 2026-10-23
+
+The owner's direction: the ceiling a bid may not pass counted only Common packs and fusion fees (a Rare 5,000 FOXSY,
+an Epic 15,400, a Legendary 47,000), while Rares were listed at 9,000 to 17,500, so no agent could buy the third
+forward its formation record asked for. Building a card also takes time, and time is money: the matches every input
+must play to reach its gate, and the days a fused card must wait. A card at auction has already played its gate
+(only such a card can be listed). Test first: `test/bid-ceiling.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| BC1 | design | The bid ceiling left out the time a card takes to build and to bring to its match gate, so it sat far under the market | `auctionCeiling` (`src/executor/rules.ts`): the Common packs and fusion fees, plus every competitive match an input or the card needs to reach its gate at the rarity's price for a bought match (a Common has none: the cheapest match price), plus every day of a fused input's cooldown at the price of a day bought off, whether or not that wait can be bought; all read from `/api/config`. Mainnet, 2026-10-23: Common 600, Uncommon 2,200, Rare 14,450, Epic 60,400, Legendary 225,650 FOXSY. Without the gate rows or the cooldown settings, the packs and fees alone (lower, so stricter); without those, no ceiling, as before |
+| R20A-1 | medium | Agent review of PR #20: the formula also charged the card bought its own 14-day cooldown (1,050 FOXSY), though a card may be listed inside it and a Legendary is never a fusion input | Only the fused inputs carry their cooldown; the card bought is charged its matches to its gate alone (Rare 14,450 instead of 15,500) |
+| R20A-2 | low | Agent review of PR #20 (docs): the strategy levels page still gave the old 5,000 / 15,400 / 47,000 and the comment on `bidCeilings` was stale | Both describe the new ceiling; a test also covers a missing rarity row (the packs and fees alone for every card that needs it) |
+
+The owner's max bid (Zeus 47,000) still binds first, so an Epic or a Legendary is limited by it; the daily cap, the
+monthly budget, the third-bid refusal and the inherited-lock refusal are unchanged. What the formula leaves out: the
+wallet's limits (2 Common packs a week, one fusion every 20 hours) and the value of the matches as play (XP and ELO).
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

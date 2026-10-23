@@ -58,13 +58,15 @@ shop than at auction. Your **Max bid** decides which rarities are in reach. With
 Rares, a predator Rares and most Epics, a beast all three. Raise a hunter's max bid and it can take a fairly priced
 Epic too.
 
-**Never above the cost of building it.** A bid never goes above what the same card would cost from Common packs and
-fusion fees, whatever the max bid: a Rare is 9 Commons (two packs) and four fusions, about **5,000 FOXSY**; an Epic
-27 Commons, about **15,400**; a Legendary 81 Commons, about **47,000**, at October 2026 prices (a pack is 2,500 for 5
-Commons; the fusion fees are 100, 200, 400 and 800). The fusion route is also slower: one fusion per wallet every 20
-hours, 14 days before a fused card can be fused again (3 with the cooldown waiver) and the match gate of every input
-(since 12 October 2026: 5 competitive matches for a Common, 15 for an Uncommon, 45 for a Rare, 135 for an Epic, part
-of them really played). An auction at a fair price under that cost often wins.
+**Never above the cost of building it.** A bid never goes above what the same card would cost to build yourself and
+bring to its match gate (only a card at its gate can be listed), whatever the max bid. Building is the Common packs (a
+pack is 2,500 for 5 Commons) and the fusion fees (100, 200, 400 and 800), plus the time it takes, priced the way
+FoxLeague prices time: each competitive match a card needs to reach its gate at the price of a bought match of its
+rarity (20 FOXSY for an Uncommon, 100 from a Rare up; 20 for a Common, which has none), and each of the 14 days a fused
+card waits before it can be fused again at 75 FOXSY, the price of a day bought off. At October 2026 prices that is
+about **14,450 FOXSY** for a Rare (9 Commons, four fusions and their matches), **60,400** for an Epic and **225,650**
+for a Legendary, so for those two the max bid is usually the limit. The fusion route is slower still than the money
+says: one fusion per wallet every 20 hours and two Common packs a week. An auction at a fair price under that cost often wins.
 
 **Zeus decides from numbers.** For every team it could face it reads the ELO and the lineup strength at today's
 condition and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to

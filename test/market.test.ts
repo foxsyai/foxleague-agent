@@ -141,7 +141,8 @@ test('a bid never pays more than the card would cost from Common packs and fusio
   const rich = { ...TEST_SETTINGS, maxBidFoxsy: 40_000 }
   const bid = (foxsy: number, rarity: string) => checkAction({ type: 'bid', nonce: 9, foxsy }, s, ctx({ settings: rich, auction: auction({ minPrice: wholeToAtomic(500) }), cardRarity: rarity }))
   assert.equal(bid(15_400, 'Epic').ok, true)
-  assert.match(bid(16_000, 'Epic').refusal!, /above what a Epic costs from Common packs and fusion fees \(15400 FOXSY\)/)
+  // No cooldown settings in this config: the ceiling is the packs and fusion fees alone (test/bid-ceiling.test.ts has the full one).
+  assert.match(bid(16_000, 'Epic').refusal!, /above what a Epic costs to build yourself \(15400 FOXSY/)
   assert.equal(bid(40_000, 'Legendary').ok, true)
-  assert.match(bid(5_500, 'Rare').refusal!, /\(5000 FOXSY\): building it is cheaper/)
+  assert.match(bid(5_500, 'Rare').refusal!, /\(5000 FOXSY: .*\): building it is cheaper/)
 })
