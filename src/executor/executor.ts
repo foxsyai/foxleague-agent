@@ -828,9 +828,21 @@ export class Executor {
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: saved`)
       case 'play_match': {
-        const r = await fox.playMatch(wallet, a.match_type)
+        let matchId: number
+        let readBack = ''
+        try {
+          matchId = (await fox.playMatch(wallet, a.match_type)).match_id
+        } catch (err) {
+          // Only FoxLeague's own refusal says no match started. An answer lost on the way (a timeout after its wait
+          // for a match slot, a 502) may come after the start: the active match read back says (audit C2).
+          if (err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)) throw err
+          const active = await fox.activeMatch(wallet).catch(() => null)
+          if (typeof active?.match_id !== 'number') throw err
+          matchId = active.match_id
+          readBack = ` (the answer was lost: ${err instanceof Error ? err.message : String(err)}; the active match read back shows it)`
+        }
         applyEffect(a, v, snap, built)
-        return finish('confirmed', `${desc}: match #${r.match_id} started (${a.match_type})`)
+        return finish('confirmed', `${desc}: match #${matchId} started (${a.match_type})${readBack}`)
       }
       case 'leave_tournament': {
         const r = await fox.leaveTournament(wallet, a.tournament_id)

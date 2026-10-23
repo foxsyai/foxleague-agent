@@ -3,14 +3,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { createServer } from 'node:http'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { AddressInfo } from 'node:net'
 import { Mnemonic } from '@multiversx/sdk-core'
 import { Executor } from '../src/executor/executor.ts'
 import { checkAction } from '../src/executor/rules.ts'
 import { budgetView, gameDayKey } from '../src/executor/budget.ts'
+import { FoxLeague } from '../src/foxleague/api.ts'
 import { gateLine } from '../src/foxleague/gate.ts'
 import type { MatchWaiverQuote } from '../src/foxleague/types.ts'
 import { Service } from '../src/service.ts'
@@ -320,6 +323,48 @@ test('C1: a Legendary waiver still needs a card the agent would list (a spare, 1
   // The cooldown waiver buys a Legendary nothing: it cannot be fused.
   const cooling = snapshot([legend({ fusionReadyAt: hours(24 * 10) })])
   assert.match(checkAction({ type: 'fusion_cooldown_waiver', nonce: 501 }, cooling, { ...ctx(), cooldownQuote: { days: 7, costAtomic: wholeToAtomic(700) } }).refusal ?? '', /a Legendary cannot be fused/)
+})
+
+// ---- C2: Play waits for FoxLeague's match slot (up to 30 s), and a lost answer is read back ----
+
+test('C2: play_match waits out FoxLeague holding the answer 30 s for a match slot (the app allows 90 s; the agent gave up at 20 s)', async () => {
+  // Every request timeout runs 100 times faster: 20 s is 200 ms, FoxLeague's 30 s wait is 300 ms.
+  const SCALE = 100
+  const realTimeout = AbortSignal.timeout
+  AbortSignal.timeout = (ms: number) => realTimeout.call(AbortSignal, Math.ceil(ms / SCALE))
+  const server = createServer((req, res) => {
+    req.resume()
+    res.setHeader('content-type', 'application/json')
+    if (req.url === '/api/auth/verify') return void res.end(JSON.stringify({ success: true, data: { token: 't' } }))
+    if (req.url === '/api/matches/play') return void setTimeout(() => res.end(JSON.stringify({ success: true, data: { match_id: 7, status: 'simulating' } })), 30_000 / SCALE)
+    res.statusCode = 404
+    res.end('{}')
+  })
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', () => r()))
+  try {
+    const fox = new FoxLeague(`http://127.0.0.1:${(server.address() as AddressInfo).port}`, 50)
+    const r = await fox.playMatch({ ...dryWallet, signMessage: () => 'sig' }, 'casual').catch((err: Error) => assert.fail(`playMatch gave up with ${err.name}: ${err.message} (the match starts on FoxLeague all the same)`))
+    assert.equal(r.match_id, 7)
+  } finally {
+    AbortSignal.timeout = realTimeout
+    server.close()
+  }
+})
+
+test('C2: a Play whose answer was lost reads the active match back: a match found is a match started', async () => {
+  const timeout = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError') }
+  const started = setup({ fox: { playMatch: timeout, activeMatch: async () => ({ match_id: 7, kind: 'ranked', status: 'simulating', tournament_id: null, created_at: new Date().toISOString() }) } })
+  await withLive(started.store, async () => {
+    const [r] = await started.exec.run(started.agent(), liveWallet, snapshot(), [{ action: { type: 'play_match', match_type: 'ranked' }, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+    assert.match(r!.summary, /match #7 started \(ranked\)/)
+  })
+  const none = setup({ fox: { playMatch: timeout, activeMatch: async () => null } })
+  await withLive(none.store, async () => {
+    const [r] = await none.exec.run(none.agent(), liveWallet, snapshot(), [{ action: { type: 'play_match', match_type: 'ranked' }, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    assert.match(r!.summary, /aborted due to timeout/)
+  })
 })
 
 // ---- E2: the formations test does not depend on the calendar ----
