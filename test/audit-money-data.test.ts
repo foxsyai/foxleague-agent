@@ -21,7 +21,6 @@ import { Service } from '../src/service.ts'
 import { takeSnapshot } from '../src/snapshot/snapshot.ts'
 import { Store } from '../src/store/db.ts'
 import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
-import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
 import { renderPlanRequest } from '../src/strategist/strategist.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { ADDR, OTHER, STRANGER, TEST_SETTINGS, card, dryWallet, liveWallet, rivalSquad, setup, snapshot, tournament, withLive } from './fixtures.ts'
@@ -291,8 +290,8 @@ test('B-P1: formation_results is emptied once, so the pool is rebuilt under the 
 test('C1: a spare Legendary at 300 played may buy the 105 matches it misses to its listing gate', () => {
   const s = snapshot([card(501, 'FWD', 'reserve', { rarity: 'Legendary', cap: 100, competitiveMatches: 300, syncedTotal: 50 })])
   s.chain!.foxsy = wholeToAtomic(20_000)
+  // What the model is told (the snapshot's gate line): a Legendary's rest is waivable and counts for listing.
   assert.match(gateLine(s.config!), /Legendary 405 \(135 played, the rest waivable at 100 FOXSY a match\)/)
-  assert.match(SYSTEM_PROMPT, /Legendary 405, 135 played; credit counts for the rest/)
   const quote: MatchWaiverQuote = { max_purchasable: 105, chain_played: 300, credit: 0, price_wei: wholeToAtomic(100).toString(), rarity: 'Legendary', gate: 405, floor: 135, price_per_match: 100, meets_gate: false }
   const ctx = { settings: { ...TEST_SETTINGS, maxShopPaymentFoxsy: 11_000 }, now: new Date(), matchQuote: quote }
   const v = checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 105 }, s, ctx)
