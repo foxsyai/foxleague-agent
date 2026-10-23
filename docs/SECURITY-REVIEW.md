@@ -673,6 +673,7 @@ first: `test/limits-common-uncommon.test.ts`, each test seen failing before the 
 | LC1 | design | No owner's limit for a bid on a Common or an Uncommon: only the build cost (600 and 2,200) and Max bid held | `maxBidCommonFoxsy` (500) and `maxBidUncommonFoxsy` (1,500) in the settings, validated 0 to 1,000,000; `rarityBidLimit` covers all five rarities; both are in `LIMITS` on the server and the dashboard, so raising one asks for the password and lowering it does not; an agent made before them gets the defaults |
 | LC2 | design | The plan saw the limits and market prices of Rare, Epic and Legendary only | The plan request lists all five limits and the digest all five market prices |
 | LC3 | low | The build-cost refusal read "a Epic", "a Uncommon" | It uses `aRarity`, as the other refusals do |
+| R26A-1 | low | Agent review of PR #26: the plan saw all five limits but the build cost of Rare, Epic and Legendary only, so with a raised Uncommon (above 2,200) or Common (above 600) limit it could propose a bid the build-cost rule refuses (a wasted action, nothing signed) | The plan request lists the build cost of all five rarities |
 
 The dashboard has both fields with their info bubbles and the coloured market line; the settings page and the strategy
 levels page list the five limits. The rule only adds refusals: no other cap changed. Open: none.

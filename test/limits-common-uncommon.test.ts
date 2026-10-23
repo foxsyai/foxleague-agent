@@ -85,3 +85,12 @@ test('the dashboard has the two new limits with their info bubbles and market li
   assert.match(page, /\| Max bid for a Common \| 500 \|/)
   assert.match(page, /\| Max bid for an Uncommon \| 1,500 \|/)
 })
+
+// Agent review of PR #26 (low): the plan saw all five limits but the build cost of Rare, Epic and Legendary only, so
+// with a raised Uncommon limit it could propose a bid the build-cost rule refuses.
+test('the plan sees the build cost of all five rarities', () => {
+  const s = snapshot()
+  s.config = { ...s.config!, common_pack_price_foxsy: 2500, fusion_costs_foxsy: [100, 200, 400, 800], rarity_match_gate: MAINNET_GATE, fusion_card_cooldown_seconds: 1_209_600, fusion_cooldown_waiver_price_per_day: 75 } as typeof s.config
+  const text = renderPlanRequest({ snapshot: s, settings: DEFAULT_SETTINGS, budget: budgetView(setup().store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
+  assert.match(text, /never above what the card costs to build yourself and bring to its match gate \(Common 600, Uncommon 2200, Rare 14450, Epic 60400, Legendary 225650\)/)
+})
