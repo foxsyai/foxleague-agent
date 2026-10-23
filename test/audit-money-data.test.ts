@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url'
 import type { AddressInfo } from 'node:net'
 import { Mnemonic } from '@multiversx/sdk-core'
 import { Executor } from '../src/executor/executor.ts'
-import { checkAction } from '../src/executor/rules.ts'
+import { checkAction, type RulesContext } from '../src/executor/rules.ts'
 import { budgetView, gameDayKey } from '../src/executor/budget.ts'
 import { estimateMinutes } from '../src/executor/slots.ts'
 import { FoxLeague } from '../src/foxleague/api.ts'
@@ -24,7 +24,7 @@ import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
 import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
 import { renderPlanRequest } from '../src/strategist/strategist.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
-import { ADDR, OTHER, STRANGER, TEST_SETTINGS, card, dryWallet, liveWallet, rivalSquad, setup, snapshot, withLive } from './fixtures.ts'
+import { ADDR, OTHER, STRANGER, TEST_SETTINGS, card, dryWallet, liveWallet, rivalSquad, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 const hours = (h: number): string => new Date(Date.now() + h * 3600_000).toISOString()
 
@@ -372,6 +372,40 @@ test('C2: a Play whose answer was lost reads the active match back: a match foun
 
 test('C4: the slot estimate of a 36-team League + Knockout tournament is FoxLeague\'s 570 minutes', () => {
   assert.equal(estimateMinutes('league_knockout', 36, false), (36 * 8 / 2 + 46) * 3)
+})
+
+// ---- D9: Zeus buys the XP booster only once a competitive fixture of its own is listed ----
+
+test('D9: Zeus buys the XP booster only once a competitive fixture of its own is scheduled within 24 hours', () => {
+  const ctx = (): RulesContext => ({ settings: { ...TEST_SETTINGS, maxShopPaymentFoxsy: 2500 }, now: new Date(), zeus: true })
+  const booster = { type: 'buy', product: 'xp_booster' } as const
+  const seat = (more: Record<string, unknown> = {}) => ({ ...(tournament(60) as { tournament: Record<string, unknown> }).tournament, format: 'swiss', max_teams: 10, min_teams: 3, status: 'open', deadline: hours(1), starts_at: hours(1.5), ...more })
+  const fixture = (more: Record<string, unknown> = {}) => ({ tournament_id: 60, tournament_title: 'T60', round_label: 'Round 1', group_name: null, is_home: true, opponent_name: 'Rival', scheduled_at: hours(1.5), strategy_locks_at: hours(1), locked: false, phase: 'upcoming', home_score: null, away_score: null, ...more })
+  const drawn = snapshot()
+  drawn.auth!.myTournaments!.active = [seat({ status: 'active' }) as never]
+  drawn.auth!.upcoming!.matches = [fixture() as never]
+  assert.equal(checkAction(booster, drawn, ctx()).ok, true, 'a fixture in the next 24 hours: the booster has matches to double')
+
+  const seated = snapshot()
+  seated.auth!.myTournaments!.active = [seat() as never]
+  seated.auth!.upcoming!.matches = []
+  assert.match(checkAction(booster, seated, ctx()).refusal ?? '', /no competitive match of yours is scheduled/, 'no fixture of ours exists yet')
+
+  const late = snapshot()
+  late.auth!.myTournaments!.active = [seat({ status: 'active' }) as never]
+  late.auth!.upcoming!.matches = [fixture({ scheduled_at: hours(30) }) as never]
+  assert.equal(checkAction(booster, late, ctx()).ok, false, 'a fixture beyond the booster\'s 24 hours')
+
+  const bronze = snapshot()
+  bronze.auth!.myTournaments!.active = [seat({ status: 'active', tier: 'bronze' }) as never]
+  bronze.auth!.upcoming!.matches = [fixture() as never]
+  assert.equal(checkAction(booster, bronze, ctx()).ok, false, 'a Bronze match earns no XP')
+
+  const blind = snapshot()
+  blind.auth!.upcoming = null as never
+  assert.match(checkAction(booster, blind, ctx()).refusal ?? '', /could not be read/)
+
+  assert.equal(checkAction(booster, seated, { ...ctx(), zeus: undefined }).ok, true, 'the other levels keep their own judgement')
 })
 
 // ---- E2: the formations test does not depend on the calendar ----

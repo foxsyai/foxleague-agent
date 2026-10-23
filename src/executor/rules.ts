@@ -417,6 +417,29 @@ function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
   return null
 }
 
+/** Fixture phases a booster bought now still doubles: FoxLeague awards a match's XP when its result is applied. */
+const BOOSTER_PHASES = new Set(['upcoming', 'locked', 'live'])
+
+/**
+ * Why Zeus would buy the XP booster with nothing of its own to double, or null: it needs a Silver or Gold tournament
+ * or 1v1 match of its own listed, not over, kicking off within the booster's 24 hours (Bronze, ranked and casual
+ * matches earn no XP). FoxLeague reads the booster when a match's result is applied (at the reveal of a tournament or
+ * 1v1 match; matches.rs apply_match_results, a purchase verified within the last 24 h), so buying it once the fixture
+ * is drawn loses nothing, while a seat in an open tournament can still come back (audit D9, 2026-10-23). Either list
+ * unreadable is no "none".
+ */
+function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
+  const upcoming = s.auth?.upcoming
+  const mine = s.auth?.myTournaments
+  if (!upcoming || !mine) return 'your fixtures could not be read: Zeus buys the XP booster only for competitive matches of its own'
+  const sure = upcoming.matches.some(m => {
+    const at = Date.parse(m.scheduled_at)
+    const t = mine.active.find(x => x.id === m.tournament_id)
+    return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && (t?.tier === 'silver' || t?.tier === 'gold')
+  })
+  return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): Zeus buys the XP booster once its fixtures are drawn'
+}
+
 /**
  * Why the agent would not list this card (the squad checks of list_card), or null: outside the lineup and bench, at
  * least 18 cards left after it and not among the CORE_CARDS strongest. A Legendary's match waiver is bought only then.
@@ -756,6 +779,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (ctx.lastBoosterAt) {
             const hours = (ctx.now.getTime() - ctx.lastBoosterAt.getTime()) / 3600_000
             if (hours < 24 - XP_BOOSTER_RENEW_HOURS) return refuse(`an XP booster was bought ${Math.max(0, Math.floor(hours))} h ago: another one now would throw away the hours left`)
+          }
+          if (ctx.zeus) {
+            const none = noBoosterFixture(s, ctx.now)
+            if (none) return refuse(none)
           }
           amount = prices.xp_booster
           break
