@@ -158,6 +158,42 @@ test('D3 the open-tournament line shows the seated field the Zeus join rule judg
   const block: string[] = [lines[at]!]
   for (let i = at + 1; i < lines.length && /^\s+/.test(lines[i]!) && !/^\s+T\d+ "/.test(lines[i]!); i++) block.push(lines[i]!)
   assert.match(block.join('\n'), /stronger|weaker|lineup|ELO/, `the plan sees only "3/8 seated" and nothing about who sits there; the executor would refuse the join because 3 seated teams are clearly stronger:\n${block.join('\n')}`)
+  assert.match(block.join('\n'), /field: 3 clearly stronger, 0 even, 0 clearly weaker \(strongest ELO 1500, lineup 3080; yours ELO 1200, lineup 1540 at its start\)/)
+  // The line and the rule share one test: the same seats refuse a Zeus join.
+  const seats = s.market.fields!.find(f => f.id === 60)!.seats!
+  const verdict = checkAction({ type: 'join_tournament', tournament_id: 60 }, s, ctx({ zeus: true, field: seats, tournament: { tournament: open, participants: seated } as never }))
+  assert.match(verdict.refusal ?? '', /3 seated teams are clearly stronger/)
+})
+
+test('D3 a field that cannot be read is shown as unknown; a check before an action reads no field', async () => {
+  const base = snapshot()
+  const open = { ...(tournament(61) as { tournament: Record<string, unknown> }).tournament, participant_count: 2 }
+  let reads = 0
+  const fox = {
+    config: async () => base.config,
+    user: async () => base.profile,
+    team: async () => base.team,
+    players: async () => ownCards(),
+    shopStatus: async () => base.auth!.shop,
+    dailyAllowance: async () => base.auth!.allowance,
+    activeMatch: async () => null,
+    myTournaments: async () => ({ active: [], completed: [] }),
+    upcomingMatches: async () => ({ lead_minutes: 30, my_team_name: 'Agent', matches: [] }),
+    challengesForMe: async () => [],
+    tournaments: async (q: { status?: string }) => (q.status === 'open' ? [open] : []),
+    tournament: async () => { reads++; throw new Error('503') },
+    leaderboard: async () => ({ users: [base.profile], total: 1, limit: 200, offset: 0 }),
+    listings: async () => [],
+    floorPrices: async () => [],
+    matchHistory: async () => [],
+  } as never
+  const chain = { account: async () => ({ nonce: 1, balance: wholeToAtomic(10) }), esdts: async () => [], egldUsd: async () => 4.5, query: async () => { throw new Error('off') } } as never
+  const planning = await takeSnapshot({ chain, fox }, { wallet: dryWallet }, new Date(), { matchFacts: { get: () => undefined, put: () => undefined } })
+  assert.match(renderDigest(planning), /T61 [^\n]*\n {4}field: unknown \(the seated teams could not be read\)/)
+  const before = reads
+  const check = await takeSnapshot({ chain, fox }, { wallet: dryWallet }, new Date())
+  assert.equal(reads, before, 'the snapshot before each action reads no field')
+  assert.equal(check.market.fields, undefined)
 })
 
 // ---- D4: the schedule check projects the squad's condition to the tournament's start ----

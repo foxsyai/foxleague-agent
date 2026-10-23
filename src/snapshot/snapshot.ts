@@ -2,6 +2,7 @@
 // Public routes and the agent's own authed routes only (README guardrail "public information only").
 
 import { slotWindows, type SlotWindow } from '../executor/slots.ts'
+import { supportedFormat, type FieldSeat } from '../executor/rules.ts'
 import { MAINNET } from '../config.ts'
 import type { Chain } from '../chain/gateway.ts'
 import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
@@ -85,6 +86,11 @@ export interface MarketSummary {
   floors: FloorPrice[]
   /** Planning snapshots only: the market price of each rarity from the public sales (null: too few to tell). */
   prices?: Record<string, MarketPrice | null>
+  /**
+   * Planning snapshots only: the seated teams of the open Silver and Gold tournaments the agent could join (soonest
+   * deadline first, at most 4, 16 seats each), read as the Zeus join rule reads them; seats null = unreadable.
+   */
+  fields?: { id: number; seated: number; seats: FieldSeat[] | null }[]
 }
 
 /** Public facts of revealed matches, kept across ticks (the store's match_facts), so each match is read once. */
@@ -302,6 +308,46 @@ async function readNewSales(fox: FoxLeague, cache: MarketSalesCache, now: Date):
   cache.markComplete()
 }
 
+/** Field reads per planning snapshot: tournaments and seats per tournament (the rivals' lineups are cached 20 minutes). */
+const FIELD_TOURNAMENTS = 4
+const FIELD_SEATS = 16
+
+/**
+ * The seated teams of the open Silver and Gold tournaments the agent could join (a supported format, before the
+ * deadline, a seat free, someone seated, not in it already): each team's ELO (the leaderboard, else its profile) and
+ * lineup strength at full condition, as the executor reads them for the Zeus join rule. A failed read is unknown.
+ */
+async function readFields(fox: FoxLeague, wallet: AgentWallet, open: Tournament[], myId: number, board: UserProfile[], now: Date): Promise<NonNullable<MarketSummary['fields']>> {
+  const joinable = open
+    .filter(t => (t.tier === 'silver' || t.tier === 'gold') && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams)
+    .sort((a, b) => a.deadline.localeCompare(b.deadline))
+    .slice(0, FIELD_TOURNAMENTS)
+  const out: NonNullable<MarketSummary['fields']> = []
+  for (const t of joinable) {
+    let detail: Awaited<ReturnType<FoxLeague['tournament']>>
+    try {
+      detail = await fox.tournament(t.id, t.is_private ? wallet : undefined)
+    } catch {
+      out.push({ id: t.id, seated: t.participant_count ?? 0, seats: null })
+      continue
+    }
+    if (!Array.isArray(detail?.participants)) {
+      out.push({ id: t.id, seated: t.participant_count ?? 0, seats: null })
+      continue
+    }
+    if (detail.participants.some(p => p.user_id === myId)) continue
+    const seated = detail.participants
+    const seats = await Promise.all(seated.slice(0, FIELD_SEATS).map(async (p): Promise<FieldSeat> => {
+      const listed = board.find(u => u.id === p.user_id)
+      const elo = listed?.elo_rating ?? (p.wallet_address ? ((await fox.user(p.wallet_address).catch(() => null))?.elo_rating ?? null) : null)
+      const strength = p.wallet_address ? await rivalStrengthCached(fox, p.wallet_address) : null
+      return { userId: p.user_id, elo: typeof elo === 'number' ? elo : null, strength }
+    }))
+    out.push({ id: t.id, seated: seated.length, seats })
+  }
+  return out
+}
+
 async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>): Promise<T | null> {
   try {
     return await fn()
@@ -491,6 +537,9 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     })
   }
 
+  // A field the plan can judge before paying (planning snapshots only), with the test the Zeus join rule applies.
+  const fields = facts && wallet && registered && profile ? await readFields(fox, wallet, openStandard, profile.id, board?.users ?? [], now) : undefined
+
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null
   // The plan is told, so it does not plan a swap that would only be refused.
   if (pool && !pool.active) warnings.push(`xExchange pool: ${PAIR_PAUSED}`)
@@ -526,6 +575,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       auctions: (listings ?? []).filter(l => l.is_auction && l.owner_address !== address).slice(0, 15),
       floors: floors ?? [],
       ...(prices ? { prices } : {}),
+      ...(fields ? { fields } : {}),
     },
     ...(record !== undefined ? { formationRecord: record } : {}),
     ...(rivalFormations ? { rivalFormations } : {}),

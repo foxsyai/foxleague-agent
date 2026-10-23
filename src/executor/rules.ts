@@ -195,6 +195,11 @@ const VALID_SIZES: Record<string, (n: number) => boolean> = {
  * admin-only league_knockout of 2026-10-15 (a 36-team league and a two-legged knockout), is neither joined nor
  * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat.
  */
+/** One of the four formats the agent knows how to join and create. */
+export function supportedFormat(format: string): boolean {
+  return Object.hasOwn(VALID_SIZES, format)
+}
+
 function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
   return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
 }
@@ -423,8 +428,32 @@ export function lineupStrength(s: AgentSnapshot, condition: (p: PlayerView) => n
 
 /** A Zeus 1v1 needs at least this win chance; a seated team is clearly stronger with both margins below. */
 export const ZEUS_MIN_1V1_CHANCE = 0.55
-const ZEUS_STRONGER_SQUAD = 1.05
-const ZEUS_STRONGER_ELO = 50
+export const ZEUS_STRONGER_SQUAD = 1.05
+export const ZEUS_STRONGER_ELO = 50
+/** Zeus does not enter a field with this many clearly stronger teams, or this many it could not read. */
+export const ZEUS_FIELD_LIMIT = 3
+
+/** One seated team of a tournament: its lineup strength at full condition and its ELO, null when unread. */
+export interface FieldSeat {
+  userId: number
+  strength: number | null
+  elo: number | null
+}
+
+/**
+ * How a seated field compares with us, the one test the Zeus join rule and the plan's field line both use. Clearly
+ * stronger: ELO more than 50 above ours and a lineup more than 5 percent above ours (a lineup that could not be read
+ * counts when its ELO alone is clearly higher). Clearly weaker: both margins the other way, both known. Unread:
+ * neither known. The rest is even (or known only in part).
+ */
+export function judgeField(field: FieldSeat[], ours: number, myElo: number): { stronger: number; weaker: number; even: number; unread: number; strongestElo: number | null; strongestLineup: number | null } {
+  const stronger = field.filter(f => f.elo !== null && f.elo > myElo + ZEUS_STRONGER_ELO && (f.strength === null || f.strength > ours * ZEUS_STRONGER_SQUAD)).length
+  const weaker = field.filter(f => f.elo !== null && f.elo < myElo - ZEUS_STRONGER_ELO && f.strength !== null && f.strength * ZEUS_STRONGER_SQUAD < ours).length
+  const unread = field.filter(f => f.strength === null && f.elo === null).length
+  const elos = field.map(f => f.elo).filter((e): e is number => e !== null)
+  const lineups = field.map(f => f.strength).filter((x): x is number => x !== null)
+  return { stronger, weaker, unread, even: field.length - stronger - weaker - unread, strongestElo: elos.length ? Math.max(...elos) : null, strongestLineup: lineups.length ? Math.max(...lineups) : null }
+}
 
 /** The 1v1 gates both join and create share: a known, not stronger opponent, not farmed every day. */
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
@@ -674,13 +703,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           // Our eleven as it will be at the start (the rivals are taken at full condition): rested, less what our other tournaments cost before it.
           const atStart = conditionAtStart(s, t, ctx.now)
           if (!atStart) return refuse('your current tournaments could not be read: Zeus does not judge a field blind')
-          const ours = lineupStrength(s, atStart.at)
-          const myElo = s.profile.elo_rating
-          const unread = ctx.field.filter(f => f.strength === null && f.elo === null).length
-          if (unread >= 3) return refuse(`${unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)
-          // A team whose squad could not be read counts as stronger when its ELO alone is clearly higher.
-          const stronger = ctx.field.filter(f => f.elo !== null && f.elo > myElo + ZEUS_STRONGER_ELO && (f.strength === null || f.strength > ours * ZEUS_STRONGER_SQUAD))
-          if (stronger.length >= 3) return refuse(`${stronger.length} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
+          const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
+          if (field.unread >= ZEUS_FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)
+          if (field.stronger >= ZEUS_FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
         }
       }
       if (t.tier === 'bronze') return allow(0, { tier: 'bronze', scId: t.sc_tournament_id ?? t.id, fee: 0 })

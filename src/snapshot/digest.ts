@@ -1,13 +1,13 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { freeGaps } from '../executor/slots.ts'
-import { lineupPositionsOk, lineupStrength, XP_BOOSTER_RENEW_HOURS } from '../executor/rules.ts'
+import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
 import { EVEN_BAND, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
-import type { ShopStatus } from '../foxleague/types.ts'
+import type { ShopStatus, Tournament } from '../foxleague/types.ts'
 
 /**
  * Text written by other players or servers (titles, team, card and listing names, error messages) as
@@ -105,6 +105,20 @@ function scheduleText(t: { format: string; max_teams: number; home_and_away?: bo
 }
 
 /**
+ * How an open tournament's seated field compares with this team, by the Zeus join rule's own test (judgeField), with
+ * our eleven at the tournament's start as the rule takes it (conditionAtStart).
+ */
+function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot['market']['fields']>[number]): string {
+  if (!f.seats || !s.profile) return 'field: unknown (the seated teams could not be read)'
+  const atStart = conditionAtStart(s, t, new Date(s.takenAt))
+  const ours = lineupStrength(s, atStart?.at)
+  const j = judgeField(f.seats, ours, s.profile.elo_rating)
+  const read = f.seats.length < f.seated ? ` (${f.seats.length} of ${f.seated} seated teams read)` : ''
+  const strongest = `strongest ELO ${j.strongestElo ?? 'unknown'}, lineup ${j.strongestLineup === null ? 'unknown' : Math.round(j.strongestLineup)}`
+  return `field${read}: ${j.stronger} clearly stronger, ${j.even} even, ${j.weaker} clearly weaker${j.unread ? `, ${j.unread} unknown` : ''} (${strongest}; yours ELO ${s.profile.elo_rating}, lineup ${Math.round(ours)} ${atStart ? 'at its start' : 'today'})`
+}
+
+/**
  * A team with its own open 1v1 (created by it, not accepted yet) cannot accept ours: FoxLeague allows one active 1v1
  * per team, created or joined. Read from the open challenges in the snapshot, until that challenge's deadline.
  */
@@ -184,8 +198,13 @@ export function renderDigest(s: AgentSnapshot): string {
 
   const m = s.market
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
+  // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
+  const zeus = s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')
+  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${ZEUS_STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((ZEUS_STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way${zeus ? `; Zeus never joins a field with ${ZEUS_FIELD_LIMIT} or more clearly stronger teams, or ${ZEUS_FIELD_LIMIT} or more unknown ones` : ''})`)
   for (const t of m.openStandard.slice(0, 30)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}`)
+    const field = m.fields?.find(f => f.id === t.id)
+    if (field) out.push(`    ${fieldText(s, t, field)}`)
   }
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
