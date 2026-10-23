@@ -3,9 +3,14 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { Mnemonic } from '@multiversx/sdk-core'
 import { Executor } from '../src/executor/executor.ts'
 import { budgetView, gameDayKey } from '../src/executor/budget.ts'
+import { Service } from '../src/service.ts'
 import { Store } from '../src/store/db.ts'
 import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
 import { renderPlanRequest } from '../src/strategist/strategist.ts'
@@ -165,6 +170,35 @@ test('B1: a match against an own team known by its user id, but without rows of 
   const pool = store.formationPool()
   assert.deepEqual(pool.rows.map(r => [r.mine, r.theirs]), [['4-4-2', '5-3-2']], 'only the match against the stranger')
   assert.equal(pool.matches, 1)
+})
+
+// ---- B2: a failed read of the agent's own history does not hide the pooled record ----
+
+function offlineService() {
+  const svc = new Service({ mnemonic: Mnemonic.generate().toString(), dataDir: mkdtempSync(join(tmpdir(), 'foxagent-audit-')), gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5, isServer: false, defaultDryRun: true, maxAgents: 3 } as never)
+  svc.ensureAgents()
+  ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
+  return svc
+}
+
+test('B2: the pooled record reaches the plan even when the agent\'s own match history could not be read', async () => {
+  const svc = offlineService()
+  const fail = async () => { throw new Error('offline') }
+  const fakes: Record<string, unknown> = {
+    user: async () => snapshot().profile,
+    team: async () => snapshot().team,
+    players: async () => [],
+    matchHistory: async () => { throw new Error('HTTP 502') },
+  }
+  const fox = svc.fox as unknown as Record<string, unknown>
+  for (const client of [svc.chain, svc.fox] as unknown as Record<string, unknown>[]) {
+    for (const k of Object.getOwnPropertyNames(Object.getPrototypeOf(client))) if (k !== 'constructor' && typeof client[k] === 'function') client[k] = (client === fox ? fakes[k] : undefined) ?? fail
+  }
+  const at = new Date(Date.now() - 3600_000).toISOString()
+  svc.store.putFormationResults(1, 101, [{ key: 't:B', at, mine: '4-3-3', theirs: '4-4-2', gf: 1, ga: 1, edge: 0, rivalUserId: 300 }])
+  const plan = await (svc as unknown as { snapshot(i: number, plan: boolean): Promise<{ formationRecord?: unknown; formationPool?: { matches: number } }> }).snapshot(0, true)
+  assert.equal(plan.formationRecord, null, 'control: the own record is unknown')
+  assert.equal(plan.formationPool?.matches, 1, 'the other team\'s match is in the pool the plan sees')
 })
 
 // ---- E2: the formations test does not depend on the calendar ----
