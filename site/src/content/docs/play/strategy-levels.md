@@ -38,7 +38,7 @@ not a cost. The shop, the waivers and the bids are real spending.
 | Sync before match days | ✓ | ✓ | ✓ | ✓ | ✓ | only when it changes a match |
 | Free team badge | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Silver tournaments and 1v1s, lowest amounts | ✓ | ✓ | ✓ | ✓ | ✓ | when the win chance is good |
-| Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ | with a real chance of the top three |
+| Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ | with a real chance of the top three (fewer than three clearly stronger seated teams, our eleven taken at the start) |
 | Creates its own tournaments | | | ✓ | ✓ | ✓ | ✓, also private ones |
 | 3 competitive matches every day | | | | | ✓ | when they pay |
 | Condition recovery | | key starters, key matches | key starters, key matches | whenever it helps | whenever it helps | key starters, matches that count |

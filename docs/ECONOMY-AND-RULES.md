@@ -399,4 +399,9 @@ among the called-up players by contribution. Nothing of it exists in the code on
   refunded cannot be used for a purchase.
 - **Config fields.** `tournament_defaults.league_knockout_enabled`, `.league_knockout_min_invite_window_minutes`,
   `tx_signature_check_mode`.
+- **XP booster timing.** The multiplier is read when a match result is applied (at the reveal for tournament and 1v1
+  matches): a booster bought once the fixture is drawn loses nothing.
+- **The agent's own checks (not FoxLeague rules).** The schedule check judges the squad at a tournament's start;
+  Zeus compares a seated field with our eleven at the start; a plan spaces its casual and ranked matches 11 minutes
+  apart and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
 

@@ -585,6 +585,55 @@ The market price guides; the owner's limits, the build cost and the max bid bind
 cap, the monthly budget, the third-bid refusal and the inherited-lock refusal hold as before. Open: a price per card
 quality (Legendaries sell for two to six times more at a higher rating) waits for enough sales.
 
+## Audit of PRs #15 to #23, 2026-10-23
+
+The owner's method: five read-only reviewers (Claude Fable 5.1, max effort) on main aae6935, one area each (A money
+and limits; B data, caches and what reaches the prompt; C FoxLeague's changes from 2026-10-15 to 2026-10-23; D play
+quality against 48 hours of the ten live agents' activity; E docs, dashboard and tests). Every finding came with a
+proof test that failed on aae6935; none was a phantom. The fixes were made by Claude Opus 5.5 (extra high), test first:
+`test/audit-money-data.test.ts`, `test/audit-play.test.ts`, `test/limit-hints.test.ts` (E3), each seen failing before
+its fix. The game knowledge was synced to FoxLeague's manual of 2026-10-23 (565a902de) in the same round, and
+FoxLeague's changes are in `docs/FOXLEAGUE-INTEGRATION.md` section 21 and `docs/ECONOMY-AND-RULES.md` section 19.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| D1 | high | A plan's actions ran at random moments over 80 percent of the tick, 30 s apart, so several casual or ranked matches collided with the 15-minute ranked cooldown and a match still running, and a refused action is never retried: 37 percent of play_match attempts refused in 48 h | `scheduleActions` (service.ts) keeps 11 min after any casual or ranked start and 16 min between ranked starts, counting the agent's last starts before the plan (`lastMatchStarts`, the helper the play_match check reads); later actions move back, a match that no longer fits is dropped with an info line, and before each match the start waits for the real gate (up to 2 min past the window) |
+| D2 | high | The plan never saw the per-rival 1v1 count of the last 7 days, nor the rivals the owner's other agents held: 22 + 5 challenges refused in 48 h | `src/executor/rivals.ts` (`oneVOnesThisWeek`, `rivalsOutByOthers`, `weeklyFreeAt`) is read by the executor and the plan request alike, with one claim test (`claimBars`); the teams to challenge say "N of 2 1v1s against it this week (the limit), free again <date> UTC", and a rival another of the owner's agents holds shows only as "not available now" |
+| D3 | high | Open tournaments showed only seated/max while the Zeus join rule judged the seated field at execution: 7 of 12 joins refused | Planning snapshots read the field of up to 4 open Silver or Gold tournaments the agent could join (16 seats each, 20-minute caches); the digest shows "field: N clearly stronger, N even, N clearly weaker, N unknown"; one helper (`judgeField`) serves the rule and the line |
+| D4 | high | The schedule check used the squad's condition now, so a tournament days away was refused as if it started tonight (T2221 watched in 242 plans) | `conditionAtStart`: each card at the start is today's condition plus regeneration until then (half after age 30, at most 100), less an even share of what its matches owed to other tournaments before then cost; an unreadable or past start stays at today's; the system prompt says so |
+| D5 | medium | The Zeus field test compared rivals at full condition with our eleven at today's condition, even for a start days away | For a tournament our eleven is taken at the start (`conditionAtStart`); a 1v1 stays at today's condition |
+| D6 | low | Per-stat XP pools were read but never shown | Squad lines show a pool of 1,500 to 1,999 below the cap, e.g. `vis 20 (1990/2000)` |
+| D7 | medium | parseAction dropped a sync's card nonce, so the 10 FOXSY one-card sync was out of reach (agents skipped useful syncs priced at about 180) | parseAction keeps an optional, validated nonce; the catalogue offers `{"type":"sync","nonce":N}` |
+| D8 | medium | home_and_away and the round interval were unknown to the plan though the executor counts on them | Open tournament lines show "home and away (2 x (N-1) matches)" and "rounds every N min"; the create catalogue names `"home_and_away":true` for a round robin |
+| D9 | medium | The XP booster (2,000 FOXSY) could be bought with no fixture of the agent's own; on 2026-10-23 a seat came back and left a booster with nothing to double | FoxLeague doubles the XP when a result is applied (`apply_match_results`, a purchase within the last 24 h), so buying once the fixture exists loses nothing: at the Zeus level a booster needs a Silver, Gold or 1v1 match of the agent's own (upcoming, locked or live) kicking off within 24 h; an unreadable fixture list refuses |
+| D10 | medium | A target with its own open 1v1 cannot accept ours; the list did not say so | The entry says "has a 1v1 out until <deadline> UTC: cannot accept yours before" |
+| A1 | low | A 1v1 that ended in an error before any FoxLeague call (a deploy, the kill switch or a pause before the signature) kept its rival claim and wrote an error row the rival check counted for up to 5 hours | The executor marks when FoxLeague is asked; an error before that releases the claim and its row says `untouched`, which the rival check and the open-challenge count skip |
+| A2 | low | The rival check read the rows of the active agents only: after a restart a retired or removed team's 1v1 still out was ignored | It reads every agent row (`Store.agentIndexes`) |
+| A3/B3 | low | The buying power line counted all the EGLD above the reserve as FOXSY and today's play room as swap room, while the executor holds swaps to their own daily and monthly allowances | The budget view carries what was swapped today and this month and what the allowances leave; the line counts the EGLD only up to that and says what was swapped |
+| B1 | low | The pooled formation record knew the owner's teams only by their own recent rows, so a match against a retired or paused team of the owner could count | It also leaves out every user id the store keeps (`agent_user_id:N`) |
+| B2 | low | A failed read of the agent's own match history also hid the pooled record | The pool reaches every planning snapshot with a profile |
+| B-P1 | low | FoxLeague rebuilds a ranked or casual match's lineups in its statistics at read time from the cards' current stats and condition (tournament and 1v1 matches keep the lock snapshot), so a ranked match read days later put today's squads into its strength band | The read time is kept with the cached facts; a ranked or casual edge counts only from statistics read within 6 hours of the match's end; `formation_results` is emptied once (kv `formation_results_rebuilt_2026_10_23`) and rebuilt under the rule |
+| C1 | low | FoxLeague sells a Legendary's match waiver (for its listing gate since 2026-10-16); the agent refused it as wasted | A Legendary's match waiver asks what list_card asks of the card (outside the lineup and bench, 18 cards left, not among the 18 strongest); the max shop payment and the exactly-the-missing-matches rule hold; the prompt says so |
+| C2 | low | FoxLeague holds a Play up to 30 s for a match slot; the agent gave up after 20 s and logged an error for a match that may have started | `playMatch` waits 95 s; an answer lost on the way reads the active match back |
+| C4 | low | The slot estimate had no league_knockout arm (108 minutes for 36 teams where FoxLeague counts 570) | The arm is added: (max_teams x 8 / 2 + 46) x 3 |
+| E1 | low | The settings page and R22A-1 said the market line has no button whenever Max bid binds; in red it still offers one | Both say the button is left out only when the line is amber |
+| E2 | medium | `test/formations.test.ts` hard-coded a match date that leaves the pool's 14-day window on 2026-11-03 and would turn CI red | Its matches end an hour before the test runs; an audit test runs the file under a clock of 2026-11-10 |
+| E3 | low | The test that the market lines are drawn on load matched the Use button's own call and passed with the load call removed | It reads `fillForm` itself |
+| E4 | low | README and the FAQ still said the agents know nothing of each other | They name the two things the agents share, as the safety page does |
+
+Left to the owner's decision: C3, reading League + Knockout invitations to tell the owner (never joining the format,
+which stays refused); D11, counting only accepted 1v1s toward the weekly limit per rival. The reviewers' proposals
+(order of play, recovery before key matches, skipping the model call on empty plans, teams to invite for private
+cups) wait for the owner as well.
+
+Open: A1 rows logged before this change keep counting for the rest of their window; within the 6 hours a ranked edge
+still uses the condition at read time; FoxLeague cancelling a Play whose client dropped is not verified; "kickoff
+within 24 h" stands in for "result applied within 24 h of the purchase"; the D4 projection spreads earlier matches'
+cost evenly and ignores casual, ranked and training before the start; D1 spaces casual and ranked starts only; D10
+sees a rival's open challenge, not one it already plays; the join gas (7,000,000) should follow FoxLeague's 8,400,000
+once the tournaments contract is upgraded on mainnet; a seat paid while the contract is paused by its hot-key alarm
+reverts (gas only). The F4 open items are corrected by B1 and B-P1.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

@@ -1768,6 +1768,17 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   (`tournament_manager.rs:457`). Per `contracts/deploys.yaml` mainnet is not upgraded yet. After the upgrade the web
   app's `JOIN_TOURNAMENT_GAS_LIMIT` is 8,400,000 (`frontend/src/lib/gasLimits.ts:32`; the heaviest join measured
   5,550,000): the agent's 7,000,000 still covers it, and should follow to 8,400,000 with the mainnet upgrade.
+- **What the agent does with them (audit 2026-10-23).** `playMatch` waits 95 s and reads `GET /api/matches/active`
+  after a lost answer; a ranked or casual match's statistics (`/api/matches/{id}/stats`) carry the cards' current
+  synced stats and `current_condition()` at read time (`launch_squad`), while `/api/public/tournament-match/{id}/stats`
+  carries the lock snapshots, so the agent counts a ranked or casual strength edge only from statistics read within
+  6 hours of `finished_at`; `league_knockout` slot window (max_teams x 8 / 2 + 46) x 3 in `src/executor/slots.ts`;
+  a Legendary's match waiver is bought only for a spare it would list; the XP booster is applied when a match result
+  is applied (`apply_match_results`, a purchase verified within the last 24 h; tournament and 1v1 results at the
+  reveal), and at the Zeus level the agent buys one only with such a fixture within 24 h. A planning snapshot also
+  reads `GET /api/tournaments/{id}` (participants) for up to 4 open Silver or Gold tournaments and each seated team's
+  players (and, when it is not on the leaderboard, its profile), with 20-minute caches. The one-card sync uses
+  `/sync/prepare?wallet_address=&nonce=`.
 - **Config.** `/api/config` adds `tournament_defaults.league_knockout_enabled`,
   `.league_knockout_min_invite_window_minutes` and `tx_signature_check_mode`; squads carry `shirt_number`; the upcoming
   route answers `is_home` false instead of null; notification kinds gain `match_ready` and `tournament_eliminated`.
