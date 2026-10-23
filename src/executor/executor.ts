@@ -97,6 +97,13 @@ export class Executor {
   private readonly d: ExecutorDeps
   /** One action at a time per agent, whatever started it (a plan, Telegram /do, the web UI). */
   private readonly locks = new Map<number, Promise<void>>()
+  /**
+   * The rival each agent has just taken a 1v1 against, kept until the log rows say it (a live create is logged only
+   * after the create, the payment and the seat). Checked and set in the same synchronous step as the rules, so two
+   * agents planning at once cannot both take one rival (C1, agent review of PR #19). A refusal releases its own claim
+   * (nothing was created), and a dry-run claim never holds a live agent off.
+   */
+  private readonly rivalClaims = new Map<number, { agent: number; until: number; dry: boolean }>()
 
   constructor(deps: ExecutorDeps) {
     this.d = deps
@@ -163,7 +170,10 @@ export class Executor {
     const dry = agent.dryRun || !this.liveEnabled
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
+    let claimed: number | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
+      // Every refusal comes before any FoxLeague call or signature: the rival this action claimed is free again.
+      if (status === 'refused' && claimed !== null && this.rivalClaims.get(claimed)?.agent === agent.index) this.rivalClaims.delete(claimed)
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}) }, costUsd: costUsdValue || null, txHash })
       const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
@@ -189,8 +199,16 @@ export class Executor {
         // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
         logExtra.winChance = winChance({ myElo: snap.profile?.elo_rating ?? null, oppElo: ctx.opponent.elo, myStrength: lineupStrength(snap) || null, oppStrength: ctx.opponent.strength ?? null })
       }
+      // No await from here to the claim: another agent's check runs before this one or after its claim, never between.
+      const claim = ctx.opponent ? this.rivalClaims.get(ctx.opponent.userId) : undefined
+      if (claim && claim.agent !== agent.index && claim.until > Date.now() && (!claim.dry || dry)) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
+      if (ctx.opponent && (a.type === 'create_challenge' || a.type === 'join_tournament')) {
+        for (const [id, c] of this.rivalClaims) if (c.until <= Date.now()) this.rivalClaims.delete(id)
+        this.rivalClaims.set(ctx.opponent.userId, { agent: agent.index, until: Date.now() + ((a.type === 'create_challenge' ? a.deadline_minutes : 0) + 60) * 60_000, dry })
+        claimed = ctx.opponent.userId
+      }
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
         const taken = await this.nameRefusal(wallet, a.team_name)
@@ -314,7 +332,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; deadline_minutes?: number } }
       } catch {
         return {}
       }
@@ -353,6 +371,14 @@ export class Executor {
       market.oneVOneWithOpponentThisWeek = store
         .activityOf(agent.index, ['join_tournament', 'create_challenge'], since(7 * 86_400_000))
         .filter(r => counted(r.status) && detailOf(r).opponentUserId === opponentId).length
+      // The owner's other agents: a 1v1 of theirs against this rival is out until its deadline (a join: at once) and an
+      // hour for the match have passed. On the safe side, a create that failed or errored may have left a challenge.
+      market.otherTeamsOnOpponent = store
+        .agents()
+        .filter(b => b.index !== agent.index)
+        .flatMap(b => store.activityOf(b.index, ['join_tournament', 'create_challenge'], since(6 * 3_600_000)))
+        .filter(r => (counted(r.status) || r.status === 'failed' || r.status === 'error') && detailOf(r).opponentUserId === opponentId)
+        .filter(r => Date.parse(r.at) + ((detailOf(r).action?.deadline_minutes ?? 0) + 60) * 60_000 > now.getTime()).length
     }
     if (a.type === 'create_challenge' && a.target_user_id === null) {
       market.openChallengesToday = store

@@ -32,7 +32,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
   Zeus creates private tournaments; every level joins one your team is invited to when it is worth it (only
   your team's own FoxLeague login sees the invitation).
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
-  starting eleven), at most twice a week against the same team. When it
+  starting eleven), at most twice a week against the same team, and never while another of your agents has a 1v1
+  out against that team (one of your teams at a time per rival). When it
   creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show
   who took challenges in the last 7 days, and a challenge to a team that never answers only locks the stake until
   its deadline. When no such team fits, it may create one **open** challenge a day, which any team can take, a

@@ -515,6 +515,31 @@ the four tests under "strength bands" in `test/formations.test.ts` were seen fai
 Nothing else changed: no new route, no money path. The rival's eleven is its strongest 11 cards at full condition, so
 the comparison leans against the agent, as the 1v1 rule does.
 
+## One challenger per rival, and buying power, 2026-10-23
+
+Two findings from the live agents on 2026-10-23. Three of the owner's agents had 1v1 challenges out against the same
+team at once ("Akeno"): each chose it on its own as a weaker, active opponent, but one manager faced three of the
+owner's teams together and two of the stakes could only wait out their deadlines. And Sporting Ohrid, holding 199.6
+EGLD and 770 FOXSY, wrote "the wallet holds about 770 FOXSY, so no entries, bids or recovery are possible": it judged
+what it could afford on its FOXSY alone, while no limit stopped a swap ($744 of its $3,000 month used, $2.89 of $150
+that day). Test first: `test/challenges-and-funds.test.ts`, each finding test seen failing before its fix; the test
+that the new refusal is not taken for the sibling rule removed on 2026-09-30 is a control.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| C1 | low | Several of the owner's agents could challenge, or take the open 1v1 of, the same rival at the same time | `oneVOneOpponentRefusal` (create with a target, and join of a 1v1) refuses while another of the owner's agents has a 1v1 out against that rival: its create or join logged in the same ledger (a failed or errored create too, as it may have left a challenge), until its deadline (a join: at once) and an hour for the match have passed. The refusal names no team and does not read as the old sibling rule. Agents may still meet each other, as before |
+| B1 | design | An agent judged what it could afford on the FOXSY it held, never counting the EGLD above its gas reserve | The plan request shows its buying power: the FOXSY held plus what the EGLD above the reserve (and any WEGLD) swaps into at the current price, next to the one-swap limit and what today's budget left buys; unknown without a price or a wallet read. The prompt says never to call something unaffordable on the FOXSY alone, and to swap earlier in the same plan when an action that pays needs it |
+| R19A-1 | medium | Agent review of PR #19: C1 could be raced. Agents plan at the same time, the executor serializes only one agent's actions, and a live create is logged only after the create, the payment and the seat (minutes), so two agents that picked one rival in the same cycle could both pass | The shared executor claims the rival in memory in the same synchronous step as the check (no await between them), until the 1v1's deadline and an hour have passed; another agent's check sees the claim. A test runs two overlapping joins against one rival: one passes, one is refused |
+| R19A-4 | medium | Re-review of PR #19: nothing released the claim of R19A-1. A refusal after the check (prices, the daily cap, the swap allowance, EGLD for gas: nothing was created) held the rival for up to 5 hours, and so did a dry-run claim from before Go LIVE for a live agent, with a false "already has a 1v1 out" | A refusal releases the claim its own action took (every refusal comes before any FoxLeague call or signature), and a claim made in dry run is not counted by a live check. Two tests: a refusal for gas frees the rival at once; a dry-run claim does not refuse a live agent |
+| R19A-2 | low | Agent review of PR #19: while xExchange has paused the pair (`prices.frozen`), the buying power still counted the EGLD as FOXSY to come, though every swap is refused then | The line says no swap is possible while the pair is paused, so the FOXSY held is all there is |
+| R19A-3 | low | Agent review of PR #19 (docs): the manual's safety page said the agents share nothing and listed the 1v1 protections without C1 | The page names the two things they share: the pooled formation record (no team named) and one 1v1 at a time per rival |
+
+No cap or limit changed: every swap still meets the swap maximum, the gas reserve, the daily cap and the monthly
+budget in the executor. Open: a create or join that failed or errored counts whatever mode its agent ran in, so a
+dry-run agent's error can hold a live agent off that rival for up to 5 hours (it only refuses more); a rival that took
+an agent's own open challenge is not seen by the others (FoxLeague's one active 1v1 per wallet keeps it from a second
+until the first is over).
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,
