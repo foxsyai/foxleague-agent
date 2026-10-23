@@ -41,7 +41,10 @@ test('the line judges the limit that binds: Max bid when it is lower than the li
 })
 
 test('the hints are drawn on load and again as a limit is typed, each tone with its colour', () => {
-  assert.match(html, /renderLimitHints\(\)/)
+  // In fillForm itself (audit 2026-10-23, E3): the Use button's own call matched the old page-wide regex.
+  const fill = html.match(/function fillForm\(st\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(fill, 'the dashboard defines fillForm(st)')
+  assert.match(fill, /renderLimitHints\(\)/)
   assert.match(html, /\$\('settingsForm'\)\.addEventListener\('input', e => \{ if \(\/\^sBid\(Rare\|Epic\|Legendary\)\?\$\/\.test\(e\.target\.id\)\) renderLimitHints\(\) \}\)/, 'Max bid too')
   assert.match(html, /limitState\(Number\(\$\('sBid' \+ r\)\.value\), p \? p\.price : null, Number\(\$\('sBid'\)\.value\)\)/)
   assert.match(html, /form\.settings \.hint\.mk\.ok\{color:var\(--up\)\}/)
