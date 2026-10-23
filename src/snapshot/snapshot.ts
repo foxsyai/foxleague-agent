@@ -143,6 +143,12 @@ export interface AgentSnapshot {
   /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
   rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null; strength?: number | null }[]
   leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null })[]
+  /**
+   * Planning only, added by the service from the activity log with the executor's own helpers (src/executor/rivals.ts):
+   * per rival, the 1v1s this agent played or entered in the last 7 days and, at the weekly limit, when it is free
+   * again; and the rivals it cannot take a 1v1 against now for a reason it is not told.
+   */
+  oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[]; unavailable: number[] }
   warnings: string[]
 }
 

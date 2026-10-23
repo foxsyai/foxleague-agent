@@ -26,6 +26,8 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
+import { oneVOnesThisWeek, rivalsOutByOthers, weeklyFreeAt } from './executor/rivals.ts'
+import { MAX_1V1_PER_OPPONENT_WEEK } from './executor/rules.ts'
 import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
@@ -1238,7 +1240,7 @@ export class Service {
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc)
-    const plan = await this.strategist!.plan({ snapshot: snap, settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
+    const plan = await this.strategist!.plan({ snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +
@@ -1251,6 +1253,19 @@ export class Service {
     if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
     else this.report(text)
     return plan
+  }
+
+  /**
+   * The snapshot a plan is made from, with what the executor reads from the activity log before a 1v1 (the same
+   * helpers, src/executor/rivals.ts): per rival, this agent's 1v1s of the last 7 days and when the weekly limit frees,
+   * and the rivals another of the owner's teams has a 1v1 out against or has just claimed, given only as not
+   * available now (no reason, no team named: the agents know nothing of each other).
+   */
+  private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
+    const now = new Date()
+    const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
+    const unavailable = new Set([...rivalsOutByOthers(this.store, agent.index, dry, now).keys(), ...this.executor.rivalsClaimedByOthers(agent.index, dry, now.getTime())])
+    return { ...snap, oneVOnes: { week, unavailable: [...unavailable] } }
   }
 
   /**

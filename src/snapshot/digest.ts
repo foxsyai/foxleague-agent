@@ -1,7 +1,7 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { freeGaps } from '../executor/slots.ts'
-import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
+import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
@@ -119,6 +119,21 @@ function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot
 }
 
 /**
+ * What the executor's 1v1 checks will count against a rival (planning snapshots, s.oneVOnes): not available now (a
+ * reason the agent is not told), and this agent's 1v1s against it in the last 7 days with the weekly limit.
+ */
+function rivalNote(s: AgentSnapshot, userId: number | null | undefined): string {
+  const o = s.oneVOnes
+  if (!o || typeof userId !== 'number') return ''
+  const notes: string[] = []
+  if (o.unavailable.includes(userId)) notes.push('not available now')
+  const w = o.week.find(x => x.userId === userId)
+  if (w && w.count >= MAX_1V1_PER_OPPONENT_WEEK) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week (the limit), free again ${w.freeAt ? `${w.freeAt.slice(0, 16)} UTC` : 'later'}`)
+  else if (w && w.count > 0) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week`)
+  return notes.map(n => `, ${n}`).join('')
+}
+
+/**
  * A team with its own open 1v1 (created by it, not accepted yet) cannot accept ours: FoxLeague allows one active 1v1
  * per team, created or joined. Read from the open challenges in the snapshot, until that challenge's deadline.
  */
@@ -170,7 +185,7 @@ export function renderDigest(s: AgentSnapshot): string {
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
-    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}`)
+    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}${rivalNote(s, c.creator_user_id)}`)
   }
 
   if (s.players.length) {
@@ -209,7 +224,7 @@ export function renderDigest(s: AgentSnapshot): string {
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()
@@ -245,7 +260,7 @@ export function renderDigest(s: AgentSnapshot): string {
   // Zeus: the threshold its 1v1s are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push('Win chances: ELO expectation and lineup strength averaged, ours at today\'s condition, theirs at full condition; Zeus plays a 1v1 from 55 percent.')
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}`).join('; ')}`)
+    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')
