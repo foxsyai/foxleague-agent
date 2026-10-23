@@ -33,6 +33,9 @@ export interface DeletedAgent {
   by: string
 }
 
+/** Set once formation_results was emptied for the read-time rule of ranked strengths (B-P1, audit 2026-10-23). */
+const FORMATION_RESULTS_REBUILT = 'formation_results_rebuilt_2026_10_23'
+
 /** The stored values that belong to one agent, keyed by its number (deleteAgent clears them). */
 const PER_AGENT_KV = ['agent_user_id:', 'summary_elo:', 'waiting_funds:', 'last_plan_', 'bid_gone:']
 
@@ -170,6 +173,12 @@ export class Store {
     if (!cols.has('removed_at')) this.db.exec('ALTER TABLE agents ADD COLUMN removed_at TEXT')
     // Added with Retire: a RetiredInfo JSON while the agent is parked, NULL while it is active.
     if (!cols.has('retired')) this.db.exec('ALTER TABLE agents ADD COLUMN retired TEXT')
+    // Once (B-P1, audit 2026-10-23): the rows kept before a ranked match's strength edge needed a read within 6 hours
+    // of its end go, and each agent's next plan stores its last 50 matches again under the rule.
+    if (this.getKv(FORMATION_RESULTS_REBUILT) !== '1') {
+      this.db.exec('DELETE FROM formation_results')
+      this.setKv(FORMATION_RESULTS_REBUILT, '1')
+    }
   }
 
   // ---- agents ----

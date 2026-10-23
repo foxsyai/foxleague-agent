@@ -11,11 +11,14 @@ import { Mnemonic } from '@multiversx/sdk-core'
 import { Executor } from '../src/executor/executor.ts'
 import { budgetView, gameDayKey } from '../src/executor/budget.ts'
 import { Service } from '../src/service.ts'
+import { takeSnapshot } from '../src/snapshot/snapshot.ts'
 import { Store } from '../src/store/db.ts'
 import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
 import { renderPlanRequest } from '../src/strategist/strategist.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { ADDR, OTHER, STRANGER, TEST_SETTINGS, dryWallet, liveWallet, rivalSquad, setup, snapshot, withLive } from './fixtures.ts'
+
+const hours = (h: number): string => new Date(Date.now() + h * 3600_000).toISOString()
 
 // ---- A1: a 1v1 that errored before any FoxLeague call keeps no rival ----
 
@@ -199,6 +202,80 @@ test('B2: the pooled record reaches the plan even when the agent\'s own match hi
   const plan = await (svc as unknown as { snapshot(i: number, plan: boolean): Promise<{ formationRecord?: unknown; formationPool?: { matches: number } }> }).snapshot(0, true)
   assert.equal(plan.formationRecord, null, 'control: the own record is unknown')
   assert.equal(plan.formationPool?.matches, 1, 'the other team\'s match is in the pool the plan sees')
+})
+
+// ---- B-P1: a ranked or casual match's statistics rebuild both elevens at read time ----
+
+type HistoryRow = Record<string, unknown>
+const historyRow = (key: string, home: number, away: number, score: [number, number], finishedHoursAgo: number): HistoryRow => ({
+  id: /^\d+$/.test(key) ? Number(key) : null, tournament_match_id: /^\d+$/.test(key) ? null : key, home_user_id: home, away_user_id: away,
+  home_team_name: `T${home}`, away_team_name: `T${away}`, home_score: score[0], away_score: score[1], match_type: /^\d+$/.test(key) ? 'ranked' : 'tournament',
+  status: 'finished', finished_at: hours(-finishedHoursAgo), home_elo_at_match: 1200, away_elo_at_match: 1200, tournament_id: null,
+})
+
+function recordDeps(history: HistoryRow[], facts: Record<string, unknown>) {
+  const fox: Record<string, unknown> = {
+    config: async () => snapshot().config,
+    user: async (a: string) => (a === ADDR ? snapshot().profile : null),
+    team: async () => snapshot().team,
+    players: async () => [],
+    tournaments: async () => [],
+    leaderboard: async () => ({ users: [], total: 0, limit: 200, offset: 0 }),
+    listings: async () => [],
+    floorPrices: async () => [],
+    shopStatus: async () => snapshot().auth!.shop,
+    dailyAllowance: async () => snapshot().auth!.allowance,
+    activeMatch: async () => null,
+    myTournaments: async () => ({ active: [], completed: [] }),
+    upcomingMatches: async () => ({ lead_minutes: 30, my_team_name: 'Agent', matches: [] }),
+    challengesForMe: async () => [],
+    matchHistory: async (a: string) => (a === ADDR ? history : []),
+    matchFormations: async (m: HistoryRow) => facts[String(m.tournament_match_id ?? m.id)] ?? null,
+  }
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool in this test') } }
+  return { chain, fox } as never
+}
+
+test('B-P1: a ranked match\'s strength edge counts only when its statistics were read within 6 hours of its end; a tournament match keeps its edge', async () => {
+  const kept = new Map<string, unknown>()
+  const cache = { get: (k: string) => kept.get(k) as never, put: (k: string, v: unknown) => void kept.set(k, v) }
+  // Read before this tick: a ranked match without a read time, and one read 2 hours after it ended.
+  kept.set('m:13', { home: '4-4-2', away: '4-3-3', homeStrength: 1500, awayStrength: 1000 })
+  kept.set('m:14', { home: '4-4-2', away: '4-3-3', homeStrength: 1500, awayStrength: 1000, readAt: hours(-8) })
+  const history = [
+    historyRow('T1', 100, 200, [1, 2], 10), // tournament, kickoff snapshot: its edge stands whenever it is read
+    historyRow('11', 100, 300, [3, 0], 10), // ranked, read now, 10 h after its end: today's cards, not the match's
+    historyRow('12', 100, 400, [1, 0], 1), // ranked, read now, 1 h after its end
+    historyRow('13', 100, 500, [0, 0], 1), // ranked, kept without a read time
+    historyRow('14', 100, 600, [2, 2], 10), // ranked, kept with a read 2 h after its end
+  ]
+  const facts = {
+    T1: { home: '4-4-2', away: '4-3-3', homeStrength: 1500, awayStrength: 1600 },
+    11: { home: '4-4-2', away: '4-3-3', homeStrength: 1500, awayStrength: 1000 },
+    12: { home: '4-4-2', away: '4-3-3', homeStrength: 1500, awayStrength: 1400 },
+  }
+  const s = await takeSnapshot(recordDeps(history, facts), { wallet: dryWallet }, new Date(), { matchFacts: cache } as never)
+  const games = (s.formationRecord?.games ?? []).map(g => [g.key, g.edge === null ? null : Math.round(g.edge)])
+  assert.deepEqual(games, [['t:T1', -6], ['m:11', null], ['m:12', 7], ['m:13', null], ['m:14', 50]])
+  assert.match(String((kept.get('m:12') as { readAt?: string }).readAt), /^\d{4}-\d\d-\d\dT/, 'a fresh read is kept with its read time')
+})
+
+test('B-P1: formation_results is emptied once, so the pool is rebuilt under the read-time rule', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-audit-pool-'))
+  const at = new Date(Date.now() - 3600_000).toISOString()
+  const g = { key: 'm:1', at, mine: '4-4-2', theirs: '4-3-3', gf: 1, ga: 0, edge: 40, rivalUserId: 300 }
+  let store = new Store(dir)
+  store.putFormationResults(0, 100, [g])
+  // A database from before the rule: no clean-up recorded yet.
+  store.db.prepare("DELETE FROM kv WHERE key LIKE 'formation_results%'").run()
+  store.db.close()
+  store = new Store(dir)
+  assert.equal(store.formationPool().matches, 0, 'the rows stored under the old rule are gone')
+  store.putFormationResults(0, 100, [g])
+  store.db.close()
+  store = new Store(dir)
+  assert.equal(store.formationPool().matches, 1, 'only once: the rows stored since stay')
+  store.db.close()
 })
 
 // ---- E2: the formations test does not depend on the calendar ----
