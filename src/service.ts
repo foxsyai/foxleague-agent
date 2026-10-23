@@ -73,6 +73,8 @@ const PLAN_MATCH_GAP_MS = MATCH_RUNS_MS
 const PLAN_RANKED_GAP_MS = RANKED_COOLDOWN_MS + 30_000
 /** How far past the plan's window a match may still start when the action before it took longer than planned. */
 const MATCH_DRIFT_MS = 2 * 60_000
+/** How far ahead a planned call makes the one-hour cache of the game manual worth writing (a margin under the hour). */
+const CACHE_HORIZON_MS = 55 * 60_000
 
 export interface ScheduledAction {
   p: PlannedAction
@@ -255,7 +257,7 @@ export class Service {
     this.fox = new FoxLeague(cfg.foxleagueUrl, cfg.foxleagueRps)
     this.telegram = this.makeTelegram()
     const choice = strategistChoice(this.store, cfg)
-    this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort) : null
+    this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort, () => this.callExpectedWithinHour()) : null
     this.executor = new Executor({
       cfg, chain: this.chain, fox: this.fox, store: this.store,
       notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)),
@@ -716,7 +718,7 @@ export class Service {
       if (this.strategist) this.strategist.setApiKey(values.ANTHROPIC_API_KEY!)
       else {
         const choice = strategistChoice(this.store, this.cfg)
-        this.strategist = new Strategist(values.ANTHROPIC_API_KEY!, choice.model, choice.effort)
+        this.strategist = new Strategist(values.ANTHROPIC_API_KEY!, choice.model, choice.effort, () => this.callExpectedWithinHour())
       }
     }
     const labels = changed.map(([k]) => KEY_FIELDS.find(f => f.key === k)!.label).join(', ')
@@ -1200,6 +1202,25 @@ export class Service {
       .filter(t => t > now + MIN_TICK_MINUTES * 60_000)[0]
     if (prep !== undefined && prep - now < delay) delay = prep - now
     this.schedule(index, delay)
+  }
+
+  /**
+   * Whether another model call is due within the hour, from the schedule: the next planning tick of an active agent
+   * (not paused, not waiting for funds) within 55 minutes and inside its active hours. An agent planning now has its
+   * entry at the moment it fired: its next is set only after its plan's actions ran (up to 0.8 of its tick, runPlan),
+   * so it comes that window plus one shortest cycle on (agent review of PR #29). Only then is the game manual worth a one-hour
+   * cache write (twice the input price); erring towards no costs at most the plain price twice (owner, 2026-10-24).
+   */
+  private callExpectedWithinHour(now = Date.now()): boolean {
+    if (this.store.killSwitch) return false
+    const horizon = now + CACHE_HORIZON_MS
+    for (const a of this.store.agents()) {
+      if (a.paused || this.store.getKv(`waiting_funds:${a.index}`) === '1') continue
+      const at = this.nextAt.get(a.index)
+      const next = at !== undefined && at > now ? at : now + (Math.max(MIN_TICK_MINUTES, a.settings.tickMinutes - a.settings.tickJitterMinutes) + a.settings.tickMinutes * 0.8) * 60_000
+      if (next <= horizon && this.inActiveHours(a, new Date(next))) return true
+    }
+    return false
   }
 
   private inActiveHours(agent: AgentRow, now = new Date()): boolean {

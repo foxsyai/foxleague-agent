@@ -270,17 +270,25 @@ export function deadlineMs(maxTokens: number): number {
   return 60_000 + maxTokens * 20
 }
 
+/** A cache read or write within this long counts as still in the one-hour cache (each read renews the hour). */
+const CACHE_WARM_MS = 55 * 60_000
+
 export class Strategist {
   private client: Anthropic
   model: string
   effort: Effort
   /** Models whose API refused the fallbacks parameter: asked without it from then on. */
   private readonly noFallback = new Set<string>()
+  /** Whether another call is due within the hour (the service reads its schedule); without one, always yes. */
+  private readonly expectsCallSoon: () => boolean
+  /** When the cache last served or stored the manual, per model and effort (the cache holds per model, tools and effort). */
+  private readonly cachedAt = new Map<string, number>()
 
-  constructor(apiKey: string, model: string, effort: Effort = 'medium') {
+  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: () => boolean = () => true) {
     this.client = new Anthropic({ apiKey, maxRetries: 2, timeout: 180_000 })
     this.model = model
     this.effort = effort
+    this.expectsCallSoon = expectsCallSoon
   }
 
   /** A new key from the admin panel, used from the next call. */
@@ -313,22 +321,31 @@ export class Strategist {
   }
 
   /**
-   * The static system prompt plus the player manual, with a cache breakpoint: identical bytes on every
-   * call (with the same tools and effort), shared by all agents, ticks, chat and /ask. One-hour TTL: with several
-   * agents a call comes every few minutes and each hit renews the hour, so only the first call after a pause writes
-   * it; a single agent at the 2-hour tick finds it expired and writes it on every plan (the manual's Costs page).
+   * One request with the static system prompt plus the player manual: identical bytes on every call (with the same
+   * tools and effort), shared by all agents, ticks, chat and /ask. A one-hour cache write costs twice the input and a
+   * read a tenth, so the manual carries the cache breakpoint only when the cache is still warm (served or stored in
+   * the last 55 minutes) or another call is due within the hour; otherwise, a single agent at the 2-hour tick for
+   * one, it goes uncached at the plain input price (owner, 2026-10-24).
    */
-  private get system(): Anthropic.TextBlockParam[] {
-    return [{ type: 'text', text: MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }]
+  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>): Promise<Anthropic.Beta.BetaMessage> {
+    const key = `${this.model}:${this.effort}`
+    const text = MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT
+    const warm = Date.now() - (this.cachedAt.get(key) ?? Number.NEGATIVE_INFINITY) < CACHE_WARM_MS
+    const cached = warm || this.expectsCallSoon()
+    // The cache is written or renewed when the request is processed, at its start: a long answer must not move it on.
+    const sent = Date.now()
+    const response = await this.create({ ...params, system: [{ type: 'text', text, ...(cached ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}) }] })
+    // Warm only when the cache really served or stored it (a request below the cache minimum does neither).
+    if (cached && ((response.usage?.cache_read_input_tokens ?? 0) > 0 || (response.usage?.cache_creation_input_tokens ?? 0) > 0)) this.cachedAt.set(key, sent)
+    return response
   }
 
   async plan(input: PlanInput): Promise<Plan> {
     const model = this.model
-    const response = await this.create({
+    const response = await this.createWithManual({
       max_tokens: roomFor(this.effort, PLAN_TOKENS),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
-      system: this.system,
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: `${renderPlanRequest(input)}\n\nCall submit_plan now.` }],
@@ -370,11 +387,10 @@ export class Strategist {
   /** The owner's advice or question: a reply, and a strategy proposal when the message gives direction. */
   async discuss(input: ChatInput): Promise<ChatAnswer> {
     const model = this.model
-    const response = await this.create({
+    const response = await this.createWithManual({
       max_tokens: roomFor(this.effort, CHAT_TOKENS),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
-      system: this.system,
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: renderChatRequest(input) }],
@@ -396,11 +412,10 @@ export class Strategist {
   /** Owner's question about the team (Telegram /ask): text only, no tools. */
   async ask(snapshot: AgentSnapshot, question: string): Promise<{ answer: string; usd: number }> {
     const model = this.model
-    const response = await this.create({
+    const response = await this.createWithManual({
       max_tokens: roomFor(this.effort, ASK_TOKENS),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
-      system: this.system,
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [
