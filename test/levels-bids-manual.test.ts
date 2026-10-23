@@ -152,3 +152,12 @@ test('the plan sees the cheapest auctions of each rarity next to the strongest',
   assert.equal(new Set(nonces).size, nonces.length, 'each auction once')
   assert.match(renderDigest(s), /Open auctions: the 10 strongest, then the 3 cheapest of each rarity \(nonce, card, OVR, price now, ends\):/)
 })
+
+// Re-review of PR #27 (low, coverage): a failed read (null) of either list leaves the other one.
+test('a failed read of either auction list leaves the other one', async () => {
+  const { auctionsShown } = await import('../src/snapshot/snapshot.ts')
+  const row = (nonce: number, rarity: string) => ({ nft_nonce: nonce, owner_address: 'erd1someone', rarity, is_auction: true }) as never
+  assert.deepEqual(auctionsShown([row(1, 'Rare'), row(2, 'Epic')], null, 'erd1me').map(l => (l as { nft_nonce: number }).nft_nonce), [1, 2], 'the strongest without the cheapest')
+  assert.deepEqual(auctionsShown(null, [row(3, 'Common'), row(4, 'Uncommon')], 'erd1me').map(l => (l as { nft_nonce: number }).nft_nonce), [3, 4], 'the cheapest without the strongest')
+  assert.deepEqual(auctionsShown(null, null, 'erd1me'), [])
+})
