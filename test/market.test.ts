@@ -102,7 +102,8 @@ test('fusion: same rarity, 20 competitive matches, synced, outside the squad, 18
 const auction = (more: Partial<Auction> = {}): Auction => ({ seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000), ...more })
 
 test('bids: reserve or top + 5 percent, within the max bid, never with or against own agents', () => {
-  const bid = (foxsy: number, au: Auction | null = auction(), c: Partial<RulesContext> = {}) => checkAction({ type: 'bid', nonce: 9, foxsy }, snap(), ctx({ auction: au, ...c }))
+  // A known rarity is a precondition of every bid (agent review of PR #21); an Uncommon at these amounts meets every limit.
+  const bid = (foxsy: number, au: Auction | null = auction(), c: Partial<RulesContext> = {}) => checkAction({ type: 'bid', nonce: 9, foxsy }, snap(), ctx({ auction: au, cardRarity: 'Uncommon', ...c }))
   assert.equal(bid(500).ok, true)
   assert.match(bid(499).refusal!, /below the minimum 500/)
   assert.match(bid(1049, auction({ highestBid: wholeToAtomic(1000), highestBidder: OTHER })).refusal!, /minimum 1050/)
@@ -138,7 +139,8 @@ test('a bid never pays more than the card would cost from Common packs and fusio
   const s = snap()
   s.chain!.foxsy = wholeToAtomic(100_000)
   s.config = { ...s.config!, common_pack_price_foxsy: 2500 }
-  const rich = { ...TEST_SETTINGS, maxBidFoxsy: 40_000 }
+  // The owner's limits per rarity raised out of the way: this tests the build cost alone.
+  const rich = { ...TEST_SETTINGS, maxBidFoxsy: 40_000, maxBidRareFoxsy: 1e6, maxBidEpicFoxsy: 1e6, maxBidLegendaryFoxsy: 1e6 }
   const bid = (foxsy: number, rarity: string) => checkAction({ type: 'bid', nonce: 9, foxsy }, s, ctx({ settings: rich, auction: auction({ minPrice: wholeToAtomic(500) }), cardRarity: rarity }))
   assert.equal(bid(15_400, 'Epic').ok, true)
   // No cooldown settings in this config: the ceiling is the packs and fusion fees alone (test/bid-ceiling.test.ts has the full one).

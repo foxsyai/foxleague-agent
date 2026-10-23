@@ -225,7 +225,8 @@ export const MAX_BIDS_PER_AUCTION = 2
  * October 2026). A bid above it pays more than building the card; null when the prices are unknown.
  */
 export function packAndFusionCost(cfg: { common_pack_price_foxsy?: number; fusion_costs_foxsy?: number[] } | null | undefined, rarity: string): number | null {
-  const level = (RARITY_LEVEL as Record<string, number>)[rarity]
+  // Own keys only: a name every object inherits (toString, __proto__) is no rarity.
+  const level = Object.hasOwn(RARITY_LEVEL, rarity) ? (RARITY_LEVEL as Record<string, number>)[rarity] : undefined
   const pack = cfg?.common_pack_price_foxsy
   const fees = cfg?.fusion_costs_foxsy
   if (level === undefined || !pack || pack <= 0 || !Array.isArray(fees) || fees.length < level) return null
@@ -268,6 +269,14 @@ export function auctionCeiling(cfg: Pick<FoxConfig, 'common_pack_price_foxsy' | 
   }
   const own = toGate(level, false)
   return own === null ? base : Math.round(made + own)
+}
+
+/** The owner's limit for a bid on a card of this rarity (Rare, Epic, Legendary); none below Rare. */
+export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidRareFoxsy' | 'maxBidEpicFoxsy' | 'maxBidLegendaryFoxsy'>, rarity: string | null | undefined): number | null {
+  if (rarity === 'Rare') return settings.maxBidRareFoxsy
+  if (rarity === 'Epic') return settings.maxBidEpicFoxsy
+  if (rarity === 'Legendary') return settings.maxBidLegendaryFoxsy
+  return null
 }
 
 /** Hours of transfer lock a card bought at auction may still carry. */
@@ -802,6 +811,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const min = ceilWhole(minAtomic)
       if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + 5 percent` : 'the reserve'})`)
       if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
+      // Its limit and the build cost both hang on the rarity: unknown, no bid (agent review of PR #21).
+      if (!ctx.cardRarity || !Object.hasOwn(RARITY_LEVEL, ctx.cardRarity)) return refuse(`the rarity of #${a.nonce} could not be read: not bidding blind`)
+      const limit = rarityBidLimit(ctx.settings, ctx.cardRarity)
+      if (limit !== null && a.foxsy > limit) return refuse(`bid ${a.foxsy} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
       const ceiling = ctx.cardRarity ? auctionCeiling(cfg, ctx.cardRarity) : null
       if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what a ${ctx.cardRarity} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
       if ((ctx.priorBids ?? 0) >= MAX_BIDS_PER_AUCTION) return refuse(`already ${MAX_BIDS_PER_AUCTION} bids on #${a.nonce}: no bidding war`)

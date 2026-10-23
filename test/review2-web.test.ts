@@ -204,7 +204,7 @@ test('R2C-1 the README does not promise a rule the executor does not have (agent
     opponent: { userId: sibling, elo: 1200, strength: 1200 }, oneVOneWithOpponentThisWeek: 0,
   })
   const bid = checkAction({ type: 'bid', nonce: 4242, foxsy: 1000 }, snapshot(), {
-    settings: TEST_SETTINGS, now, priorBids: 0, cardLock: { until: null },
+    settings: TEST_SETTINGS, now, priorBids: 0, cardLock: { until: null }, cardRarity: 'Uncommon',
     auction: { seller: OTHER, minPrice: wholeToAtomic(1000), highestBid: 0n, highestBidder: null, endsAt: new Date(now.getTime() + 3600_000) } as never,
   })
   assert.ok(seat.ok && bid.ok, 'the rules allow a 1v1 and a bid between the owner\'s own agents (the owner removed the sibling rule on 2026-09-30)')

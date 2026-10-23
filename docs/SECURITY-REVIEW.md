@@ -558,6 +558,30 @@ The owner's max bid (Zeus 47,000) still binds first, so an Epic or a Legendary i
 monthly budget, the third-bid refusal and the inherited-lock refusal are unchanged. What the formula leaves out: the
 wallet's limits (2 Common packs a week, one fusion every 20 hours) and the value of the matches as play (XP and ELO).
 
+## Limits per rarity and the market price, 2026-10-23
+
+The owner's direction: never pay more than the market. The 1,217 sales since mainnet (30 September to 23 October,
+public at `/api/marketplace/recent-sales`) put a typical Rare at about 6,100 FOXSY, an Epic at 11,800 and a
+Legendary at 31,200, measured as the median of the daily median sale prices of the last 30 days, so the sell-off of
+13 October (about 170 cards that day at a third of the usual price) counts as one day. The build-cost ceiling of PR
+#20 (Rare 14,450) sat well above that. The owner chose round limits from the market as defaults any owner may raise.
+Test first: `test/rarity-bid-caps.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| M1 | design | Nothing held a bid to the market: the ceiling was the build cost, the only owner limit the max bid | Three settings, `maxBidRareFoxsy` 6,000, `maxBidEpicFoxsy` 12,000, `maxBidLegendaryFoxsy` 32,000 by default (agents made before them get the defaults); the bid rule refuses above the limit of the card's rarity, under the max bid and the build cost. They are limits like the others: raising one asks for the owner's password, lowering it does not, and choosing a level leaves them as they are |
+| M2 | design | The plan judged a fair price only from the floors and the open listings, never from what cards really sold for | The planning snapshot keeps every public sale (`market_sales`, 120 days) and reads only the new pages, then gives each rarity its market price: the median of the daily median prices over 30 days with at least 5 trading days, else 60, else 90; with fewer, none (shown as unknown, never a guess). The plan sees the prices and each auction's, and is told to aim below them; the dashboard shows today's next to the limits. A failed read leaves the kept sales and a warning |
+| R21A-1 | medium | Agent review of PR #21: a card whose rarity could not be read skipped both its limit and the build cost, so a Legendary could be bid up to the max bid | A bid on a card of unknown rarity (none read, or not one of the five) is refused: not bidding blind |
+| R21A-2 | medium | Agent review of PR #21: the sales reader stopped at the first page holding a known sale, so a first read cut short (a failed page, offsets shifted by new sales) left the older sales unread for good | Until a first read has gone back to the end of the list (or 120 days), every plan reads it all (kv `market_sales_complete`); after it, a page whose oldest sale is kept ends the read |
+| R21A-4 | medium | Re-review of PR #21: past 2,000 sales in 120 days (about 7 November 2026 at 53 a day), a first read filled its 20 pages without ever reaching the end or 120 days, so it never counted as complete and every plan of every agent read 20 pages again. An answer that was not a list counted as the end of the list | 20 full pages read without an error complete the first read (the newest 2,000 sales, over a month); an answer that is not a list is a failed read (a warning, the kept sales stay) |
+| R21A-5 | low | Re-review of PR #21: the known-rarity check used `in`, which follows the prototype chain, so a rarity answered as `toString`, `constructor` or `__proto__` passed it and no limit per rarity applied | `Object.hasOwn` in the bid rule and in the build cost; the test tries those names |
+| R21A-6 | low | Re-review of PR #21: after the first read, a catch-up cut short (over 100 new sales between two plans, then a failed page) left a gap the next plan never filled, as page 0's oldest row was kept by then | A failed page after page 0 marks the read incomplete again (`markSalesIncomplete`), so the next plan reads on past the kept sales |
+| R21A-3 | low | Agent review of PR #21 (docs): three texts still said the max bid is usually the limit for an Epic or a Legendary | They say the limits per rarity usually bind first |
+
+The market price guides; the owner's limits, the build cost and the max bid bind. Nothing else changed: the daily
+cap, the monthly budget, the third-bid refusal and the inherited-lock refusal hold as before. Open: a price per card
+quality (Legendaries sell for two to six times more at a higher rating) waits for enough sales.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

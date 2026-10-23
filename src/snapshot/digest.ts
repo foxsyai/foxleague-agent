@@ -175,13 +175,21 @@ export function renderDigest(s: AgentSnapshot): string {
     for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${t.tier} ${t.format} ${t.seated}/${t.max_teams} fee ${t.fee} ${t.status} ${t.starts_at.slice(0, 16)}`)
   }
   if (m.floors.length) out.push(`Marketplace floors (lowest reserve by rarity): ${m.floors.map(f => `${f.rarity} ${f.floor_price} (${f.count} listed)`).join(', ')}`)
+  if (m.prices) {
+    const known = (r: string) => {
+      const p = m.prices![r]
+      return p ? `${r} ${p.price.toLocaleString('en-US')} (${p.tradingDays} trading days in ${p.windowDays} days)` : `${r} unknown (too few sales in 90 days)`
+    }
+    out.push(`Market prices (median of the daily median sale prices; every trading day counts once): ${['Rare', 'Epic', 'Legendary'].map(known).join(', ')}`)
+  }
   if (m.auctions.length) {
     out.push('Open auctions, strongest first (nonce, card, OVR, price now, ends):')
     for (const l of m.auctions) {
       const ovr = Math.round((l.speed + l.accuracy + l.defense + l.power + l.control + l.vision + l.stamina) / 7)
       const price = l.highest_bid ? `top bid ${l.highest_bid}` : `reserve ${l.min_price ?? '?'}`
       const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
-      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
+      const market = m.prices?.[l.rarity]
+      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
     }
   }
   // Zeus: the threshold its 1v1s are held to, next to the chances below.

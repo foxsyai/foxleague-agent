@@ -7,6 +7,7 @@ import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type MatchFactsCache } from './snapshot/snapshot.ts'
 import type { MatchFormations } from './foxleague/types.ts'
+import type { MarketSale, MarketSalesCache } from './snapshot/market.ts'
 import { renderDigest, snapshotToJson } from './snapshot/digest.ts'
 import { assertSameWords, deriveWallet, exportPem, generateMnemonicInto, shardOf, type AgentWallet } from './wallet/wallet.ts'
 import { Store } from './store/db.ts'
@@ -226,7 +227,7 @@ async function main(): Promise<void> {
         if (!/^erd1[0-9a-z]{58}$/.test(addr)) usage()
         target = { watch: addr }
       }
-      const snap = await takeSnapshot({ chain, fox }, target, new Date(), { matchFacts: memoryFacts() })
+      const snap = await takeSnapshot({ chain, fox }, target, new Date(), { matchFacts: memoryFacts(), marketSales: memorySales() })
       console.log(args.includes('--json') ? snapshotToJson(snap) : renderDigest(snap))
       return
     }
@@ -268,7 +269,7 @@ async function main(): Promise<void> {
       const wallet = isWatch ? watchWallet(target) : walletOf(store, index)
       if (isWatch) store.addAgent(index, wallet.address) // the throwaway in-memory store
       const agent = { ...store.agent(index)!, dryRun: true }
-      const snap = await takeSnapshot({ chain, fox }, isWatch ? { watch: wallet.address } : { wallet }, new Date(), { matchFacts: { get: k => store.matchFacts(k), put: (k, f) => store.putMatchFacts(k, f) } })
+      const snap = await takeSnapshot({ chain, fox }, isWatch ? { watch: wallet.address } : { wallet }, new Date(), { matchFacts: { get: k => store.matchFacts(k), put: (k, f) => store.putMatchFacts(k, f) }, marketSales: { has: id => store.hasSale(id), put: rows => store.putSales(rows), since: iso => store.salesSince(iso), complete: () => store.salesComplete, markComplete: () => store.markSalesComplete(), markIncomplete: () => store.markSalesIncomplete() } })
       const input = { snapshot: snap, settings: agent.settings, budget: budgetView(store, index, agent.settings, true, new Date()), recent: store.activity(index, 20), dryRun: true }
       if (!cfg.anthropicApiKey) {
         console.log('(no ANTHROPIC_API_KEY: this is the request the strategist would receive)\n')
@@ -412,6 +413,13 @@ function undecidedText(pages: string[]): string {
 function memoryFacts(): MatchFactsCache {
   const kept = new Map<string, MatchFormations>()
   return { get: k => kept.get(k), put: (k, f) => void kept.set(k, f) }
+}
+
+/** Sales for one CLI run (snapshot, watch): nothing is written to the database. */
+function memorySales(): MarketSalesCache {
+  const kept = new Map<number, MarketSale>()
+  let complete = false
+  return { has: id => kept.has(id), put: rows => rows.forEach(r => kept.set(r.id, r)), since: iso => [...kept.values()].filter(r => r.sold_at >= iso), complete: () => complete, markComplete: () => { complete = true }, markIncomplete: () => { complete = false } }
 }
 
 function watchWallet(address: string): AgentWallet {

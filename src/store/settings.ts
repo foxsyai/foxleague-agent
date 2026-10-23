@@ -13,6 +13,13 @@ export interface AgentSettings {
   maxShopPaymentFoxsy: number
   /** Largest single marketplace bid, in FOXSY. */
   maxBidFoxsy: number
+  /**
+   * Largest bid per rarity, in FOXSY, under the max bid: the owner's limits, by default the round market prices of
+   * October 2026 (the median of the daily median sale prices: Rare about 6,100, Epic 11,800, Legendary 31,200).
+   */
+  maxBidRareFoxsy: number
+  maxBidEpicFoxsy: number
+  maxBidLegendaryFoxsy: number
   /** Largest single EGLD -> FOXSY swap, in FOXSY. */
   maxSwapFoxsy: number
   /** EGLD kept for gas: a swap that would leave less is refused; transaction fees may use it. */
@@ -103,6 +110,9 @@ export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
+  maxBidRareFoxsy: 6000,
+  maxBidEpicFoxsy: 12_000,
+  maxBidLegendaryFoxsy: 32_000,
   setupBudgetUsd: 20,
   egldGasReserve: '1',
   tickJitterMinutes: 10,
@@ -147,6 +157,9 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('maxShopPaymentFoxsy', 0, 100_000, true)
   num('maxSwapFoxsy', 100, 1_000_000, true)
   num('maxBidFoxsy', 0, 1_000_000, true)
+  num('maxBidRareFoxsy', 0, 1_000_000, true)
+  num('maxBidEpicFoxsy', 0, 1_000_000, true)
+  num('maxBidLegendaryFoxsy', 0, 1_000_000, true)
   if ('egldGasReserve' in raw) {
     const v = raw.egldGasReserve
     if (typeof v !== 'string' || !/^\d{1,2}(\.\d{1,4})?$/.test(v) || Number(v) > 10 || Number(v) < MIN_GAS_RESERVE_EGLD) throw new Error(`egldGasReserve must be a decimal EGLD amount from ${MIN_GAS_RESERVE_EGLD} to 10`)

@@ -9,6 +9,7 @@ import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import { winChance } from './winchance.ts'
 import { summariseFormations, type FormationMatch, type FormationRecord } from './formations.ts'
+import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache } from './market.ts'
 
 /** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
 const rivalSeen = new Map<string, { at: number; strength: number | null }>()
@@ -82,6 +83,8 @@ export interface MarketSummary {
   /** Open auctions, strongest cards first (public listings), and the reserve floor of each rarity. */
   auctions: MarketListing[]
   floors: FloorPrice[]
+  /** Planning snapshots only: the market price of each rarity from the public sales (null: too few to tell). */
+  prices?: Record<string, MarketPrice | null>
 }
 
 /** Public facts of revealed matches, kept across ticks (the store's match_facts), so each match is read once. */
@@ -267,6 +270,38 @@ async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: 
   return out
 }
 
+/**
+ * New sales since the last plan, newest first. Until a first read has gone back to the end of the list (or 120 days),
+ * every plan reads it all, so a failed page or offsets shifted by new sales leave nothing unread for good (agent
+ * review of PR #21); after it, a page whose oldest sale is already kept ends the read. At most 20 pages a plan.
+ */
+async function readNewSales(fox: FoxLeague, cache: MarketSalesCache, now: Date): Promise<void> {
+  const oldest = new Date(now.getTime() - 120 * 86_400_000).toISOString()
+  for (let page = 0; page < 20; page++) {
+    let rows: Awaited<ReturnType<FoxLeague['recentSales']>>
+    try {
+      rows = await fox.recentSales(100, page * 100)
+    } catch (err) {
+      // Newer pages are kept by now: a plan that stopped at their oldest row would leave this gap for good.
+      if (page > 0) cache.markIncomplete()
+      throw err
+    }
+    // Not a list: a failed read (the attempt warns), never the end of the list.
+    if (!Array.isArray(rows)) {
+      if (page > 0) cache.markIncomplete()
+      throw new Error('the sales list answered something else than a list')
+    }
+    if (!rows.length) return cache.markComplete()
+    const oldestKnown = cache.has(rows.at(-1)!.id)
+    cache.put(rows.filter(r => !cache.has(r.id)))
+    if (rows.length < 100 || (rows.at(-1)!.sold_at ?? '') < oldest) return cache.markComplete()
+    if (oldestKnown && cache.complete()) return
+  }
+  // 20 full pages without an error hold the newest 2,000 sales (over a month at October 2026's pace): enough for the
+  // market price, so the first read is done and later plans read only the new pages (re-review of PR #21).
+  cache.markComplete()
+}
+
 async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>): Promise<T | null> {
   try {
     return await fn()
@@ -284,7 +319,7 @@ async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>
  * `research`: a Zeus agent reads every team it could challenge (its lineup strength) to weigh its win chance.
  * `matchFacts`: a planning snapshot also reads the formation record and the formations of the next rivals.
  */
-export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache } = {}): Promise<AgentSnapshot> {
+export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache; marketSales?: MarketSalesCache } = {}): Promise<AgentSnapshot> {
   const { chain, fox } = deps
   const warnings: string[] = []
   const wallet = 'wallet' in target ? target.wallet : null
@@ -359,6 +394,14 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
     .slice(0, 20)
     .map(t => ({ id: t.id, tier: t.tier, format: t.format, max_teams: t.max_teams, seated: t.participant_count ?? 0, fee: t.entry_fee_foxsy, status: t.status, starts_at: t.starts_at }))
+
+  // What cards sell for: a failed read leaves the kept sales (a warning says so); none kept means no market price.
+  let prices: Record<string, MarketPrice | null> | undefined
+  if (opts.marketSales) {
+    const sales = opts.marketSales
+    await attempt(warnings, 'marketplace sales', () => readNewSales(fox, sales, now))
+    prices = marketPrices(sales.since(new Date(now.getTime() - MARKET_WINDOWS.at(-1)! * 86_400_000).toISOString()), now)
+  }
 
   // What formation wins against which: the agent's own record, then what its next rivals play.
   const facts = opts.matchFacts
@@ -482,6 +525,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       slots: slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? [])]),
       auctions: (listings ?? []).filter(l => l.is_auction && l.owner_address !== address).slice(0, 15),
       floors: floors ?? [],
+      ...(prices ? { prices } : {}),
     },
     ...(record !== undefined ? { formationRecord: record } : {}),
     ...(rivalFormations ? { rivalFormations } : {}),

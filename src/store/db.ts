@@ -8,6 +8,7 @@ import { agentName } from '../names.ts'
 import { DEFAULT_SETTINGS, type AgentSettings } from './settings.ts'
 import type { MatchFormations } from '../foxleague/types.ts'
 import { summariseFormations, type FormationMatch, type FormationRecord } from '../snapshot/formations.ts'
+import type { MarketSale } from '../snapshot/market.ts'
 
 export interface AgentRow {
   index: number
@@ -148,6 +149,7 @@ export class Store {
       );
       CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS match_facts (key TEXT PRIMARY KEY, facts TEXT NOT NULL, read_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS market_sales (id INTEGER PRIMARY KEY, rarity TEXT NOT NULL, price REAL NOT NULL, sold_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS formation_results (
         agent_idx INTEGER NOT NULL,
         match_key TEXT NOT NULL,
@@ -359,6 +361,35 @@ export class Store {
     const now = new Date()
     this.db.prepare('INSERT INTO match_facts (key, facts, read_at) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET facts = excluded.facts, read_at = excluded.read_at').run(key, JSON.stringify(facts), now.toISOString())
     this.db.prepare('DELETE FROM match_facts WHERE read_at < ?').run(new Date(now.getTime() - 90 * 86_400_000).toISOString())
+  }
+
+  // ---- marketplace sales (the market price of each rarity) ----
+
+  hasSale(id: number): boolean {
+    return this.db.prepare('SELECT 1 FROM market_sales WHERE id = ?').get(id) !== undefined
+  }
+
+  /** Public sales as read; kept 120 days (the market price looks back at most 90). */
+  putSales(rows: Pick<MarketSale, 'id' | 'rarity' | 'price' | 'sold_at'>[]): void {
+    const put = this.db.prepare('INSERT INTO market_sales (id, rarity, price, sold_at) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING')
+    for (const r of rows) if (Number.isSafeInteger(r.id) && typeof r.rarity === 'string' && r.price > 0 && typeof r.sold_at === 'string') put.run(r.id, r.rarity, r.price, r.sold_at)
+    this.db.prepare('DELETE FROM market_sales WHERE sold_at < ?').run(new Date(Date.now() - 120 * 86_400_000).toISOString())
+  }
+
+  get salesComplete(): boolean {
+    return this.getKv('market_sales_complete') === '1'
+  }
+
+  markSalesComplete(): void {
+    this.setKv('market_sales_complete', '1')
+  }
+
+  markSalesIncomplete(): void {
+    this.setKv('market_sales_complete', '0')
+  }
+
+  salesSince(iso: string): Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[] {
+    return this.db.prepare('SELECT rarity, price, sold_at FROM market_sales WHERE sold_at >= ?').all(iso) as Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[]
   }
 
   /** An agent's counted matches (its formation record), kept for the pooled record; read again each plan, stored once. */

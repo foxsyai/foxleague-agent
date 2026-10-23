@@ -1535,7 +1535,7 @@ Live auction state: view `getAuction(nonce)` returns
 |---|---|---|
 | `GET /api/marketplace/listings?position=&rarity=&min_price=&max_price=&sort_by=price_asc\|price_desc\|overall_desc&limit=` | listing rows (card stats, `is_auction`, `min_price`, `highest_bid`, `ends_at`, `transferred_at`, `transfer_cooldown_hours`); limit default 50, max 200; prices whole FOXSY | `marketplace.rs:89-383` |
 | `GET /api/marketplace/floor-prices` | `[{rarity, floor_price, count}]` (the reserve for auctions), cached 5 s | `marketplace.rs:547-587` |
-| `GET /api/marketplace/recent-sales?limit=&offset=` | `MarketplaceSale[]`, limit default 20, max 100 | `marketplace.rs:589-636` |
+| `GET /api/marketplace/recent-sales?limit=&offset=` | `MarketplaceSale[]` (`id, nft_nonce, player_name, position, rarity, overall, seller_address, buyer_address, price, tx_hash, sold_at`, newest first, price in whole FOXSY), limit default 20, max 100. The agent keeps every sale (`market_sales`) and reads only the new pages each plan, for the market price of each rarity (`src/snapshot/market.ts`) | `marketplace.rs:589-636` |
 | `GET /api/marketplace/player-sales/{nonce}` | sales of one card | `marketplace.rs:638-673` |
 
 ---

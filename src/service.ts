@@ -8,6 +8,7 @@ import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
 import type { MatchFormations } from './foxleague/types.ts'
+import type { MarketSale } from './snapshot/market.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
 import { MIN_TICK_MINUTES, STRATEGY_PRESETS, isZeus, validateSettingsPatch } from './store/settings.ts'
@@ -763,7 +764,8 @@ export class Service {
   private async snapshot(index: number, plan = false): Promise<AgentSnapshot> {
     const research = isZeus(this.store.agent(index)?.settings.strategy ?? '')
     const matchFacts = plan ? { get: (k: string) => this.store.matchFacts(k), put: (k: string, f: MatchFormations) => this.store.putMatchFacts(k, f) } : undefined
-    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts })
+    const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
+    const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts, marketSales })
     // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
     if (plan && snap.formationRecord?.games && snap.profile) {
       this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)

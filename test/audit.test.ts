@@ -305,7 +305,7 @@ test('MM1 an action queued behind another one uses the caps set meanwhile and st
     send: async () => `hash${++sends}`,
     waitForOutcome: async () => { if (sends === hold) await new Promise<void>(r => (release = r)); return { kind: 'success' } },
   }
-  const fox = { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }) }
+  const fox = { user: async () => null, player: async () => ({ rarity: 'Rare', transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }) }
   const m = setup({ chain, fox })
   // One bid holds the lock while it waits for its outcome; a second one queues behind it.
   const queued = async (change: () => void, nonce: number) => {
@@ -447,7 +447,7 @@ test('A5 S7 Telegram obeys only the owner, not other members of a chat, and not 
 
 test('A6 at most two bids per auction, so a shill bidder cannot walk the agent up', async () => {
   const au = encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: wholeToAtomic(600), bidder: PAIR, endsInS: 3600 })
-  const m = setup({ chain: { query: async (_sc: string, fn: string) => (fn === 'getAuction' ? [au] : []) }, fox: { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null }) } })
+  const m = setup({ chain: { query: async (_sc: string, fn: string) => (fn === 'getAuction' ? [au] : []) }, fox: { user: async () => null, player: async () => ({ rarity: 'Rare', transferred_at: null, transfer_cooldown_hours: null }) } })
   for (let i = 0; i < 2; i++) m.store.log({ agentIndex: 0, kind: 'bid', status: 'dry_run', summary: 'bid', detail: { action: { type: 'bid', nonce: 9, foxsy: 550 + i * 30 } } })
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'bid', nonce: 9, foxsy: 700 }))
   assert.equal(r!.status, 'refused')
@@ -468,7 +468,7 @@ test('A7 M6 the caps value FOXSY at the higher of spot and its recent price', as
 test('A8 no bid on a card that would arrive locked for weeks, nor when its details cannot be read', async () => {
   const au = encodeAuction({ seller: STRANGER, min: wholeToAtomic(500), top: 0n, bidder: null, endsInS: 3600 })
   const query = async (_sc: string, fn: string) => (fn === 'getAuction' ? [au] : [])
-  const locked = setup({ chain: { query }, fox: { user: async () => null, player: async () => ({ transferred_at: new Date(Date.now() - 3600_000).toISOString(), transfer_cooldown_hours: 1512 }), listings: async () => [] } })
+  const locked = setup({ chain: { query }, fox: { user: async () => null, player: async () => ({ rarity: 'Rare', transferred_at: new Date(Date.now() - 3600_000).toISOString(), transfer_cooldown_hours: 1512 }), listings: async () => [] } })
   const [r] = await locked.exec.run(locked.agent(), dryWallet, snapshot(), act({ type: 'bid', nonce: 9, foxsy: 500 }))
   assert.equal(r!.status, 'refused')
   assert.match(r!.summary, /transfer lock/)
@@ -662,7 +662,7 @@ test('AA6 a fractional top bid or reserve never leaves the agent bidding under t
   const run = async (top: bigint, min: bigint, foxsy: number) => {
     const m = setup({
       chain: { query: async (_sc: string, fn: string) => (fn === 'getAuction' ? [encodeAuction({ seller: STRANGER, min, top, bidder: top ? PAIR : null, endsInS: 3600 })] : []) },
-      fox: { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }) },
+      fox: { user: async () => null, player: async () => ({ rarity: 'Rare', transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }) },
     })
     return (await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'bid', nonce: 9, foxsy })))[0]!
   }
@@ -806,7 +806,7 @@ test('M10 a refunded bid or entry gives its budget back (only the gas stays coun
   const participants: { user_id: number; wallet_address?: string }[] = []
   const fox = {
     user: async () => null,
-    player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }),
+    player: async () => ({ rarity: 'Rare', transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }),
     tournament: async () => tournament(562, {}, [...participants]),
   }
   const m = setup({ chain, fox })
@@ -841,7 +841,7 @@ test('MM4 MM5 a won bid stays counted for good; dry-run bids are never credited'
     // The API may still name the seller as owner; the wallet's own cards are what counts.
     esdts: async () => (state === 'running' || state === 'open' ? [] : [{ tokenIdentifier: 'FXLP-6f28e5', nonce: 9, balance: 1n }]),
   }
-  const fox = { user: async () => null, player: async () => ({ transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }) }
+  const fox = { user: async () => null, player: async () => ({ rarity: 'Rare', transferred_at: null, transfer_cooldown_hours: null, owner_address: STRANGER }) }
   const m = setup({ chain, fox })
   const later = Date.now() + 11 * 60_000
   await withLive(m.store, async () => {
