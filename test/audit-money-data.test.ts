@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { Executor } from '../src/executor/executor.ts'
 import { Store } from '../src/store/db.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
-import { ADDR, OTHER, STRANGER, TEST_SETTINGS, liveWallet, rivalSquad, snapshot, withLive } from './fixtures.ts'
+import { ADDR, OTHER, STRANGER, TEST_SETTINGS, dryWallet, liveWallet, rivalSquad, setup, snapshot, withLive } from './fixtures.ts'
 
 // ---- A1: a 1v1 that errored before any FoxLeague call keeps no rival ----
 
@@ -67,6 +67,34 @@ test('A1 control: a 1v1 create that errored at FoxLeague (the create may have la
     assert.equal(b!.status, 'refused', b!.summary)
     assert.match(b!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
   })
+})
+
+// ---- A2: a retired agent's 1v1 still out keeps the other agents off the rival ----
+
+function siblingChallenge(store: Store) {
+  store.addAgent(1, OTHER)
+  const id = store.log({ agentIndex: 1, kind: 'create_challenge', status: 'dry_run', summary: 'create silver 1v1, stake 1000 vs user 50', detail: { action: { ...CHALLENGE }, opponentUserId: 50 } })
+  store.db.prepare('UPDATE activity SET at = ? WHERE id = ?').run(new Date(Date.now() - 10 * 60_000).toISOString(), id)
+}
+
+test('A2: a retired sibling with a 1v1 still out against the rival keeps this agent off it', async () => {
+  const m = setup()
+  siblingChallenge(m.store)
+  m.store.retireAgent(1, { at: new Date().toISOString(), by: 'owner', team: 'Parked FC', egld: null, foxsy: null, usd: null })
+  const [r] = await m.exec.run(m.agent(), dryWallet, rivalSnap(), [{ action: { ...CHALLENGE, deadline_minutes: 60 }, reason: '' }])
+  assert.equal(r!.status, 'refused', `the retired agent's challenge is still out on FoxLeague, yet: ${r!.status}: ${r!.summary}`)
+  assert.match(r!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
+})
+
+test('A2: so does a removed imported team whose 1v1 is still out', async () => {
+  const m = setup()
+  const imported = m.store.addImportedAgent(OTHER)
+  const id = m.store.log({ agentIndex: imported.index, kind: 'create_challenge', status: 'dry_run', summary: 'create silver 1v1', detail: { action: { ...CHALLENGE }, opponentUserId: 50 } })
+  m.store.db.prepare('UPDATE activity SET at = ? WHERE id = ?').run(new Date(Date.now() - 10 * 60_000).toISOString(), id)
+  m.store.removeImportedAgent(imported.index)
+  const [r] = await m.exec.run(m.agent(), dryWallet, rivalSnap(), [{ action: { ...CHALLENGE, deadline_minutes: 60 }, reason: '' }])
+  assert.equal(r!.status, 'refused', r!.summary)
+  assert.match(r!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
 })
 
 // ---- E2: the formations test does not depend on the calendar ----

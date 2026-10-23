@@ -382,13 +382,14 @@ export class Executor {
       market.oneVOneWithOpponentThisWeek = store
         .activityOf(agent.index, ['join_tournament', 'create_challenge'], since(7 * 86_400_000))
         .filter(r => counted(r.status) && detailOf(r).opponentUserId === opponentId).length
-      // The owner's other agents: a 1v1 of theirs against this rival is out until its deadline (a join: at once) and an
-      // hour for the match have passed. On the safe side, a create that failed or errored may have left a challenge,
-      // unless the error came before FoxLeague was asked or anything was signed (`untouched`).
+      // The owner's other agents, retired and removed ones too (a 1v1 stays out after its team is parked): a 1v1 of
+      // theirs against this rival is out until its deadline (a join: at once) and an hour for the match have passed.
+      // On the safe side, a create that failed or errored may have left a challenge, unless the error came before
+      // FoxLeague was asked or anything was signed (`untouched`).
       market.otherTeamsOnOpponent = store
-        .agents()
-        .filter(b => b.index !== agent.index)
-        .flatMap(b => store.activityOf(b.index, ['join_tournament', 'create_challenge'], since(6 * 3_600_000)))
+        .agentIndexes()
+        .filter(i => i !== agent.index)
+        .flatMap(i => store.activityOf(i, ['join_tournament', 'create_challenge'], since(6 * 3_600_000)))
         .filter(r => (counted(r.status) || r.status === 'failed' || (r.status === 'error' && !detailOf(r).untouched)) && detailOf(r).opponentUserId === opponentId)
         .filter(r => Date.parse(r.at) + ((detailOf(r).action?.deadline_minutes ?? 0) + 60) * 60_000 > now.getTime()).length
     }
