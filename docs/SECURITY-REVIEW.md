@@ -652,9 +652,10 @@ seen failing with the release removed).
 | SB1 | low | Two of the owner's agents could bid on the same card at auction, the second raising the price against the first | The bid rule refuses a card another of the owner's teams leads on chain (`highestBidder`) or has bid on in the last 48 hours (its log rows in the same ledger, a bid that errored after its signature too; a refused, reverted or unsigned one placed nothing), retired and removed teams included (`cardsBidByOthers`, `store.agentAddresses`). The shared executor claims the card in the same synchronous step as the check, until its auction ends (at least an hour), as for rivals (R19A-1); a bid that placed nothing releases it, and a dry-run claim does not hold a live agent off |
 | SB2 | low | An agent could bid on a card another of the owner's teams sells | Refused: buying it would only move it between the owner's wallets and pay the 10 percent fee |
 | SB3 | design | The plan did not know which cards were taken | The plan request marks those auctions "not available now", from the same helpers and claims, with no reason given and no team named; `src/strategist/prompt.ts` is unchanged (the prompt cache holds) |
+| R25A-1 | low | Agent review of PR #25 (docs): INSTALL.md and the update page still said two agents may bid on the same card, and that the agents know nothing of each other | Both name the three things the agents share; a test reads every owner-facing page for the old wording |
 
-No cap or limit changed and the rule only adds refusals. The README, the FAQ and the safety page name the third thing
-the agents share. Open: a card another team of the owner's bid on stays taken for 48 hours after that bid even when
+No cap or limit changed and the rule only adds refusals. The README, the install guide, the FAQ, the update page and
+the safety page name the third thing the agents share. Open: a card another team of the owner's bid on stays taken for 48 hours after that bid even when
 the team was outbid or the card was listed again (it only refuses more); a team the owner runs from another install is
 not in this install's table and is not seen.
 

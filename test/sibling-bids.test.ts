@@ -151,3 +151,13 @@ test('the plan request marks the cards another of the owner\'s teams bids on, ha
   const [r] = await exec.run(svc.store.agent(0)!, { ...dryWallet, address: svc.store.agent(0)!.address }, snapshot(), bid(20))
   assert.match(r!.summary, TAKEN)
 })
+
+// Review of PR #25 (low, docs): INSTALL.md and the update page still said two agents may bid on the same card.
+test('no owner-facing page says two agents may bid on the same card', async () => {
+  const { readFileSync } = await import('node:fs')
+  for (const f of ['README.md', 'INSTALL.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/help/faq.md', 'site/src/content/docs/play/safety.md']) {
+    const page = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
+    assert.doesNotMatch(page, /bid on the same card/, f)
+    assert.doesNotMatch(page, /knows nothing of the others, so/, `${f} names what the agents share`)
+  }
+})
