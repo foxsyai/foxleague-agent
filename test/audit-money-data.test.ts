@@ -9,14 +9,18 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Mnemonic } from '@multiversx/sdk-core'
 import { Executor } from '../src/executor/executor.ts'
+import { checkAction } from '../src/executor/rules.ts'
 import { budgetView, gameDayKey } from '../src/executor/budget.ts'
+import { gateLine } from '../src/foxleague/gate.ts'
+import type { MatchWaiverQuote } from '../src/foxleague/types.ts'
 import { Service } from '../src/service.ts'
 import { takeSnapshot } from '../src/snapshot/snapshot.ts'
 import { Store } from '../src/store/db.ts'
 import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
+import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
 import { renderPlanRequest } from '../src/strategist/strategist.ts'
 import { numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
-import { ADDR, OTHER, STRANGER, TEST_SETTINGS, dryWallet, liveWallet, rivalSquad, setup, snapshot, withLive } from './fixtures.ts'
+import { ADDR, OTHER, STRANGER, TEST_SETTINGS, card, dryWallet, liveWallet, rivalSquad, setup, snapshot, withLive } from './fixtures.ts'
 
 const hours = (h: number): string => new Date(Date.now() + h * 3600_000).toISOString()
 
@@ -276,6 +280,46 @@ test('B-P1: formation_results is emptied once, so the pool is rebuilt under the 
   store = new Store(dir)
   assert.equal(store.formationPool().matches, 1, 'only once: the rows stored since stay')
   store.db.close()
+})
+
+// ---- C1: a Legendary's match waiver serves its listing gate ----
+
+test('C1: a spare Legendary at 300 played may buy the 105 matches it misses to its listing gate', () => {
+  const s = snapshot([card(501, 'FWD', 'reserve', { rarity: 'Legendary', cap: 100, competitiveMatches: 300, syncedTotal: 50 })])
+  s.chain!.foxsy = wholeToAtomic(20_000)
+  assert.match(gateLine(s.config!), /Legendary 405 \(135 played, the rest waivable at 100 FOXSY a match\)/)
+  assert.match(SYSTEM_PROMPT, /Legendary 405, 135 played; credit counts for the rest/)
+  const quote: MatchWaiverQuote = { max_purchasable: 105, chain_played: 300, credit: 0, price_wei: wholeToAtomic(100).toString(), rarity: 'Legendary', gate: 405, floor: 135, price_per_match: 100, meets_gate: false }
+  const ctx = { settings: { ...TEST_SETTINGS, maxShopPaymentFoxsy: 11_000 }, now: new Date(), matchQuote: quote }
+  const v = checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 105 }, s, ctx)
+  assert.equal(v.ok, true, `the agent refuses what FoxLeague sells: ${v.refusal}`)
+  assert.equal(v.foxsy, wholeToAtomic(10_500))
+  assert.match(v.notes.join(' '), /reaches 405 competitive matches for listing/)
+})
+
+test('C1: a Legendary waiver still needs a card the agent would list (a spare, 18 cards left) and stays within the max shop payment', () => {
+  const quote: MatchWaiverQuote = { max_purchasable: 105, chain_played: 300, credit: 0, price_wei: wholeToAtomic(100).toString(), rarity: 'Legendary', gate: 405, floor: 135, price_per_match: 100, meets_gate: false }
+  const ctx = (max = 11_000) => ({ settings: { ...TEST_SETTINGS, maxShopPaymentFoxsy: max }, now: new Date(), matchQuote: quote })
+  const legend = (more = {}) => card(501, 'FWD', 'reserve', { rarity: 'Legendary', cap: 100, competitiveMatches: 300, syncedTotal: 50, ...more })
+  const strong = snapshot([legend({ syncedTotal: 600 })])
+  strong.chain!.foxsy = wholeToAtomic(20_000)
+  assert.match(checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 105 }, strong, ctx()).refusal ?? '', /among the 18 strongest cards/)
+  const short = snapshot([legend()])
+  short.chain!.foxsy = wholeToAtomic(20_000)
+  short.players = short.players.filter(p => p.nonce !== 18)
+  short.team!.substitutes = short.team!.substitutes.filter(n => n !== 18)
+  assert.match(checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 105 }, short, ctx()).refusal ?? '', /fewer than 18 cards/)
+  const benched = snapshot([legend()])
+  benched.chain!.foxsy = wholeToAtomic(20_000)
+  benched.team!.substitutes = [...benched.team!.substitutes.slice(0, 6), 501]
+  assert.match(checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 105 }, benched, ctx()).refusal ?? '', /in the lineup or on the bench/)
+  const spare = snapshot([legend()])
+  spare.chain!.foxsy = wholeToAtomic(20_000)
+  assert.match(checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 105 }, spare, ctx(10_000)).refusal ?? '', /10500 FOXSY exceeds the per-action maximum 10000/)
+  assert.match(checkAction({ type: 'fusion_match_waiver', nonce: 501, matches: 100 }, spare, ctx()).refusal ?? '', /needs exactly 105/)
+  // The cooldown waiver buys a Legendary nothing: it cannot be fused.
+  const cooling = snapshot([legend({ fusionReadyAt: hours(24 * 10) })])
+  assert.match(checkAction({ type: 'fusion_cooldown_waiver', nonce: 501 }, cooling, { ...ctx(), cooldownQuote: { days: 7, costAtomic: wholeToAtomic(700) } }).refusal ?? '', /a Legendary cannot be fused/)
 })
 
 // ---- E2: the formations test does not depend on the calendar ----
