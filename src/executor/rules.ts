@@ -238,8 +238,8 @@ export function packAndFusionCost(cfg: { common_pack_price_foxsy?: number; fusio
  * gate, since only a card at its gate can be listed. Building is the Common packs and the fusion fees, plus the time
  * it takes, priced the way FoxLeague prices time: every competitive match an input or the card needs to reach its gate
  * at the rarity's price for a bought match (a Common has none: the cheapest match price), and every day of a fused
- * card's cooldown at the price of a day bought off, all of them, whether or not that wait can be bought. On mainnet
- * that is Common 600, Uncommon 3,250, Rare 15,500, Epic 61,450, Legendary 226,700 FOXSY. Without the gate rows or
+ * input's cooldown at the price of a day bought off, all of them, whether or not that wait can be bought. On mainnet
+ * that is Common 600, Uncommon 2,200, Rare 14,450, Epic 60,400, Legendary 225,650 FOXSY. Without the gate rows or
  * the cooldown settings, the packs and fees alone (lower, so stricter); without those, no ceiling, as before.
  */
 export function auctionCeiling(cfg: Pick<FoxConfig, 'common_pack_price_foxsy' | 'fusion_costs_foxsy' | 'rarity_match_gate' | 'fusion_card_cooldown_seconds' | 'fusion_cooldown_waiver_price_per_day'> | null | undefined, rarity: string): number | null {
@@ -253,19 +253,20 @@ export function auctionCeiling(cfg: Pick<FoxConfig, 'common_pack_price_foxsy' | 
   const cheapest = Math.min(...rows.map(r => r.price_per_match).filter(p => typeof p === 'number' && p > 0))
   if (!Number.isFinite(cheapest)) return base
   const order = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']
-  // A card of `level` played to its gate, and (fused cards) through its cooldown.
-  const toGate = (l: number): number | null => {
+  // A card of `level` played to its gate; a fused input also through its cooldown, before it can be fused again. The
+  // card bought is not charged its own cooldown: a card may be listed inside it (agent review of PR #20).
+  const toGate = (l: number, input: boolean): number | null => {
     const row = rows.find(r => r.rarity === order[l])
     if (!row || !(row.gate >= 0)) return null
-    return row.gate * (row.price_per_match > 0 ? row.price_per_match : cheapest) + (l > 0 ? (cooldown / 86_400) * perDay : 0)
+    return row.gate * (row.price_per_match > 0 ? row.price_per_match : cheapest) + (input && l > 0 ? (cooldown / 86_400) * perDay : 0)
   }
   let made = cfg!.common_pack_price_foxsy / 5
   for (let l = 0; l < level; l++) {
-    const wait = toGate(l)
+    const wait = toGate(l, true)
     if (wait === null) return base
     made = 3 * (made + wait) + cfg!.fusion_costs_foxsy[l]!
   }
-  const own = toGate(level)
+  const own = toGate(level, false)
   return own === null ? base : Math.round(made + own)
 }
 

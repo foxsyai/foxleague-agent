@@ -21,9 +21,11 @@ const ceiling = (cfg: unknown, r: string) => (rules as unknown as { auctionCeili
 
 test('a card at auction is worth building it and bringing it to its gate, every match and day at FoxLeague\'s own price', () => {
   // Common: a pack card (500) and its 5 matches at 20 (a Common has no waiver price: the cheapest match price).
-  // Uncommon: 3 such Commons + the 100 fee, then 15 matches at 20 and 14 days of fusion cooldown at 75.
-  // Rare: 3 such Uncommons + 200, then 45 matches at 100 and 14 days at 75; Epic and Legendary the same way.
-  assert.deepEqual(RARITIES.map(r => ceiling(LIVE, r)), [600, 3250, 15500, 61450, 226700])
+  // Uncommon: 3 such Commons + the 100 fee, then its own 15 matches at 20. Rare: 3 Uncommons at their gate and through
+  // their 14-day fusion cooldown at 75 a day (inputs must be) + the 200 fee, then its 45 matches at 100. Epic and
+  // Legendary the same way. The card's own cooldown is not counted (agent review of PR #20): a card may be listed
+  // inside it, and a Legendary is never a fusion input.
+  assert.deepEqual(RARITIES.map(r => ceiling(LIVE, r)), [600, 2200, 14450, 60400, 225650])
 })
 
 test('without the gate rows or the cooldown settings the ceiling is the packs and fusion fees alone (stricter)', () => {
@@ -32,6 +34,11 @@ test('without the gate rows or the cooldown settings the ceiling is the packs an
   assert.equal(ceiling(noGate, 'Rare'), 5000)
   assert.equal(ceiling(noDays, 'Rare'), 5000)
   assert.equal(ceiling({ common_pack_price_foxsy: 0, fusion_costs_foxsy: [] }, 'Rare'), null, 'unknown prices: no ceiling, as before')
+  // One rarity's row missing (review of PR #20): the packs and fees alone for every card that needs it.
+  const noRareRow = { ...LIVE, rarity_match_gate: { ...MAINNET_GATE, rarities: MAINNET_GATE.rarities.filter(r => r.rarity !== 'Rare') } }
+  assert.equal(ceiling(noRareRow, 'Rare'), 5000)
+  assert.equal(ceiling(noRareRow, 'Epic'), 15400)
+  assert.equal(ceiling(noRareRow, 'Uncommon'), 2200, 'an Uncommon does not need the Rare row')
 })
 
 test('the bid rule uses it: a Rare up to its built price, and the max bid still binds above', () => {
@@ -41,8 +48,8 @@ test('the bid rule uses it: a Rare up to its built price, and the max bid still 
   const auction = { seller: OTHER, minPrice: wholeToAtomic(4000), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }
   const ctx = (rarity: string): RulesContext => ({ settings: { ...TEST_SETTINGS, maxBidFoxsy: 47_000 }, now: new Date(), auction, cardRarity: rarity })
   const bid = (foxsy: number, rarity: string) => checkAction({ type: 'bid', nonce: 9, foxsy }, s, ctx(rarity))
-  assert.equal(bid(15_500, 'Rare').ok, true, bid(15_500, 'Rare').refusal)
-  assert.match(bid(15_600, 'Rare').refusal!, /above what a Rare costs to build yourself \(15500 FOXSY/)
+  assert.equal(bid(14_450, 'Rare').ok, true, bid(14_450, 'Rare').refusal)
+  assert.match(bid(14_451, 'Rare').refusal!, /above what a Rare costs to build yourself \(14450 FOXSY/)
   assert.equal(bid(47_000, 'Epic').ok, true, 'an Epic up to the max bid')
   assert.match(bid(47_001, 'Legendary').refusal!, /per-action maximum 47000/)
 })
@@ -51,5 +58,5 @@ test('the plan sees the new ceilings', () => {
   const s = snapshot()
   s.config = { ...s.config!, ...LIVE } as typeof s.config
   const text = renderPlanRequest({ snapshot: s, settings: DEFAULT_SETTINGS, budget: budgetView(setup().store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
-  assert.match(text, /never above what the card costs to build yourself and bring to its match gate \(Rare 15500, Epic 61450, Legendary 226700\)/)
+  assert.match(text, /never above what the card costs to build yourself and bring to its match gate \(Rare 14450, Epic 60400, Legendary 225650\)/)
 })

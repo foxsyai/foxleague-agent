@@ -176,7 +176,7 @@ export interface PlanInput {
  */
 const OLD_SIBLING_RULE = /fair.?play|another agent of (this install|this owner)|other agents? of (this|the) owner/i
 
-/** The packs-and-fusion cost of each rarity worth bidding on: the executor refuses a bid above it. */
+/** What each rarity worth bidding on costs to build and bring to its match gate (`auctionCeiling`): the executor refuses a bid above it. */
 function bidCeilings(s: AgentSnapshot): string {
   const parts = ['Rare', 'Epic', 'Legendary'].flatMap(r => {
     const c = auctionCeiling(s.config, r)
