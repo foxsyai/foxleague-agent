@@ -164,11 +164,12 @@ test('no match, entry or 1v1 while the saved eleven does not fit the saved forma
 // ---- the formation record ----
 
 type Row = Record<string, unknown>
+// Finished an hour ago, whatever the date: the pool keeps 14 days, so a fixed date would turn the test red later (E2).
 const row = (key: string, home: number, away: number, score: [number, number] | null, more: Row = {}): Row => ({
   id: /^\d+$/.test(key) ? Number(key) : null, tournament_match_id: /^\d+$/.test(key) ? null : key,
   home_user_id: home, away_user_id: away, home_team_name: `T${home}`, away_team_name: `T${away}`,
   home_score: score?.[0] ?? null, away_score: score?.[1] ?? null, match_type: /^\d+$/.test(key) ? 'ranked' : 'tournament',
-  status: score ? 'finished' : 'scheduled', finished_at: score ? '2026-10-20T12:00:00.000Z' : null,
+  status: score ? 'finished' : 'scheduled', finished_at: score ? new Date(Date.now() - 3600_000).toISOString() : null,
   home_elo_at_match: 1200, away_elo_at_match: 1200, tournament_id: null, ...more,
 })
 
