@@ -205,6 +205,7 @@ function buyingPower(p: PlanInput): string {
   if (!s.chain) return 'Buying power: unknown (the wallet could not be read)'
   const held = `${n(atomicToFloat(s.chain.foxsy))} FOXSY held`
   if (!s.prices || !(s.prices.egldPerFoxsy > 0) || !(s.prices.foxsyUsd > 0)) return `Buying power: ${held}; what the EGLD swaps into is unknown (no price)`
+  if (s.prices.frozen) return `Buying power: ${held}; no swap is possible while xExchange has paused the FOXSY pair, so the FOXSY held is all there is`
   // The reserve the executor keeps (the same decimal setting it reads); an EGLD balance under it buys nothing.
   const egldAbove = s.chain.egld - decimalToAtomic(p.settings.egldGasReserve)
   const above = atomicToFloat(egldAbove > 0n ? egldAbove : 0n) + atomicToFloat(s.chain.wegld)

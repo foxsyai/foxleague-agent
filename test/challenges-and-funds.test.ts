@@ -10,7 +10,7 @@ import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
 import { budgetView } from '../src/executor/budget.ts'
 import { DEFAULT_SETTINGS } from '../src/store/settings.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
-import { OTHER, STRANGER, dryWallet, setup, snapshot, tournament } from './fixtures.ts'
+import { OTHER, STRANGER, TEST_SETTINGS, dryWallet, setup, snapshot, tournament } from './fixtures.ts'
 
 const RIVAL = { id: 50, wallet_address: STRANGER, team_name: 'Rival', elo_rating: 1190, league: 'Bronze', accepted7d: 3 }
 const CHALLENGE = { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 50, deadline_minutes: 60 } as const
@@ -65,6 +65,33 @@ test('joining the open 1v1 of a team another of the owner\'s agents is playing i
   assert.match(r!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
 })
 
+// Agent review of PR #19 (medium): agents plan at the same time and a live create is logged only after the create,
+// the payment and the seat, so two agents could both pass the check against one rival. The rival is claimed in the
+// shared executor in the same synchronous step as the check.
+test('two agents checking at once cannot both take the same rival', async () => {
+  const detail = tournament(7, { max_teams: 2, min_teams: 2, creator_user_id: 50, entry_fee_foxsy: 1000 }, [{ user_id: 50, wallet_address: STRANGER }])
+  let release: () => void = () => undefined
+  const held = new Promise<void>(r => { release = r })
+  const m = setup({
+    fox: { tournament: async () => detail, user: async () => ({ id: 50, elo_rating: 1190 }) },
+    // The first agent's join waits in its simulation, after its check and before its log row.
+    chain: { simulate: async () => { await held; return { ok: true, detail: 'success', raw: {} } } },
+  })
+  m.store.addAgent(1, OTHER)
+  m.store.updateSettings(1, TEST_SETTINGS)
+  const snap = () => { const x = snapshot(); x.leaderboardNeighbours = [RIVAL]; return x }
+  const join = { type: 'join_tournament', tournament_id: 7 } as const
+  const first = m.exec.run(m.agent(), dryWallet, snap(), [{ action: join, reason: '' }])
+  await new Promise(r => setTimeout(r, 30))
+  const second = m.exec.run(m.store.agent(1)!, { ...dryWallet, index: 1, address: OTHER }, snap(), [{ action: join, reason: '' }])
+  await new Promise(r => setTimeout(r, 30))
+  release()
+  const [[a], [b]] = await Promise.all([first, second])
+  assert.equal(a!.status, 'dry_run', a!.summary)
+  assert.equal(b!.status, 'refused', b!.summary)
+  assert.match(b!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
+})
+
 test('the refusal is not mistaken for the sibling rule removed on 2026-09-30', () => {
   const store = setup().store
   const recent = [{ id: 1, agentIndex: 0, at: new Date().toISOString(), kind: 'create_challenge', status: 'refused', summary: "create silver 1v1, stake 1000 vs user 50: refused: another of your owner's teams already has a 1v1 out against user 50 (one at a time per rival: pick another team or wait until it is over)", detail: null, costUsd: null, txHash: null }]
@@ -86,6 +113,23 @@ test('the plan sees its buying power: the FOXSY held plus what the EGLD above th
   const blind = snapshot()
   blind.prices = null
   assert.match(renderPlanRequest({ snapshot: blind, settings, budget: budgetView(store, 0, settings, true, new Date()), recent: [], dryRun: true }), /Buying power: \d[\d,]* FOXSY held; what the EGLD swaps into is unknown \(no price\)/)
+})
+
+// Agent review of PR #19 (low): while xExchange has paused the pair every swap is refused, so nothing comes from EGLD.
+test('while xExchange has paused the pair, the buying power is the FOXSY held', () => {
+  const store = setup().store
+  const s = snapshot()
+  s.prices = { ...s.prices!, frozen: true }
+  const text = renderPlanRequest({ snapshot: s, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
+  assert.match(text, /Buying power: [\d,]+ FOXSY held; no swap is possible while xExchange has paused the FOXSY pair, so the FOXSY held is all there is/)
+})
+
+// Agent review of PR #19 (low, docs): the manual's safety page said the agents share nothing.
+test('the safety page names the two things the agents share', async () => {
+  const { readFileSync } = await import('node:fs')
+  const page = readFileSync(new URL('../site/src/content/docs/play/safety.md', import.meta.url), 'utf8')
+  assert.match(page, /a pooled formation record with no team named/)
+  assert.match(page, /only one of them at a time has a 1v1 out against the same rival/)
 })
 
 test('the prompt says EGLD above the reserve is buying power, swapped earlier in the same plan when an action needs it', () => {

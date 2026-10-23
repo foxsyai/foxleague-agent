@@ -97,6 +97,12 @@ export class Executor {
   private readonly d: ExecutorDeps
   /** One action at a time per agent, whatever started it (a plan, Telegram /do, the web UI). */
   private readonly locks = new Map<number, Promise<void>>()
+  /**
+   * The rival each agent has just taken a 1v1 against, kept until the log rows say it (a live create is logged only
+   * after the create, the payment and the seat). Checked and set in the same synchronous step as the rules, so two
+   * agents planning at once cannot both take one rival (C1, agent review of PR #19).
+   */
+  private readonly rivalClaims = new Map<number, { agent: number; until: number }>()
 
   constructor(deps: ExecutorDeps) {
     this.d = deps
@@ -189,8 +195,15 @@ export class Executor {
         // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
         logExtra.winChance = winChance({ myElo: snap.profile?.elo_rating ?? null, oppElo: ctx.opponent.elo, myStrength: lineupStrength(snap) || null, oppStrength: ctx.opponent.strength ?? null })
       }
+      // No await from here to the claim: another agent's check runs before this one or after its claim, never between.
+      const claim = ctx.opponent ? this.rivalClaims.get(ctx.opponent.userId) : undefined
+      if (claim && claim.agent !== agent.index && claim.until > Date.now()) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
+      if (ctx.opponent && (a.type === 'create_challenge' || a.type === 'join_tournament')) {
+        for (const [id, c] of this.rivalClaims) if (c.until <= Date.now()) this.rivalClaims.delete(id)
+        this.rivalClaims.set(ctx.opponent.userId, { agent: agent.index, until: Date.now() + ((a.type === 'create_challenge' ? a.deadline_minutes : 0) + 60) * 60_000 })
+      }
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
         const taken = await this.nameRefusal(wallet, a.team_name)

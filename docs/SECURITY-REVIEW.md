@@ -530,8 +530,15 @@ that the new refusal is not taken for the sibling rule removed on 2026-09-30 is 
 | C1 | low | Several of the owner's agents could challenge, or take the open 1v1 of, the same rival at the same time | `oneVOneOpponentRefusal` (create with a target, and join of a 1v1) refuses while another of the owner's agents has a 1v1 out against that rival: its create or join logged in the same ledger (a failed or errored create too, as it may have left a challenge), until its deadline (a join: at once) and an hour for the match have passed. The refusal names no team and does not read as the old sibling rule. Agents may still meet each other, as before |
 | B1 | design | An agent judged what it could afford on the FOXSY it held, never counting the EGLD above its gas reserve | The plan request shows its buying power: the FOXSY held plus what the EGLD above the reserve (and any WEGLD) swaps into at the current price, next to the one-swap limit and what today's budget left buys; unknown without a price or a wallet read. The prompt says never to call something unaffordable on the FOXSY alone, and to swap earlier in the same plan when an action that pays needs it |
 
+| R19A-1 | medium | Agent review of PR #19: C1 could be raced. Agents plan at the same time, the executor serializes only one agent's actions, and a live create is logged only after the create, the payment and the seat (minutes), so two agents that picked one rival in the same cycle could both pass | The shared executor claims the rival in memory in the same synchronous step as the check (no await between them), until the 1v1's deadline and an hour have passed; another agent's check sees the claim. A test runs two overlapping joins against one rival: one passes, one is refused |
+| R19A-2 | low | Agent review of PR #19: while xExchange has paused the pair (`prices.frozen`), the buying power still counted the EGLD as FOXSY to come, though every swap is refused then | The line says no swap is possible while the pair is paused, so the FOXSY held is all there is |
+| R19A-3 | low | Agent review of PR #19 (docs): the manual's safety page said the agents share nothing and listed the 1v1 protections without C1 | The page names the two things they share: the pooled formation record (no team named) and one 1v1 at a time per rival |
+
 No cap or limit changed: every swap still meets the swap maximum, the gas reserve, the daily cap and the monthly
-budget in the executor.
+budget in the executor. Open: a create or join that failed or errored counts whatever mode its agent ran in, so a
+dry-run agent's error can hold a live agent off that rival for up to 5 hours (it only refuses more); a rival that took
+an agent's own open challenge is not seen by the others (FoxLeague's one active 1v1 per wallet keeps it from a second
+until the first is over).
 
 ## Where the limits live
 
