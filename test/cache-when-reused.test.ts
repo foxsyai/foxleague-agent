@@ -94,8 +94,33 @@ test('the service expects another call within the hour from its schedule: an act
   svc.store.setPaused(1, false)
   svc.store.updateSettings(1, { activeHoursUtc: [(new Date(now + 30 * 60_000).getUTCHours() + 2) % 24, (new Date(now + 30 * 60_000).getUTCHours() + 3) % 24] })
   assert.equal(inner.callExpectedWithinHour(now), false, 'its next tick falls outside its active hours: no plan')
-  svc.store.updateSettings(0, { tickMinutes: 50, tickJitterMinutes: 5 })
-  assert.equal(inner.callExpectedWithinHour(now), true, 'the planning agent\'s own cycle is under the hour')
+  // Agent review of PR #29 (low): an agent's next plan is set only after its plan's actions ran (up to 0.8 of its
+  // tick), so a lone Zeus agent at 60 minutes plans again after about 90 minutes, not 50.
+  svc.store.updateSettings(0, { tickMinutes: 60, tickJitterMinutes: 10 })
+  assert.equal(inner.callExpectedWithinHour(now), false, 'a lone Zeus agent: its plan window comes first')
+  svc.store.updateSettings(0, { tickMinutes: 25, tickJitterMinutes: 5 })
+  assert.equal(inner.callExpectedWithinHour(now), true, 'the planning agent\'s own cycle and window are under the hour')
   svc.store.setKillSwitch(true)
   assert.equal(inner.callExpectedWithinHour(now), false, 'the kill switch stops every plan')
+})
+
+// Agent review of PR #29 (low): the cache is written or renewed when the request is processed, at its start, so a
+// long answer must not move the warm window past the cache's real expiry.
+test('the warm window counts from when the request was sent, not from the end of a long answer', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  let soon = true
+  const s = new Strategist('test-key', 'claude-sonnet-5', 'high', () => soon)
+  const marked: boolean[] = []
+  ;(s as unknown as { client: unknown }).client = {
+    beta: { messages: { stream: (p: { system: { cache_control?: unknown }[] }) => ({ finalMessage: async () => {
+      marked.push(p.system[0]?.cache_control !== undefined)
+      t.mock.timers.tick(8 * 60_000) // an 8-minute answer
+      return { model: 'claude-sonnet-5', stop_reason: 'end_turn', content: [{ type: 'text', text: 'ok' }], usage: { input_tokens: 10, output_tokens: 10, cache_read_input_tokens: 0, cache_creation_input_tokens: 60_000 } }
+    } }) } },
+  }
+  await s.ask(snapshot(), 'one') // sent at T, written at T, answered at T+8
+  soon = false
+  t.mock.timers.tick(48 * 60_000) // T+56: the cache written at T is past its 55-minute window
+  await s.ask(snapshot(), 'two')
+  assert.deepEqual(marked, [true, false])
 })

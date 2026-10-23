@@ -332,9 +332,11 @@ export class Strategist {
     const text = MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT
     const warm = Date.now() - (this.cachedAt.get(key) ?? Number.NEGATIVE_INFINITY) < CACHE_WARM_MS
     const cached = warm || this.expectsCallSoon()
+    // The cache is written or renewed when the request is processed, at its start: a long answer must not move it on.
+    const sent = Date.now()
     const response = await this.create({ ...params, system: [{ type: 'text', text, ...(cached ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}) }] })
     // Warm only when the cache really served or stored it (a request below the cache minimum does neither).
-    if (cached && ((response.usage?.cache_read_input_tokens ?? 0) > 0 || (response.usage?.cache_creation_input_tokens ?? 0) > 0)) this.cachedAt.set(key, Date.now())
+    if (cached && ((response.usage?.cache_read_input_tokens ?? 0) > 0 || (response.usage?.cache_creation_input_tokens ?? 0) > 0)) this.cachedAt.set(key, sent)
     return response
   }
 

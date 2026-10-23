@@ -1206,8 +1206,9 @@ export class Service {
 
   /**
    * Whether another model call is due within the hour, from the schedule: the next planning tick of an active agent
-   * (not paused, not waiting for funds) within 55 minutes and inside its active hours. The agent planning now has its
-   * entry at the moment it fired: its next comes one shortest cycle on. Only then is the game manual worth a one-hour
+   * (not paused, not waiting for funds) within 55 minutes and inside its active hours. An agent planning now has its
+   * entry at the moment it fired: its next is set only after its plan's actions ran (up to 0.8 of its tick, runPlan),
+   * so it comes that window plus one shortest cycle on (agent review of PR #29). Only then is the game manual worth a one-hour
    * cache write (twice the input price); erring towards no costs at most the plain price twice (owner, 2026-10-24).
    */
   private callExpectedWithinHour(now = Date.now()): boolean {
@@ -1216,7 +1217,7 @@ export class Service {
     for (const a of this.store.agents()) {
       if (a.paused || this.store.getKv(`waiting_funds:${a.index}`) === '1') continue
       const at = this.nextAt.get(a.index)
-      const next = at !== undefined && at > now ? at : now + Math.max(MIN_TICK_MINUTES, a.settings.tickMinutes - a.settings.tickJitterMinutes) * 60_000
+      const next = at !== undefined && at > now ? at : now + (Math.max(MIN_TICK_MINUTES, a.settings.tickMinutes - a.settings.tickJitterMinutes) + a.settings.tickMinutes * 0.8) * 60_000
       if (next <= horizon && this.inActiveHours(a, new Date(next))) return true
     }
     return false
