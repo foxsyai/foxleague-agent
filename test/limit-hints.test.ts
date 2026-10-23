@@ -9,9 +9,9 @@ import { readFileSync } from 'node:fs'
 
 const html = readFileSync(new URL('../src/web/dashboard.html', import.meta.url), 'utf8')
 
-function limitState(): (limit: number, market: number | null) => { tone: string; text: string; suggest?: number } {
-  const src = html.match(/function limitState\(limit, market\) \{[\s\S]*?\n\}/)?.[0]
-  assert.ok(src, 'the dashboard defines limitState(limit, market)')
+function limitState(): (limit: number, market: number | null, maxBid?: number) => { tone: string; text: string; suggest?: number } {
+  const src = html.match(/function limitState\(limit, market, maxBid = Infinity\) \{[\s\S]*?\n\}/)?.[0]
+  assert.ok(src, 'the dashboard defines limitState(limit, market, maxBid)')
   return new Function(`${src}; return limitState`)()
 }
 
@@ -30,9 +30,20 @@ test('a limit within 90 to 150 percent of the market price is green, under it am
   assert.deepEqual(state(6000, null), { tone: 'none', text: 'Market today: too few sales to tell' })
 })
 
+// Agent review of PR #22 (medium): the bid rule checks Max bid first, so the line must judge whichever binds.
+test('the line judges the limit that binds: Max bid when it is lower than the limit for the rarity', () => {
+  const state = limitState()
+  assert.deepEqual(state(6000, 6100, 0), { tone: 'low', text: 'Market today: 6,100 FOXSY. Bids are off: Max bid is 0.' })
+  assert.deepEqual(state(6000, 6100, 4000), { tone: 'low', text: 'Market today: 6,100 FOXSY. Below the market: the agent may miss most sales. Max bid (4,000) is the limit here.' }, 'no button: the field for the rarity would not help')
+  assert.equal(state(32_000, 31_240, 15_000).tone, 'low')
+  assert.deepEqual(state(20_000, 6100, 12_000), { tone: 'high', text: 'Market today: 6,100 FOXSY. Well above the market: the agent aims lower, but may pay up to this. Max bid (12,000) is the limit here.', suggest: 6000 }, 'lowering the limit for the rarity does help')
+  assert.equal(state(6000, 6100, 47_000).tone, 'ok')
+})
+
 test('the hints are drawn on load and again as a limit is typed, each tone with its colour', () => {
   assert.match(html, /renderLimitHints\(\)/)
-  assert.match(html, /\$\('settingsForm'\)\.addEventListener\('input', e => \{ if \(\/\^sBid\(Rare\|Epic\|Legendary\)\$\/\.test\(e\.target\.id\)\) renderLimitHints\(\) \}\)/)
+  assert.match(html, /\$\('settingsForm'\)\.addEventListener\('input', e => \{ if \(\/\^sBid\(Rare\|Epic\|Legendary\)\?\$\/\.test\(e\.target\.id\)\) renderLimitHints\(\) \}\)/, 'Max bid too')
+  assert.match(html, /limitState\(Number\(\$\('sBid' \+ r\)\.value\), p \? p\.price : null, Number\(\$\('sBid'\)\.value\)\)/)
   assert.match(html, /form\.settings \.hint\.mk\.ok\{color:var\(--up\)\}/)
   assert.match(html, /form\.settings \.hint\.mk\.low\{color:var\(--acc\)\}/)
   assert.match(html, /form\.settings \.hint\.mk\.high\{color:var\(--down\)\}/)

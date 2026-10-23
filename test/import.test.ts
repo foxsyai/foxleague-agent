@@ -50,7 +50,9 @@ test('import: a PEM file, a keystore (with a key or with words) and recovery wor
   assert.throws(() => secretKeyFrom({ kind: 'words', words: TEAM_WORDS, account: -1 }), /account number/)
   const bad = TEAM_WORDS.split(' ').reverse().join(' ')
   const err = (() => { try { secretKeyFrom({ kind: 'words', words: bad }) } catch (e) { return (e as Error).message } })()
-  if (err) assert.doesNotMatch(err, new RegExp(bad.split(' ')[0]!), 'an error never repeats the words')
+  // Two words in a row: one word alone may be in the message by chance (valid, list, order and stand are on the
+  // standard list), which made this test fail about once in 300 runs.
+  if (err) assert.ok(!err.includes(bad.split(' ').slice(0, 2).join(' ')), 'an error never repeats the words')
 })
 
 test('import: only the one key is stored, mode 600 in a 700 folder; a wrong or missing file is refused', () => {
