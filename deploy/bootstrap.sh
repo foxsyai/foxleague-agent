@@ -4,6 +4,8 @@
 set -euo pipefail
 NODE_VERSION=v22.22.0
 BASE=/opt/foxleague-agent
+# The repository copied to the server: the unit file is read from here, before the first deploy ships the code.
+HERE="$(cd "$(dirname "$0")" && pwd)"
 
 id foxleague-agent >/dev/null 2>&1 || useradd --system --home-dir "$BASE" --shell /usr/sbin/nologin foxleague-agent
 install -d -o foxleague-agent -g foxleague-agent -m 755 "$BASE" "$BASE/app"
@@ -25,6 +27,6 @@ if [ "$("$BASE/node/bin/node" --version 2>/dev/null || true)" != "$NODE_VERSION"
   rm -rf "$tmp"
 fi
 
-install -m 644 "$BASE/app/deploy/foxleague-agent.service" /etc/systemd/system/foxleague-agent.service
+install -m 644 "$HERE/foxleague-agent.service" /etc/systemd/system/foxleague-agent.service
 systemctl daemon-reload
 echo "bootstrap done: node $("$BASE/node/bin/node" --version); env file /etc/foxleague-agent/env ($(stat -c '%a %U' /etc/foxleague-agent/env))"

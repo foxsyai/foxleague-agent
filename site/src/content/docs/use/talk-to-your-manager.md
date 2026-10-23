@@ -63,7 +63,7 @@ for one agent, a payment whose outcome is unclear and top-up codes. Any plain me
 | `/status` | This install and every agent at a glance (retired agents in one line) |
 | `/agents` | Balances and today's spend |
 | `/plan [N]` | The latest plan |
-| `/tick N` | Plan and run now |
+| `/tick N` | Plan and run now, inside the agent's active hours (outside them it says so; `/do N request` runs anyway) |
 | `/pause [N\|all]`, `/resume [N\|all]` | Pause or resume one agent or all |
 | `/mode dry`, `/mode live confirm` | One mode for all agents |
 | `/budget [N]` | Spend against the limits |
@@ -75,7 +75,7 @@ for one agent, a payment whose outcome is unclear and top-up codes. Any plain me
 | `/summary [today]` | Yesterday per agent, or today so far |
 | `/updates [daily\|all]` | Daily: plans and action results wait for the morning summary; all: every update as it happens |
 | `/topup N` | Propose an EGLD top-up from Binance for agent N, with a one-time code |
-| `/topup <code> [EGLD]` | Approve it (with an amount, that much instead) |
+| `/topup <code> [EGLD]` | Approve it (with a smaller amount after the code, that much instead; more than proposed is refused) |
 | `/help` | The full list |
 
 Your Telegram bot answers only your own chat and ignores everyone else.

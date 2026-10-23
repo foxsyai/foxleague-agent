@@ -25,7 +25,7 @@ This is the AI that plans for your agents. Without it they only watch.
    **Save**. The agent uses it at once.
 </Steps>
 
-It costs about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick; you pick them in the Strategist box.
+About $2 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.30 a plan): the game manual the AI reads is cached for an hour, and plans 2 hours apart find it expired. Agents that plan within the same hour share it, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more; you pick the model and effort in the Strategist box.
 
 ## 2. Telegram, optional
 
@@ -48,14 +48,14 @@ A summary of every agent each morning and any detail on request; you can also ta
 For EGLD top-ups of your agent wallets from an exchange (a CEX), so you do not have to send EGLD by hand. You
 approve each one. When an agent runs low, Telegram shows what it has, its warning level, the EGLD that brings it
 to its monthly budget and a one-time code. Send `/topup` with the code and Binance sends the EGLD to that agent's
-own wallet (`/topup 482193 10` sends 10 EGLD instead). `/topup 2` asks for a top-up of agent 2 at any time. The
+own wallet (`/topup 482193 10` withdraws 10 EGLD instead, less than proposed (Binance's fee comes off that)). `/topup 2` asks for a top-up of agent 2 at any time. The
 code works once, for an hour. It needs Telegram and LIVE mode.
 
 An account in the EU is asked a short Travel Rule form with each withdrawal; the agent fills it in for a
 withdrawal to your own wallet, once you set `BINANCE_ACCOUNT_TYPE=individual` (or `corporate` for a company
 account) in the `.env` file and restart.
 
-The example is Binance: an API key that can do one thing only, withdraw EGLD to your agent wallets.
+The example is Binance: an API key that can only read your account and withdraw EGLD to your agent wallets.
 
 <Steps>
 1. Log in to Binance and open [API Management](https://www.binance.com/en/my/settings/api-management).

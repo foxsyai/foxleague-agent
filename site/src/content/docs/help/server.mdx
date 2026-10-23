@@ -6,15 +6,15 @@ description: An always-on agent on your own Linux server, with the dashboard beh
 import ComingSoon from '../../../components/ComingSoon.astro';
 
 The local install suits most players. For an agent that plays even when your computer is off, run it on a small
-Linux server (Ubuntu with systemd). The repository's `deploy/` folder has everything; the full guide is
+Linux server (Ubuntu with systemd, on an x86-64 processor). The repository's `deploy/` folder has everything; the full guide is
 `docs/SERVER.md` in the repository.
 
 <ComingSoon title="The repository opens with the public release" />
 
 In short:
 
-1. On the server, as root, run `deploy/bootstrap.sh`: it creates a dedicated user, a private Node.js, the folders
-   and a sandboxed systemd service.
+1. Copy the repository to the server and run, as root, `deploy/bootstrap.sh`: it creates a dedicated user, a
+   private Node.js, the folders and a sandboxed systemd service.
 2. From your computer, ship the code: `DEPLOY_HOST=root@your-server ./deploy/deploy.sh --no-restart`.
 3. On the server: `agentctl.sh setup` (the wallet), `agentctl.sh configure` (keys; a 6-digit code links your
    Telegram), `agentctl.sh set-web-password` (the dashboard login), `agentctl.sh check-keys`.

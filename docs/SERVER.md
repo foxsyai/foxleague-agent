@@ -1,7 +1,7 @@
 # Running FoxLeague Agent on a server
 
 For most players the one-line local install in [INSTALL.md](../INSTALL.md) is the right choice. This guide is
-for running your agents on your own Linux server (Ubuntu with systemd), with the dashboard behind nginx and TLS.
+for running your agents on your own Linux server (Ubuntu with systemd, on an x86-64 processor: `deploy/bootstrap.sh` installs the x64 Node.js), with the dashboard behind nginx and TLS.
 The files are in `deploy/`.
 
 ## Layout

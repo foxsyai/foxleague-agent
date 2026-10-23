@@ -705,6 +705,27 @@ The internal records (this file, `docs/ECONOMY-AND-RULES.md`, `docs/FOXLEAGUE-IN
 are the history. Unchanged: the agent's own lowest reserves for selling a card (`MIN_RESERVE_FOXSY`: Common 500,
 Uncommon 1,500, Rare 4,000, Epic 10,000, Legendary 25,000). Open: none.
 
+## The manual against the code, 2026-10-24
+
+The owner asked that the manual be one to one with the deployed code, so a user knows from it exactly how the software
+behaves. Three read-only reviewers read every manual page, README, INSTALL.md and the dashboard's info bubbles against
+the code and checked every number; they found 31 points, all confirmed here. Test first: `test/manual-sync.test.ts`, one
+test per group, each seen failing before the fix; where a number lives in the code (the field reads, the market
+windows, the ranked cooldown, the previous plan's length, the Zeus tick) the test reads it from there.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MS-C1 | medium | The AI cost said $0.20 to $0.50 a day per agent. The game manual is cached for an hour, and a single agent at the 2-hour tick finds it expired at every plan: measured on the server, a plan with the cache costs $0.08 on Opus 5.5 and $0.55 without, so about $0.05 and $0.28 on Sonnet 5, about $2 a day for one agent | Costs, Keys, INSTALL.md, README and the Getting started guide give about $2 a day for a single agent at the defaults (about $0.30 a plan) and about $0.40 a day each with three or more agents sharing the cache. Whether to change the cache or the default tick for a single agent is the owner's decision |
+| MS-B3 | low | `/tick` and Plan now answered "started" outside the active hours (and while paused or busy), when nothing ran | `tickRefusal` holds the tick's own checks; both ask it first and answer the reason (Telegram adds that `/do N request` runs outside the hours; the dashboard shows it as an error) |
+| MS-C2 | low | The server guide's first step, `deploy/bootstrap.sh`, read the service file from `/opt/foxleague-agent/app`, which exists only after the first deploy, and stopped with an error | It reads the file from its own folder, the repository copied to the server, as the guide says |
+| MS-A1..A13 | low | How it plays, Strategy levels, Safety and the home page: every tournament's field read (4, up to 16 seats), a win chance for every team (the challenge list, up to 10), the 30-day market price (60 or 90 days when thin), the level proposal (both ways), open challenges at Zeus (never), the ranked cooldown (15, spaced 16), a preparation before every match (each session), "under" (at or under), the XP pools (within 500 XP), the random window (a shift either way), the previous plan in full (up to 2,000 characters), what needs the password (also the tick, hours, Gold, reserve) and going live (also the machine's permission) | Each page says what the code does |
+| MS-B1..B10 | low | Settings, Dashboard, Talk to your manager and the info bubbles: the Zeus tick (60), `/topup` with an amount (less only), `/tick` (inside the active hours), the preparation per session, the top-up proposal (needs Telegram and LIVE, once a day), what needs the password, the level proposal's rows (no limits per rarity) and both directions, the Silver steps, a match dropped from a plan and the 12-action cap | Each page and bubble says what the code does |
+| MS-C3..C8 | low | Server, FAQ, Update, INSTALL.md, Costs, Troubleshooting, Keys: the server's processor (x86-64), the fourth thing the agents share (a private tournament never invites your other teams), the low-funds warning on Telegram (in the morning summary), a quiet Telegram (the default), the Binance key (it reads too) and the top-up amount (less, the fee comes off it) | Each page says what the code does |
+| R28A-1 | low | Agent review of PR #28: the Costs page still said a Binance key alone brings a top-up proposal | It names Telegram and LIVE and once a day per agent, as the other pages do; the test reads the Costs page too |
+
+Not changed: the Telegram key fields keep Telegram's own name, "bot token". Open: the cost of a single agent at the
+2-hour tick (MS-C1).
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

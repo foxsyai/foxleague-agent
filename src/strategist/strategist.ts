@@ -193,7 +193,7 @@ function bidCeilings(s: AgentSnapshot): string {
  * summary, so it lasts as long as it is true, while the older texts with their outdated numbers stay out.
  * About 300 more tokens a plan.
  */
-const PREVIOUS_PLAN_CHARS = 2000
+export const PREVIOUS_PLAN_CHARS = 2000
 
 /**
  * What the agent can spend (owner, 2026-10-23): an agent with 199 EGLD wrote "770 FOXSY, so no bids are possible".
@@ -314,9 +314,9 @@ export class Strategist {
 
   /**
    * The static system prompt plus the player manual, with a cache breakpoint: identical bytes on every
-   * call (with the same tools and effort), shared by all agents, ticks, chat and /ask. One-hour TTL:
-   * ticks are about 30 minutes apart, so the default 5 minutes would rewrite the cache every tick;
-   * each hit renews the hour, so only the first call after a pause writes it.
+   * call (with the same tools and effort), shared by all agents, ticks, chat and /ask. One-hour TTL: with several
+   * agents a call comes every few minutes and each hit renews the hour, so only the first call after a pause writes
+   * it; a single agent at the 2-hour tick finds it expired and writes it on every plan (the manual's Costs page).
    */
   private get system(): Anthropic.TextBlockParam[] {
     return [{ type: 'text', text: MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT, cache_control: { type: 'ephemeral', ttl: '1h' } }]
