@@ -177,6 +177,28 @@ test('D4 a tournament a week away is judged on the condition the squad will have
   assert.equal(v.ok, true, `refused a seat the squad is fit for in 7 days: ${v.refusal}`)
 })
 
+test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable start, matches owed before the start', () => {
+  const join = { type: 'join_tournament', tournament_id: 301 } as const
+  const tired = () => {
+    const s = snapshot()
+    for (const p of s.players) p.condition = 60
+    return s
+  }
+  // The same 14-team round robin starting in an hour: 2 points of rest per card change nothing.
+  const soon = tournament(301, { format: 'round_robin', max_teams: 14, min_teams: 3, round_interval_minutes: 30, deadline: hours(0.5), starts_at: hours(1) }) as TournamentDetail
+  assert.match(checkAction(join, tired(), ctx({ tournament: soon })).refusal ?? '', /the schedule would wear the squad down/)
+  // A start that cannot be read is judged at today's condition, never projected.
+  const unreadable = tournament(301, { format: 'round_robin', max_teams: 14, min_teams: 3, round_interval_minutes: 30, starts_at: 'soon' }) as TournamentDetail
+  assert.match(checkAction(join, tired(), ctx({ tournament: unreadable })).refusal ?? '', /the schedule would wear the squad down/)
+  // Seated in a 7-match round robin that plays from in 1 h to in 4 h: its matches cost the condition the rest until
+  // a start in 5 h would bring, so a small round robin then is refused; three days later the squad is fresh again.
+  const busy = tired()
+  busy.auth!.myTournaments!.active = [{ ...(tournament(400) as { tournament: Record<string, unknown> }).tournament, format: 'round_robin', max_teams: 8, min_teams: 3, round_interval_minutes: 30, starts_at: hours(1), started_at: null, home_and_away: false } as never]
+  const small = (startsIn: number) => tournament(301, { format: 'round_robin', max_teams: 4, min_teams: 3, round_interval_minutes: 30, deadline: hours(startsIn - 0.5), starts_at: hours(startsIn) }) as TournamentDetail
+  assert.match(checkAction(join, busy, ctx({ tournament: small(5) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
+  assert.equal(checkAction(join, busy, ctx({ tournament: small(72) })).ok, true)
+})
+
 // ---- D5: the Zeus field test compares the field with our eleven at the tournament's start ----
 
 test('D5 Zeus judges a field days away against the squad at the condition it will have then', () => {

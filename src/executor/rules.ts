@@ -308,16 +308,82 @@ export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boo
   }
 }
 
+/** The most condition a card can have. */
+const MAX_CONDITION = 100
+
+/** Condition points a card regenerates per hour of rest: FoxLeague's daily rate, half of it after age 30. */
+function regenPerHour(p: PlayerView, cfg: FoxConfig): number {
+  const rate = (cfg.condition_regen_points_per_day ?? 48) / 24
+  return p.ageYears > 30 ? rate / 2 : rate
+}
+
+/** Hours from `now` to an ISO time, 0 when it is past or unreadable. */
+export function hoursUntil(iso: string, now: Date): number {
+  const h = (new Date(iso).getTime() - now.getTime()) / 3600_000
+  return Number.isFinite(h) && h > 0 ? h : 0
+}
+
+/** The squad a schedule wears down: the eleven and the bench. */
+function matchSquad(s: AgentSnapshot): PlayerView[] {
+  return s.team ? [...s.team.lineup, ...s.team.substitutes].map(n => card(s, n)).filter((p): p is PlayerView => Boolean(p)) : []
+}
+
+/**
+ * What the squad's other tournaments (1v1s apart) still bring around a tournament that plays from `start` to `end`:
+ * the matches before its start and those whose play overlaps it. Started: the fixtures still to play; not started:
+ * the most its format can bring. One over by now and before the start (as its schedule says) brings nothing. Null: unreadable.
+ */
+function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, now: Date, start: number, end: number): { before: number; during: number } | null {
+  const mine = s.auth?.myTournaments
+  if (!mine) return null
+  const groupSize = cfg.tournament_defaults?.groups_knockout_group_size ?? 4
+  let before = 0
+  let during = 0
+  for (const x of mine.active) {
+    if (x.id === id || x.max_teams === 2) continue
+    const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
+    const xStart = new Date(x.starts_at).getTime()
+    const xEnd = xStart + (total - 1) * (x.round_interval_minutes ?? 30) * 60_000
+    if (xStart > end || (xEnd < start && xEnd < now.getTime())) continue
+    const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
+    const n = x.started_at ? Math.max(1, left) : total
+    // An unreadable start overlaps everything (as before the projection): nothing is moved out of the schedule's count.
+    if (xEnd >= start || !Number.isFinite(start)) during += n
+    else before += n
+  }
+  return { before, during }
+}
+
+/**
+ * Each card's condition at a tournament's start: today's, less an even share of what the squad's matches in its other
+ * tournaments before then cost, plus what it regenerates until the start, at most 100. A start that is past or
+ * unreadable is today's condition (a projection never guesses upward). Null: the agent's tournaments are unreadable.
+ */
+export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: string; end?: number }, now: Date): { hours: number; during: number; at: (p: PlayerView) => number } | null {
+  const cfg = s.config
+  if (!cfg) return { hours: 0, during: 0, at: p => p.condition }
+  const start = new Date(t.starts_at).getTime()
+  const owed = otherMatches(s, cfg, t.id, now, start, t.end ?? start)
+  if (!owed) return null
+  const hours = hoursUntil(t.starts_at, now)
+  const squad = matchSquad(s)
+  const spent = hours > 0 && squad.length ? (owed.before * 11 * (cfg.condition_loss_per_match ?? 10)) / squad.length : 0
+  return { hours, during: owed.during, at: p => (hours > 0 ? Math.min(MAX_CONDITION, p.condition - spent + regenPerHour(p, cfg) * hours) : p.condition) }
+}
+
 /**
  * Refuses a tournament whose schedule would wear the squad below the playable condition: every
- * appearance costs 11 starters the match loss, against the squad's condition above the floor plus
- * what it regenerates between rounds (half the rate after age 30). Matches the squad already owes to
- * tournaments it sits in, when their play overlaps, count too: two tournaments at the same hour each
- * look fine alone. Needs the snapshot's team and the agent's tournaments (unreadable = refused).
+ * appearance costs 11 starters the match loss, against the squad's condition above the floor at the
+ * start (conditionAtStart: today's plus what it regenerates until then, less what its other tournaments
+ * cost before then, at most 100) plus what it regenerates between rounds (half the rate after age 30).
+ * Matches the squad already owes to tournaments it sits in, when their play overlaps, count too: two
+ * tournaments at the same hour each look fine alone. Needs the snapshot's team and the agent's
+ * tournaments (unreadable = refused).
  */
 function scheduleRefusal(
   s: AgentSnapshot,
   t: { id?: number; format: string; max_teams: number; home_and_away?: boolean; round_interval_minutes?: number | null; starts_at: string },
+  now: Date,
 ): string | null {
   const cfg = s.config
   if (!cfg || !s.team) return null
@@ -326,31 +392,20 @@ function scheduleRefusal(
   const interval = t.round_interval_minutes ?? 30
   const start = new Date(t.starts_at).getTime()
   const end = start + (own - 1) * interval * 60_000
-  const mine = s.auth?.myTournaments
-  if (!mine) return 'your current tournaments could not be read: not taking on another schedule blind'
-  let owed = 0
-  for (const x of mine.active) {
-    if (x.id === t.id || x.max_teams === 2) continue
-    const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
-    const xStart = new Date(x.starts_at).getTime()
-    const xEnd = xStart + (total - 1) * (x.round_interval_minutes ?? 30) * 60_000
-    if (xEnd < start || xStart > end) continue
-    // Started: the fixtures still to play are known; not started: the most its format can bring.
-    const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
-    owed += x.started_at ? Math.max(1, left) : total
-  }
+  const atStart = conditionAtStart(s, { id: t.id, starts_at: t.starts_at, end }, now)
+  if (!atStart) return 'your current tournaments could not be read: not taking on another schedule blind'
+  const owed = atStart.during
   const matches = own + owed
   if (matches <= 1) return null
   const hours = ((own - 1) * interval) / 60
   const floor = cfg.min_field_condition ?? 30
   const loss = cfg.condition_loss_per_match ?? 10
-  const regenPerHour = (cfg.condition_regen_points_per_day ?? 48) / 24
-  const squad = [...s.team.lineup, ...s.team.substitutes].map(n => card(s, n)).filter((p): p is PlayerView => Boolean(p))
-  const available = squad.reduce((sum, p) => sum + Math.max(0, p.condition - floor) + (p.ageYears > 30 ? regenPerHour / 2 : regenPerHour) * hours, 0)
+  const available = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
   const needed = matches * 11 * loss
   if (needed <= available) return null
   const also = owed ? ` (${own} here plus ${owed} still owed to your other tournaments at the same time)` : ''
-  return `the schedule would wear the squad down: up to ${matches} matches${also} about every ${interval} min need ~${needed} condition, the squad has ~${Math.round(available)} above ${floor} with recovery`
+  const when = atStart.hours > 0 ? ` at its start in ${Math.round(atStart.hours)} h` : ''
+  return `the schedule would wear the squad down: up to ${matches} matches${also} about every ${interval} min need ~${needed} condition, the squad has ~${Math.round(available)} above ${floor}${when} with recovery`
 }
 
 /**
@@ -609,7 +664,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (fit.length < 11) return refuse(`only ${fit.length} match-fit players (condition >= ${cfg.min_field_condition})`)
       }
       if (!oneVOne) {
-        const worn = scheduleRefusal(s, t)
+        const worn = scheduleRefusal(s, t, ctx.now)
         if (worn) return refuse(worn)
         // Zeus enters only with a chance of the top three: not when three seated teams are clearly stronger.
         if (ctx.zeus) {
@@ -676,7 +731,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
         return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(taken.end)} UTC); ${free !== null ? `the first free start for this format and size is starts_in_hours ${free}` : 'no free start in the next 72 hours'}`)
       }
-      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() })
+      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() }, ctx.now)
       if (worn) return refuse(worn)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
