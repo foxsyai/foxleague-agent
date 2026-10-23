@@ -278,8 +278,10 @@ export function auctionCeiling(cfg: Pick<FoxConfig, 'common_pack_price_foxsy' | 
   return own === null ? base : Math.round(made + own)
 }
 
-/** The owner's limit for a bid on a card of this rarity (Rare, Epic, Legendary); none below Rare. */
-export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidRareFoxsy' | 'maxBidEpicFoxsy' | 'maxBidLegendaryFoxsy'>, rarity: string | null | undefined): number | null {
+/** The owner's limit for a bid on a card of this rarity; null for a rarity the game does not have. */
+export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidCommonFoxsy' | 'maxBidUncommonFoxsy' | 'maxBidRareFoxsy' | 'maxBidEpicFoxsy' | 'maxBidLegendaryFoxsy'>, rarity: string | null | undefined): number | null {
+  if (rarity === 'Common') return settings.maxBidCommonFoxsy
+  if (rarity === 'Uncommon') return settings.maxBidUncommonFoxsy
   if (rarity === 'Rare') return settings.maxBidRareFoxsy
   if (rarity === 'Epic') return settings.maxBidEpicFoxsy
   if (rarity === 'Legendary') return settings.maxBidLegendaryFoxsy
@@ -961,7 +963,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const limit = rarityBidLimit(ctx.settings, ctx.cardRarity)
       if (limit !== null && a.foxsy > limit) return refuse(`bid ${a.foxsy} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
       const ceiling = ctx.cardRarity ? auctionCeiling(cfg, ctx.cardRarity) : null
-      if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what a ${ctx.cardRarity} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
+      if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what ${aRarity(ctx.cardRarity)} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
       if ((ctx.priorBids ?? 0) >= MAX_BIDS_PER_AUCTION) return refuse(`already ${MAX_BIDS_PER_AUCTION} bids on #${a.nonce}: no bidding war`)
       if (ctx.cardLock === null) return refuse(`the details of #${a.nonce} could not be read: not bidding blind`)
       const lock = ctx.cardLock?.until

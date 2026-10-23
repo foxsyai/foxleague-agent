@@ -15,8 +15,12 @@ export interface AgentSettings {
   maxBidFoxsy: number
   /**
    * Largest bid per rarity, in FOXSY, under the max bid: the owner's limits, by default the round market prices of
-   * October 2026 (the median of the daily median sale prices: Rare about 6,100, Epic 11,800, Legendary 31,200).
+   * October 2026 (the median of the daily median sale prices: Rare about 6,100, Epic 11,800, Legendary 31,200). A
+   * Common at 500, a pack card's price (2,500 for 5), and an Uncommon at 1,500, about a third above its market price
+   * of 1,133 and under the 1,600 it costs to build (owner, 2026-10-24).
    */
+  maxBidCommonFoxsy: number
+  maxBidUncommonFoxsy: number
   maxBidRareFoxsy: number
   maxBidEpicFoxsy: number
   maxBidLegendaryFoxsy: number
@@ -110,6 +114,8 @@ export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
+  maxBidCommonFoxsy: 500,
+  maxBidUncommonFoxsy: 1500,
   maxBidRareFoxsy: 6000,
   maxBidEpicFoxsy: 12_000,
   maxBidLegendaryFoxsy: 32_000,
@@ -157,6 +163,8 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('maxShopPaymentFoxsy', 0, 100_000, true)
   num('maxSwapFoxsy', 100, 1_000_000, true)
   num('maxBidFoxsy', 0, 1_000_000, true)
+  num('maxBidCommonFoxsy', 0, 1_000_000, true)
+  num('maxBidUncommonFoxsy', 0, 1_000_000, true)
   num('maxBidRareFoxsy', 0, 1_000_000, true)
   num('maxBidEpicFoxsy', 0, 1_000_000, true)
   num('maxBidLegendaryFoxsy', 0, 1_000_000, true)

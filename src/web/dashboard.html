@@ -362,6 +362,8 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sShop">Max shop payment<i class="info" data-tip="shop">i</i></label><input id="sShop" type="number" min="0" step="100"></div>
           <div><label for="sSwap">Max swap<i class="info" data-tip="swap">i</i></label><input id="sSwap" type="number" min="100" step="100"></div>
           <div><label for="sBid">Max bid<i class="info" data-tip="bid">i</i></label><input id="sBid" type="number" min="0" step="100"></div>
+          <div><label for="sBidCommon">Max bid for a Common<i class="info" data-tip="bidCommon">i</i></label><input id="sBidCommon" type="number" min="0" step="100"><div class="hint" id="hBidCommon"></div></div>
+          <div><label for="sBidUncommon">Max bid for an Uncommon<i class="info" data-tip="bidUncommon">i</i></label><input id="sBidUncommon" type="number" min="0" step="100"><div class="hint" id="hBidUncommon"></div></div>
           <div><label for="sBidRare">Max bid for a Rare<i class="info" data-tip="bidRare">i</i></label><input id="sBidRare" type="number" min="0" step="100"><div class="hint" id="hBidRare"></div></div>
           <div><label for="sBidEpic">Max bid for an Epic<i class="info" data-tip="bidEpic">i</i></label><input id="sBidEpic" type="number" min="0" step="100"><div class="hint" id="hBidEpic"></div></div>
           <div><label for="sBidLegendary">Max bid for a Legendary<i class="info" data-tip="bidLegendary">i</i></label><input id="sBidLegendary" type="number" min="0" step="100"><div class="hint" id="hBidLegendary"></div></div>
@@ -629,6 +631,7 @@ function fillForm(st) {
   $('sDaily').value = st.dailyCapUsd; $('sMonthly').value = st.monthlyBudgetUsd; $('sSetup').value = st.setupBudgetUsd
   $('sReserve').value = st.egldGasReserve; $('sTopUp').value = st.topUpWarningUsd
   $('sEntry').value = st.maxEntryFeeFoxsy; $('sShop').value = st.maxShopPaymentFoxsy; $('sSwap').value = st.maxSwapFoxsy; $('sBid').value = st.maxBidFoxsy
+  $('sBidCommon').value = st.maxBidCommonFoxsy; $('sBidUncommon').value = st.maxBidUncommonFoxsy
   $('sBidRare').value = st.maxBidRareFoxsy; $('sBidEpic').value = st.maxBidEpicFoxsy; $('sBidLegendary').value = st.maxBidLegendaryFoxsy
   renderLimitHints()
   $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
@@ -659,7 +662,7 @@ function limitState(limit, market, maxBid = Infinity) {
 
 /** The market line under each limit per rarity, coloured by limitState, with a button that fills in the suggestion. */
 function renderLimitHints() {
-  for (const r of ['Rare', 'Epic', 'Legendary']) {
+  for (const r of ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary']) {
     const p = (S.instance.marketPrices || {})[r]
     const st = limitState(Number($('sBid' + r).value), p ? p.price : null, Number($('sBid').value))
     const h = $('hBid' + r)
@@ -677,7 +680,7 @@ function readForm() {
   return {
     strategy: $('sStrategy').value, dailyCapUsd: n('sDaily'), monthlyBudgetUsd: n('sMonthly'), setupBudgetUsd: n('sSetup'),
     egldGasReserve: $('sReserve').value.trim(), topUpWarningUsd: n('sTopUp'), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
-    maxBidRareFoxsy: n('sBidRare'), maxBidEpicFoxsy: n('sBidEpic'), maxBidLegendaryFoxsy: n('sBidLegendary'),
+    maxBidCommonFoxsy: n('sBidCommon'), maxBidUncommonFoxsy: n('sBidUncommon'), maxBidRareFoxsy: n('sBidRare'), maxBidEpicFoxsy: n('sBidEpic'), maxBidLegendaryFoxsy: n('sBidLegendary'),
     entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
     activeHoursUtc: [n('sFrom'), n('sTo')],
   }
@@ -986,8 +989,12 @@ const TIPS = {
     <p>At 2,500 the agent can buy anything in the shop. The two fusion waivers use the same maximum: a shorter fusion cooldown (75 per day, at most 825 per card) and bought match credit (since 12 October by rarity: an Uncommon 20 per match, at most 200 per card; a Rare or an Epic 100 per match, a Rare's 30 credits 3,000; none for a Common). Fusion fees (100 to 800) and marketplace bids have their own rules.</p>`],
   swap: ['Max swap (FOXSY)', `<p>The largest single swap to FOXSY on xExchange, counted in FOXSY received. The agent pays with the wallet's WEGLD when it covers the swap, otherwise with EGLD above the gas reserve, and swaps only what its next actions need.</p>`],
   bid: ['Max bid (FOXSY)', `<p>The largest single bid the agent may place on a marketplace auction. Every sale is a 24-hour auction: a bid must reach the reserve or beat the top bid by 5 percent. An outbid bidder gets the FOXSY back at once.</p>
-    <p>Whatever this says, a bid never goes above what the card would cost to build yourself and bring to its match gate: the Common packs, the fusion fees and the time, each match and each day of waiting at FoxLeague's own price for skipping it. At today's prices that is about 14,450 FOXSY for a Rare, 60,400 for an Epic and 225,650 for a Legendary. The limits per rarity below (by default 6,000, 12,000 and 32,000) usually bind first.</p>
+    <p>Whatever this says, a bid never goes above what the card would cost to build yourself and bring to its match gate: the Common packs, the fusion fees and the time, each match and each day of waiting at FoxLeague's own price for skipping it. At today's prices that is about 14,450 FOXSY for a Rare, 60,400 for an Epic and 225,650 for a Legendary. The limits per rarity below (by default 500 for a Common, 1,500 for an Uncommon, 6,000 for a Rare, 12,000 for an Epic and 32,000 for a Legendary) usually bind first.</p>
     <p>0 turns bidding off.</p>`],
+  bidCommon: ['Max bid for a Common (FOXSY)', `<p>The most the agent may bid for a Common card. The default, 500, is what a card from a Common pack costs (2,500 FOXSY for 5 cards) and the lowest price a card can be listed at, so the agent never pays more for a Common than the shop would charge.</p>
+    <p>A Common at auction has already played its 5 matches and has a known position, which a pack card has not. The agent aims below the market price it is shown. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password; 0 turns bids on Commons off.</p>`],
+  bidUncommon: ['Max bid for an Uncommon (FOXSY)', `<p>The most the agent may bid for an Uncommon card. The default, 1,500, is about a third above the market price of October 2026 (1,133, measured like the Rare's) and under what building one costs: 3 Commons and the 100 FOXSY fusion fee, then its 15 matches.</p>
+    <p>The agent aims below the market price it is shown. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password.</p>`],
   bidRare: ['Max bid for a Rare (FOXSY)', `<p>The most the agent may bid for a Rare card. The default, 6,000, is the round market price of October 2026: the median of what Rares sold for each trading day, so one day of cheap sales counts once.</p>
     <p>The agent aims below the market price it is shown, at the reserve or the smallest raise that wins. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password.</p>
     <p>The line under the field shows today's market price: green when your limit is in range (90 to 150 percent of it), amber when it is under the market (the agent may miss most sales), red when it is far above (the agent may pay too much). It judges whichever limit binds, so with a lower Max bid it says so. The button fills in the market price, rounded; Save keeps it.</p>`],
@@ -1297,10 +1304,10 @@ $('sPreset').onchange = () => {
   if (k) { $('sStrategy').value = S.instance.presets[k]; formDirty = true; openLevel(k) }
 }
 $('settingsForm').addEventListener('input', () => { formDirty = true })
-$('settingsForm').addEventListener('input', e => { if (/^sBid(Rare|Epic|Legendary)?$/.test(e.target.id)) renderLimitHints() })
+$('settingsForm').addEventListener('input', e => { if (/^sBid(Common|Uncommon|Rare|Epic|Legendary)?$/.test(e.target.id)) renderLimitHints() })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
 // Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
-const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy']
+const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy']
 const RAISE_TEXT = 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.'
 function raisesForm(form, cur) {
   const hours = h => (h[1] - h[0] + 24) % 24 || 24
