@@ -13,6 +13,7 @@ import { Mnemonic } from '@multiversx/sdk-core'
 import { Executor } from '../src/executor/executor.ts'
 import { checkAction } from '../src/executor/rules.ts'
 import { budgetView, gameDayKey } from '../src/executor/budget.ts'
+import { estimateMinutes } from '../src/executor/slots.ts'
 import { FoxLeague } from '../src/foxleague/api.ts'
 import { gateLine } from '../src/foxleague/gate.ts'
 import type { MatchWaiverQuote } from '../src/foxleague/types.ts'
@@ -365,6 +366,12 @@ test('C2: a Play whose answer was lost reads the active match back: a match foun
     assert.equal(r!.status, 'error', r!.summary)
     assert.match(r!.summary, /aborted due to timeout/)
   })
+})
+
+// ---- C4: the slot window of a League + Knockout tournament ----
+
+test('C4: the slot estimate of a 36-team League + Knockout tournament is FoxLeague\'s 570 minutes', () => {
+  assert.equal(estimateMinutes('league_knockout', 36, false), (36 * 8 / 2 + 46) * 3)
 })
 
 // ---- E2: the formations test does not depend on the calendar ----
