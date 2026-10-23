@@ -247,7 +247,7 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`Market prices (median of the daily median sale prices; every trading day counts once): ${['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].map(known).join(', ')}`)
   }
   if (m.auctions.length) {
-    out.push('Open auctions, strongest first (nonce, card, OVR, price now, ends):')
+    out.push('Open auctions: the 10 strongest, then the 3 cheapest of each rarity (nonce, card, OVR, price now, ends):')
     for (const l of m.auctions) {
       const ovr = Math.round((l.speed + l.accuracy + l.defense + l.power + l.control + l.vision + l.stamina) / 7)
       const price = l.highest_bid ? `top bid ${l.highest_bid}` : `reserve ${l.min_price ?? '?'}`

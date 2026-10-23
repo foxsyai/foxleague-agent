@@ -121,3 +121,34 @@ test('no info bubble or manual page keeps the old bidding rule', () => {
   assert.match(html, /<b>Hunter<\/b>: plus its own tournaments, the booster on strong match days and bids on Common and Uncommon players/)
   for (const p of pages('site/src/content/docs')) assert.doesNotMatch(read(p).replace(/\s+/g, ' '), /never (on )?Common or Uncommon/, p)
 })
+
+// Re-review of PR #27 (medium): the plan saw only the 15 strongest open auctions, and stats are capped per rarity, so
+// with 15 stronger cards listed a hunter (Commons and Uncommons) had nothing to bid on. The snapshot keeps the 10
+// strongest and adds the 3 cheapest auctions of each rarity, from one more read sorted by price.
+test('the plan sees the cheapest auctions of each rarity next to the strongest', async () => {
+  const { takeSnapshot } = await import('../src/snapshot/snapshot.ts')
+  const { renderDigest } = await import('../src/snapshot/digest.ts')
+  const { ADDR, OTHER, dryWallet, snapshot } = await import('./fixtures.ts')
+  const card = (nonce: number, rarity: string, stat: number, price: number) => ({ nft_nonce: nonce, owner_address: OTHER, name: `Card ${nonce}`, position: 'FWD', rarity, level: 1, speed: stat, accuracy: stat, defense: stat, power: stat, control: stat, vision: stat, stamina: stat, condition: 100, is_auction: true, min_price: price, highest_bid: null, ends_at: new Date(Date.now() + 3600_000).toISOString(), transferred_at: null, transfer_cooldown_hours: null })
+  const strongest = Array.from({ length: 20 }, (_, i) => card(100 + i, i < 10 ? 'Epic' : 'Rare', 60 - i, 9000 - i * 100))
+  const cheapest = [card(1, 'Common', 12, 500), card(2, 'Common', 11, 500), card(3, 'Common', 10, 520), card(4, 'Common', 9, 550), card(5, 'Uncommon', 25, 900), card(6, 'Uncommon', 24, 1000), card(7, 'Uncommon', 26, 1100), card(8, 'Uncommon', 27, 1400), card(119, 'Rare', 41, 7100), card(9, 'Common', 9, 400)]
+  cheapest[cheapest.length - 1]!.owner_address = ADDR // our own listing never shows
+  const sorts: string[] = []
+  const fox: Record<string, unknown> = {
+    config: async () => snapshot().config, user: async (a: string) => (a === ADDR ? snapshot().profile : null), team: async () => snapshot().team, players: async () => [],
+    tournaments: async () => [], leaderboard: async () => ({ users: [], total: 0, limit: 200, offset: 0 }), floorPrices: async () => [],
+    listings: async (q: { sort_by?: string }) => { sorts.push(String(q.sort_by)); return q.sort_by === 'price_asc' ? cheapest : strongest },
+    shopStatus: async () => snapshot().auth!.shop, dailyAllowance: async () => snapshot().auth!.allowance, activeMatch: async () => null,
+    myTournaments: async () => ({ active: [], completed: [] }), upcomingMatches: async () => ({ lead_minutes: 30, my_team_name: 'Agent', matches: [] }),
+    challengesForMe: async () => [], matchHistory: async () => [],
+  }
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool in this test') } }
+  const s = await takeSnapshot({ chain, fox } as never, { wallet: { ...dryWallet, address: ADDR } }, new Date())
+  assert.deepEqual(sorts.sort(), ['overall_desc', 'price_asc'])
+  const nonces = s.market.auctions.map(a => a.nft_nonce)
+  assert.deepEqual(nonces.slice(0, 10), strongest.slice(0, 10).map(c => c.nft_nonce), 'the 10 strongest first')
+  for (const n of [1, 2, 3, 5, 6, 7]) assert.ok(nonces.includes(n), `#${n}, among the 3 cheapest of its rarity, is shown`)
+  for (const n of [4, 8, 9]) assert.ok(!nonces.includes(n), `#${n} is not shown (the 4th cheapest of its rarity, or our own)`)
+  assert.equal(new Set(nonces).size, nonces.length, 'each auction once')
+  assert.match(renderDigest(s), /Open auctions: the 10 strongest, then the 3 cheapest of each rarity \(nonce, card, OVR, price now, ends\):/)
+})
