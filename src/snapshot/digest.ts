@@ -188,7 +188,8 @@ export function renderDigest(s: AgentSnapshot): string {
       const ovr = Math.round((l.speed + l.accuracy + l.defense + l.power + l.control + l.vision + l.stamina) / 7)
       const price = l.highest_bid ? `top bid ${l.highest_bid}` : `reserve ${l.min_price ?? '?'}`
       const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
-      const market = m.prices?.[l.rarity]
+      // Own keys only: a rarity named like an inherited property (toString) has no market price (review of PR #21).
+      const market = m.prices && Object.hasOwn(m.prices, l.rarity) ? m.prices[l.rarity] : undefined
       out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
     }
   }

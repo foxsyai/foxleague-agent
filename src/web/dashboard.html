@@ -187,6 +187,10 @@ form.settings input,form.settings select,form.settings textarea{width:100%;paddi
 form.settings textarea{min-height:92px;resize:vertical}
 form.settings input:focus,form.settings select:focus,form.settings textarea:focus{outline:none;border-color:var(--acc)}
 form.settings .hint{font-size:11px;color:var(--dim);margin-top:3px}
+form.settings .hint.mk.ok{color:var(--up)}
+form.settings .hint.mk.low{color:var(--acc)}
+form.settings .hint.mk.high{color:var(--down)}
+form.settings .hint .use{margin-left:6px;padding:1px 8px;font:inherit;font-size:11px;border-radius:6px;border:1px solid currentColor;background:transparent;color:inherit;cursor:pointer}
 .sep{grid-column:1/-1;border-top:1px solid var(--line);margin:4px 0 0;padding-top:8px;font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.07em}
 .empty{color:var(--dim);font-size:13px;padding:10px 2px}
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom));transform:translateX(-50%);max-width:min(560px,92vw);
@@ -626,14 +630,45 @@ function fillForm(st) {
   $('sReserve').value = st.egldGasReserve; $('sTopUp').value = st.topUpWarningUsd
   $('sEntry').value = st.maxEntryFeeFoxsy; $('sShop').value = st.maxShopPaymentFoxsy; $('sSwap').value = st.maxSwapFoxsy; $('sBid').value = st.maxBidFoxsy
   $('sBidRare').value = st.maxBidRareFoxsy; $('sBidEpic').value = st.maxBidEpicFoxsy; $('sBidLegendary').value = st.maxBidLegendaryFoxsy
-  for (const r of ['Rare', 'Epic', 'Legendary']) {
-    const p = (S.instance.marketPrices || {})[r]
-    $('hBid' + r).textContent = p ? 'Market today: ' + Number(p.price).toLocaleString('en-US') + ' FOXSY' : 'Market today: too few sales to tell'
-  }
+  renderLimitHints()
   $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
   formDirty = false
+}
+
+// Owner, 2026-10-23: one look says whether a limit per rarity still fits today's market. Within 90 to 150 percent
+// of the market price it is in range; under it the agent may miss most sales; far over it the agent may pay too much.
+// The bid rule checks Max bid first, so the limit judged is whichever binds (agent review of PR #22); when Max bid
+// binds, raising the field for the rarity would not help, so no button then. The suggestion is the market price
+// rounded the way the defaults were: to 500 under 10,000, to 1,000 from there.
+function limitState(limit, market, maxBid = Infinity) {
+  if (!(market > 0)) return { tone: 'none', text: 'Market today: too few sales to tell' }
+  const step = market < 10000 ? 500 : 1000
+  const suggest = Math.max(step, Math.round(market / step) * step)
+  const m = 'Market today: ' + Number(market).toLocaleString('en-US') + ' FOXSY.'
+  if (!(maxBid > 0)) return { tone: 'low', text: m + ' Bids are off: Max bid is 0.' }
+  const capped = maxBid < limit
+  const binds = capped ? maxBid : limit
+  const by = capped ? ' Max bid (' + Number(maxBid).toLocaleString('en-US') + ') is the limit here.' : ''
+  if (!(binds > 0)) return { tone: 'low', text: m + ' Bids on this rarity are off.', suggest }
+  if (binds < market * 0.9) return capped ? { tone: 'low', text: m + ' Below the market: the agent may miss most sales.' + by } : { tone: 'low', text: m + ' Below the market: the agent may miss most sales.', suggest }
+  if (binds > market * 1.5) return { tone: 'high', text: m + ' Well above the market: the agent aims lower, but may pay up to this.' + by, suggest }
+  return { tone: 'ok', text: m + ' Your limit covers it.' + by }
+}
+
+/** The market line under each limit per rarity, coloured by limitState, with a button that fills in the suggestion. */
+function renderLimitHints() {
+  for (const r of ['Rare', 'Epic', 'Legendary']) {
+    const p = (S.instance.marketPrices || {})[r]
+    const st = limitState(Number($('sBid' + r).value), p ? p.price : null, Number($('sBid').value))
+    const h = $('hBid' + r)
+    h.className = 'hint mk ' + st.tone
+    h.replaceChildren(st.text)
+    if (st.suggest !== undefined) {
+      h.append(el('button', { type: 'button', class: 'use', text: 'Use ' + st.suggest.toLocaleString('en-US'), onclick: () => { $('sBid' + r).value = st.suggest; formDirty = true; renderLimitHints() } }))
+    }
+  }
 }
 
 function readForm() {
@@ -954,7 +989,8 @@ const TIPS = {
     <p>Whatever this says, a bid never goes above what the card would cost to build yourself and bring to its match gate: the Common packs, the fusion fees and the time, each match and each day of waiting at FoxLeague's own price for skipping it. At today's prices that is about 14,450 FOXSY for a Rare, 60,400 for an Epic and 225,650 for a Legendary. The limits per rarity below (by default 6,000, 12,000 and 32,000) usually bind first.</p>
     <p>0 turns bidding off.</p>`],
   bidRare: ['Max bid for a Rare (FOXSY)', `<p>The most the agent may bid for a Rare card. The default, 6,000, is the round market price of October 2026: the median of what Rares sold for each trading day, so one day of cheap sales counts once.</p>
-    <p>The agent aims below the market price it is shown, at the reserve or the smallest raise that wins. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password.</p>`],
+    <p>The agent aims below the market price it is shown, at the reserve or the smallest raise that wins. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password.</p>
+    <p>The line under the field shows today's market price: green when your limit is in range (90 to 150 percent of it), amber when it is under the market (the agent may miss most sales), red when it is far above (the agent may pay too much). It judges whichever limit binds, so with a lower Max bid it says so. The button fills in the market price, rounded; Save keeps it.</p>`],
   bidEpic: ['Max bid for an Epic (FOXSY)', `<p>The most the agent may bid for an Epic card. The default, 12,000, is the round market price of October 2026, measured the same way.</p>
     <p>The agent aims below the market price it is shown. Max bid holds above this. Raising it asks for your password.</p>`],
   bidLegendary: ['Max bid for a Legendary (FOXSY)', `<p>The most the agent may bid for a Legendary card. The default, 32,000, is the round market price of October 2026, measured the same way.</p>
@@ -1259,6 +1295,7 @@ $('sPreset').onchange = () => {
   if (k) { $('sStrategy').value = S.instance.presets[k]; formDirty = true; openLevel(k) }
 }
 $('settingsForm').addEventListener('input', () => { formDirty = true })
+$('settingsForm').addEventListener('input', e => { if (/^sBid(Rare|Epic|Legendary)?$/.test(e.target.id)) renderLimitHints() })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
 // Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
 const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy']
