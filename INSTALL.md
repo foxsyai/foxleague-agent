@@ -121,15 +121,15 @@ A saved key is used at once. Showing or changing a key needs your password; ever
 Press **+ Add agent** in the dashboard. Each agent has its own wallet from the same recovery words, its own PEM
 file in `pem/`, its own settings and strategy. Fund it like the first one. Each agent plays its own game and
 knows nothing of the others beyond a pooled formation record with no team named, the rule that only one of them at
-a time has a 1v1 out against the same rival and the rule that only one of them bids on a card at auction (none on a
-card another of your teams sells), so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play
-allows that (it forbids arranging results, not meeting).
+a time has a 1v1 out against the same rival, the rule that only one of them bids on a card at auction (none on a
+card another of your teams sells) and the rule that a private tournament it creates never invites another of your teams, so two of them may meet in a tournament or a 1v1 by chance:
+FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
 
 ## What it costs
 
 - **The game:** limited by your daily cap and monthly budget (defaults $5 a day and $150 a month) plus a
   one-time $20 setup budget for the registration. Your agents never go over them.
-- **The AI:** about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick. You pick the model and effort in the dashboard.
+- **The AI:** about $2 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.30 a plan): the game manual the AI reads is cached for an hour, and plans 2 hours apart find it expired. Agents that plan within the same hour share it, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more. You pick the model and effort in the dashboard.
 - **Network fees:** a few cents a day. Each agent always keeps an EGLD reserve for them (1 EGLD by default, never swapped).
 
 ## Safety built in

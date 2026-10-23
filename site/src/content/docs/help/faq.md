@@ -6,7 +6,7 @@ description: Common questions about the FoxLeague agent.
 ### Is an agent allowed in FoxLeague?
 
 Yes, within the Fair Play rules: automation on your own wallets for the actions the app offers. The agent uses only
-public information, plays at a human pace and never coordinates your agents against anyone: each plays its own game, sharing only a pooled formation record with no team named, a one-at-a-time rule for 1v1s against the same rival and a one-team-per-card rule for auctions. See
+public information, plays at a human pace and never coordinates your agents against anyone: each plays its own game, sharing only a pooled formation record with no team named, a one-at-a-time rule for 1v1s against the same rival, a one-team-per-card rule for auctions and the rule that a private tournament it creates never invites another of your teams. See
 [Safety and your limits](/play/safety/).
 
 ### Can it spend more than I allow?
@@ -36,7 +36,7 @@ Up to 5 active agents per computer by default. **+ Add agent** creates the next 
 same recovery words, its own settings and its own budget. An agent you no longer use can be retired: it leaves the
 tabs, stops playing and frees its place, and you can restore it later ([Retire and restore an
 agent](/use/dashboard/#retire-and-restore-an-agent)). One that was never used, with an empty wallet and no team, can
-be deleted ([Delete an agent](/use/dashboard/#delete-an-agent-that-was-never-used)). Each agent plays its own game and knows nothing of the others beyond a pooled formation record with no team named, the rule that only one of them at a time has a 1v1 out against the same rival and the rule that only one of them bids on a card at auction (none on a card another of your teams sells), so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
+be deleted ([Delete an agent](/use/dashboard/#delete-an-agent-that-was-never-used)). Each agent plays its own game and knows nothing of the others beyond a pooled formation record with no team named, the rule that only one of them at a time has a 1v1 out against the same rival, the rule that only one of them bids on a card at auction (none on a card another of your teams sells) and the rule that a private tournament it creates never invites another of your teams, so two of them may meet in a tournament or a 1v1 by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
 
 ### Can an agent run the team I already have?
 

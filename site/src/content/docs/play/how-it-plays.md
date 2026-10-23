@@ -7,7 +7,7 @@ Every cycle (every 2 hours by default, every hour for Zeus, inside your active h
 at everything a player can see: its squad and their condition, its budget, open tournaments and 1v1 challenges, auctions,
 prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.
-It also reads what it did lately and its previous plan in full, and each plan says again what the agent still
+It also reads what it did lately and its previous plan (summary and actions, up to 2,000 characters), and each plan says again what the agent still
 means to do later (ranked games after a 1v1, saving for an entry, a tournament watched until its deadline), so a
 goal carries on for as long as it holds. Where the fresh look says something else, the fresh look wins.
 
@@ -16,7 +16,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## The daily routine
 
 - **Training**: the 5 free sessions of the day, on the starters who gain most, on stats below their rarity cap; it
-  sees which stat is one session from its next point.
+  sees each stat's XP pool once it is within 500 XP of its next point, so it knows which session or match brings it.
 - **Sync**: training and match XP change a card's live stats; matches use the stats synced on chain. The agent
   syncs when it matters, typically before a match day, not after every session, or a single card for 10 FOXSY when
   only one matters.
@@ -26,15 +26,15 @@ An empty plan is a good answer too: the agent never spends just because budget i
   named), tests another formation in ranked matches when its own record is thin or keeps losing, starting with the
   one that does best in the pooled record, and saves a new formation together with the eleven it needs.
 - **Ranked and casual matches**: the daily allowance, never closer than a match lasts (about 11 minutes) or the
-  ranked cooldown (16 minutes between ranked games), counting the last match before the plan; a match that no longer
+  ranked cooldown (15 minutes in the game; the plan spaces ranked games 16 minutes apart to be sure), counting the last match before the plan; a match that no longer
   fits waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
 
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. For each open Silver or Gold tournament it could join, it
-  sees how the seated teams compare (clearly stronger, even, clearly weaker, by rating and starting eleven). It
+  platform time slot, sized from what recently filled. For the 4 open Silver or Gold tournaments it could join whose
+  deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by rating and starting eleven). It
   refuses a schedule that would wear the squad out, judged on the condition the squad will have at the start (rested
   until then, less what its other tournaments cost before it). Only
   Zeus creates private tournaments; every level joins one your team is invited to when it is worth it (only
@@ -46,7 +46,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   until that one ends). When it
   creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show
   who took challenges in the last 7 days, and a challenge to a team that never answers only locks the stake until
-  its deadline. When no such team fits, it may create one **open** challenge a day, which any team can take, a
+  its deadline. When no such team fits, it may create one open challenge a day (never at the Zeus level, which challenges only a named team with a known win chance), which any team can take, a
   stronger one too: always Silver at your lowest Silver amount, so the stake stays small. It can leave its own
   unaccepted challenge when a better one appears.
 - **Match preparation**: about an hour before each match session locks (inside its active hours), it syncs if the gains matter, sets the

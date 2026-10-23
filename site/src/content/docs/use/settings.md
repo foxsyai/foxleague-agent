@@ -3,8 +3,9 @@ title: Every setting explained
 description: The strategy, spending limits, per-action maximums and timing of each agent.
 ---
 
-Each agent has its own settings, on its page under **Settings**. Lowering a limit is one click; **raising** one (or
-shrinking the gas reserve) asks for your password.
+Each agent has its own settings, on its page under **Settings**. Lowering a limit is one click. Raising one asks
+for your password, and so do a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer
+active hours.
 
 ## Strategy
 
@@ -17,8 +18,8 @@ text freely, or let [Talk to your manager](/use/talk-to-your-manager/) rewrite i
 the strategy guides the choices, the code enforces the limits.
 
 **Picking a level opens a proposal** with its default limits: each setting that does not fit the level yet (the daily
-cap, the monthly budget, the top-up warning, the per-action maximums, the Silver and Gold amounts or the tick) gets a
-row with a tick, and the level's recommended AI is offered apart. **Accept and save** saves the ticked ones; untick a
+cap, the monthly budget, the top-up warning, the max entry fee or stake, the max shop payment, the max swap, the max
+bid, the Silver and Gold amounts or the tick; your limits per rarity stay as they are) gets a row with a tick, and the level's recommended AI is offered apart. **Accept and save** saves the ticked ones; untick a
 row to keep your own value, and **Cancel** keeps everything as it is saved. Raising a limit or switching to a dearer
 AI asks for your password. The defaults below are the steady level's, the one every new agent starts with;
 [Strategy levels](/play/strategy-levels/#the-default-limits-of-each-level) lists every level's.
@@ -31,7 +32,7 @@ AI asks for your password. The defaults below are the steady level's, the one ev
 | Monthly budget | $150 | The most this agent may spend in a calendar month. Every action must fit both this and the daily cap. It also limits the EGLD swapped to FOXSY in a month. |
 | Setup budget | $20 | A separate one-time budget for starting the team: the 5,000 FOXSY registration, the swap that buys it and its fee. It does not count against the daily or monthly caps. |
 | EGLD gas reserve | 1 EGLD | EGLD that always stays in the wallet for network fees. A swap may only use the EGLD above it; WEGLD in the wallet has no reserve and is spent first when it covers the swap. 1 EGLD pays for well over a thousand ordinary transactions. The lowest allowed is 0.05. |
-| Top-up warning | $10 | You are warned when what the wallet can play with (its EGLD, WEGLD and FOXSY, the EGLD gas reserve aside) is worth less than this: the value turns orange on the agent's page and it shows in the morning summary on Telegram (with a Binance key, a top-up proposal comes at once), again only after a top-up to well above it. Nothing is paused. The default of each level is about two days of play at its daily cap. 0 switches it off. |
+| Top-up warning | $10 | You are warned when what the wallet can play with (its EGLD, WEGLD and FOXSY, the EGLD gas reserve aside) is worth less than this: the value turns orange on the agent's page and it shows in the morning summary on Telegram (with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once (once a day per agent)), again only after a top-up to well above it. Nothing is paused. The default of each level is about two days of play at its daily cap. 0 switches it off. |
 
 ## Per action (FOXSY)
 
@@ -46,17 +47,17 @@ AI asks for your password. The defaults below are the steady level's, the one ev
 | Max bid for a Rare | 7,000 | The most the agent may bid for a Rare card, under the max bid. The default is about 20 percent above the Rare's market price when it was set (the median of what Rares sold for each trading day, so one day of cheap sales counts once): room to bid once more after being outbid, since the agent bids at most twice on one auction. The agent is shown today's market price and aims below it. Under the field, today's market price is shown in colour: green when your limit is in range (90 to 150 percent of it), amber when it is under the market (the agent may miss most sales), red when it is far above (the agent may pay too much), with a button that fills in the market price, rounded. The line judges whichever limit binds: with a Max bid of 0 (the Steady and Climber default) every line with a known market price is amber and reads "Bids are off: Max bid is 0" (a rarity with too few sales keeps its grey line); with a Max bid under this limit the colour follows the Max bid and the line names it, for example "Max bid (4,000) is the limit here", with no button when the line is amber, since raising this field would not help (when it is red, the button still lowers this field). Raising it asks for your password. |
 | Max bid for an Epic | 14,000 | The same for an Epic card. |
 | Max bid for a Legendary | 38,000 | The same for a Legendary card. With a max bid under it, the max bid is the limit. |
-| Silver and Gold amounts | 1,000 and 1,500; none | The round entry fees the agent may choose when it creates a tournament or a 1v1, never odd numbers like 1,246. Each level adds two Silver steps, up to 4,999 for the beast. No Gold amounts (the steady default) keep the agent out of Gold altogether: it never creates or joins a Gold tournament or 1v1. |
+| Silver and Gold amounts | 1,000 and 1,500; none | The round entry fees the agent may choose when it creates a tournament or a 1v1, never odd numbers like 1,246. Each level up to the predator adds two Silver steps; the beast and Zeus add the 4,999 ceiling. No Gold amounts (the steady default) keep the agent out of Gold altogether: it never creates or joins a Gold tournament or 1v1. |
 
 ## Timing
 
 | Setting | Default | What it does |
 |---|---|---|
-| Tick | 120 minutes | How often the agent plans, every level: the daily trainings, matches and entries fit in 6 to 8 plans a day, and a match still gets its own planning cycle about an hour before it locks. Shorter reacts faster and costs more in AI calls. The shortest allowed is 10 minutes. A shorter tick counts from the save: the next plan comes within one new tick. |
+| Tick | 120 minutes | How often the agent plans. 120 minutes is the default of every level but Zeus, which plans every 60 minutes; at 120 the daily trainings, matches and entries fit in 6 to 8 plans a day, and a planning cycle also runs about an hour before each match session locks (matches whose locks fall within 2 hours of each other share it). Shorter reacts faster and makes more AI calls ([Costs](/help/costs/) says what a plan costs). The shortest allowed is 10 minutes. A shorter tick counts from the save: the next plan comes within one new tick. |
 | Random window | 10 | Each cycle starts up to this many minutes earlier or later, at random, so the agent does not act like clockwork. It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20. |
 | Active hours | 08:00 to 20:00 UTC | The agent plans only inside this window, in UTC: 12 hours around the 14:00 UTC game-day reset. A plan still running at the end hour stops. Matches FoxLeague already scheduled are played as usual. The window may cross midnight; from 0 until 24 runs all day. |
 
-Two things are fixed: the actions of a plan run at least 30 seconds apart, and every planned action is carried out.
+Two things are fixed: the actions of a plan run at least 30 seconds apart, and every planned action is carried out (a match that its cooldown pushes past the plan's window waits for the next plan; a plan keeps at most 12 actions).
 
 Before each match session, the agent also plans about an hour before the lineup locks (inside its active hours), so
 it can sync, set the lineup and recover condition in time.

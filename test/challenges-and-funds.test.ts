@@ -162,7 +162,7 @@ test('while xExchange has paused the pair, the buying power is the FOXSY held', 
 
 // Agent review of PR #19 (low, docs): the manual's safety page said the agents share nothing. Since 2026-10-23 they
 // share three things: one team per card at auction too (test/sibling-bids.test.ts).
-test('the safety page names the three things the agents share', async () => {
+test('the safety page names the things the agents share', async () => {
   const { readFileSync } = await import('node:fs')
   const page = readFileSync(new URL('../site/src/content/docs/play/safety.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(page, /a pooled formation record with no team named/)

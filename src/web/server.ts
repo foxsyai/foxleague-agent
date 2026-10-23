@@ -371,9 +371,13 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
                 throw new HttpFail(502, err instanceof Error ? err.message : String(err))
               }
             }
-            case 'tick':
+            case 'tick': {
+              // Asked before answering: outside the active hours, paused or busy, nothing would start.
+              const refusal = service.tickRefusal(index)
+              if (refusal) throw new HttpFail(409, refusal)
               void service.tick(index)
               return json(res, 200, { ok: true, message: `${agentName(index)}: plan started` })
+            }
             case 'refresh':
               await service.refreshSnapshot(index)
               return json(res, 200, { ok: true })

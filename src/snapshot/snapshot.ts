@@ -347,8 +347,8 @@ async function readNewSales(fox: FoxLeague, cache: MarketSalesCache, now: Date):
 }
 
 /** Field reads per planning snapshot: tournaments and seats per tournament (the rivals' lineups are cached 20 minutes). */
-const FIELD_TOURNAMENTS = 4
-const FIELD_SEATS = 16
+export const FIELD_TOURNAMENTS = 4
+export const FIELD_SEATS = 16
 
 /**
  * The seated teams of the open Silver and Gold tournaments the agent could join (a supported format, before the

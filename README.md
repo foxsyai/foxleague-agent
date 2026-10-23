@@ -52,10 +52,10 @@ the dashboard or by chatting with it on Telegram.
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only and a human pace. Your agents are never coordinated against anyone: each
   plays its own game without knowing which teams are yours, so two of them may meet in a tournament or a 1v1 by
-  chance (FoxLeague's Fair Play forbids arranging results, not meeting). They share three things only: a pooled
+  chance (FoxLeague's Fair Play forbids arranging results, not meeting). They share four things only: a pooled
   formation record with no team named, a rule that only one of them at a time has a 1v1 out against the same rival,
-  so no manager faces several of your teams at once, and a rule that only one of them bids on a card at auction (and
-  none on a card another of your teams sells), so you never bid against yourself. Guards against rivals who try to farm
+  so no manager faces several of your teams at once, a rule that only one of them bids on a card at auction (and
+  none on a card another of your teams sells), so you never bid against yourself, and the rule that a private tournament it creates never invites another of your teams. Guards against rivals who try to farm
   an agent (1v1s only against teams of similar strength, at most two a week each).
 - **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release.
   Every confirmed finding is fixed or decided; the few still open are listed
@@ -76,7 +76,7 @@ the dashboard or by chatting with it on Telegram.
 ## What it costs
 
 - **The game:** never more than your caps (defaults $5 a day and $150 a month, plus $20 for the registration).
-- **The AI:** about $0.20 to $0.50 a day per agent with the default model, effort and tick (a plan every 2 hours), more at a higher effort, with Opus or Fable or with a shorter tick.
+- **The AI:** about $2 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.30 a plan): the game manual the AI reads is cached for an hour, and plans 2 hours apart find it expired. Agents that plan within the same hour share it, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more.
 - **Network fees:** a few cents a day.
 
 ## Command line

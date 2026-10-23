@@ -23,11 +23,12 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 ## You stay in control
 
 - **Dry run first**: a new install only simulates, and an agent you add later follows the current mode. Going
-  live in the dashboard needs you to type `GO LIVE` and your password; on Telegram it takes `/mode live confirm`,
+  live in the dashboard needs you to type `GO LIVE` and your password, and this machine's permission
+  (`AGENT_LIVE_ENABLED=1` in `.env`, asked by the installer); on Telegram it takes `/mode live confirm`,
   which only your own chat can send.
 - **Back to dry run** is one click. **Pause** stops one agent; the **Kill switch** stops every agent, even free actions.
-- In the dashboard, raising a limit, switching to a dearer AI, releasing the kill switch and changing a key all ask
-  for your password again.
+- In the dashboard, raising a limit (also a shorter tick, longer active hours, Gold back on or a smaller gas
+  reserve), switching to a dearer AI, releasing the kill switch and changing a key all ask for your password again.
   Telegram obeys your own chat only (`/kill off` releases the switch there).
 - Your recovery words and keys stay on your computer. The dashboard is not on the internet.
 - **Top-ups from Binance** move only with a one-time code you send on Telegram, only to an agent's own wallet,
@@ -51,10 +52,11 @@ abuse. The agent:
 - plays at a human pace (random timing, spread-out actions, active hours);
 - never coordinates your agents against anyone: each plays its own game without knowing which teams are yours, so two
   of them may meet in a tournament or a 1v1 by chance (FoxLeague's Fair Play forbids arranging results, not
-  meeting). They share three things only: a pooled formation record with no team named, a rule that only one of them
+  meeting). They share four things only: a pooled formation record with no team named, a rule that only one of them
   at a time has a 1v1 out against the same rival (retired and removed teams count too), so no manager faces several
   of your teams at once, and a rule that only one of them bids on a card at auction and none on a card another of
-  your teams sells, so you never bid against yourself or pay the sale fee to move a card between your own wallets;
+  your teams sells, so you never bid against yourself or pay the sale fee to move a card between your own wallets, and the rule that a
+  private tournament it creates never invites another of your teams;
 - protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two a week
   against the same team; an open challenge, which any team may take, at most once a day and only at your lowest
   Silver amount);

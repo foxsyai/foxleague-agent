@@ -1209,6 +1209,22 @@ export class Service {
   }
 
   /** One tick: snapshot, plan, run the actions spread over the window. */
+  /**
+   * Why a tick would not start now, or null when it would: the checks tick() makes first. /tick and Plan now ask
+   * before they answer, so they never say "started" for a tick that does nothing (manual sync, 2026-10-24).
+   */
+  tickRefusal(index: number, ownerRequest?: string): string | null {
+    const agent = this.store.agent(index)
+    if (!agent) return `no ${agentName(index)}`
+    if (this.stopping) return 'stopping'
+    if (this.store.killSwitch) return 'kill switch is on'
+    if (agent.retired) return `${agentName(index)} is retired`
+    if (agent.paused) return `${agentName(index)} is paused`
+    if (!ownerRequest && !this.inActiveHours(agent)) return `${agentName(index)}: outside active hours`
+    if (this.busy.has(index)) return `${agentName(index)} is still running its previous plan`
+    return null
+  }
+
   async tick(index: number, ownerRequest?: string, o: { loud?: boolean } = {}): Promise<string> {
     if (o.loud) {
       this.loud.add(index)
@@ -1218,14 +1234,9 @@ export class Service {
         this.loud.delete(index)
       }
     }
-    const agent = this.store.agent(index)
-    if (!agent) return `no ${agentName(index)}`
-    if (this.stopping) return 'stopping'
-    if (this.store.killSwitch) return 'kill switch is on'
-    if (agent.retired) return `${agentName(index)} is retired`
-    if (agent.paused) return `${agentName(index)} is paused`
-    if (!ownerRequest && !this.inActiveHours(agent)) return `${agentName(index)}: outside active hours`
-    if (this.busy.has(index)) return `${agentName(index)} is still running its previous plan`
+    const refusal = this.tickRefusal(index, ownerRequest)
+    if (refusal) return refusal
+    const agent = this.store.agent(index)!
     this.busy.add(index)
     try {
       await this.retryPending(agent)
@@ -1525,6 +1536,8 @@ export class Service {
         return this.agentsArg(args[0]).map(i => this.store.getKv(`last_plan_${i}`) ?? `${agentName(i)}: no plan yet`).join('\n\n')
       case 'tick': {
         const [i] = this.agentsArg(args[0])
+        const refusal = this.tickRefusal(i!)
+        if (refusal) return refusal.endsWith('outside active hours') ? `${refusal}: /do ${i! + 1} <request> runs outside them` : refusal
         void this.tick(i!, undefined, { loud: true })
         return `${agentName(i!)}: tick started; its plan and results follow here`
       }
