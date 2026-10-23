@@ -1223,6 +1223,8 @@ function fillLevel(l) {
   $('sDaily').value = l.dailyCapUsd; $('sMonthly').value = l.monthlyBudgetUsd; $('sTopUp').value = l.topUpWarningUsd
   $('sEntry').value = l.maxEntryFeeFoxsy; $('sShop').value = l.maxShopPaymentFoxsy; $('sSwap').value = l.maxSwapFoxsy; $('sBid').value = l.maxBidFoxsy
   $('sSilver').value = l.entryFeesSilver.join(', '); $('sGold').value = l.entryFeesGold.join(', '); $('sTick').value = l.tickMinutes
+  // Set from code, so no input event: the market lines follow the new Max bid here (review of PR #22).
+  renderLimitHints()
 }
 /**
  * Picking a level proposes it with its values next to the agent's own: Accept saves the level's strategy and
