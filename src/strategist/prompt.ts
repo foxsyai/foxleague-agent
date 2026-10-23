@@ -60,7 +60,7 @@ Money: the wallet holds EGLD (for gas and swaps), sometimes WEGLD (for swaps onl
 ## Actions (the only ones the executor accepts)
 - {"type":"swap_egld_for_foxsy","foxsy":N} whole FOXSY to receive (100 or more)
 - {"type":"register","team_name":"..."}
-- {"type":"sync"} all dirty cards
+- {"type":"sync"} all dirty cards | {"type":"sync","nonce":N} that one card only
 - {"type":"train","player_nonce":N,"attribute":"speed|accuracy|defense|power|control|vision|stamina"}
 - {"type":"set_formation","formation":"4-4-2|4-4-2o|4-3-3|4-3-3w|4-3-3b|5-3-2|4-2-3-1|5-2-3","lineup":[11 nonces in the new formation's slot order],"substitutes":[up to 7 nonces]} lineup and substitutes together, needed when the current eleven does not fit the new formation; without them only between formations of the same counts
 - {"type":"set_lineup","lineup":[11 nonces, slot order],"substitutes":[up to 7 nonces]}
