@@ -269,7 +269,7 @@ async function main(): Promise<void> {
       const wallet = isWatch ? watchWallet(target) : walletOf(store, index)
       if (isWatch) store.addAgent(index, wallet.address) // the throwaway in-memory store
       const agent = { ...store.agent(index)!, dryRun: true }
-      const snap = await takeSnapshot({ chain, fox }, isWatch ? { watch: wallet.address } : { wallet }, new Date(), { matchFacts: { get: k => store.matchFacts(k), put: (k, f) => store.putMatchFacts(k, f) }, marketSales: { has: id => store.hasSale(id), put: rows => store.putSales(rows), since: iso => store.salesSince(iso), complete: () => store.salesComplete, markComplete: () => store.markSalesComplete() } })
+      const snap = await takeSnapshot({ chain, fox }, isWatch ? { watch: wallet.address } : { wallet }, new Date(), { matchFacts: { get: k => store.matchFacts(k), put: (k, f) => store.putMatchFacts(k, f) }, marketSales: { has: id => store.hasSale(id), put: rows => store.putSales(rows), since: iso => store.salesSince(iso), complete: () => store.salesComplete, markComplete: () => store.markSalesComplete(), markIncomplete: () => store.markSalesIncomplete() } })
       const input = { snapshot: snap, settings: agent.settings, budget: budgetView(store, index, agent.settings, true, new Date()), recent: store.activity(index, 20), dryRun: true }
       if (!cfg.anthropicApiKey) {
         console.log('(no ANTHROPIC_API_KEY: this is the request the strategist would receive)\n')
@@ -419,7 +419,7 @@ function memoryFacts(): MatchFactsCache {
 function memorySales(): MarketSalesCache {
   const kept = new Map<number, MarketSale>()
   let complete = false
-  return { has: id => kept.has(id), put: rows => rows.forEach(r => kept.set(r.id, r)), since: iso => [...kept.values()].filter(r => r.sold_at >= iso), complete: () => complete, markComplete: () => { complete = true } }
+  return { has: id => kept.has(id), put: rows => rows.forEach(r => kept.set(r.id, r)), since: iso => [...kept.values()].filter(r => r.sold_at >= iso), complete: () => complete, markComplete: () => { complete = true }, markIncomplete: () => { complete = false } }
 }
 
 function watchWallet(address: string): AgentWallet {

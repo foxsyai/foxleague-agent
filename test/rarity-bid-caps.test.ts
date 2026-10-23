@@ -91,7 +91,7 @@ test('the planning snapshot reads only the new sales and carries the market pric
   const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
   const kept = new Map<number, unknown>()
   let complete = false
-  const salesCache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true } }
+  const salesCache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true }, markIncomplete: () => { complete = false } }
   const s1 = await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: salesCache } as never)
   assert.deepEqual(calls, [0, 100], 'a full first page, then the next one')
   calls.length = 0
@@ -130,7 +130,7 @@ test('a first read of the sales cut short is completed by the next plan; after i
   const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
   const kept = new Map<number, unknown>()
   let complete = false
-  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true } }
+  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true }, markIncomplete: () => { complete = false } }
   await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
   assert.deepEqual([calls, kept.size, complete], [[0, 100], 100, false], 'page 1 failed: not complete')
   calls.length = 0
@@ -154,7 +154,7 @@ test('a first read that fills its 20 pages is complete; an answer that is not a 
   const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
   const kept = new Map<number, unknown>()
   let complete = false
-  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true } }
+  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true }, markIncomplete: () => { complete = false } }
   await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
   assert.deepEqual([calls.length, kept.size, complete], [20, 2000, true], '20 full pages read without an error: complete')
   calls.length = 0
@@ -162,11 +162,36 @@ test('a first read that fills its 20 pages is complete; an answer that is not a 
   assert.deepEqual(calls, [0], 'then one page a plan')
   const fresh = new Map<number, unknown>()
   let done = false
-  const cache2 = { has: (id: number) => fresh.has(id), put: (rows: { id: number }[]) => rows.forEach(r => fresh.set(r.id, r)), since: () => [...fresh.values()], complete: () => done, markComplete: () => { done = true } }
+  const cache2 = { has: (id: number) => fresh.has(id), put: (rows: { id: number }[]) => rows.forEach(r => fresh.set(r.id, r)), since: () => [...fresh.values()], complete: () => done, markComplete: () => { done = true }, markIncomplete: () => { done = false } }
   broken = true
   const s = await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache2 } as never)
   assert.equal(done, false, 'not the end of the list')
   assert.ok(s.warnings.some(w => w.startsWith('marketplace sales:')), s.warnings.join('; '))
+})
+
+// Re-review of PR #21 (low): after the first read, a catch-up cut short (over 100 new sales, then a failed page)
+// left a gap the next plan never filled, as page 0's oldest row was kept by then.
+test('a catch-up read cut short by a failed page makes the next plan read on past the kept sales', async () => {
+  const kept = new Map<number, unknown>()
+  let complete = true // a first read was done before the downtime
+  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true }, markIncomplete: () => { complete = false } }
+  const page = (from: number) => Array.from({ length: 100 }, (_, i) => ({ ...sale('Epic', 12_000, 1), id: 900_000 - from - i }))
+  let failPage1 = true
+  const calls: number[] = []
+  const fox = new Proxy({
+    config: async () => snapshot().config, user: async () => snapshot().profile, team: async () => snapshot().team, players: async () => [],
+    recentSales: async (_l: number, offset: number) => {
+      calls.push(offset)
+      if (offset === 100 && failPage1) { failPage1 = false; throw new Error('HTTP 502') }
+      return offset < 200 ? page(offset) : []
+    },
+  } as Record<string, unknown>, { get: (t, k: string) => t[k] ?? (async () => { throw new Error('not in this test') }) })
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual([calls, kept.size, complete], [[0, 100], 100, false], 'page 1 failed after new sales were kept: not complete again')
+  calls.length = 0
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual([calls, kept.size, complete], [[0, 100, 200], 200, true], 'the next plan reads on past page 0')
 })
 
 test('the prompt says to aim below the market price, the limits being the most, never the target', () => {

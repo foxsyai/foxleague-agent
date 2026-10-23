@@ -764,7 +764,7 @@ export class Service {
   private async snapshot(index: number, plan = false): Promise<AgentSnapshot> {
     const research = isZeus(this.store.agent(index)?.settings.strategy ?? '')
     const matchFacts = plan ? { get: (k: string) => this.store.matchFacts(k), put: (k: string, f: MatchFormations) => this.store.putMatchFacts(k, f) } : undefined
-    const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete() } : undefined
+    const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts, marketSales })
     // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
     if (plan && snap.formationRecord?.games && snap.profile) {

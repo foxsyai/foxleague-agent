@@ -278,9 +278,19 @@ async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: 
 async function readNewSales(fox: FoxLeague, cache: MarketSalesCache, now: Date): Promise<void> {
   const oldest = new Date(now.getTime() - 120 * 86_400_000).toISOString()
   for (let page = 0; page < 20; page++) {
-    const rows = await fox.recentSales(100, page * 100)
+    let rows: Awaited<ReturnType<FoxLeague['recentSales']>>
+    try {
+      rows = await fox.recentSales(100, page * 100)
+    } catch (err) {
+      // Newer pages are kept by now: a plan that stopped at their oldest row would leave this gap for good.
+      if (page > 0) cache.markIncomplete()
+      throw err
+    }
     // Not a list: a failed read (the attempt warns), never the end of the list.
-    if (!Array.isArray(rows)) throw new Error('the sales list answered something else than a list')
+    if (!Array.isArray(rows)) {
+      if (page > 0) cache.markIncomplete()
+      throw new Error('the sales list answered something else than a list')
+    }
     if (!rows.length) return cache.markComplete()
     const oldestKnown = cache.has(rows.at(-1)!.id)
     cache.put(rows.filter(r => !cache.has(r.id)))

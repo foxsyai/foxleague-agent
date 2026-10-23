@@ -31,6 +31,8 @@ export interface MarketSalesCache {
   /** Whether a first read went back to the end of the list (or 120 days): until then every plan reads it all. */
   complete(): boolean
   markComplete(): void
+  /** A later page failed after newer sales were kept: the next plan reads on past them (re-review of PR #21). */
+  markIncomplete(): void
 }
 
 /** A rarity needs at least this many trading days in its window to have a market price. */

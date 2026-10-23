@@ -384,6 +384,10 @@ export class Store {
     this.setKv('market_sales_complete', '1')
   }
 
+  markSalesIncomplete(): void {
+    this.setKv('market_sales_complete', '0')
+  }
+
   salesSince(iso: string): Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[] {
     return this.db.prepare('SELECT rarity, price, sold_at FROM market_sales WHERE sold_at >= ?').all(iso) as Pick<MarketSale, 'rarity' | 'price' | 'sold_at'>[]
   }
