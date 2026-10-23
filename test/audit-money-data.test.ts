@@ -419,3 +419,10 @@ globalThis.Date = class extends R { constructor(...a) { if (a.length === 0) supe
   const failed = (r.stdout + r.stderr).split('\n').filter(l => /^\s*not ok|^# fail/.test(l))
   assert.equal(r.status, 0, `exit ${r.status}\n${failed.join('\n')}`)
 })
+
+// The prompt follows C1 and D9 (audit 2026-10-23): the AI is told what the rules now allow and require.
+test('the prompt says a Legendary buys its match waiver for its listing gate, and Zeus buys the booster once its fixtures are drawn', async () => {
+  const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
+  assert.match(SYSTEM_PROMPT, /A Legendary is never fused, but its match waiver \(100 FOXSY a match, at most 270\) buys the matches of its listing gate, only for a spare you would sell/)
+  assert.match(SYSTEM_PROMPT, /At the Zeus level the executor sells the booster only once a Silver, Gold or 1v1 match of your own is drawn within its 24 hours/)
+})
