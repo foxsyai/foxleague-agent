@@ -279,12 +279,17 @@ async function readNewSales(fox: FoxLeague, cache: MarketSalesCache, now: Date):
   const oldest = new Date(now.getTime() - 120 * 86_400_000).toISOString()
   for (let page = 0; page < 20; page++) {
     const rows = await fox.recentSales(100, page * 100)
-    if (!Array.isArray(rows) || !rows.length) return cache.markComplete()
+    // Not a list: a failed read (the attempt warns), never the end of the list.
+    if (!Array.isArray(rows)) throw new Error('the sales list answered something else than a list')
+    if (!rows.length) return cache.markComplete()
     const oldestKnown = cache.has(rows.at(-1)!.id)
     cache.put(rows.filter(r => !cache.has(r.id)))
     if (rows.length < 100 || (rows.at(-1)!.sold_at ?? '') < oldest) return cache.markComplete()
     if (oldestKnown && cache.complete()) return
   }
+  // 20 full pages without an error hold the newest 2,000 sales (over a month at October 2026's pace): enough for the
+  // market price, so the first read is done and later plans read only the new pages (re-review of PR #21).
+  cache.markComplete()
 }
 
 async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>): Promise<T | null> {

@@ -141,6 +141,34 @@ test('a first read of the sales cut short is completed by the next plan; after i
   assert.deepEqual(calls, [0], 'complete: a page whose oldest row is known ends the read')
 })
 
+// Re-review of PR #21 (medium): past 2,000 sales in 120 days a first read never ended, so every plan read 20 pages.
+// And an answer that is not a list is a failed read, not the end of the list (low).
+test('a first read that fills its 20 pages is complete; an answer that is not a list is a failed read', async () => {
+  const page = (from: number) => Array.from({ length: 100 }, (_, i) => ({ ...sale('Rare', 6000, 1 + Math.floor((from + i) / 100)), id: 500_000 - from - i }))
+  const calls: number[] = []
+  let broken = false
+  const fox = new Proxy({
+    config: async () => snapshot().config, user: async () => snapshot().profile, team: async () => snapshot().team, players: async () => [],
+    recentSales: async (_l: number, offset: number) => { calls.push(offset); return broken ? { error: 'maintenance' } : page(offset) }, // 25 full pages and more
+  } as Record<string, unknown>, { get: (t, k: string) => t[k] ?? (async () => { throw new Error('not in this test') }) })
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool') } }
+  const kept = new Map<number, unknown>()
+  let complete = false
+  const cache = { has: (id: number) => kept.has(id), put: (rows: { id: number }[]) => rows.forEach(r => kept.set(r.id, r)), since: () => [...kept.values()], complete: () => complete, markComplete: () => { complete = true } }
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual([calls.length, kept.size, complete], [20, 2000, true], '20 full pages read without an error: complete')
+  calls.length = 0
+  await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache } as never)
+  assert.deepEqual(calls, [0], 'then one page a plan')
+  const fresh = new Map<number, unknown>()
+  let done = false
+  const cache2 = { has: (id: number) => fresh.has(id), put: (rows: { id: number }[]) => rows.forEach(r => fresh.set(r.id, r)), since: () => [...fresh.values()], complete: () => done, markComplete: () => { done = true } }
+  broken = true
+  const s = await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: cache2 } as never)
+  assert.equal(done, false, 'not the end of the list')
+  assert.ok(s.warnings.some(w => w.startsWith('marketplace sales:')), s.warnings.join('; '))
+})
+
 test('the prompt says to aim below the market price, the limits being the most, never the target', () => {
   assert.match(SYSTEM_PROMPT, /aim below the market price of its rarity/)
   assert.match(SYSTEM_PROMPT, /the limits per rarity and the build cost are the most you may pay, never the target/)
