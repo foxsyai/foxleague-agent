@@ -107,7 +107,7 @@ test('a card whose rarity could not be read is not bid on', () => {
   const s = snapshot()
   s.chain!.foxsy = wholeToAtomic(200_000)
   const auction = { seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }
-  for (const cardRarity of [undefined, 'Mythic']) {
+  for (const cardRarity of [undefined, 'Mythic', 'toString', '__proto__', 'constructor']) { // the last three: names every object inherits (re-review of PR #21)
     const v = checkAction({ type: 'bid', nonce: 9, foxsy: 40_000 }, s, { settings: { ...TEST_SETTINGS, maxBidFoxsy: 47_000 }, now: new Date(), auction, cardRarity } as RulesContext)
     assert.equal(v.ok, false)
     assert.match(v.refusal!, /rarity of #9 could not be read: not bidding blind/)
