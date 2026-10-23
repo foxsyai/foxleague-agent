@@ -104,6 +104,18 @@ function scheduleText(t: { format: string; max_teams: number; home_and_away?: bo
   return parts.length ? `, ${parts.join(', ')}` : ''
 }
 
+/**
+ * A team with its own open 1v1 (created by it, not accepted yet) cannot accept ours: FoxLeague allows one active 1v1
+ * per team, created or joined. Read from the open challenges in the snapshot, until that challenge's deadline.
+ */
+function ownChallengeOut(s: AgentSnapshot, userId: number): string {
+  const now = Date.parse(s.takenAt)
+  const out = s.market.openChallenges
+    .filter(t => t.max_teams === 2 && t.creator_user_id === userId && Date.parse(t.deadline) > now)
+    .sort((a, b) => b.deadline.localeCompare(a.deadline))[0]
+  return out ? `, has a 1v1 out until ${out.deadline.slice(0, 16)} UTC: cannot accept yours before` : ''
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
@@ -214,7 +226,7 @@ export function renderDigest(s: AgentSnapshot): string {
   // Zeus: the threshold its 1v1s are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push('Win chances: ELO expectation and lineup strength averaged, ours at today\'s condition, theirs at full condition; Zeus plays a 1v1 from 55 percent.')
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}`).join('; ')}`)
+    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')

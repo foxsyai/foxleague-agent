@@ -254,4 +254,8 @@ test('D10 a challenge target with its own 1v1 out is marked as unable to accept 
   const entry = renderDigest(s).split('\n').flatMap(l => l.split(';')).find(e => /user 597\)/.test(e)) ?? ''
   assert.ok(entry, 'the team is listed')
   assert.match(entry, /busy|cannot accept|can't accept|own 1v1|1v1 out|challenge out|active 1v1/i, `nothing says user 597 already has a 1v1 out and cannot take ours until it ends:\n${entry}`)
+  assert.match(entry, new RegExp(`until ${s.market.openChallenges[0]!.deadline.slice(0, 16)} UTC`))
+  // Another creator's challenge marks nobody else.
+  s.market.openChallenges = [{ ...s.market.openChallenges[0]!, creator_user_id: 598 }]
+  assert.doesNotMatch(renderDigest(s), /cannot accept/)
 })
