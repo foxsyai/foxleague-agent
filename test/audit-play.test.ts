@@ -203,6 +203,12 @@ test('D6 the squad lines show the XP pool of a stat about to gain a point', () =
   p.xp = { speed: 10, accuracy: 0, defense: 0, power: 0, control: 0, vision: 1990, stamina: 0 }
   const line = renderDigest(s).split('\n').find(l => /^\s+#7 /.test(l)) ?? playerLine(p)
   assert.match(line, /1,?990/, `the pools are not in the digest, so the plan cannot see that one session on vision gives +1:\n${line}`)
+  // Compact: a pool far from its point, or on a stat at its rarity cap (XP there is lost), is left out.
+  p.xp = { ...p.xp, stamina: 1800 }
+  p.live.stamina = p.cap
+  const again = renderDigest(s).split('\n').find(l => /^\s+#7 /.test(l))!
+  assert.match(again, /vis 20 \(1990\/2000\)/)
+  assert.doesNotMatch(again, /\(10\/2000\)|\(1800\/2000\)/)
 })
 
 // ---- D7: the one-card sync ----

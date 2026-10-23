@@ -30,13 +30,19 @@ export function txt(v: unknown, max = 40): string {
 }
 
 const SHORT: Record<string, string> = { speed: 'spd', accuracy: 'acc', defense: 'def', power: 'pow', control: 'ctl', vision: 'vis', stamina: 'sta' }
+/** XP a stat's pool needs for +1 (FoxLeague's stat bump), and the pool from which the squad line shows it. */
+export const XP_PER_POINT = 2000
+export const XP_SHOWN_FROM = 1500
 
+/** A stat's pool is shown only when a few sessions or a match bring the point, and only below the rarity cap (XP on a capped stat is lost). */
 function statLine(p: PlayerView): string {
   return Object.keys(SHORT)
     .map(s => {
       const synced = p.synced[s] ?? 0
       const live = p.live[s] ?? 0
-      return `${SHORT[s]} ${synced}${live !== synced ? `>${live}` : ''}`
+      const xp = p.xp?.[s]
+      const pool = typeof xp === 'number' && xp >= XP_SHOWN_FROM && xp < XP_PER_POINT && live < p.cap ? ` (${xp}/${XP_PER_POINT})` : ''
+      return `${SHORT[s]} ${synced}${live !== synced ? `>${live}` : ''}${pool}`
     })
     .join(' ')
 }
@@ -142,7 +148,7 @@ export function renderDigest(s: AgentSnapshot): string {
   }
 
   if (s.players.length) {
-    out.push(`Squad (${s.players.length}; stats synced>live; comp = competitive matches of the rarity's match gate):`)
+    out.push(`Squad (${s.players.length}; stats synced>live, (xp/${XP_PER_POINT}) = that stat's XP pool when ${XP_SHOWN_FROM} or more, ${XP_PER_POINT} gives +1; comp = competitive matches of the rarity's match gate):`)
     if (s.config) out.push(`Match gates (fusion input or listing; ranked, casual and Bronze never count): ${gateLine(s.config)}`)
     const order = { starter: 0, bench: 1, reserve: 2 }
     const cfg = s.config
