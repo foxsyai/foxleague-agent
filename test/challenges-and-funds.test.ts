@@ -92,6 +92,38 @@ test('two agents checking at once cannot both take the same rival', async () => 
   assert.match(b!.summary, /another of your owner's teams already has a 1v1 out against user 50/)
 })
 
+// Re-review of PR #19 (medium): a claim must not outlive a refusal after the check (nothing was created), nor hold
+// a live agent off a rival for a dry-run 1v1 of before Go LIVE.
+test('a refusal after the check releases the claim', async () => {
+  const m = setup()
+  m.store.addAgent(1, OTHER)
+  m.store.updateSettings(1, TEST_SETTINGS)
+  const broke = snapshot()
+  broke.leaderboardNeighbours = [RIVAL]
+  broke.chain!.egld = 0n // no EGLD for the seat payment: refused after the rules allowed it
+  const [r] = await m.exec.run(m.agent(), dryWallet, broke, [{ action: CHALLENGE, reason: '' }])
+  assert.equal(r!.status, 'refused', r!.summary)
+  assert.doesNotMatch(r!.summary, /another of your owner's teams/)
+  const s = snapshot()
+  s.leaderboardNeighbours = [RIVAL]
+  const [ok] = await m.exec.run(m.store.agent(1)!, { ...dryWallet, index: 1, address: OTHER }, s, [{ action: CHALLENGE, reason: '' }])
+  assert.equal(ok!.status, 'dry_run', ok!.summary)
+})
+
+test('a dry-run claim does not hold a live agent off the rival', async () => {
+  const { liveWallet, withLive } = await import('./fixtures.ts')
+  const m = setup()
+  m.store.addAgent(1, OTHER)
+  m.store.updateSettings(1, TEST_SETTINGS)
+  const s = () => { const x = snapshot(); x.leaderboardNeighbours = [RIVAL]; return x }
+  const [dry] = await m.exec.run(m.agent(), dryWallet, s(), [{ action: CHALLENGE, reason: '' }])
+  assert.equal(dry!.status, 'dry_run', dry!.summary)
+  await withLive(m.store, async () => {
+    const [live] = await m.exec.run(m.store.agent(1)!, { ...liveWallet, index: 1, address: OTHER }, s(), [{ action: CHALLENGE, reason: '' }])
+    assert.doesNotMatch(live!.summary, /another of your owner's teams/, live!.summary)
+  })
+})
+
 test('the refusal is not mistaken for the sibling rule removed on 2026-09-30', () => {
   const store = setup().store
   const recent = [{ id: 1, agentIndex: 0, at: new Date().toISOString(), kind: 'create_challenge', status: 'refused', summary: "create silver 1v1, stake 1000 vs user 50: refused: another of your owner's teams already has a 1v1 out against user 50 (one at a time per rival: pick another team or wait until it is over)", detail: null, costUsd: null, txHash: null }]

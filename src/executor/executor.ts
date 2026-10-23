@@ -100,9 +100,10 @@ export class Executor {
   /**
    * The rival each agent has just taken a 1v1 against, kept until the log rows say it (a live create is logged only
    * after the create, the payment and the seat). Checked and set in the same synchronous step as the rules, so two
-   * agents planning at once cannot both take one rival (C1, agent review of PR #19).
+   * agents planning at once cannot both take one rival (C1, agent review of PR #19). A refusal releases its own claim
+   * (nothing was created), and a dry-run claim never holds a live agent off.
    */
-  private readonly rivalClaims = new Map<number, { agent: number; until: number }>()
+  private readonly rivalClaims = new Map<number, { agent: number; until: number; dry: boolean }>()
 
   constructor(deps: ExecutorDeps) {
     this.d = deps
@@ -169,7 +170,10 @@ export class Executor {
     const dry = agent.dryRun || !this.liveEnabled
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
+    let claimed: number | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
+      // Every refusal comes before any FoxLeague call or signature: the rival this action claimed is free again.
+      if (status === 'refused' && claimed !== null && this.rivalClaims.get(claimed)?.agent === agent.index) this.rivalClaims.delete(claimed)
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}) }, costUsd: costUsdValue || null, txHash })
       const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
@@ -197,12 +201,13 @@ export class Executor {
       }
       // No await from here to the claim: another agent's check runs before this one or after its claim, never between.
       const claim = ctx.opponent ? this.rivalClaims.get(ctx.opponent.userId) : undefined
-      if (claim && claim.agent !== agent.index && claim.until > Date.now()) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
+      if (claim && claim.agent !== agent.index && claim.until > Date.now() && (!claim.dry || dry)) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
       if (ctx.opponent && (a.type === 'create_challenge' || a.type === 'join_tournament')) {
         for (const [id, c] of this.rivalClaims) if (c.until <= Date.now()) this.rivalClaims.delete(id)
-        this.rivalClaims.set(ctx.opponent.userId, { agent: agent.index, until: Date.now() + ((a.type === 'create_challenge' ? a.deadline_minutes : 0) + 60) * 60_000 })
+        this.rivalClaims.set(ctx.opponent.userId, { agent: agent.index, until: Date.now() + ((a.type === 'create_challenge' ? a.deadline_minutes : 0) + 60) * 60_000, dry })
+        claimed = ctx.opponent.userId
       }
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
