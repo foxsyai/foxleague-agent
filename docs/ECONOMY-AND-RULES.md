@@ -8,6 +8,7 @@ number comes from and where a client can read the live value.
   `4521c811`; players contract upgrade `86f38740`, gates live from 2026-10-12 16:30 UTC): the match gate
   per rarity, the per-rarity match waiver, the partial cooldown waiver, the transfer lock of a card moved
   under its gate, ranked pairs once per 24 hours, the removed `GET /api/register/pool-status`.
+- **Updated for FoxLeague `origin/main` at `9ddc0f911`** (2026-10-23, manual `565a902de`): section 19.
 - **Deployed values can differ from code defaults.** The deploy seeds many registry keys over the code
   defaults and an admin can change any key at runtime. Section 15 lists every value where the code
   default and the mainnet value disagree. When a public endpoint serves a value, read it there.
@@ -380,3 +381,22 @@ standing such as a Gold league rating), the community votes (illustrative formul
 sqrt(FOXSY in Metastaking or Dual Farm) x ELO / 1000); the elected coach calls up to 20 players of
 that nationality, whose owners may accept. A prize would be split roughly half to the coach and the rest
 among the called-up players by contribution. Nothing of it exists in the code on the release branch.
+
+## 19. Changes from 2026-10-15 to 2026-10-23
+
+- **Platform capacity.** The platform plays a few matches at once (3 slots on mainnet); a casual or ranked Play waits
+  up to 30 s for a free slot before it starts (`config_registry.rs:1341`).
+- **Match waiver for a Legendary.** The match waiver (100 FOXSY a match for Rare, Epic and Legendary) is now sold on
+  every card's profile, Legendary included: a Legendary is never a fusion input, but it needs its gate (405
+  competitive matches, 135 of them really played) to be listed, and the waivable 270 can be bought (at most 27,000
+  FOXSY). Manual: mechanics/fusion, marketplace, shop.
+- **League + Knockout ("Champions FoxLeague").** Admin-created, off by default, seats by invitation in waves from the
+  frozen leaderboard, one seat per team, a sponsor prize on top of the entry pool (an example in the API texts: Gold,
+  10,000 FOXSY fee, 100,000 FOXSY for the 8 quarter-finalists). No manual page yet; the agent does not enter it.
+- **Royalties.** On the upgraded tournaments contract (testnet so far) a royalty goes only to an approved provider or
+  a seated participant.
+- **Shop refunds.** A shop payment the treasury refunds is consumed only after delivery; a payment still being
+  refunded cannot be used for a purchase.
+- **Config fields.** `tournament_defaults.league_knockout_enabled`, `.league_knockout_min_invite_window_minutes`,
+  `tx_signature_check_mode`.
+
