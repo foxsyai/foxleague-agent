@@ -248,8 +248,8 @@ test('presets run from careful to all-in, and the AI is told the owner sets how 
   assert.match(STRATEGY_PRESETS.zeus!, /Climb in steps/)
   assert.match(STRATEGY_PRESETS.zeus!, /never arrange a result/)
   assert.match(STRATEGY_PRESETS.steady!, /No shop purchases, no auction bids/)
-  // Bidding from the hunter up: Rare, Epic and Legendary only, the max bid decides what is in reach.
-  for (const k of ['hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /Bid on Rare, Epic or Legendary players, never Common or Uncommon ones/)
+  // Bidding from the hunter up, on the rarities each level buys (test/levels-bids-manual.test.ts); the max bid decides what is in reach.
+  for (const k of ['hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /Bid on Common[^.]*the max bid and your limits per rarity decide which are in reach/)
   for (const k of ['steady', 'climber']) assert.doesNotMatch(STRATEGY_PRESETS[k]!, /Bid on/)
   for (const k of ['climber', 'hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /5 free training sessions every day|all 15 training sessions every day/)
   assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
@@ -267,7 +267,7 @@ test('each level brings its own default limits, rising with the level; every age
   assert.deepEqual(LEVEL_SETTINGS.steady!.entryFeesSilver, [1000, 1500])
   assert.equal(LEVEL_SETTINGS.beast!.entryFeesSilver.at(-1), 4999)
   assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [0, 0], 'no bids below the hunter')
-  for (const l of levels) assert.ok(l.maxEntryFeeFoxsy * 0.0027 < l.dailyCapUsd, 'the largest entry fits the daily cap at October 2026 prices')
+  for (const l of levels) assert.ok(l.maxEntryFeeFoxsy * 0.0027 < l.dailyCapUsd, 'the largest entry fits the daily cap at a FOXSY price of $0.0027')
   assert.deepEqual([D.strategy, D.dailyCapUsd, D.activeHoursUtc, D.tickMinutes, D.tickJitterMinutes, D.minGapSeconds, D.actionProbability], [P.steady, 5, [8, 20], 120, 10, 30, 1])
   // The cycle: never under 10 minutes, the random window included.
   assert.throws(() => validateSettingsPatch({ tickMinutes: MIN_TICK_MINUTES - 1 }), /between 10 and 240/)

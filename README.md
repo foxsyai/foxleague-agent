@@ -57,8 +57,8 @@ the dashboard or by chatting with it on Telegram.
   so no manager faces several of your teams at once, and a rule that only one of them bids on a card at auction (and
   none on a card another of your teams sells), so you never bid against yourself. Guards against rivals who try to farm
   an agent (1v1s only against teams of similar strength, at most two a week each).
-- **Reviewed.** Fourteen numbered adversarial reviews, the reviews of CI and of the xExchange pause and a
-  whole-project review on 13 October 2026. Every confirmed finding is fixed or decided; the few still open are listed
+- **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release.
+  Every confirmed finding is fixed or decided; the few still open are listed
   in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
