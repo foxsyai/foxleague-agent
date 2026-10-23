@@ -207,8 +207,15 @@ test('R2C-1 the README does not promise a rule the executor does not have (agent
     settings: TEST_SETTINGS, now, priorBids: 0, cardLock: { until: null }, cardRarity: 'Uncommon',
     auction: { seller: OTHER, minPrice: wholeToAtomic(1000), highestBid: 0n, highestBidder: null, endsAt: new Date(now.getTime() + 3600_000) } as never,
   })
-  assert.ok(seat.ok && bid.ok, 'the rules allow a 1v1 and a bid between the owner\'s own agents (the owner removed the sibling rule on 2026-09-30)')
+  assert.ok(seat.ok && bid.ok, 'the rules allow a 1v1 between the owner\'s own agents (the owner removed the sibling rule on 2026-09-30), and a bid the executor finds no other team of the owner\'s on')
+  // Owner, 2026-10-23: one team per card at auction (test/sibling-bids.test.ts).
+  const own = checkAction({ type: 'bid', nonce: 4242, foxsy: 1000 }, snapshot(), {
+    settings: TEST_SETTINGS, now, priorBids: 0, cardLock: { until: null }, cardRarity: 'Uncommon', ownTeamOnCard: 'seller',
+    auction: { seller: OTHER, minPrice: wholeToAtomic(1000), highestBid: 0n, highestBidder: null, endsAt: new Date(now.getTime() + 3600_000) } as never,
+  })
+  assert.equal(own.ok, false, 'a card another of the owner\'s teams sells is not bought')
   const readme = readFileSync(join(REPO, 'README.md'), 'utf8').replace(/\s+/g, ' ')
   assert.doesNotMatch(readme, /never a 1v1 or trade between your own agents/, 'README.md promises a check the executor does not have')
-  assert.match(readme, /two of them may meet in a tournament or a 1v1, or bid on the same card, by chance/, 'the README says what the safety page says')
+  assert.match(readme, /two of them may meet in a tournament or a 1v1 by chance/, 'the README says what the safety page says')
+  assert.match(readme, /only one of them bids on a card at auction \(and none on a card another of your teams sells\)/)
 })

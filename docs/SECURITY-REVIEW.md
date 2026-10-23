@@ -637,6 +637,28 @@ sees a rival's open challenge, not one it already plays; the join gas (7,000,000
 once the tournaments contract is upgraded on mainnet; a seat paid while the contract is paused by its hot-key alarm
 reverts (gas only). The F4 open items are corrected by B1 and B-P1.
 
+## One team per card at auction, 2026-10-23
+
+A finding from the live agents' first plans after the audit's deploy: agents 3 and 4 planned the same bid (1,456
+FOXSY on #6226) in the same minute. Whichever bid second had to beat the first, so on a later plan the owner could
+have paid more for one card by bidding against their own bid, and nothing stopped an agent from buying a card another of
+the owner's teams had listed (the 10 percent sale fee to move a card between the owner's wallets, which agents never
+do otherwise). The owner asked for the same rule as one challenger per rival. Test first:
+`test/sibling-bids.test.ts`, each test seen failing before the fix (the release test passes without the rule and was
+seen failing with the release removed).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SB1 | low | Two of the owner's agents could bid on the same card at auction, the second raising the price against the first | The bid rule refuses a card another of the owner's teams leads on chain (`highestBidder`) or has bid on in the last 48 hours (its log rows in the same ledger, a bid that errored after its signature too; a refused, reverted or unsigned one placed nothing), retired and removed teams included (`cardsBidByOthers`, `store.agentAddresses`). The shared executor claims the card in the same synchronous step as the check, until its auction ends (at least an hour), as for rivals (R19A-1); a bid that placed nothing releases it, and a dry-run claim does not hold a live agent off |
+| SB2 | low | An agent could bid on a card another of the owner's teams sells | Refused: buying it would only move it between the owner's wallets and pay the 10 percent fee |
+| SB3 | design | The plan did not know which cards were taken | The plan request marks those auctions "not available now", from the same helpers and claims, with no reason given and no team named; `src/strategist/prompt.ts` is unchanged (the prompt cache holds) |
+| R25A-1 | low | Agent review of PR #25 (docs): INSTALL.md and the update page still said two agents may bid on the same card, and that the agents know nothing of each other | Both name the three things the agents share; a test reads every owner-facing page for the old wording |
+
+No cap or limit changed and the rule only adds refusals. The README, the install guide, the FAQ, the update page and
+the safety page name the third thing the agents share. Open: a card another team of the owner's bid on stays taken for 48 hours after that bid even when
+the team was outbid or the card was listed again (it only refuses more); a team the owner runs from another install is
+not in this install's table and is not seen.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

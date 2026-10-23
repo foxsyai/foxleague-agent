@@ -9,12 +9,15 @@ const WEEK_MS = 7 * 86_400_000
 /** How far back the owner's other agents' 1v1s are read: the longest deadline (240 min) plus the match hour, and more. */
 const OTHERS_MS = 6 * 3_600_000
 
+/** How far back the owner's other agents' bids are read: an auction runs 24 hours, and more. */
+const BIDS_MS = 48 * 3_600_000
+
 /** Activity of the same ledger (dry run or live) the action is judged in. */
 const counted = (dry: boolean, status: string) => (dry ? status === 'dry_run' : status === 'confirmed' || status === 'unconfirmed')
 
-function detailOf(r: ActivityRow): { opponentUserId?: number; untouched?: boolean; action?: { deadline_minutes?: number } } {
+function detailOf(r: ActivityRow): { opponentUserId?: number; untouched?: boolean; sent?: boolean; action?: { deadline_minutes?: number; nonce?: number } } {
   try {
-    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; untouched?: boolean; action?: { deadline_minutes?: number } }
+    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; untouched?: boolean; sent?: boolean; action?: { deadline_minutes?: number; nonce?: number } }
   } catch {
     return {}
   }
@@ -61,6 +64,25 @@ export function rivalsOutByOthers(store: Store, agentIndex: number, dry: boolean
     if (!(counted(dry, r.status) || r.status === 'failed' || (r.status === 'error' && !d.untouched)) || typeof d.opponentUserId !== 'number') continue
     if (Date.parse(r.at) + ((d.action?.deadline_minutes ?? 0) + 60) * 60_000 <= now.getTime()) continue
     out.set(d.opponentUserId, (out.get(d.opponentUserId) ?? 0) + 1)
+  }
+  return out
+}
+
+/**
+ * The cards at auction the owner's other agents have bid on in the last 48 hours, retired and removed agents too: one
+ * team per card, so the owner never bids against their own bid (owner, 2026-10-23). On the safe side, a bid that errored
+ * after its signature may have landed; a refused, reverted or unsigned one placed nothing.
+ */
+export function cardsBidByOthers(store: Store, agentIndex: number, dry: boolean, now: Date): Set<number> {
+  const out = new Set<number>()
+  const rows = store
+    .agentIndexes()
+    .filter(i => i !== agentIndex)
+    .flatMap(i => store.activityOf(i, ['bid'], new Date(now.getTime() - BIDS_MS)))
+  for (const r of rows) {
+    const d = detailOf(r)
+    if (!(counted(dry, r.status) || r.status === 'sent' || (r.status === 'error' && d.sent === true)) || typeof d.action?.nonce !== 'number') continue
+    out.add(d.action.nonce)
   }
   return out
 }

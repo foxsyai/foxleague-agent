@@ -50,10 +50,11 @@ abuse. The agent:
 - uses only public information, the same a player sees in the app;
 - plays at a human pace (random timing, spread-out actions, active hours);
 - never coordinates your agents against anyone: each plays its own game without knowing which teams are yours, so two
-  of them may meet in a tournament or a 1v1, or bid on the same card, by chance (FoxLeague's Fair Play forbids
-  arranging results, not meeting). They share two things only: a pooled formation record with no team named, and a
-  rule that only one of them at a time has a 1v1 out against the same rival (retired and removed teams count too),
-  so no manager faces several of your teams at once;
+  of them may meet in a tournament or a 1v1 by chance (FoxLeague's Fair Play forbids arranging results, not
+  meeting). They share three things only: a pooled formation record with no team named, a rule that only one of them
+  at a time has a 1v1 out against the same rival (retired and removed teams count too), so no manager faces several
+  of your teams at once, and a rule that only one of them bids on a card at auction and none on a card another of
+  your teams sells, so you never bid against yourself or pay the sale fee to move a card between your own wallets;
 - protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two a week
   against the same team; an open challenge, which any team may take, at most once a day and only at your lowest
   Silver amount);

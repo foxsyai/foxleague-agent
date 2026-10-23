@@ -250,6 +250,11 @@ export class Store {
     return (this.db.prepare('SELECT idx FROM agents ORDER BY idx').all() as { idx: number }[]).map(r => Number(r.idx))
   }
 
+  /** The wallet of every agent the table holds, active, retired and removed alike (one owner's teams). */
+  agentAddresses(): string[] {
+    return (this.db.prepare('SELECT address FROM agents ORDER BY idx').all() as { address: string }[]).map(r => String(r.address))
+  }
+
   /** The agents parked with Retire, until they are restored. */
   retiredAgents(): AgentRow[] {
     const live = this.liveMode

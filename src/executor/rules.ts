@@ -65,6 +65,8 @@ export interface RulesContext {
   cardRarity?: string
   /** Bids this agent already placed on the same auction in the last 48 hours. */
   priorBids?: number
+  /** Another of the owner's teams sells the card at auction, or leads, bids on or has just claimed it. */
+  ownTeamOnCard?: 'seller' | 'bidder'
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
   pendingShop?: Set<string>
   /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
@@ -942,6 +944,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (au.endsAt <= ctx.now) return refuse(`the auction of #${a.nonce} has ended`)
       if (au.seller === s.agent.address) return refuse('a seller cannot bid on its own auction')
       if (au.highestBidder === s.agent.address) return refuse('already the top bidder')
+      // One team per card (owner, 2026-10-23): never bidding against the owner's own bid, never paying the fee to move a
+      // card between the owner's wallets.
+      if (ctx.ownTeamOnCard === 'seller') return refuse(`#${a.nonce} is listed by another of your owner's teams: buying it would only move it between the owner's wallets and pay the 10 percent fee`)
+      if (ctx.ownTeamOnCard === 'bidder') return refuse(`another of your owner's teams is bidding on #${a.nonce} (one team per card: pick another card)`)
       // In atomic units, rounded up to whole FOXSY: a rival's fractional bid or reserve (600.999) never
       // leaves the agent a whole-FOXSY bid just under the contract's minimum.
       const ceilWhole = (x: bigint) => Number((x + 10n ** 18n - 1n) / 10n ** 18n)
