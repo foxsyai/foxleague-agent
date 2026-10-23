@@ -85,7 +85,12 @@ interface Built {
 interface Booking {
   ids: number[]
   sent: boolean
+  /** FoxLeague was asked to create or seat: a tournament, a 1v1 or a seat may exist from then on, whatever the answer. */
+  reached?: boolean
 }
+
+/** The actions whose rows say `untouched` when they end in an error before FoxLeague was asked or anything was signed. */
+const REACH_TRACKED = new Set<Action['type']>(['create_tournament', 'create_challenge', 'join_tournament'])
 
 /** The server's permission to sign at all: AGENT_LIVE_ENABLED=1 in its env. */
 export function liveSigningAllowed(): boolean {
@@ -172,10 +177,14 @@ export class Executor {
     let booking: Booking | null = null
     let claimed: number | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
+      // An error before FoxLeague was asked to create or seat and before any signature (the kill switch, a pause or a
+      // stop before the signature, a booking that failed) left nothing on FoxLeague, as a refusal (audit A1, 2026-10-23).
+      const untouched = status === 'error' && REACH_TRACKED.has(a.type) && !booking?.sent && !booking?.reached
       // Every refusal comes before any FoxLeague call or signature: the rival this action claimed is free again.
-      if (status === 'refused' && claimed !== null && this.rivalClaims.get(claimed)?.agent === agent.index) this.rivalClaims.delete(claimed)
+      if ((status === 'refused' || untouched) && claimed !== null && this.rivalClaims.get(claimed)?.agent === agent.index) this.rivalClaims.delete(claimed)
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
-      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}) }, costUsd: costUsdValue || null, txHash })
+      // `untouched`: the 1v1 checks after a restart know that this error left no challenge and no seat.
+      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}), ...(untouched ? { untouched: true } : {}) }, costUsd: costUsdValue || null, txHash })
       const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
       // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
       const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
@@ -274,7 +283,9 @@ export class Executor {
       // under-count the caps, and when the booking itself fails nothing is signed or sent.
       if (!ownerLeave) this.assertNotStopped(agent.index) // a leave signs nothing; send() still checks before any signature
       if (built.txs.length || seat.length || verdict.foxsy > 0n) booking = this.book(agent, verdict, usd, fees, built.swapUsd, false, now, snap, a, prices)
-      return await this.live(agent, wallet, snap, a, verdict, built, usd, fees, desc, costText, finish, now, booking ?? { ids: [], sent: false })
+      // A free action gets one too: it says when FoxLeague was asked (`reached`).
+      booking ??= { ids: [], sent: false }
+      return await this.live(agent, wallet, snap, a, verdict, built, usd, fees, desc, costText, finish, now, booking)
     } catch (err) {
       // Nothing was signed: the booking goes. Signed (maybe sent): it stays, the conservative side.
       if (booking && !booking.sent) this.unbook(booking)
@@ -332,7 +343,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; deadline_minutes?: number } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; untouched?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; deadline_minutes?: number } }
       } catch {
         return {}
       }
@@ -372,19 +383,20 @@ export class Executor {
         .activityOf(agent.index, ['join_tournament', 'create_challenge'], since(7 * 86_400_000))
         .filter(r => counted(r.status) && detailOf(r).opponentUserId === opponentId).length
       // The owner's other agents: a 1v1 of theirs against this rival is out until its deadline (a join: at once) and an
-      // hour for the match have passed. On the safe side, a create that failed or errored may have left a challenge.
+      // hour for the match have passed. On the safe side, a create that failed or errored may have left a challenge,
+      // unless the error came before FoxLeague was asked or anything was signed (`untouched`).
       market.otherTeamsOnOpponent = store
         .agents()
         .filter(b => b.index !== agent.index)
         .flatMap(b => store.activityOf(b.index, ['join_tournament', 'create_challenge'], since(6 * 3_600_000)))
-        .filter(r => (counted(r.status) || r.status === 'failed' || r.status === 'error') && detailOf(r).opponentUserId === opponentId)
+        .filter(r => (counted(r.status) || r.status === 'failed' || (r.status === 'error' && !detailOf(r).untouched)) && detailOf(r).opponentUserId === opponentId)
         .filter(r => Date.parse(r.at) + ((detailOf(r).action?.deadline_minutes ?? 0) + 60) * 60_000 > now.getTime()).length
     }
     if (a.type === 'create_challenge' && a.target_user_id === null) {
       market.openChallengesToday = store
         .activityOf(agent.index, ['create_challenge'], since(24 * 3_600_000))
-        // On the safe side: a create that failed or errored may still have left a challenge on FoxLeague.
-        .filter(r => (counted(r.status) || r.status === 'failed' || r.status === 'error') && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null).length
+        // On the safe side: a create that failed or errored may still have left a challenge on FoxLeague (an untouched one did not).
+        .filter(r => (counted(r.status) || r.status === 'failed' || (r.status === 'error' && !detailOf(r).untouched)) && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null).length
     }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
@@ -835,6 +847,7 @@ export class Executor {
       }
       case 'join_tournament': {
         if (!built.txs.length) {
+          booking.reached = true
           await fox.joinTournament(wallet, a.tournament_id)
           return finish('confirmed', `${desc}: seated (free)`)
         }
@@ -917,6 +930,7 @@ export class Executor {
                 // A non-empty invite list makes it private (FoxLeague's whitelist_user_ids): the one the rules kept.
                 ...(Array.isArray(v.facts.invites) && v.facts.invites.length ? { whitelist_user_ids: v.facts.invites } : {}),
               }
+        booking.reached = true // from here a tournament or a 1v1 may exist, whatever the answer
         const created = await fox.createTournament(wallet, body, `agent${agent.index}-${randomUUID()}`)
         store.retagSpend(booking.ids, 'join:new', `join:${created.id}`)
         let detail: TournamentDetail | undefined
