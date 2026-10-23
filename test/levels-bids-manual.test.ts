@@ -94,3 +94,30 @@ test('the strategy levels page says which rarities each level buys, as the texts
   assert.doesNotMatch(page, /never on Common or Uncommon ones/)
   assert.match(page, /\| Bids at auction \| \| \| Common, Uncommon \| up to Rare \| up to Epic \| any rarity, only at a good price, for a reason \|/)
 })
+
+// Agent review of PR #27 (medium): an agent saves its whole settings (at creation since PR #21, or on any save), and a
+// saved limit wins over a new default. So only an agent that never saved its limits gets the new ones; one that did
+// keeps the lower limits it saved (raising them asks for the password). The record said every agent on the defaults
+// got them at once.
+test('an agent that saved its limits keeps them; one that never did gets the new defaults; the record says so', async () => {
+  const { Store } = await import('../src/store/db.ts')
+  const { ADDR } = await import('./fixtures.ts')
+  const store = new Store('', ':memory:')
+  store.addAgent(0, ADDR)
+  ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify({ ...DEFAULT_SETTINGS, maxBidRareFoxsy: 6000, maxBidEpicFoxsy: 12_000, maxBidLegendaryFoxsy: 32_000 }))
+  assert.deepEqual([store.agent(0)!.settings.maxBidRareFoxsy, store.agent(0)!.settings.maxBidEpicFoxsy, store.agent(0)!.settings.maxBidLegendaryFoxsy], [6000, 12_000, 32_000], 'saved limits win')
+  ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify({ strategy: 'x' }))
+  assert.equal(store.agent(0)!.settings.maxBidRareFoxsy, 7000, 'no saved limit: the new default')
+  const record = read('docs/SECURITY-REVIEW.md').replace(/\s+/g, ' ')
+  assert.doesNotMatch(record, /Agents on the defaults get them at once/)
+  assert.match(record, /an agent that saved its limits keeps them/)
+})
+
+// Agent review of PR #27 (low): the dashboard's Strategy bubble still said a hunter bids on Rare, Epic and Legendary
+// players, never Common or Uncommon.
+test('no info bubble or manual page keeps the old bidding rule', () => {
+  const html = read('src/web/dashboard.html').replace(/\s+/g, ' ')
+  assert.doesNotMatch(html, /never Common or Uncommon/)
+  assert.match(html, /<b>Hunter<\/b>: plus its own tournaments, the booster on strong match days and bids on Common and Uncommon players/)
+  for (const p of pages('site/src/content/docs')) assert.doesNotMatch(read(p).replace(/\s+/g, ' '), /never (on )?Common or Uncommon/, p)
+})
