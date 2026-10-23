@@ -195,13 +195,13 @@ const VALID_SIZES: Record<string, (n: number) => boolean> = {
  * admin-only league_knockout of 2026-10-15 (a 36-team league and a two-legged knockout), is neither joined nor
  * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat.
  */
+function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
+  return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
+}
+
 /** One of the four formats the agent knows how to join and create. */
 export function supportedFormat(format: string): boolean {
   return Object.hasOwn(VALID_SIZES, format)
-}
-
-function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
-  return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
 }
 
 /** Largest size worth creating: what recently filled plus a margin (README: 16-20 is the norm, not 64). */
@@ -379,7 +379,7 @@ export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: 
   const hours = hoursUntil(t.starts_at, now)
   const squad = matchSquad(s)
   const spent = hours > 0 && squad.length ? (owed.before * 11 * (cfg.condition_loss_per_match ?? 10)) / squad.length : 0
-  return { hours, during: owed.during, at: p => (hours > 0 ? Math.min(MAX_CONDITION, p.condition - spent + regenPerHour(p, cfg) * hours) : p.condition) }
+  return { hours, during: owed.during, at: p => (hours > 0 ? Math.max(0, Math.min(MAX_CONDITION, p.condition - spent + regenPerHour(p, cfg) * hours)) : p.condition) }
 }
 
 /**

@@ -22,6 +22,18 @@ async function rivalStrengthCached(fox: FoxLeague, wallet: string): Promise<numb
   if (rivalSeen.size > 500) rivalSeen.delete(rivalSeen.keys().next().value!)
   return strength
 }
+/** A seated team's ELO when the leaderboard does not list it, read at most every 20 minutes like its lineup. */
+const eloSeen = new Map<string, { at: number; elo: number | null }>()
+async function rivalEloCached(fox: FoxLeague, wallet: string): Promise<number | null> {
+  const hit = eloSeen.get(wallet)
+  if (hit && Date.now() - hit.at < 20 * 60_000) return hit.elo
+  const read = await fox.user(wallet).catch(() => undefined)
+  const elo = typeof read?.elo_rating === 'number' ? read.elo_rating : null
+  // A failed read is not kept: the next plan asks again.
+  if (read !== undefined) eloSeen.set(wallet, { at: Date.now(), elo })
+  if (eloSeen.size > 500) eloSeen.delete(eloSeen.keys().next().value!)
+  return elo
+}
 import {
   RARITY_CAP,
   STATS,
@@ -345,7 +357,7 @@ async function readFields(fox: FoxLeague, wallet: AgentWallet, open: Tournament[
     const seated = detail.participants
     const seats = await Promise.all(seated.slice(0, FIELD_SEATS).map(async (p): Promise<FieldSeat> => {
       const listed = board.find(u => u.id === p.user_id)
-      const elo = listed?.elo_rating ?? (p.wallet_address ? ((await fox.user(p.wallet_address).catch(() => null))?.elo_rating ?? null) : null)
+      const elo = listed?.elo_rating ?? (p.wallet_address ? await rivalEloCached(fox, p.wallet_address) : null)
       const strength = p.wallet_address ? await rivalStrengthCached(fox, p.wallet_address) : null
       return { userId: p.user_id, elo: typeof elo === 'number' ? elo : null, strength }
     }))

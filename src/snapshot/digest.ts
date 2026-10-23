@@ -142,7 +142,7 @@ function ownChallengeOut(s: AgentSnapshot, userId: number): string {
   const out = s.market.openChallenges
     .filter(t => t.max_teams === 2 && t.creator_user_id === userId && Date.parse(t.deadline) > now)
     .sort((a, b) => b.deadline.localeCompare(a.deadline))[0]
-  return out ? `, has a 1v1 out until ${out.deadline.slice(0, 16)} UTC: cannot accept yours before` : ''
+  return out ? `, has a 1v1 out until ${new Date(Date.parse(out.deadline)).toISOString().slice(0, 16)} UTC: cannot accept yours before` : ''
 }
 
 export function renderDigest(s: AgentSnapshot): string {
