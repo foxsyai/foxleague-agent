@@ -59,5 +59,5 @@ test('the plan sees the new ceilings', () => {
   const s = snapshot()
   s.config = { ...s.config!, ...LIVE } as typeof s.config
   const text = renderPlanRequest({ snapshot: s, settings: DEFAULT_SETTINGS, budget: budgetView(setup().store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
-  assert.match(text, /never above what the card costs to build yourself and bring to its match gate \(Rare 14450, Epic 60400, Legendary 225650\)/)
+  assert.match(text, /never above what the card costs to build yourself and bring to its match gate \(Common 600, Uncommon 2200, Rare 14450, Epic 60400, Legendary 225650\)/)
 })

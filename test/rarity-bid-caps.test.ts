@@ -45,7 +45,7 @@ test('a bid above the owner\'s limit for its rarity is refused; a raised limit i
   assert.match(bid(32_001, 'Legendary').refusal!, /above your limit for a Legendary \(32000 FOXSY\)/)
   assert.equal(bid(40_000, 'Legendary', { maxBidLegendaryFoxsy: 45_000 }).ok, true, 'the owner raised it')
   assert.match(bid(46_000, 'Legendary', { maxBidLegendaryFoxsy: 60_000, maxBidFoxsy: 45_000 } as never).refusal!, /per-action maximum 45000/, 'the max bid still binds on top')
-  assert.equal(bid(1000, 'Uncommon').ok, true, 'no limit per rarity below Rare (the build cost and the max bid hold)')
+  assert.equal(bid(1000, 'Uncommon').ok, true, 'under the Uncommon limit (1,500 since 2026-10-24: test/limits-common-uncommon.test.ts)')
 })
 
 test('raising a limit per rarity asks for the password, lowering it does not; each is validated', () => {
@@ -97,9 +97,9 @@ test('the planning snapshot reads only the new sales and carries the market pric
   calls.length = 0
   await takeSnapshot({ chain, fox } as never, { wallet: dryWallet }, new Date(), { marketSales: salesCache } as never)
   assert.deepEqual(calls, [0], 'a page of known sales ends the read')
-  assert.match(renderDigest(s1), /Market prices \(median of the daily median sale prices; every trading day counts once\): Rare 6,100 \(5 trading days in 30 days\)/)
+  assert.match(renderDigest(s1), /Market prices \(median of the daily median sale prices; every trading day counts once\): Common unknown \(too few sales in 90 days\), Uncommon unknown \(too few sales in 90 days\), Rare 6,100 \(5 trading days in 30 days\)/)
   const store = setup().store
-  assert.match(renderPlanRequest({ snapshot: s1, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true }), /by rarity at most Rare 6000, Epic 12000, Legendary 32000 \(the owner's limits\)/)
+  assert.match(renderPlanRequest({ snapshot: s1, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true }), /by rarity at most Common 500, Uncommon 1500, Rare 6000, Epic 12000, Legendary 32000 \(the owner's limits\)/)
 })
 
 // Agent review of PR #21 (medium): a card whose rarity is unknown skipped both its limit and the build cost.

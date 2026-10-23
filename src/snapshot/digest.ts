@@ -244,7 +244,7 @@ export function renderDigest(s: AgentSnapshot): string {
       const p = m.prices![r]
       return p ? `${r} ${p.price.toLocaleString('en-US')} (${p.tradingDays} trading days in ${p.windowDays} days)` : `${r} unknown (too few sales in 90 days)`
     }
-    out.push(`Market prices (median of the daily median sale prices; every trading day counts once): ${['Rare', 'Epic', 'Legendary'].map(known).join(', ')}`)
+    out.push(`Market prices (median of the daily median sale prices; every trading day counts once): ${['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].map(known).join(', ')}`)
   }
   if (m.auctions.length) {
     out.push('Open auctions, strongest first (nonce, card, OVR, price now, ends):')

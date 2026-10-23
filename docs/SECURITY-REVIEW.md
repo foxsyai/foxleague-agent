@@ -659,6 +659,25 @@ the safety page name the third thing the agents share. Open: a card another team
 the team was outbid or the card was listed again (it only refuses more); a team the owner runs from another install is
 not in this install's table and is not seen.
 
+## Limits for a Common and an Uncommon, 2026-10-24
+
+The owner asked why agents bid on Commons when a Common pack gives 5 cards for 2,500 FOXSY. None had: the six bids of
+the last three days were on five Uncommons (1,000 to 1,456) and a Rare (2,800). A Common could still go up to its build
+cost (600), and an Uncommon up to 2,200, with no limit of the owner's below Rare. The owner set Common 500 (a pack
+card's price, also the lowest listing price) and Uncommon 1,500 (about a third above its market price of 1,133 over
+30 days, under the 1,600 it costs to build) as defaults, next to Rare 6,000, Epic 12,000 and Legendary 32,000. Test
+first: `test/limits-common-uncommon.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LC1 | design | No owner's limit for a bid on a Common or an Uncommon: only the build cost (600 and 2,200) and Max bid held | `maxBidCommonFoxsy` (500) and `maxBidUncommonFoxsy` (1,500) in the settings, validated 0 to 1,000,000; `rarityBidLimit` covers all five rarities; both are in `LIMITS` on the server and the dashboard, so raising one asks for the password and lowering it does not; an agent made before them gets the defaults |
+| LC2 | design | The plan saw the limits and market prices of Rare, Epic and Legendary only | The plan request lists all five limits and the digest all five market prices |
+| LC3 | low | The build-cost refusal read "a Epic", "a Uncommon" | It uses `aRarity`, as the other refusals do |
+| R26A-1 | low | Agent review of PR #26: the plan saw all five limits but the build cost of Rare, Epic and Legendary only, so with a raised Uncommon (above 2,200) or Common (above 600) limit it could propose a bid the build-cost rule refuses (a wasted action, nothing signed) | The plan request lists the build cost of all five rarities |
+
+The dashboard has both fields with their info bubbles and the coloured market line; the settings page and the strategy
+levels page list the five limits. The rule only adds refusals: no other cap changed. Open: none.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

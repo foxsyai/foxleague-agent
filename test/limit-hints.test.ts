@@ -45,7 +45,7 @@ test('the hints are drawn on load and again as a limit is typed, each tone with 
   const fill = html.match(/function fillForm\(st\) \{[\s\S]*?\n\}/)?.[0]
   assert.ok(fill, 'the dashboard defines fillForm(st)')
   assert.match(fill, /renderLimitHints\(\)/)
-  assert.match(html, /\$\('settingsForm'\)\.addEventListener\('input', e => \{ if \(\/\^sBid\(Rare\|Epic\|Legendary\)\?\$\/\.test\(e\.target\.id\)\) renderLimitHints\(\) \}\)/, 'Max bid too')
+  assert.match(html, /\$\('settingsForm'\)\.addEventListener\('input', e => \{ if \(\/\^sBid\(Common\|Uncommon\|Rare\|Epic\|Legendary\)\?\$\/\.test\(e\.target\.id\)\) renderLimitHints\(\) \}\)/, 'Max bid too')
   assert.match(html, /limitState\(Number\(\$\('sBid' \+ r\)\.value\), p \? p\.price : null, Number\(\$\('sBid'\)\.value\)\)/)
   assert.match(html, /form\.settings \.hint\.mk\.ok\{color:var\(--up\)\}/)
   assert.match(html, /form\.settings \.hint\.mk\.low\{color:var\(--acc\)\}/)
