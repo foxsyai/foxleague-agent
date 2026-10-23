@@ -93,7 +93,7 @@ export interface MarketSummary {
   scouted?: { id: number; elo: number | null; strength: number | null; formations?: string[] | null }[]
   /** Platform-wide time slots a created tournament may not overlap (open and running standard tournaments). */
   slots: SlotWindow[]
-  /** Open auctions, strongest cards first (public listings), and the reserve floor of each rarity. */
+  /** Open auctions, never our own: the 10 strongest, then the 3 cheapest of each rarity (auctionsShown); and the reserve floor of each rarity. */
   auctions: MarketListing[]
   floors: FloorPrice[]
   /** Planning snapshots only: the market price of each rarity from the public sales (null: too few to tell). */
@@ -403,6 +403,26 @@ async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>
  * `research`: a Zeus agent reads every team it could challenge (its lineup strength) to weigh its win chance.
  * `matchFacts`: a planning snapshot also reads the formation record and the formations of the next rivals.
  */
+/**
+ * The open auctions the plan sees, never our own: the 10 strongest, then the 3 cheapest of each rarity not among them.
+ * Stats are capped per rarity, so the strongest are Rares and up, and a hunter (Commons and Uncommons) would see
+ * nothing to bid on (re-review of PR #27). Either read may be missing (a failed read): the other still shows.
+ */
+export function auctionsShown(strongest: MarketListing[] | null, cheapest: MarketListing[] | null, own: string): MarketListing[] {
+  const open = (l: MarketListing) => l.is_auction && l.owner_address !== own
+  const out = (strongest ?? []).filter(open).slice(0, 10)
+  const seen = new Set(out.map(l => l.nft_nonce))
+  const perRarity = new Map<string, number>()
+  for (const l of (cheapest ?? []).filter(open)) {
+    const n = perRarity.get(l.rarity) ?? 0
+    if (seen.has(l.nft_nonce) || n >= 3) continue
+    perRarity.set(l.rarity, n + 1)
+    seen.add(l.nft_nonce)
+    out.push(l)
+  }
+  return out
+}
+
 export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache; marketSales?: MarketSalesCache } = {}): Promise<AgentSnapshot> {
   const { chain, fox } = deps
   const warnings: string[] = []
@@ -462,12 +482,13 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [] }
   }
 
-  const [openAll, completed, cancelled, board, listings, floors, active, pendingSc, doneChallenges] = await Promise.all([
+  const [openAll, completed, cancelled, board, listings, cheapListings, floors, active, pendingSc, doneChallenges] = await Promise.all([
     attempt(warnings, 'open tournaments', () => fox.tournaments({ status: 'open' })),
     attempt(warnings, 'completed tournaments', () => fox.tournaments({ status: 'completed', kind: 'standard' })),
     attempt(warnings, 'cancelled tournaments', () => fox.tournaments({ status: 'cancelled', kind: 'standard' })),
     attempt(warnings, 'leaderboard', () => fox.leaderboard(200)),
     attempt(warnings, 'marketplace listings', () => fox.listings({ sort_by: 'overall_desc', limit: 50 })),
+    attempt(warnings, 'cheapest marketplace listings', () => fox.listings({ sort_by: 'price_asc', limit: 200 })),
     attempt(warnings, 'marketplace floors', () => fox.floorPrices()),
     // FoxLeague answers only its public statuses (2026-10-07): a tournament being simulated reads active.
     attempt(warnings, 'running tournaments', () => fox.tournaments({ status: 'active', kind: 'standard' })),
@@ -610,7 +631,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       recentStandard,
       scouted,
       slots: slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? [])]),
-      auctions: (listings ?? []).filter(l => l.is_auction && l.owner_address !== address).slice(0, 15),
+      auctions: auctionsShown(listings, cheapListings, address),
       floors: floors ?? [],
       ...(prices ? { prices } : {}),
       ...(fields ? { fields } : {}),

@@ -678,6 +678,33 @@ first: `test/limits-common-uncommon.test.ts`, each test seen failing before the 
 The dashboard has both fields with their info bubbles and the coloured market line; the settings page and the strategy
 levels page list the five limits. The rule only adds refusals: no other cap changed. Open: none.
 
+## Bids per level and a manual without testing dates, 2026-10-24
+
+The owner read the strategy levels page. Its tables matched the code, but the levels' max bids (4,000, 15,000, 40,000
+and 47,000) no longer followed the limits per rarity, the hunter, predator and beast texts still said never to bid on a
+Common or an Uncommon, and the manual, README and the dashboard's info bubbles told prices and events of our testing
+("the round market price of October 2026", auction start prices, "a whole-project review on 13 October 2026", "the
+review of the xExchange pause", "since 12 October"). The owner also wanted room to be outbid once and bid again. A bid
+stops at the lowest of Max bid, its rarity's limit and the build cost, so that room has to be in the limits per rarity.
+Test first: `test/levels-bids-manual.test.ts`, each test seen failing before the change (the tables test passed before
+and failed once the code moved, until the page followed).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LB1 | design | The limits per rarity sat at the market price, leaving no room for a second bid after being outbid (an agent bids at most twice on one auction, 5 percent over the top each time) | Rare 7,000, Epic 14,000, Legendary 38,000 by default, about 20 percent over the market prices they were set from (5,650, 11,828, 31,240); Common 500 and Uncommon 1,500 stay. A saved limit wins over a default: an agent that never saved its limits gets the new ones at once (the owner's 10 live agents had saved none), an agent that saved its limits keeps them (the lower ones), and raising one by hand asks for the password |
+| LB2 | design | The levels' max bids did not follow the limits per rarity | Each level's max bid is the limit of the dearest rarity it buys: hunter 1,500 (Uncommon), predator 7,000 (Rare), beast 14,000 (Epic), Zeus 38,000 (Legendary); each fits its daily cap at a FOXSY price of $0.0027. An agent keeps its saved max bid until its level is picked again |
+| LB3 | low | The hunter, predator and beast texts said never to bid on a Common or an Uncommon (packs and fusion make those), though an Uncommon at auction costs less than building one | Each names the rarities it buys: hunter Commons and Uncommons, predator up to Rares, beast up to Epics, below the market price of their rarity. An agent keeps its text until its level is picked again |
+| LB4 | low | The manual, README and the dashboard's info bubbles told dated prices and events of our testing | Written in general, with examples; a test reads every manual page, README, INSTALL.md and the info bubbles for a dated month, a day and month, the xExchange pause, the sell-off and "what agents spent" |
+| LB5 | low | Nothing tied the manual's level tables to the code | A test compares every money row, the max bid rows, the tick and the recommended AI of the tables, and the settings page's five limits, with the code |
+| R27A-1 | medium | Agent review of PR #27: LB1 and the PR said every agent on the defaults got the new limits at once, but an agent saves its whole settings (at creation since PR #21, and on every save), and a saved limit wins over a default | The record says which agents get them: one that never saved its limits gets the new ones, an agent that saved its limits keeps them; no stored value is raised (that would raise a cap without the password). A test shows both |
+| R27A-2 | low | Agent review of PR #27: the dashboard's Strategy bubble still said a hunter bids on Rare, Epic and Legendary players, never Common or Uncommon | It names the rarities each level buys, as the texts do; a test reads every bubble and manual page for the old rule |
+| R27A-3 | medium | Re-review of PR #27: the plan saw only the 15 strongest open auctions, and stats are capped per rarity, so with 15 stronger cards listed a hunter (Commons and Uncommons) had nothing to bid on (it fails toward not spending) | The snapshot also reads the listings sorted by price (one more read, limit 200) and the plan sees the 10 strongest, then the 3 cheapest of each rarity not among them, never our own (`auctionsShown`); a failed read leaves the other list. A test shows the cheapest Commons and Uncommons reach the plan |
+| R27A-4 | low | Re-review of PR #27 (coverage): no test called `auctionsShown` with a failed read on either side | A test: the strongest list stands without the cheapest, the cheapest without the strongest (seen failing on a version that drops both) |
+
+The internal records (this file, `docs/ECONOMY-AND-RULES.md`, `docs/FOXLEAGUE-INTEGRATION.md`) keep their dates: they
+are the history. Unchanged: the agent's own lowest reserves for selling a card (`MIN_RESERVE_FOXSY`: Common 500,
+Uncommon 1,500, Rare 4,000, Epic 10,000, Legendary 25,000). Open: none.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

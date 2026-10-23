@@ -66,6 +66,5 @@ You remain responsible for your agents.
 ## Reviewed
 
 The code went through fourteen numbered adversarial reviews that tried to break the money limits, attack it from
-outside and break its security, then the reviews of CI and of the xExchange pause and a whole-project review on
-13 October 2026. Every finding was fixed with a test that proves it or weighed and decided; the few still open are
-listed in the review record.
+outside and break its security, then a review of CI and whole-project reviews before release. Every finding was
+fixed with a test that proves it or weighed and decided; the few still open are listed in the review record.

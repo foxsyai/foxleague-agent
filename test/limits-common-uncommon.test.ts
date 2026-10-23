@@ -23,7 +23,7 @@ const html = readFileSync(new URL('../src/web/dashboard.html', import.meta.url),
 
 test('the limits for a Common and an Uncommon default to 500 and 1,500, also for an agent made before them', () => {
   const d = DEFAULT_SETTINGS as unknown as Caps
-  assert.deepEqual([d.maxBidCommonFoxsy, d.maxBidUncommonFoxsy, d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [500, 1500, 6000, 12000, 32000])
+  assert.deepEqual([d.maxBidCommonFoxsy, d.maxBidUncommonFoxsy, d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [500, 1500, 7000, 14_000, 38_000], 'Rare, Epic and Legendary since 2026-10-24: test/levels-bids-manual.test.ts')
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
   ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify({ strategy: 'x', maxBidFoxsy: 47000 }))
@@ -68,7 +68,7 @@ test('the plan sees the five limits and the five market prices', () => {
   assert.match(renderDigest(s), /Market prices \(median of the daily median sale prices; every trading day counts once\): Common 500 \(5 trading days in 30 days\), Uncommon 1,100 \(5 trading days in 30 days\), Rare 6,000 \(5 trading days in 30 days\), Epic unknown \(too few sales in 90 days\), Legendary unknown/)
   const store = setup().store
   const text = renderPlanRequest({ snapshot: s, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
-  assert.match(text, /by rarity at most Common 500, Uncommon 1500, Rare 6000, Epic 12000, Legendary 32000 \(the owner's limits\)/)
+  assert.match(text, /by rarity at most Common 500, Uncommon 1500, Rare 7000, Epic 14000, Legendary 38000 \(the owner's limits\)/)
 })
 
 test('the dashboard has the two new limits with their info bubbles and market lines, and the password guards them', () => {
