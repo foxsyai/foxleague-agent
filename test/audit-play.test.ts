@@ -332,6 +332,8 @@ test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable 
   const small = (startsIn: number) => tournament(301, { format: 'round_robin', max_teams: 4, min_teams: 3, round_interval_minutes: 30, deadline: hours(startsIn - 0.5), starts_at: hours(startsIn) }) as TournamentDetail
   assert.match(checkAction(join, busy, ctx({ tournament: small(5) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
   assert.equal(checkAction(join, busy, ctx({ tournament: small(72) })).ok, true)
+  // The instructions state the rule as it now judges: the squad at the start, rested until then.
+  assert.match(SYSTEM_PROMPT, /more condition than it will have above 30 at the start \(rested until then\) plus what it regenerates between rounds/)
 })
 
 // ---- D5: the Zeus field test compares the field with our eleven at the tournament's start ----
