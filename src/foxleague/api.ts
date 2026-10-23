@@ -50,6 +50,9 @@ interface Envelope<T> {
   code?: string
 }
 
+/** How long a Play may take to answer: FoxLeague's slot wait (at most 35 s) and the match start, with room to spare. */
+const PLAY_MATCH_TIMEOUT_MS = 95_000
+
 export class FoxLeague {
   private readonly base: string
   private readonly limiter: RateLimiter
@@ -262,8 +265,12 @@ export class FoxLeague {
     return this.call<Team>('/teams/lineup', { method: 'POST', wallet: w, body: { wallet_address: w.address, lineup, substitutes } })
   }
 
+  /**
+   * With every match slot busy FoxLeague holds the answer until one frees, up to match.sim_slot_wait_ms (30 s by
+   * default, 35 s at most), then starts the match; its own app waits 90 s (PLAY_MATCH_TIMEOUT_MS). Audit C2.
+   */
   playMatch(w: AgentWallet, matchType: 'casual' | 'ranked'): Promise<{ match_id: number }> {
-    return this.call('/matches/play', { method: 'POST', wallet: w, body: { wallet_address: w.address, match_type: matchType } })
+    return this.call('/matches/play', { method: 'POST', wallet: w, body: { wallet_address: w.address, match_type: matchType }, timeoutMs: PLAY_MATCH_TIMEOUT_MS })
   }
 
   joinTournament(w: AgentWallet, id: number, txHash?: string): Promise<{ participant_id: number; condition_warning?: string }> {

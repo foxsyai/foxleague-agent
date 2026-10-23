@@ -767,8 +767,9 @@ export class Service {
     const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts, marketSales })
     // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
-    if (plan && snap.formationRecord?.games && snap.profile) {
-      this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)
+    // Its own matches are kept when they were read; a failed read of them hides none of the others' (audit B2).
+    if (plan && snap.profile) {
+      if (snap.formationRecord?.games) this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)
       snap.formationPool = this.store.formationPool()
     }
     this.noteTeams(index, snap)
@@ -1237,7 +1238,7 @@ export class Service {
 
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
-    const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc)
+    const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered)
     const plan = await this.strategist!.plan({ snapshot: snap, settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +

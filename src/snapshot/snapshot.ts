@@ -225,9 +225,27 @@ async function factsOf(fox: FoxLeague, cache: MatchFactsCache, budget: { left: n
   if (kept) return kept
   if (budget.left <= 0) return null
   budget.left--
-  const f = await fox.matchFormations(m).catch(() => null)
+  const read = await fox.matchFormations(m).catch(() => null)
+  // Kept with the moment it was read: a ranked or casual match's strengths depend on it (see strengthAtKickoff).
+  const f = read ? { ...read, readAt: new Date().toISOString() } : null
   if (f) cache.put(key, f)
   return f
+}
+
+/** A ranked or casual match's strengths count only from statistics read within this long of its end. */
+const RANKED_STRENGTH_READ_MS = 6 * 3600_000
+
+/**
+ * Whether the strengths in a match's statistics are those both elevens played with. A tournament or 1v1 match keeps
+ * its kickoff snapshot. A ranked or casual one is rebuilt at read time from the cards' current synced stats and
+ * condition (FoxLeague, matches.rs launch_squad): only a read within 6 hours of its end is close to the match, and
+ * facts kept without a read time are unknown (B-P1, audit 2026-10-23).
+ */
+function strengthAtKickoff(m: MatchHistoryRow, f: MatchFormations): boolean {
+  if (m.tournament_match_id) return true
+  const read = Date.parse(f.readAt ?? '')
+  const end = Date.parse(m.finished_at ?? '')
+  return Number.isFinite(read) && Number.isFinite(end) && read - end <= RANKED_STRENGTH_READ_MS
 }
 
 /** The agent's results by its formation against the rival's, over its last 50 revealed matches. */
@@ -244,7 +262,7 @@ async function formationRecord(fox: FoxLeague, cache: MatchFactsCache, address: 
       unread++
       continue
     }
-    const [ms, ts] = home ? [f.homeStrength, f.awayStrength] : [f.awayStrength, f.homeStrength]
+    const [ms, ts] = !strengthAtKickoff(m, f) ? [null, null] : home ? [f.homeStrength, f.awayStrength] : [f.awayStrength, f.homeStrength]
     games.push({
       key: m.tournament_match_id ? `t:${m.tournament_match_id}` : `m:${m.id}`,
       at: m.finished_at ?? new Date(0).toISOString(),

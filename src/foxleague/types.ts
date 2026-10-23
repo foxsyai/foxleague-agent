@@ -336,6 +336,12 @@ export interface MatchFormations {
   away: string
   homeStrength: number | null
   awayStrength: number | null
+  /**
+   * When the statistics were read (kept with the facts since 2026-10-23). A ranked or casual match's statistics
+   * rebuild both elevens at read time from the cards' current synced stats and condition (FoxLeague keeps no kickoff
+   * copy for them, matches.rs launch_squad), so its strengths are the match's only when read soon after it.
+   */
+  readAt?: string
 }
 
 export interface ChallengeForMe {

@@ -417,6 +417,42 @@ function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
   return null
 }
 
+/** Fixture phases a booster bought now still doubles: FoxLeague awards a match's XP when its result is applied. */
+const BOOSTER_PHASES = new Set(['upcoming', 'locked', 'live'])
+
+/**
+ * Why Zeus would buy the XP booster with nothing of its own to double, or null: it needs a Silver or Gold tournament
+ * or 1v1 match of its own listed, not over, kicking off within the booster's 24 hours (Bronze, ranked and casual
+ * matches earn no XP). FoxLeague reads the booster when a match's result is applied (at the reveal of a tournament or
+ * 1v1 match; matches.rs apply_match_results, a purchase verified within the last 24 h), so buying it once the fixture
+ * is drawn loses nothing, while a seat in an open tournament can still come back (audit D9, 2026-10-23). Either list
+ * unreadable is no "none".
+ */
+function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
+  const upcoming = s.auth?.upcoming
+  const mine = s.auth?.myTournaments
+  if (!upcoming || !mine) return 'your fixtures could not be read: Zeus buys the XP booster only for competitive matches of its own'
+  const sure = upcoming.matches.some(m => {
+    const at = Date.parse(m.scheduled_at)
+    const t = mine.active.find(x => x.id === m.tournament_id)
+    return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && (t?.tier === 'silver' || t?.tier === 'gold')
+  })
+  return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): Zeus buys the XP booster once its fixtures are drawn'
+}
+
+/**
+ * Why the agent would not list this card (the squad checks of list_card), or null: outside the lineup and bench, at
+ * least 18 cards left after it and not among the CORE_CARDS strongest. A Legendary's match waiver is bought only then.
+ */
+function listingBlocked(s: AgentSnapshot, c: PlayerView): string | null {
+  if (inSquad(s, c.nonce)) return `#${c.nonce} is in the lineup or on the bench`
+  const unlisted = s.players.filter(p => !p.listed)
+  if (unlisted.length - 1 < 18) return 'listing it would leave fewer than 18 cards; a match needs 18'
+  const rank = [...unlisted].sort((x, y) => y.syncedTotal - x.syncedTotal).findIndex(p => p.nonce === c.nonce)
+  if (rank >= 0 && rank < CORE_CARDS) return `#${c.nonce} is among the ${CORE_CARDS} strongest cards: the agent sells only spares`
+  return null
+}
+
 /**
  * The agent's own team could not be read (FoxLeague answered without its lineup, or not at all). Nothing that
  * depends on who plays may run blind: no lineup or formation change, no match, and no card leaves the squad.
@@ -744,6 +780,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
             const hours = (ctx.now.getTime() - ctx.lastBoosterAt.getTime()) / 3600_000
             if (hours < 24 - XP_BOOSTER_RENEW_HOURS) return refuse(`an XP booster was bought ${Math.max(0, Math.floor(hours))} h ago: another one now would throw away the hours left`)
           }
+          if (ctx.zeus) {
+            const none = noBoosterFixture(s, ctx.now)
+            if (none) return refuse(none)
+          }
           amount = prices.xp_booster
           break
         }
@@ -860,9 +900,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
       if (c.listed) return refuse(`#${a.nonce} is listed for sale: a listed card cannot be waived`)
-      // Only for a fusion that can really happen: otherwise the FOXSY buys nothing.
-      const blocked = fusionBlocked(s, c)
-      if (blocked) return refuse(`no fusion is possible with #${a.nonce} yet (${blocked}): a waiver would be wasted`)
+      // Only for a fusion that can really happen: otherwise the FOXSY buys nothing. A Legendary is never fused, but
+      // FoxLeague sells its match waiver for the listing gate (405, 135 played): bought only for a card the agent
+      // would list (audit C1, 2026-10-23). Its cooldown waiver still buys nothing.
+      const forListing = a.type === 'fusion_match_waiver' && c.rarity === 'Legendary'
+      const blocked = forListing ? listingBlocked(s, c) : fusionBlocked(s, c)
+      if (blocked) return refuse(forListing ? `#${a.nonce} is not a card the agent would list (${blocked}): a waiver would be wasted` : `no fusion is possible with #${a.nonce} yet (${blocked}): a waiver would be wasted`)
+      const purpose = forListing ? 'listing' : 'fusion'
       let costAtomic: bigint
       const notes: string[] = []
       const extra: Record<string, unknown> = {}
@@ -890,7 +934,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const floor = q.floor ?? g.floor
         if (q.chain_played < floor) return refuse(`#${a.nonce} has really played ${q.chain_played} competitive matches on chain; ${aRarity(c.rarity)} must play ${floor} before credit can be bought`)
         const needed = minMatches - q.chain_played - q.credit
-        if (needed <= 0) return refuse(`#${a.nonce} already has the ${minMatches} matches fusion needs`)
+        if (needed <= 0) return refuse(`#${a.nonce} already has the ${minMatches} matches ${purpose} needs`)
         if (ctx.piece) {
           const target = Math.min(needed, q.max_purchasable)
           if (ctx.piece.index === 1 && ctx.piece.of * a.matches !== target) return refuse(`#${a.nonce} needs exactly ${target} to reach ${minMatches}: the pieces would buy ${ctx.piece.of * a.matches}`)
@@ -903,7 +947,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (needed > q.max_purchasable) return refuse(`#${a.nonce} needs ${needed} more but only ${q.max_purchasable} can be bought: play more matches first`)
         costAtomic = BigInt(q.price_wei) * BigInt(a.matches)
         extra.matches = a.matches
-        notes.push(a.matches === needed ? `#${a.nonce} reaches ${minMatches} competitive matches for fusion` : `#${a.nonce} +${a.matches} toward the ${minMatches} matches for fusion (${needed - a.matches} to go)`)
+        notes.push(a.matches === needed ? `#${a.nonce} reaches ${minMatches} competitive matches for ${purpose}` : `#${a.nonce} +${a.matches} toward the ${minMatches} matches for ${purpose} (${needed - a.matches} to go)`)
       }
       const whole = Number(costAtomic / 10n ** 18n)
       // The first piece of a split waiver answers for the whole group, as the unsplit action would.

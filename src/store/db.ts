@@ -33,6 +33,9 @@ export interface DeletedAgent {
   by: string
 }
 
+/** Set once formation_results was emptied for the read-time rule of ranked strengths (B-P1, audit 2026-10-23). */
+const FORMATION_RESULTS_REBUILT = 'formation_results_rebuilt_2026_10_23'
+
 /** The stored values that belong to one agent, keyed by its number (deleteAgent clears them). */
 const PER_AGENT_KV = ['agent_user_id:', 'summary_elo:', 'waiting_funds:', 'last_plan_', 'bid_gone:']
 
@@ -170,6 +173,12 @@ export class Store {
     if (!cols.has('removed_at')) this.db.exec('ALTER TABLE agents ADD COLUMN removed_at TEXT')
     // Added with Retire: a RetiredInfo JSON while the agent is parked, NULL while it is active.
     if (!cols.has('retired')) this.db.exec('ALTER TABLE agents ADD COLUMN retired TEXT')
+    // Once (B-P1, audit 2026-10-23): the rows kept before a ranked match's strength edge needed a read within 6 hours
+    // of its end go, and each agent's next plan stores its last 50 matches again under the rule.
+    if (this.getKv(FORMATION_RESULTS_REBUILT) !== '1') {
+      this.db.exec('DELETE FROM formation_results')
+      this.setKv(FORMATION_RESULTS_REBUILT, '1')
+    }
   }
 
   // ---- agents ----
@@ -231,6 +240,14 @@ export class Store {
   agents(): AgentRow[] {
     const live = this.liveMode
     return (this.db.prepare('SELECT * FROM agents WHERE removed_at IS NULL AND retired IS NULL ORDER BY idx').all() as Record<string, unknown>[]).map(r => toAgentRow(r, live))
+  }
+
+  /**
+   * Every agent number the table holds: active, retired and removed teams alike (their activity stays). What one of
+   * them left on FoxLeague (a 1v1 out until its deadline) outlives its place among the active agents.
+   */
+  agentIndexes(): number[] {
+    return (this.db.prepare('SELECT idx FROM agents ORDER BY idx').all() as { idx: number }[]).map(r => Number(r.idx))
   }
 
   /** The agents parked with Retire, until they are restored. */
@@ -403,15 +420,19 @@ export class Store {
 
   /**
    * The pooled formation record: the last 14 days of every team this install runs (its matches against a team of its
-   * own left out, they say nothing about the field). It names no team.
+   * own left out, they say nothing about the field). It names no team. The install's own teams are the ones with rows
+   * here and every one whose FoxLeague user id the store keeps (agent_user_id:N, retired and removed teams too): a team
+   * that never planned or whose rows were pruned is still the owner's (audit B1, 2026-10-23).
    */
   formationPool(): FormationRecord {
-    const rows = this.db
+    const own = new Set(this.kvWithPrefix('agent_user_id:').map(([, v]) => Number(v)).filter(n => Number.isSafeInteger(n) && n > 0))
+    const rows = (this.db
       .prepare(
         `SELECT match_key, at, mine, theirs, gf, ga, edge, rival_user_id FROM formation_results
          WHERE at >= ? AND (rival_user_id IS NULL OR rival_user_id NOT IN (SELECT DISTINCT own_user_id FROM formation_results))`,
       )
-      .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[]
+      .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[])
+      .filter(r => r.rival_user_id === null || !own.has(Number(r.rival_user_id)))
     return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: r.theirs, gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: r.rival_user_id })))
   }
 
