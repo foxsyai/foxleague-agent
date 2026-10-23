@@ -2,6 +2,7 @@
 // It never sees keys and cannot build a transaction; every proposed action goes through
 // parseAction and the executor's checks.
 
+import { atomicToFloat, decimalToAtomic } from '../util/encoding.ts'
 import { readFileSync } from 'node:fs'
 import Anthropic from '@anthropic-ai/sdk'
 import { parseAction, type PlannedAction } from '../executor/actions.ts'
@@ -194,6 +195,23 @@ function bidCeilings(s: AgentSnapshot): string {
  */
 const PREVIOUS_PLAN_CHARS = 2000
 
+/**
+ * What the agent can spend (owner, 2026-10-23): an agent with 199 EGLD wrote "770 FOXSY, so no bids are possible".
+ * The FOXSY held plus what the EGLD above the gas reserve (and any WEGLD) swaps into, next to the swap and day limits.
+ */
+function buyingPower(p: PlanInput): string {
+  const s = p.snapshot
+  const n = (x: number) => Math.round(x).toLocaleString('en-US')
+  if (!s.chain) return 'Buying power: unknown (the wallet could not be read)'
+  const held = `${n(atomicToFloat(s.chain.foxsy))} FOXSY held`
+  if (!s.prices || !(s.prices.egldPerFoxsy > 0) || !(s.prices.foxsyUsd > 0)) return `Buying power: ${held}; what the EGLD swaps into is unknown (no price)`
+  // The reserve the executor keeps (the same decimal setting it reads); an EGLD balance under it buys nothing.
+  const egldAbove = s.chain.egld - decimalToAtomic(p.settings.egldGasReserve)
+  const above = atomicToFloat(egldAbove > 0n ? egldAbove : 0n) + atomicToFloat(s.chain.wegld)
+  const today = p.budget.remainingTodayUsd
+  return `Buying power: ${held} plus about ${n(above / s.prices.egldPerFoxsy)} FOXSY from the ${+above.toFixed(2)} EGLD above the gas reserve; one swap at most ${n(p.settings.maxSwapFoxsy)} FOXSY, and today's $${today.toFixed(2)} left buys about ${n(today / s.prices.foxsyUsd)} FOXSY. Judge what you can afford on both, never on the FOXSY alone.`
+}
+
 export function renderPlanRequest(p: PlanInput): string {
   const b = p.budget
   const recent = p.recent.slice(0, 20)
@@ -204,6 +222,7 @@ export function renderPlanRequest(p: PlanInput): string {
     `## Budget (${p.dryRun ? 'dry-run ledger' : 'live ledger'}, game day ${b.gameDay})`,
     `Today: $${b.spentTodayUsd.toFixed(2)} spent of $${b.dailyCapUsd.toFixed(2)}, $${b.remainingTodayUsd.toFixed(2)} left. Month ${b.month}: $${b.remainingMonthUsd.toFixed(2)} of $${b.monthlyBudgetUsd.toFixed(2)} left. Setup budget left: $${b.remainingSetupUsd.toFixed(2)} of $${b.setupBudgetUsd.toFixed(2)}.`,
     `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY${bidCeilings(p.snapshot)}, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.length ? p.settings.entryFeesGold.join('/') : 'off (this agent never creates or joins Gold tournaments or 1v1s)'}.`,
+    buyingPower(p),
     `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
     recent.some(r => OLD_SIBLING_RULE.test(r.summary))
       ? "## Earlier entries\nSome recent entries below cite a rule that kept this agent out of tournaments, 1v1s and auctions with the owner's other teams. The owner removed that rule on 2026-09-30; the fair play section of your instructions says what holds now. Do not carry that reasoning forward: judge every tournament, 1v1 and auction on its merits."

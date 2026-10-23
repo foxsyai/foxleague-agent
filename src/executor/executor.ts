@@ -314,7 +314,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; deadline_minutes?: number } }
       } catch {
         return {}
       }
@@ -353,6 +353,14 @@ export class Executor {
       market.oneVOneWithOpponentThisWeek = store
         .activityOf(agent.index, ['join_tournament', 'create_challenge'], since(7 * 86_400_000))
         .filter(r => counted(r.status) && detailOf(r).opponentUserId === opponentId).length
+      // The owner's other agents: a 1v1 of theirs against this rival is out until its deadline (a join: at once) and an
+      // hour for the match have passed. On the safe side, a create that failed or errored may have left a challenge.
+      market.otherTeamsOnOpponent = store
+        .agents()
+        .filter(b => b.index !== agent.index)
+        .flatMap(b => store.activityOf(b.index, ['join_tournament', 'create_challenge'], since(6 * 3_600_000)))
+        .filter(r => (counted(r.status) || r.status === 'failed' || r.status === 'error') && detailOf(r).opponentUserId === opponentId)
+        .filter(r => Date.parse(r.at) + ((detailOf(r).action?.deadline_minutes ?? 0) + 60) * 60_000 > now.getTime()).length
     }
     if (a.type === 'create_challenge' && a.target_user_id === null) {
       market.openChallengesToday = store

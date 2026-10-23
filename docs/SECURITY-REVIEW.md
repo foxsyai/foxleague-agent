@@ -515,6 +515,24 @@ the four tests under "strength bands" in `test/formations.test.ts` were seen fai
 Nothing else changed: no new route, no money path. The rival's eleven is its strongest 11 cards at full condition, so
 the comparison leans against the agent, as the 1v1 rule does.
 
+## One challenger per rival, and buying power, 2026-10-23
+
+Two findings from the live agents on 2026-10-23. Three of the owner's agents had 1v1 challenges out against the same
+team at once ("Akeno"): each chose it on its own as a weaker, active opponent, but one manager faced three of the
+owner's teams together and two of the stakes could only wait out their deadlines. And Sporting Ohrid, holding 199.6
+EGLD and 770 FOXSY, wrote "the wallet holds about 770 FOXSY, so no entries, bids or recovery are possible": it judged
+what it could afford on its FOXSY alone, while no limit stopped a swap ($744 of its $3,000 month used, $2.89 of $150
+that day). Test first: `test/challenges-and-funds.test.ts`, each finding test seen failing before its fix; the test
+that the new refusal is not taken for the sibling rule removed on 2026-09-30 is a control.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| C1 | low | Several of the owner's agents could challenge, or take the open 1v1 of, the same rival at the same time | `oneVOneOpponentRefusal` (create with a target, and join of a 1v1) refuses while another of the owner's agents has a 1v1 out against that rival: its create or join logged in the same ledger (a failed or errored create too, as it may have left a challenge), until its deadline (a join: at once) and an hour for the match have passed. The refusal names no team and does not read as the old sibling rule. Agents may still meet each other, as before |
+| B1 | design | An agent judged what it could afford on the FOXSY it held, never counting the EGLD above its gas reserve | The plan request shows its buying power: the FOXSY held plus what the EGLD above the reserve (and any WEGLD) swaps into at the current price, next to the one-swap limit and what today's budget left buys; unknown without a price or a wallet read. The prompt says never to call something unaffordable on the FOXSY alone, and to swap earlier in the same plan when an action that pays needs it |
+
+No cap or limit changed: every swap still meets the swap maximum, the gas reserve, the daily cap and the monthly
+budget in the executor.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

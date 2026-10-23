@@ -52,6 +52,8 @@ export interface RulesContext {
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
+  /** 1v1s the owner's other agents have out against that opponent (created or joined, not over yet). */
+  otherTeamsOnOpponent?: number
   /** Open 1v1 challenges this agent created in the last 24 hours. */
   openChallengesToday?: number
   /**
@@ -326,6 +328,8 @@ const ZEUS_STRONGER_ELO = 50
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
   const opp = ctx.opponent
   if (!opp || opp.elo === null) return "the opponent's strength could not be read"
+  // Owner, 2026-10-23: one of the owner's teams at a time against a rival, never several piling on one manager.
+  if ((ctx.otherTeamsOnOpponent ?? 0) > 0) return `another of your owner's teams already has a 1v1 out against user ${opp.userId} (one at a time per rival: pick another team or wait until it is over)`
   const mine = s.profile?.elo_rating ?? 1200
   if (opp.elo - mine >= MAX_1V1_ELO_GAP) return `the opponent is far stronger (ELO ${opp.elo} vs ${mine})`
   // ELO alone is the one number a rival controls (new teams start at 1200): compare the squads too.
