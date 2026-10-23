@@ -1,13 +1,13 @@
 // Audit 2026-10-23 (48 hours of the 10 live agents): actions the plan lost to refusals it could have avoided, because
 // it lacked what the executor knows, or because the scheduling defeated it. One test per finding, named after it.
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Mnemonic } from '@multiversx/sdk-core'
 import type { Config } from '../src/config.ts'
-import { Service } from '../src/service.ts'
+import { Service, scheduleActions } from '../src/service.ts'
 import { Executor } from '../src/executor/executor.ts'
 import { parseAction, type PlannedAction } from '../src/executor/actions.ts'
 import { checkAction, lineupStrength, type RulesContext } from '../src/executor/rules.ts'
@@ -54,6 +54,73 @@ test('D1 two ranked matches of one plan are scheduled at least the 15-minute ran
   assert.equal(scheduled.length, 2, 'both ranked matches were scheduled')
   const gapMin = (scheduled[1]! - scheduled[0]!) / 60_000
   assert.ok(gapMin >= 15.5, `the second ranked start is scheduled ${gapMin.toFixed(2)} min after the first; the executor refuses a ranked start within 15.5 min of the last one, so the second is lost`)
+})
+
+test('D1 scheduleActions spaces the matches by their gates, keeps the other actions random and drops what no longer fits', () => {
+  const MIN = 60_000
+  const seq = (...xs: number[]) => () => xs.shift() ?? 0
+  const ranked = act({ type: 'play_match', match_type: 'ranked' })
+  const casual = act({ type: 'play_match', match_type: 'casual' })
+  const train = act({ type: 'train', player_nonce: 1, attribute: 'speed' })
+  const sync = act({ type: 'sync' })
+  const at = (r: ReturnType<typeof scheduleActions>) => r.kept.map(k => +(k.offset / MIN).toFixed(2))
+  const base = { windowMs: 48 * MIN, gapMs: 30_000 }
+  // Two ranked starts on the same random moment: 16 min apart (the 15.5-minute gate and 30 s for the action before).
+  assert.deepEqual(at(scheduleActions([ranked, ranked], { ...base, random: () => 0.5 })), [24, 40])
+  // A third no longer fits the 48-minute window: dropped, with the reason, and it pushes nothing.
+  const three = scheduleActions([ranked, ranked, ranked, sync], { ...base, random: () => 0.5 })
+  assert.deepEqual(at(three), [24, 40, 40.5])
+  assert.deepEqual(three.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
+  // After any match the next waits until it is over (11 min); a casual start does not wait the ranked cooldown.
+  assert.deepEqual(at(scheduleActions([casual, ranked, casual], { ...base, random: () => 0 })), [0, 11, 22])
+  // The agent's last ranked start 5 minutes before the plan counts too.
+  assert.deepEqual(at(scheduleActions([ranked], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [11])
+  assert.deepEqual(at(scheduleActions([casual], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [6])
+  // The other actions keep their random moments; only a match pushed later moves what follows it.
+  assert.deepEqual(at(scheduleActions([train, sync, train], { ...base, random: seq(0.1, 0.5, 0.9) })), [4.8, 24, 43.2])
+  assert.deepEqual(at(scheduleActions([ranked, train, ranked, sync], { ...base, random: seq(0.2, 0.25, 0.3, 0.9) })), [9.6, 12, 25.6, 43.2])
+  // An owner request runs at once (no window): a second match cannot wait out the first and is dropped.
+  const owner = scheduleActions([casual, casual], { windowMs: 0, gapMs: 30_000, random: () => 0.5 })
+  assert.deepEqual(at(owner), [0])
+  assert.match(owner.dropped[0]!.reason, /the match before it/)
+})
+
+test('D1 a match waits for the real gate when the action before it took longer than planned', async () => {
+  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-d1b-'))))
+  svc.ensureAgents()
+  const h = new Date().getUTCHours()
+  // Two hours of active time: the plan's 45 minutes on the mocked clock stay inside them.
+  svc.store.updateSettings(0, { tickMinutes: 60, tickJitterMinutes: 10, minGapSeconds: 30, activeHoursUtc: [h, (h + 2) % 24], actionProbability: 1 })
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  const checked: number[] = []
+  const logged: number[] = []
+  try {
+    ;(svc as unknown as { snapshot: unknown }).snapshot = async () => snapshot()
+    ;(svc as unknown as { pause: unknown }).pause = async (ms: number) => { mock.timers.tick(Math.max(0, ms)) }
+    // The executor checks the ranked cooldown when the action starts; this start then takes 3 minutes before it is
+    // logged (FoxLeague waiting for a match slot), and the log row is what the next check counts from.
+    ;(svc as unknown as { executor: unknown }).executor = {
+      liveEnabled: false,
+      run: async (_b: unknown, _w: unknown, _s: unknown, a: PlannedAction[]) => {
+        checked.push(Date.now())
+        mock.timers.tick(3 * 60_000)
+        logged.push(Date.now())
+        svc.store.log({ agentIndex: 0, kind: 'play_match', status: 'dry_run', summary: 'DRY RUN would play ranked match', detail: { action: a[0]!.action } })
+        return []
+      },
+    }
+    const realRandom = Math.random
+    Math.random = () => 0.5
+    try {
+      await (svc as unknown as { runPlan: (b: unknown, a: unknown[], r: boolean) => Promise<void> }).runPlan(svc.store.agent(0), [act({ type: 'play_match', match_type: 'ranked' }), act({ type: 'play_match', match_type: 'ranked' })], true)
+    } finally {
+      Math.random = realRandom
+    }
+  } finally {
+    mock.timers.reset()
+  }
+  assert.equal(checked.length, 2)
+  assert.ok(checked[1]! - logged[0]! >= 15.5 * 60_000, `the second ranked start is checked ${((checked[1]! - logged[0]!) / 60_000).toFixed(2)} min after the first was logged: refused as the ranked cooldown`)
 })
 
 // ---- D2: the weekly 1v1 count per rival and the rivals not available now ----

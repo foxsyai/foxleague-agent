@@ -284,6 +284,12 @@ export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidRareFoxsy' |
   return null
 }
 
+/** FoxLeague's 30 seconds between match starts and 15 minutes after a ranked start, each with a margin (play_match). */
+export const MATCH_COOLDOWN_MS = 35_000
+export const RANKED_COOLDOWN_MS = 15.5 * 60_000
+/** A casual or ranked match runs about 10 minutes; another start before it ends is refused ("already in match"). */
+export const MATCH_RUNS_MS = 11 * 60_000
+
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72
 /** Lowest reserve per rarity, whatever the floor says (one junk listing can drag the floor to 500). */
@@ -654,8 +660,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (legal) return refuse(legal)
       const exhausted = s.team.lineup.filter(n => (card(s, n)?.condition ?? 0) <= 0)
       if (exhausted.length) return refuse(`starters at condition 0: ${exhausted.map(n => `#${n}`).join(',')}`)
-      if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < 35_000) return refuse('match cooldown (30 s)')
-      if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < 15.5 * 60_000) return refuse('ranked cooldown (15 min)')
+      if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < MATCH_COOLDOWN_MS) return refuse('match cooldown (30 s)')
+      if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < RANKED_COOLDOWN_MS) return refuse('ranked cooldown (15 min)')
       return allow(0)
     }
 

@@ -24,6 +24,7 @@ import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, rivalsOutByOthers } from './rivals.ts'
+import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -454,17 +455,15 @@ export class Executor {
         return { userId: p.user_id, strength, elo }
       }))
     }
-    const recent = store.activityOf(agent.index, ['play_match'], since(86_400_000)).filter(r => r.status === 'confirmed' || r.status === 'dry_run')
-    const lastMatch = recent[0]
-    const lastRanked = recent.find(r => r.summary.includes('ranked'))
+    const starts = lastMatchStarts(store, agent.index, now)
     return {
       settings: agent.settings,
       ...(zeus ? { zeus } : {}),
       ...(tournament !== undefined ? { tournament } : {}),
       ...(entryAmount !== undefined ? { entryAmount } : {}),
       ...market,
-      lastMatchStartAt: lastMatch ? new Date(lastMatch.at) : null,
-      lastRankedStartAt: lastRanked ? new Date(lastRanked.at) : null,
+      lastMatchStartAt: starts.match,
+      lastRankedStartAt: starts.ranked,
       now,
     }
   }
