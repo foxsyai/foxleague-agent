@@ -784,6 +784,7 @@ format's rules were read from FoxLeague's code (next-foxleague 75289fbbf, read o
 | R31F-3 | low | Fable review of PR #31: the knockout stretch was judged from the condition at the tournament's start, too kind at a short interval | It is judged from the condition after the league phase: rested over its slots (at most 100), less an even share of its 8 matches; a test refuses an old squad (half the regeneration) at 30 minutes and allows a young one |
 | R31A-1 | medium | Agent review of PR #31: an empty invited field, or rows in states the code does not know, let Zeus accept a field it never judged (rule 4) | Declined and expired rows are left out, invited and accepted are judged, any other state counts as unread, and an empty field is unread (refused); executor tests through the invitations view and the leaderboard, both failing too |
 | R31A-2 | low | Agent review and Fable review of PR #31: comments still said the agent never joins the format | Reworded |
+| R31A-3 | low | Re-review of PR #31 (test): no executor test showed Zeus refusing a strong field read from the leaderboard | A test: 30 invited teams at ELO 3000 with strong lineups are refused as clearly stronger, expired and declined rows left out (seen failing with the ELO lookup broken) |
 
 A League + Knockout leaves the open tournaments list (invitation only). The paid invitation endpoints are on FoxLeague's
 testnet only until its mainnet tournaments contract is upgraded; Bronze editions need no contract. Open: a team knocked

@@ -224,3 +224,14 @@ test('R31A-2 no comment says the agent never joins a League + Knockout', async (
     assert.doesNotMatch(src, /never joins the format|is neither joined nor created|\/\/ .*never joined\b/, f)
   }
 })
+
+// Re-review of PR #31 (low, test): no executor test showed Zeus refusing a strong field read from the leaderboard.
+test('R31A-3 Zeus refuses a field the leaderboard shows clearly stronger, and leaves declined and expired teams out', async () => {
+  const { STRATEGY_PRESETS } = await import('../src/store/settings.ts')
+  const { rivalSquad } = await import('./fixtures.ts')
+  const strongBoard = { users: Array.from({ length: 30 }, (_, i) => ({ id: 7000 + i, wallet_address: `erd1x${i}`, elo_rating: 3000 })), total: 30, limit: 200, offset: 0 }
+  const m = setup({ fox: { tournament: async () => lk(), leagueInvitations: async () => [invitation()], ...rivalSquad(60), leaderboard: async () => strongBoard, leagueInvitationsView: async () => ({ invitations: [...Array.from({ length: 30 }, (_, i) => ({ user_id: 7000 + i, state: i % 2 ? 'accepted' : 'invited' })), { user_id: 9001, state: 'expired' }, { user_id: 9002, state: 'declined' }] }) } })
+  m.store.updateSettings(0, { maxEntryFeeFoxsy: 10_000, strategy: STRATEGY_PRESETS.zeus! })
+  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: join, reason: '' }])
+  assert.match(r!.summary, /30 of the invited teams are clearly stronger \(lineup and ELO\): no real chance of the knockout/)
+})
