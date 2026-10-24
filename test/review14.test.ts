@@ -87,7 +87,7 @@ test('R14A-1 when the snapshot cannot tell (no own fixture listed, group not sen
     ['groups_knockout without any own fixture in the list', withRows([running(205, 'groups_knockout')], [])],
     ['swiss without any own fixture in the list', withRows([running(206, 'swiss')], [])],
     ['group rows without group_name', withRows([running(207, 'groups_knockout')], [fixture(207, -30, 'finished', { group_name: undefined })])],
-    ['a format the agent does not know', withRows([running(208, 'league_knockout', { max_teams: 36 })], [fixture(208, 600, 'upcoming')])],
+    ['a format the agent does not know', withRows([running(208, 'ladder', { max_teams: 36 })], [fixture(208, 600, 'upcoming')])], // league_knockout is known since 2026-10-24 (own fixtures only)
     ['a status the agent does not know', withRows([running(209, 'knockout', { status: 'paused' })], [])],
   ]
   for (const [what, s] of cases) {

@@ -1291,7 +1291,8 @@ export class Service {
       const snap = await this.snapshot(index, true)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
-      // League + Knockout invitations reach the owner (the agent never joins the format); a failed read waits for the next tick.
+      // League + Knockout invitations reach the owner (the agent decides on them within the limits, join_tournament);
+      // from the snapshot's own read, quiet when it failed.
       await this.noticeInvitations(index, snap).catch(() => undefined)
       const waiting = this.waitingForFunds(agent, snap)
       if (waiting) {

@@ -69,10 +69,11 @@ test('the schedule check takes all 17 matches and the knockout burst at the end'
   assert.equal(checkAction(join, s, ctx({ tournament: fast })).ok, true, checkAction(join, s, ctx({ tournament: fast })).refusal)
   // Rested to the start (49 h at 2 an hour) a tired squad is fit again: the start's condition counts, not today's.
   assert.equal(checkAction(join, tired, ctx({ tournament: fast })).ok, true)
-  // Starting within the hour, a tired squad cannot carry the knockout's 9 matches in about 23 hours.
+  // Starting within the hour, a tired squad still rests over the league phase (about 72 h) before the knockout's 9
+  // matches: the knockout is judged from the condition after the league (R31F-3, where an old squad is refused).
   const soon = lk({ round_interval_minutes: 30, deadline: new Date(Date.now() + 30 * 60_000).toISOString(), starts_at: new Date(Date.now() + 40 * 60_000).toISOString() })
   for (const p of tired.players) p.condition = 35
-  assert.match(checkAction(join, tired, ctx({ tournament: soon })).refusal!, /knockout would wear the squad down/)
+  assert.equal(checkAction(join, tired, ctx({ tournament: soon })).ok, true, checkAction(join, tired, ctx({ tournament: soon })).refusal)
 })
 
 test('Zeus accepts with a real chance of the knockout: fewer than 24 of the invited teams clearly stronger', () => {
@@ -156,4 +157,70 @@ test('the manual describes the rule', async () => {
   assert.match(plays, /\*\*Champions FoxLeague \(League \+ Knockout\)\*\*: FoxLeague invites the top of its leaderboard; the agent accepts an invitation by itself, at every level, when the entry fee fits your limits and the squad can carry up to 17 matches/)
   assert.match(plays, /It never creates one and never leaves one by itself/)
   assert.match(read('site/src/content/docs/play/strategy-levels.md'), /\| Champions FoxLeague \(League \+ Knockout\) invitations \| ✓ \| ✓ \| ✓ \| ✓ \| ✓ \| with a real chance of the knockout \(fewer than 24 of the invited teams clearly stronger\) \|/)
+})
+
+// ---- the reviews of PR #31 ----
+
+// Fable review F1 (medium): the 1v1 busy check knew no League + Knockout and refused every 1v1 for its whole run,
+// while FoxLeague keeps 1v1s open (its busy rows count only the team's own fixtures) and the manual says so.
+test('R31F-1 a running League + Knockout of ours keeps 1v1s open; only its own fixture within the hour makes the team busy', async () => {
+  const { STRANGER } = await import('./fixtures.ts')
+  const s = snapshot()
+  s.auth!.myTournaments = { active: [{ ...(lk().tournament), status: 'active', started_at: new Date(Date.now() - H).toISOString(), starts_at: new Date(Date.now() - H).toISOString() }], completed: [] } as never
+  const oneVOne = tournament(5001, { max_teams: 2, min_teams: 2, creator_user_id: 50, entry_fee_foxsy: 1000 }, [{ user_id: 50, wallet_address: STRANGER }]) as TournamentDetail
+  const c = { settings: TEST_SETTINGS, now: new Date(), tournament: oneVOne, opponent: { userId: 50, elo: 1190, strength: 1000 }, oneVOneWithOpponentThisWeek: 0, otherTeamsOnOpponent: 0 } as RulesContext
+  const free = checkAction({ type: 'join_tournament', tournament_id: 5001 }, s, c)
+  assert.doesNotMatch(free.refusal ?? '', /format the agent does not know/, free.refusal)
+  assert.equal(free.ok, true, free.refusal)
+  s.auth!.upcoming = { lead_minutes: 30, my_team_name: 'Agent', matches: [{ tournament_id: 3001, tournament_title: 'x', round_label: null, group_name: null, is_home: true, opponent_name: 'y', scheduled_at: new Date(Date.now() + 30 * 60_000).toISOString(), strategy_locks_at: new Date().toISOString(), phase: 'upcoming' }] } as never
+  assert.match(checkAction({ type: 'join_tournament', tournament_id: 5001 }, s, c).refusal!, /T3001 match at .* \(busy from an hour before kickoff/)
+})
+
+// Fable review F2 (low): a completed League + Knockout (36 invited seats) lifted the create ceiling to 45 teams.
+test('R31F-2 a completed League + Knockout does not lift the size ceiling for creating', async () => {
+  const { sizeCeiling } = await import('../src/executor/rules.ts')
+  const s = snapshot()
+  s.market.recentStandard = [{ id: 3001, tier: 'silver', format: 'league_knockout', max_teams: 36, seated: 36, fee: 2000, status: 'completed', starts_at: new Date().toISOString() }]
+  assert.equal(sizeCeiling(s), 8, 'invitation-filled seats say nothing about open demand')
+})
+
+// Fable review F3 (low): the knockout stretch started from the condition at the tournament's start; it starts after
+// the league phase (its 8 matches paid, its slots of rest regenerated, at most 100).
+test('R31F-3 the knockout stretch is judged from the condition the squad has after the league phase', () => {
+  const s = snapshot()
+  for (const p of s.players) { p.condition = 100; p.ageYears = 33 }
+  // Fit but old (half the regeneration) at a 30-minute interval: after the league (8 matches, about 72 h) the starters
+  // are about half full, and 9 knockout matches in about 23 h are too many.
+  const old = lk({ round_interval_minutes: 30 })
+  assert.match(checkAction(join, s, ctx({ tournament: old })).refusal!, /knockout would wear the squad down/)
+  for (const p of s.players) p.ageYears = 25
+  assert.equal(checkAction(join, s, ctx({ tournament: old })).ok, true, 'a young squad regenerates enough')
+})
+
+// Agent review of PR #31 (medium): an empty field, or rows in states the code does not know, let Zeus accept a field it
+// never judged. Fable review: the executor's field read had no test.
+test('R31A-1 Zeus never accepts a Champions FoxLeague field it could not judge', async () => {
+  const { STRATEGY_PRESETS } = await import('../src/store/settings.ts')
+  const run = async (fox: Record<string, unknown>) => {
+    const m = setup({ fox: { tournament: async () => lk(), leagueInvitations: async () => [invitation()], ...fox } })
+    m.store.updateSettings(0, { maxEntryFeeFoxsy: 10_000, strategy: STRATEGY_PRESETS.zeus! })
+    return (await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: join, reason: '' }]))[0]!
+  }
+  const board = { users: Array.from({ length: 30 }, (_, i) => ({ id: 7000 + i, wallet_address: `erd1x${i}`, elo_rating: 1200 })), total: 30, limit: 200, offset: 0 }
+  const rows = (n: number, state = 'invited') => ({ invitations: Array.from({ length: n }, (_, i) => ({ user_id: 7000 + i, state })) })
+  assert.match((await run({ leagueInvitationsView: async () => rows(0), leaderboard: async () => board })).summary, /the invited teams could not be read/, 'an empty field')
+  assert.match((await run({ leagueInvitationsView: async () => rows(30, 'pending'), leaderboard: async () => board })).summary, /invited teams could not be read/, 'states the code does not know count as unread')
+  assert.match((await run({ leagueInvitationsView: async () => { throw new Error('HTTP 502') }, leaderboard: async () => board })).summary, /the invited teams could not be read/)
+  assert.match((await run({ leagueInvitationsView: async () => rows(30), leaderboard: async () => { throw new Error('HTTP 502') } })).summary, /the invited teams could not be read/)
+  const declined = await run({ leagueInvitationsView: async () => ({ invitations: [...rows(30).invitations.slice(0, 5), ...Array.from({ length: 25 }, (_, i) => ({ user_id: 8000 + i, state: 'declined' }))] }), leaderboard: async () => board })
+  assert.equal(declined.status, 'dry_run', `declined and expired rows are not in the field: ${declined.summary}`)
+})
+
+// Agent review of PR #31 (low) and Fable review F4: comments that said the agent never joins the format.
+test('R31A-2 no comment says the agent never joins a League + Knockout', async () => {
+  const { readFileSync } = await import('node:fs')
+  for (const f of ['src/service.ts', 'src/foxleague/types.ts', 'src/executor/rules.ts']) {
+    const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8')
+    assert.doesNotMatch(src, /never joins the format|is neither joined nor created|\/\/ .*never joined\b/, f)
+  }
 })

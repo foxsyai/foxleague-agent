@@ -779,10 +779,17 @@ format's rules were read from FoxLeague's code (next-foxleague 75289fbbf, read o
 | LK5 | design | Leaving closes the invitation for good, and after the seats lock it is refused | The agent never leaves one by itself (only an owner's leave, `byOwner`); it never creates one |
 | LK6 | design | Zeus's top-three rule would refuse nearly every Champions FoxLeague | Zeus judges the invited teams (`GET /api/tournaments/{id}/invitations`, wallets and ELO from the leaderboard, lineups read as for other fields) and refuses with 24 or more clearly stronger, or when stronger plus unread reach 24 |
 | LK7 | low | The C3 notice read invitations only while `league_knockout_enabled` was on, but that switch gates only creating one | Every planning snapshot reads the pending invitations; the plan sees them inside the framed snapshot (titles and refusals through `txt()`) and the owner hears of each once, now told that the agent decides within the limits |
+| R31F-1 | medium | Fable review of PR #31: the 1v1 busy check knew no League + Knockout and refused every 1v1 for its whole run (days), while FoxLeague keeps 1v1s open (its busy rows count only the team's own fixtures) and the snapshot and the manual said so | `league_knockout` joins the formats busy only through the team's own fixtures; a test: a running one leaves a 1v1 open, its own fixture within the hour makes the team busy |
+| R31F-2 | low | Fable review of PR #31: a completed League + Knockout (36 invited seats) lifted the create ceiling to 45 teams | `sizeCeiling` leaves it out: invitation-filled seats say nothing about open demand |
+| R31F-3 | low | Fable review of PR #31: the knockout stretch was judged from the condition at the tournament's start, too kind at a short interval | It is judged from the condition after the league phase: rested over its slots (at most 100), less an even share of its 8 matches; a test refuses an old squad (half the regeneration) at 30 minutes and allows a young one |
+| R31A-1 | medium | Agent review of PR #31: an empty invited field, or rows in states the code does not know, let Zeus accept a field it never judged (rule 4) | Declined and expired rows are left out, invited and accepted are judged, any other state counts as unread, and an empty field is unread (refused); executor tests through the invitations view and the leaderboard, both failing too |
+| R31A-2 | low | Agent review and Fable review of PR #31: comments still said the agent never joins the format | Reworded |
 
 A League + Knockout leaves the open tournaments list (invitation only). The paid invitation endpoints are on FoxLeague's
 testnet only until its mainnet tournaments contract is upgraded; Bronze editions need no contract. Open: a team knocked
-out early stays barred from other tournaments until the whole tournament ends (the stricter side); the first play-off
+out early stays barred from other tournaments until the whole tournament ends (the stricter side); FoxLeague's
+refusal after a paid join can quote a title others wrote and reaches the next plan sanitised through recent activity
+(as every FoxLeague error today); the first play-off
 locks may come late (seats fill from aired results); FoxLeague's manual page for the format is synced when published.
 
 ## Where the limits live

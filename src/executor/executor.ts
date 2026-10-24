@@ -494,12 +494,18 @@ export class Executor {
       const view = await soft(() => fox.leagueInvitationsView(t0.id, wallet))
       const board = view ? await soft(() => fox.leaderboard(200)) : null
       if (view && board) {
-        const invited = view.invitations.filter(i => (i.state === 'invited' || i.state === 'accepted') && i.user_id !== snap.profile?.id).slice(0, 35)
-        market.field = await Promise.all(invited.map(async i => {
-          const u = board.users.find(x => x.id === i.user_id)
-          const strength = u?.wallet_address ? await soft(() => rivalStrength(fox, u.wallet_address)) : null
-          return { userId: i.user_id, strength, elo: u?.elo_rating ?? null }
-        }))
+        // FoxLeague's four states (league_invitations.rs): invited and accepted are the field, declined and expired are
+        // not; any other state is a team it cannot judge (unread). An empty field is unread too (agent review of PR #31).
+        const rows = (Array.isArray(view.invitations) ? view.invitations : []).filter(i => i.user_id !== snap.profile?.id)
+        const field = rows.filter(i => i.state !== 'declined' && i.state !== 'expired').slice(0, 35)
+        if (field.length) {
+          market.field = await Promise.all(field.map(async i => {
+            if (i.state !== 'invited' && i.state !== 'accepted') return { userId: i.user_id, strength: null, elo: null }
+            const u = board.users.find(x => x.id === i.user_id)
+            const strength = u?.wallet_address ? await soft(() => rivalStrength(fox, u.wallet_address)) : null
+            return { userId: i.user_id, strength, elo: u?.elo_rating ?? null }
+          }))
+        }
       }
     } else if (zeus && a.type === 'join_tournament' && tournament && worthReading) {
       const seated = tournament.participants.filter(p => p.user_id !== snap.profile?.id).slice(0, 32)

@@ -152,7 +152,7 @@ export interface Tournament {
   creator_user_id: number
   title: string
   description: string | null
-  /** The four formats the agent knows; FoxLeague serves others too (league_knockout since 2026-10-15), never joined. */
+  /** The four formats the agent creates and joins; league_knockout (since 2026-10-15) it joins by invitation only, others never. */
   format: 'knockout' | 'groups_knockout' | 'round_robin' | 'swiss' | (string & {})
   tier: 'bronze' | 'silver' | 'gold'
   featured: boolean

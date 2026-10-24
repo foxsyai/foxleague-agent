@@ -163,6 +163,8 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
     switch (t.format) {
       case 'knockout':
       case 'round_robin':
+      // FoxLeague counts a League + Knockout as busy only through the team's own fixtures (matches.rs busy rows).
+      case 'league_knockout':
         continue // only the own fixtures, read above
       case 'groups_knockout': {
         if (own.some(m => m.group_name === undefined)) return `T${t.id}: FoxLeague did not say which of your fixtures are group matches: whether your group has ended is unknown`
@@ -202,7 +204,8 @@ const VALID_SIZES: Record<string, (n: number) => boolean> = {
 /**
  * The formats the agent knows (their sizes, matches and windows above). Any other one, such as FoxLeague's
  * admin-only league_knockout of 2026-10-15 (a 36-team league and a two-legged knockout), is neither joined nor
- * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat.
+ * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat. A League +
+ * Knockout is the exception for joining: by invitation, with its own checks (join_tournament).
  */
 function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
   // A League + Knockout is joined by invitation (its own checks in join_tournament) and created only by FoxLeague's admin.
@@ -217,7 +220,8 @@ export function supportedFormat(format: string): boolean {
 
 /** Largest size worth creating: what recently filled plus a margin (README: 16-20 is the norm, not 64). */
 export function sizeCeiling(s: AgentSnapshot): number {
-  const seated = s.market.recentStandard.filter(t => t.status === 'completed').map(t => t.seated)
+  // A League + Knockout fills by invitation: its 36 seats say nothing about what an open tournament fills.
+  const seated = s.market.recentStandard.filter(t => t.status === 'completed' && t.format !== 'league_knockout').map(t => t.seated)
   const best = seated.length ? Math.max(...seated) : 0
   return Math.max(8, Math.ceil(best * 1.25))
 }
@@ -467,9 +471,14 @@ function scheduleRefusal(
   const available = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
   const needed = matches * 11 * loss
   if (t.format === 'league_knockout' && needed <= available) {
-    // The binding stretch is the knockout: up to 9 matches within its 46 slots, from the squad as it is at the start.
+    // The binding stretch is the knockout: up to 9 matches within its 46 slots, from the squad as the league phase
+    // leaves it (rested over its slots at most to 100, less an even share of its 8 matches; Fable review of PR #31).
+    const squad = matchSquad(s)
+    const leagueHours = (span - (LK_KNOCKOUT_SLOTS - 1) * interval) / 60
+    const leagueCost = squad.length ? (LK_LEAGUE_MATCHES * 11 * loss) / squad.length : 0
+    const atKnockout = (p: PlayerView) => Math.max(0, Math.min(MAX_CONDITION, atStart.at(p) + regenPerHour(p, cfg) * leagueHours) - leagueCost)
     const burstHours = ((LK_KNOCKOUT_SLOTS - 1) * interval) / 60
-    const burst = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * burstHours, 0)
+    const burst = squad.reduce((sum, p) => sum + Math.max(0, atKnockout(p) - floor) + regenPerHour(p, cfg) * burstHours, 0)
     const burstNeeded = LK_KNOCKOUT_MATCHES * 11 * loss
     return burstNeeded <= burst ? null : `the knockout would wear the squad down: up to ${LK_KNOCKOUT_MATCHES} matches in about ${Math.round(burstHours)} h need ~${burstNeeded} condition, the squad has ~${Math.round(burst)} above ${floor} with recovery`
   }
