@@ -57,8 +57,8 @@ abuse. The agent:
   of your teams at once, and a rule that only one of them bids on a card at auction and none on a card another of
   your teams sells, so you never bid against yourself or pay the sale fee to move a card between your own wallets, and the rule that a
   private tournament it creates never invites another of your teams;
-- protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two a week
-  against the same team; an open challenge, which any team may take, at most once a day and only at your lowest
+- protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two played
+  1v1s a week against the same team, a challenge nobody accepted not counting; an open challenge, which any team may take, at most once a day and only at your lowest
   Silver amount);
 - creates a private tournament only at the Zeus level (it invites rival teams, never your other agents) and joins
   one only when your team is invited.

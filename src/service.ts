@@ -1205,6 +1205,30 @@ export class Service {
   }
 
   /**
+   * League + Knockout invitations (owner, 2026-10-24, audit C3): the agent never joins that format (unsupportedFormat,
+   * src/executor/rules.ts), but the owner hears of each pending invitation once, in the activity and at once on
+   * Telegram, to accept it in FoxLeague by hand, and once more if it becomes acceptable after a refusal. Read only
+   * while FoxLeague has the format on and the team is registered. The title and FoxLeague's refusal (which can quote a
+   * title players wrote) go to the owner only: the activity row, which the next plan reads, is built from our own
+   * values (agent review of PR #30, rule 6).
+   */
+  private async noticeInvitations(index: number, snap: AgentSnapshot): Promise<void> {
+    if (snap.config?.tournament_defaults?.league_knockout_enabled !== true || !snap.profile) return
+    for (const inv of await this.fox.leagueInvitations(this.wallet(index))) {
+      const key = `league_invite_told:${index}:${inv.tournament_id}:${inv.can_accept ? 'open' : 'refused'}`
+      if (this.store.getKv(key) || !(Date.parse(inv.expires_at) > Date.now())) continue
+      this.store.setKv(key, new Date().toISOString())
+      const title = String(inv.title).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 80)
+      const refusal = inv.can_accept ? '' : ` (FoxLeague says it cannot be accepted now: ${String(inv.refusal ?? 'no reason given').replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 160)})`
+      const id = Number(inv.tournament_id)
+      const terms = `${/^[a-z]+$/.test(String(inv.tier)) ? inv.tier : 'tier unknown'}, entry ${Number(inv.entry_fee_foxsy)} FOXSY`
+      const until = `${new Date(Date.parse(inv.expires_at)).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+      this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: `League + Knockout invitation T${id} (${terms}, until ${until}): the owner was told; the agent never joins this format${inv.can_accept ? '' : '; FoxLeague says it cannot be accepted now'}` })
+      this.notify(`${agentName(index)}: invited to the League + Knockout T${id} "${title}" (${terms}), until ${until}: the agent never joins this format; accept it yourself in FoxLeague${refusal}`)
+    }
+  }
+
+  /**
    * Whether another model call is due within the hour, from the schedule: the next planning tick of an active agent
    * (not paused, not waiting for funds) within 55 minutes and inside its active hours. An agent planning now has its
    * entry at the moment it fired: its next is set only after its plan's actions ran (up to 0.8 of its tick, runPlan),
@@ -1266,6 +1290,8 @@ export class Service {
       const snap = await this.snapshot(index, true)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
+      // League + Knockout invitations reach the owner (the agent never joins the format); a failed read waits for the next tick.
+      await this.noticeInvitations(index, snap).catch(() => undefined)
       const waiting = this.waitingForFunds(agent, snap)
       if (waiting) {
         if (this.store.getKv(`waiting_funds:${index}`) !== '1') this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: waiting })

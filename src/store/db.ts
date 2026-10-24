@@ -523,6 +523,13 @@ export class Store {
     this.db.prepare("UPDATE spend SET usd = 0, foxsy_atomic = '0', action = action || ':refunded' WHERE id = ?").run(id)
   }
 
+  /** The hashes of this agent's seats and stakes (join:<tournament>) whose money came back: cancelled, left or never seated. */
+  refundedSeatHashes(agentIndex: number): Set<string> {
+    return new Set((this.db
+      .prepare("SELECT tx_hash FROM spend WHERE agent_idx = ? AND action LIKE 'join:%:refunded' AND tx_hash IS NOT NULL")
+      .all(agentIndex) as { tx_hash: string }[]).map(r => String(r.tx_hash)))
+  }
+
   /** The hashes of this agent's payments tagged so (shop:xp_booster) whose money came back (creditSpend). */
   refundedHashes(agentIndex: number, tag: string): Set<string> {
     return new Set((this.db
