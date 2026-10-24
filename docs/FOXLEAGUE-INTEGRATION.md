@@ -1752,7 +1752,8 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   (`join_tournament`: a pending invitation read again right before the payment with `can_accept` true and at least 30
   minutes to its `expires_at`, the entry within the owner's limits, the schedule check for 17 matches over its 190
   slots and the knockout's 9 matches in 46 slots, Zeus with fewer than 24 clearly stronger invited teams read from
-  `GET /api/tournaments/{id}/invitations`), never creates one (`unsupportedFormat`), never leaves one by itself, and
+  `GET /api/tournaments/{id}/invitations`), never creates one (`unsupportedFormat`), leaves one only before its `seats_lock_at` (read again from
+  `GET /api/tournaments/{id}/invitations`, 30 minutes of margin; leaving then refunds the whole entry), and
   refuses other standard tournaments while one of its own runs (FoxLeague's option C). Every planning snapshot reads
   `GET /api/tournaments/invitations` (FoxLeague's `league_knockout_enabled` gates only creating one) and the owner hears
   of each pending invitation once (`noticeInvitations`, `src/service.ts`). Facts from next-foxleague 75289fbbf:

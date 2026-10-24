@@ -50,15 +50,44 @@ test('when FoxLeague says the invitation cannot be accepted, the agent does not 
   assert.doesNotMatch(v.refusal!, /EVIL TITLE/, 'the refusal is logged and read by the next plan: no text written by others')
 })
 
-test('the agent never creates a League + Knockout, and never leaves one by itself', async () => {
+test('the agent never creates a League + Knockout', async () => {
   const create = { type: 'create_tournament', tier: 'silver', format: 'league_knockout', max_teams: 36, min_teams: 36, entry_fee_foxsy: 1000, starts_in_hours: 48, round_interval_minutes: 60, registration_closes_minutes_before: 60 }
   const c = checkAction(create as never, snapshot(), ctx())
   assert.equal(c.ok, false)
+})
+
+// Owner, 2026-10-24: the agent may leave a League + Knockout it joined early once it sees no real chance of the top 24,
+// but only while leaving still returns the whole entry: before the seats lock (FoxLeague refuses any leave after it).
+// Leaving closes the invitation for good, so an unreadable lock time is no leave.
+test('the agent leaves a League + Knockout only before its seats lock, with a 30-minute margin; the owner as before', () => {
   const seated = lk()
   seated.participants = [{ user_id: snapshot().profile!.id }]
   const leave = { type: 'leave_tournament' as const, tournament_id: 3001 }
-  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated })).refusal!, /never leaves a League \+ Knockout by itself/)
-  assert.equal(checkAction(leave, snapshot(), ctx({ tournament: seated, byOwner: true })).ok, true, 'the owner may')
+  const at = (h: number) => new Date(Date.now() + h * H)
+  const ok = checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(10) }))
+  assert.equal(ok.ok, true, ok.refusal)
+  assert.match(ok.notes.join(' '), /the whole entry comes back; the invitation closes for good/)
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(0.25) })).refusal!, /seats lock at .*: too close to leave/)
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(-1) })).refusal!, /seats locked at .*: nobody can leave now/)
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: null })).refusal!, /when its seats lock could not be read: not leaving blind/)
+  assert.equal(checkAction(leave, snapshot(), ctx({ tournament: seated, byOwner: true })).ok, true, 'the owner may, as before')
+})
+
+test('the executor reads when the seats lock right before leaving; an unreadable time leaves nothing', async () => {
+  const seated = lk()
+  seated.participants = [{ user_id: snapshot().profile!.id }]
+  const leave = { action: { type: 'leave_tournament' as const, tournament_id: 3001 }, reason: '' }
+  const view = (lock: string) => ({ invitations: [], seats_lock_at: lock })
+  const ok = setup({ fox: { tournament: async () => seated, leagueInvitationsView: async () => view(new Date(Date.now() + 10 * H).toISOString()) } })
+  assert.equal((await ok.exec.run(ok.agent(), dryWallet, snapshot(), [leave]))[0]!.status, 'dry_run')
+  const blind = setup({ fox: { tournament: async () => seated, leagueInvitationsView: async () => { throw new Error('HTTP 502') } } })
+  assert.match((await blind.exec.run(blind.agent(), dryWallet, snapshot(), [leave]))[0]!.summary, /could not be read: not leaving blind/)
+})
+
+test('the plan sees when the seats of its League + Knockout lock, and that leaving before then returns the whole entry', () => {
+  const s = snapshot()
+  s.auth!.leagueSeats = [{ tournamentId: 3001, seatsLockAt: new Date(Date.now() + 10 * H).toISOString(), accepted: 20 }]
+  assert.match(renderDigest(s), /Your League \+ Knockout T3001: 20 of 36 seats taken; seats lock .* UTC: until then you may leave for the whole entry back \(the invitation closes for good\), after that nobody can leave/)
 })
 
 test('the schedule check takes all 17 matches and the knockout burst at the end', () => {
@@ -155,7 +184,7 @@ test('the manual describes the rule', async () => {
   const read = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
   const plays = read('site/src/content/docs/play/how-it-plays.md')
   assert.match(plays, /\*\*Champions FoxLeague \(League \+ Knockout\)\*\*: FoxLeague invites the top of its leaderboard; the agent accepts an invitation by itself, at every level, when the entry fee fits your limits and the squad can carry up to 17 matches/)
-  assert.match(plays, /It never creates one and never leaves one by itself/)
+  assert.match(plays, /It never creates one\. It may leave one it joined early when it sees no real chance of the top 24, but only before the seats lock, while leaving still returns the whole entry/)
   assert.match(read('site/src/content/docs/play/strategy-levels.md'), /\| Champions FoxLeague \(League \+ Knockout\) invitations \| ✓ \| ✓ \| ✓ \| ✓ \| ✓ \| with a real chance of the knockout \(fewer than 24 of the invited teams clearly stronger\) \|/)
 })
 
@@ -212,7 +241,8 @@ test('R31A-1 Zeus never accepts a Champions FoxLeague field it could not judge',
   assert.match((await run({ leagueInvitationsView: async () => rows(30, 'pending'), leaderboard: async () => board })).summary, /invited teams could not be read/, 'states the code does not know count as unread')
   assert.match((await run({ leagueInvitationsView: async () => { throw new Error('HTTP 502') }, leaderboard: async () => board })).summary, /the invited teams could not be read/)
   assert.match((await run({ leagueInvitationsView: async () => rows(30), leaderboard: async () => { throw new Error('HTTP 502') } })).summary, /the invited teams could not be read/)
-  const declined = await run({ leagueInvitationsView: async () => ({ invitations: [...rows(30).invitations.slice(0, 5), ...Array.from({ length: 25 }, (_, i) => ({ user_id: 8000 + i, state: 'declined' }))] }), leaderboard: async () => board })
+  // Re-review of PR #31 (low, R31A-4): 24 expired rows next to the 25 declined ones, so dropping either state from the filter refuses.
+  const declined = await run({ leagueInvitationsView: async () => ({ invitations: [...rows(30).invitations.slice(0, 5), ...Array.from({ length: 25 }, (_, i) => ({ user_id: 8000 + i, state: 'declined' })), ...Array.from({ length: 24 }, (_, i) => ({ user_id: 8100 + i, state: 'expired' }))] }), leaderboard: async () => board })
   assert.equal(declined.status, 'dry_run', `declined and expired rows are not in the field: ${declined.summary}`)
 })
 

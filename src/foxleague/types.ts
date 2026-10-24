@@ -422,4 +422,6 @@ export interface PendingLeagueInvitation {
 /** GET /api/tournaments/{id}/invitations (league_invitations.rs LeagueInvitationsView): the parts the agent reads. */
 export interface LeagueInvitationsView {
   invitations: { user_id: number; team_name?: string; state: string }[]
+  /** When the seats lock (the third wave): leaving refunds the whole entry before it and is refused after it. */
+  seats_lock_at?: string
 }

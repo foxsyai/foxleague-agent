@@ -481,6 +481,12 @@ export class Executor {
         .map(([, v]) => Number(v))
         .filter(n => Number.isInteger(n) && n > 0)
     }
+    // Leaving a League + Knockout: when its seats lock, read right now (null: unreadable, refused).
+    if (a.type === 'leave_tournament' && tournament?.tournament.format === 'league_knockout') {
+      const view = await soft(() => fox.leagueInvitationsView(a.tournament_id, wallet))
+      const lock = view?.seats_lock_at ? Date.parse(view.seats_lock_at) : Number.NaN
+      market.seatsLockAt = Number.isFinite(lock) ? new Date(lock) : null
+    }
     // A League + Knockout seat is paid only on an invitation read right now (null: unreadable, refused).
     if (a.type === 'join_tournament' && tournament?.tournament.format === 'league_knockout') {
       const pending = await soft(() => fox.leagueInvitations(wallet))
