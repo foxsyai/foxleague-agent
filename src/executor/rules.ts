@@ -351,8 +351,12 @@ export function scheduleSpanMinutes(format: string, maxTeams: number, homeAndAwa
  * An OVR range on a create (FoxLeague, 2026-10-24): the agent always takes its own seat, and FoxLeague refuses a creator
  * outside their own range, so the range must hold the team's best XI OVR, read right before the create (unreadable: none).
  */
-function createRangeRefusal(a: { ovr_min?: number; ovr_max?: number }, ctx: RulesContext): string | null {
+function createRangeRefusal(a: { ovr_min?: number; ovr_max?: number; target_user_id?: number | null; invite_user_ids?: number[] }, ctx: RulesContext): string | null {
   if (a.ovr_min === undefined && a.ovr_max === undefined) return null
+  // Only the chosen team can accept a targeted challenge, and only the invited teams join a private tournament: a range
+  // could only lock them out, unread (agent review of PR #35).
+  if (typeof a.target_user_id === 'number') return 'no OVR range on a targeted challenge: only the chosen team can accept it'
+  if (a.invite_user_ids?.length) return 'no OVR range on a private tournament: it could lock out the teams you invite'
   const ovr = ctx.bestXiOvr
   if (typeof ovr !== 'number' || !Number.isFinite(ovr)) return 'your best XI OVR could not be read: no OVR range without it'
   if ((a.ovr_min !== undefined && ovr < a.ovr_min) || (a.ovr_max !== undefined && ovr > a.ovr_max)) return `your best XI OVR is ${ovr}, outside the OVR range you set (${rangeWords(a.ovr_min, a.ovr_max)}): FoxLeague refuses a creator outside their own range`

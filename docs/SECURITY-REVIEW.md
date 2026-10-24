@@ -859,6 +859,9 @@ it on what they create. Test first: `test/create-ovr-range.test.ts`, each test s
 |---|---|---|---|
 | CR-OVR1 | design | The agents could not set an OVR range on a tournament or 1v1 they create, though it keeps stronger teams out of an open challenge | `create_tournament` and `create_challenge` take optional `ovr_min` and `ovr_max` (whole numbers 1 to 100, min <= max), sent in FoxLeague's create body; the prompt describes them |
 | CR-OVR2 | design | FoxLeague refuses a creator who takes a seat outside their own range | The rule refuses a range that does not hold the team's best XI OVR, read right before the create; an unreadable value is no range. No read without a range |
+| R35A-1 | medium | Agent review of PR #35: a range on a targeted challenge (or a private tournament) could only lock out the chosen team, whose best XI OVR the agent cannot read; the stake would sit unaccepted until the deadline and block other 1v1s | No range on a targeted challenge or a private tournament; the prompt says so |
+| R35A-2 | low | Agent review of PR #35 (tests): the tournament body and the executor's fail-closed path had no test | A test: a ranged tournament create carries both bounds (seen failing with them removed), and a failed best XI OVR read refuses before FoxLeague is asked and before anything is booked |
+| R35A-3 | low | Agent review of PR #35 (docs): the integration notes still said the agent never sets a range, and the economy notes had no create path | Both say what the agent does |
 
 The range only narrows who may join: no cap, booking or signing changes. Open: the open challenge keeps its stake rule
 (your lowest Silver amount, once a day) even with a maximum set; loosening it is the owner's call.

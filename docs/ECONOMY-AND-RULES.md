@@ -395,11 +395,14 @@ among the called-up players by contribution. Nothing of it exists in the code on
   10,000 FOXSY fee, 100,000 FOXSY for the 8 quarter-finalists). Manual page `mechanics/champions-foxleague` since
   2026-10-24 (688088787, synced). FoxLeague frees a team that is out at once; the agent's rule waits until the edition
   ends (the stricter side). Since 2026-10-24 (owner) the agent accepts an invitation by itself at every level within the owner's limits (Zeus with a real chance of the knockout), never creates one, leaves one only before its seats lock (when leaving still returns the whole entry) once it sees no real chance of the top 24, and only a seat it paid itself (never one the owner took), and tells the owner of each pending invitation. From FoxLeague's code: 36 teams, 8 league matches each, then places 1 to 24 play the knockout (two-legged play-off, round of 16, quarter-finals and semi-finals, then the final or the third place match): at most 17 matches; one match at a time for the whole tournament (144 league then 46 knockout matches, one per round interval); while it runs a team joins or creates no other standard tournament; one League + Knockout at a time; no leaving once the seats lock.
-- **OVR range** (manual of 2026-10-24, not live on mainnet that day). A tournament or 1v1 can carry `ovr_min` and
+- **OVR range** (manual of 2026-10-24, live on mainnet that evening). A tournament or 1v1 can carry `ovr_min` and
   `ovr_max` (whole numbers 1 to 100), checked once at the join against the team's best XI OVR (the average OVR of the
   strongest eleven it can field, to one decimal; `GET /api/teams/best-xi-ovr`). Outside it a paid entry is refunded,
   the gas lost. The agent reads its best XI OVR right before paying and joins only inside the range (unreadable or a
   value it cannot read refuses).
+  The agent may set a range on a tournament or an open 1v1 it creates (whole numbers 1 to 100, min <= max), only one
+  holding its own best XI OVR (FoxLeague refuses a creator outside their own range), never on a targeted challenge or a
+  private tournament.
 - **Royalties.** On the upgraded tournaments contract (on mainnet since 2026-10-24) a royalty goes only to an approved provider or
   a seated participant.
 - **Shop refunds.** A shop payment the treasury refunds is consumed only after delivery; a payment still being
