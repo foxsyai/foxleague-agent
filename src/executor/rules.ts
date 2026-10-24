@@ -51,8 +51,12 @@ export interface RulesContext {
    * 'not invited' when there is none, null when the invitations could not be read (refused).
    */
   invitation?: PendingLeagueInvitation | 'not invited' | null
-  /** The owner asked for this action (dashboard or Telegram), not the plan: the owner may leave a League + Knockout. */
+  /** The owner asked for this action (dashboard or Telegram), not the plan. */
   byOwner?: boolean
+  /** For leaving a League + Knockout: when its seats lock (FoxLeague's invitations view), null when unreadable. */
+  seatsLockAt?: Date | null
+  /** For leaving a League + Knockout: this agent paid the seat itself (its own join in its log), not the owner. */
+  ownSeat?: boolean
   /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
   ownUserIds?: number[]
   /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
@@ -851,8 +855,19 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!d || !s.profile) return refuse(`tournament T${a.tournament_id} not found`)
       if (!d.participants.some(p => p.user_id === s.profile!.id)) return refuse(`not in T${a.tournament_id}`)
       if (d.tournament.status !== 'open' || new Date(d.tournament.deadline) <= ctx.now) return refuse('can only leave an open tournament before its deadline')
-      // Leaving a League + Knockout closes its invitation for good (the seat goes to the next wave): the owner's call.
-      if (d.tournament.format === 'league_knockout' && !ctx.byOwner) return refuse('the agent never leaves a League + Knockout by itself: leaving closes the invitation for good; the owner can')
+      // A League + Knockout (owner, 2026-10-24): the agent may leave one it sees no chance of the top 24 in, but only while
+      // leaving returns the whole entry, before its seats lock (FoxLeague refuses any leave after it). Leaving closes the
+      // invitation for good, so an unreadable lock time is no leave. The owner may leave as before.
+      if (d.tournament.format === 'league_knockout' && !ctx.byOwner) {
+        // Only a seat it paid itself: one the owner took in FoxLeague is the owner's decision (agent review of PR #32).
+        if (!ctx.ownSeat) return refuse('a seat this agent did not pay itself (the owner\'s): only the owner leaves it')
+        const lock = ctx.seatsLockAt
+        if (!lock || !Number.isFinite(lock.getTime())) return refuse('when its seats lock could not be read: not leaving blind (leaving closes the invitation for good)')
+        const when = lock.toISOString().slice(0, 16).replace('T', ' ')
+        if (lock.getTime() <= ctx.now.getTime()) return refuse(`its seats locked at ${when} UTC: nobody can leave now`)
+        if (lock.getTime() - ctx.now.getTime() <= INVITATION_MARGIN_MS) return refuse(`its seats lock at ${when} UTC: too close to leave (after that FoxLeague refuses and the entry stays)`)
+        return allow(0, { cancel: false }, 'play', ['the whole entry comes back; the invitation closes for good'])
+      }
       // Our own 1v1 nobody accepted: leaving refunds the stake, cancelling closes it and frees the 1v1 slot.
       const ownChallenge = d.tournament.max_teams === 2 && d.tournament.creator_user_id === s.profile.id && d.participants.length === 1
       return allow(0, { cancel: ownChallenge }, 'play', ownChallenge ? ['your own 1v1: the stake comes back and the challenge is closed'] : [])

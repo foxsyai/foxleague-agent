@@ -776,7 +776,7 @@ format's rules were read from FoxLeague's code (next-foxleague 75289fbbf, read o
 | LK2 | design | Paying without being on the contract's invite list loses the gas | The executor reads the team's pending invitations again right before the payment: unreadable refuses ("not paying blind"), none refuses, FoxLeague's `can_accept` false refuses (its refusal text, which can quote a title others wrote, stays out of the logged refusal), and the last 30 minutes before `expires_at` refuse |
 | LK3 | design | Up to 9 knockout matches come within 46 slots | The schedule check also judges the knockout stretch alone, from the squad's condition at the start: 9 matches x 11 starters x the match loss against the condition above the floor plus 45 slots of recovery |
 | LK4 | design | While a League + Knockout runs FoxLeague refuses other standard tournaments (option C), after the seat is paid | The rules refuse joining or creating one while a League + Knockout of the team's has started and is not over (stricter than FoxLeague, which frees a team knocked out); 1v1s and ranked stay open |
-| LK5 | design | Leaving closes the invitation for good, and after the seats lock it is refused | The agent never leaves one by itself (only an owner's leave, `byOwner`); it never creates one |
+| LK5 | design | Leaving closes the invitation for good, and after the seats lock it is refused | The agent never leaves one by itself (only an owner's leave, `byOwner`); it never creates one. Changed the same day by LK8: it may leave before the seats lock |
 | LK6 | design | Zeus's top-three rule would refuse nearly every Champions FoxLeague | Zeus judges the invited teams (`GET /api/tournaments/{id}/invitations`, wallets and ELO from the leaderboard, lineups read as for other fields) and refuses with 24 or more clearly stronger, or when stronger plus unread reach 24 |
 | LK7 | low | The C3 notice read invitations only while `league_knockout_enabled` was on, but that switch gates only creating one | Every planning snapshot reads the pending invitations; the plan sees them inside the framed snapshot (titles and refusals through `txt()`) and the owner hears of each once, now told that the agent decides within the limits |
 | R31F-1 | medium | Fable review of PR #31: the 1v1 busy check knew no League + Knockout and refused every 1v1 for its whole run (days), while FoxLeague keeps 1v1s open (its busy rows count only the team's own fixtures) and the snapshot and the manual said so | `league_knockout` joins the formats busy only through the team's own fixtures; a test: a running one leaves a 1v1 open, its own fixture within the hour makes the team busy |
@@ -792,6 +792,27 @@ out early stays barred from other tournaments until the whole tournament ends (t
 refusal after a paid join can quote a title others wrote and reaches the next plan sanitised through recent activity
 (as every FoxLeague error today); the first play-off
 locks may come late (seats fill from aired results); FoxLeague's manual page for the format is synced when published.
+
+## Champions FoxLeague: leaving before the seats lock, 2026-10-24
+
+The owner decided that the agent may leave a League + Knockout it joined early once it sees no real chance of the top
+24, as long as leaving costs nothing: before the seats lock, FoxLeague refunds the whole entry (next-foxleague
+`routes/tournaments.rs:7201-7216`, `chain.rs:9161-9170`); from the lock on it refuses any leave
+(`league_invitations.rs:1167-1175`). Test first: four tests in `test/champions-foxleague.test.ts`, each seen failing
+before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LK8 | design | LK5 kept every League + Knockout seat until the end, even one the agent judged hopeless while leaving was still free | The agent may leave before the seats lock: the executor reads `seats_lock_at` from the invitations view right before the leave; unreadable refuses (leaving closes the invitation for good), within 30 minutes of the lock or after it refuses. The plan sees, for each League + Knockout seat not started, how many seats are taken and when they lock. The owner may leave as before |
+| R31A-4 | low | Re-review of PR #31 (test): the expired rows could not change the Zeus test's outcome | 24 expired rows sit next to the 25 declined ones, so dropping either state from the field filter refuses |
+| R32A-1 | medium | Agent review of PR #32: the agent could leave a seat the owner accepted in FoxLeague, closing the owner's invitation for good | It leaves only a seat it paid itself (its own join in its log, a paid one whose answer was lost too); one the owner took is refused ("only the owner leaves it") |
+| R32A-2 | low | Agent review of PR #32: the plan was never told the owner's condition for leaving | Its seat line says to leave only a seat it joined itself, only with no real chance of the top 24, and that leaving closes the invitation for good |
+| R32A-3 | low | Agent review of PR #32 (test): nothing tested how the snapshot builds the seat lines | A test: only League + Knockout seats, the lock time and seats taken read, a failed view unknown with a warning |
+| R32A-4 | medium | Re-review of PR #32: a join the owner made through Telegram `/do` counted as the agent's own seat, so the agent could still leave a seat the owner chose | An owner's action keeps `byOwner` with its log row; a join with it (or with an owner reason, on rows from before) is the owner's seat, never left by the agent |
+
+Open: whether the agent sees no real chance of the top 24 is the plan's judgement (the code holds only the timing and the
+own seat); `seats_lock_at` on `GET /api/tournaments/{id}/invitations` is taken from next-foxleague, not yet seen on
+mainnet (if it is missing, every leave by the agent refuses, the safe side).
 
 ## Where the limits live
 

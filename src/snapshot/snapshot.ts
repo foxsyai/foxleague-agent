@@ -147,6 +147,8 @@ export interface AgentSnapshot {
      * when the invitations could not be read. Their titles are written by others: the digest passes them through txt().
      */
     invitations?: (PendingLeagueInvitation & { tournament: Tournament | null })[] | null
+    /** The team's League + Knockout seats not started yet: when their seats lock (leaving refunds the entry until then). */
+    leagueSeats?: { tournamentId: number; seatsLockAt: string | null; accepted: number | null }[]
   } | null
   market: MarketSummary
   /**
@@ -503,6 +505,15 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     attempt(warnings, 'pending tournaments', () => fox.tournaments({ status: 'pending_sc', kind: 'standard' })),
     attempt(warnings, 'completed 1v1s', () => recentChallenges(fox, now)),
   ])
+  // Our League + Knockout seats before their start: when the seats lock (until then the agent may leave for the entry back).
+  const seats = (auth?.myTournaments?.active ?? []).filter(t => t.format === 'league_knockout' && t.status === 'open')
+  if (auth && seats.length) {
+    auth.leagueSeats = await Promise.all(seats.map(async t => {
+      const view = await attempt(warnings, `league seats T${t.id}`, () => fox.leagueInvitationsView(t.id, wallet!))
+      const lock = view?.seats_lock_at && Number.isFinite(Date.parse(view.seats_lock_at)) ? new Date(Date.parse(view.seats_lock_at)).toISOString() : null
+      return { tournamentId: t.id, seatsLockAt: lock, accepted: view && Array.isArray(view.invitations) ? view.invitations.filter(i => i.state === 'accepted').length : null }
+    }))
+  }
   // Each invitation's tournament (its start and interval): from the open list, or read by its id.
   if (auth?.invitations?.length) {
     auth.invitations = await Promise.all(auth.invitations.map(async i => {

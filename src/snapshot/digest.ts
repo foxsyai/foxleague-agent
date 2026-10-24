@@ -234,6 +234,10 @@ export function renderDigest(s: AgentSnapshot): string {
       out.push(`  T${Number(i.tournament_id)} "${txt(i.title, 60)}" ${txt(i.tier, 10)}, entry ${Number(i.entry_fee_foxsy)} FOXSY${prize}${run}, expires ${at(i.expires_at)}, seats lock ${at(i.seats_lock_at)}: ${can}`)
     }
   }
+  for (const seat of s.auth?.leagueSeats ?? []) {
+    const lock = seat.seatsLockAt ? `seats lock ${seat.seatsLockAt.slice(0, 16).replace('T', ' ')} UTC: until then you may leave a seat you joined yourself for the whole entry back, but only when you see no real chance of the top 24 (places 1 to 24 play the knockout; leaving closes the invitation for good); after that nobody can leave` : 'when its seats lock could not be read: no leaving'
+    out.push(`Your League + Knockout T${Number(seat.tournamentId)}: ${seat.accepted ?? '?'} of 36 seats taken; ${lock}`)
+  }
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {

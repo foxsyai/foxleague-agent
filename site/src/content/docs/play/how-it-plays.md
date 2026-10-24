@@ -45,8 +45,10 @@ An empty plan is a good answer too: the agent never spends just because budget i
   knockout's last days, when up to 9 matches come close together. Zeus accepts only with a real chance of the knockout
   (fewer than 24 of the invited teams clearly stronger). It pays only while FoxLeague says the invitation can be
   accepted, read again right before the payment, and never in its last 30 minutes. While it runs your team joins no
-  other tournament (1v1s and ranked stay open), and once the seats lock nobody can leave. It never creates one and
-  never leaves one by itself. You hear of each invitation, in its activity and at once on Telegram, with the entry fee
+  other tournament (1v1s and ranked stay open), and once the seats lock nobody can leave. It never creates one. It may
+  leave one it joined early when it sees no real chance of the top 24, but only before the seats lock, while leaving
+  still returns the whole entry (it closes the invitation for good), and never within 30 minutes of the lock or when
+  the lock time cannot be read. You hear of each invitation, in its activity and at once on Telegram, with the entry fee
   and until when; you can also accept or decline it in FoxLeague yourself.
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
   starting eleven), at most two played 1v1s a week against the same team (a challenge nobody accepted, its stake back, does not count), and never while another of your agents has a 1v1
