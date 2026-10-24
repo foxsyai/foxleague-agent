@@ -219,7 +219,13 @@ export function renderDigest(s: AgentSnapshot): string {
   }
 
   const m = s.market
-  if (typeof s.auth?.bestXiOvr === 'number') out.push(`Your best XI OVR (what OVR ranges are checked against): ${s.auth.bestXiOvr}`)
+  if (typeof s.auth?.bestXiOvr === 'number') {
+    // The default range for what the agent creates (owner, 2026-10-24): about 10 percent either way, whole numbers 1 to 100.
+    const ovr = s.auth.bestXiOvr
+    const lo = Math.max(1, Math.floor(ovr * 0.9))
+    const hi = Math.min(100, Math.ceil(ovr * 1.1))
+    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}`)
+  }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
   const zeus = s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')

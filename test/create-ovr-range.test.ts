@@ -66,6 +66,7 @@ test('the manual describes creating with an OVR range', async () => {
   const { readFileSync } = await import('node:fs')
   const plays = readFileSync(new URL('../site/src/content/docs/play/how-it-plays.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(plays, /It may set an OVR range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its own best XI OVR/)
+  assert.match(plays, /On an open challenge or its own open tournament it sets one by default, about 10 percent either way around its best XI OVR/)
 })
 
 // Agent review of PR #35 (medium): only the chosen team can accept a targeted challenge, so a range there can only lock
@@ -100,4 +101,16 @@ test('R35A-2 a tournament create carries the range; a failed best XI OVR read cr
   assert.match(r!.summary, /best XI OVR could not be read/)
   assert.equal(created, 0, 'FoxLeague was not asked')
   assert.equal(down.store.openSpend(0, 'join:', false).length, 0, 'nothing booked')
+})
+
+// Owner, 2026-10-24: what the agent creates should carry a range by default, about 10 percent either way around its
+// best XI OVR, so teams of its strength enter; the agent decides, widening it when tournaments fill slowly.
+test('the snapshot suggests a range about 10 percent either way around the best XI OVR, and the prompt makes it the default', async () => {
+  const { renderDigest } = await import('../src/snapshot/digest.ts')
+  const s = snapshot()
+  s.auth!.bestXiOvr = 31.4
+  assert.match(renderDigest(s), /Your best XI OVR \(what OVR ranges are checked against\): 31\.4; a range about 10 percent either way for what you create: ovr_min 28, ovr_max 35/)
+  s.auth!.bestXiOvr = 95.5
+  assert.match(renderDigest(s), /ovr_min 85, ovr_max 100/, 'at most 100')
+  assert.match(SYSTEM_PROMPT, /On an open challenge or your own open tournament set one by default, about 10 percent either way around your best XI OVR \(the snapshot suggests it\), so teams of your strength can enter; widen it when recent tournaments filled slowly/)
 })
