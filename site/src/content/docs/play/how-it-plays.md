@@ -55,7 +55,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
   out against that team (one of your teams at a time per rival). A tournament or a 1v1 with an OVR range is joined
   only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it. It may set an OVR
   range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its
-  own best XI OVR, read right before the create (a maximum near it keeps stronger teams out of an open challenge). The plan sees how many 1v1s it played against each
+  own best XI OVR, read right before the create. On an open challenge or its own open tournament it sets one by
+  default, about 10 percent either way around its best XI OVR, wider when recent tournaments filled slowly. The plan sees how many 1v1s it played against each
   team this week and when the limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). When it
   creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show
