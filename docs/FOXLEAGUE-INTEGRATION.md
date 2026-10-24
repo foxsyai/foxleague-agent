@@ -225,7 +225,7 @@ processing part, MultiversX keeps the whole limit (`frontend/src/lib/gasLimits.t
 | `fusion` (3 NFTs + FOXSY) | 21,000,000 | `gasLimits.ts:17` |
 | `payFusionMatchWaiver`, `payFusionCooldownWaiver` | 15,000,000 | `gasLimits.ts:21` |
 | `shopPay` (every shop product, the transfer-cooldown waiver, the paid badge) | 12,000,000 | `gasLimits.ts:26` |
-| `joinTournament` (every tournament and 1v1 seat) | 7,000,000 | `gasLimits.ts:30` |
+| `joinTournament` (every tournament and 1v1 seat) | 8,400,000 (7,000,000 before the League + Knockout upgrade of the contract, live on mainnet 2026-10-24) | `gasLimits.ts:32` |
 | `claimRefund` | 6,500,000 | `gasLimits.ts:34` |
 | `auctionList` / `auctionBid` / `auctionSettle` / `auctionCancel` | 15,000,000 / 13,500,000 / 13,500,000 / 12,000,000 | `gasLimits.ts:42-47` |
 | `registerAndPay` (relayed) | `min(12,000,000, relayer_max_gas_limit)` | `gasLimits.ts:51-69` |
@@ -1055,7 +1055,7 @@ join.
    `is_participant` means done; `has_escrow && joinable` means an earlier payment is still in escrow,
    so `POST /join` **without** a hash; otherwise pay.
 2. **Pay** (`frontend/src/lib/tournamentTx.ts:49-167`; `frontend/src/lib/tournamentTxData.ts:29-40`):
-   receiver = tournaments contract, value 0, gas 7,000,000, version 2,
+   receiver = tournaments contract, value 0, gas 8,400,000, version 2,
    `data = ESDTTransfer@464f5853592d356435663365@<fee atomic hex>@6a6f696e546f75726e616d656e74@<tid, 16 hex>`.
    Example, tournament 1234 at 1,000 FOXSY:
    `ESDTTransfer@464f5853592d356435663365@3635c9adc5dea00000@6a6f696e546f75726e616d656e74@00000000000004d2`.
@@ -1753,7 +1753,8 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   minutes to its `expires_at`, the entry within the owner's limits, the schedule check for 17 matches over its 190
   slots and the knockout's 9 matches in 46 slots, Zeus with fewer than 24 clearly stronger invited teams read from
   `GET /api/tournaments/{id}/invitations`), never creates one (`unsupportedFormat`), leaves one only before its `seats_lock_at` (read again from
-  `GET /api/tournaments/{id}/invitations`, 30 minutes of margin; leaving then refunds the whole entry), and
+  `GET /api/tournaments/{id}/invitations`, 30 minutes of margin; leaving then refunds the whole entry) and only a seat
+  it paid itself (never one the owner took, in FoxLeague or through Telegram `/do`), and
   refuses other standard tournaments while one of its own runs (FoxLeague's option C). Every planning snapshot reads
   `GET /api/tournaments/invitations` (FoxLeague's `league_knockout_enabled` gates only creating one) and the owner hears
   of each pending invitation once (`noticeInvitations`, `src/service.ts`). Facts from next-foxleague 75289fbbf:
@@ -1779,7 +1780,8 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   participant, the owner's close while paused, and `joinTournament` refuses operator keys and contracts
   (`tournament_manager.rs:457`). Per `contracts/deploys.yaml` mainnet is not upgraded yet. After the upgrade the web
   app's `JOIN_TOURNAMENT_GAS_LIMIT` is 8,400,000 (`frontend/src/lib/gasLimits.ts:32`; the heaviest join measured
-  5,550,000): the agent's 7,000,000 still covers it, and should follow to 8,400,000 with the mainnet upgrade.
+  5,550,000): the agent followed to 8,400,000 once the upgrade was live on mainnet (2026-10-24: `isInviteOnly` and
+  `getSponsorPrize` answer on chain).
 - **What the agent does with them (audit 2026-10-23).** `playMatch` waits 95 s and reads `GET /api/matches/active`
   after a lost answer; a ranked or casual match's statistics (`/api/matches/{id}/stats`) carry the cards' current
   synced stats and `current_condition()` at read time (`launch_squad`), while `/api/public/tournament-match/{id}/stats`

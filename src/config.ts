@@ -23,7 +23,8 @@ export const MAINNET = {
 /** Gas limits the FoxLeague web app signs (frontend/src/lib/gasLimits.ts, xexchangeSwapTx.ts). */
 export const GAS = {
   shopPay: 12_000_000n,
-  joinTournament: 7_000_000n,
+  // FoxLeague's app since the League + Knockout upgrade of the tournaments contract (live on mainnet 2026-10-24).
+  joinTournament: 8_400_000n,
   claimRefund: 6_500_000n,
   registerAndPayMax: 12_000_000n,
   registerAndPayLegacy: 9_900_000n,

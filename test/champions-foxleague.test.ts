@@ -298,3 +298,12 @@ test('R31A-3 Zeus refuses a field the leaderboard shows clearly stronger, and le
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: join, reason: '' }])
   assert.match(r!.summary, /30 of the invited teams are clearly stronger \(lineup and ELO\): no real chance of the knockout/)
 })
+
+// Owner, 2026-10-24: FoxLeague's tournaments contract on mainnet now carries the League + Knockout invitations
+// (isInviteOnly and getSponsorPrize answer on chain), which makes every call about 830k gas dearer. FoxLeague's app signs
+// a join with 8,400,000 (1.51x the heaviest measured, 5.55M: frontend/src/lib/gasLimits.ts); the agent's 7,000,000
+// left only 1.26x. Out of gas, a join reverts and loses its fee.
+test('a join is signed with FoxLeague\'s gas limit for the upgraded tournaments contract', async () => {
+  const { joinTournamentTx } = await import('../src/executor/tx.ts')
+  assert.equal(joinTournamentTx(77, 10n ** 21n).gasLimit, 8_400_000n)
+})
