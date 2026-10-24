@@ -1207,20 +1207,24 @@ export class Service {
   /**
    * League + Knockout invitations (owner, 2026-10-24, audit C3): the agent never joins that format (unsupportedFormat,
    * src/executor/rules.ts), but the owner hears of each pending invitation once, in the activity and at once on
-   * Telegram, to accept it in FoxLeague by hand. Read only while FoxLeague has the format on and the team is
-   * registered. The title is the admin's text: shortened, one line, and never shown to the model.
+   * Telegram, to accept it in FoxLeague by hand, and once more if it becomes acceptable after a refusal. Read only
+   * while FoxLeague has the format on and the team is registered. The title and FoxLeague's refusal (which can quote a
+   * title players wrote) go to the owner only: the activity row, which the next plan reads, is built from our own
+   * values (agent review of PR #30, rule 6).
    */
   private async noticeInvitations(index: number, snap: AgentSnapshot): Promise<void> {
     if (snap.config?.tournament_defaults?.league_knockout_enabled !== true || !snap.profile) return
     for (const inv of await this.fox.leagueInvitations(this.wallet(index))) {
-      const key = `league_invite_told:${index}:${inv.tournament_id}`
+      const key = `league_invite_told:${index}:${inv.tournament_id}:${inv.can_accept ? 'open' : 'refused'}`
       if (this.store.getKv(key) || !(Date.parse(inv.expires_at) > Date.now())) continue
       this.store.setKv(key, new Date().toISOString())
       const title = String(inv.title).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 80)
       const refusal = inv.can_accept ? '' : ` (FoxLeague says it cannot be accepted now: ${String(inv.refusal ?? 'no reason given').replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 160)})`
-      const summary = `invited to the League + Knockout T${inv.tournament_id} "${title}" (${inv.tier}, entry ${inv.entry_fee_foxsy} FOXSY), until ${inv.expires_at.slice(0, 16).replace('T', ' ')} UTC: the agent never joins this format; accept it yourself in FoxLeague${refusal}`
-      this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary })
-      this.notify(`${agentName(index)}: ${summary}`)
+      const id = Number(inv.tournament_id)
+      const terms = `${/^[a-z]+$/.test(String(inv.tier)) ? inv.tier : 'tier unknown'}, entry ${Number(inv.entry_fee_foxsy)} FOXSY`
+      const until = `${new Date(Date.parse(inv.expires_at)).toISOString().slice(0, 16).replace('T', ' ')} UTC`
+      this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: `League + Knockout invitation T${id} (${terms}, until ${until}): the owner was told; the agent never joins this format${inv.can_accept ? '' : '; FoxLeague says it cannot be accepted now'}` })
+      this.notify(`${agentName(index)}: invited to the League + Knockout T${id} "${title}" (${terms}), until ${until}: the agent never joins this format; accept it yourself in FoxLeague${refusal}`)
     }
   }
 
