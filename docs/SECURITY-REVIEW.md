@@ -850,6 +850,19 @@ FoxLeague compares the best XI OVR rounded to one decimal (held in tenths, `ovr_
 so the agent's comparison is the same. Open: a team out of a Champions FoxLeague is free again at once in FoxLeague, while the agent waits until the edition
 ends (the stricter side; the AI reads FoxLeague's rule in the manual, so it may propose a join the rule refuses).
 
+## Creating with an OVR range, 2026-10-24
+
+FoxLeague switched its OVR range on (the best XI OVR route answers on mainnet), and the owner asked that the agents use
+it on what they create. Test first: `test/create-ovr-range.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CR-OVR1 | design | The agents could not set an OVR range on a tournament or 1v1 they create, though it keeps stronger teams out of an open challenge | `create_tournament` and `create_challenge` take optional `ovr_min` and `ovr_max` (whole numbers 1 to 100, min <= max), sent in FoxLeague's create body; the prompt describes them |
+| CR-OVR2 | design | FoxLeague refuses a creator who takes a seat outside their own range | The rule refuses a range that does not hold the team's best XI OVR, read right before the create; an unreadable value is no range. No read without a range |
+
+The range only narrows who may join: no cap, booking or signing changes. Open: the open challenge keeps its stake rule
+(your lowest Silver amount, once a day) even with a maximum set; loosening it is the owner's call.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

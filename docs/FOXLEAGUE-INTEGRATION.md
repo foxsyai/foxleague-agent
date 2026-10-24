@@ -1815,3 +1815,9 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   Fused mark on cards, a 1v1 can be created with an OVR range (the agent never sets one), and an unpaid challenge is
   cancelled after 20 minutes (the agent pays its seat right after creating, in the same action). FoxLeague compares
   the best XI OVR rounded to one decimal (held in tenths, `ovr_range.rs`), the same value its route answers.
+- **Creating with a range** (owner, 2026-10-24, live on mainnet that evening: `GET /api/teams/best-xi-ovr` answers 401
+  without a session): `create_tournament` and `create_challenge` take optional `ovr_min` and `ovr_max` (whole numbers 1
+  to 100, min <= max, `parseAction`), sent in FoxLeague's create body. FoxLeague refuses a range on a League + Knockout or
+  a developer tournament and a creator who takes a seat outside their own range (`ovr_range.rs` `validate`,
+  `creator_check`, before any payment); the agent always takes its seat, so the rule refuses a range that does not hold
+  its best XI OVR, read right before the create (unreadable: no range).

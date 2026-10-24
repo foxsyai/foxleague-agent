@@ -1,0 +1,69 @@
+// Owner, 2026-10-24: FoxLeague switched its OVR range on, so the agents may set one on what they create. FoxLeague's
+// create takes optional `ovr_min` and `ovr_max`, whole numbers 1 to 100 with min <= max (next-foxleague
+// `tournament_models.rs:459-466`, `ovr_range.rs` `validate`); it refuses a range on a Champions FoxLeague or a developer
+// tournament, and a creator who takes a seat outside their own range (`creator_check`, before any payment). The agent
+// always takes its own seat, so its range must hold its best XI OVR, read right before the create; unreadable is no
+// range. A range on an open challenge keeps stronger teams out of it.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { parseAction } from '../src/executor/actions.ts'
+import { checkAction, type RulesContext } from '../src/executor/rules.ts'
+import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
+import { TEST_SETTINGS, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
+
+const challenge = (more: Record<string, unknown> = {}) => ({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ...more })
+const cup = (more: Record<string, unknown> = {}) => ({ type: 'create_tournament', title: 'Autumn Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: 24, registration_closes_minutes_before: 60, round_interval_minutes: 30, ...more })
+
+test('a create may carry an OVR range of whole numbers 1 to 100, the minimum not above the maximum', () => {
+  assert.deepEqual([(parseAction(challenge({ ovr_max: 33 })) as { ovr_max?: number }).ovr_max, (parseAction(cup({ ovr_min: 25, ovr_max: 35 })) as { ovr_min?: number }).ovr_min], [33, 25])
+  assert.equal('ovr_min' in parseAction(cup()), false, 'none when not set')
+  assert.throws(() => parseAction(cup({ ovr_min: 0 })), /ovr_min/)
+  assert.throws(() => parseAction(cup({ ovr_max: 101 })), /ovr_max/)
+  assert.throws(() => parseAction(cup({ ovr_min: 30.5 })), /ovr_min/)
+  assert.throws(() => parseAction(challenge({ ovr_min: 36, ovr_max: 35 })), /minimum OVR cannot be above the maximum/)
+})
+
+test('the range must hold the team\'s own best XI OVR, read right before the create; unreadable is no range', () => {
+  const s = snapshot()
+  const ctx = (bestXiOvr: number | null | undefined) => ({ settings: TEST_SETTINGS, now: new Date(), bestXiOvr } as RulesContext)
+  assert.equal(checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(31.4)).ok, true, checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(31.4)).refusal)
+  assert.match(checkAction(parseAction(challenge({ ovr_max: 30 })), s, ctx(31.4)).refusal!, /your best XI OVR is 31\.4, outside the OVR range you set \(at most 30\): FoxLeague refuses a creator outside their own range/)
+  assert.match(checkAction(parseAction(challenge({ ovr_min: 32 })), s, ctx(31.4)).refusal!, /outside the OVR range you set \(at least 32\)/)
+  assert.match(checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(null)).refusal!, /your best XI OVR could not be read: no OVR range without it/)
+  assert.equal(checkAction(parseAction(challenge()), s, ctx(undefined)).ok, true, 'no range: nothing to read')
+})
+
+test('the create sends the range to FoxLeague; the executor reads the best XI OVR only for a create with a range', async () => {
+  const bodies: Record<string, unknown>[] = []
+  let reads = 0
+  const fox = {
+    createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 900 } },
+    tournament: async () => tournament(900, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 900 }),
+    joinTournament: async () => ({ participant_id: 1 }),
+    bestXiOvr: async () => { reads++; return { best_xi_ovr: 31.4 } },
+  }
+  const m = setup({ fox })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge({ ovr_min: 28, ovr_max: 34 })), reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.equal(bodies[0]!.ovr_min, 28)
+  assert.equal(bodies[0]!.ovr_max, 34)
+  assert.equal(reads, 1)
+  const n = setup({ fox: { ...fox, createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 901 } } } })
+  await withLive(n.store, async () => { await n.exec.run(n.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge()), reason: '' }]) })
+  assert.equal('ovr_min' in bodies[1]!, false, 'no range: none sent')
+  assert.equal(reads, 1, 'no read without a range')
+})
+
+test('the plan knows it may set a range on what it creates, and a refusal names the range', () => {
+  assert.match(SYSTEM_PROMPT, /"ovr_min":N,"ovr_max":N/)
+  assert.match(SYSTEM_PROMPT, /optional OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
+})
+
+test('the manual describes creating with an OVR range', async () => {
+  const { readFileSync } = await import('node:fs')
+  const plays = readFileSync(new URL('../site/src/content/docs/play/how-it-plays.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  assert.match(plays, /It may set an OVR range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its own best XI OVR/)
+})

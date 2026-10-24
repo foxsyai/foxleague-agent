@@ -5,7 +5,7 @@
 import { blockingWindow, clash, firstFreeStartHours } from './slots.ts'
 import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
-import { FORMATION_SLOTS } from './actions.ts'
+import { FORMATION_SLOTS, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
 import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, PendingLeagueInvitation, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
@@ -345,6 +345,18 @@ const INVITATION_MARGIN_MS = 30 * 60_000
 export function scheduleSpanMinutes(format: string, maxTeams: number, homeAndAway: boolean, interval: number, groupSize = 4): number {
   if (format === 'league_knockout') return (maxTeams * (LK_LEAGUE_MATCHES / 2) + LK_KNOCKOUT_SLOTS - 1) * interval
   return (matchesAtMost(format, maxTeams, homeAndAway, groupSize) - 1) * interval
+}
+
+/**
+ * An OVR range on a create (FoxLeague, 2026-10-24): the agent always takes its own seat, and FoxLeague refuses a creator
+ * outside their own range, so the range must hold the team's best XI OVR, read right before the create (unreadable: none).
+ */
+function createRangeRefusal(a: { ovr_min?: number; ovr_max?: number }, ctx: RulesContext): string | null {
+  if (a.ovr_min === undefined && a.ovr_max === undefined) return null
+  const ovr = ctx.bestXiOvr
+  if (typeof ovr !== 'number' || !Number.isFinite(ovr)) return 'your best XI OVR could not be read: no OVR range without it'
+  if ((a.ovr_min !== undefined && ovr < a.ovr_min) || (a.ovr_max !== undefined && ovr > a.ovr_max)) return `your best XI OVR is ${ovr}, outside the OVR range you set (${rangeWords(a.ovr_min, a.ovr_max)}): FoxLeague refuses a creator outside their own range`
+  return null
 }
 
 /** Our League + Knockout that has started and is not over: no other standard tournament meanwhile (FoxLeague's option C). */
@@ -899,6 +911,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (invites.length + 1 < a.min_teams) return refuse(`a private tournament fills only with its invited teams and you: ${invites.length + 1} cannot reach the minimum of ${a.min_teams}; invite more active teams`)
       }
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
+      const tournamentRange = createRangeRefusal(a, ctx)
+      if (tournamentRange) return refuse(tournamentRange)
       const list = a.tier === 'silver' ? ctx.settings.entryFeesSilver : ctx.settings.entryFeesGold
       if (!list.includes(a.entry_fee_foxsy)) return refuse(`entry fee ${a.entry_fee_foxsy} is not one of the configured amounts ${list.join('/')}`)
       const bounds = tierBounds(s, a.tier)
@@ -935,6 +949,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
     case 'create_challenge': {
       if (!registered || !s.profile) return refuse('not registered')
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
+      const challengeRange = createRangeRefusal(a, ctx)
+      if (challengeRange) return refuse(challengeRange)
       if (a.target_user_id === null) {
         if (ctx.zeus) return refuse('Zeus plays a 1v1 only against a named team with a known win chance: challenge one of the teams listed')
         // Open: the strength of whoever takes it cannot be checked, so the stake is the smallest the owner allows.

@@ -487,7 +487,8 @@ export class Executor {
     }
     // An OVR range: the best XI OVR read right now (null: unreadable, refused).
     const t1 = tournament?.tournament
-    if (a.type === 'join_tournament' && t1 && ((t1.ovr_min ?? null) !== null || (t1.ovr_max ?? null) !== null)) {
+    const createsRange = (a.type === 'create_tournament' || a.type === 'create_challenge') && (a.ovr_min !== undefined || a.ovr_max !== undefined)
+    if (createsRange || (a.type === 'join_tournament' && t1 && ((t1.ovr_min ?? null) !== null || (t1.ovr_max ?? null) !== null))) {
       const best = await soft(() => fox.bestXiOvr(wallet))
       market.bestXiOvr = typeof best?.best_xi_ovr === 'number' && Number.isFinite(best.best_xi_ovr) ? best.best_xi_ovr : null
     }
@@ -999,6 +1000,8 @@ export class Executor {
                 entry_fee_foxsy: a.stake_foxsy,
                 target_user_id: a.target_user_id,
                 challenge_deadline_minutes: a.deadline_minutes,
+                ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),
+                ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}),
                 deadline: new Date(nowMs + a.deadline_minutes * 60_000).toISOString(),
                 starts_at: new Date(nowMs + (a.deadline_minutes + 5) * 60_000).toISOString(),
               }
@@ -1016,6 +1019,9 @@ export class Executor {
                 ...(a.home_and_away ? { home_and_away: true } : {}),
                 // A non-empty invite list makes it private (FoxLeague's whitelist_user_ids): the one the rules kept.
                 ...(Array.isArray(v.facts.invites) && v.facts.invites.length ? { whitelist_user_ids: v.facts.invites } : {}),
+                // An OVR range the rules checked against the team's best XI OVR (FoxLeague's ovr_min / ovr_max).
+                ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),
+                ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}),
               }
         booking.reached = true // from here a tournament or a 1v1 may exist, whatever the answer
         const created = await fox.createTournament(wallet, body, `agent${agent.index}-${randomUUID()}`)
