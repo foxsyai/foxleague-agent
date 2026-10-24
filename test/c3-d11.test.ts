@@ -70,16 +70,19 @@ test('D11 the executor allows a new challenge once one of the two was never acce
 
 const INVITE = { tournament_id: 3001, title: 'Champions FoxLeague\nAutumn', tier: 'gold', entry_fee_foxsy: 5000, wave: 1, expires_at: new Date(Date.now() + 2 * 86_400_000).toISOString(), seats_lock_at: new Date(Date.now() + 3 * 86_400_000).toISOString(), can_accept: true, refusal: null, prize_atomic: null }
 
+// Since the owner's Champions FoxLeague decision (2026-10-24, test/champions-foxleague.test.ts) the notice reads the
+// planning snapshot's own invitations, whatever FoxLeague's create switch says, and the agent decides by itself.
 async function service(invitations: () => Promise<unknown[]>) {
   const { Service } = await import('../src/service.ts')
   const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-'))))
   svc.ensureAgents()
   const told: string[] = []
   svc.notify = (t: string) => void told.push(t)
-  let calls = 0
-  ;(svc as unknown as { fox: { leagueInvitations: unknown } }).fox.leagueInvitations = async () => { calls++; return invitations() }
-  const notice = (s: ReturnType<typeof snapshot>) => (svc as unknown as { noticeInvitations: (i: number, s: unknown) => Promise<void> }).noticeInvitations(0, s)
-  return { svc, told, calls: () => calls, notice }
+  const notice = async (s: ReturnType<typeof snapshot>) => {
+    s.auth!.invitations = ((await invitations()) as never[]).map(i => ({ ...(i as object), tournament: null })) as never
+    return (svc as unknown as { noticeInvitations: (i: number, s: unknown) => Promise<void> }).noticeInvitations(0, s)
+  }
+  return { svc, told, notice }
 }
 
 const withKnockout = (on: boolean) => {
@@ -93,30 +96,32 @@ test('C3 a pending League + Knockout invitation reaches the owner once, with wha
   await notice(withKnockout(true))
   await notice(withKnockout(true))
   assert.equal(told.length, 1, told.join(' | '))
-  assert.match(told[0]!, /agent 1: invited to the League \+ Knockout T3001 "Champions FoxLeague Autumn" \(gold, entry 5000 FOXSY\), until .* UTC: the agent never joins this format; accept it yourself in FoxLeague/)
-  assert.ok(svc.store.activity(0, 5).some(r => /League \+ Knockout invitation T3001 \(gold, entry 5000 FOXSY, until .* UTC\): the owner was told; the agent never joins this format/.test(r.summary)), 'it is in the activity too')
+  assert.match(told[0]!, /agent 1: invited to the League \+ Knockout T3001 "Champions FoxLeague Autumn" \(gold, entry 5000 FOXSY\), until .* UTC: the agent decides within your limits/)
+  assert.ok(svc.store.activity(0, 5).some(r => /League \+ Knockout invitation T3001 \(gold, entry 5000 FOXSY, until .* UTC\): the owner was told; the agent decides within the limits/.test(r.summary)), 'it is in the activity too')
 })
 
-test('C3 nothing is read while FoxLeague has the format off; an expired or refused invitation says so or stays quiet', async () => {
+test('C3 an invitation reaches the owner with FoxLeague\'s create switch off too; an expired or refused one stays quiet or says so', async () => {
   const off = await service(async () => [INVITE])
   await off.notice(withKnockout(false))
-  assert.equal(off.calls(), 0, 'no read while the format is off')
+  assert.equal(off.told.length, 1, 'the switch gates only creating one')
   const expired = await service(async () => [{ ...INVITE, expires_at: new Date(Date.now() - 60_000).toISOString() }])
   await expired.notice(withKnockout(true))
   assert.equal(expired.told.length, 0)
   const refused = await service(async () => [{ ...INVITE, can_accept: false, refusal: 'Your team is still in another tournament' }])
   await refused.notice(withKnockout(true))
   assert.match(refused.told[0]!, /FoxLeague says it cannot be accepted now: Your team is still in another tournament/)
-  const failing = await service(async () => { throw new Error('HTTP 502') })
-  await failing.notice(withKnockout(true)).catch(() => undefined) // as the tick does: a failed read is quiet, the next tick reads again
+  const failing = await service(async () => [])
+  const unread = withKnockout(true)
+  unread.auth!.invitations = null // the snapshot could not read them: quiet, the next tick reads again
+  await (failing.svc as unknown as { noticeInvitations: (i: number, s: unknown) => Promise<void> }).noticeInvitations(0, unread)
   assert.equal(failing.told.length, 0)
 })
 
-test('C3 the agent still never joins the format', async () => {
+test('C3 the agent never joins the format without an invitation it can accept (since 2026-10-24 it accepts one by itself)', async () => {
   const { checkAction } = await import('../src/executor/rules.ts')
   const { TEST_SETTINGS, tournament } = await import('./fixtures.ts')
   const t = tournament(3001, { format: 'league_knockout', max_teams: 36, entry_fee_foxsy: 5000, tier: 'gold' })
-  const v = checkAction({ type: 'join_tournament', tournament_id: 3001 }, snapshot(), { settings: TEST_SETTINGS, now: new Date(), tournament: t as never } as never)
+  const v = checkAction({ type: 'join_tournament', tournament_id: 3001 }, snapshot(), { settings: TEST_SETTINGS, now: new Date(), tournament: t as never, invitation: 'not invited' } as never)
   assert.equal(v.ok, false)
 })
 
@@ -124,7 +129,7 @@ test('C3 and D11 the manual says what the agent now does', async () => {
   const { readFileSync } = await import('node:fs')
   const read = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
   const plays = read('site/src/content/docs/play/how-it-plays.md')
-  assert.match(plays, /FoxLeague's League \+ Knockout format \(created by FoxLeague, seats by invitation\) is the exception: the agent never joins it, but it tells you of each invitation/)
+  assert.match(plays, /You hear of each invitation, in its activity and at once on Telegram, with the entry fee and until when/)
   assert.match(read('site/src/content/docs/use/talk-to-your-manager.md'), /a payment whose outcome is unclear, top-up codes and a League \+ Knockout invitation/)
   assert.match(plays, /at most two played 1v1s a week against the same team \(a challenge nobody accepted, its stake back, does not count\)/)
   assert.match(read('site/src/content/docs/play/safety.md'), /at most two played 1v1s a week against the same team, a challenge nobody accepted not counting/)

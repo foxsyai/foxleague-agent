@@ -7,7 +7,7 @@ import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
-import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
+import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, PendingLeagueInvitation, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
@@ -46,6 +46,13 @@ export interface RulesContext {
   opponent?: { userId: number; elo: number | null; strength?: number | null }
   /** The agent plays at the Zeus level: a 1v1 needs a good win chance, a tournament a chance of the top three. */
   zeus?: boolean
+  /**
+   * For joining a League + Knockout: the team's pending invitation to it, read again right before the payment;
+   * 'not invited' when there is none, null when the invitations could not be read (refused).
+   */
+  invitation?: PendingLeagueInvitation | 'not invited' | null
+  /** The owner asked for this action (dashboard or Telegram), not the plan: the owner may leave a League + Knockout. */
+  byOwner?: boolean
   /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
   ownUserIds?: number[]
   /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
@@ -198,6 +205,8 @@ const VALID_SIZES: Record<string, (n: number) => boolean> = {
  * created: its matches, schedule and busy rows are unknown, and an estimate is no reason to pay a seat.
  */
 function unsupportedFormat(format: string, doing: 'joining' | 'creating'): string | null {
+  // A League + Knockout is joined by invitation (its own checks in join_tournament) and created only by FoxLeague's admin.
+  if (format === 'league_knockout') return doing === 'joining' ? null : 'a League + Knockout is created by FoxLeague only'
   return Object.hasOwn(VALID_SIZES, format) ? null : `format ${format} is not supported yet: not ${doing} blind`
 }
 
@@ -305,6 +314,34 @@ export const XP_BOOSTER_RENEW_HOURS = 2
 
 const NEXT_RARITY = ['Uncommon', 'Rare', 'Epic', 'Legendary'] as const
 
+/**
+ * FoxLeague's League + Knockout ("Champions FoxLeague", next-foxleague tournament_engine.rs, read 2026-10-24): 36 teams,
+ * 8 league matches each, then places 1 to 24 play the knockout (play-off, round of 16, quarter-finals and semi-finals
+ * over two legs, then the final or the third place match): at most 9 more. Its matches are played one at a time for
+ * the whole tournament, 4 a team in the league (144 for 36) then 46 knockout matches, one per round interval.
+ */
+export const LK_LEAGUE_MATCHES = 8
+export const LK_KNOCKOUT_MATCHES = 9
+const LK_KNOCKOUT_SLOTS = 46
+/** Zeus accepts with a real chance of the knockout: places 1 to 24 (owner, 2026-10-24). */
+export const LK_KNOCKOUT_PLACES = 24
+/** An invitation this close to its expiry is not paid into (FoxLeague closes it when the next wave runs). */
+const INVITATION_MARGIN_MS = 30 * 60_000
+
+/**
+ * Minutes from a tournament's first match to its last, at its round interval: one round per interval, except a League
+ * + Knockout, whose matches are all played one after another (its league slots, then its 46 knockout matches).
+ */
+export function scheduleSpanMinutes(format: string, maxTeams: number, homeAndAway: boolean, interval: number, groupSize = 4): number {
+  if (format === 'league_knockout') return (maxTeams * (LK_LEAGUE_MATCHES / 2) + LK_KNOCKOUT_SLOTS - 1) * interval
+  return (matchesAtMost(format, maxTeams, homeAndAway, groupSize) - 1) * interval
+}
+
+/** Our League + Knockout that has started and is not over: no other standard tournament meanwhile (FoxLeague's option C). */
+function runningLeagueKnockout(s: AgentSnapshot): Tournament | undefined {
+  return s.auth?.myTournaments?.active.find(t => t.format === 'league_knockout' && t.started_at && t.status !== 'completed' && t.status !== 'cancelled')
+}
+
 /** Matches one team may play in a tournament at most (it goes all the way), by format and size. */
 export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boolean, groupSize = 4): number {
   const rounds = (n: number) => Math.ceil(Math.log2(Math.max(2, n)))
@@ -317,6 +354,8 @@ export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boo
       return (maxTeams - 1) * (homeAndAway ? 2 : 1)
     case 'swiss':
       return rounds(maxTeams) + 1
+    case 'league_knockout':
+      return LK_LEAGUE_MATCHES + LK_KNOCKOUT_MATCHES
     default:
       // Never joined or created (unsupportedFormat); only a tournament already held could have one: counted as a league.
       return maxTeams - 1
@@ -360,7 +399,7 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
     if (x.id === id || x.max_teams === 2) continue
     const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
     const xStart = new Date(x.starts_at).getTime()
-    const xEnd = xStart + (total - 1) * (x.round_interval_minutes ?? 30) * 60_000
+    const xEnd = xStart + scheduleSpanMinutes(x.format, x.max_teams, Boolean(x.home_and_away), x.round_interval_minutes ?? 30, groupSize) * 60_000
     if (xStart > end || (xEnd < start && xEnd < now.getTime())) continue
     const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
     const n = x.started_at ? Math.max(1, left) : total
@@ -415,17 +454,25 @@ function scheduleRefusal(
   const own = matchesAtMost(t.format, t.max_teams, Boolean(t.home_and_away), groupSize)
   const interval = t.round_interval_minutes ?? 30
   const start = new Date(t.starts_at).getTime()
-  const end = start + (own - 1) * interval * 60_000
+  const span = scheduleSpanMinutes(t.format, t.max_teams, Boolean(t.home_and_away), interval, groupSize)
+  const end = start + span * 60_000
   const atStart = conditionAtStart(s, { id: t.id, starts_at: t.starts_at, end }, now)
   if (!atStart) return 'your current tournaments could not be read: not taking on another schedule blind'
   const owed = atStart.during
   const matches = own + owed
   if (matches <= 1) return null
-  const hours = ((own - 1) * interval) / 60
+  const hours = span / 60
   const floor = cfg.min_field_condition ?? 30
   const loss = cfg.condition_loss_per_match ?? 10
   const available = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
   const needed = matches * 11 * loss
+  if (t.format === 'league_knockout' && needed <= available) {
+    // The binding stretch is the knockout: up to 9 matches within its 46 slots, from the squad as it is at the start.
+    const burstHours = ((LK_KNOCKOUT_SLOTS - 1) * interval) / 60
+    const burst = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * burstHours, 0)
+    const burstNeeded = LK_KNOCKOUT_MATCHES * 11 * loss
+    return burstNeeded <= burst ? null : `the knockout would wear the squad down: up to ${LK_KNOCKOUT_MATCHES} matches in about ${Math.round(burstHours)} h need ~${burstNeeded} condition, the squad has ~${Math.round(burst)} above ${floor} with recovery`
+  }
   if (needed <= available) return null
   const also = owed ? ` (${own} here plus ${owed} still owed to your other tournaments at the same time)` : ''
   const when = atStart.hours > 0 ? ` at its start in ${Math.round(atStart.hours)} h` : ''
@@ -726,6 +773,18 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const unknownJoin = unsupportedFormat(t.format, 'joining')
       if (unknownJoin) return refuse(unknownJoin)
       if (t.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
+      const lk = t.format === 'league_knockout'
+      if (lk) {
+        // By invitation only, read again right before the payment: the contract admits only invited wallets (paying
+        // without being listed loses the gas). FoxLeague's own refusal can quote a title others wrote: not repeated here.
+        const inv = ctx.invitation
+        if (inv === null || inv === undefined) return refuse('the invitations could not be read: not paying blind')
+        if (inv === 'not invited' || inv.tournament_id !== t.id) return refuse(`T${t.id} is a League + Knockout, by invitation only, and this team has no pending invitation to it`)
+        if (!inv.can_accept) return refuse('FoxLeague says this invitation cannot be accepted now (one League + Knockout at a time, or the wallet is not on its on-chain list yet): not paying')
+        if (!(Date.parse(inv.expires_at) - ctx.now.getTime() > INVITATION_MARGIN_MS)) return refuse('the invitation expires within 30 minutes: not paying at its edge')
+      }
+      const running = runningLeagueKnockout(s)
+      if (t.max_teams > 2 && running && running.id !== t.id) return refuse(`your team is in T${running.id}, a League + Knockout that has started: no other tournament until it is over (1v1s and ranked stay open)`)
       const myId = s.profile.id
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
       if (ctx.pendingJoin) return refuse(`a seat in T${t.id} is already paid and waiting for FoxLeague's confirmation: not paying twice`)
@@ -751,8 +810,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!oneVOne) {
         const worn = scheduleRefusal(s, t, ctx.now)
         if (worn) return refuse(worn)
-        // Zeus enters only with a chance of the top three: not when three seated teams are clearly stronger.
-        if (ctx.zeus) {
+        // Zeus enters only with a chance of the top three: not when three seated teams are clearly stronger. A League +
+        // Knockout is judged on its invited teams, with a chance of the knockout (places 1 to 24, owner 2026-10-24).
+        if (ctx.zeus && lk) {
+          if (!ctx.field) return refuse('the invited teams could not be read: Zeus does not accept a field it cannot judge')
+          const atStart = conditionAtStart(s, t, ctx.now)
+          if (!atStart) return refuse('your current tournaments could not be read: Zeus does not judge a field blind')
+          const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
+          if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (lineup and ELO): no real chance of the knockout`)
+          if (field.stronger + field.unread >= LK_KNOCKOUT_PLACES) return refuse(`${field.unread} invited teams could not be read: Zeus does not accept a field it cannot judge`)
+        } else if (ctx.zeus) {
           // Never blind: a field that could not be read is no field to pay into.
           if (!ctx.field) return refuse('the seated teams could not be read: Zeus does not enter a field it cannot judge')
           // Our eleven as it will be at the start (the rivals are taken at full condition): rested, less what our other tournaments cost before it.
@@ -775,6 +842,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!d || !s.profile) return refuse(`tournament T${a.tournament_id} not found`)
       if (!d.participants.some(p => p.user_id === s.profile!.id)) return refuse(`not in T${a.tournament_id}`)
       if (d.tournament.status !== 'open' || new Date(d.tournament.deadline) <= ctx.now) return refuse('can only leave an open tournament before its deadline')
+      // Leaving a League + Knockout closes its invitation for good (the seat goes to the next wave): the owner's call.
+      if (d.tournament.format === 'league_knockout' && !ctx.byOwner) return refuse('the agent never leaves a League + Knockout by itself: leaving closes the invitation for good; the owner can')
       // Our own 1v1 nobody accepted: leaving refunds the stake, cancelling closes it and frees the 1v1 slot.
       const ownChallenge = d.tournament.max_teams === 2 && d.tournament.creator_user_id === s.profile.id && d.participants.length === 1
       return allow(0, { cancel: ownChallenge }, 'play', ownChallenge ? ['your own 1v1: the stake comes back and the challenge is closed'] : [])
@@ -807,6 +876,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.registration_closes_minutes_before >= a.starts_in_hours * 60 - 30) return refuse('registration would close within 30 minutes of now')
       const mine = s.auth?.myTournaments?.active.filter(t => t.creator_user_id === s.profile!.id && t.max_teams > 2) ?? []
       if (mine.length) return refuse(`already running T${mine[0]!.id}: one created tournament at a time`)
+      const runningLk = runningLeagueKnockout(s)
+      if (runningLk) return refuse(`your team is in T${runningLk.id}, a League + Knockout that has started: no other tournament until it is over (1v1s and ranked stay open)`)
       // FoxLeague refuses a create whose blocking window overlaps any live tournament's: check it first.
       const startsAt = ctx.now.getTime() + a.starts_in_hours * 3600_000
       const taken = clash(s.market.slots ?? [], blockingWindow(a.format, a.max_teams, Boolean(a.home_and_away), startsAt))

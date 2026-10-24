@@ -40,6 +40,7 @@ import {
   type ActiveMatch,
   type ChallengeForMe,
   type DailyAllowance,
+  type PendingLeagueInvitation,
   type FoxConfig,
   type MyTournaments,
   type PlayerCard,
@@ -141,6 +142,11 @@ export interface AgentSnapshot {
     myTournaments: MyTournaments | null
     upcoming: UpcomingMatches | null
     challengesForMe: ChallengeForMe[]
+    /**
+     * Pending League + Knockout invitations, each with its tournament (start, interval) when it could be read; null
+     * when the invitations could not be read. Their titles are written by others: the digest passes them through txt().
+     */
+    invitations?: (PendingLeagueInvitation & { tournament: Tournament | null })[] | null
   } | null
   market: MarketSummary
   /**
@@ -471,15 +477,17 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // The agent's own authed state (never in watch mode: that would need someone else's key).
   let auth: AgentSnapshot['auth'] = null
   if (wallet && registered) {
-    const [shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe] = await Promise.all([
+    const [shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe, invitations] = await Promise.all([
       attempt(warnings, 'shop status', () => fox.shopStatus(wallet)),
       attempt(warnings, 'daily allowance', () => fox.dailyAllowance(wallet)),
       attempt(warnings, 'active match', () => fox.activeMatch(wallet)),
       attempt(warnings, 'my tournaments', () => fox.myTournaments(wallet)),
       attempt(warnings, 'upcoming matches', () => fox.upcomingMatches(wallet)),
       attempt(warnings, 'challenges for me', () => fox.challengesForMe(wallet)),
+      // Whatever FoxLeague's create switch says: it gates only creating one, invitations keep coming.
+      attempt(warnings, 'league invitations', () => fox.leagueInvitations(wallet)),
     ])
-    auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [] }
+    auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [], invitations: invitations ? invitations.map(i => ({ ...i, tournament: null })) : null }
   }
 
   const [openAll, completed, cancelled, board, listings, cheapListings, floors, active, pendingSc, doneChallenges] = await Promise.all([
@@ -495,6 +503,15 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     attempt(warnings, 'pending tournaments', () => fox.tournaments({ status: 'pending_sc', kind: 'standard' })),
     attempt(warnings, 'completed 1v1s', () => recentChallenges(fox, now)),
   ])
+  // Each invitation's tournament (its start and interval): from the open list, or read by its id.
+  if (auth?.invitations?.length) {
+    auth.invitations = await Promise.all(auth.invitations.map(async i => {
+      const listed = (openAll ?? []).find(t => t.id === i.tournament_id)
+      if (listed) return { ...i, tournament: listed }
+      const read = await attempt(warnings, `league invitation T${i.tournament_id}`, () => fox.tournament(i.tournament_id, wallet!))
+      return { ...i, tournament: read?.tournament ?? null }
+    }))
+  }
   const recentStandard = [...(completed ?? []), ...(cancelled ?? [])]
     .sort((a, b) => b.starts_at.localeCompare(a.starts_at))
     .slice(0, 20)
@@ -587,7 +604,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
 
   // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent never
   // creates one; it may join one it is invited to, so only those are kept.
-  const openStandard = (openAll ?? []).filter(t => t.max_teams > 2 && !t.is_private)
+  // A League + Knockout is by invitation only: it shows among the invitations, never as an open tournament.
+  const openStandard = (openAll ?? []).filter(t => t.max_teams > 2 && !t.is_private && t.format !== 'league_knockout')
   if (wallet && registered) {
     const privates = (openAll ?? []).filter(t => t.max_teams > 2 && t.is_private).sort((a, b) => a.deadline.localeCompare(b.deadline)).slice(0, 8)
     const details = await Promise.all(privates.map(t => attempt(warnings, `private T${t.id}`, () => fox.tournament(t.id, wallet))))

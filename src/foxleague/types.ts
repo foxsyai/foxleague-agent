@@ -418,3 +418,8 @@ export interface PendingLeagueInvitation {
   refusal: string | null
   prize_atomic: string | null
 }
+
+/** GET /api/tournaments/{id}/invitations (league_invitations.rs LeagueInvitationsView): the parts the agent reads. */
+export interface LeagueInvitationsView {
+  invitations: { user_id: number; team_name?: string; state: string }[]
+}

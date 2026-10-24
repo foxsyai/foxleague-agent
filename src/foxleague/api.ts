@@ -17,6 +17,7 @@ import type {
   UserProfile,
   ChallengeForMe,
   PendingLeagueInvitation,
+  LeagueInvitationsView,
   ActiveMatch,
   MyTournaments,
   LeaderboardPage,
@@ -252,9 +253,14 @@ export class FoxLeague {
     return this.call<ChallengeForMe[]>('/notifications/challenges-for-me', { wallet: w })
   }
 
-  /** The team's pending League + Knockout invitations (read only: the agent never joins that format). */
+  /** The team's pending League + Knockout invitations. */
   leagueInvitations(w: AgentWallet): Promise<PendingLeagueInvitation[]> {
     return this.call<PendingLeagueInvitation[]>('/tournaments/invitations', { wallet: w })
+  }
+
+  /** Who a League + Knockout invited (the field a Zeus agent judges before accepting). */
+  leagueInvitationsView(id: number, w: AgentWallet): Promise<LeagueInvitationsView> {
+    return this.call<LeagueInvitationsView>(`/tournaments/${id}/invitations`, { wallet: w })
   }
 
   // ---- actions (called only by the executor, never in dry run) ----
