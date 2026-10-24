@@ -170,6 +170,9 @@ export interface Tournament {
   third_place_user_id: number | null
   created_at: string
   started_at: string | null
+  /** The OVR range (FoxLeague, 2026-10-24): the lowest and highest best XI OVR a joining team may have; absent for none. */
+  ovr_min?: number | null
+  ovr_max?: number | null
   completed_at: string | null
   cancelled_at: string | null
   participant_count?: number
@@ -424,4 +427,12 @@ export interface LeagueInvitationsView {
   invitations: { user_id: number; team_name?: string; state: string }[]
   /** When the seats lock (the third wave): leaving refunds the whole entry before it and is refused after it. */
   seats_lock_at?: string
+}
+
+/** GET /api/teams/best-xi-ovr: the team's best XI OVR, what an OVR range is checked against at the join. */
+export interface BestXiOvr {
+  best_xi_ovr: number | null
+  formation?: string | null
+  complete?: boolean
+  cards?: number
 }

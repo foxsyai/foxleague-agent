@@ -53,6 +53,8 @@ export interface RulesContext {
   invitation?: PendingLeagueInvitation | 'not invited' | null
   /** The owner asked for this action (dashboard or Telegram), not the plan. */
   byOwner?: boolean
+  /** For joining a tournament or 1v1 with an OVR range: the team's best XI OVR read right before paying, null when unreadable. */
+  bestXiOvr?: number | null
   /** For leaving a League + Knockout: when its seats lock (FoxLeague's invitations view), null when unreadable. */
   seatsLockAt?: Date | null
   /** For leaving a League + Knockout: this agent paid the seat itself (its own join in its log), not the owner. */
@@ -795,6 +797,19 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (inv === 'not invited' || inv.tournament_id !== t.id) return refuse(`T${t.id} is a League + Knockout, by invitation only, and this team has no pending invitation to it`)
         if (!inv.can_accept) return refuse('FoxLeague says this invitation cannot be accepted now (one League + Knockout at a time, or the wallet is not on its on-chain list yet): not paying')
         if (!(Date.parse(inv.expires_at) - ctx.now.getTime() > INVITATION_MARGIN_MS)) return refuse('the invitation expires within 30 minutes: not paying at its edge')
+      }
+      // An OVR range (FoxLeague, 2026-10-24) is checked once at the join against the best XI OVR; outside it the paid
+      // entry is refunded and the gas lost, so the agent joins only inside it, never blind.
+      // FoxLeague compares the best XI OVR to one decimal (held in tenths, ovr_range.rs), the value its route answers.
+      const lo = t.ovr_min ?? null
+      const hi = t.ovr_max ?? null
+      if (lo !== null || hi !== null) {
+        const known = (v: unknown) => v === null || (typeof v === 'number' && Number.isFinite(v))
+        if (!known(lo) || !known(hi)) return refuse(`T${t.id} carries an OVR range the agent cannot read: not paying blind`)
+        const ovr = ctx.bestXiOvr
+        if (typeof ovr !== 'number' || !Number.isFinite(ovr)) return refuse('your best XI OVR could not be read: not paying into an OVR range blind')
+        if (lo !== null && ovr < lo) return refuse(`T${t.id} takes teams with a best XI OVR from ${lo}; yours is ${ovr}`)
+        if (hi !== null && ovr > hi) return refuse(`T${t.id} takes teams with a best XI OVR up to ${hi}; yours is ${ovr}`)
       }
       const running = runningLeagueKnockout(s)
       if (t.max_teams > 2 && running && running.id !== t.id) return refuse(`your team is in T${running.id}, a League + Knockout that has started: no other tournament until it is over (1v1s and ranked stay open)`)

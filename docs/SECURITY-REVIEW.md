@@ -787,7 +787,7 @@ format's rules were read from FoxLeague's code (next-foxleague 75289fbbf, read o
 | R31A-3 | low | Re-review of PR #31 (test): no executor test showed Zeus refusing a strong field read from the leaderboard | A test: 30 invited teams at ELO 3000 with strong lineups are refused as clearly stronger, expired and declined rows left out (seen failing with the ELO lookup broken) |
 
 A League + Knockout leaves the open tournaments list (invitation only). The paid invitation endpoints are on FoxLeague's
-testnet only until its mainnet tournaments contract is upgraded; Bronze editions need no contract. Open: a team knocked
+testnet only until its mainnet tournaments contract is upgraded (it was, on 2026-10-24); Bronze editions need no contract. Open: a team knocked
 out early stays barred from other tournaments until the whole tournament ends (the stricter side); FoxLeague's
 refusal after a paid join can quote a title others wrote and reaches the next plan sanitised through recent activity
 (as every FoxLeague error today); the first play-off
@@ -826,6 +826,29 @@ its fee. Test first: one test in `test/champions-foxleague.test.ts`, seen failin
 |---|---|---|---|
 | JG1 | low | The join's gas limit (7,000,000) had not followed FoxLeague's 8,400,000 after the mainnet upgrade | `GAS.joinTournament` is 8,400,000; unused gas is refunded, so it costs little. The other limits already match FoxLeague's app |
 | R32A-5 | low | Re-review of PR #32 (docs): the internal docs did not say the agent leaves only a seat it paid itself | `docs/ECONOMY-AND-RULES.md` and `docs/FOXLEAGUE-INTEGRATION.md` say so |
+
+Open: `claimRefund` keeps 6,500,000, as FoxLeague's app does, on the larger contract (a refund claim that runs out of gas
+loses only its gas and can be retried).
+
+## FoxLeague's manual of 2026-10-24 and the OVR range
+
+FoxLeague published its Champions FoxLeague page and an OVR range for tournaments and 1v1s (manual at 688088787, synced
+into `src/strategist/manual.md`). The page states the rules the agent already follows. The OVR range is not live on
+mainnet yet; the agent is ready for it. Test first: `test/ovr-range.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| OR1 | design | A tournament or 1v1 can carry an OVR range, checked once at the join against the team's best XI OVR; outside it a paid entry is refunded and the gas lost | The executor reads the best XI OVR (`GET /api/teams/best-xi-ovr`) right before paying into a ranged tournament or 1v1; the rule refuses outside the range and when the value is unreadable; no read without a range |
+| OR2 | design | The plan did not see ranges | Each open tournament and challenge shows its range, and the snapshot its best XI OVR |
+| R33A-1 | low | Agent review of PR #33 (docs): the integration and economy notes still called the contract upgrade testnet only | They say it is on mainnet since 2026-10-24 |
+| R33A-2 | low | Agent review of PR #33: its section had no open line | Added (`claimRefund` at 6,500,000) |
+| R34A-1 | medium | Agent review of PR #34: the route is not live on mainnet yet, so the snapshot's best XI OVR read put "best XI OVR: Team not found" in every plan request and kept the dashboard dot off ok | The snapshot's read is quiet when it fails (its value is information only; the rule uses the executor's fresh read) |
+| R34A-2 | low | Agent review of PR #34 (rule 4): a range value present but not a number counted as no range | Any value that is not null counts as a range: the executor reads the best XI OVR, and a value that is not a finite number refuses ("an OVR range the agent cannot read") |
+| R34A-3 | low | Re-review of PR #34 (docs): `docs/ECONOMY-AND-RULES.md`, a mirror of the game rules, still said no manual page and had no OVR range rule | It names the page, the stricter "out of the edition" rule and the OVR range |
+
+FoxLeague compares the best XI OVR rounded to one decimal (held in tenths, `ovr_range.rs`), the value its route answers,
+so the agent's comparison is the same. Open: a team out of a Champions FoxLeague is free again at once in FoxLeague, while the agent waits until the edition
+ends (the stricter side; the AI reads FoxLeague's rule in the manual, so it may propose a join the rule refuses).
 
 ## Where the limits live
 

@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 565a902de 2026-10-23.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 688088787 2026-10-24.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -22,7 +22,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Match cooldown** | 30 seconds from the start of your previous match; 15 minutes from the start of your last ranked game | Pacing between the matches you start | Both clocks run from the start of the match, not from full time. The ranked cooldown counts from your last ranked game, started or drawn into | Not for sale |
 | **XP-eligible matches per player per day** | 3 | How many matches a day a player card can earn attribute XP in | A fourth competitive match that day still counts for ELO, career stats and the fusion counter. It awards no XP | Not for sale |
 | **What counts as competitive** | Silver or Gold tournament matches plus 1v1 challenges. XP also comes from ranked while ranked XP is on (off on mainnet), but ranked never moves the match counter | The matches that move the on-chain match counter the match gates read | A real opponent and a paid seat. Casual games against the AI never count. Bronze tournaments never count | Fusion match waiver (see fusion row) |
-| **XP per match** | Up to 900 XP spread over the 7 stats | Attribute XP a starter earns from one competitive match | Nine match actions (distance, dribbles, goals, passes, shots, completed passes, tackles, interceptions, saves) each score 0 to 100 against a normaliser and the scores are distributed to stats. The normalisers are set so a median performance scores about half of each term | XP booster doubles it (next row) |
+| **XP per match** | Up to 900 XP spread over the 7 stats (910 in the keeper's shirt) | Attribute XP a starter earns from one competitive match | Scored on the role of the shirt worn ([XP by shirt](/mechanics/training/#xp-by-shirt)). Midfield and forward shirts: nine match actions (distance, dribbles, goals, passes, shots, completed passes, tackles, interceptions, saves) each score 0 to 100 against a normaliser and the scores are distributed to stats. The normalisers are set so a median performance scores about half of each term. The keeper's shirt is scored on distance, passes, completed passes, saves and catches; a back-line shirt on distance, dribbles, passes, completed passes, tackles and interceptions. Both are scored against the role's own normalisers, then a role factor brings the role's average match to the midfield and forward average | XP booster doubles it (next row) |
 | **XP booster** | 2,000 FOXSY, 2x XP, 24 hours | Doubles training XP and match XP for one day | One active at a time. Buying again restarts the 24 hour clock. Featured tournament rewards (2x for 48 h to the winner, 1.5x for 24 h to the runner-up) do not stack with it; the highest single multiplier applies | This row is the shortcut. No floor |
 | **XP per stat bump** | 2,000 XP | XP a stat meter needs before the stat goes up by 1 | Surplus carries into the next meter, unless the bump lands on the rarity cap | None |
 | **Player level** | level = floor(sqrt(total XP / 200)), max 100 | The level shown on the card, grown from lifetime XP | Cosmetic and career-only; stats are driven by the per-stat meters | None |
@@ -38,19 +38,20 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Fusion card cooldown** | 14 days per fused card | A fusion output waits before it can be an input again | Belongs to the card and travels with it if sold. Does not block play, listing or your other fusions | Fusion cooldown waiver: 75 FOXSY per day down to a 3-day floor, at most 11 days and 825 FOXSY per card |
 | **Fusion wallet spacing** | 20 hours between two fusions of one wallet | Pacing on the wallet, whatever the cards | Counts from your last successful fusion | Not for sale |
 | **Marketplace listing** | Reserve between 500 and 1,000,000 FOXSY; every sale is a 24 hour auction | How you sell a player | Listing costs nothing beyond gas. Bids start at the reserve and must beat the top bid by 5 percent. A bid in the last 300 seconds extends the auction by 300 seconds. Cancel only while there are no bids | None. The 500 floor is enforced on chain |
-| **Listing gate** | The match gate of the card's rarity: Common 5 competitive matches (5 really played), Uncommon 15 (5), Rare 45 (15), Epic 135 (45), Legendary 405 (135) | What a card needs before it can be auctioned | The same two gates as fusion. The fusion match waiver credit on the card counts. Cards out of a pack or a fusion start at 0. The contract refuses the listing otherwise; listings already open on 12 October 2026 at 14:00 UTC, when these gates replaced the single gate of 20 matches, finish normally | Fusion match waiver: Uncommon 20 FOXSY per match; Rare, Epic plus Legendary 100 (a Legendary at most 270, so 135 really played). None for Common |
+| **Listing gate** | The match gate of the card's rarity: Common 5 competitive matches (5 really played), Uncommon 15 (5), Rare 45 (15), Epic 135 (45), Legendary 405 (135) | What a card needs before it can be auctioned | The same two gates as fusion. The fusion match waiver credit on the card counts. Cards out of a pack or a fusion start at 0. The contract refuses the listing otherwise; listings already open on 12 October 2026 at 16:15 UTC, when these gates replaced the single gate of 20 matches, finish normally | Fusion match waiver: Uncommon 20 FOXSY per match; Rare, Epic plus Legendary 100 (a Legendary at most 270, so 135 really played). None for Common |
 | **Marketplace fee** | 10 percent of the winning bid | Platform fee on a completed sale | Paid by the seller out of the bid, only when the auction sells | None |
 | **Relist cooldown** | 48 hours after a sale | A just-sold player cannot be auctioned again | Per player, enforced on chain | Not for sale |
 | **Creator royalty** | 2.5 percent of a tournament or 1v1 prize pool | Paid to the provider of the AI binary the matches ran on | Comes out of the 10 percent platform fee, in the same distribution transaction as the prizes. It never reduces a winner's share. Capped on chain at 2.5 percent. Marketplace sales carry no royalty | None |
-| **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card at its match gate; 21 days plus 6 hours for every missing match for a card moved under it | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer; each fusion match waiver bought afterwards for a card moved under its gate takes 6 hours off, down to 21 days plus 6 hours for every match it still has to really play. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The longer lock closes the alt-wallet path: a second wallet's untouched Legendary is locked for 122 days and 6 hours. Locks already running on 12 October 2026 at 14:30 UTC were never made longer | Reduce Cooldown, for a card moved at its gate only: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days), every day or only some of them. Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY. Under the gate: the fusion match waiver (on the card's profile in the Squad), 6 hours a match |
+| **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card at its match gate; 21 days plus 6 hours for every missing match for a card moved under it | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer; each fusion match waiver bought afterwards for a card moved under its gate takes 6 hours off, down to 21 days plus 6 hours for every match it still has to really play. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The longer lock closes the alt-wallet path: a second wallet's untouched Legendary is locked for 122 days and 6 hours. Locks already running on 12 October 2026 at 16:30 UTC were never made longer | Reduce Cooldown, for a card moved at its gate only: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days), every day or only some of them. Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY. Under the gate: the fusion match waiver (on the card's profile in the Squad), 6 hours a match |
 | **Tournament seat fee** | Bronze free; Silver 1,000 to 4,999 FOXSY; Gold 5,000 FOXSY and up | What a seat costs, chosen by the creator inside the tier | Paid exactly, on chain, into a free seat. Refunded if you leave before the registration deadline or the tournament is cancelled | None. Bronze is the free tier |
-| **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a Silver or Gold pool is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
+| **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a Silver or Gold pool is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. Champions FoxLeague always plays its 3rd place match. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
+| **Prize from FoxLeague** | An amount the FoxLeague team sets per Champions FoxLeague edition (Silver or Gold only) | Paid on top of the entry pool to the 8 quarter-finalists, in equal shares | Deposited into the tournaments contract by the contract owner or a sponsor wallet the owner approved, before the edition starts. Paid by the contract after the edition completed and its entry pool was paid. No platform fee and no royalty. A cancelled edition returns it to the depositor; so does the owner for a prize still unpaid 30 days after the completion. See [Champions FoxLeague](/mechanics/champions-foxleague/#prizes) | None |
 | **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the broadcast ends. Unaccepted challenges refund in full at the deadline | None |
 | **Tournaments you can run** | 1 active as a player plus 1 active as organizer-only | Creation cap | Complete or cancel before creating another. Admins are uncapped as organizers | Not for sale |
 | **Sync fee** | 10 FOXSY per player | Writes trained stats to the chain so they count in matches | Sync All shows the total before you sign. Required before fusing or listing a player. Not required to play | None |
 | **Badge re-roll** | 1,000 FOXSY after 3 free re-rolls | A fresh AI-generated team badge from Settings | The first badge during onboarding is always free | This row is the shortcut |
 | **ELO leagues** | Bronze below 1,300; Silver 1,300; Gold 1,600; Platinum 2,000; Diamond 2,700 | Your league bracket, from your ELO | New teams start at 1,200. Ranked games against another manager move rating with K = 24. Silver tournaments and Silver 1v1s use K = 12, Gold ones K = 18. Bronze tournaments move no ELO. The bands are 300 to 700 points wide: Gold is a season of wins, Platinum about three in either direction | Not for sale |
-| **ELO decay** | On. After 10 idle days you lose 5 points every 20 hours (6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a finished Silver or Gold tournament match resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
+| **ELO decay** | On. After 10 idle days you lose 5 points at most once every 20 hours (about 6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a finished Silver or Gold tournament match resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
 | **Aging** | Minted at 18; one in-game week per real day; ramp from age 30 to the peak at 39 | Older players lose more condition per match and per training while regenerating less | Stats never drop. Every condition cost climbs to 3x its base at 39: matches from 10 or 5 to 30 or 15, training from 5 to 15; regeneration falls from 48 to 24 a day. A 39-year-old plays three tournament matches from full, then rests about 4 days | Condition recovery keeps a veteran on the pitch. Age itself is not for sale |
 | **Onboarding EGLD bonus** | Spent. The first 101 wallets that registered with less than 0.01 EGLD received 0.1 EGLD each | Covered roughly 100 on-chain actions of gas for a new manager | All 101 were paid. A wallet that registers today gets no EGLD from FoxLeague and tops up EGLD itself: the swap window's Ramp Network link, xPortal or an exchange | None |
 | **Registration relayer** | 3 attempts per wallet per 10 minutes; 5,000 relayed registrations per day platform-wide | Rate limits on the gas-free registration | Past the daily cap the gas-free registration closes (the registration screen says "Onboarding closed for today"): try again tomorrow or ask the team on Telegram. There is no path where you pay the registration gas yourself | Not for sale |
@@ -143,7 +144,7 @@ The card's match gate at the moment of the transfer decides the length: 21 days 
 | Matches | 90 per starter | 3 x 30 |
 | Seat fees paid | 90,000 FOXSY | 90 x 1,000. A tournament seat buys several matches (up to 19 in a 20-team round robin), so the real seat bill per match is lower |
 | Expected prize flow at an average result | 81,000 FOXSY back, 9,000 net cost | 90 percent of 90,000 returns as prizes; the 10 percent fee is the cost, 2,250 of which is the creator royalty (2.5 percent of the pool) |
-| XP earned per starter | up to 81,000 XP, about half at a median performance | 90 x 900. That is up to 40 stat bumps at 2,000 XP each; the normalisers put a median game at about half |
+| XP earned per starter | up to 81,000 XP (81,900 in the keeper's shirt), about half at a median performance | 90 x 900 (90 x 910 for the keeper). That is up to 40 stat bumps at 2,000 XP each; the normalisers put a median game at about half |
 | Condition | sustainable | 3 x 10 = 30 per day against 48 regenerated |
 
 ### (h) One Legendary from a fresh squad
@@ -269,6 +270,287 @@ The principle stays fixed. Your stats are preserved. Age is paid in condition. R
 
 See also [Tournaments](/mechanics/tournaments/), [Match-Day Strategy](/mechanics/match-day-strategy/) and the [Shop](/mechanics/shop/).
 
+# Champions FoxLeague
+(docs.foxleague.ai/mechanics/champions-foxleague/)
+
+**Champions FoxLeague** is FoxLeague's big competition. 36 teams play one league phase in a single table. The best 24 go on to a knockout phase played over two legs, up to a single-match final. In the API its format code is `league_knockout`.
+
+> **Every match is played live**
+> A match is played live during its broadcast. When the broadcast ends, the match has its final score. The league table, the knockout seats, ELO, XP and condition all move at that moment, never earlier.
+
+## At a glance
+
+| Topic | Rule |
+|---|---|
+| **Teams** | 36, by invitation from the leaderboard |
+| **League phase** | 8 matchdays, 8 matches per team, one table of 36 |
+| **Places 1 to 8** | Straight to the round of 16 |
+| **Places 9 to 24** | Knockout play-off |
+| **Places 25 to 36** | Out |
+| **Knockout ties** | Play-off, round of 16, quarter-finals and semi-finals over two legs |
+| **3rd place match and final** | Single matches, the 3rd place match first |
+| **Matches in total** | 190: 144 in the league phase and 46 in the knockout phase |
+| **Who runs it** | The FoxLeague team |
+
+## Who organizes it
+
+The FoxLeague team creates every edition. Players cannot create one. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on.
+
+For each edition the FoxLeague team sets:
+
+- the **tier** and the **entry fee**: Bronze (free), Silver (1,000 to 4,999 FOXSY) or Gold (5,000 FOXSY and up);
+- the **snapshot date**, the **registration deadline** and the **start**;
+- the **time between games**;
+- an optional **prize from FoxLeague** on a Silver or Gold edition (see [Prizes](#prizes)).
+
+The FoxLeague team runs the edition without a seat of its own. An edition has no OVR range, no developer mode and no hand-picked invite list: its 36 seats go to the leaderboard's teams through the invitation waves below.
+
+## How you get in: the invitations
+
+### The snapshot
+
+At the snapshot date the leaderboard is frozen: every team's rank and ELO at that moment. The snapshot date is at least **4 days** before the registration deadline.
+
+A team on the frozen board can be invited only when:
+
+- it played at least one **match in the 14 days** before the snapshot. Any match counts except a developer game; a tournament match counts once its broadcast has ended;
+- it has a **full owned squad**: 11 starters plus 7 substitutes, every card in its wallet and none listed for sale;
+- it holds no seat and no open invitation in **another Champions FoxLeague** that is not over. A team plays one Champions FoxLeague at a time;
+- its account can be invited (banned, admin and FoxLeague test accounts cannot).
+
+### The three waves
+
+| Wave | When | Who is invited |
+|---|---|---|
+| **1** | At the snapshot | The 36 highest eligible teams of the frozen board |
+| **2** | Halfway from the snapshot to the deadline | The next eligible teams, one for every empty seat |
+| **3** | Three quarters of the way to the deadline | The next eligible teams again, one for every empty seat |
+
+When wave 2 or wave 3 starts, every invitation still unanswered expires and its seat goes to the next team. The invitations of wave 3 expire at the deadline. The next teams are checked again at that wave, in the order of the frozen board. A team left out at the snapshot that is eligible by then is invited in its original rank.
+
+### Accept, decline or leave
+
+- You are told in the bell (and by push, if you turned it on). A banner in the app shows the invitation and the time to accept it by.
+- **Accept** is the join. On a Silver or Gold edition you pay the entry fee as you accept. There Accept opens once your wallet is on the contract's invite list: within a minute of the invitation.
+- **Decline** closes your invitation for good. Its seat goes to the next wave.
+- You can **leave** after accepting until wave 3 starts. A paid entry is refunded on chain. From the start of wave 3 your seat is locked in.
+- The tournament page lists every invitation by wave and the frozen leaderboard, with the reason a team could not be invited.
+
+> **Not full at the deadline**
+> An edition needs all 36 seats. If it is not full when registration closes, it is cancelled: every entry fee is refunded on chain and so is the prize from FoxLeague.
+
+### While the edition runs
+
+From the edition's start until your team is out (or the edition ends) you cannot join or create another standard tournament to play in. 1v1 challenges, ranked matches, casual matches and developer tournaments stay open with their usual rules. Before the start nothing changes: keep playing everything.
+
+A team that is out is free again at once: places 25 to 36 when the last league match's broadcast has ended, the loser of a tie when the broadcast of its deciding match has ended. The semi-final losers stay in for the 3rd place match.
+
+## The draw and the pots
+
+When registration closes, the 36 teams are seeded by their **ELO at the snapshot** (a team missing from the snapshot keeps its current ELO). On equal ELO the team that joined first goes first. The seeds make four pots of 9:
+
+| Pot | Seeds |
+|---|---|
+| **Pot 1** | 1 to 9 |
+| **Pot 2** | 10 to 18 |
+| **Pot 3** | 19 to 27 |
+| **Pot 4** | 28 to 36 |
+
+The tournament page shows the pots above the table and a pot badge (P1 to P4) next to every team. Tap a team in the pots panel to see its 8 league opponents.
+
+![The Pots panel of a finished edition: four columns of 9 teams in draw order, seeds 1 to 36](/screenshots/champions-foxleague/pots.png)
+
+## The league phase
+
+Every team plays **8 matches on 8 matchdays**, one per matchday:
+
+- **2 opponents from each pot**, your own pot included;
+- one of the two at home and one away, so 4 home and 4 away matches in all;
+- never the same opponent twice.
+
+All 144 fixtures are drawn at the deadline and are public from then on. A league match can end in a draw: no extra time, no penalties. Points are **3 for a win, 1 for a draw, 0 for a loss**. A match neither team could play costs each of them 1 point.
+
+### The table and its zones
+
+All 36 teams share one table. A stripe on each row shows its zone:
+
+| Places | Zone | What it means |
+|---|---|---|
+| **1 to 8** | Round of 16 | Straight into the round of 16 |
+| **9 to 24** | Play-off | A two-legged play-off for the 8 remaining round of 16 seats |
+| **25 to 36** | Out | The edition ends here for these teams |
+
+The final places are set once the broadcast of the last league match has ended.
+
+![The league phase table of a finished edition: green stripes for places 1 to 8, blue for 9 to 24, grey from 25, a pot badge next to every team](/screenshots/champions-foxleague/league-table-zones.png)
+
+### Tie-breakers
+
+Teams level on points are separated in this order:
+
+1. **Head-to-head**, only when every one of the level teams has played every other one. Then the points, the goal difference and the goals scored in the matches between them decide. When even one pair of them has not met, this step is skipped.
+2. **Goal difference** over all league matches.
+3. **Goals scored** over all league matches.
+4. **Higher ELO** when the league phase ends.
+5. **The team that joined the edition first**.
+
+A team meets only 8 of the other 35, so level teams have often not all played each other. Example: X, Y and Z are level on points. X beat Y 1-0 and Z met neither. Their goal differences are Y +12, X +5, Z +3. Not all of them met, so goal difference decides: Y, X, Z.
+
+This head-to-head rule is for Champions FoxLeague only. The other formats keep the rule on [Tournaments](/mechanics/tournaments/#tie-breakers).
+
+## The knockout phase
+
+### The knockout draw
+
+The knockout bracket is drawn when registration closes, over league **places**, not teams. So the Knockout tab shows "9th v 24th" style pairings from the first day. The draw never sees a result: the teams take their seats only once the league phase is over.
+
+### Play-off (places 9 to 24)
+
+| Group | Pairing |
+|---|---|
+| A | 9th or 10th v 23rd or 24th |
+| B | 11th or 12th v 21st or 22nd |
+| C | 13th or 14th v 19th or 20th |
+| D | 15th or 16th v 17th or 18th |
+
+Inside each group the draw decides which of the two higher places meets which of the two lower ones. The team placed 9th to 16th plays leg 2 at home.
+
+### Round of 16
+
+| Top 8 | Meets the winner of |
+|---|---|
+| 1st or 2nd | the 15th or 16th v 17th or 18th tie |
+| 3rd or 4th | the 13th or 14th v 19th or 20th tie |
+| 5th or 6th | the 11th or 12th v 21st or 22nd tie |
+| 7th or 8th | the 9th or 10th v 23rd or 24th tie |
+
+The top-8 team plays leg 2 at home. The draw puts 1st and 2nd into opposite halves of the bracket. It does the same with 3rd and 4th, 5th and 6th, 7th and 8th. So 1st and 2nd can only meet in the final.
+
+### Quarter-finals, semi-finals, 3rd place match and final
+
+- **Quarter-finals**: in each half the tie of 1st or 2nd meets the tie of 7th or 8th. The tie of 3rd or 4th meets the tie of 5th or 6th.
+- From the quarter-finals on, the team **higher in the league table** plays leg 2 at home.
+- **Semi-finals** are two-legged too.
+- The two semi-final losers play the **3rd place match**, a single match before the final. Every edition plays it.
+- The **final** is a single match.
+
+| Round | Ties | Matches |
+|---|---|---|
+| Play-off | 8 | 16 |
+| Round of 16 | 8 | 16 |
+| Quarter-finals | 4 | 8 |
+| Semi-finals | 2 | 4 |
+| 3rd place match | 1 | 1 |
+| Final | 1 | 1 |
+
+The Knockout tab shows the whole bracket, one column per round. Each tie lists both legs (**L1**, **L2**) and the aggregate (**Agg**); the team that went through is in green. A shootout score is shown in brackets after the aggregate.
+
+![The Knockout tab of a finished edition: play-off, round of 16, quarter-finals and semi-finals with L1, L2 and Agg per tie, then the 3rd place match and the final; play-off tie 2 and the final were decided on penalties](/screenshots/champions-foxleague/knockout-bracket.png)
+
+## Two legs and the aggregate
+
+Each team plays one leg at home and one away. The **aggregate** (the goals of both legs added up) decides who goes through. There is **no away goals rule**: 2-2 on aggregate is level, wherever the goals were scored.
+
+- **Leg 1** is a normal match. It can end in a draw.
+- **Leg 2** kicks off only after leg 1's broadcast has ended. The match engine starts it with leg 1's score carried in, so the scoreboard shows the leg's own score and the aggregate (**AGG**) next to it.
+
+![Leg 2 at kickoff: the leg's own score is 0-0 and the AGG chip carries leg 1's 1-0](/screenshots/champions-foxleague/leg-two-kickoff-aggregate.png)
+
+- If the aggregate is **level at the end of leg 2's normal time**, leg 2 goes on to **extra time** (two halves of 100 seconds). If it is still level, a **penalty shootout** follows: five kicks each, then sudden death for up to 20 more rounds. All of it is part of leg 2's own game and broadcast.
+
+![Leg 2 of a play-off tie after its shootout: the leg ended 1-2, the aggregate 2-2, the shootout 2-1](/screenshots/champions-foxleague/leg-two-penalties.png)
+
+- The **3rd place match** and the **final** are single matches: level at full time goes to extra time, then penalties.
+- A tie is never decided by lot. In the rare case of a level aggregate with no shootout (for example when both teams forfeit leg 2, which counts 0-0), the team higher in the league table goes through. The same rule covers the 3rd place match and the final.
+
+The match card of each leg shows that leg's own score. The Knockout tab shows each tie with **L1**, **L2** and **Agg** (see [the bracket](#quarter-finals-semi-finals-3rd-place-match-and-final) above).
+
+## What each leg counts for
+
+Each leg is a match of its own. Everything a tournament match moves, a leg moves, measured on that leg alone:
+
+| Effect | What happens per leg |
+|---|---|
+| **Score on record** | The leg's own goals. Leg 2 never counts the score carried in from leg 1 |
+| **Win, draw or loss** | From the leg's own score. A leg level on its own score that ended in a shootout goes to the shootout winner |
+| **ELO** | Rated on the leg's own result, like the record. Silver moves ELO with K = 12, Gold with K = 18, Bronze moves none |
+| **Player XP** | Silver and Gold only. Each player earns XP from what they did in that game. Leg 2's XP counts only leg 2's play, extra time included, never leg 1 or the aggregate. The daily cap of 3 XP-earning matches per player applies |
+| **Condition** | 10 for every player who takes the pitch, per leg (more for older players, see [Player Aging](/mechanics/aging/)) |
+| **Competitive matches** | On Silver and Gold, each leg counts as one competitive match for the card's match gate |
+
+So a team can go through and still lose leg 2. In the play-off tie in the images above, the team at home in leg 2 lost that leg 1-2 and went through 2-1 on penalties. For the record and ELO, leg 2 is a loss for it.
+
+The league matches, the 3rd place match and the final work the same way as single tournament matches.
+
+## Prizes
+
+### The entry pool (Silver and Gold)
+
+The pool is the entry fee times 36. When the edition completes, the tournaments contract pays it on chain with the standard split:
+
+| Place | Share of the pool |
+|---|---|
+| **Winner** | 45% |
+| **Runner-up** | 30% |
+| **3rd place** (the winner of the 3rd place match) | 15% |
+| **Platform fee** | 10% |
+
+A quarter of the platform fee (2.5% of the pool) is the creator royalty, as on every paid tournament. It never reduces a winner's share. Example: a Gold edition at 5,000 FOXSY gives a pool of 180,000 FOXSY: 81,000 to the winner, 54,000 to the runner-up, 27,000 to 3rd place and 18,000 platform fee.
+
+The edition completes once the broadcasts of the 3rd place match and the final have ended. Winners receive their share in their wallet with no claim needed.
+
+### The prize from FoxLeague
+
+A Silver or Gold edition can carry a **prize from FoxLeague** on top of the entry pool:
+
+- The FoxLeague team sets the amount when it creates the edition and deposits the FOXSY into the tournaments contract while registration is open. Only the contract owner or a wallet it approved as a sponsor (`setSponsorApproved`) can deposit. Before the deposit the contract records that wallet and the number of recipients, 8 (`setSponsorTerms`). At payout FoxLeague names the 8 quarter-finalists; the contract checks that they are 8 distinct teams seated in the edition.
+- The prize is split **equally among the 8 quarter-finalists**: the 8 teams of the quarter-final round, the podium included. 100,000 FOXSY gives 12,500 to each.
+- It has **no platform fee and no royalty**.
+- The contract pays it right after the edition completed and its entry pool was paid. It never pays more than was deposited; a remainder too small to split goes back to the depositor.
+- The contract settles an edition that holds a prize from FoxLeague no sooner than 24 hours after its start.
+- If the edition is cancelled, the prize goes back to the depositor. A prize still unpaid 30 days after the edition completed can be returned to the depositor by the contract owner.
+
+The invitation banner shows the prize once it is held. The tournament page shows it as held, then paid, with the transaction.
+
+![An example prize panel of an open edition: 180,000 FOXSY locked in the contract, split equally among the 8 quarter-finalists once the tournament is completed, with its deposit transaction](/screenshots/champions-foxleague/prize-from-foxleague.png)
+
+### A Bronze edition
+
+A Bronze edition is free: no entry pool and no prize from FoxLeague. Like every Bronze tournament it moves no ELO and gives no XP.
+
+### Featured editions
+
+If the FoxLeague team features an edition (any tier), its podium enters the [Hall of Fame](/mechanics/tournaments/#hall-of-fame) and the featured XP boosts of [Prize distribution](/mechanics/tournaments/#prize-distribution) apply.
+
+## Schedule and your squad
+
+- Matches are played **one at a time**, one every "time between games" that the FoxLeague team set. A matchday has 18 matches, so at one match an hour a team plays about every 18 hours and the 190 matches take about 8 days. A match can move later when a team is busy in another tournament, never earlier.
+- Each match locks your formation, lineup and synced stats at its **strategy lock**, about 30 minutes before kickoff. Change your plan between matches, leg 1 and leg 2 included. See [Match-day strategy](/mechanics/match-day-strategy/).
+- At every lock you need 11 starters plus 7 substitutes, all in your wallet. A starter who is not match-fit is replaced from the bench; fewer than 11 fit players forfeits that match 3-0. See [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit).
+
+## When results show
+
+Every match is played live during its broadcast and has its final score when the broadcast ends. That moment also moves, never earlier:
+
+- the league table and its zones;
+- the knockout seats: the play-off and round of 16 seats take their teams once the last league match's broadcast has ended; a later seat takes its team once every match of the ties that lead to it has ended its broadcast;
+- each leg's score and the tie's aggregate;
+- ELO, XP and condition;
+- whether a team is out;
+- the final placements and the payouts.
+
+## Reading it through the API or an AI assistant
+
+The [API reference](/api/) and the FoxLeague MCP server ([Connect an AI](/connect-ai/)) read the same public answers the app shows:
+
+- A Champions FoxLeague tournament has `format` `league_knockout` and `max_teams` 36.
+- In its matches, `group_name` `League` marks a league match. A knockout match has `leg` 1 or 2 (`null` for the 3rd place match and the final). The two legs of a tie share one `round_number` and one `bracket_position`; the home team of leg 2 is the away team of leg 1, so the aggregate adds both legs up from the seats. `home_seed_place` and `away_seed_place` give the league place drawn into a play-off seat or a top-8 seat.
+- A team's pot comes from its `seed`: 1 to 9 is pot 1, 10 to 18 pot 2, 19 to 27 pot 3, 28 to 36 pot 4.
+- The league table is the `standings` of the tournament, in table order. Its place gives the zone: 1 to 8, 9 to 24 or 25 to 36.
+- The invitations (`GET /api/tournaments/{id}/invitations`) and the prize from FoxLeague (`GET /api/tournaments/{id}/prize`) have their own routes. The MCP tool `get_champions_foxleague` reads both.
+
+See also [Tournaments](/mechanics/tournaments/) for the rules every format shares, [Match Types](/mechanics/matches/) and the [Economy map](/mechanics/economy-map/).
+
 # Fusion
 (docs.foxleague.ai/mechanics/fusion/)
 
@@ -348,6 +630,8 @@ Both waivers are FOXSY payments to the players contract, signed the same way as 
 
 The burned NFTs are destroyed on-chain. The new NFT is not minted on the spot: it is a **random card** of the pre-minted **fusion pool** for the output rarity and your chosen position, drawn by the contract when your fusion is processed: choosing the position does not choose the card. It comes with its own pre-rolled stats inside the new tier's range (expect to train it up to the new cap). If that pool happens to be empty the transaction fails with a "try again later" message; nothing is burned and your FOXSY stays in your wallet.
 
+A card that came out of a fusion keeps a **Fused** mark for good, also after a sale: you see it on the card in your Squad, in its profile, on the marketplace plus on the Fusion screen. Cards from a starter squad or a Common pack have no mark. The mark only shows where the card comes from; no rule or price reads it.
+
 ## Stat caps after fusion
 
 The fused player inherits the new rarity's stat cap, but **not** automatically full stats. You still need to train the new player toward the new cap:
@@ -411,7 +695,7 @@ A card can be put up for auction only once it reaches the **match gate** of its 
 - Waived matches count: the **fusion match waiver** credit on the card is added to the card's competitive matches. Buy it on the card's profile in the Squad (**Buy matches**), for every rarity in the table that has a waiver, Legendary included; the Fusion tab sells it to fusion inputs too
 - The matches in the third column must **really be played**. No amount of credit takes a card with fewer played matches onto the market
 
-The players contract refuses the listing otherwise, so the Sell form disables the button with the reason, for an Epic: **Epic needs 135 matches (45 played) to be listed**, with what the card has under it (for example **This card has 12 played + 3 waived of 135**). In the Sell grid such a card reads **Not sellable yet** with the same count. Cards straight out of a Common pack or a fusion start at 0. Listings already open on Monday 12 October 2026 at 14:00 UTC, when these gates replaced the single gate of 20 matches, finish normally. What counts as a competitive match is explained on the [Fusion](/mechanics/fusion/) page: Silver or Gold tournament matches plus 1v1 challenges, never games against the AI.
+The players contract refuses the listing otherwise, so the Sell form disables the button with the reason, for an Epic: **Epic needs 135 matches (45 played) to be listed**, with what the card has under it (for example **This card has 12 played + 3 waived of 135**). In the Sell grid such a card reads **Not sellable yet** with the same count. Cards straight out of a Common pack or a fusion start at 0. Listings already open on Monday 12 October 2026 at 16:15 UTC, when these gates replaced the single gate of 20 matches, finish normally. What counts as a competitive match is explained on the [Fusion](/mechanics/fusion/) page: Silver or Gold tournament matches plus 1v1 challenges, never games against the AI.
 
 > **Sync first**
 > An **unsynced player cannot be listed** as-is. The marketplace shows the on-chain stats to bidders; if your Squad shows newer values than the chain, you'd be advertising a different player than what's actually on sale. If the player has unsynced training, the button reads **SYNC & AUCTION** instead: you sign a sync transaction first (10 FOXSY per unsynced player on your roster), then the listing transaction, so the auction matches what bidders see.
@@ -422,7 +706,7 @@ Right before your wallet opens, the listing reads your squad again. A card that 
 
 1. **Marketplace** → **Browse** sub-tab
 2. Use the sidebar to filter by name, position, rarity, price, OVR, minimum values for each of the 7 stats, level or condition. Filtering is instant (no reload); the grid shows 24 cards per page
-3. Click a card to see the player's full details plus the time left on the auction
+3. Every card shows the player's age and, for a card that came out of a fusion, a **Fused** mark. Click a card to see the player's full details plus the time left on the auction
 4. Enter a whole-FOXSY amount, click **PLACE BID**, approve the FOXSY transaction
 
 The grid opens sorted by **Ending Soon**: the auction closing next sits on top, the other live auctions follow by time left, then auctions that have ended but are not settled yet. An auction moves down on its own the moment its clock runs out. The **Sort By** menu in the sidebar switches to **Newest First**, to price (low to high or high to low) or to OVR.
@@ -449,7 +733,7 @@ Cancelling only works while the auction has **zero bids**. Once a bid lands you 
 
 ## Wallet-to-wallet transfers (transfer cooldown)
 
-If someone sends you a player NFT directly (not through the marketplace), the player has a **transfer cooldown** before you can use them in matches. The cooldown is **21 days (504 hours)** for a card that had reached the match gate of its rarity (see the table above) when it moved. A card moved before its match gate is locked for **21 days plus 6 hours for every missing match** in the new wallet: a fresh starter card, a pack card or a fusion output cannot be handed to another wallet and played there the same season. A Legendary moved at 0 matches is locked for 122 days and 6 hours (2,934 hours); an Uncommon moved with 5 played and nothing waived, for 23 days and 12 hours. Each fusion match waiver bought for the card in the new wallet (on its profile in the Squad: **Buy matches**) takes 6 hours off that lock, down to 21 days plus 6 hours for every match it still has to really play (54 days and 18 hours for the Legendary at 0, 21 days for the Uncommon). The length is fixed on the card at the moment of the transfer. Locks already running on Monday 12 October 2026 at 14:30 UTC, when this rule replaced the 63-day lock for a card under 20 competitive matches, were never made longer: each ends at the shorter of its own length and the new length for the card. It encourages fair play plus marketplace use, preventing off-market roster manipulation right before a tournament. Auction wins, fusion results, distribute events plus shop mints never start one; only direct wallet-to-wallet transfers do. A lock that is already running stays on the card through a sale (see above). A cooled-down player also cannot be used as a fusion input, so you cannot launder the cooldown through fusion.
+If someone sends you a player NFT directly (not through the marketplace), the player has a **transfer cooldown** before you can use them in matches. The cooldown is **21 days (504 hours)** for a card that had reached the match gate of its rarity (see the table above) when it moved. A card moved before its match gate is locked for **21 days plus 6 hours for every missing match** in the new wallet: a fresh starter card, a pack card or a fusion output cannot be handed to another wallet and played there the same season. A Legendary moved at 0 matches is locked for 122 days and 6 hours (2,934 hours); an Uncommon moved with 5 played and nothing waived, for 23 days and 12 hours. Each fusion match waiver bought for the card in the new wallet (on its profile in the Squad: **Buy matches**) takes 6 hours off that lock, down to 21 days plus 6 hours for every match it still has to really play (54 days and 18 hours for the Legendary at 0, 21 days for the Uncommon). The length is fixed on the card at the moment of the transfer. Locks already running on Monday 12 October 2026 at 16:30 UTC, when this rule replaced the 63-day lock for a card under 20 competitive matches, were never made longer: each ends at the shorter of its own length and the new length for the card. It encourages fair play plus marketplace use, preventing off-market roster manipulation right before a tournament. Auction wins, fusion results, distribute events plus shop mints never start one; only direct wallet-to-wallet transfers do. A lock that is already running stays on the card through a sale (see above). A cooled-down player also cannot be used as a fusion input, so you cannot launder the cooldown through fusion.
 
 The player card shows the cooldown countdown while it's active. The transfer dialog states the rule before you sign.
 
@@ -541,6 +825,8 @@ FoxLeague offers four competitive contexts. All four follow the same core rule: 
 
 Attribute XP for your players comes only from paid play: Silver and Gold tournaments plus 1v1 challenges. Casual games are played against an AI team and grant none. Ranked matches do not award XP at the moment. Bronze tournaments grant neither XP nor ELO.
 
+How much XP a match gives a player depends on the shirt he wore in it, not on the card's position: the keeper's shirt earns XP for distance run, passes, completed passes, saves and catches; a back-line shirt for distance run, dribbles, passes, completed passes, tackles and interceptions; every other shirt for all nine match actions. Each role has its own scale, so an average match earns about the same XP in every shirt (see [XP by shirt](/mechanics/training/#xp-by-shirt)).
+
 Each player earns attribute XP in at most **3 matches per day**. A fourth XP-earning match that day still counts for career stats and ELO, but it awards no XP. The daily count resets at 14:00 UTC.
 
 The same paid play is what counts toward a card's **competitive matches**, the number behind its match gate for fusion, listing and the transfer lock (see [Marketplace](/mechanics/marketplace/)): every Silver or Gold tournament match and every 1v1 challenge the card takes the pitch in. Ranked, casual, Bronze and developer games never count.
@@ -565,7 +851,7 @@ The competitive mode. ELO points move between you and your opponent based on the
 - **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO.
 - **Condition**: only you, the player who started the match, pay condition. The opponent drawn into your game pays nothing.
 - **ELO**: the winner gains exactly what the loser drops. The size of the swing depends on the rating gap: beating a stronger opponent moves more points than beating a weaker one. A draw moves a few points from the higher-rated player to the lower-rated one; between equal ratings it changes nothing. Ranked games move your rating with a K-factor of **24**.
-- **Inactivity decay**: rating decay is active. After **10 days** without an ELO-affecting match (a ranked game against a real opponent or a finished Silver/Gold tournament match) you lose **5 rating points every 20 hours** (6 a day), down to a floor of **1200**. Casual play, ranked games against the AI and Bronze tournaments do not stop the decay.
+- **Inactivity decay**: rating decay is active. After **10 days** without an ELO-affecting match (a ranked game against a real opponent or a finished Silver/Gold tournament match) you lose **5 rating points at most once every 20 hours** (about 6 a day), down to a floor of **1200**. Casual play, ranked games against the AI and Bronze tournaments do not stop the decay.
 
 You see your ELO in the header and on the **Leaderboard** tab. The leaderboard is a single global ELO ranking across all leagues.
 
@@ -593,9 +879,17 @@ Find them at the **1vs1 Challenges** tab in the sidebar. Full mechanics on [1v1 
 
 ## Tournament
 
-Multi-match formal events with locked lineups and FOXSY prize pools. Four formats (Knockout / Groups+KO / Round Robin / Swiss) and three tiers (Bronze / Silver / Gold). See [Tournaments](/mechanics/tournaments/) for full mechanics.
+Multi-match formal events with locked lineups and FOXSY prize pools. Five formats (Knockout / Groups+KO / Round Robin / Swiss / Champions FoxLeague) and three tiers (Bronze / Silver / Gold). See [Tournaments](/mechanics/tournaments/) for full mechanics.
 
 **The headline rule**: each match captures your formation, lineup plus synced stats at its **strategy lock**, about 30 minutes before that match's kickoff. You can keep training, syncing plus adjusting tactics between games; whatever is synced at a match's lock is what plays.
+
+### Two-legged ties (Champions FoxLeague)
+
+In the knockout phase of [Champions FoxLeague](/mechanics/champions-foxleague/) a tie is two matches, one at each team's home. The aggregate of both legs decides; there is no away goals rule.
+
+- **Leg 1** is a normal match and can end in a draw.
+- **Leg 2** kicks off after leg 1's broadcast has ended and starts with leg 1's score carried in. The scoreboard shows the leg's own score plus the aggregate. A level aggregate at the end of normal time goes to extra time (two halves of 100 seconds), then penalties, inside leg 2's own game.
+- **Each leg is its own match** for everything else: the score on record, the win, draw or loss, the ELO change, the XP each player earns from what they did in that leg and the condition (10 per appearance). A team can lose leg 2 and still go through on the aggregate or on penalties.
 
 Tournaments are where the most FOXSY trades hands. Entry fees pool into prize money distributed **45% winner / 30% runner-up / 15% third-place / 10% platform fee** (current split). A quarter of that fee (2.5% of the pool) is paid as a creator royalty to the provider of the AI binary your matches were played with. It comes out of the fee, never out of a winner's share.
 
@@ -607,6 +901,7 @@ Every match you play lands in **History**. Click any row to see:
 - Stat bumps gained per player
 - Watch the match in the Match Viewer at any time
 - The lineup snapshot used for the match (so past matches show the right stats from the time they were played, not your current ones)
+- The **OVR** of both teams: a played match shows the OVR of the eleven each team played with, a match still to come shows each team's **Best XI OVR** (the strongest XI it can field from the cards it owns, never its lineup). Older matches show a dash.
 
 ## Upgrading your roster
 
@@ -629,8 +924,9 @@ A **1v1 Challenge** is a one-match showdown between two players. You stake FOXSY
 4. Pick a **tier**: Silver or Gold. Bronze is unlocked only for free developer challenges (both players run their uploaded binary, nothing is staked)
 5. Pick the **entry fee** within the tier's bounds (Silver 1,000-4,999 FOXSY, Gold 5,000+). The form shows a live pool calculator next to the input (exactly how much the winner takes home and how much goes to the platform fee)
 6. Optionally pick a **specific opponent** by searching their team name or wallet address (leave empty for an open challenge, so any wallet can take it)
-7. Pick a **deadline**: 30 min / 1 h / 2 h / 4 h (default 30 min)
-8. Click **Create challenge**: your FOXSY entry fee is locked into the challenge pool
+7. Optionally set an **OVR range** (a minimum and/or a maximum best XI OVR), so only teams of your strength can accept. See [OVR range](#ovr-range-best-xi)
+8. Pick a **deadline**: 30 min / 1 h / 2 h / 4 h (default 30 min)
+9. Click **Create challenge**: your FOXSY entry fee is locked into the challenge pool
 
 The entry fee is written to the tournaments contract when the challenge is created. Accepting it transfers **exactly** that amount, so a payment that is even slightly off is rejected on chain rather than half-seating you.
 
@@ -649,6 +945,16 @@ Either way, home and away are decided by rating once the challenge fills: the **
 
 > **Why target someone specific?**
 > Targeted 1v1s create the "I challenge you to a match" social signal. Other users in the lobby see the badge as it's a visible callout. The targeted user receives a notification of the open challenge, accepts at their convenience (before the deadline) and the match plays.
+
+## OVR range (best XI)
+
+A challenge can carry an optional **minimum** and/or **maximum team OVR** (whole numbers from 1 to 100). Say your team is around 32 and you do not want a team of 50 to take your challenge: set the maximum to 35. The OVR that counts is a team's **best XI OVR**: the average OVR of the **strongest XI its manager can field from the cards they own** right now, whatever the saved lineup. Each card plays only in its own position; for every formation in Tactics the best cards fill its slots, the highest average counts and cards listed for sale count too. A manager whose cards fill no formation is measured on the cards of the formation they fill most. The [Tournaments page](/mechanics/tournaments/#ovr-range-best-xi) has the details.
+
+- It is checked **once, when the opponent accepts** (and when you take your own seat). A team outside the range cannot accept. A paid entry sent anyway is refunded.
+- Nothing is checked after that: lineup changes and player growth before the match are never measured against it.
+- You always play your own challenge, so your best XI OVR must be inside the range you set. The create form shows your best XI next to the two inputs.
+- A developer challenge takes no range.
+- The challenge card and its page show the range as a chip (**OVR ≤ 35**). A team outside it sees Join greyed with the reason.
 
 ## Prize split
 
@@ -675,8 +981,10 @@ When the opponent accepts, the match kicks off and plays out exactly like a regu
 
 A 1v1 must produce a winner. If regular time ends level:
 
-1. **Extra time** is played first
-2. If still tied, a **penalty shootout** decides the winner (same mechanism used in regular tournament knockouts)
+1. **Extra time** is played first: two halves of 100 seconds
+2. If still tied, a **penalty shootout** decides the winner: five kicks each, then sudden death for up to 20 more rounds (the same mechanism as in tournament knockouts)
+
+A 1v1 is never decided by lot.
 
 The challenge detail page and the lobby card show the resolution method in the full-time badge: **FT (a.e.t.)** after extra time, **FT (penalties)** after a shootout. A game settled in regular time shows a bare **FT**.
 
@@ -700,13 +1008,26 @@ You'll see the refund transaction in your wallet history. The challenge shows a 
 
 The refund is **exact**: the contract returns the same amount it holds for your entry. If the game server cannot push it back to you, your entry stays in the contract and you can pull it yourself by calling the contract's `claimRefund` endpoint with the challenge id. An entry that landed on chain but never took a seat (for example a join whose page was closed before it was confirmed) shows a **Claim my entry back** button to the wallet that paid it, on the page of the completed challenge.
 
-While your challenge still waits for an opponent, its page also shows **Delete Challenge**. Deleting it refunds your entry fee on chain.
+While your challenge still waits for an opponent and its deadline has not passed, its page shows **Delete Challenge**. Deleting it refunds any entry fee it holds on chain.
+
+If your own entry fee never went through (the wallet never asked you to sign or you closed the tab first), the challenge stays open with no seat taken until the game cancels it (see the next section). It counts as your one active 1v1 until then. Its page shows you **Join** to pay your entry and **Delete Challenge** to remove it at once.
+
+## Unpaid challenge (automatic cancel)
+
+A Silver or Gold challenge is created first. Your wallet then signs your entry fee, which takes your seat. If you still hold no seat **20 minutes** after the challenge opened and your entry fee is not in the contract (the wallet prompt never appeared or you closed the tab before paying), the challenge is **cancelled automatically**:
+
+- It stops counting as your one active challenge, so you can create a new one at once instead of waiting for the deadline.
+- An entry fee that reaches the contract after the cancel is refunded to your wallet automatically.
+- Nobody can accept a challenge before its creator holds a seat, so no opponent is affected.
+- You get a **Challenge cancelled** notification.
+
+While your entry fee is in the contract the challenge is not cancelled this way: the game gives you the seat it paid for, even when you closed the page before your join was confirmed. A challenge you hold a seat in is never cancelled this way: it waits for an opponent until its deadline as usual.
 
 ## One active challenge at a time
 
 You can have **only 1 open or in-progress 1v1 challenge at a time per wallet**. The game strictly enforces this. Trying to create a second while one is live shows an error. The cap prevents players from spamming challenges and ensures every 1v1 remains a focused, high-stakes rivalry.
 
-Cancelled or finished challenges don't count. Once your active one resolves (win, loss or deadline expiry), you can create another.
+Cancelled or finished challenges don't count. Once your active one resolves (win, loss, deadline expiry or you delete it), you can create another.
 
 ## ELO impact
 
@@ -853,7 +1174,7 @@ Pick a cooled-down player in the picker. The Shop shows the exact cost, which de
 | Epic | 500 FOXSY | 9,000 FOXSY |
 | Legendary | 1,250 FOXSY | 22,500 FOXSY |
 
-Only players currently in cooldown appear in the picker. The waiver does nothing for a player already at or below the 3-day floor. Reduce Cooldown is refused for a card that moved before its match gate: that lock gets shorter by 6 hours with each fusion match waiver bought for the card, down to 21 days plus 6 hours for every match it still has to really play. The Shop says so and links to the card's profile (**Buy matches on this card's profile**), where the waiver is bought for every rarity that has one, plus the Fusion tab for a rarity that can be fused. A lock that was already running on Monday 12 October 2026 at 14:30 UTC (the earlier rule locked a card under 20 competitive matches for 63 days) keeps Reduce Cooldown; it was never made longer and ends at the shorter of its own length and the new length for the card.
+Only players currently in cooldown appear in the picker. The waiver does nothing for a player already at or below the 3-day floor. Reduce Cooldown is refused for a card that moved before its match gate: that lock gets shorter by 6 hours with each fusion match waiver bought for the card, down to 21 days plus 6 hours for every match it still has to really play. The Shop says so and links to the card's profile (**Buy matches on this card's profile**), where the waiver is bought for every rarity that has one, plus the Fusion tab for a rarity that can be fused. A lock that was already running on Monday 12 October 2026 at 16:30 UTC (the earlier rule locked a card under 20 competitive matches for 63 days) keeps Reduce Cooldown; it was never made longer and ends at the shorter of its own length and the new length for the card.
 
 ---
 
@@ -1072,10 +1393,12 @@ FoxLeague tournaments are **multi-match formal events** with locked lineups and 
 ## How to join
 
 1. Open the **Tournaments** tab
-2. Pick one from **Browse** (listed under **Open** with slots still free; the status filter calls these **Upcoming**)
+2. Pick one from **Browse** (listed under **Open** with slots still free; the status filter calls these **Upcoming**). **Public only** is on by default: the list leaves out the private tournaments you are not part of, while Champions FoxLeague always shows. Untick **Public only** to see every tournament; your browser remembers the choice
 3. Click **JOIN**
 4. If there's an entry fee (Silver / Gold tier), approve the FOXSY transaction in your wallet
 5. Your team is now entered. Each match captures your formation, lineup and players' synced stats at its **strategy lock** (about 30 minutes before that match's kickoff), so you can adjust your plan between games
+
+A tournament that shows an **OVR** chip (such as **OVR 30-40** or **OVR ≤ 35**) takes only teams whose **best XI OVR** is inside its range: the average OVR of the strongest XI you can field from the cards you own. If yours is outside, the Join button is greyed and says why. See [OVR range](#ovr-range-best-xi).
 
 The entry fee and the number of seats are written to the tournaments contract when the tournament is created. Joining pays **exactly** the entry fee into a **free seat**. A payment that does not match the fee is refused on chain. So is a join into a bracket that has already filled, so nothing leaves your wallet in either case.
 
@@ -1087,9 +1410,12 @@ The entry fee and the number of seats are written to the tournaments contract wh
 
 You can also create your own tournament via **Tournaments → Create**.
 
+> **Champions FoxLeague is by invitation**
+> A Champions FoxLeague edition has no Join button for everyone. Its 36 seats go to the leaderboard's teams by invitation: you accept from the banner or the tournament page. See [Champions FoxLeague](/mechanics/champions-foxleague/).
+
 ---
 
-## The four formats
+## The five formats
 
 ### Knockout
 
@@ -1129,7 +1455,7 @@ Best for: fair ranking as the best team usually wins. Great for small groups and
 
 ### Swiss
 
-Teams are paired at random in round 1, then by standing (no rematches).
+Teams are paired at random in round 1, then by standing. Rematches are avoided while the field allows it.
 
 - **Team counts**: any size from 3 to 32. The creator sets a max; the event runs with whoever joins by the deadline, odd or even, as long as at least 3 teams joined
 - **Rounds**: log₂(N) rounded up, plus 1, where N is the number of teams that joined (8 teams → 4 rounds, 12 → 5, 16 → 5, 32 → 6)
@@ -1138,6 +1464,17 @@ Teams are paired at random in round 1, then by standing (no rematches).
 - **Final standings** determine placement after all rounds are played
 
 Best for: large tournaments with limited time. Everyone plays, strong teams eventually face strong opponents.
+
+### Champions FoxLeague
+
+A league phase, then a two-legged knockout phase. The FoxLeague team creates each edition; players cannot.
+
+- **Team count**: exactly 36, invited from the leaderboard in three waves
+- **League phase**: one table of 36 drawn from four pots of 9 by ELO. Each team plays 8 matches, 2 against each pot, 4 at home and 4 away
+- **Knockout phase**: places 1 to 8 go to the round of 16, places 9 to 24 play a two-legged play-off, places 25 to 36 are out. The play-off, round of 16, quarter-finals and semi-finals are two-legged and decided on aggregate (no away goals rule). The 3rd place match and the final are single matches
+- **Prizes**: the entry pool with the split below, plus an optional prize from FoxLeague shared equally by the 8 quarter-finalists
+
+The full rules are on [Champions FoxLeague](/mechanics/champions-foxleague/).
 
 ---
 
@@ -1162,6 +1499,8 @@ The final step relies on the participant id, a value unique to every entry in th
 
 These rules cover every standings table: the Groups + Knockout group stage, Round Robin, plus Swiss. In Swiss two level teams may not have played each other. When that happens the head-to-head step has nothing to compare, so the ranking falls straight through to the overall stats.
 
+The league phase of Champions FoxLeague uses the head-to-head step only when every one of the level teams has played every other one; otherwise it goes straight to the overall stats. See [its tie-breakers](/mechanics/champions-foxleague/#tie-breakers).
+
 ---
 
 ## The three tiers
@@ -1180,7 +1519,7 @@ The creator sets the exact FOXSY amount when creating a Silver or Gold tournamen
 
 ## Creating a tournament
 
-Open **Tournaments → Create** and step through format, tier, configuration, schedule and a final confirmation. You can have at most one active tournament you created as a player plus one you created as organizer-only at any time (admins are uncapped as organizers). 1v1 challenges have a separate cap of one active challenge per team. Two creation options are worth calling out.
+Open **Tournaments → Create** and step through format, tier, configuration, schedule and a final confirmation. Champions FoxLeague is the one format you cannot pick: the FoxLeague team creates it. You can have at most one active tournament you created as a player plus one you created as organizer-only at any time (admins are uncapped as organizers). 1v1 challenges have a separate cap of one active challenge per team. Two creation options are worth calling out.
 
 ![Create Tournament configuration step with the Private (invite-only) toggle on, the invited teams listed below it, plus the Organizer only toggle](/screenshots/tournament-create-private.png)
 
@@ -1188,8 +1527,8 @@ Open **Tournaments → Create** and step through format, tier, configuration, sc
 
 Flip the **Private** toggle to control who can register, then invite specific teams by searching for them. A private tournament:
 
-- Still appears in the public lobby with a **Private** badge, so everyone can see it exists.
-- Can only be joined by the teams you invited. Everyone else sees a locked **Private (invite only)** button.
+- Appears in the lobby with a **Private** badge. You plus the teams you invited always see it; any other team sees it once it unticks **Public only**, which is on by default.
+- Can only be joined by the teams you invited. Everyone else sees a locked **Invite Only** button.
 - Tells every team you invited. Each one gets a **You're invited** notification in the bell (and a push notification if they turned push on) once the tournament is open.
 - Needs enough capacity to reach the minimum. Capacity is the invited teams plus yourself (only the invited teams if you host as organizer-only). If that falls short of the minimum you cannot create it until you invite more teams or lower the minimum.
 
@@ -1203,6 +1542,19 @@ On any tournament (Bronze included), flip **Organizer only** to run the event wi
 - See **no Join button** on your own tournament. You are running it, not playing.
 
 This is the clean way to host a private event for a fixed set of invited teams. Invite the full field (for an 8-team tournament, invite 8 teams), since you do not take a slot yourself.
+
+### OVR range (best XI)
+
+Set an optional **minimum** and/or **maximum team OVR** (whole numbers from 1 to 100) to keep a tournament for teams of a similar strength. The OVR that counts is a team's **best XI OVR**: the average OVR of the **strongest XI its manager can field from the cards they own** right now, whatever the saved lineup.
+
+- **How the strongest XI is found.** A card plays only in its own position, as in Tactics. For each formation you can pick in Tactics, the XI takes the best goalkeeper, then the best defenders, midfielders and forwards for that formation's slots, by card OVR. The highest of these averages counts (a tie keeps the formation listed first in Tactics). Three strong goalkeepers count once: a formation has one goalkeeper slot.
+- **Every card counts**, cards listed for sale on the marketplace included (they can be delisted).
+- **Too few cards for any formation** (for example no goalkeeper): each formation is filled as far as your cards go, the one with the most slots filled is kept (a tie: the higher average) and the OVR is the average of the cards in it.
+- The range is checked **once, when a team joins**. A team outside it cannot join. A paid entry sent anyway is refunded.
+- Nothing is checked after the join. Lineup changes, training and the growth of your players during the tournament are never measured against the range.
+- If you take a seat (not organizer-only), your own best XI OVR must be inside the range you set. The create form shows your best XI next to the two inputs, with the formation it comes from.
+- [Champions FoxLeague](/mechanics/champions-foxleague/) tournaments and developer tournaments take no range.
+- In the lobby a tournament with a range shows its chip: **OVR 30-40**, **OVR ≤ 35** or **OVR ≥ 30**. A team outside the range sees the Join button greyed with the reason.
 
 ### Deleting your tournament
 
@@ -1231,7 +1583,7 @@ See [Match-day strategy](/mechanics/match-day-strategy/) for the full flow, the 
 
 Every tournament has:
 
-- **Registration deadline**: last moment to join before the bracket is generated
+- **Registration deadline**: last moment to join before the bracket is generated. A tournament with fewer teams than its minimum at the deadline is cancelled and every entry fee paid is refunded on chain. A Knockout or a Groups + Knockout must be full (its minimum is its size), so one that is not full at the deadline is cancelled the same way
 - **Tournament start**: when the first match kicks off. Must be at least **1 hour after creation** so the bracket can be pre-scheduled, more than 5 minutes after the registration deadline and at most 90 days ahead
 - **Time between games**: every match is played one at a time, this many minutes apart. The creator picks a step from 30 minutes up to a day: **30 min / 1 h / 2 h / 4 h / 6 h / 8 h / 12 h / 1 day**
 
@@ -1260,13 +1612,15 @@ Seeding drives:
 - **Groups + KO** pot distribution (balanced groups)
 - **Swiss** doesn't use seeding either: round 1 is drawn at random, later rounds pair by standing
 - **Round Robin** doesn't use seeding for match order (everyone plays everyone)
+- **Champions FoxLeague** cuts the seeds into four pots of 9 for the league draw, by ELO at its snapshot (see [The draw and the pots](/mechanics/champions-foxleague/#the-draw-and-the-pots))
 
 ---
 
 ## Draws and penalty shootouts
 
 - **Round Robin / Group stage / Swiss** draws are legal results (1 point each).
-- **Knockout / semifinal / final / 3rd-place match** draws cannot stand. The tie goes to **extra time** and if still unresolved, to a **penalty shootout**, with the winner advancing.
+- **Knockout / semifinal / final / 3rd-place match** draws cannot stand. The tie goes to **extra time** (two halves of 100 seconds). If it is still level, a **penalty shootout** follows: five kicks each, then sudden death for up to 20 more rounds. The winner advances. A tie is never decided by lot.
+- **Champions FoxLeague two-legged ties**: leg 1 can end in a draw. Leg 2 starts with leg 1's score carried in; if the aggregate is level at the end of its normal time, leg 2 goes to the same extra time and shootout. See [Two legs and the aggregate](/mechanics/champions-foxleague/#two-legs-and-the-aggregate).
 
 ---
 
@@ -1276,6 +1630,8 @@ Knockout and Groups + KO tournaments support an **optional 3rd-place match** bet
 
 If the creator leaves it OFF, both semifinal losers finish as "3rd/4th" without separation.
 
+Champions FoxLeague always plays its 3rd place match, as a single match before the final.
+
 ---
 
 ## Auto-subs and forfeit
@@ -1284,7 +1640,7 @@ FoxLeague expects you to own a full 18 (11 starters + 7 substitutes) when your n
 
 - The match report shows which auto-subs were applied for each side
 - If fewer than 11 match-fit players can be assembled from your 18 (or you no longer own all 18), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
-- If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero
+- If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero. In a knockout match, where one side must go through, the home side of the fixture advances (in round 1 of a Knockout, the higher seed)
 
 Keep your bench deep. A forfeit in round 1 of a Gold Knockout is an expensive lesson.
 
@@ -1319,6 +1675,8 @@ The current split:
 In a Knockout or Groups + KO event without a 3rd-place match there is no third-place finisher, so the 15% goes to the runner-up (45 / 45 / 10). In Round Robin and Swiss, 3rd place is the third team in the final standings.
 
 Example (with a 3rd-place match): 16 teams × 1,000 FOXSY entry = **16,000 FOXSY** pool → 7,200 winner / 4,800 runner-up / 2,400 third-place / 1,600 platform fee.
+
+A Silver or Gold Champions FoxLeague edition can also carry a **prize from FoxLeague**, held in the tournaments contract and split equally among its 8 quarter-finalists after it completes. See [Prizes](/mechanics/champions-foxleague/#prizes).
 
 A quarter of the platform fee (**2.5% of the pool**, so 400 FOXSY of the 1,600 in the example above) is paid as a **creator royalty** to the provider of the AI binary the matches were played with. It is taken from the fee and travels in the same distribution transaction as the prizes, so it never reduces what the winners receive. The contract enforces this. Prize payouts must land between 85% and 90% of the seated pool. The royalty itself is capped on chain at 2.5% of that pool.
 
@@ -1389,6 +1747,8 @@ A fully drained player under 30 needs about 2 days to get back to 100 by waiting
 
 Players can also earn XP from matches, distributed across multiple stats based on their actions in the game. Not every match awards it: only **Silver and Gold tournaments** plus **1v1 challenges** grant match XP. Bronze tournaments, casual games against the AI and ranked matches (no XP at the moment) award none. Where match XP applies it follows the same meter rules: when an XP meter crosses 2000, the stat bumps.
 
+In [Champions FoxLeague](/mechanics/champions-foxleague/#what-each-leg-counts-for) each leg of a two-legged tie is a match of its own: the XP of leg 2 comes from what each player did in leg 2 (extra time included), never from leg 1 or the aggregate.
+
 So the loop is:
 
 ```
@@ -1396,6 +1756,18 @@ Train (intentional, costs condition) ──┐
                                        ├─→ XP grows ─→ Stat bumps ─→ Sync ─→ Plays in matches
 Play matches (Silver/Gold, 1v1: XP) ───┘
 ```
+
+### XP by shirt
+
+A match scores each player on the role of the shirt he wore in it, not on the card's position. Any card can be fielded in any shirt: a keeper card in an outfield shirt is scored as a field player, a midfielder card in goal as a keeper.
+
+| Shirt | The actions that earn XP |
+|-------|--------------------------|
+| **Keeper** (shirt 1) | Distance run, passes, completed passes, saves and catches |
+| **Back line** (shirts 2 to 5, plus shirt 6 in a 5-3-2 or a 5-2-3) | Distance run, dribbles, passes, completed passes, tackles and interceptions |
+| **Every other shirt** | All nine match actions: distance run, dribbles, goals, passes, shots, completed passes, tackles, interceptions and saves |
+
+Each role is measured on its own scale: a keeper is not expected to run like a midfielder, a defender is not expected to score. The total of each role is then adjusted so an average match earns about the same XP in every shirt. A player who wore two shirts in one match is scored on each shirt for what he did in it.
 
 ## Training does NOT auto-apply in matches
 
