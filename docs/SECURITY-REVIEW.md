@@ -808,6 +808,7 @@ before the change.
 | R32A-1 | medium | Agent review of PR #32: the agent could leave a seat the owner accepted in FoxLeague, closing the owner's invitation for good | It leaves only a seat it paid itself (its own join in its log, a paid one whose answer was lost too); one the owner took is refused ("only the owner leaves it") |
 | R32A-2 | low | Agent review of PR #32: the plan was never told the owner's condition for leaving | Its seat line says to leave only a seat it joined itself, only with no real chance of the top 24, and that leaving closes the invitation for good |
 | R32A-3 | low | Agent review of PR #32 (test): nothing tested how the snapshot builds the seat lines | A test: only League + Knockout seats, the lock time and seats taken read, a failed view unknown with a warning |
+| R32A-4 | medium | Re-review of PR #32: a join the owner made through Telegram `/do` counted as the agent's own seat, so the agent could still leave a seat the owner chose | An owner's action keeps `byOwner` with its log row; a join with it (or with an owner reason, on rows from before) is the owner's seat, never left by the agent |
 
 Open: whether the agent sees no real chance of the top 24 is the plan's judgement (the code holds only the timing and the
 own seat); `seats_lock_at` on `GET /api/tournaments/{id}/invitations` is taken from next-foxleague, not yet seen on

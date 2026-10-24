@@ -83,6 +83,13 @@ test('the executor reads when the seats lock right before leaving; an unreadable
   const ok = setup({ fox: { tournament: async () => seated, leagueInvitationsView: async () => view(new Date(Date.now() + 10 * H).toISOString()) } })
   // Not the agent's own join: refused (agent review of PR #32); after its own join row, allowed.
   assert.match((await ok.exec.run(ok.agent(), dryWallet, snapshot(), [leave]))[0]!.summary, /did not pay itself/)
+  // Re-review of PR #32 (medium): a join the owner made through Telegram /do is the owner's seat too.
+  const ownerJoin = setup({ fox: { tournament: async () => lk(), leagueInvitations: async () => [invitation()] } })
+  ownerJoin.store.updateSettings(0, { maxEntryFeeFoxsy: 10_000 })
+  await ownerJoin.exec.run(ownerJoin.agent(), dryWallet, snapshot(), [{ action: join, reason: 'owner (Telegram /do)', byOwner: true }])
+  ;(ownerJoin.exec as unknown as { d: { fox: Record<string, unknown> } }).d.fox.tournament = async () => seated
+  ;(ownerJoin.exec as unknown as { d: { fox: Record<string, unknown> } }).d.fox.leagueInvitationsView = async () => view(new Date(Date.now() + 10 * H).toISOString())
+  assert.match((await ownerJoin.exec.run(ownerJoin.agent(), dryWallet, snapshot(), [leave]))[0]!.summary, /did not pay itself/, 'the owner\'s /do join')
   ok.store.log({ agentIndex: 0, kind: 'join_tournament', status: 'dry_run', summary: 'DRY RUN would join tournament T3001', detail: { action: { type: 'join_tournament', tournament_id: 3001 } } })
   assert.equal((await ok.exec.run(ok.agent(), dryWallet, snapshot(), [leave]))[0]!.status, 'dry_run')
   const blind = setup({ fox: { tournament: async () => seated, leagueInvitationsView: async () => { throw new Error('HTTP 502') } } })

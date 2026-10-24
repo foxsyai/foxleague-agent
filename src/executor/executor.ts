@@ -230,7 +230,11 @@ export class Executor {
       const now = new Date()
       const ctx = await this.context(agent, wallet, snap, a, now, dry)
       if (planned.piece) ctx.piece = { index: planned.piece.index, of: planned.piece.of }
-      if (planned.byOwner) ctx.byOwner = true
+      if (planned.byOwner) {
+        ctx.byOwner = true
+        // Kept with the row: a League + Knockout seat the owner took (Telegram /do) is the owner's to leave.
+        logExtra.byOwner = true
+      }
       if (ctx.opponent) {
         logExtra.opponentUserId = ctx.opponent.userId
         // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
@@ -486,8 +490,13 @@ export class Executor {
       const view = await soft(() => fox.leagueInvitationsView(a.tournament_id, wallet))
       const lock = view?.seats_lock_at ? Date.parse(view.seats_lock_at) : Number.NaN
       market.seatsLockAt = Number.isFinite(lock) ? new Date(lock) : null
-      // The agent's own join of it (a paid one whose answer was lost too): a seat the owner took is the owner's to leave.
-      market.ownSeat = store.activityOf(agent.index, ['join_tournament'], since(60 * 86_400_000)).some(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && (detailOf(r).action as { tournament_id?: number } | undefined)?.tournament_id === a.tournament_id)
+      // The agent's own join of it (a paid one whose answer was lost too): a seat the owner took, in FoxLeague or through
+      // Telegram /do (byOwner, or an owner reason on a row from before it was kept), is the owner's to leave.
+      market.ownSeat = store.activityOf(agent.index, ['join_tournament'], since(60 * 86_400_000)).some(r => {
+        const d = detailOf(r) as { action?: { tournament_id?: number }; byOwner?: boolean; reason?: string; sent?: boolean }
+        const paid = counted(r.status) || r.status === 'sent' || (r.status === 'error' && d.sent === true)
+        return paid && d.action?.tournament_id === a.tournament_id && d.byOwner !== true && !/^owner\b/i.test(String(d.reason ?? ''))
+      })
     }
     // A League + Knockout seat is paid only on an invitation read right now (null: unreadable, refused).
     if (a.type === 'join_tournament' && tournament?.tournament.format === 'league_knockout') {
