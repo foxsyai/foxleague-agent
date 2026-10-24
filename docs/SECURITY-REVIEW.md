@@ -634,8 +634,8 @@ Open: A1 rows logged before this change keep counting for the rest of their wind
 still uses the condition at read time; FoxLeague cancelling a Play whose client dropped is not verified; "kickoff
 within 24 h" stands in for "result applied within 24 h of the purchase"; the D4 projection spreads earlier matches'
 cost evenly and ignores casual, ranked and training before the start; D1 spaces casual and ranked starts only; D10
-sees a rival's open challenge, not one it already plays; the join gas (7,000,000) should follow FoxLeague's 8,400,000
-once the tournaments contract is upgraded on mainnet; a seat paid while the contract is paused by its hot-key alarm
+sees a rival's open challenge, not one it already plays; the join gas follows FoxLeague's 8,400,000 since the
+contract's mainnet upgrade (section below, 2026-10-24); a seat paid while the contract is paused by its hot-key alarm
 reverts (gas only). The F4 open items are corrected by B1 and B-P1.
 
 ## One team per card at auction, 2026-10-23
@@ -813,6 +813,19 @@ before the change.
 Open: whether the agent sees no real chance of the top 24 is the plan's judgement (the code holds only the timing and the
 own seat); `seats_lock_at` on `GET /api/tournaments/{id}/invitations` is taken from next-foxleague, not yet seen on
 mainnet (if it is missing, every leave by the agent refuses, the safe side).
+
+## The join gas after the tournaments contract upgrade, 2026-10-24
+
+FoxLeague's tournaments contract on mainnet now carries the League + Knockout invitations: `isInviteOnly` and
+`getSponsorPrize` answer on chain (read-only queries, 2026-10-24). The larger contract makes every call about 830,000
+gas dearer; FoxLeague's app signs a join with 8,400,000, 1.51 times the heaviest join measured (5,550,000,
+`frontend/src/lib/gasLimits.ts`). The agent's 7,000,000 left 1.26 times; a join that runs out of gas reverts and loses
+its fee. Test first: one test in `test/champions-foxleague.test.ts`, seen failing on 7,000,000.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| JG1 | low | The join's gas limit (7,000,000) had not followed FoxLeague's 8,400,000 after the mainnet upgrade | `GAS.joinTournament` is 8,400,000; unused gas is refunded, so it costs little. The other limits already match FoxLeague's app |
+| R32A-5 | low | Re-review of PR #32 (docs): the internal docs did not say the agent leaves only a seat it paid itself | `docs/ECONOMY-AND-RULES.md` and `docs/FOXLEAGUE-INTEGRATION.md` say so |
 
 ## Where the limits live
 
