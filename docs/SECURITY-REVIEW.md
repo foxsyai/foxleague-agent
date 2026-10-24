@@ -844,6 +844,7 @@ mainnet yet; the agent is ready for it. Test first: `test/ovr-range.test.ts`, ea
 | R33A-2 | low | Agent review of PR #33: its section had no open line | Added (`claimRefund` at 6,500,000) |
 | R34A-1 | medium | Agent review of PR #34: the route is not live on mainnet yet, so the snapshot's best XI OVR read put "best XI OVR: Team not found" in every plan request and kept the dashboard dot off ok | The snapshot's read is quiet when it fails (its value is information only; the rule uses the executor's fresh read) |
 | R34A-2 | low | Agent review of PR #34 (rule 4): a range value present but not a number counted as no range | Any value that is not null counts as a range: the executor reads the best XI OVR, and a value that is not a finite number refuses ("an OVR range the agent cannot read") |
+| R34A-3 | low | Re-review of PR #34 (docs): `docs/ECONOMY-AND-RULES.md`, a mirror of the game rules, still said no manual page and had no OVR range rule | It names the page, the stricter "out of the edition" rule and the OVR range |
 
 FoxLeague compares the best XI OVR rounded to one decimal (held in tenths, `ovr_range.rs`), the value its route answers,
 so the agent's comparison is the same. Open: a team out of a Champions FoxLeague is free again at once in FoxLeague, while the agent waits until the edition
