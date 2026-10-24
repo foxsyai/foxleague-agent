@@ -761,6 +761,38 @@ passed before and stays as a guard).
 The weekly limit is the agent's own rule against farming, not FoxLeague's. Open: a refund is credited at the start of
 the next tick, so until then the cancelled 1v1 still counts (the stricter side).
 
+## Champions FoxLeague (League + Knockout): the agent accepts invitations, 2026-10-24
+
+The owner decided that the agent accepts a League + Knockout invitation by itself, at every level within the owner's
+limits, with Zeus requiring a real chance of the knockout (fewer than 24 of the invited teams clearly stronger). FoxLeague
+turns the format on about 2026-10-26; only its admin creates one and the first starts at the end of November. The
+format's rules were read from FoxLeague's code (next-foxleague 75289fbbf, read only). Test first:
+`test/champions-foxleague.test.ts`, each test seen failing before the change (the file did not load without
+`scheduleSpanMinutes`).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LK1 | design | The format was refused outright, and `matchesAtMost` counted it as a 35-match league | An invited team may join it; `matchesAtMost` gives 17 (8 league matches, then up to 9 knockout ones) and `scheduleSpanMinutes` its 190 slots (144 league and 46 knockout matches, one per round interval), used by the schedule check and by every other tournament's condition projection |
+| LK2 | design | Paying without being on the contract's invite list loses the gas | The executor reads the team's pending invitations again right before the payment: unreadable refuses ("not paying blind"), none refuses, FoxLeague's `can_accept` false refuses (its refusal text, which can quote a title others wrote, stays out of the logged refusal), and the last 30 minutes before `expires_at` refuse |
+| LK3 | design | Up to 9 knockout matches come within 46 slots | The schedule check also judges the knockout stretch alone, from the squad's condition at the start: 9 matches x 11 starters x the match loss against the condition above the floor plus 45 slots of recovery |
+| LK4 | design | While a League + Knockout runs FoxLeague refuses other standard tournaments (option C), after the seat is paid | The rules refuse joining or creating one while a League + Knockout of the team's has started and is not over (stricter than FoxLeague, which frees a team knocked out); 1v1s and ranked stay open |
+| LK5 | design | Leaving closes the invitation for good, and after the seats lock it is refused | The agent never leaves one by itself (only an owner's leave, `byOwner`); it never creates one |
+| LK6 | design | Zeus's top-three rule would refuse nearly every Champions FoxLeague | Zeus judges the invited teams (`GET /api/tournaments/{id}/invitations`, wallets and ELO from the leaderboard, lineups read as for other fields) and refuses with 24 or more clearly stronger, or when stronger plus unread reach 24 |
+| LK7 | low | The C3 notice read invitations only while `league_knockout_enabled` was on, but that switch gates only creating one | Every planning snapshot reads the pending invitations; the plan sees them inside the framed snapshot (titles and refusals through `txt()`) and the owner hears of each once, now told that the agent decides within the limits |
+| R31F-1 | medium | Fable review of PR #31: the 1v1 busy check knew no League + Knockout and refused every 1v1 for its whole run (days), while FoxLeague keeps 1v1s open (its busy rows count only the team's own fixtures) and the snapshot and the manual said so | `league_knockout` joins the formats busy only through the team's own fixtures; a test: a running one leaves a 1v1 open, its own fixture within the hour makes the team busy |
+| R31F-2 | low | Fable review of PR #31: a completed League + Knockout (36 invited seats) lifted the create ceiling to 45 teams | `sizeCeiling` leaves it out: invitation-filled seats say nothing about open demand |
+| R31F-3 | low | Fable review of PR #31: the knockout stretch was judged from the condition at the tournament's start, too kind at a short interval | It is judged from the condition after the league phase: rested over its slots (at most 100), less an even share of its 8 matches; a test refuses an old squad (half the regeneration) at 30 minutes and allows a young one |
+| R31A-1 | medium | Agent review of PR #31: an empty invited field, or rows in states the code does not know, let Zeus accept a field it never judged (rule 4) | Declined and expired rows are left out, invited and accepted are judged, any other state counts as unread, and an empty field is unread (refused); executor tests through the invitations view and the leaderboard, both failing too |
+| R31A-2 | low | Agent review and Fable review of PR #31: comments still said the agent never joins the format | Reworded |
+| R31A-3 | low | Re-review of PR #31 (test): no executor test showed Zeus refusing a strong field read from the leaderboard | A test: 30 invited teams at ELO 3000 with strong lineups are refused as clearly stronger, expired and declined rows left out (seen failing with the ELO lookup broken) |
+
+A League + Knockout leaves the open tournaments list (invitation only). The paid invitation endpoints are on FoxLeague's
+testnet only until its mainnet tournaments contract is upgraded; Bronze editions need no contract. Open: a team knocked
+out early stays barred from other tournaments until the whole tournament ends (the stricter side); FoxLeague's
+refusal after a paid join can quote a title others wrote and reaches the next plan sanitised through recent activity
+(as every FoxLeague error today); the first play-off
+locks may come late (seats fill from aired results); FoxLeague's manual page for the format is synced when published.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

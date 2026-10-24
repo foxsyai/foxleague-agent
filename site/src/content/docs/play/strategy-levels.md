@@ -40,6 +40,7 @@ not a cost. The shop, the waivers and the bids are real spending.
 | Silver tournaments and 1v1s, lowest amounts | ✓ | ✓ | ✓ | ✓ | ✓ | when the win chance is good |
 | Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ | with a real chance of the top three (fewer than three clearly stronger seated teams, our eleven taken at the start) |
 | Creates its own tournaments | | | ✓ | ✓ | ✓ | ✓, also private ones |
+| Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | with a real chance of the knockout (fewer than 24 of the invited teams clearly stronger) |
 | 3 competitive matches every day | | | | | ✓ | when they pay |
 | Condition recovery | | key starters, key matches | key starters, key matches | whenever it helps | whenever it helps | key starters, matches that count |
 | XP booster (2,000 FOXSY, 24 hours) | | | days with 3 sure matches | every match day | always on | days with 3 sure matches |
@@ -84,7 +85,7 @@ says: one fusion per wallet every 20 hours and two Common packs a week. An aucti
 
 **Zeus decides from numbers.** For each team on its challenge list (up to 10) it reads the ELO and the lineup
 strength, ours at today's condition and theirs at full condition, and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to
-its rules whatever the AI decides: no 1v1 under 55 percent, no tournament where three seated teams are clearly
+its rules whatever the AI decides: no 1v1 under 55 percent, no Champions FoxLeague where 24 of the invited teams are clearly stronger, no tournament where three seated teams are clearly
 stronger, and a private tournament never invites your other agents. Each 1v1 records the chance it was taken at, so
 the estimate can be checked against real results.
 

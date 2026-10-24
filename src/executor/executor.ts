@@ -230,6 +230,7 @@ export class Executor {
       const now = new Date()
       const ctx = await this.context(agent, wallet, snap, a, now, dry)
       if (planned.piece) ctx.piece = { index: planned.piece.index, of: planned.piece.of }
+      if (planned.byOwner) ctx.byOwner = true
       if (ctx.opponent) {
         logExtra.opponentUserId = ctx.opponent.userId
         // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
@@ -480,10 +481,33 @@ export class Executor {
         .map(([, v]) => Number(v))
         .filter(n => Number.isInteger(n) && n > 0)
     }
+    // A League + Knockout seat is paid only on an invitation read right now (null: unreadable, refused).
+    if (a.type === 'join_tournament' && tournament?.tournament.format === 'league_knockout') {
+      const pending = await soft(() => fox.leagueInvitations(wallet))
+      market.invitation = pending === null ? null : (pending.find(i => i.tournament_id === a.tournament_id) ?? 'not invited')
+    }
     // The field is read only for an entry the cheap checks would allow (open, before its deadline, a seat left).
     const t0 = tournament?.tournament
     const worthReading = t0 && t0.max_teams > 2 && t0.status === 'open' && new Date(t0.deadline) > now && tournament!.participants.length < t0.max_teams && !tournament!.participants.some(p => p.user_id === snap.profile?.id)
-    if (zeus && a.type === 'join_tournament' && tournament && worthReading) {
+    if (zeus && a.type === 'join_tournament' && tournament && worthReading && t0.format === 'league_knockout') {
+      // Judged on the invited teams, not only the seated ones; their wallets and ELO from the leaderboard.
+      const view = await soft(() => fox.leagueInvitationsView(t0.id, wallet))
+      const board = view ? await soft(() => fox.leaderboard(200)) : null
+      if (view && board) {
+        // FoxLeague's four states (league_invitations.rs): invited and accepted are the field, declined and expired are
+        // not; any other state is a team it cannot judge (unread). An empty field is unread too (agent review of PR #31).
+        const rows = (Array.isArray(view.invitations) ? view.invitations : []).filter(i => i.user_id !== snap.profile?.id)
+        const field = rows.filter(i => i.state !== 'declined' && i.state !== 'expired').slice(0, 35)
+        if (field.length) {
+          market.field = await Promise.all(field.map(async i => {
+            if (i.state !== 'invited' && i.state !== 'accepted') return { userId: i.user_id, strength: null, elo: null }
+            const u = board.users.find(x => x.id === i.user_id)
+            const strength = u?.wallet_address ? await soft(() => rivalStrength(fox, u.wallet_address)) : null
+            return { userId: i.user_id, strength, elo: u?.elo_rating ?? null }
+          }))
+        }
+      }
+    } else if (zeus && a.type === 'join_tournament' && tournament && worthReading) {
       const seated = tournament.participants.filter(p => p.user_id !== snap.profile?.id).slice(0, 32)
       market.field = await Promise.all(seated.map(async p => {
         const known = snap.leaderboardNeighbours.find(u => u.id === p.user_id)

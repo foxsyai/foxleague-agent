@@ -87,7 +87,7 @@ test('R14A-1 when the snapshot cannot tell (no own fixture listed, group not sen
     ['groups_knockout without any own fixture in the list', withRows([running(205, 'groups_knockout')], [])],
     ['swiss without any own fixture in the list', withRows([running(206, 'swiss')], [])],
     ['group rows without group_name', withRows([running(207, 'groups_knockout')], [fixture(207, -30, 'finished', { group_name: undefined })])],
-    ['a format the agent does not know', withRows([running(208, 'league_knockout', { max_teams: 36 })], [fixture(208, 600, 'upcoming')])],
+    ['a format the agent does not know', withRows([running(208, 'ladder', { max_teams: 36 })], [fixture(208, 600, 'upcoming')])], // league_knockout is known since 2026-10-24 (own fixtures only)
     ['a status the agent does not know', withRows([running(209, 'knockout', { status: 'paused' })], [])],
   ]
   for (const [what, s] of cases) {
@@ -135,13 +135,18 @@ test('R14A-1 control: play_match keeps its pre-match lockout (an own match withi
 
 // ---- R14A-2: a tournament of a format the agent does not know is neither joined nor created ----
 
-test('R14A-2 a league_knockout tournament (36 teams, a daily round) is not joined: the format is not supported yet', async () => {
+// Since 2026-10-24 an invited team may accept a league_knockout (test/champions-foxleague.test.ts): without an
+// invitation read right before the payment it is still never joined, and a format the agent does not know never is.
+test('R14A-2 a league_knockout tournament is not joined without an invitation; an unknown format never is', async () => {
   const m = setup({
     fox: { tournament: async () => tournament(600, { format: 'league_knockout', max_teams: 36, min_teams: 36, round_interval_minutes: 1440 }) },
   })
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 600 }))
   assert.equal(r!.status, 'refused', r!.summary)
-  assert.match(r!.summary, /format league_knockout is not supported yet: not joining blind/)
+  assert.match(r!.summary, /invitations could not be read: not paying blind/)
+  const u = setup({ fox: { tournament: async () => tournament(602, { format: 'ladder', max_teams: 16, min_teams: 16 }) } })
+  const [unknown] = await u.exec.run(u.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 602 }))
+  assert.match(unknown!.summary, /format ladder is not supported yet: not joining blind/)
   // Control: the four known formats still join.
   for (const [format, max] of [['knockout', 8], ['groups_knockout', 8], ['round_robin', 6], ['swiss', 6]] as const) {
     const k = setup({ fox: { tournament: async () => tournament(601, { format, max_teams: max, min_teams: max }) } })
@@ -156,5 +161,5 @@ test('R14A-2 a create of an unknown format is refused by the rules, not left to 
   const m = setup()
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), act(create))
   assert.equal(r!.status, 'refused', r!.summary)
-  assert.match(r!.summary, /format league_knockout is not supported yet/)
+  assert.match(r!.summary, /a League \+ Knockout is created by FoxLeague only/)
 })

@@ -1748,9 +1748,18 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   (`tournaments.rs:4881`). New join refusals (not invited, expired, declined, left, one seat, "still in <title>"),
   a leave refusal ("seats are locked since <time>") and create refusals (`snapshot_at`, `sponsor_prize_foxsy`,
   "Developer Mode needs an admin's approval"). Slot window: `(max_teams x 8 / 2 + 46) x 3` minutes
-  (`tournaments.rs:1177-1181`). The agent refuses this format (`unsupportedFormat`): no manual page, admin-only. Since 2026-10-24 it reads `GET
-  /api/tournaments/invitations` while `league_knockout_enabled` is on and tells the owner of each pending invitation once
-  (`noticeInvitations`, `src/service.ts`), never joining.
+  (`tournaments.rs:1177-1181`). Since 2026-10-24 (owner) the agent accepts an invitation by itself
+  (`join_tournament`: a pending invitation read again right before the payment with `can_accept` true and at least 30
+  minutes to its `expires_at`, the entry within the owner's limits, the schedule check for 17 matches over its 190
+  slots and the knockout's 9 matches in 46 slots, Zeus with fewer than 24 clearly stronger invited teams read from
+  `GET /api/tournaments/{id}/invitations`), never creates one (`unsupportedFormat`), never leaves one by itself, and
+  refuses other standard tournaments while one of its own runs (FoxLeague's option C). Every planning snapshot reads
+  `GET /api/tournaments/invitations` (FoxLeague's `league_knockout_enabled` gates only creating one) and the owner hears
+  of each pending invitation once (`noticeInvitations`, `src/service.ts`). Facts from next-foxleague 75289fbbf:
+  `tournament_engine.rs:1583-1648` (league phase), `:1817-1866` (knockout), `:1511-1546` (sequential schedule),
+  `league_invitations.rs:1058-1062`, `:1339-1406` (refusals, one seat, option C), `:1167-1175` (seats lock). The paid
+  invitation endpoints (`createInvitationTournament`, `addInvited`) are on testnet only until FoxLeague upgrades the
+  mainnet tournaments contract.
 - **Fusion pre-check.** `can-fuse` gains the reasons `not_in_wallet` and `ownership_unreadable` and the refusal "A
   fusion takes at most 3 different card nonces." (`marketplace.rs:3486`, `:3512`); the agent refuses on any
   `can_fuse: false` with its reason.

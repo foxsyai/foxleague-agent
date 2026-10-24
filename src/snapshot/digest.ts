@@ -1,7 +1,7 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { freeGaps } from '../executor/slots.ts'
-import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
+import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
@@ -220,6 +220,19 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
+  }
+  // League + Knockout invitations: accepted with join_tournament, by every level within its limits (owner, 2026-10-24).
+  const invitations = s.auth?.invitations ?? []
+  if (invitations.length) {
+    out.push(`League + Knockout invitations (36 teams: ${LK_LEAGUE_MATCHES} league matches, then places 1 to ${LK_KNOCKOUT_PLACES} play the knockout, at most ${LK_LEAGUE_MATCHES + LK_KNOCKOUT_MATCHES} matches; one match at a time for the whole tournament; while it runs no other tournament, 1v1s and ranked stay open; no leaving once the seats lock):`)
+    const at = (iso: string | null | undefined) => (iso && Number.isFinite(Date.parse(iso)) ? new Date(Date.parse(iso)).toISOString().slice(0, 16).replace('T', ' ') : '?')
+    for (const i of invitations) {
+      const t = i.tournament
+      const prize = i.prize_atomic && /^\d+$/.test(i.prize_atomic) ? `, sponsor prize ${(BigInt(i.prize_atomic) / 10n ** 18n).toString()} FOXSY shared by the last 8` : ''
+      const run = t ? `, one match every ${t.round_interval_minutes ?? '?'} min from ${at(t.starts_at)}` : ', its schedule could not be read'
+      const can = i.can_accept ? 'accept with join_tournament' : `FoxLeague says it cannot be accepted now${i.refusal ? ` (${txt(i.refusal, 120)})` : ''}`
+      out.push(`  T${Number(i.tournament_id)} "${txt(i.title, 60)}" ${txt(i.tier, 10)}, entry ${Number(i.entry_fee_foxsy)} FOXSY${prize}${run}, expires ${at(i.expires_at)}, seats lock ${at(i.seats_lock_at)}: ${can}`)
+    }
   }
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
