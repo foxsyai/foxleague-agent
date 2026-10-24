@@ -49,8 +49,11 @@ export type Action =
       home_and_away?: boolean
       /** Teams invited (their user ids): a non-empty list makes it private. The Zeus level only. */
       invite_user_ids?: number[]
+      /** An optional OVR range (FoxLeague, 2026-10-24): only teams whose best XI OVR is inside may join. */
+      ovr_min?: number
+      ovr_max?: number
     }
-  | { type: 'create_challenge'; tier: 'silver' | 'gold'; stake_foxsy: number; target_user_id: number | null; deadline_minutes: 30 | 60 | 120 | 240 }
+  | { type: 'create_challenge'; tier: 'silver' | 'gold'; stake_foxsy: number; target_user_id: number | null; deadline_minutes: 30 | 60 | 120 | 240; ovr_min?: number; ovr_max?: number }
   | { type: 'buy'; product: ShopProduct; player_nonces?: number[]; quantity?: number }
   | { type: 'claim_refund'; tournament_id: number }
   /** Three cards of one rarity into one of the next; the output takes the position of player_nonces[position_of]. */
@@ -167,6 +170,7 @@ export function parseAction(raw: unknown): Action {
         round_interval_minutes: int(o, 'round_interval_minutes', 30, 1440),
         ...(o.home_and_away === true && format === 'round_robin' ? { home_and_away: true } : {}),
         ...(Array.isArray(o.invite_user_ids) && o.invite_user_ids.length ? { invite_user_ids: userIds(o, 'invite_user_ids', 1, 63) } : {}),
+        ...ovrRange(o),
       }
     }
     case 'create_challenge': {
@@ -178,6 +182,7 @@ export function parseAction(raw: unknown): Action {
         stake_foxsy: int(o, 'stake_foxsy', 1, 1_000_000),
         target_user_id: (target as number | null | undefined) ?? null,
         deadline_minutes: oneOf(o, 'deadline_minutes', [30, 60, 120, 240] as const),
+        ...ovrRange(o),
       }
     }
     case 'buy': {
@@ -204,6 +209,19 @@ export function parseAction(raw: unknown): Action {
   }
 }
 
+/** An optional OVR range on a create: whole numbers 1 to 100, the minimum not above the maximum (FoxLeague's rule). */
+function ovrRange(o: Record<string, unknown>): { ovr_min?: number; ovr_max?: number } {
+  const lo = o.ovr_min === undefined || o.ovr_min === null ? undefined : int(o, 'ovr_min', 1, 100)
+  const hi = o.ovr_max === undefined || o.ovr_max === null ? undefined : int(o, 'ovr_max', 1, 100)
+  if (lo !== undefined && hi !== undefined && lo > hi) throw new ParseError('the minimum OVR cannot be above the maximum')
+  return { ...(lo !== undefined ? { ovr_min: lo } : {}), ...(hi !== undefined ? { ovr_max: hi } : {}) }
+}
+
+/** The range in FoxLeague's words: "30 to 40", "at most 35", "at least 30". */
+export function rangeWords(lo: number | undefined, hi: number | undefined): string {
+  return lo !== undefined && hi !== undefined ? (lo === hi ? `exactly ${lo}` : `${lo} to ${hi}`) : hi !== undefined ? `at most ${hi}` : lo !== undefined ? `at least ${lo}` : 'any'
+}
+
 export function describeAction(a: Action): string {
   switch (a.type) {
     case 'swap_egld_for_foxsy': return `swap EGLD for ${a.foxsy} FOXSY`
@@ -215,8 +233,8 @@ export function describeAction(a: Action): string {
     case 'play_match': return `play ${a.match_type} match`
     case 'join_tournament': return `join tournament T${a.tournament_id}`
     case 'leave_tournament': return `leave tournament T${a.tournament_id}`
-    case 'create_tournament': return `create ${a.invite_user_ids?.length ? `private (${a.invite_user_ids.length} invited) ` : ''}${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, starts in ${a.starts_in_hours} h`
-    case 'create_challenge': return `create ${a.tier} 1v1, stake ${a.stake_foxsy}${a.target_user_id ? ` vs user ${a.target_user_id}` : ' (open)'}`
+    case 'create_tournament': return `create ${a.invite_user_ids?.length ? `private (${a.invite_user_ids.length} invited) ` : ''}${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, starts in ${a.starts_in_hours} h${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
+    case 'create_challenge': return `create ${a.tier} 1v1, stake ${a.stake_foxsy}${a.target_user_id ? ` vs user ${a.target_user_id}` : ' (open)'}${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
     case 'buy': return `buy ${a.product}${a.quantity ? ` x${a.quantity}` : ''}${a.player_nonces ? ` for ${a.player_nonces.map(n => `#${n}`).join(',')}` : ''}`
     case 'claim_refund': return `claim refund T${a.tournament_id}`
     case 'fuse': return `fuse ${a.player_nonces.map(n => `#${n}`).join(',')} (position of #${a.player_nonces[a.position_of]})`
