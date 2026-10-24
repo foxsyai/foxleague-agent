@@ -1760,8 +1760,8 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   of each pending invitation once (`noticeInvitations`, `src/service.ts`). Facts from next-foxleague 75289fbbf:
   `tournament_engine.rs:1583-1648` (league phase), `:1817-1866` (knockout), `:1511-1546` (sequential schedule),
   `league_invitations.rs:1058-1062`, `:1339-1406` (refusals, one seat, option C), `:1167-1175` (seats lock). The paid
-  invitation endpoints (`createInvitationTournament`, `addInvited`) are on testnet only until FoxLeague upgrades the
-  mainnet tournaments contract.
+  invitation endpoints (`createInvitationTournament`, `addInvited`) are on the mainnet tournaments contract since
+  2026-10-24 (`isInviteOnly` and `getSponsorPrize` answer on chain).
 - **Fusion pre-check.** `can-fuse` gains the reasons `not_in_wallet` and `ownership_unreadable` and the refusal "A
   fusion takes at most 3 different card nonces." (`marketplace.rs:3486`, `:3512`); the agent refuses on any
   `can_fuse: false` with its reason.
@@ -1775,10 +1775,10 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   consumed after delivery and a refund the contract refuses is handed to an operator (#503).
 - **Sign-in budget.** `POST /api/auth/verify` answers 429 "Too many failed sign-in attempts" after 10 failed or
   replayed signatures per client or wallet in 60 s (5-minute lock); a fresh valid signature still passes.
-- **Tournaments contract (testnet so far).** The upgrades of 2026-10-16/17/22/23 add invitation tournaments,
+- **Tournaments contract (on mainnet since 2026-10-24).** The upgrades of 2026-10-16/17/22/23 add invitation tournaments,
   sponsor prizes (settled after a 24-hour minimum run), royalties only to an approved provider or a seated
   participant, the owner's close while paused, and `joinTournament` refuses operator keys and contracts
-  (`tournament_manager.rs:457`). Per `contracts/deploys.yaml` mainnet is not upgraded yet. After the upgrade the web
+  (`tournament_manager.rs:457`). Mainnet carries them since 2026-10-24 (read-only queries on chain). After the upgrade the web
   app's `JOIN_TOURNAMENT_GAS_LIMIT` is 8,400,000 (`frontend/src/lib/gasLimits.ts:32`; the heaviest join measured
   5,550,000): the agent followed to 8,400,000 once the upgrade was live on mainnet (2026-10-24: `isInviteOnly` and
   `getSponsorPrize` answer on chain).
@@ -1797,3 +1797,19 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   `.league_knockout_min_invite_window_minutes` and `tx_signature_check_mode`; squads carry `shirt_number`; the upcoming
   route answers `is_home` false instead of null; notification kinds gain `match_ready` and `tournament_eliminated`.
 
+
+## 22. FoxLeague's manual of 2026-10-24 (688088787) and the OVR range
+
+- **Champions FoxLeague page** (`mechanics/champions-foxleague`), synced into `src/strategist/manual.md`: it states the
+  rules the agent already follows (36 teams, 8 league matches, places 1 to 24 to the knockout, 190 matches one at a
+  time, leaving until wave 3 with the entry refunded, no other standard tournament while it runs, one at a time,
+  prizes 45/30/15 plus the prize from FoxLeague for the 8 quarter-finalists). One difference: a team that is out is free
+  again at once, while the agent's rule waits until the edition ends (the stricter side).
+- **OVR range** (`ovr_min`, `ovr_max` on a tournament or a 1v1, whole numbers 1 to 100; next-foxleague
+  `tournament_models.rs:241-252`, `ovr_range.rs`): checked once at the join against the team's best XI OVR (the average
+  OVR of the strongest eleven it can field, to one decimal; `GET /api/teams/best-xi-ovr`, session). Outside it the join
+  is refused and a paid entry refunded, the gas lost. Not live on mainnet on 2026-10-24 (no open tournament carries the
+  fields; the route answers as the team route). The agent reads its best XI OVR right before paying into a ranged
+  tournament or 1v1 and joins only inside the range (unreadable refuses); the plan sees each range and its own best XI OVR.
+- **Smaller changes**: XP by the shirt worn (the keeper's shirt up to 910), ELO decay "at most once every 20 hours", a
+  Fused mark on cards, a 1v1 can be created with an OVR range (the agent never sets one).

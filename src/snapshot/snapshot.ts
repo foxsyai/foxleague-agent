@@ -147,6 +147,8 @@ export interface AgentSnapshot {
      * when the invitations could not be read. Their titles are written by others: the digest passes them through txt().
      */
     invitations?: (PendingLeagueInvitation & { tournament: Tournament | null })[] | null
+    /** The team's best XI OVR (what OVR ranges are checked against); null when unreadable. */
+    bestXiOvr?: number | null
     /** The team's League + Knockout seats not started yet: when their seats lock (leaving refunds the entry until then). */
     leagueSeats?: { tournamentId: number; seatsLockAt: string | null; accepted: number | null }[]
   } | null
@@ -479,7 +481,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // The agent's own authed state (never in watch mode: that would need someone else's key).
   let auth: AgentSnapshot['auth'] = null
   if (wallet && registered) {
-    const [shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe, invitations] = await Promise.all([
+    const [shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe, invitations, bestXi] = await Promise.all([
       attempt(warnings, 'shop status', () => fox.shopStatus(wallet)),
       attempt(warnings, 'daily allowance', () => fox.dailyAllowance(wallet)),
       attempt(warnings, 'active match', () => fox.activeMatch(wallet)),
@@ -488,8 +490,9 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       attempt(warnings, 'challenges for me', () => fox.challengesForMe(wallet)),
       // Whatever FoxLeague's create switch says: it gates only creating one, invitations keep coming.
       attempt(warnings, 'league invitations', () => fox.leagueInvitations(wallet)),
+      attempt(warnings, 'best XI OVR', () => fox.bestXiOvr(wallet)),
     ])
-    auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [], invitations: invitations ? invitations.map(i => ({ ...i, tournament: null })) : null }
+    auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [], invitations: invitations ? invitations.map(i => ({ ...i, tournament: null })) : null, bestXiOvr: typeof bestXi?.best_xi_ovr === 'number' ? bestXi.best_xi_ovr : null }
   }
 
   const [openAll, completed, cancelled, board, listings, cheapListings, floors, active, pendingSc, doneChallenges] = await Promise.all([

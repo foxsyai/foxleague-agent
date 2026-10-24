@@ -18,6 +18,7 @@ import type {
   ChallengeForMe,
   PendingLeagueInvitation,
   LeagueInvitationsView,
+  BestXiOvr,
   ActiveMatch,
   MyTournaments,
   LeaderboardPage,
@@ -256,6 +257,11 @@ export class FoxLeague {
   /** The team's pending League + Knockout invitations. */
   leagueInvitations(w: AgentWallet): Promise<PendingLeagueInvitation[]> {
     return this.call<PendingLeagueInvitation[]>('/tournaments/invitations', { wallet: w })
+  }
+
+  /** The team's best XI OVR (what a tournament's or a 1v1's OVR range is checked against at the join). */
+  bestXiOvr(w: AgentWallet): Promise<BestXiOvr> {
+    return this.call<BestXiOvr>('/teams/best-xi-ovr', { wallet: w })
   }
 
   /** Who a League + Knockout invited (the field a Zeus agent judges before accepting). */

@@ -145,6 +145,13 @@ function ownChallengeOut(s: AgentSnapshot, userId: number): string {
   return out ? `, has a 1v1 out until ${new Date(Date.parse(out.deadline)).toISOString().slice(0, 16)} UTC: cannot accept yours before` : ''
 }
 
+/** A tournament's or a 1v1's OVR range, as FoxLeague checks it at the join (numbers only). */
+function ovrRange(t: { ovr_min?: number | null; ovr_max?: number | null }): string {
+  const lo = typeof t.ovr_min === 'number' ? t.ovr_min : null
+  const hi = typeof t.ovr_max === 'number' ? t.ovr_max : null
+  return lo === null && hi === null ? '' : `, OVR range ${lo ?? 'any'} to ${hi ?? 'any'}`
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
@@ -212,12 +219,13 @@ export function renderDigest(s: AgentSnapshot): string {
   }
 
   const m = s.market
+  if (typeof s.auth?.bestXiOvr === 'number') out.push(`Your best XI OVR (what OVR ranges are checked against): ${s.auth.bestXiOvr}`)
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
   const zeus = s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')
   if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${ZEUS_STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((ZEUS_STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way${zeus ? `; Zeus never joins a field with ${ZEUS_FIELD_LIMIT} or more clearly stronger teams, or ${ZEUS_FIELD_LIMIT} or more unknown ones` : ''})`)
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${ovrRange(t)}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
   }
@@ -241,7 +249,7 @@ export function renderDigest(s: AgentSnapshot): string {
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()

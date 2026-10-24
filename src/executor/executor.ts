@@ -485,6 +485,12 @@ export class Executor {
         .map(([, v]) => Number(v))
         .filter(n => Number.isInteger(n) && n > 0)
     }
+    // An OVR range: the best XI OVR read right now (null: unreadable, refused).
+    const t1 = tournament?.tournament
+    if (a.type === 'join_tournament' && t1 && (typeof t1.ovr_min === 'number' || typeof t1.ovr_max === 'number')) {
+      const best = await soft(() => fox.bestXiOvr(wallet))
+      market.bestXiOvr = typeof best?.best_xi_ovr === 'number' && Number.isFinite(best.best_xi_ovr) ? best.best_xi_ovr : null
+    }
     // Leaving a League + Knockout: when its seats lock, read right now (null: unreadable, refused).
     if (a.type === 'leave_tournament' && tournament?.tournament.format === 'league_knockout') {
       const view = await soft(() => fox.leagueInvitationsView(a.tournament_id, wallet))
