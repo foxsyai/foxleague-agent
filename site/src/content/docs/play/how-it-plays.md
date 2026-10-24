@@ -38,9 +38,11 @@ An empty plan is a good answer too: the agent never spends just because budget i
   refuses a schedule that would wear the squad out, judged on the condition the squad will have at the start (rested
   until then, less what its other tournaments cost before it). Only
   Zeus creates private tournaments; every level joins one your team is invited to when it is worth it (only
-  your team's own FoxLeague login sees the invitation).
+  your team's own FoxLeague login sees the invitation). FoxLeague's League + Knockout format (created by FoxLeague,
+  seats by invitation) is the exception: the agent never joins it, but it tells you of each invitation, in its
+  activity and at once on Telegram, with the entry fee and until when, so you can accept it in FoxLeague yourself.
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
-  starting eleven), at most twice a week against the same team, and never while another of your agents has a 1v1
+  starting eleven), at most two played 1v1s a week against the same team (a challenge nobody accepted, its stake back, does not count), and never while another of your agents has a 1v1
   out against that team (one of your teams at a time per rival). The plan sees how many 1v1s it played against each
   team this week and when the limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). When it

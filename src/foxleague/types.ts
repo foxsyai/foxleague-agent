@@ -30,6 +30,8 @@ export interface FoxConfig {
     groups_knockout_group_size: number
     one_v_one_max_active_per_user: number
     one_v_one_prize_delivery_seconds: number
+    /** FoxLeague's League + Knockout format (admin-created, by invitation) is on; it ships off. */
+    league_knockout_enabled?: boolean
   }
   min_field_condition: number
   condition_regen_points_per_day: number
@@ -401,4 +403,18 @@ export interface FloorPrice {
   rarity: Rarity
   floor_price: number
   count: number
+}
+
+/** One pending League + Knockout invitation of the signed-in team (GET /api/tournaments/invitations, league_invitations.rs). */
+export interface PendingLeagueInvitation {
+  tournament_id: number
+  title: string
+  tier: string
+  entry_fee_foxsy: number
+  wave: number
+  expires_at: string
+  seats_lock_at: string
+  can_accept: boolean
+  refusal: string | null
+  prize_atomic: string | null
 }

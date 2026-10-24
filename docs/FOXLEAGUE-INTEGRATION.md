@@ -1748,7 +1748,9 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   (`tournaments.rs:4881`). New join refusals (not invited, expired, declined, left, one seat, "still in <title>"),
   a leave refusal ("seats are locked since <time>") and create refusals (`snapshot_at`, `sponsor_prize_foxsy`,
   "Developer Mode needs an admin's approval"). Slot window: `(max_teams x 8 / 2 + 46) x 3` minutes
-  (`tournaments.rs:1177-1181`). The agent refuses this format (`unsupportedFormat`): no manual page, admin-only.
+  (`tournaments.rs:1177-1181`). The agent refuses this format (`unsupportedFormat`): no manual page, admin-only. Since 2026-10-24 it reads `GET
+  /api/tournaments/invitations` while `league_knockout_enabled` is on and tells the owner of each pending invitation once
+  (`noticeInvitations`, `src/service.ts`), never joining.
 - **Fusion pre-check.** `can-fuse` gains the reasons `not_in_wallet` and `ownership_unreadable` and the refusal "A
   fusion takes at most 3 different card nonces." (`marketplace.rs:3486`, `:3512`); the agent refuses on any
   `can_fuse: false` with its reason.

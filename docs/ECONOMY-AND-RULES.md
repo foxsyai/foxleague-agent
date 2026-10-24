@@ -392,7 +392,7 @@ among the called-up players by contribution. Nothing of it exists in the code on
   FOXSY). Manual: mechanics/fusion, marketplace, shop.
 - **League + Knockout ("Champions FoxLeague").** Admin-created, off by default, seats by invitation in waves from the
   frozen leaderboard, one seat per team, a sponsor prize on top of the entry pool (an example in the API texts: Gold,
-  10,000 FOXSY fee, 100,000 FOXSY for the 8 quarter-finalists). No manual page yet; the agent does not enter it.
+  10,000 FOXSY fee, 100,000 FOXSY for the 8 quarter-finalists). No manual page yet; the agent does not enter it and tells the owner of each pending invitation (since 2026-10-24).
 - **Royalties.** On the upgraded tournaments contract (testnet so far) a royalty goes only to an approved provider or
   a seated participant.
 - **Shop refunds.** A shop payment the treasury refunds is consumed only after delivery; a payment still being

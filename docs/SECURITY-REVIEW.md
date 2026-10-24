@@ -625,7 +625,8 @@ FoxLeague's changes are in `docs/FOXLEAGUE-INTEGRATION.md` section 21 and `docs/
 | R24A-3 | low | Agent review of PR #24 (coverage): the `untouched` paths of a paid join had no test | A test: a broadcast definitely refused for an unknown transaction is untouched; an unclear send error is not and stays counted (a broken reset makes it fail) |
 
 Left to the owner's decision: C3, reading League + Knockout invitations to tell the owner (never joining the format,
-which stays refused); D11, counting only accepted 1v1s toward the weekly limit per rival. The reviewers' proposals
+which stays refused); D11, counting only accepted 1v1s toward the weekly limit per rival. Both accepted and built on
+2026-10-24 (section C3 and D11 below). The reviewers' proposals
 (order of play, recovery before key matches, skipping the model call on empty plans, teams to invite for private
 cups) wait for the owner as well.
 
@@ -743,6 +744,20 @@ caching, passed before and stays as a guard).
 The prompt and manual bytes are unchanged, so the cache stays shared by all agents, ticks, chat and /ask. Open: a
 preparation tick before a match session can come sooner than the planning agent's next cycle and is not counted (at
 most a plain-price send where a cache read would have done).
+
+## C3 and D11, decided by the owner, 2026-10-24
+
+The audit of 2026-10-23 left two points to the owner's decision; the owner accepted both. Test first:
+`test/c3-d11.test.ts`, each test seen failing before the change (the test that the agent still never joins the format
+passed before and stays as a guard).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| C3 | design | The agent refuses FoxLeague's League + Knockout format, and the owner never heard of an invitation to it | While FoxLeague has the format on (`league_knockout_enabled`) and the team is registered, each tick reads `GET /api/tournaments/invitations` with the team's login; each pending invitation not yet expired reaches the owner once (activity row and Telegram at once): the tournament, its title (shortened, one line, never shown to the model), tier, entry fee, until when and, when FoxLeague says it cannot be accepted, why. The agent still never joins the format. A failed read is quiet; the next tick reads again |
+| D11 | design | A 1v1 nobody accepted counted toward the 2 a week against the same rival, so an unanswered challenge used a slot | `oneVOnesThisWeek` skips a 1v1 whose stake came back (`join:<tournament>:refunded` with the same transaction hash: FoxLeague cancelled it unaccepted, the agent closed it, or it never seated). One still open, played or unknown counts; dry run, which has no refunds, counts every 1v1 as before. The plan request reads the same count |
+
+The weekly limit is the agent's own rule against farming, not FoxLeague's. Open: a refund is credited at the start of
+the next tick, so until then the cancelled 1v1 still counts (the stricter side).
 
 ## Where the limits live
 

@@ -25,13 +25,16 @@ function detailOf(r: ActivityRow): { opponentUserId?: number; untouched?: boolea
 
 /**
  * Per rival (FoxLeague user id): when this agent played or entered a 1v1 against it in the last 7 days, newest first.
- * The rule refuses a third within 7 days (MAX_1V1_PER_OPPONENT_WEEK) on exactly this count.
+ * The rule refuses a third within 7 days (MAX_1V1_PER_OPPONENT_WEEK) on exactly this count. A 1v1 whose stake came back
+ * (FoxLeague cancelled it unaccepted, the agent closed it, or it never seated) was never played and does not count
+ * (owner, 2026-10-24, audit D11); one still open, played or unknown counts.
  */
 export function oneVOnesThisWeek(store: Store, agentIndex: number, dry: boolean, now: Date): Map<number, Date[]> {
   const out = new Map<number, Date[]>()
+  const refunded = store.refundedSeatHashes(agentIndex)
   for (const r of store.activityOf(agentIndex, ONE_V_ONE_KINDS, new Date(now.getTime() - WEEK_MS))) {
     const opp = detailOf(r).opponentUserId
-    if (!counted(dry, r.status) || typeof opp !== 'number') continue
+    if (!counted(dry, r.status) || typeof opp !== 'number' || (r.txHash && refunded.has(r.txHash))) continue
     out.set(opp, [...(out.get(opp) ?? []), new Date(r.at)])
   }
   return out

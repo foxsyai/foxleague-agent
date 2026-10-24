@@ -16,6 +16,7 @@ import type {
   UpcomingMatches,
   UserProfile,
   ChallengeForMe,
+  PendingLeagueInvitation,
   ActiveMatch,
   MyTournaments,
   LeaderboardPage,
@@ -249,6 +250,11 @@ export class FoxLeague {
 
   challengesForMe(w: AgentWallet): Promise<ChallengeForMe[]> {
     return this.call<ChallengeForMe[]>('/notifications/challenges-for-me', { wallet: w })
+  }
+
+  /** The team's pending League + Knockout invitations (read only: the agent never joins that format). */
+  leagueInvitations(w: AgentWallet): Promise<PendingLeagueInvitation[]> {
+    return this.call<PendingLeagueInvitation[]>('/tournaments/invitations', { wallet: w })
   }
 
   // ---- actions (called only by the executor, never in dry run) ----
