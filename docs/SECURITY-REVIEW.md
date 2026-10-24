@@ -805,6 +805,13 @@ before the change.
 |---|---|---|---|
 | LK8 | design | LK5 kept every League + Knockout seat until the end, even one the agent judged hopeless while leaving was still free | The agent may leave before the seats lock: the executor reads `seats_lock_at` from the invitations view right before the leave; unreadable refuses (leaving closes the invitation for good), within 30 minutes of the lock or after it refuses. The plan sees, for each League + Knockout seat not started, how many seats are taken and when they lock. The owner may leave as before |
 | R31A-4 | low | Re-review of PR #31 (test): the expired rows could not change the Zeus test's outcome | 24 expired rows sit next to the 25 declined ones, so dropping either state from the field filter refuses |
+| R32A-1 | medium | Agent review of PR #32: the agent could leave a seat the owner accepted in FoxLeague, closing the owner's invitation for good | It leaves only a seat it paid itself (its own join in its log, a paid one whose answer was lost too); one the owner took is refused ("only the owner leaves it") |
+| R32A-2 | low | Agent review of PR #32: the plan was never told the owner's condition for leaving | Its seat line says to leave only a seat it joined itself, only with no real chance of the top 24, and that leaving closes the invitation for good |
+| R32A-3 | low | Agent review of PR #32 (test): nothing tested how the snapshot builds the seat lines | A test: only League + Knockout seats, the lock time and seats taken read, a failed view unknown with a warning |
+
+Open: whether the agent sees no real chance of the top 24 is the plan's judgement (the code holds only the timing and the
+own seat); `seats_lock_at` on `GET /api/tournaments/{id}/invitations` is taken from next-foxleague, not yet seen on
+mainnet (if it is missing, every leave by the agent refuses, the safe side).
 
 ## Where the limits live
 

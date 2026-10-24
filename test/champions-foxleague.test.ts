@@ -64,12 +64,14 @@ test('the agent leaves a League + Knockout only before its seats lock, with a 30
   seated.participants = [{ user_id: snapshot().profile!.id }]
   const leave = { type: 'leave_tournament' as const, tournament_id: 3001 }
   const at = (h: number) => new Date(Date.now() + h * H)
-  const ok = checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(10) }))
+  const ok = checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(10), ownSeat: true }))
   assert.equal(ok.ok, true, ok.refusal)
   assert.match(ok.notes.join(' '), /the whole entry comes back; the invitation closes for good/)
-  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(0.25) })).refusal!, /seats lock at .*: too close to leave/)
-  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(-1) })).refusal!, /seats locked at .*: nobody can leave now/)
-  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: null })).refusal!, /when its seats lock could not be read: not leaving blind/)
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(0.25), ownSeat: true })).refusal!, /seats lock at .*: too close to leave/)
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(-1), ownSeat: true })).refusal!, /seats locked at .*: nobody can leave now/)
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: null, ownSeat: true })).refusal!, /when its seats lock could not be read: not leaving blind/)
+  // Agent review of PR #32 (medium): a seat the owner took in FoxLeague is the owner's to leave, never the agent's.
+  assert.match(checkAction(leave, snapshot(), ctx({ tournament: seated, seatsLockAt: at(10) })).refusal!, /a seat this agent did not pay itself \(the owner's\): only the owner leaves it/)
   assert.equal(checkAction(leave, snapshot(), ctx({ tournament: seated, byOwner: true })).ok, true, 'the owner may, as before')
 })
 
@@ -79,15 +81,39 @@ test('the executor reads when the seats lock right before leaving; an unreadable
   const leave = { action: { type: 'leave_tournament' as const, tournament_id: 3001 }, reason: '' }
   const view = (lock: string) => ({ invitations: [], seats_lock_at: lock })
   const ok = setup({ fox: { tournament: async () => seated, leagueInvitationsView: async () => view(new Date(Date.now() + 10 * H).toISOString()) } })
+  // Not the agent's own join: refused (agent review of PR #32); after its own join row, allowed.
+  assert.match((await ok.exec.run(ok.agent(), dryWallet, snapshot(), [leave]))[0]!.summary, /did not pay itself/)
+  ok.store.log({ agentIndex: 0, kind: 'join_tournament', status: 'dry_run', summary: 'DRY RUN would join tournament T3001', detail: { action: { type: 'join_tournament', tournament_id: 3001 } } })
   assert.equal((await ok.exec.run(ok.agent(), dryWallet, snapshot(), [leave]))[0]!.status, 'dry_run')
   const blind = setup({ fox: { tournament: async () => seated, leagueInvitationsView: async () => { throw new Error('HTTP 502') } } })
+  blind.store.log({ agentIndex: 0, kind: 'join_tournament', status: 'dry_run', summary: 'DRY RUN would join tournament T3001', detail: { action: { type: 'join_tournament', tournament_id: 3001 } } })
   assert.match((await blind.exec.run(blind.agent(), dryWallet, snapshot(), [leave]))[0]!.summary, /could not be read: not leaving blind/)
 })
 
 test('the plan sees when the seats of its League + Knockout lock, and that leaving before then returns the whole entry', () => {
   const s = snapshot()
   s.auth!.leagueSeats = [{ tournamentId: 3001, seatsLockAt: new Date(Date.now() + 10 * H).toISOString(), accepted: 20 }]
-  assert.match(renderDigest(s), /Your League \+ Knockout T3001: 20 of 36 seats taken; seats lock .* UTC: until then you may leave for the whole entry back \(the invitation closes for good\), after that nobody can leave/)
+  assert.match(renderDigest(s), /Your League \+ Knockout T3001: 20 of 36 seats taken; seats lock .* UTC: until then you may leave a seat you joined yourself for the whole entry back, but only when you see no real chance of the top 24 \(places 1 to 24 play the knockout; leaving closes the invitation for good\); after that nobody can leave/)
+})
+
+// Agent review of PR #32 (low, test): how the snapshot builds the seat lines.
+test('the snapshot reads the lock time and the seats taken of each League + Knockout seat not started; a failed read says nothing', async () => {
+  const { takeSnapshot } = await import('../src/snapshot/snapshot.ts')
+  const { ADDR } = await import('./fixtures.ts')
+  const mine = [{ ...lk().tournament, id: 3001 }, { ...lk().tournament, id: 3002 }, { ...(tournament(4001) as TournamentDetail).tournament }]
+  const lock = new Date(Date.now() + 10 * H).toISOString()
+  const fox: Record<string, unknown> = {
+    config: async () => snapshot().config, user: async (a: string) => (a === ADDR ? snapshot().profile : null), team: async () => snapshot().team, players: async () => [],
+    tournaments: async () => [], leaderboard: async () => ({ users: [], total: 0, limit: 200, offset: 0 }), floorPrices: async () => [], listings: async () => [],
+    shopStatus: async () => snapshot().auth!.shop, dailyAllowance: async () => snapshot().auth!.allowance, activeMatch: async () => null,
+    myTournaments: async () => ({ active: mine, completed: [] }), upcomingMatches: async () => ({ lead_minutes: 30, my_team_name: 'Agent', matches: [] }),
+    challengesForMe: async () => [], matchHistory: async () => [], leagueInvitations: async () => [],
+    leagueInvitationsView: async (id: number) => { if (id === 3002) throw new Error('HTTP 502'); return { invitations: [{ user_id: 1, state: 'accepted' }, { user_id: 2, state: 'accepted' }, { user_id: 3, state: 'invited' }], seats_lock_at: lock } },
+  }
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool in this test') } }
+  const s = await takeSnapshot({ chain, fox } as never, { wallet: { ...dryWallet, address: ADDR } }, new Date())
+  assert.deepEqual(s.auth!.leagueSeats, [{ tournamentId: 3001, seatsLockAt: lock, accepted: 2 }, { tournamentId: 3002, seatsLockAt: null, accepted: null }], 'only League + Knockout seats, a failed view unknown')
+  assert.ok(s.warnings.some(w => /league seats T3002/.test(w)), s.warnings.join(' | '))
 })
 
 test('the schedule check takes all 17 matches and the knockout burst at the end', () => {

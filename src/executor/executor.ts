@@ -486,6 +486,8 @@ export class Executor {
       const view = await soft(() => fox.leagueInvitationsView(a.tournament_id, wallet))
       const lock = view?.seats_lock_at ? Date.parse(view.seats_lock_at) : Number.NaN
       market.seatsLockAt = Number.isFinite(lock) ? new Date(lock) : null
+      // The agent's own join of it (a paid one whose answer was lost too): a seat the owner took is the owner's to leave.
+      market.ownSeat = store.activityOf(agent.index, ['join_tournament'], since(60 * 86_400_000)).some(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && (detailOf(r).action as { tournament_id?: number } | undefined)?.tournament_id === a.tournament_id)
     }
     // A League + Knockout seat is paid only on an invitation read right now (null: unreadable, refused).
     if (a.type === 'join_tournament' && tournament?.tournament.format === 'league_knockout') {

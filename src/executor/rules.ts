@@ -55,6 +55,8 @@ export interface RulesContext {
   byOwner?: boolean
   /** For leaving a League + Knockout: when its seats lock (FoxLeague's invitations view), null when unreadable. */
   seatsLockAt?: Date | null
+  /** For leaving a League + Knockout: this agent paid the seat itself (its own join in its log), not the owner. */
+  ownSeat?: boolean
   /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
   ownUserIds?: number[]
   /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
@@ -857,6 +859,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // leaving returns the whole entry, before its seats lock (FoxLeague refuses any leave after it). Leaving closes the
       // invitation for good, so an unreadable lock time is no leave. The owner may leave as before.
       if (d.tournament.format === 'league_knockout' && !ctx.byOwner) {
+        // Only a seat it paid itself: one the owner took in FoxLeague is the owner's decision (agent review of PR #32).
+        if (!ctx.ownSeat) return refuse('a seat this agent did not pay itself (the owner\'s): only the owner leaves it')
         const lock = ctx.seatsLockAt
         if (!lock || !Number.isFinite(lock.getTime())) return refuse('when its seats lock could not be read: not leaving blind (leaving closes the invitation for good)')
         const when = lock.toISOString().slice(0, 16).replace('T', ' ')
