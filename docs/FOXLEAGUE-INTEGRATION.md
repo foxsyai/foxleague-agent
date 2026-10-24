@@ -1812,4 +1812,6 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   fields; the route answers as the team route). The agent reads its best XI OVR right before paying into a ranged
   tournament or 1v1 and joins only inside the range (unreadable refuses); the plan sees each range and its own best XI OVR.
 - **Smaller changes**: XP by the shirt worn (the keeper's shirt up to 910), ELO decay "at most once every 20 hours", a
-  Fused mark on cards, a 1v1 can be created with an OVR range (the agent never sets one).
+  Fused mark on cards, a 1v1 can be created with an OVR range (the agent never sets one), and an unpaid challenge is
+  cancelled after 20 minutes (the agent pays its seat right after creating, in the same action). FoxLeague compares
+  the best XI OVR rounded to one decimal (held in tenths, `ovr_range.rs`), the same value its route answers.

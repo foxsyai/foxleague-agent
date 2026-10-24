@@ -842,8 +842,11 @@ mainnet yet; the agent is ready for it. Test first: `test/ovr-range.test.ts`, ea
 | OR2 | design | The plan did not see ranges | Each open tournament and challenge shows its range, and the snapshot its best XI OVR |
 | R33A-1 | low | Agent review of PR #33 (docs): the integration and economy notes still called the contract upgrade testnet only | They say it is on mainnet since 2026-10-24 |
 | R33A-2 | low | Agent review of PR #33: its section had no open line | Added (`claimRefund` at 6,500,000) |
+| R34A-1 | medium | Agent review of PR #34: the route is not live on mainnet yet, so the snapshot's best XI OVR read put "best XI OVR: Team not found" in every plan request and kept the dashboard dot off ok | The snapshot's read is quiet when it fails (its value is information only; the rule uses the executor's fresh read) |
+| R34A-2 | low | Agent review of PR #34 (rule 4): a range value present but not a number counted as no range | Any value that is not null counts as a range: the executor reads the best XI OVR, and a value that is not a finite number refuses ("an OVR range the agent cannot read") |
 
-Open: a team out of a Champions FoxLeague is free again at once in FoxLeague, while the agent waits until the edition
+FoxLeague compares the best XI OVR rounded to one decimal (held in tenths, `ovr_range.rs`), the value its route answers,
+so the agent's comparison is the same. Open: a team out of a Champions FoxLeague is free again at once in FoxLeague, while the agent waits until the edition
 ends (the stricter side; the AI reads FoxLeague's rule in the manual, so it may propose a join the rule refuses).
 
 ## Where the limits live

@@ -800,11 +800,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       }
       // An OVR range (FoxLeague, 2026-10-24) is checked once at the join against the best XI OVR; outside it the paid
       // entry is refunded and the gas lost, so the agent joins only inside it, never blind.
-      if (typeof t.ovr_min === 'number' || typeof t.ovr_max === 'number') {
+      // FoxLeague compares the best XI OVR to one decimal (held in tenths, ovr_range.rs), the value its route answers.
+      const lo = t.ovr_min ?? null
+      const hi = t.ovr_max ?? null
+      if (lo !== null || hi !== null) {
+        const known = (v: unknown) => v === null || (typeof v === 'number' && Number.isFinite(v))
+        if (!known(lo) || !known(hi)) return refuse(`T${t.id} carries an OVR range the agent cannot read: not paying blind`)
         const ovr = ctx.bestXiOvr
         if (typeof ovr !== 'number' || !Number.isFinite(ovr)) return refuse('your best XI OVR could not be read: not paying into an OVR range blind')
-        if (typeof t.ovr_min === 'number' && ovr < t.ovr_min) return refuse(`T${t.id} takes teams with a best XI OVR from ${t.ovr_min}; yours is ${ovr}`)
-        if (typeof t.ovr_max === 'number' && ovr > t.ovr_max) return refuse(`T${t.id} takes teams with a best XI OVR up to ${t.ovr_max}; yours is ${ovr}`)
+        if (lo !== null && ovr < lo) return refuse(`T${t.id} takes teams with a best XI OVR from ${lo}; yours is ${ovr}`)
+        if (hi !== null && ovr > hi) return refuse(`T${t.id} takes teams with a best XI OVR up to ${hi}; yours is ${ovr}`)
       }
       const running = runningLeagueKnockout(s)
       if (t.max_teams > 2 && running && running.id !== t.id) return refuse(`your team is in T${running.id}, a League + Knockout that has started: no other tournament until it is over (1v1s and ranked stay open)`)

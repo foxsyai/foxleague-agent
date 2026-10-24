@@ -487,7 +487,7 @@ export class Executor {
     }
     // An OVR range: the best XI OVR read right now (null: unreadable, refused).
     const t1 = tournament?.tournament
-    if (a.type === 'join_tournament' && t1 && (typeof t1.ovr_min === 'number' || typeof t1.ovr_max === 'number')) {
+    if (a.type === 'join_tournament' && t1 && ((t1.ovr_min ?? null) !== null || (t1.ovr_max ?? null) !== null)) {
       const best = await soft(() => fox.bestXiOvr(wallet))
       market.bestXiOvr = typeof best?.best_xi_ovr === 'number' && Number.isFinite(best.best_xi_ovr) ? best.best_xi_ovr : null
     }

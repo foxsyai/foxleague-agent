@@ -490,7 +490,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       attempt(warnings, 'challenges for me', () => fox.challengesForMe(wallet)),
       // Whatever FoxLeague's create switch says: it gates only creating one, invitations keep coming.
       attempt(warnings, 'league invitations', () => fox.leagueInvitations(wallet)),
-      attempt(warnings, 'best XI OVR', () => fox.bestXiOvr(wallet)),
+      // Information only (the rule reads its own right before paying) and not live on mainnet yet: a failed read is quiet.
+      Promise.resolve().then(() => fox.bestXiOvr(wallet)).catch(() => null),
     ])
     auth = { shop, allowance, activeMatch, myTournaments, upcoming, challengesForMe: challengesForMe ?? [], invitations: invitations ? invitations.map(i => ({ ...i, tournament: null })) : null, bestXiOvr: typeof bestXi?.best_xi_ovr === 'number' ? bestXi.best_xi_ovr : null }
   }

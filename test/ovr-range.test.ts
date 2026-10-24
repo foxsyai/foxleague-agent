@@ -58,3 +58,35 @@ test('the manual describes the OVR range rule', async () => {
   const plays = readFileSync(new URL('../site/src/content/docs/play/how-it-plays.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(plays, /A tournament or a 1v1 with an OVR range is joined only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it/)
 })
+
+// Agent review of PR #34 (medium): the route is not live on mainnet yet (it answers as the team route, "Team not
+// found"), so a warning in every snapshot told the model its team was not found and kept the dashboard dot off ok.
+// The snapshot's value is only information (the rule reads its own right before paying): a failed read is quiet.
+test('R34A-1 a failed best XI OVR read in the snapshot is quiet', async () => {
+  const { takeSnapshot } = await import('../src/snapshot/snapshot.ts')
+  const { ADDR } = await import('./fixtures.ts')
+  const { ApiRefusal } = await import('../src/foxleague/api.ts')
+  const fox: Record<string, unknown> = {
+    config: async () => snapshot().config, user: async (a: string) => (a === ADDR ? snapshot().profile : null), team: async () => snapshot().team, players: async () => [],
+    tournaments: async () => [], leaderboard: async () => ({ users: [], total: 0, limit: 200, offset: 0 }), floorPrices: async () => [], listings: async () => [],
+    shopStatus: async () => snapshot().auth!.shop, dailyAllowance: async () => snapshot().auth!.allowance, activeMatch: async () => null,
+    myTournaments: async () => ({ active: [], completed: [] }), upcomingMatches: async () => ({ lead_minutes: 30, my_team_name: 'Agent', matches: [] }),
+    challengesForMe: async () => [], matchHistory: async () => [], leagueInvitations: async () => [],
+    bestXiOvr: async () => { throw new ApiRefusal('Team not found') },
+  }
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool in this test') } }
+  const s = await takeSnapshot({ chain, fox } as never, { wallet: { ...dryWallet, address: ADDR } }, new Date())
+  assert.equal(s.auth!.bestXiOvr, null)
+  assert.ok(!s.warnings.some(w => /best XI OVR|Team not found/.test(w)), s.warnings.join(' | '))
+})
+
+// Agent review of PR #34 (low, rule 4): a range value that is present but not a number counted as no range.
+test('R34A-2 a range the agent cannot read is no range to pay into', async () => {
+  const s = snapshot()
+  const c = (t: TournamentDetail) => ({ settings: TEST_SETTINGS, now: new Date(), tournament: t, bestXiOvr: 31 } as RulesContext)
+  assert.match(checkAction(join(4100), s, c(ranged({ ovr_max: '28' }))).refusal!, /carries an OVR range the agent cannot read: not paying blind/)
+  let reads = 0
+  const m = setup({ fox: { tournament: async () => ranged({ ovr_min: '20' }), bestXiOvr: async () => { reads++; return { best_xi_ovr: 31 } } } })
+  await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: join(4100), reason: '' }])
+  assert.equal(reads, 1, 'the executor reads for any range value, not only a number')
+})
