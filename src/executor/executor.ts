@@ -363,7 +363,7 @@ export class Executor {
   private async context(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, a: Action, now: Date, dry: boolean): Promise<RulesContext> {
     const { store, fox } = this.d
     let tournament: TournamentDetail | null | undefined
-    if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund') {
+    if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund' || a.type === 'widen_range') {
       try {
         tournament = await fox.tournament(a.tournament_id, wallet)
       } catch (err) {
@@ -933,6 +933,14 @@ export class Executor {
         }
         return finish('confirmed', `${desc}: ${r.message}${r.refund_tx_hash ? ` refund ${r.refund_tx_hash}` : ''}${closed}`)
       }
+      case 'widen_range': {
+        // Only the sides the plan named: a side left out keeps its bound at FoxLeague.
+        const body = { ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}), ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}) }
+        const r = await fox.widenOvrRange(wallet, a.tournament_id, body)
+        // The range FoxLeague answers with; the one the rules checked when the answer leaves it out.
+        const side = (k: 'ovr_min' | 'ovr_max', checked: unknown) => (r && k in r ? r[k] : checked) ?? 'any'
+        return finish('confirmed', `${desc}: OVR range of T${a.tournament_id} widened to ${side('ovr_min', v.facts.min)} to ${side('ovr_max', v.facts.max)}`)
+      }
       case 'join_tournament': {
         if (!built.txs.length) {
           booking.reached = true
@@ -1122,6 +1130,7 @@ function apiCallsFor(a: Action): string | null {
     case 'play_match': return `POST /api/matches/play {match_type: ${a.match_type}}`
     case 'join_tournament': return `POST /api/tournaments/${a.tournament_id}/join`
     case 'leave_tournament': return `POST /api/tournaments/${a.tournament_id}/leave (and /cancel for your own unaccepted 1v1)`
+    case 'widen_range': return `POST /api/tournaments/${a.tournament_id}/ovr-range`
     case 'create_tournament':
     case 'create_challenge': return 'POST /api/tournaments/create, joinTournament, POST /join'
     case 'buy': return `POST /api/shop/confirm {product: ${a.product}}`

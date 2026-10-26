@@ -1239,10 +1239,12 @@ or 18 (Gold); counts as competitive. A 1v1 win does not count as a tournament wi
 
 **One contract endpoint for every product.** `shopPay()` on the players contract accepts any positive
 FOXSY amount and books it to the treasury (`contracts/foxleague-players/src/player_nft.rs:2274-2287`). It
-does not know what you bought: the backend decides from your confirm call.
+does not know what you bought: the backend decides from your confirm call. Since the players contract upgrade (live
+on mainnet 2026-10-26) it also writes the payer's refundable record, so a refund goes back to the payer within a
+25-hour window.
 
 - **Transaction** (`frontend/src/lib/foxsyPaymentTx.ts:35-79`): receiver = players contract, value 0,
-  gas 12,000,000, version 1,
+  gas 12,864,100 (12,000,000 before the refundable record), version 1,
   `data = ESDTTransfer@464f5853592d356435663365@<amount atomic hex>@73686f70506179`, no arguments (no
   product id, no card nonce). Example, one Common pack:
   `ESDTTransfer@464f5853592d356435663365@878678326eac900000@73686f70506179`.
@@ -1822,7 +1824,9 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   a developer tournament and a creator who takes a seat outside their own range (`ovr_range.rs` `validate`,
   `creator_check`, before any payment); the agent always takes its seat, so the rule refuses a range that does not hold
   its best XI OVR, read right before the create (unreadable: no range), and never sets one on a targeted challenge or a
-  private tournament (it could only lock out the teams chosen).
+  private tournament (it could only lock out the teams chosen). Since PR #36 the prompt makes a range the default on an
+  open challenge or its own open tournament, about 10 percent either way around its best XI OVR (the snapshot suggests
+  `ovr_min` and `ovr_max`); the plan may widen it when recent tournaments filled slowly.
 
 ## 23. Mainnet of 2026-10-26 (FoxLeague 4e42b94c9)
 
@@ -1839,7 +1843,13 @@ Checked read-only on 2026-10-26, after the owner upgraded mainnet:
   `best_xi_formation`); `team_overall` is gone from the team answer (the client keeps it 0). The agent shows each rival's
   best XI OVR and counts how many leaderboard teams, and how many that accepted a 1v1 in 7 days, its suggested range lets
   in; the import preview shows the best XI OVR.
-- **Widening a range** (#542): a creator may widen the range of its open tournament or challenge before the deadline
-  (lower the minimum or raise the maximum, never narrow). Not used by the agent yet.
+- **Widening a range** (#542, `POST /api/tournaments/{id}/ovr-range`, `ovr_range.rs` `widen_refusal`): the creator (or
+  an admin) may widen the range of its open tournament or challenge while it is open for joining (status open, not past
+  the deadline): lower the minimum or raise the maximum; a side left out keeps its bound, `null` removes it; never
+  narrower, never a new bound on a side without one, never on a League + Knockout or a developer tournament; seated teams
+  stay. Nothing is paid. Since 2026-10-26 the agent may widen its own (`widen_range`): the executor reads the tournament
+  right before, the rules apply FoxLeague's checks, and the body carries only the sides the plan named. The plan sees
+  each of its own open creations with a range and how many joined (the seat count from the public list, since
+  `/tournaments/my` carries none).
 - **Manual** synced to 4e42b94c9: "when a match ends" wording, the best XI OVR on the leaderboard, the one-signature
   challenge, widening a range.

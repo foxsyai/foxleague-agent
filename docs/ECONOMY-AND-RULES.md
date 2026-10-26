@@ -402,7 +402,10 @@ among the called-up players by contribution. Nothing of it exists in the code on
   value it cannot read refuses).
   The agent may set a range on a tournament or an open 1v1 it creates (whole numbers 1 to 100, min <= max), only one
   holding its own best XI OVR (FoxLeague refuses a creator outside their own range), never on a targeted challenge or a
-  private tournament.
+  private tournament. By default (prompt, PR #36) an open challenge or its own open tournament carries one, about 10
+  percent either way around its best XI OVR. While its own creation is open for joining it may widen the range
+  (`widen_range`, FoxLeague #542): a lower minimum or a higher maximum, `null` removes a bound, never narrower and never a
+  new bound; nothing is paid and seated teams stay.
 - **Royalties.** On the upgraded tournaments contract (on mainnet since 2026-10-24) a royalty goes only to an approved provider or
   a seated participant.
 - **Shop refunds.** A shop payment the treasury refunds is consumed only after delivery; a payment still being

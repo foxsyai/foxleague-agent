@@ -880,7 +880,26 @@ row. Test first: `test/mainnet-2026-10-26.test.ts`, each test seen failing befor
 | MN3 | design | The leaderboard now gives every team's best XI OVR (the read the owner asked for) | The plan sees each rival's best XI OVR, and how many leaderboard teams (and how many that accepted a 1v1 in 7 days) its suggested range lets in |
 
 The one-signature 1v1 is not used: the usual flow stays open and costs the same. Open: widening a range when nobody joins
-(FoxLeague's #542) is not used yet.
+(FoxLeague's #542) is not used yet (done in the next section).
+
+## Widening an OVR range, 2026-10-26
+
+Owner, 2026-10-26: with a range by default (PR #36) an open challenge can sit unaccepted or a tournament unfilled.
+FoxLeague lets the creator widen the range while it is open for joining (#542). Test first:
+`test/widen-range.test.ts` and `test/mainnet-2026-10-26.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| WR1 | design | The agent could not widen the range of its own open tournament or challenge when too few joined | A new action `widen_range` (tournament id, `ovr_min` and/or `ovr_max`, a whole number 1 to 100 or `null` to remove that bound; at least one side). Nothing is paid, no transaction, dry run asks nothing |
+| WR2 | design | A widen FoxLeague refuses is a wasted call; a narrower range could lock out a seated team | The rules apply FoxLeague's `widen_refusal` on the tournament read right before (a failed read refuses): only the creator, only while open and before the deadline, never on a League + Knockout or a developer tournament, never on a tournament without a range, never narrower, never a new bound, never the same range; an unreadable stored bound refuses |
+| WR3 | low | A side left out must keep its bound at FoxLeague (a widen cannot be undone) | The body carries only the sides the plan named; `null` is sent as `null` |
+| WR4 | design | The plan did not see which of its own creations carry a range or how full they are | A line per own open creation with a range: the range, seated of seats, the deadline; `/tournaments/my` has no seat count, so it comes from the public list (`?` when neither has it) |
+| R37A-1 | low | Agent review of PR #37 (tests): the import preview's best XI OVR was tested by a search of the source | A test runs the preview: `best_xi_ovr` shown, the old field when the answer has none |
+| R37A-2 | low | Agent review of PR #37 (docs): section 12.1 of the integration notes still gave the shop payment 12,000,000 gas | It gives 12,864,100 and the refundable record; a test reads the section |
+
+Widening only lets more teams in: no cap, booking or signing changes. The integration notes and the economy notes now
+also give PR #36's default range. Open: when to widen is the plan's judgment (the prompt says when too few joined to fill
+it before the deadline); no code forces or limits how often.
 
 ## Where the limits live
 
