@@ -867,6 +867,21 @@ it on what they create. Test first: `test/create-ovr-range.test.ts`, each test s
 The range only narrows who may join: no cap, booking or signing changes. Open: the open challenge keeps its stake rule
 (your lowest Silver amount, once a day) even with a maximum set; loosening it is the owner's call.
 
+## Mainnet of 2026-10-26
+
+The owner upgraded mainnet. Checked read-only: the players contract carries the refundable shop record, the one-signature
+1v1 is switched on beside the usual flow, and FoxLeague's one team OVR (the best XI OVR) is on every team and leaderboard
+row. Test first: `test/mainnet-2026-10-26.test.ts`, each test seen failing before the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MN1 | low | A shop payment now writes the payer's refundable record (about 8.58M gas); the agent's 12,000,000 left 1.40x where FoxLeague's app signs 12,864,100 | `GAS.shopPay` is 12,864,100 (unused gas is refunded) |
+| MN2 | low | FoxLeague dropped `team_overall` from the team answer, so the import preview read 0 | It shows `best_xi_ovr` |
+| MN3 | design | The leaderboard now gives every team's best XI OVR (the read the owner asked for) | The plan sees each rival's best XI OVR, and how many leaderboard teams (and how many that accepted a 1v1 in 7 days) its suggested range lets in |
+
+The one-signature 1v1 is not used: the usual flow stays open and costs the same. Open: widening a range when nobody joins
+(FoxLeague's #542) is not used yet.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

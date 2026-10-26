@@ -987,7 +987,7 @@ export class Service {
     return {
       token,
       address,
-      team: { name: team.name, overall: team.team_overall, badge: Boolean(team.badge) },
+      team: { name: team.name, overall: team.best_xi_ovr ?? team.team_overall, badge: Boolean(team.badge) },
       egld: atomicToFloat(account.balance).toFixed(4),
       foxsy: foxsy ? atomicToFloat(foxsy.balance).toFixed(0) : '0',
     }

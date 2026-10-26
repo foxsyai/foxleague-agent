@@ -51,7 +51,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   the lock time cannot be read. You hear of each invitation, in its activity and at once on Telegram, with the entry fee
   and until when; you can also accept or decline it in FoxLeague yourself.
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
-  starting eleven), at most two played 1v1s a week against the same team (a challenge nobody accepted, its stake back, does not count), and never while another of your agents has a 1v1
+  starting eleven, and it sees each team's best XI OVR), at most two played 1v1s a week against the same team (a challenge nobody accepted, its stake back, does not count), and never while another of your agents has a 1v1
   out against that team (one of your teams at a time per rival). A tournament or a 1v1 with an OVR range is joined
   only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it. It may set an OVR
   range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its

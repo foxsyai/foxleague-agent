@@ -59,6 +59,8 @@ export interface FoxConfig {
 export interface UserProfile {
   id: number
   wallet_address: string
+  /** The team's best XI OVR (FoxLeague's one team OVR since 2026-10-25; leaderboard rows and team answers). */
+  best_xi_ovr?: number | null
   username: string | null
   elo_rating: number
   league: string
@@ -81,7 +83,9 @@ export interface Team {
   formation: string
   lineup: number[]
   substitutes: number[]
+  /** Gone from FoxLeague's team answer since 2026-10-25 (kept 0 by the client): best_xi_ovr replaced it. */
   team_overall: number
+  best_xi_ovr?: number | null
   badge: string | null
   badge_ipfs_uri?: string | null
   /**
