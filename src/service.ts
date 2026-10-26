@@ -26,7 +26,7 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { cardsBidByOthers, oneVOnesThisWeek, rivalsOutByOthers, weeklyFreeAt } from './executor/rivals.ts'
+import { cardsBidByOthers, oneVOnesThisWeek, ownCreations, rivalsOutByOthers, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
@@ -1386,7 +1386,7 @@ export class Service {
     const others = new Set(this.store.agentAddresses().filter(x => x !== agent.address))
     const cards = new Set([...cardsBidByOthers(this.store, agent.index, dry, now), ...this.executor.cardsClaimedByOthers(agent.index, dry, now.getTime())])
     for (const l of snap.market.auctions) if (others.has(l.owner_address)) cards.add(l.nft_nonce)
-    return { ...snap, oneVOnes: { week, unavailable: [...unavailable] }, cardsTaken: [...cards] }
+    return { ...snap, oneVOnes: { week, unavailable: [...unavailable] }, cardsTaken: [...cards], ownCreations: [...ownCreations(this.store, agent.index, now)] }
   }
 
   /**

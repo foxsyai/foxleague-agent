@@ -894,12 +894,16 @@ FoxLeague lets the creator widen the range while it is open for joining (#542). 
 | WR2 | design | A widen FoxLeague refuses is a wasted call; a narrower range could lock out a seated team | The rules apply FoxLeague's `widen_refusal` on the tournament read right before (a failed read refuses): only the creator, only while open and before the deadline, never on a League + Knockout or a developer tournament, never on a tournament without a range, never narrower, never a new bound, never the same range; an unreadable stored bound refuses |
 | WR3 | low | A side left out must keep its bound at FoxLeague (a widen cannot be undone) | The body carries only the sides the plan named; `null` is sent as `null` |
 | WR4 | design | The plan did not see which of its own creations carry a range or how full they are | A line per own open creation with a range: the range, seated of seats, the deadline; `/tournaments/my` has no seat count, so it comes from the public list (`?` when neither has it) |
+| R38A-1 | medium | Agent review of PR #38: the creator check matched the team, so the agent could widen for good a range the owner set by hand with the same wallet; on a hand-made 1v1 a much stronger team could then take the owner's stake (the same class as R32A-1) | A live create keeps the id it made in its activity row (`createdTournamentId`); the agent widens only one of those (`ownCreations`, `src/executor/rivals.ts`), never one the owner asked for (Telegram /do, or an owner reason) or made in FoxLeague; the owner may widen as before. The plan's line lists only those |
+| R38A-2 | low | Agent review of PR #38 (tests): WR2's fail-closed claims had no test; a widen answer that is not an object would log a widen that went through as an error | Tests: a failed read, a stored bound that is not a number and an unregistered team refuse; the answer is read only when it is an object |
 | R37A-1 | low | Agent review of PR #37 (tests): the import preview's best XI OVR was tested by a search of the source | A test runs the preview: `best_xi_ovr` shown, the old field when the answer has none |
 | R37A-2 | low | Agent review of PR #37 (docs): section 12.1 of the integration notes still gave the shop payment 12,000,000 gas | It gives 12,864,100 and the refundable record; a test reads the section |
 
 Widening only lets more teams in: no cap, booking or signing changes. The integration notes and the economy notes now
 also give PR #36's default range. Open: when to widen is the plan's judgment (the prompt says when too few joined to fill
-it before the deadline); no code forces or limits how often.
+it before the deadline); no code forces or limits how often. A create whose answer was lost, or that broke before its
+row was written, keeps no id: the agent cannot widen that one (the safe side). Creations from before this change keep
+no id either.
 
 ## Where the limits live
 

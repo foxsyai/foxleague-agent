@@ -59,6 +59,8 @@ export interface RulesContext {
   seatsLockAt?: Date | null
   /** For leaving a League + Knockout: this agent paid the seat itself (its own join in its log), not the owner. */
   ownSeat?: boolean
+  /** For widening an OVR range: this agent created the tournament or 1v1 itself (its own create in its log), not the owner. */
+  ownCreation?: boolean
   /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
   ownUserIds?: number[]
   /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
@@ -913,6 +915,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (t.format === 'league_knockout') return refuse('no OVR range on a League + Knockout')
       if (t.developer_mode) return refuse('no OVR range on a developer tournament')
       if (t.creator_user_id !== s.profile.id) return refuse(`only the creator of T${t.id} can change its OVR range`)
+      // A range the owner set by hand (same team) is the owner's decision, as a seat they took (R32A-1); the owner may widen as before.
+      if (!ctx.ownCreation && !ctx.byOwner) return refuse('a tournament or challenge this agent did not create (the owner\'s): only the owner widens its range')
       if (t.status !== 'open' || !(new Date(t.deadline) > ctx.now)) return refuse(`the range can change only while T${t.id} is open for joining`)
       const cur = { min: t.ovr_min ?? null, max: t.ovr_max ?? null }
       const readable = (v: unknown) => v === null || (typeof v === 'number' && Number.isFinite(v))

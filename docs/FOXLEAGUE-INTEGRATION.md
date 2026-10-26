@@ -1848,8 +1848,10 @@ Checked read-only on 2026-10-26, after the owner upgraded mainnet:
   the deadline): lower the minimum or raise the maximum; a side left out keeps its bound, `null` removes it; never
   narrower, never a new bound on a side without one, never on a League + Knockout or a developer tournament; seated teams
   stay. Nothing is paid. Since 2026-10-26 the agent may widen its own (`widen_range`): the executor reads the tournament
-  right before, the rules apply FoxLeague's checks, and the body carries only the sides the plan named. The plan sees
-  each of its own open creations with a range and how many joined (the seat count from the public list, since
-  `/tournaments/my` carries none).
+  right before, the rules apply FoxLeague's checks, and the body carries only the sides the plan named. FoxLeague checks
+  the team, so the agent widens only what it created itself (the id of a live create, kept in its activity row): a range
+  the owner set with the same team, in FoxLeague or through Telegram /do, stays the owner's. The plan sees each of its
+  own open creations with a range and how many joined (the seat count from the public list, since `/tournaments/my`
+  carries none).
 - **Manual** synced to 4e42b94c9: "when a match ends" wording, the best XI OVR on the leaderboard, the one-signature
   challenge, widening a range.

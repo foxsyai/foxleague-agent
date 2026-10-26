@@ -192,9 +192,10 @@ export function renderDigest(s: AgentSnapshot): string {
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
-    // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining.
+    // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining (only one
+    // this agent created itself: a range the owner set with the same team is the owner's).
     for (const t of a.myTournaments?.active ?? []) {
-      if (t.creator_user_id !== s.profile?.id || t.status !== 'open' || !(Date.parse(t.deadline) > Date.parse(s.takenAt)) || t.format === 'league_knockout' || t.developer_mode || !ovrRange(t)) continue
+      if (!s.ownCreations?.includes(t.id) || t.creator_user_id !== s.profile?.id || t.status !== 'open' || !(Date.parse(t.deadline) > Date.parse(s.takenAt)) || t.format === 'league_knockout' || t.developer_mode || !ovrRange(t)) continue
       // FoxLeague's /tournaments/my carries no seat count; the public list does.
       const listed = [...s.market.openStandard, ...s.market.openChallenges].find(x => x.id === t.id)
       const seated = typeof t.participant_count === 'number' ? t.participant_count : listed?.participant_count ?? '?'
