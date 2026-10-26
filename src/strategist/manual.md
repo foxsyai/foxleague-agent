@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 688088787 2026-10-24.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 4e42b94c9 2026-10-26.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -275,9 +275,6 @@ See also [Tournaments](/mechanics/tournaments/), [Match-Day Strategy](/mechanics
 
 **Champions FoxLeague** is FoxLeague's big competition. 36 teams play one league phase in a single table. The best 24 go on to a knockout phase played over two legs, up to a single-match final. In the API its format code is `league_knockout`.
 
-> **Every match is played live**
-> A match is played live during its broadcast. When the broadcast ends, the match has its final score. The league table, the knockout seats, ELO, XP and condition all move at that moment, never earlier.
-
 ## At a glance
 
 | Topic | Rule |
@@ -294,7 +291,7 @@ See also [Tournaments](/mechanics/tournaments/), [Match-Day Strategy](/mechanics
 
 ## Who organizes it
 
-The FoxLeague team creates every edition. Players cannot create one. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on.
+The FoxLeague team creates every edition. Players cannot create one. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on. There and in **My Tournaments** it has a card of its own: a night-blue card with a gold edge and the fox head drawn as stars, showing the edition's phase, its 36 seats, the entry fee and the next key date.
 
 For each edition the FoxLeague team sets:
 
@@ -402,7 +399,7 @@ This head-to-head rule is for Champions FoxLeague only. The other formats keep t
 
 ### The knockout draw
 
-The knockout bracket is drawn when registration closes, over league **places**, not teams. So the Knockout tab shows "9th v 24th" style pairings from the first day. The draw never sees a result: the teams take their seats only once the league phase is over.
+The knockout bracket is drawn when registration closes, over league **places**, not teams. So the Knockout tab shows "9th v 24th" style pairings from the first day. The teams take their seats when the league phase ends.
 
 ### Play-off (places 9 to 24)
 
@@ -452,7 +449,7 @@ The Knockout tab shows the whole bracket, one column per round. Each tie lists b
 Each team plays one leg at home and one away. The **aggregate** (the goals of both legs added up) decides who goes through. There is **no away goals rule**: 2-2 on aggregate is level, wherever the goals were scored.
 
 - **Leg 1** is a normal match. It can end in a draw.
-- **Leg 2** kicks off only after leg 1's broadcast has ended. The match engine starts it with leg 1's score carried in, so the scoreboard shows the leg's own score and the aggregate (**AGG**) next to it.
+- **Leg 2** kicks off after leg 1 has ended. The match engine starts it with leg 1's score carried in, so the scoreboard shows the leg's own score and the aggregate (**AGG**) next to it.
 
 ![Leg 2 at kickoff: the leg's own score is 0-0 and the AGG chip carries leg 1's 1-0](/screenshots/champions-foxleague/leg-two-kickoff-aggregate.png)
 
@@ -524,16 +521,16 @@ If the FoxLeague team features an edition (any tier), its podium enters the [Hal
 
 ## Schedule and your squad
 
-- Matches are played **one at a time**, one every "time between games" that the FoxLeague team set. A matchday has 18 matches, so at one match an hour a team plays about every 18 hours and the 190 matches take about 8 days. A match can move later when a team is busy in another tournament, never earlier.
+- Matches are played **one at a time**, one every "time between games" that the FoxLeague team set. A matchday has 18 matches, so at one match an hour a team plays about every 18 hours and the 190 matches take about 8 days. A match can move later when a team is busy in another tournament.
 - Each match locks your formation, lineup and synced stats at its **strategy lock**, about 30 minutes before kickoff. Change your plan between matches, leg 1 and leg 2 included. See [Match-day strategy](/mechanics/match-day-strategy/).
 - At every lock you need 11 starters plus 7 substitutes, all in your wallet. A starter who is not match-fit is replaced from the bench; fewer than 11 fit players forfeits that match 3-0. See [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit).
 
-## When results show
+## When a match ends
 
-Every match is played live during its broadcast and has its final score when the broadcast ends. That moment also moves, never earlier:
+When a match ends, these update:
 
 - the league table and its zones;
-- the knockout seats: the play-off and round of 16 seats take their teams once the last league match's broadcast has ended; a later seat takes its team once every match of the ties that lead to it has ended its broadcast;
+- the knockout seats: the play-off and round of 16 seats take their teams when the last league match ends; a later seat takes its team when every match of the ties that lead to it has ended;
 - each leg's score and the tie's aggregate;
 - ELO, XP and condition;
 - whether a team is out;
@@ -646,9 +643,9 @@ The fused player inherits the new rarity's stat cap, but **not** automatically f
 
 ## Fusion history
 
-Every fusion you do is recorded in the Fusion tab's history panel (date, input rarity, burned players, output player, transaction link). Useful for tracking your long-term team-building investment.
+Every fusion you do is recorded in the Fusion tab's history panel: the date, the input rarity, the burned players (struck through after a fox skull), the card you got (with its own picture and its **Fused** mark) and the transaction link. Useful for tracking your long-term team-building investment. When a later fusion burns the card you got (fusing your way up the rarities), its row shows the fox skull in place of its picture, its name struck through and **Burned in a later fusion**.
 
-A fusion still waiting for its on-chain result shows as **Pending**; the platform keeps re-checking it for up to 48 hours. A fusion that reverted on-chain shows as **Failed** with the reason. Your three players and the fee are returned to your wallet in that case.
+A fusion still waiting for its on-chain result shows as **Pending**; the platform keeps re-checking it for up to 48 hours. A fusion that reverted on-chain shows as **Failed** with the reason. Your three players and the fee are returned to your wallet in that case. A pending or failed fusion has no card yet, so it shows no picture and no Fused mark; a failed one burned nothing, so it has no fox skull either.
 
 ## Tips
 
@@ -855,6 +852,8 @@ The competitive mode. ELO points move between you and your opponent based on the
 
 You see your ELO in the header and on the **Leaderboard** tab. The leaderboard is a single global ELO ranking across all leagues.
 
+Every team on the leaderboard also shows its **Best XI OVR** with the formation it comes from, so you can see how strong a team is before you challenge it: a column next to the ELO on a computer, a small chip under the team's record on a phone. Open a team to see its cards with the same number above them. See [your team OVR](/getting-started/players/#your-team-ovr-the-best-xi-ovr).
+
 ![Leaderboard (top 3 podium with the ranking table below)](/screenshots/leaderboard-page.png)
 
 ## Daily limit and cooldowns
@@ -901,7 +900,7 @@ Every match you play lands in **History**. Click any row to see:
 - Stat bumps gained per player
 - Watch the match in the Match Viewer at any time
 - The lineup snapshot used for the match (so past matches show the right stats from the time they were played, not your current ones)
-- The **OVR** of both teams: a played match shows the OVR of the eleven each team played with, a match still to come shows each team's **Best XI OVR** (the strongest XI it can field from the cards it owns, never its lineup). Older matches show a dash.
+- The **OVR** of both teams: a played match shows the OVR of the eleven each team played with, a match still to come shows each team's **Best XI OVR** with the formation it comes from under it (the strongest XI it can field from the cards it owns, never its lineup; see [your team OVR](/getting-started/players/#your-team-ovr-the-best-xi-ovr)). Older matches show a dash.
 
 ## Upgrading your roster
 
@@ -927,6 +926,14 @@ A **1v1 Challenge** is a one-match showdown between two players. You stake FOXSY
 7. Optionally set an **OVR range** (a minimum and/or a maximum best XI OVR), so only teams of your strength can accept. See [OVR range](#ovr-range-best-xi)
 8. Pick a **deadline**: 30 min / 1 h / 2 h / 4 h (default 30 min)
 9. Click **Create challenge**: your FOXSY entry fee is locked into the challenge pool
+
+Your wallet asks for **one signature** (the entry fee): that one transaction creates the challenge on chain and seats you in it. Other players see the challenge only once your payment has landed; until then your lobby and the challenge page show it as **Waiting for your payment**.
+
+A **developer challenge** keeps the earlier flow: the game creates the challenge first, then your one signature pays the entry fee and seats you.
+
+- **You closed the wallet without signing**: nothing is charged and nothing is created. Press **Try again** to sign the same challenge. Before it opens your wallet again, the game checks the chain, so a first signature that is still on its way is never paid twice.
+- **Your earlier challenge is still waiting for its payment**: the form says so and counts down until you can start a different one, with a link to the pending challenge.
+- **Your payment is not confirmed yet**: the challenge opens as soon as it lands, even if you leave the page; nothing is charged twice. Closing the tab in that moment asks you to stay first.
 
 The entry fee is written to the tournaments contract when the challenge is created. Accepting it transfers **exactly** that amount, so a payment that is even slightly off is rejected on chain rather than half-seating you.
 
@@ -955,6 +962,8 @@ A challenge can carry an optional **minimum** and/or **maximum team OVR** (whole
 - You always play your own challenge, so your best XI OVR must be inside the range you set. The create form shows your best XI next to the two inputs.
 - A developer challenge takes no range.
 - The challenge card and its page show the range as a chip (**OVR ≤ 35**). A team outside it sees Join greyed with the reason.
+- Every challenge card still to be played shows each team's **Best XI OVR** with the formation it comes from under it, so you can see the strength of a challenger before you accept. The lobby of the challenge shows the same number. It is the one team OVR the app shows everywhere: see [your team OVR](/getting-started/players/#your-team-ovr-the-best-xi-ovr).
+- **Nobody accepting?** While the challenge is open (before its deadline), you can **widen** the range from its page: **Widen the range** sits next to the chip. Lower the minimum or raise the maximum. Clear a field to remove that bound. It never gets narrower: a higher minimum, a lower maximum or a new bound on a side that has none is refused. An admin can widen it too. See [Widening the range](/mechanics/tournaments/#widening-the-range).
 
 ## Prize split
 
@@ -1398,7 +1407,7 @@ FoxLeague tournaments are **multi-match formal events** with locked lineups and 
 4. If there's an entry fee (Silver / Gold tier), approve the FOXSY transaction in your wallet
 5. Your team is now entered. Each match captures your formation, lineup and players' synced stats at its **strategy lock** (about 30 minutes before that match's kickoff), so you can adjust your plan between games
 
-A tournament that shows an **OVR** chip (such as **OVR 30-40** or **OVR ≤ 35**) takes only teams whose **best XI OVR** is inside its range: the average OVR of the strongest XI you can field from the cards you own. If yours is outside, the Join button is greyed and says why. See [OVR range](#ovr-range-best-xi).
+A tournament that shows an **OVR** chip (such as **OVR 30-40** or **OVR ≤ 35**) takes only teams whose **best XI OVR** is inside its range: the average OVR of the strongest XI you can field from the cards you own. If yours is outside, the Join button is greyed and says why. The creator may widen the range while registration is open, so a team that is just outside can check again later. See [OVR range](#ovr-range-best-xi).
 
 The entry fee and the number of seats are written to the tournaments contract when the tournament is created. Joining pays **exactly** the entry fee into a **free seat**. A payment that does not match the fee is refused on chain. So is a join into a bracket that has already filled, so nothing leaves your wallet in either case.
 
@@ -1555,6 +1564,17 @@ Set an optional **minimum** and/or **maximum team OVR** (whole numbers from 1 to
 - If you take a seat (not organizer-only), your own best XI OVR must be inside the range you set. The create form shows your best XI next to the two inputs, with the formation it comes from.
 - [Champions FoxLeague](/mechanics/champions-foxleague/) tournaments and developer tournaments take no range.
 - In the lobby a tournament with a range shows its chip: **OVR 30-40**, **OVR ≤ 35** or **OVR ≥ 30**. A team outside the range sees the Join button greyed with the reason.
+- The lobby shows every seated team's **Best XI OVR** with the formation it comes from: the same number the range checks and every page shows (see [your team OVR](/getting-started/players/#your-team-ovr-the-best-xi-ovr)).
+
+#### Widening the range
+
+Not enough teams? While registration is open (before the registration deadline), the creator can **widen** the range from the tournament page: **Widen the range** sits next to the chip. An admin can do it too. No one else can.
+
+- **Wider only.** Lower the minimum or raise the maximum. Clear a field to remove that bound. Clearing both removes the range.
+- **Never narrower.** A higher minimum or a lower maximum is refused. A side with no bound stays without one: a range set as **OVR ≤ 35** can go up to **OVR ≤ 45**, but it cannot get a minimum.
+- **Every team that joined stays in.** A wider range only lets more teams join, so no seat is measured again.
+- The dialog shows the range now and the range after the change before you confirm. Once registration has closed, the tournament has started or it was cancelled, the range can no longer change.
+- Champions FoxLeague and developer tournaments have no range, so there is nothing to widen.
 
 ### Deleting your tournament
 

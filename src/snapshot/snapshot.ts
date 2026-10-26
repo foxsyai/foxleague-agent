@@ -96,6 +96,8 @@ export interface MarketSummary {
   slots: SlotWindow[]
   /** Open auctions, never our own: the 10 strongest, then the 3 cheapest of each rarity (auctionsShown); and the reserve floor of each rarity. */
   auctions: MarketListing[]
+  /** The best XI OVR of the leaderboard teams read (ours left out), and of those that accepted a 1v1 in 7 days: how many a range lets in. */
+  boardOvrs?: { all: number[]; takers: number[] }
   floors: FloorPrice[]
   /** Planning snapshots only: the market price of each rarity from the public sales (null: too few to tell). */
   prices?: Record<string, MarketPrice | null>
@@ -164,7 +166,7 @@ export interface AgentSnapshot {
   formationPool?: FormationRecord
   /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
   rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null; strength?: number | null }[]
-  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null })[]
+  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null; bestXiOvr?: number | null })[]
   /**
    * Planning only, added by the service from the activity log with the executor's own helpers (src/executor/rivals.ts):
    * per rival, the 1v1s this agent played or entered in the last 7 days and, at the weekly limit, when it is free
@@ -600,11 +602,13 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   const myElo = profile?.elo_rating ?? 1200
   const gap = (u: { elo_rating: number }) => Math.abs(u.elo_rating - myElo)
   const others = (board?.users ?? []).filter(u => u.wallet_address !== address && u.team_name && u.id !== profile?.id)
+  const ovrOf = (u: UserProfile) => (typeof u.best_xi_ovr === 'number' && Number.isFinite(u.best_xi_ovr) ? u.best_xi_ovr : null)
+  const boardOvrs = board ? { all: others.map(ovrOf).filter((v): v is number => v !== null), takers: others.filter(u => (accepted.get(u.id) ?? 0) > 0).map(ovrOf).filter((v): v is number => v !== null) } : undefined
   // Up to 6 teams that accept 1v1s and are not 100 or more ELO above (the executor refuses those), then the nearest.
   const takers = others.filter(u => (accepted.get(u.id) ?? 0) > 0 && u.elo_rating < myElo + 100).sort((a, b) => gap(a) - gap(b)).slice(0, 6)
   const nearest = others.filter(u => !takers.includes(u)).sort((a, b) => gap(a) - gap(b)).slice(0, 10 - takers.length)
   const leaderboardNeighbours: AgentSnapshot['leaderboardNeighbours'] = [...takers, ...nearest]
-    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0, matches: (u.matches_won ?? 0) + (u.matches_drawn ?? 0) + (u.matches_lost ?? 0) }))
+    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0, matches: (u.matches_won ?? 0) + (u.matches_drawn ?? 0) + (u.matches_lost ?? 0), bestXiOvr: typeof u.best_xi_ovr === 'number' && Number.isFinite(u.best_xi_ovr) ? u.best_xi_ovr : null }))
   if (opts.research && registered) {
     // Our eleven as the engine sees it today (synced stats scaled by condition), against each rival at full condition.
     const mine = (team?.lineup ?? []).reduce((sum, n) => {
@@ -665,6 +669,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       scouted,
       slots: slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? [])]),
       auctions: auctionsShown(listings, cheapListings, address),
+      ...(boardOvrs ? { boardOvrs } : {}),
       floors: floors ?? [],
       ...(prices ? { prices } : {}),
       ...(fields ? { fields } : {}),

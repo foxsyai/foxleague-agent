@@ -224,7 +224,11 @@ export function renderDigest(s: AgentSnapshot): string {
     const ovr = s.auth.bestXiOvr
     const lo = Math.max(1, Math.floor(ovr * 0.9))
     const hi = Math.min(100, Math.ceil(ovr * 1.1))
-    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}`)
+    // How many teams it lets in, from the leaderboard's best XI OVRs (FoxLeague, 2026-10-26).
+    const inside = (v: number[]) => v.filter(x => x >= lo && x <= hi).length
+    const b = s.market.boardOvrs
+    const count = b?.all.length ? ` (inside it: ${inside(b.all)} of the ${b.all.length} leaderboard teams read, ${inside(b.takers)} of the ${b.takers.length} that accepted a 1v1 in 7 days)` : ''
+    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}${count}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
@@ -293,7 +297,7 @@ export function renderDigest(s: AgentSnapshot): string {
   // Zeus: the threshold its 1v1s are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push('Win chances: ELO expectation and lineup strength averaged, ours at today\'s condition, theirs at full condition; Zeus plays a 1v1 from 55 percent.')
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
+    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')
