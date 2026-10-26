@@ -51,8 +51,32 @@ test('the snapshot keeps each leaderboard team\'s best XI OVR', async () => {
   assert.deepEqual(s.market.boardOvrs, { all: [33.1], takers: [] }, 'ours left out; a team without an OVR left out')
 })
 
-test('the import preview shows the best XI OVR (FoxLeague dropped team_overall)', async () => {
+// Agent review of PR #37 (low, tests): the preview itself, not a search of the source.
+test('R37A-1 the import preview shows the best XI OVR (FoxLeague dropped team_overall), the client fallback without it', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { Mnemonic, UserPem } = await import('@multiversx/sdk-core')
+  const { addressOfKey } = await import('../src/wallet/imported.ts')
+  const { Service } = await import('../src/service.ts')
+  const key = Mnemonic.fromString(Mnemonic.generate().toString()).deriveKey(0)
+  const pem = new UserPem(addressOfKey(key), key).toText()
+  const svc = new Service({ mnemonic: Mnemonic.generate().toString(), dataDir: mkdtempSync(join(tmpdir(), 'foxagent-')), gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5, isServer: false, defaultDryRun: true, maxAgents: 5 } as never)
+  svc.ensureAgents()
+  Object.assign(svc.chain, { account: async () => ({ balance: 0n }), esdts: async () => [], guarded: async () => false })
+  Object.assign(svc.fox, { team: async () => ({ name: 'Community XI', team_overall: 0, best_xi_ovr: 33.1, badge: null }), user: async () => ({ team_name: 'Community XI' }) })
+  assert.equal((await svc.previewImport({ kind: 'pem', pem })).team.overall, 33.1)
+  Object.assign(svc.fox, { team: async () => ({ name: 'Community XI', team_overall: 61, badge: null }) })
+  assert.equal((await svc.previewImport({ kind: 'pem', pem })).team.overall, 61, 'an answer without best_xi_ovr: the old field')
+})
+
+// Agent review of PR #37 (low, docs): the shop transaction's section still gave the old gas.
+test('R37A-2 the integration notes give the shop payment its new gas everywhere', async () => {
   const { readFileSync } = await import('node:fs')
-  const src = readFileSync(new URL('../src/service.ts', import.meta.url), 'utf8')
-  assert.match(src, /overall: team\.best_xi_ovr \?\? team\.team_overall/)
+  const doc = readFileSync(new URL('../docs/FOXLEAGUE-INTEGRATION.md', import.meta.url), 'utf8')
+  const section = doc.slice(doc.indexOf('### 12.1'), doc.indexOf('### 12.2'))
+  assert.ok(section.length > 100, 'section 12.1 found')
+  assert.doesNotMatch(section, /gas 12,000,000/)
+  assert.match(section, /gas 12,864,100/)
+  assert.match(section, /refundable record/)
 })

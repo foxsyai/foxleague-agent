@@ -173,6 +173,8 @@ export interface AgentSnapshot {
    * again; and the rivals it cannot take a 1v1 against now for a reason it is not told.
    */
   oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[]; unavailable: number[] }
+  /** The tournaments and 1v1s this agent created itself (its log, added by the service): the ones it may widen. */
+  ownCreations?: number[]
   /** Planning snapshots only: the cards at auction the executor will not let this agent bid on (src/executor/rivals.ts). */
   cardsTaken?: number[]
   warnings: string[]

@@ -59,6 +59,8 @@ export interface RulesContext {
   seatsLockAt?: Date | null
   /** For leaving a League + Knockout: this agent paid the seat itself (its own join in its log), not the owner. */
   ownSeat?: boolean
+  /** For widening an OVR range: this agent created the tournament or 1v1 itself (its own create in its log), not the owner. */
+  ownCreation?: boolean
   /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
   ownUserIds?: number[]
   /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
@@ -902,6 +904,29 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // Our own 1v1 nobody accepted: leaving refunds the stake, cancelling closes it and frees the 1v1 slot.
       const ownChallenge = d.tournament.max_teams === 2 && d.tournament.creator_user_id === s.profile.id && d.participants.length === 1
       return allow(0, { cancel: ownChallenge }, 'play', ownChallenge ? ['your own 1v1: the stake comes back and the challenge is closed'] : [])
+    }
+
+    case 'widen_range': {
+      // FoxLeague's widen_refusal (ovr_range.rs, #542): the creator, while open for joining, wider only, no new bound.
+      if (!registered || !s.profile) return refuse('not registered')
+      const d = ctx.tournament
+      if (!d) return refuse(`tournament T${a.tournament_id} not found`)
+      const t = d.tournament
+      if (t.format === 'league_knockout') return refuse('no OVR range on a League + Knockout')
+      if (t.developer_mode) return refuse('no OVR range on a developer tournament')
+      if (t.creator_user_id !== s.profile.id) return refuse(`only the creator of T${t.id} can change its OVR range`)
+      // A range the owner set by hand (same team) is the owner's decision, as a seat they took (R32A-1); the owner may widen as before.
+      if (!ctx.ownCreation && !ctx.byOwner) return refuse('a tournament or challenge this agent did not create (the owner\'s): only the owner widens its range')
+      if (t.status !== 'open' || !(new Date(t.deadline) > ctx.now)) return refuse(`the range can change only while T${t.id} is open for joining`)
+      const cur = { min: t.ovr_min ?? null, max: t.ovr_max ?? null }
+      const readable = (v: unknown) => v === null || (typeof v === 'number' && Number.isFinite(v))
+      if (!readable(cur.min) || !readable(cur.max)) return refuse(`T${t.id} carries an OVR range the agent cannot read`)
+      if (cur.min === null && cur.max === null) return refuse(`T${t.id} has no OVR range: it already takes teams of any OVR`)
+      const next = { min: a.ovr_min === undefined ? cur.min : a.ovr_min, max: a.ovr_max === undefined ? cur.max : a.ovr_max }
+      if (next.min === cur.min && next.max === cur.max) return refuse(`the range is already ${rangeWords(cur.min ?? undefined, cur.max ?? undefined)}: nothing to change`)
+      if ((cur.min === null && next.min !== null) || (cur.max === null && next.max !== null)) return refuse('never a new bound where there was none: widening only lowers a minimum or raises a maximum')
+      if ((cur.min !== null && next.min !== null && next.min > cur.min) || (cur.max !== null && next.max !== null && next.max < cur.max)) return refuse('wider only: a lower minimum or a higher maximum')
+      return allow(0, { min: next.min, max: next.max }, 'play', ['more teams can join; nobody seated is measured again'])
     }
 
     case 'create_tournament': {

@@ -35,6 +35,8 @@ export type Action =
   | { type: 'play_match'; match_type: 'casual' | 'ranked' }
   | { type: 'join_tournament'; tournament_id: number }
   | { type: 'leave_tournament'; tournament_id: number }
+  /** Widen the OVR range of the agent's own open tournament or challenge (null removes a bound); nothing is paid. */
+  | { type: 'widen_range'; tournament_id: number; ovr_min?: number | null; ovr_max?: number | null }
   | {
       type: 'create_tournament'
       title: string
@@ -155,6 +157,12 @@ export function parseAction(raw: unknown): Action {
     case 'leave_tournament':
     case 'claim_refund':
       return { type: o.type, tournament_id: int(o, 'tournament_id', 1, 2 ** 40) }
+    case 'widen_range': {
+      // A side left out keeps its bound, null removes it (FoxLeague's body); at least one side.
+      if (!('ovr_min' in o) && !('ovr_max' in o)) throw new ParseError('widen_range needs ovr_min or ovr_max')
+      const side = (k: 'ovr_min' | 'ovr_max') => (!(k in o) ? {} : o[k] === null ? { [k]: null } : { [k]: int(o, k, 1, 100) })
+      return { type: o.type, tournament_id: int(o, 'tournament_id', 1, 2 ** 40), ...side('ovr_min'), ...side('ovr_max') }
+    }
     case 'create_tournament': {
       const format = oneOf(o, 'format', ['knockout', 'round_robin', 'swiss', 'groups_knockout'] as const)
       return {
@@ -233,6 +241,7 @@ export function describeAction(a: Action): string {
     case 'play_match': return `play ${a.match_type} match`
     case 'join_tournament': return `join tournament T${a.tournament_id}`
     case 'leave_tournament': return `leave tournament T${a.tournament_id}`
+    case 'widen_range': return `widen the OVR range of T${a.tournament_id}${a.ovr_min !== undefined ? `, minimum ${a.ovr_min ?? 'none'}` : ''}${a.ovr_max !== undefined ? `, maximum ${a.ovr_max ?? 'none'}` : ''}`
     case 'create_tournament': return `create ${a.invite_user_ids?.length ? `private (${a.invite_user_ids.length} invited) ` : ''}${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, starts in ${a.starts_in_hours} h${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
     case 'create_challenge': return `create ${a.tier} 1v1, stake ${a.stake_foxsy}${a.target_user_id ? ` vs user ${a.target_user_id}` : ' (open)'}${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
     case 'buy': return `buy ${a.product}${a.quantity ? ` x${a.quantity}` : ''}${a.player_nonces ? ` for ${a.player_nonces.map(n => `#${n}`).join(',')}` : ''}`

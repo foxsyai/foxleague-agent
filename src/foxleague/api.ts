@@ -304,6 +304,11 @@ export class FoxLeague {
     return this.call(`/tournaments/${id}/leave`, { method: 'POST', wallet: w })
   }
 
+  /** Widen the OVR range of the agent's own open tournament or challenge (a side left out keeps its bound, null removes it). */
+  widenOvrRange(w: AgentWallet, id: number, body: { ovr_min?: number | null; ovr_max?: number | null }): Promise<{ ovr_min?: number | null; ovr_max?: number | null }> {
+    return this.call(`/tournaments/${id}/ovr-range`, { method: 'POST', wallet: w, body })
+  }
+
   createTournament(w: AgentWallet, body: Record<string, unknown>, idempotencyKey: string): Promise<Tournament> {
     return this.call<Tournament>('/tournaments/create', { method: 'POST', wallet: w, body, timeoutMs: 60_000, headers: { 'idempotency-key': idempotencyKey } })
   }

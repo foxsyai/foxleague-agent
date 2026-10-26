@@ -1,5 +1,5 @@
-// The 1v1 counts the rules read from the activity log, in one place: the executor's checks and the plan request
-// both call these, so the plan is told exactly what the rule will count (audit 2026-10-23, D2).
+// The 1v1 counts (and the agent's own creations) the rules read from the activity log, in one place: the executor's
+// checks and the plan request both call these, so the plan is told exactly what the rule will count (audit 2026-10-23, D2).
 
 import type { ActivityRow, Store } from '../store/db.ts'
 
@@ -12,12 +12,15 @@ const OTHERS_MS = 6 * 3_600_000
 /** How far back the owner's other agents' bids are read: an auction runs 24 hours, and more. */
 const BIDS_MS = 48 * 3_600_000
 
+/** How far back the agent's own creates are read: a tournament starts at most 72 hours after it is created, and more. */
+const CREATED_MS = 7 * 86_400_000
+
 /** Activity of the same ledger (dry run or live) the action is judged in. */
 const counted = (dry: boolean, status: string) => (dry ? status === 'dry_run' : status === 'confirmed' || status === 'unconfirmed')
 
-function detailOf(r: ActivityRow): { opponentUserId?: number; untouched?: boolean; sent?: boolean; action?: { deadline_minutes?: number; nonce?: number } } {
+function detailOf(r: ActivityRow): { opponentUserId?: number; untouched?: boolean; sent?: boolean; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { deadline_minutes?: number; nonce?: number } } {
   try {
-    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; untouched?: boolean; sent?: boolean; action?: { deadline_minutes?: number; nonce?: number } }
+    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; untouched?: boolean; sent?: boolean; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { deadline_minutes?: number; nonce?: number } }
   } catch {
     return {}
   }
@@ -86,6 +89,21 @@ export function cardsBidByOthers(store: Store, agentIndex: number, dry: boolean,
     const d = detailOf(r)
     if (!(counted(dry, r.status) || r.status === 'sent' || (r.status === 'error' && d.sent === true)) || typeof d.action?.nonce !== 'number') continue
     out.add(d.action.nonce)
+  }
+  return out
+}
+
+/**
+ * The tournaments and 1v1s this agent created itself in the last 7 days: the id FoxLeague gave a live create (written
+ * by the executor), whatever came after it. One the owner asked for (Telegram /do: byOwner, or an owner reason on a row
+ * from before it was kept) or made in FoxLeague is the owner's: the agent never widens its range (agent review of PR #38).
+ */
+export function ownCreations(store: Store, agentIndex: number, now: Date): Set<number> {
+  const out = new Set<number>()
+  for (const r of store.activityOf(agentIndex, ['create_tournament', 'create_challenge'], new Date(now.getTime() - CREATED_MS))) {
+    const d = detailOf(r)
+    if (typeof d.createdTournamentId !== 'number' || d.byOwner === true || /^owner\b/i.test(String(d.reason ?? ''))) continue
+    out.add(d.createdTournamentId)
   }
   return out
 }

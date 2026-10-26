@@ -23,7 +23,7 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
-import { cardsBidByOthers, oneVOnesThisWeek, rivalsOutByOthers } from './rivals.ts'
+import { cardsBidByOthers, oneVOnesThisWeek, ownCreations, rivalsOutByOthers } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
@@ -363,7 +363,7 @@ export class Executor {
   private async context(agent: AgentRow, wallet: AgentWallet, snap: AgentSnapshot, a: Action, now: Date, dry: boolean): Promise<RulesContext> {
     const { store, fox } = this.d
     let tournament: TournamentDetail | null | undefined
-    if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund') {
+    if (a.type === 'join_tournament' || a.type === 'leave_tournament' || a.type === 'claim_refund' || a.type === 'widen_range') {
       try {
         tournament = await fox.tournament(a.tournament_id, wallet)
       } catch (err) {
@@ -492,6 +492,8 @@ export class Executor {
       const best = await soft(() => fox.bestXiOvr(wallet))
       market.bestXiOvr = typeof best?.best_xi_ovr === 'number' && Number.isFinite(best.best_xi_ovr) ? best.best_xi_ovr : null
     }
+    // Widening a range: only one this agent created itself (its own live create in its log), never the owner's.
+    if (a.type === 'widen_range') market.ownCreation = ownCreations(store, agent.index, now).has(a.tournament_id)
     // Leaving a League + Knockout: when its seats lock, read right now (null: unreadable, refused).
     if (a.type === 'leave_tournament' && tournament?.tournament.format === 'league_knockout') {
       const view = await soft(() => fox.leagueInvitationsView(a.tournament_id, wallet))
@@ -933,6 +935,14 @@ export class Executor {
         }
         return finish('confirmed', `${desc}: ${r.message}${r.refund_tx_hash ? ` refund ${r.refund_tx_hash}` : ''}${closed}`)
       }
+      case 'widen_range': {
+        // Only the sides the plan named: a side left out keeps its bound at FoxLeague.
+        const body = { ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}), ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}) }
+        const r = await fox.widenOvrRange(wallet, a.tournament_id, body)
+        // The range FoxLeague answers with; the one the rules checked when the answer leaves it out.
+        const side = (k: 'ovr_min' | 'ovr_max', checked: unknown) => (typeof r === 'object' && r !== null && k in r ? r[k] : checked) ?? 'any'
+        return finish('confirmed', `${desc}: OVR range of T${a.tournament_id} widened to ${side('ovr_min', v.facts.min)} to ${side('ovr_max', v.facts.max)}`)
+      }
       case 'join_tournament': {
         if (!built.txs.length) {
           booking.reached = true
@@ -1026,6 +1036,8 @@ export class Executor {
         booking.reached = true // from here a tournament or a 1v1 may exist, whatever the answer
         const created = await fox.createTournament(wallet, body, `agent${agent.index}-${randomUUID()}`)
         store.retagSpend(booking.ids, 'join:new', `join:${created.id}`)
+        // Its row keeps the id it made, whatever comes after: what this agent created itself (ownCreations).
+        const done: typeof finish = (st, summary, cost, hash, extra) => finish(st, summary, cost, hash, { ...((extra as object) ?? {}), createdTournamentId: created.id })
         let detail: TournamentDetail | undefined
         for (let i = 0; i < 20; i++) {
           detail = await fox.tournament(created.id, wallet)
@@ -1035,10 +1047,10 @@ export class Executor {
         if (!detail || detail.tournament.sc_tournament_id === null) {
           // Nothing was signed: the booked seat is not spent (it would otherwise stay counted until the tournament ends).
           if (!booking.sent) this.unbook(booking)
-          return finish('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
+          return done('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
         }
         const spec = joinTournamentTx(detail.tournament.sc_tournament_id, v.foxsy)
-        return this.payAndJoin(agent, wallet, snap, created.id, spec, v, usd, fees, `${desc} (T${created.id})`, costText, finish, now, booking)
+        return this.payAndJoin(agent, wallet, snap, created.id, spec, v, usd, fees, `${desc} (T${created.id})`, costText, done, now, booking)
       }
     }
   }
@@ -1122,6 +1134,7 @@ function apiCallsFor(a: Action): string | null {
     case 'play_match': return `POST /api/matches/play {match_type: ${a.match_type}}`
     case 'join_tournament': return `POST /api/tournaments/${a.tournament_id}/join`
     case 'leave_tournament': return `POST /api/tournaments/${a.tournament_id}/leave (and /cancel for your own unaccepted 1v1)`
+    case 'widen_range': return `POST /api/tournaments/${a.tournament_id}/ovr-range`
     case 'create_tournament':
     case 'create_challenge': return 'POST /api/tournaments/create, joinTournament, POST /join'
     case 'buy': return `POST /api/shop/confirm {product: ${a.product}}`
