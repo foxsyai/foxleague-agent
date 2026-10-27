@@ -922,6 +922,7 @@ change.
 | AL3 | design | A Zeus private tournament left the owner's own teams out of its invites without a word (2026-10-10) | Removed: FoxLeague gets the plan's invite list. The agents still do not know which teams are the owner's |
 | AL4 | low | Refusals of the removed rules stay in an agent's recent history and would keep steering its plans | The plan's "Earlier entries" note also matches "another of your owner's teams" and says the rules were removed (the first on 2026-09-30, the last on 2026-10-27) |
 | AL5 | low | Docs: the README, the install guide, the FAQ, the update page, the safety page, the play page and the levels page described the removed rules | Each says the agent plays as if it were alone and that the one thing they share is the pooled formation record; a test reads every page |
+| R39A-1 | low | Agent review of PR #39 (docs): the levels page still said no level ever moves cards between wallets, while one agent may now buy at auction a card another of the owner's agents listed | The page says no level sends a card straight from one wallet to another, and that buying at auction is not such a transfer. The Beast and Zeus presets keep "Never move cards between wallets" (since 2026-10-04): it means that transfer, which no action can make, and the agent cannot tell which wallets are the owner's |
 
 No cap, budget, booking or signing changes: each agent stays within its own caps and limits, and the change only
 removes refusals. The FoxLeague user ids the service notes (`agent_user_id:N`) now serve only the pooled record and

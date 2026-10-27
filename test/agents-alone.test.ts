@@ -166,3 +166,12 @@ test('AL6 the owner-facing pages say each agent plays alone, sharing only the po
   }
   assert.doesNotMatch(readFileSync(new URL('../src/strategist/prompt.ts', import.meta.url), 'utf8'), OWN_RULE, 'the prompt names no such rule')
 })
+
+// Agent review of PR #39 (low, docs): the levels page still said no level ever moves cards between wallets, while one
+// agent may now buy at auction a card another of the owner's agents listed. The presets' "Never move cards between
+// wallets" (since 2026-10-04) means a wallet-to-wallet transfer, which no action can make; they stay.
+test('R39A-1 the levels page says an agent never transfers a card, and may buy one another of yours listed', () => {
+  const page = readFileSync(new URL('../site/src/content/docs/play/strategy-levels.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  assert.doesNotMatch(page, /No level ever\*\* moves cards between wallets/)
+  assert.match(page, /\*\*No level ever\*\* sends a card straight from one wallet to another or buys a paid badge\. Buying at auction is not such a transfer: one of your agents may buy a card another of yours listed, as any team may\./)
+})

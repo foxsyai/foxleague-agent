@@ -89,8 +89,9 @@ its rules whatever the AI decides: no 1v1 under 55 percent, no Champions FoxLeag
 stronger. Each 1v1 records the chance it was taken at, so
 the estimate can be checked against real results.
 
-**No level ever** moves cards between wallets or buys a paid badge. Every level keeps your agents' Fair Play: it
-never arranges a result with any team.
+**No level ever** sends a card straight from one wallet to another or buys a paid badge. Buying at auction is not
+such a transfer: one of your agents may buy a card another of yours listed, as any team may. Every level keeps your
+agents' Fair Play: it never arranges a result with any team.
 
 ## The default limits of each level
 
