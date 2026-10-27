@@ -123,7 +123,7 @@ test('D1 a match waits for the real gate when the action before it took longer t
   assert.ok(checked[1]! - logged[0]! >= 15.5 * 60_000, `the second ranked start is checked ${((checked[1]! - logged[0]!) / 60_000).toFixed(2)} min after the first was logged: refused as the ranked cooldown`)
 })
 
-// ---- D2: the weekly 1v1 count per rival and the rivals not available now ----
+// ---- D2: the weekly 1v1 count per rival ----
 
 const neighbour = (id: number, name: string) => ({ id, wallet_address: `erd1${name.toLowerCase()}`, team_name: name, elo_rating: 1200, league: 'Bronze', accepted7d: 3, strength: 1500, winChance: 0.69 })
 
@@ -173,14 +173,13 @@ test('D2 the plan request marks a challenge target the executor would refuse for
   assert.ok(told, `the request says nothing about the 2 challenges already sent to user 877 this week; the model proposes it and loses the slot:\n${entry}`)
 })
 
-test('D2 the counts come from the executor\'s own helpers: the free-again date, the rivals not available now, no team named', async () => {
+test('D2 the counts come from the executor\'s own helpers: the free-again date, and nothing of the owner\'s other agents', async () => {
   const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-d2b-'))))
   svc.ensureAgents()
   svc.store.addAgent(1, OTHER)
   twoChallenges(svc.store)
-  // Another of the owner's agents has a 1v1 out against 878 (its log row), and has just claimed 879 (in memory).
+  // Another of the owner's agents has a 1v1 out against 878: since 2026-10-27 it counts for nothing (each plays alone).
   svc.store.log({ agentIndex: 1, kind: 'create_challenge', status: 'dry_run', summary: 'DRY RUN would create silver 1v1, stake 1000 vs user 878 (T2400)', detail: { action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 878, deadline_minutes: 60 }, reason: '', opponentUserId: 878 } })
-  ;(svc.executor as unknown as { rivalClaims: Map<number, unknown> }).rivalClaims.set(879, { agent: 1, until: Date.now() + 3_600_000, dry: true })
   const s = snapshot()
   s.leaderboardNeighbours = [neighbour(877, 'Liverpool'), neighbour(878, 'Other'), neighbour(879, 'Third'), neighbour(880, 'Free')]
   s.market.openChallenges = [{ ...(tournament(2500) as { tournament: Record<string, unknown> }).tournament, max_teams: 2, creator_user_id: 877, entry_fee_foxsy: 1000, participant_count: 1 } as never]
@@ -189,17 +188,15 @@ test('D2 the counts come from the executor\'s own helpers: the free-again date, 
   const oldest = svc.store.activityOf(0, ['create_challenge'], new Date(0)).at(-1)!.at
   const freeAt = new Date(Date.parse(oldest) + 7 * 86_400_000).toISOString().slice(0, 16)
   assert.match(entry(877), new RegExp(`2 of 2 1v1s against it this week \\(the limit\\), free again ${freeAt} UTC`))
-  assert.match(entry(878), /not available now/)
-  assert.match(entry(879), /not available now/)
-  assert.doesNotMatch(entry(880), /not available|1v1s against it/)
-  assert.doesNotMatch(text, /agent 2|another of your owner/, 'no reason given, no team named')
+  for (const id of [878, 879, 880]) assert.doesNotMatch(entry(id), /not available|1v1s against it/)
+  assert.doesNotMatch(text, /agent 2|another of your owner/, 'no team named')
   // The open challenge 877 created (joining it is a 1v1 against 877) carries the same count.
   assert.match(text, /T2500 [^\n]*creator user 877[^\n]*2 of 2 1v1s against it this week \(the limit\)/)
   // What the plan is told is what the executor refuses (an executor on the same store, FoxLeague mocked).
   const exec = new Executor({ cfg: {} as Config, chain: {} as never, fox: { user: async () => null, ...rivalSquad(20) } as never, store: svc.store })
   const wallet = { ...dryWallet, address: svc.store.agent(0)!.address }
   const [r] = await exec.run(svc.store.agent(0)!, wallet, s, [act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 878, deadline_minutes: 60 })])
-  assert.match(r!.summary, /another of your owner's teams already has a 1v1 out against user 878/)
+  assert.equal(r!.status, 'dry_run', r!.summary)
   const [again] = await exec.run(svc.store.agent(0)!, wallet, s, [act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 877, deadline_minutes: 60 })])
   assert.match(again!.summary, /already 2 1v1s against user 877 in the last 7 days/)
 })

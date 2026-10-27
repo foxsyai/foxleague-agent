@@ -170,11 +170,12 @@ export interface PlanInput {
 
 /**
  * Until 2026-09-30 the executor kept an agent out of tournaments, 1v1s and auctions with the owner's other
- * agents, and refusals and plans in the history still say so. The owner removed the rule (agents know nothing
- * of each other), so while such an entry is among the recent ones the plan is told it no longer holds, or the
- * model would keep repeating it from its own earlier plans.
+ * agents, and from 2026-10-23 to 2026-10-27 out of a 1v1 against a rival another of them had one out against and
+ * off a card another of them sold or bid on; refusals and plans in the history still say so. The owner removed
+ * those rules (each agent plays as if it were alone), so while such an entry is among the recent ones the plan is
+ * told they no longer hold, or the model would keep repeating them from its own earlier plans.
  */
-const OLD_SIBLING_RULE = /fair.?play|another agent of (this install|this owner)|other agents? of (this|the) owner/i
+const OLD_SIBLING_RULE = /fair.?play|another agent of (this install|this owner)|other agents? of (this|the) owner|another of your owner's teams/i
 
 /** What each rarity costs to build and bring to its match gate (`auctionCeiling`): the executor refuses a bid above it. */
 function bidCeilings(s: AgentSnapshot): string {
@@ -235,7 +236,7 @@ export function renderPlanRequest(p: PlanInput): string {
     buyingPower(p),
     `Gas reserve: ${p.settings.egldGasReserve} EGLD stays in the wallet for transaction fees; a swap may only spend the EGLD above it (plus its fee). WEGLD in the wallet is spent first, all of it if needed and with no reserve, whenever it covers the whole swap.`,
     recent.some(r => OLD_SIBLING_RULE.test(r.summary))
-      ? "## Earlier entries\nSome recent entries below cite a rule that kept this agent out of tournaments, 1v1s and auctions with the owner's other teams. The owner removed that rule on 2026-09-30; the fair play section of your instructions says what holds now. Do not carry that reasoning forward: judge every tournament, 1v1 and auction on its merits."
+      ? "## Earlier entries\nSome recent entries below cite a rule that kept this agent out of tournaments, 1v1s and auctions with the owner's other teams. The owner removed those rules (the first on 2026-09-30, the last on 2026-10-27): this agent plays as if it were alone, and the fair play section of your instructions says what holds now. Do not carry that reasoning forward: judge every tournament, 1v1 and auction on its merits."
       : '',
     `## Recent activity (newest first)`,
     ...(recent.length ? recent.map(r => `- ${r.at.slice(0, 16)} [${r.status}] ${r === last ? 'your previous plan, in full below' : txt(r.summary, 300)}`) : ['- none yet']),

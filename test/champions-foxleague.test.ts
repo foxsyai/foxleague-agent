@@ -230,7 +230,7 @@ test('R31F-1 a running League + Knockout of ours keeps 1v1s open; only its own f
   const s = snapshot()
   s.auth!.myTournaments = { active: [{ ...(lk().tournament), status: 'active', started_at: new Date(Date.now() - H).toISOString(), starts_at: new Date(Date.now() - H).toISOString() }], completed: [] } as never
   const oneVOne = tournament(5001, { max_teams: 2, min_teams: 2, creator_user_id: 50, entry_fee_foxsy: 1000 }, [{ user_id: 50, wallet_address: STRANGER }]) as TournamentDetail
-  const c = { settings: TEST_SETTINGS, now: new Date(), tournament: oneVOne, opponent: { userId: 50, elo: 1190, strength: 1000 }, oneVOneWithOpponentThisWeek: 0, otherTeamsOnOpponent: 0 } as RulesContext
+  const c = { settings: TEST_SETTINGS, now: new Date(), tournament: oneVOne, opponent: { userId: 50, elo: 1190, strength: 1000 }, oneVOneWithOpponentThisWeek: 0 } as RulesContext
   const free = checkAction({ type: 'join_tournament', tournament_id: 5001 }, s, c)
   assert.doesNotMatch(free.refusal ?? '', /format the agent does not know/, free.refusal)
   assert.equal(free.ok, true, free.refusal)

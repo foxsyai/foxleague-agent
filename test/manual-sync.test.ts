@@ -149,7 +149,8 @@ test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.m
   const server = read(`${DOCS}/help/server.mdx`)
   assert.match(server, /Copy the repository to the server and run, as root, `deploy\/bootstrap\.sh`/, 'C2 the server order')
   assert.match(server, /Ubuntu with systemd, on an x86-64 processor/, 'C3')
-  const shared = /the rule that a private tournament it creates never invites another of your teams/
+  // Owner, 2026-10-27: each agent plays alone; the pooled formation record is all they share (test/agents-alone.test.ts).
+  const shared = /The one thing they share is a pooled formation record with no team named/
   for (const f of [`${DOCS}/help/faq.md`, `${DOCS}/help/update.md`, 'INSTALL.md', 'README.md', `${DOCS}/play/safety.md`]) assert.match(read(f), shared, `C4 ${f}`)
   assert.match(read(`${DOCS}/help/costs.md`), /you are warned there, in the morning summary on Telegram \(at once with `\/updates all`\)/, 'C5')
   assert.match(read(`${DOCS}/help/troubleshooting.md`), /By default Telegram sends only the morning summary and urgent messages; send `\/updates all` for every plan and result as it happens/, 'C6')

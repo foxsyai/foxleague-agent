@@ -55,7 +55,7 @@ test('Zeus tournaments: refused when three seated teams are clearly stronger, so
   assert.equal(checkAction(join, s, ctx({ tournament: d, field: field(4) })).ok, true, 'the other levels decide by the plan')
 })
 
-test('private tournaments: Zeus only, the owner\'s own teams left out without a word, sized to the invites', () => {
+test('private tournaments: Zeus only, sized to the invites', () => {
   const s = snapshot()
   const base = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60 }
   const parsed = parseAction({ ...base, invite_user_ids: [11, 12, 13] })
@@ -67,17 +67,14 @@ test('private tournaments: Zeus only, the owner\'s own teams left out without a 
     return v.ok ? '' : (v as { refusal: string }).refusal
   }
   assert.match(refusal(parsed, {}), /only the Zeus level creates private tournaments/)
-  // An own team is dropped silently; with too few left the refusal names no team.
-  const short = refusal(parsed, { zeus: true, ownUserIds: [12] })
-  assert.match(short, /3 cannot reach the minimum of 4; invite more active teams/)
-  assert.doesNotMatch(short, /12/)
-  const three = checkAction(parseAction({ ...base, min_teams: 3, invite_user_ids: [11, 12, 13] }) as never, s, ctx({ zeus: true, ownUserIds: [12] }))
-  if (three.ok) assert.deepEqual(three.facts.invites, [11, 13], 'the list FoxLeague gets leaves the own team out')
+  // Every invited team is kept, one the owner runs too (owner, 2026-10-27: each agent plays as if it were alone).
+  const three = checkAction(parsed as never, s, ctx({ zeus: true }))
+  if (three.ok) assert.deepEqual(three.facts.invites, [11, 12, 13], 'the list FoxLeague gets is the plan\'s')
   else assert.doesNotMatch((three as { refusal: string }).refusal, /invite/)
   assert.equal((parseAction({ ...base, invite_user_ids: [] }) as { invite_user_ids?: number[] }).invite_user_ids, undefined, 'an empty list is a public tournament')
   assert.match(refusal(parseAction({ ...base, invite_user_ids: [1, 2, 3, 4, 5, 6] }), { zeus: true }), /at most 5 invited teams for 6 seats/)
   assert.match(refusal(parseAction({ ...base, invite_user_ids: [11, 12] }), { zeus: true }), /3 cannot reach the minimum of 4/)
-  assert.doesNotMatch(refusal(parsed, { zeus: true, ownUserIds: [99] }), /invite/, 'a good invite list passes the invite checks')
+  assert.doesNotMatch(refusal(parsed, { zeus: true }), /invite/, 'a good invite list passes the invite checks')
 })
 
 test('Zeus never acts blind: an unread field is refused, an unread squad with a clearly higher ELO counts as stronger, no open 1v1', () => {

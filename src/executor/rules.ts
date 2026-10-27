@@ -61,14 +61,10 @@ export interface RulesContext {
   ownSeat?: boolean
   /** For widening an OVR range: this agent created the tournament or 1v1 itself (its own create in its log), not the owner. */
   ownCreation?: boolean
-  /** FoxLeague user ids of the owner's other agents: never invited to a private tournament (the AI is not told). */
-  ownUserIds?: number[]
   /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
-  /** 1v1s the owner's other agents have out against that opponent (created or joined, not over yet). */
-  otherTeamsOnOpponent?: number
   /** Open 1v1 challenges this agent created in the last 24 hours. */
   openChallengesToday?: number
   /**
@@ -80,8 +76,6 @@ export interface RulesContext {
   cardRarity?: string
   /** Bids this agent already placed on the same auction in the last 48 hours. */
   priorBids?: number
-  /** Another of the owner's teams sells the card at auction, or leads, bids on or has just claimed it. */
-  ownTeamOnCard?: 'seller' | 'bidder'
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
   pendingShop?: Set<string>
   /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
@@ -558,8 +552,6 @@ export function judgeField(field: FieldSeat[], ours: number, myElo: number): { s
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
   const opp = ctx.opponent
   if (!opp || opp.elo === null) return "the opponent's strength could not be read"
-  // Owner, 2026-10-23: one of the owner's teams at a time against a rival, never several piling on one manager.
-  if ((ctx.otherTeamsOnOpponent ?? 0) > 0) return `another of your owner's teams already has a 1v1 out against user ${opp.userId} (one at a time per rival: pick another team or wait until it is over)`
   const mine = s.profile?.elo_rating ?? 1200
   if (opp.elo - mine >= MAX_1V1_ELO_GAP) return `the opponent is far stronger (ELO ${opp.elo} vs ${mine})`
   // ELO alone is the one number a rival controls (new teams start at 1200): compare the squads too.
@@ -931,8 +923,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'create_tournament': {
       if (!registered || !s.profile) return refuse('not registered')
-      // The owner's own teams are left out of the invites without a word, so no agent learns which they are.
-      const invites = (a.invite_user_ids ?? []).filter(id => !(ctx.ownUserIds ?? []).includes(id))
+      const invites = a.invite_user_ids ?? []
       if (a.invite_user_ids?.length) {
         if (!ctx.zeus) return refuse('only the Zeus level creates private tournaments')
         if (invites.includes(s.profile.id)) return refuse('cannot invite yourself')
@@ -1101,10 +1092,6 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (au.endsAt <= ctx.now) return refuse(`the auction of #${a.nonce} has ended`)
       if (au.seller === s.agent.address) return refuse('a seller cannot bid on its own auction')
       if (au.highestBidder === s.agent.address) return refuse('already the top bidder')
-      // One team per card (owner, 2026-10-23): never bidding against the owner's own bid, never paying the fee to move a
-      // card between the owner's wallets.
-      if (ctx.ownTeamOnCard === 'seller') return refuse(`#${a.nonce} is listed by another of your owner's teams: buying it would only move it between the owner's wallets and pay the 10 percent fee`)
-      if (ctx.ownTeamOnCard === 'bidder') return refuse(`another of your owner's teams is bidding on #${a.nonce} (one team per card: pick another card)`)
       // In atomic units, rounded up to whole FOXSY: a rival's fractional bid or reserve (600.999) never
       // leaves the agent a whole-FOXSY bid just under the contract's minimum.
       const ceilWhole = (x: bigint) => Number((x + 10n ** 18n - 1n) / 10n ** 18n)

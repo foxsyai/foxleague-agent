@@ -28,7 +28,7 @@ test('a tournament with an OVR range is joined only when the team\'s best XI OVR
 test('a 1v1 with an OVR range is checked the same way', () => {
   const s = snapshot()
   const oneVOne = tournament(5001, { max_teams: 2, min_teams: 2, creator_user_id: 50, entry_fee_foxsy: 1000, ovr_max: 28 }, [{ user_id: 50, wallet_address: STRANGER }]) as TournamentDetail
-  const c = { settings: TEST_SETTINGS, now: new Date(), tournament: oneVOne, opponent: { userId: 50, elo: 1190, strength: 1000 }, oneVOneWithOpponentThisWeek: 0, otherTeamsOnOpponent: 0, bestXiOvr: 31 } as RulesContext
+  const c = { settings: TEST_SETTINGS, now: new Date(), tournament: oneVOne, opponent: { userId: 50, elo: 1190, strength: 1000 }, oneVOneWithOpponentThisWeek: 0, bestXiOvr: 31 } as RulesContext
   assert.match(checkAction(join(5001), s, c).refusal!, /up to 28; yours is 31/)
 })
 

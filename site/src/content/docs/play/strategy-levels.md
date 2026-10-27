@@ -85,12 +85,13 @@ says: one fusion per wallet every 20 hours and two Common packs a week. An aucti
 
 **Zeus decides from numbers.** For each team on its challenge list (up to 10) it reads the ELO and the lineup
 strength, ours at today's condition and theirs at full condition, and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to
-its rules whatever the AI decides: no 1v1 under 55 percent, no Champions FoxLeague where 24 of the invited teams are clearly stronger, no tournament where three seated teams are clearly
-stronger, and a private tournament never invites your other agents. Each 1v1 records the chance it was taken at, so
+its rules whatever the AI decides: no 1v1 under 55 percent, no Champions FoxLeague where 24 of the invited teams are clearly stronger and no tournament where three seated teams are clearly
+stronger. Each 1v1 records the chance it was taken at, so
 the estimate can be checked against real results.
 
-**No level ever** moves cards between wallets or buys a paid badge. Every level keeps your agents' Fair Play: it
-never arranges a result with any team.
+**No level ever** sends a card straight from one wallet to another or buys a paid badge. Buying at auction is not
+such a transfer: one of your agents may buy a card another of yours listed, as any team may. Every level keeps your
+agents' Fair Play: it never arranges a result with any team.
 
 ## The default limits of each level
 

@@ -26,7 +26,7 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { cardsBidByOthers, oneVOnesThisWeek, ownCreations, rivalsOutByOthers, weeklyFreeAt } from './executor/rivals.ts'
+import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
@@ -843,8 +843,8 @@ export class Service {
 
   /**
    * What the snapshot alone cannot tell: how many matches each rival played in the last 3 days (from its record,
-   * noted once a day), and this agent's own FoxLeague user id (so the code keeps its own teams out of a private
-   * tournament's invites; the AI is never told which teams are the owner's).
+   * noted once a day), and this agent's own FoxLeague user id (the pooled formation record leaves out the matches
+   * between the owner's teams; the AI is never told which teams are the owner's).
    */
   private noteTeams(index: number, snap: AgentSnapshot): void {
     if (snap.profile?.id) this.store.setKv(`agent_user_id:${index}`, String(snap.profile.id))
@@ -1119,8 +1119,8 @@ export class Service {
     this.startTelegram()
     this.armSummary()
     this.armPendingRetry()
-    // Each agent's FoxLeague user id, for one that was never noted (retired or added before this version): a Zeus
-    // private tournament never invites the owner's own teams.
+    // Each agent's FoxLeague user id, for one that was never noted (retired or added before this version): the pooled
+    // formation record leaves out the matches between the owner's teams.
     void this.noteOwnUserIds().catch(() => undefined)
     // A top-up whose outcome was not known when the last run ended (a restart while it was sent): ask Binance.
     if (this.telegram) void this.topups.settleUnclear().then(lines => { if (lines.length) this.telegram?.send(lines.join('\n')) }).catch(() => undefined)
@@ -1373,20 +1373,14 @@ export class Service {
   }
 
   /**
-   * The snapshot a plan is made from, with what the executor reads from the activity log before a 1v1 (the same
-   * helpers, src/executor/rivals.ts): per rival, this agent's 1v1s of the last 7 days and when the weekly limit frees,
-   * and the rivals another of the owner's teams has a 1v1 out against or has just claimed, given only as not
-   * available now (no reason, no team named: the agents know nothing of each other). The same for the cards at
-   * auction another of the owner's teams sells, bids on or has just claimed (one team per card).
+   * The snapshot a plan is made from, with what the executor reads from this agent's own activity log (the same
+   * helpers, src/executor/rivals.ts): per rival, its 1v1s of the last 7 days and when the weekly limit frees, and the
+   * tournaments and 1v1s it created itself. Nothing of the owner's other agents: each plays as if it were alone.
    */
   private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
     const now = new Date()
     const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
-    const unavailable = new Set([...rivalsOutByOthers(this.store, agent.index, dry, now).keys(), ...this.executor.rivalsClaimedByOthers(agent.index, dry, now.getTime())])
-    const others = new Set(this.store.agentAddresses().filter(x => x !== agent.address))
-    const cards = new Set([...cardsBidByOthers(this.store, agent.index, dry, now), ...this.executor.cardsClaimedByOthers(agent.index, dry, now.getTime())])
-    for (const l of snap.market.auctions) if (others.has(l.owner_address)) cards.add(l.nft_nonce)
-    return { ...snap, oneVOnes: { week, unavailable: [...unavailable] }, cardsTaken: [...cards], ownCreations: [...ownCreations(this.store, agent.index, now)] }
+    return { ...snap, oneVOnes: { week }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
   }
 
   /**

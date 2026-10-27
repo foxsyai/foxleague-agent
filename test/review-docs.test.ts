@@ -36,7 +36,7 @@ test('D3 the safety page says Zeus creates private tournaments, which the rules 
   assert.doesNotMatch(doc, /never creates a private tournament/)
   assert.match(doc, /private tournament only at the Zeus level/)
   const invite = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
-  const v = checkAction(parseAction(invite), snapshot(), { settings: TEST_SETTINGS, now: new Date(), zeus: true, ownUserIds: [99] })
+  const v = checkAction(parseAction(invite), snapshot(), { settings: TEST_SETTINGS, now: new Date(), zeus: true })
   assert.equal(v.ok, true, `a Zeus agent's private tournament is refused: ${v.ok ? "" : v.refusal}`)
 })
 

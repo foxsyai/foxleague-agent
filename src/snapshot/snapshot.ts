@@ -170,13 +170,11 @@ export interface AgentSnapshot {
   /**
    * Planning only, added by the service from the activity log with the executor's own helpers (src/executor/rivals.ts):
    * per rival, the 1v1s this agent played or entered in the last 7 days and, at the weekly limit, when it is free
-   * again; and the rivals it cannot take a 1v1 against now for a reason it is not told.
+   * again.
    */
-  oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[]; unavailable: number[] }
+  oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[] }
   /** The tournaments and 1v1s this agent created itself (its log, added by the service): the ones it may widen. */
   ownCreations?: number[]
-  /** Planning snapshots only: the cards at auction the executor will not let this agent bid on (src/executor/rivals.ts). */
-  cardsTaken?: number[]
   warnings: string[]
 }
 
