@@ -74,7 +74,7 @@ test('the manual describes creating with an OVR range', async () => {
 // holds for a private tournament's invited teams. No range on either.
 test('R35A-1 no range on a targeted challenge or a private tournament', () => {
   const s = snapshot()
-  const ctx = { settings: TEST_SETTINGS, now: new Date(), bestXiOvr: 31.4, zeus: true, ownUserIds: [] } as RulesContext
+  const ctx = { settings: TEST_SETTINGS, now: new Date(), bestXiOvr: 31.4, zeus: true } as RulesContext
   assert.match(checkAction(parseAction(challenge({ target_user_id: 42, ovr_max: 33 })), s, ctx).refusal!, /no OVR range on a targeted challenge: only the chosen team can accept it/)
   assert.match(checkAction(parseAction(cup({ invite_user_ids: [42, 43, 44, 45, 46, 47, 48], ovr_max: 33 })), s, ctx).refusal!, /no OVR range on a private tournament: it could lock out the teams you invite/)
 })

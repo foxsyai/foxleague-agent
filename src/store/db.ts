@@ -242,19 +242,6 @@ export class Store {
     return (this.db.prepare('SELECT * FROM agents WHERE removed_at IS NULL AND retired IS NULL ORDER BY idx').all() as Record<string, unknown>[]).map(r => toAgentRow(r, live))
   }
 
-  /**
-   * Every agent number the table holds: active, retired and removed teams alike (their activity stays). What one of
-   * them left on FoxLeague (a 1v1 out until its deadline) outlives its place among the active agents.
-   */
-  agentIndexes(): number[] {
-    return (this.db.prepare('SELECT idx FROM agents ORDER BY idx').all() as { idx: number }[]).map(r => Number(r.idx))
-  }
-
-  /** The wallet of every agent the table holds, active, retired and removed alike (one owner's teams). */
-  agentAddresses(): string[] {
-    return (this.db.prepare('SELECT address FROM agents ORDER BY idx').all() as { address: string }[]).map(r => String(r.address))
-  }
-
   /** The agents parked with Retire, until they are restored. */
   retiredAgents(): AgentRow[] {
     const live = this.liveMode

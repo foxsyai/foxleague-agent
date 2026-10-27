@@ -119,11 +119,10 @@ A saved key is used at once. Showing or changing a key needs your password; ever
 ## More agents
 
 Press **+ Add agent** in the dashboard. Each agent has its own wallet from the same recovery words, its own PEM
-file in `pem/`, its own settings and strategy. Fund it like the first one. Each agent plays its own game and
-knows nothing of the others beyond a pooled formation record with no team named, the rule that only one of them at
-a time has a 1v1 out against the same rival, the rule that only one of them bids on a card at auction (none on a
-card another of your teams sells) and the rule that a private tournament it creates never invites another of your teams, so two of them may meet in a tournament or a 1v1 by chance:
-FoxLeague's Fair Play allows that (it forbids arranging results, not meeting).
+file in `pem/`, its own settings and strategy. Fund it like the first one. Each agent plays its own game as if it
+were alone and knows nothing of the others, so two of them may meet in a tournament or a 1v1, bid on the same card
+or buy a card from each other at auction, by chance: FoxLeague's Fair Play allows that (it forbids arranging
+results, not meeting). The one thing they share is a pooled formation record with no team named.
 
 ## What it costs
 

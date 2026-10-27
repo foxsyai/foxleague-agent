@@ -119,14 +119,13 @@ function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot
 }
 
 /**
- * What the executor's 1v1 checks will count against a rival (planning snapshots, s.oneVOnes): not available now (a
- * reason the agent is not told), and this agent's 1v1s against it in the last 7 days with the weekly limit.
+ * What the executor's 1v1 checks will count against a rival (planning snapshots, s.oneVOnes): this agent's 1v1s
+ * against it in the last 7 days with the weekly limit.
  */
 function rivalNote(s: AgentSnapshot, userId: number | null | undefined): string {
   const o = s.oneVOnes
   if (!o || typeof userId !== 'number') return ''
   const notes: string[] = []
-  if (o.unavailable.includes(userId)) notes.push('not available now')
   const w = o.week.find(x => x.userId === userId)
   if (w && w.count >= MAX_1V1_PER_OPPONENT_WEEK) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week (the limit), free again ${w.freeAt ? `${w.freeAt.slice(0, 16)} UTC` : 'later'}`)
   else if (w && w.count > 0) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week`)
@@ -298,9 +297,7 @@ export function renderDigest(s: AgentSnapshot): string {
       const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
       // Own keys only: a rarity named like an inherited property (toString) has no market price (review of PR #21).
       const market = m.prices && Object.hasOwn(m.prices, l.rarity) ? m.prices[l.rarity] : undefined
-      // What the bid rule's one team per card refuses (planning snapshots): no reason given, no team named.
-      const taken = s.cardsTaken?.includes(l.nft_nonce) ? ' | not available now' : ''
-      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}${taken}`)
+      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
     }
   }
   // Zeus: the threshold its 1v1s are held to, next to the chances below.

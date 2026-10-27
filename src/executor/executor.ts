@@ -23,7 +23,7 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
-import { cardsBidByOthers, oneVOnesThisWeek, ownCreations, rivalsOutByOthers } from './rivals.ts'
+import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
@@ -100,28 +100,10 @@ export function liveSigningAllowed(): boolean {
   return v === '1' || v === 'true'
 }
 
-/** A rival claim that holds this agent off: another agent's, not expired, and a dry-run claim never holds a live agent off. */
-function claimBars(c: { agent: number; until: number; dry: boolean }, index: number, dry: boolean, now: number): boolean {
-  return c.agent !== index && c.until > now && (!c.dry || dry)
-}
-
 export class Executor {
   private readonly d: ExecutorDeps
   /** One action at a time per agent, whatever started it (a plan, Telegram /do, the web UI). */
   private readonly locks = new Map<number, Promise<void>>()
-  /**
-   * The rival each agent has just taken a 1v1 against, kept until the log rows say it (a live create is logged only
-   * after the create, the payment and the seat). Checked and set in the same synchronous step as the rules, so two
-   * agents planning at once cannot both take one rival (C1, agent review of PR #19). A refusal releases its own claim
-   * (nothing was created), and a dry-run claim never holds a live agent off.
-   */
-  private readonly rivalClaims = new Map<number, { agent: number; until: number; dry: boolean }>()
-  /**
-   * The card at auction each agent has just bid on, kept until its auction ends (a bid is logged only after it is
-   * sent and settled): one team per card, checked and set like a rival claim. A bid that placed nothing (refused,
-   * reverted, an error before the signature) releases it.
-   */
-  private readonly bidClaims = new Map<number, { agent: number; until: number; dry: boolean }>()
 
   constructor(deps: ExecutorDeps) {
     this.d = deps
@@ -139,16 +121,6 @@ export class Executor {
   /** No action running or queued for this agent. */
   idleFor(index: number): boolean {
     return !this.locks.has(index)
-  }
-
-  /** The rivals another of the owner's agents holds a 1v1 claim against, as the claim check reads them (for the plan request). */
-  rivalsClaimedByOthers(index: number, dry: boolean, now = Date.now()): number[] {
-    return [...this.rivalClaims].filter(([, c]) => claimBars(c, index, dry, now)).map(([id]) => id)
-  }
-
-  /** The cards at auction another of the owner's agents holds a bid claim on, as the claim check reads them (for the plan request). */
-  cardsClaimedByOthers(index: number, dry: boolean, now = Date.now()): number[] {
-    return [...this.bidClaims].filter(([, c]) => claimBars(c, index, dry, now)).map(([nonce]) => nonce)
   }
 
   /** Runs a plan in order; each action sees the local effect of the ones before it. */
@@ -198,17 +170,10 @@ export class Executor {
     const dry = agent.dryRun || !this.liveEnabled
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
-    let claimed: number | null = null
-    let claimedCard: number | null = null
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
       // An error before FoxLeague was asked to create or seat and before any signature (the kill switch, a pause or a
       // stop before the signature, a booking that failed) left nothing on FoxLeague, as a refusal (audit A1, 2026-10-23).
       const untouched = status === 'error' && REACH_TRACKED.has(a.type) && !booking?.sent && !booking?.reached
-      // Every refusal comes before any FoxLeague call or signature: the rival this action claimed is free again.
-      if ((status === 'refused' || untouched) && claimed !== null && this.rivalClaims.get(claimed)?.agent === agent.index) this.rivalClaims.delete(claimed)
-      // A bid that placed nothing frees its card: refused, reverted on chain, or an error before it was signed.
-      const placedNothing = status === 'refused' || status === 'failed' || (status === 'error' && !booking?.sent)
-      if (placedNothing && claimedCard !== null && this.bidClaims.get(claimedCard)?.agent === agent.index) this.bidClaims.delete(claimedCard)
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
       // `untouched`: the 1v1 checks after a restart know that this error left no challenge and no seat.
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}), ...(untouched ? { untouched: true } : {}) }, costUsd: costUsdValue || null, txHash })
@@ -240,23 +205,8 @@ export class Executor {
         // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
         logExtra.winChance = winChance({ myElo: snap.profile?.elo_rating ?? null, oppElo: ctx.opponent.elo, myStrength: lineupStrength(snap) || null, oppStrength: ctx.opponent.strength ?? null })
       }
-      // No await from here to the claim: another agent's check runs before this one or after its claim, never between.
-      const claim = ctx.opponent ? this.rivalClaims.get(ctx.opponent.userId) : undefined
-      if (claim && claimBars(claim, agent.index, dry, Date.now())) ctx.otherTeamsOnOpponent = (ctx.otherTeamsOnOpponent ?? 0) + 1
-      const cardClaim = a.type === 'bid' ? this.bidClaims.get(a.nonce) : undefined
-      if (cardClaim && claimBars(cardClaim, agent.index, dry, Date.now()) && !ctx.ownTeamOnCard) ctx.ownTeamOnCard = 'bidder'
       const verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
-      if (ctx.opponent && (a.type === 'create_challenge' || a.type === 'join_tournament')) {
-        for (const [id, c] of this.rivalClaims) if (c.until <= Date.now()) this.rivalClaims.delete(id)
-        this.rivalClaims.set(ctx.opponent.userId, { agent: agent.index, until: Date.now() + ((a.type === 'create_challenge' ? a.deadline_minutes : 0) + 60) * 60_000, dry })
-        claimed = ctx.opponent.userId
-      }
-      if (a.type === 'bid' && ctx.auction) {
-        for (const [nonce, c] of this.bidClaims) if (c.until <= Date.now()) this.bidClaims.delete(nonce)
-        this.bidClaims.set(a.nonce, { agent: agent.index, until: Math.max(ctx.auction.endsAt.getTime(), Date.now() + 3_600_000), dry })
-        claimedCard = a.nonce
-      }
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
         const taken = await this.nameRefusal(wallet, a.team_name)
@@ -418,10 +368,8 @@ export class Executor {
       }
       const strength = opponentWallet ? await soft(() => rivalStrength(fox, opponentWallet!)) : null
       market.opponent = { userId: opponentId, elo, strength }
-      // The counts the plan request shows too (src/executor/rivals.ts): this agent's 1v1s against the rival this week,
-      // and the 1v1s the owner's other agents have out against it.
+      // The count the plan request shows too (src/executor/rivals.ts): this agent's 1v1s against the rival this week.
       market.oneVOneWithOpponentThisWeek = oneVOnesThisWeek(store, agent.index, dry, now).get(opponentId)?.length ?? 0
-      market.otherTeamsOnOpponent = rivalsOutByOthers(store, agent.index, dry, now).get(opponentId) ?? 0
     }
     if (a.type === 'create_challenge' && a.target_user_id === null) {
       market.openChallengesToday = store
@@ -456,10 +404,6 @@ export class Executor {
       // On the safe side: a bid that errored after its signature (sent, the answer lost) may have landed. An error
       // before any signature (an unreadable auction, the kill switch, a refusal released) is no bid.
       market.priorBids = store.activityOf(agent.index, ['bid'], since(48 * 3600_000)).filter(r => (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.nonce === a.nonce).length
-      // One team per card: another of the owner's teams sells it, leads it on chain or has bid on it (its log rows).
-      const others = new Set(store.agentAddresses().filter(x => x !== agent.address))
-      if (market.auction && others.has(market.auction.seller)) market.ownTeamOnCard = 'seller'
-      else if ((market.auction?.highestBidder && others.has(market.auction.highestBidder)) || cardsBidByOthers(store, agent.index, dry, now).has(a.nonce)) market.ownTeamOnCard = 'bidder'
       try {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours
@@ -476,15 +420,8 @@ export class Executor {
       const floors = await soft(() => fox.floorPrices())
       market.floorPrice = floors ? (floors.find(f => f.rarity === rarity)?.floor_price ?? 0) : null
     }
-    // Zeus: its own extra checks need the owner's other teams (private invites) and the seated field (the podium).
+    // Zeus: its own extra check needs the seated field (the podium).
     const zeus = isZeus(agent.settings.strategy)
-    if (zeus && a.type === 'create_tournament' && a.invite_user_ids?.length) {
-      // Every team this install ever ran (active, retired, removed): noted by each agent's snapshot and at start.
-      market.ownUserIds = store.kvWithPrefix('agent_user_id:')
-        .filter(([k]) => k !== `agent_user_id:${agent.index}`)
-        .map(([, v]) => Number(v))
-        .filter(n => Number.isInteger(n) && n > 0)
-    }
     // An OVR range: the best XI OVR read right now (null: unreadable, refused).
     const t1 = tournament?.tournament
     const createsRange = (a.type === 'create_tournament' || a.type === 'create_challenge') && (a.ovr_min !== undefined || a.ovr_max !== undefined)

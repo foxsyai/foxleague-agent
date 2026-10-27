@@ -209,8 +209,8 @@ test('while the history still cites the removed rule about the owner\'s other ag
   const base = { snapshot: snapshot(), settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), dryRun: true }
   const row = (summary: string) => ({ id: 1, at: new Date().toISOString(), agentIndex: 0, kind: 'join_tournament', status: 'refused', summary, detail: null, costUsd: null, txHash: null })
   const old = renderPlanRequest({ ...base, recent: [row('join tournament T104: another agent of this install is in or runs this tournament (Fair Play: no coordinated teams)')] as never })
-  assert.match(old, /## Earlier entries\nSome recent entries below cite a rule[^\n]*The owner removed that rule on 2026-09-30/)
-  assert.doesNotMatch(renderPlanRequest({ ...base, recent: [row('play ranked match: match #870 started')] as never }), /removed that rule/)
+  assert.match(old, /## Earlier entries\nSome recent entries below cite a rule[^\n]*The owner removed those rules \(the first on 2026-09-30, the last on 2026-10-27\)/)
+  assert.doesNotMatch(renderPlanRequest({ ...base, recent: [row('play ranked match: match #870 started')] as never }), /removed those rules/)
 })
 
 test('the newest plan goes to the next one in full, its intentions at the end included; older entries stay short', () => {

@@ -905,6 +905,31 @@ it before the deadline); no code forces or limits how often. A create whose answ
 row was written, keeps no id: the agent cannot widen that one (the safe side). Creations from before this change keep
 no id either.
 
+## The agents play alone, 2026-10-27
+
+Owner, 2026-10-27: each agent plays as if it were alone, with no friends. It joins any tournament, takes a 1v1
+against any team and bids on any card, whoever of the owner's other teams is in it, sells it or bids on it: if one
+agent sells a player another one really needs, that one buys it. The owner keeps the pooled formation record (no team
+named). FoxLeague's manual lists selling a card at auction and buying it back with another wallet of yours as a normal
+route (anyone can outbid it), and its Fair Play forbids teams coordinated against other managers, which agents that
+know nothing of each other cannot be. Test first: `test/agents-alone.test.ts`, each test seen failing before the
+change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| AL1 | design | One team per card (SB1 to SB3, 2026-10-23): an agent was refused a card another of the owner's teams sold, led or had bid on, and the plan saw it "not available now" | Removed: the bid rule, the executor's bid claims, `cardsBidByOthers` and the plan's marker. Two of the owner's agents may bid on the same card, and one may buy a card another sells (the 10 percent sale fee goes to FoxLeague) |
+| AL2 | design | One of the owner's teams at a time per rival (C1, R19A-1, A1 and A2 of 2026-10-23): a 1v1 was refused while another of the owner's agents had one out against that rival | Removed: the refusal, the executor's rival claims, `rivalsOutByOthers` and the plan's marker. The agent's own limit per rival (two played 1v1s in 7 days) stays |
+| AL3 | design | A Zeus private tournament left the owner's own teams out of its invites without a word (2026-10-10) | Removed: FoxLeague gets the plan's invite list. The agents still do not know which teams are the owner's |
+| AL4 | low | Refusals of the removed rules stay in an agent's recent history and would keep steering its plans | The plan's "Earlier entries" note also matches "another of your owner's teams" and says the rules were removed (the first on 2026-09-30, the last on 2026-10-27) |
+| AL5 | low | Docs: the README, the install guide, the FAQ, the update page, the safety page, the play page and the levels page described the removed rules | Each says the agent plays as if it were alone and that the one thing they share is the pooled formation record; a test reads every page |
+
+No cap, budget, booking or signing changes: each agent stays within its own caps and limits, and the change only
+removes refusals. The FoxLeague user ids the service notes (`agent_user_id:N`) now serve only the pooled record and
+the refund checks. Open: two of the owner's agents may bid against each other on a card someone else sells and push
+its price up, each within its own limits per rarity and its Max bid; a rival may face several of the owner's teams at
+once, as on 2026-10-23 when three challenges went to one team and two of the stakes could only wait out their
+deadlines.
+
 ## Where the limits live
 
 `src/executor/rules.ts` (the constants at the top: `MAX_1V1_ELO_GAP`, `MAX_1V1_PER_OPPONENT_WEEK`,

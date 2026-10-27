@@ -6,11 +6,6 @@ import type { ActivityRow, Store } from '../store/db.ts'
 /** The 1v1 kinds whose rows name the opponent (detail.opponentUserId, written by the executor). */
 const ONE_V_ONE_KINDS = ['join_tournament', 'create_challenge']
 const WEEK_MS = 7 * 86_400_000
-/** How far back the owner's other agents' 1v1s are read: the longest deadline (240 min) plus the match hour, and more. */
-const OTHERS_MS = 6 * 3_600_000
-
-/** How far back the owner's other agents' bids are read: an auction runs 24 hours, and more. */
-const BIDS_MS = 48 * 3_600_000
 
 /** How far back the agent's own creates are read: a tournament starts at most 72 hours after it is created, and more. */
 const CREATED_MS = 7 * 86_400_000
@@ -18,9 +13,9 @@ const CREATED_MS = 7 * 86_400_000
 /** Activity of the same ledger (dry run or live) the action is judged in. */
 const counted = (dry: boolean, status: string) => (dry ? status === 'dry_run' : status === 'confirmed' || status === 'unconfirmed')
 
-function detailOf(r: ActivityRow): { opponentUserId?: number; untouched?: boolean; sent?: boolean; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { deadline_minutes?: number; nonce?: number } } {
+function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string } {
   try {
-    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; untouched?: boolean; sent?: boolean; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { deadline_minutes?: number; nonce?: number } }
+    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string }
   } catch {
     return {}
   }
@@ -51,46 +46,6 @@ export function weeklyFreeAt(times: Date[], limit: number): Date | null {
   if (times.length < limit) return null
   const sorted = [...times].sort((a, b) => b.getTime() - a.getTime())
   return new Date(sorted[limit - 1]!.getTime() + WEEK_MS)
-}
-
-/**
- * Per rival: the 1v1s the owner's other agents have out against it, retired and removed agents too (a 1v1 stays out
- * after its team is parked; audit A2). A 1v1 of theirs is out until its deadline (a join: at once) and an hour for the
- * match have passed. On the safe side, a create that failed or errored may have left a challenge, unless the error came
- * before FoxLeague was asked or anything was signed (`untouched`, audit A1).
- */
-export function rivalsOutByOthers(store: Store, agentIndex: number, dry: boolean, now: Date): Map<number, number> {
-  const out = new Map<number, number>()
-  const rows = store
-    .agentIndexes()
-    .filter(i => i !== agentIndex)
-    .flatMap(i => store.activityOf(i, ONE_V_ONE_KINDS, new Date(now.getTime() - OTHERS_MS)))
-  for (const r of rows) {
-    const d = detailOf(r)
-    if (!(counted(dry, r.status) || r.status === 'failed' || (r.status === 'error' && !d.untouched)) || typeof d.opponentUserId !== 'number') continue
-    if (Date.parse(r.at) + ((d.action?.deadline_minutes ?? 0) + 60) * 60_000 <= now.getTime()) continue
-    out.set(d.opponentUserId, (out.get(d.opponentUserId) ?? 0) + 1)
-  }
-  return out
-}
-
-/**
- * The cards at auction the owner's other agents have bid on in the last 48 hours, retired and removed agents too: one
- * team per card, so the owner never bids against their own bid (owner, 2026-10-23). On the safe side, a bid that errored
- * after its signature may have landed; a refused, reverted or unsigned one placed nothing.
- */
-export function cardsBidByOthers(store: Store, agentIndex: number, dry: boolean, now: Date): Set<number> {
-  const out = new Set<number>()
-  const rows = store
-    .agentIndexes()
-    .filter(i => i !== agentIndex)
-    .flatMap(i => store.activityOf(i, ['bid'], new Date(now.getTime() - BIDS_MS)))
-  for (const r of rows) {
-    const d = detailOf(r)
-    if (!(counted(dry, r.status) || r.status === 'sent' || (r.status === 'error' && d.sent === true)) || typeof d.action?.nonce !== 'number') continue
-    out.add(d.action.nonce)
-  }
-  return out
 }
 
 /**
