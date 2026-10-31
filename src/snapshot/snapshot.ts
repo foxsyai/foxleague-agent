@@ -369,7 +369,7 @@ export const FIELD_SEATS = 16
  */
 async function readFields(fox: FoxLeague, wallet: AgentWallet, open: Tournament[], myId: number, board: UserProfile[], now: Date): Promise<NonNullable<MarketSummary['fields']>> {
   const joinable = open
-    .filter(t => (t.tier === 'silver' || t.tier === 'gold') && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams)
+    .filter(t => (t.tier === 'silver' || t.tier === 'gold' || (t.tier === 'bronze' && t.entry_fee_foxsy > 0)) && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams)
     .sort((a, b) => a.deadline.localeCompare(b.deadline))
     .slice(0, FIELD_TOURNAMENTS)
   const out: NonNullable<MarketSummary['fields']> = []

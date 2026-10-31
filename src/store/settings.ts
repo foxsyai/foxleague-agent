@@ -31,6 +31,8 @@ export interface AgentSettings {
   /** The owner is told when the wallet's EGLD and FOXSY together are worth less than this (USD); 0 switches it off. */
   topUpWarningUsd: number
   /** Round entry amounts to choose from when creating (never odd numbers like 1,246). */
+  /** Round amounts for a Bronze it creates; empty: it creates none. */
+  entryFeesBronze: number[]
   entryFeesSilver: number[]
   entryFeesGold: number[]
   /** Timing. */
@@ -115,6 +117,7 @@ export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
+  entryFeesBronze: [100, 250, 500],
   maxBidCommonFoxsy: 500,
   maxBidUncommonFoxsy: 1500,
   maxBidRareFoxsy: 7000,
@@ -142,8 +145,8 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
     }
     ;(out as Record<string, unknown>)[k] = v
   }
-  // Silver needs at least one amount; an empty Gold list turns Gold off for the agent.
-  const fees = (k: 'entryFeesSilver' | 'entryFeesGold', min: number, max: number, least = 1): void => {
+  // Silver needs at least one amount; an empty Gold list turns Gold off for the agent, an empty Bronze list its Bronze creates.
+  const fees = (k: 'entryFeesBronze' | 'entryFeesSilver' | 'entryFeesGold', min: number, max: number, least = 1): void => {
     if (!(k in raw)) return
     const v = raw[k]
     if (!Array.isArray(v) || v.length < least || v.length > 10 || v.some(x => typeof x !== 'number' || !Number.isInteger(x) || x < min || x > max)) {
@@ -174,6 +177,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
     if (typeof v !== 'string' || !/^\d{1,2}(\.\d{1,4})?$/.test(v) || Number(v) > 10 || Number(v) < MIN_GAS_RESERVE_EGLD) throw new Error(`egldGasReserve must be a decimal EGLD amount from ${MIN_GAS_RESERVE_EGLD} to 10`)
     out.egldGasReserve = v
   }
+  fees('entryFeesBronze', 100, 999, 0)
   fees('entryFeesSilver', 1000, 4999)
   fees('entryFeesGold', 5000, 1_000_000, 0)
   num('tickMinutes', MIN_TICK_MINUTES, 240, true)

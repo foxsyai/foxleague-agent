@@ -952,3 +952,22 @@ Checked against FoxLeague v1.0.0-rc.78 (`0931413e8`) and the live `/api/config`.
 
 Stays open: the 9 November rules (ranked ticket, paid Bronze, levels, leave lock, organizer fees) are not in this change; they follow when FoxLeague's code reaches main. Ranked and casual starts refused by FoxLeague's round gate ("Round N is not finished yet") are not mirrored here: a start costs nothing today, so a refusal costs one planned match.
 
+## The competition levels, the organizer fees and the leave lock, 2026-10-31
+
+FoxLeague's rule change of 9 November 2026, 14:00 UTC, read on its testnet build. The agent follows the switches in `/api/config`, so nothing changes before them. New money paths: the ranked ticket, a paid Bronze seat and the organizer's payment.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CL1 | high | A live ranked start needs a paid ticket, so without this change every ranked start is refused from the switch on. | The start is pressed first, so any other gate refuses with nothing paid; only `ranked_ticket_required` reaches one `shopPay` of the price read from FoxLeague, booked before the signature under `shop:ranked_ticket`, within Max shop payment. |
+| CL2 | medium | A ticket payment confirmed late could be paid twice. | Pending from the send on (`ranked_ticket`), confirmed again with the same hash every minute; a ranked start is refused while one waits. Tickets that cannot be read refuse the start. |
+| CL3 | high | A paid Bronze was taken as free: the executor would have asked for a seat without paying. | Any Bronze with a fee takes the paid path of Silver, within Max entry or stake. A free one seats as before. |
+| CL4 | medium | A create owes a payment first, and booking it with the entry would have paid the seat with the deposit in it and credited the deposit when a seat came back. | Quote before the create (unread: refused), one `shopPay` with its own booking and row (`shop:organizer_fee`), its hash with the create, the seat for the entry alone. `tx_pending` sends the same hash again. |
+| CL5 | low | The leave rule did not know the lock. | Refused at exactly `min_teams` while `leave_lock_live`; the digest marks the seat. |
+| CL6 | medium | The condition check counted groups of 4; a flexible Groups + Knockout can draw groups of up to 6. | `matchesAtMost` mirrors `groups_knockout_most_matches` over the fields from `min_teams` up. `min_teams` from 6 is allowed. |
+| CL7 | low | A Bronze the agent creates needs an amount the owner chose. | New setting `entryFeesBronze` (100 to 999, empty: none), created only while the levels are live. |
+
+Stays open:
+- The deposit that comes back and an unused organizer payment stay counted in the budget: conservative, and only for that game day and month. A refund read could credit them later.
+- The prices and the routes come from FoxLeague's unmerged branches. Check them again when they reach its main; `src/strategist/manual.md` syncs then, and the prompt's sentence on the manual's old K goes with it.
+- Owner decisions: the Steady level says "no shop purchases" and treats a ticket as a match fee; ranked games alone do not unlock the Zeus booster.
+

@@ -13,7 +13,7 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 
 export interface PendingDeps {
   store: Store
-  fox: Pick<FoxLeague, 'shopConfirm' | 'joinTournament'>
+  fox: Pick<FoxLeague, 'shopConfirm' | 'joinTournament'> & Partial<Pick<FoxLeague, 'buyRankedTicket'>>
   /** Routine news (a payment confirmed after all). */
   notify: (text: string) => void
   /** A payment given up on: said at once (defaults to notify). */
@@ -55,8 +55,8 @@ function creditShopPayment(store: Store, agentIndex: number, hash: string): bool
 /** What the owner is told about a payment given up on: what is known, no promise FoxLeague did not make. */
 function givenUp(agentIndex: number, p: { hash: string; kind: string; payload: unknown }, ageMin: number, last: string): string {
   const said = `FoxLeague's last answer, ${Math.round(ageMin)} minutes after the payment: "${last.slice(0, 200)}"`
-  if (p.kind === 'shop') {
-    const { product } = p.payload as { product?: string }
+  if (p.kind === 'shop' || p.kind === 'ranked_ticket') {
+    const { product } = p.kind === 'shop' ? (p.payload as { product?: string }) : { product: 'ranked ticket' }
     return `${agentName(agentIndex)}: shop payment ${p.hash} was never confirmed (${product ?? 'unknown product'}). ${said}. FoxLeague returns a shop payment it did not deliver (by itself or through its support team); until the refund is seen its FOXSY keeps counting against the budget.`
   }
   const { tournamentId } = p.payload as { tournamentId?: number }
@@ -65,11 +65,16 @@ function givenUp(agentIndex: number, p: { hash: string; kind: string; payload: u
 
 export async function retryPendingPayments(d: PendingDeps, agentIndex: number, wallet: AgentWallet, now = Date.now()): Promise<void> {
   for (const p of d.store.pending(agentIndex)) {
-    if (p.kind !== 'shop' && p.kind !== 'join') continue
+    if (p.kind !== 'shop' && p.kind !== 'join' && p.kind !== 'ranked_ticket') continue
     const ageMin = (now - new Date(p.sentAt).getTime()) / 60_000
     let last: string
     try {
-      if (p.kind === 'shop') {
+      if (p.kind === 'ranked_ticket') {
+        if (!d.fox.buyRankedTicket) throw new Error('no ranked ticket confirm in this client')
+        await d.fox.buyRankedTicket(wallet, p.hash)
+        d.store.resolvePending(p.hash, 'done')
+        d.notify(`${agentName(agentIndex)}: pending ranked ticket confirmed`)
+      } else if (p.kind === 'shop') {
         const r = await d.fox.shopConfirm(wallet, p.payload as { tx_hash: string; product: string })
         d.store.resolvePending(p.hash, 'done')
         d.notify(`${agentName(agentIndex)}: pending shop payment confirmed: ${r.message}`)
@@ -86,7 +91,7 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
       // come with it (its timeout and retry texts say "refunded", "already" and "do not pay again" too).
       // No answer at all (a transport error, a TypeError) is not final either.
       const final = err instanceof ApiRefusal && !err.isTxPending
-      if (final && p.kind === 'shop' && SHOP_FINAL.test(last)) {
+      if (final && (p.kind === 'shop' || p.kind === 'ranked_ticket') && SHOP_FINAL.test(last)) {
         d.store.resolvePending(p.hash, 'done')
         // FoxLeague's own word that the payment came back (or is on its way back automatically): its FOXSY stops
         // counting against the caps. The gas, booked in its own row, stays. A used payment keeps counting.
