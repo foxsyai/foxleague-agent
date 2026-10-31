@@ -40,35 +40,50 @@ test('the new lineup is checked against the new formation', async () => {
   assert.match(r!.summary, /slot 8 of 4-3-3 wants a FWD, #9 is a MID/)
 })
 
-test('formation and lineup are saved back to back, and a refused lineup puts the old formation back', async () => {
-  const calls: string[] = []
-  const ok = setup({ fox: { setFormation: async (_w: unknown, f: string) => { calls.push(`formation ${f}`) }, setLineup: async (_w: unknown, l: number[]) => { calls.push(`lineup ${l.join(',')}`) } } })
-  await withLive(ok.store, async () => {
-    const [r] = await ok.exec.run(ok.agent(), liveWallet, snapshot(), [{ action: { type: 'set_formation', formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 }, reason: '' }])
-    assert.equal(r!.status, 'confirmed', r!.summary)
-  })
-  assert.deepEqual(calls, ['formation 4-3-3', `lineup ${XI_433.join(',')}`])
-
-  calls.length = 0
-  const bad = setup({ fox: { setFormation: async (_w: unknown, f: string) => { calls.push(`formation ${f}`) }, setLineup: async () => { calls.push('lineup'); throw new ApiRefusal('Some players are not owned by you or are listed for sale') }, team: async () => { calls.push('read'); return snapshot().team } } })
-  await withLive(bad.store, async () => {
-    const [r] = await bad.exec.run(bad.agent(), liveWallet, snapshot(), [{ action: { type: 'set_formation', formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 }, reason: '' }])
-    assert.notEqual(r!.status, 'confirmed')
-    assert.match(r!.summary, /formation 4-4-2 restored/)
-  })
-  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'formation 4-4-2'])
-})
-
+// FoxLeague rc.78 (#566): POST /teams/formation alone refuses a formation the saved eleven does not fit, so a change of
+// lines goes as one save, POST /teams/lineup with its formation, written together or not at all. Live, agent 6 was
+// refused twice ("Save the formation together with a lineup that fits it").
 const TO_433 = { type: 'set_formation' as const, formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 }
 const recorder = (calls: string[], over: Record<string, unknown>) => ({
   setFormation: async (_w: unknown, f: string) => { calls.push(`formation ${f}`) },
-  setLineup: async (_w: unknown, l: number[]) => { calls.push(`lineup ${l.join(',')}`) },
+  setLineup: async (_w: unknown, l: number[], _s: number[], f?: string) => { calls.push(`lineup ${l.join(',')} in ${f}`) },
   ...over,
 })
 
-// Review of PR #15 (medium): a failure that is not FoxLeague's refusal (a timeout, a 502 after the save) may have
-// saved the eleven, so the old formation is not put back blind: the team is read back first.
-test('a lineup call that fails without a refusal is read back before the old formation goes back', async () => {
+test('R78-1: formation and lineup go in one save, and the formation alone is never sent ahead of them', async () => {
+  const calls: string[] = []
+  const ok = setup({ fox: recorder(calls, { setFormation: async () => { calls.push('formation alone'); throw new ApiRefusal('Conor Smith is a MID. Slot requires FW in 4-3-3. Save the formation together with a lineup that fits it.') } }) })
+  await withLive(ok.store, async () => {
+    const [r] = await ok.exec.run(ok.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(calls, [`lineup ${XI_433.join(',')} in 4-3-3`])
+})
+
+test('R78-1: a refused save changed nothing, so nothing is put back', async () => {
+  const calls: string[] = []
+  const bad = setup({ fox: recorder(calls, { setLineup: async () => { calls.push('lineup'); throw new ApiRefusal('Some players are not owned by you or are listed for sale') }, team: async () => { calls.push('read'); return snapshot().team } }) })
+  await withLive(bad.store, async () => {
+    const [r] = await bad.exec.run(bad.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
+    assert.notEqual(r!.status, 'confirmed')
+    assert.match(r!.summary, /not owned by you/)
+  })
+  assert.deepEqual(calls, ['lineup'], 'FoxLeague writes both or neither')
+})
+
+test('a formation between the same lines still goes alone', async () => {
+  const calls: string[] = []
+  const m = setup({ fox: recorder(calls, {}) })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: { type: 'set_formation', formation: '4-4-2o' }, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(calls, ['formation 4-4-2o'])
+})
+
+// Review of PR #15 (medium), kept for the one save: a failure that is not FoxLeague's refusal (a timeout, a 502 after
+// the save) may have saved it, so the team is read back and nothing is changed blind.
+test('a save that fails without a refusal is read back', async () => {
   const calls: string[] = []
   const timeout = async () => { calls.push('lineup'); throw new Error('timeout after 30000 ms') }
   const saved = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 } } }) })
@@ -77,15 +92,15 @@ test('a lineup call that fails without a refusal is read back before the old for
     assert.equal(r!.status, 'confirmed', r!.summary)
     assert.match(r!.summary, /read back/)
   })
-  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read'], 'a saved eleven keeps its new formation')
+  assert.deepEqual(calls, ['lineup', 'read'])
 
   calls.length = 0
-  const lost = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3' } } }) })
+  const lost = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); return snapshot().team } }) })
   await withLive(lost.store, async () => {
     const [r] = await lost.exec.run(lost.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
-    assert.match(r!.summary, /formation 4-4-2 restored/)
+    assert.notEqual(r!.status, 'confirmed', r!.summary)
   })
-  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read', 'formation 4-4-2'], 'an eleven not saved: the old formation goes back')
+  assert.deepEqual(calls, ['lineup', 'read'], 'not saved: the old formation and eleven still stand')
 
   calls.length = 0
   const blind = setup({ fox: recorder(calls, { setLineup: timeout, team: async () => { calls.push('read'); throw new Error('HTTP 502') } }) })
@@ -94,53 +109,19 @@ test('a lineup call that fails without a refusal is read back before the old for
     assert.equal(r!.status, 'error')
     assert.match(r!.summary, /could not be read back/)
   })
-  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read'], 'unknown: nothing is changed blind')
-})
-
-test('a formation call that fails without a refusal is read back, and the lineup follows when it was saved', async () => {
-  const calls: string[] = []
-  const timeout = async (_w: unknown, f: string) => { calls.push(`formation ${f}`); throw new Error('timeout after 30000 ms') }
-  const saved = setup({ fox: recorder(calls, { setFormation: timeout, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3' } } }) })
-  await withLive(saved.store, async () => {
-    const [r] = await saved.exec.run(saved.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
-    assert.equal(r!.status, 'confirmed', r!.summary)
-  })
-  assert.deepEqual(calls, ['formation 4-3-3', 'read', `lineup ${XI_433.join(',')}`])
-
-  calls.length = 0
-  const unsaved = setup({ fox: recorder(calls, { setFormation: timeout, team: async () => { calls.push('read'); return snapshot().team } }) })
-  await withLive(unsaved.store, async () => {
-    const [r] = await unsaved.exec.run(unsaved.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
-    assert.equal(r!.status, 'error', r!.summary)
-  })
-  assert.deepEqual(calls, ['formation 4-3-3', 'read'], 'the formation was not saved: its lineup is not sent')
-})
-
-// Re-review of PR #15 (low): a formation call that failed without a refusal, on a team that cannot be read back,
-// may have saved the new shape with the old eleven; its lineup was never sent, so the old formation is saved again.
-test('a formation call that failed on a team that cannot be read back puts the old formation back and says the state is unknown', async () => {
-  const calls: string[] = []
-  let first = true
-  const flaky = async (_w: unknown, f: string) => { calls.push(`formation ${f}`); if (first) { first = false; throw new Error('timeout after 30000 ms') } }
-  const m = setup({ fox: recorder(calls, { setFormation: flaky, team: async () => { calls.push('read'); throw new Error('HTTP 502') } }) })
-  await withLive(m.store, async () => {
-    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
-    assert.equal(r!.status, 'error', r!.summary)
-    assert.match(r!.summary, /formation 4-4-2 saved again/)
-  })
-  assert.deepEqual(calls, ['formation 4-3-3', 'read', 'formation 4-4-2'])
+  assert.deepEqual(calls, ['lineup', 'read'], 'unknown: nothing is changed blind')
 })
 
 // Re-review of PR #15 (not verified, closed): an answer that is not FoxLeague's envelope ("unexpected answer") is no
 // refusal: the eleven may have been saved, so it is read back like a timeout.
-test('an unexpected answer to the lineup call is read back, not taken as a refusal', async () => {
+test('an unexpected answer to the save is read back, not taken as a refusal', async () => {
   const calls: string[] = []
   const m = setup({ fox: recorder(calls, { setLineup: async () => { calls.push('lineup'); throw new ApiRefusal('unexpected answer from /teams/lineup (HTTP 502)') }, team: async () => { calls.push('read'); return { ...snapshot().team!, formation: '4-3-3', lineup: XI_433, substitutes: BENCH_433 } } }) })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: TO_433, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
   })
-  assert.deepEqual(calls, ['formation 4-3-3', 'lineup', 'read'])
+  assert.deepEqual(calls, ['lineup', 'read'])
 })
 
 test('no match, entry or 1v1 while the saved eleven does not fit the saved formation', async () => {

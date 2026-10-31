@@ -68,10 +68,10 @@ Source priority used by the manual itself (EM:13): SEED > CC > CR defaults > con
 | Match type | Started by | Opponent | Counts toward the daily 5 | ELO | XP and competitive count | Condition cost | FOXSY |
 |---|---|---|---|---|---|---|---|
 | Casual | you | AI at your lineup's OVR | yes | no | no | 5, you only | none |
-| Ranked | you | a real team within 150/300/500 ELO, else AI | yes | K 24 against a real team, none against AI | no while ranked XP is off (launch) | 5, initiator only | none |
+| Ranked | you | a real team within 150/300/500 ELO, else AI | yes | K 9 against a real team, none against AI | no while ranked XP is off (launch) | 5, initiator only | none |
 | Bronze tournament | schedule | real | no | no | no | 10, both | none (free) |
-| Silver / Gold tournament | schedule | real | no | K 12 / K 18 | yes | 10, both | pool prizes |
-| 1v1 challenge (Silver / Gold) | schedule | real | no | K 12 / K 18 | yes | 10, both | winner takes 90 percent of the pool |
+| Silver / Gold tournament | schedule | real | no | K 13 / K 17 | yes | 10, both | pool prizes |
+| 1v1 challenge (Silver / Gold) | schedule | real | no | K 13 / K 17 | yes | 10, both | winner takes 90 percent of the pool |
 | Developer games | | | no | no | no | none | |
 
 Sources: `backend/src/routes/matches.rs:990-991` (types), `:1531-1629` (opponents), `:3448-3451`
@@ -101,9 +101,9 @@ effects); Manual `mechanics/matches.mdx:11-54`.
 |---|---|---|---|
 | Starting ELO | 1200 | EM:54; `backend/migrations/001_initial.sql:8` | |
 | Formula | standard Elo, expected score `1/(1+10^((opp-me)/400))`, draw 0.5, each side rounded | `backend/src/db.rs:779-803` | |
-| K ranked (vs a real team) | **24** | `elo.k_factor_ranked` (CR:453-454), SEED:82 | not public |
-| K Silver tournament and Silver 1v1 | **12** | `elo.k_factor_tournament_silver` (CR:457-458), SEED:83; Manual `mechanics/one-v-one.mdx:103` | not public |
-| K Gold tournament and Gold 1v1 | **18** | `elo.k_factor_tournament_gold` (CR:459-460), SEED:84 | not public |
+| K ranked (vs a real team) | **9** (24 until 2026-10-30) | `elo.k_factor_ranked` (CR:453-454), SEED:82 | not public |
+| K Silver tournament and Silver 1v1 | **13** (12 until 2026-10-30) | `elo.k_factor_tournament_silver` (CR:457-458), SEED:83; Manual `mechanics/one-v-one.mdx:103` | not public |
+| K Gold tournament and Gold 1v1 | **17** (18 until 2026-10-30) | `elo.k_factor_tournament_gold` (CR:459-460), SEED:84 | not public |
 | Bronze tournaments, casual, ranked vs AI | no ELO (the key `elo.k_factor_tournament_bronze` exists but is never read) | `matches.rs:3611-3645`; CR:455-456 | |
 | Mutual forfeit | a loss for both (Silver/Gold: both lose ELO) | Manual `mechanics/match-day-strategy.mdx:45` | |
 | League floors | Bronze below 1300, Silver 1300, Gold 1600, Platinum 2000, Diamond 2700 | EM:54; `league.*_min_elo` (CR:470-477); gold, platinum, diamond SEED:85-87 (silver runs on its default) | CFG `league_thresholds` |
@@ -244,7 +244,7 @@ squad in 7 days for 100 FOXSY (2 days for 1,000 FOXSY with match waivers); Commo
 | Prize delivery | about **180 s** after the reveal | `tournament.one_v_one_prize_delivery_delay_seconds` 180 (CR:211-213) | CFG `tournament_defaults.one_v_one_prize_delivery_seconds` |
 | Draws | none: extra time, then penalties | Manual `mechanics/one-v-one.mdx:66-73`, `:107` | |
 | Unaccepted | full refund to the creator at the deadline | EM:50; Manual `mechanics/one-v-one.mdx:83-93` | |
-| ELO, XP, condition | K 12 / 18; XP and competitive count; 10 condition per appearance | sections 3 to 6 | |
+| ELO, XP, condition | K 13 / 17; XP and competitive count; 10 condition per appearance | sections 3 to 6 | |
 
 ---
 

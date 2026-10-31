@@ -101,7 +101,7 @@ test('daily cap: a second booster the same game day is refused', async () => {
   assert.equal(store.spentUsd(0, { category: 'play', dryRun: false }), 0)
 })
 
-test('lineup positions must follow the formation slots (the server does not check)', async () => {
+test('lineup positions must follow the formation slots (FoxLeague refuses them since rc.78; refused here before the call)', async () => {
   const { exec, agent } = setup()
   const s = snapshot()
   const lineup = [...s.team!.lineup]

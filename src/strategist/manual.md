@@ -1,12 +1,12 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 4e42b94c9 2026-10-26.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 4f82e988f 2026-10-30.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
 # Economy map
 (docs.foxleague.ai/mechanics/economy-map/)
 
-This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values of 12 October 2026. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
+This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values of 28 October 2026. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
 
 Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours. Daily allowances reset at a fixed **14:00 UTC**, not on a rolling 24 hour window.
 
@@ -16,7 +16,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 |---|---|---|---|---|
 | **Registration fee** | 5,000 FOXSY | One-time payment that creates your team and mints your starter squad | Paid once per wallet. The relayer pays the network fee for this transaction. One wallet gets one starter squad, enforced on chain | None. Every manager pays the same fee |
 | **Starter squad** | 18 players: 10 Common, 4 Uncommon, 2 Rare, 1 Epic, 1 Legendary | The roster you receive at registration | Spread as 2 GK, 6 DEF, 6 MID, 4 FWD. While the pool allows it, each position gets one special card (a Legendary, an Epic or a Rare) plus one Uncommon; when a position has no card of that rarity left the draw bends and the card lands in any position that still has room. Commons fill the rest | None. Extra players come from the Common pack, the marketplace or fusion |
-| **Common pack** | 2,500 FOXSY for 5 Common players | The only shop item that adds cards to your roster | At most 2 packs per wallet per rolling 7 days. Positions drawn like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD of 18), uniform within a position. Drawn from the pre-minted Common pool; sold out when fewer than 5 are free or when the platform's daily budget of 100 packs (500 cards for all managers together, reset once a day at the epoch change) is spent. Delivered by the game server about a minute after payment. The cards arrive with 0 competitive matches and no cooldown | This row is the shortcut. Floor: 2 packs a week, whatever you spend |
+| **Common pack** | 2,500 FOXSY for 5 Common players | The only shop item that adds cards to your roster | At most 2 packs per wallet per rolling 7 days. Positions drawn like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD of 18), uniform within a position. Drawn from the pre-minted Common pool. The Shop card reads Sold out when fewer than 5 are free. It reads Daily pack budget spent when the platform's budget is used up: at most 100 packs (500 cards) for all managers together in any 24 hours. Each pack counts against it for 24 to 25 hours, so room comes back hour by hour, not at a fixed time. Delivered by the game server about a minute after payment. The cards arrive with 0 competitive matches and no cooldown | This row is the shortcut. Floor: 2 packs a week, whatever you spend |
 | **Stat caps by rarity** | Common 30, Uncommon 55, Rare 75, Epic 90, Legendary 100 per stat | The ceiling training can reach on each of the 7 stats | XP earned on a capped stat is discarded. Only fusion raises the ceiling | None |
 | **Casual plus ranked matches per day** | 5 | The matches you may start yourself per day, casual and ranked combined | Being drawn in as someone's ranked opponent does not count. Tournament and 1v1 games do not count either | Not for sale |
 | **Match cooldown** | 30 seconds from the start of your previous match; 15 minutes from the start of your last ranked game | Pacing between the matches you start | Both clocks run from the start of the match, not from full time. The ranked cooldown counts from your last ranked game, started or drawn into | Not for sale |
@@ -291,7 +291,7 @@ See also [Tournaments](/mechanics/tournaments/), [Match-Day Strategy](/mechanics
 
 ## Who organizes it
 
-The FoxLeague team creates every edition. Players cannot create one. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on. There and in **My Tournaments** it has a card of its own: a night-blue card with a gold edge and the fox head drawn as stars, showing the edition's phase, its 36 seats, the entry fee and the next key date.
+The FoxLeague team creates every edition. Players cannot create one. The first edition has not been created yet. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on. There and in **My Tournaments** it has a card of its own: a night-blue card with a gold edge and the fox head drawn as stars, showing the edition's phase, its 36 seats, the entry fee and the next key date.
 
 For each edition the FoxLeague team sets:
 
@@ -582,7 +582,7 @@ Your player's career **matches played** stat still counts every appearance, AI g
 
 Every fused card (the **output** of a fusion) carries its own **14-day fusion cooldown** before it can be used as an input again. The clock starts when the fusion succeeds; a failed fusion starts nothing. Players that never came out of a fusion (the starter squad, a Common pack card or a never-fused card bought at auction) have no fusion cooldown. A fused card bought at auction keeps whatever remains of its cooldown. The Fusion tab shows "ready in N d" on a card that is still waiting.
 
-The cooldown belongs to the card, not to you: it travels with the NFT if you sell it. It does not block your other fusions. There is no longer a wallet-wide 14-day cooldown. What remains at wallet level is **spacing**: one wallet can fuse at most **once every 20 hours**. The spacing cannot be bought down; the Fusion tab shows "next fusion possible in" until it clears.
+The cooldown belongs to the card, not to you: it travels with the NFT if you sell it. It does not block your other fusions. There is no longer a wallet-wide 14-day cooldown. What remains at wallet level is **spacing**: one wallet can fuse at most **once every 20 hours**. The spacing cannot be bought down. Until it clears, a line under the **Fuse** button reads **One fusion per wallet every ~20 h.** Once you pick three cards the button itself reads **Next fusion in** with the time left.
 
 ## Cost by rarity
 
@@ -796,7 +796,7 @@ The **Tactics** page shows a banner for your next match with the same lock count
 
 ## Squad rule
 
-Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. If your squad is short for any reason (for example you sold a player without replacing it) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped for the best fit substitute automatically. If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
+Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. If your squad is short for any reason (for example you sold a player without replacing it) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped automatically for a fit substitute of his own line first, then of the nearest line. A keeper is swapped only for a keeper (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
 
 ## Your team name
 
@@ -1019,11 +1019,11 @@ The refund is **exact**: the contract returns the same amount it holds for your 
 
 While your challenge still waits for an opponent and its deadline has not passed, its page shows **Delete Challenge**. Deleting it refunds any entry fee it holds on chain.
 
-If your own entry fee never went through (the wallet never asked you to sign or you closed the tab first), the challenge stays open with no seat taken until the game cancels it (see the next section). It counts as your one active 1v1 until then. Its page shows you **Join** to pay your entry and **Delete Challenge** to remove it at once.
+A paid developer challenge is created before you pay (see above). If your own entry fee never went through (the wallet never asked you to sign or you closed the tab first), that challenge stays open with no seat taken until the game cancels it (see the next section). It counts as your one active 1v1 until then. Its page shows you **Join** to pay your entry and **Delete Challenge** to remove it at once.
 
 ## Unpaid challenge (automatic cancel)
 
-A Silver or Gold challenge is created first. Your wallet then signs your entry fee, which takes your seat. If you still hold no seat **20 minutes** after the challenge opened and your entry fee is not in the contract (the wallet prompt never appeared or you closed the tab before paying), the challenge is **cancelled automatically**:
+This automatic cancel is for a paid challenge created before its creator pays, which today means a paid developer challenge: every other Silver or Gold challenge exists only once your payment has landed. The game creates it first, then your wallet signs your entry fee, which takes your seat. If you still hold no seat **20 minutes** after the challenge opened and your entry fee is not in the contract (the wallet prompt never appeared or you closed the tab before paying), the challenge is **cancelled automatically**:
 
 - It stops counting as your one active challenge, so you can create a new one at once instead of waiting for the deadline.
 - An entry fee that reaches the contract after the cancel is refunded to your wallet automatically.
@@ -1031,6 +1031,10 @@ A Silver or Gold challenge is created first. Your wallet then signs your entry f
 - You get a **Challenge cancelled** notification.
 
 While your entry fee is in the contract the challenge is not cancelled this way: the game gives you the seat it paid for, even when you closed the page before your join was confirmed. A challenge you hold a seat in is never cancelled this way: it waits for an opponent until its deadline as usual.
+
+## Cancelled after it started
+
+In rare cases FoxLeague cancels a challenge whose two seats are taken (a fault the game cannot repair). Both entry fees are refunded on chain. If the match had not finished its broadcast it is void: no page, post or history shows its result and it changes nothing on either team. A match whose broadcast had ended keeps its result. See [Cancelled while under way](/mechanics/tournaments/#cancelled-while-under-way).
 
 ## One active challenge at a time
 
@@ -1111,7 +1115,7 @@ The only Shop item that adds players to your roster. One pack is **5 Common play
 - **Balance check**: every FOXSY payment in the app (packs, consumables, fusion waivers, badge re-rolls, tournament entries, bids) compares the price with your FOXSY balance before your wallet opens. When the balance is too low the app says so (with what the item costs) and nothing is signed. If the balance cannot be read at that moment, the purchase is not blocked
 - **Cap**: at most **2 packs per wallet per rolling 7 days**. The Shop card shows how many packs you can still buy this week; the third attempt inside the window is refused before any FOXSY moves
 - **What you get**: 5 Commons with random positions, weighted like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD out of 18), so over a few packs you end up with a normal spread. Within a position the card is uniformly random. Stats are the pre-rolled Common stats of the card, inside the Common range
-- **Where they come from**: the pre-minted Common pool the platform also uses for starter squads. The Shop card reads **sold out** in two cases: fewer than 5 Commons are free in the pool; the platform's daily pack budget is spent (100 packs a day for all managers together, reset once a day at the MultiversX epoch change, about 16:35 UTC). In both cases the purchase is refused without charging you. Try again once the pool is restocked or the budget resets
+- **Where they come from**: the pre-minted Common pool the platform also uses for starter squads. The Shop card reads **Sold out** when fewer than 5 Commons are free in the pool. It reads **Daily pack budget spent** when the platform's pack budget is used up: at most 100 packs (500 cards) for all managers together in any 24 hours. The budget has no fixed reset time: each pack delivered counts against it for 24 to 25 hours, so room comes back hour by hour. In both cases the purchase is refused without charging you. Try again once the pool is restocked or the budget has room
 - **Delivery**: the game server sends the 5 cards to your wallet about a minute after the payment confirms. The Shop card shows **5 players on the way** until they land in your Squad. If the delivery fails the FOXSY is refunded through the usual refund sweep
 - **What the cards carry**: 0 competitive matches and no cooldown of any kind. They can play at once. They can be fused or auctioned only once they reach the Common match gate: 5 competitive matches, all really played (see [Fusion](/mechanics/fusion/) and [Marketplace](/mechanics/marketplace/))
 
@@ -1331,16 +1335,21 @@ Pick by clicking the formation card at the top of Tactics. The pitch view animat
 The pitch view shows position slots. Drag a player from your roster (left side) into a slot. Constraints:
 
 - Position must match (a Defender can't fill a Forward slot)
+- A few slots name the role the shirt plays instead of its line. In **4-2-3-1** and **4-4-2 - Offensive** one defender slot reads **DM** (a defensive midfielder in front of the back line); in 4-4-2 - Offensive the two wide midfield slots read **FWL** and **FWR** (wide forwards level with the strikers, whose slots read **FWCL** and **FWCR**). The line still decides who fills the slot: hover over the label to read it, for example **DM, filled by a Defender** or **FWL, filled by a Midfielder**
 - Player must be **eligible** (not listed for sale, not in a transfer cooldown)
 - One slot per player (you can't field the same player twice)
 
 Each slot shows the position requirement (GK / DEF / MID / FWD) and the assigned player's OVR. Empty slots are red.
+
+The server keeps the same position rule. A lineup with a player in a slot of another line is refused with the message Tactics shows, for example *Fox 7 is a FW. Slot requires DEF*, whatever app or script sends it. Nothing is saved then.
 
 ## Save your lineup
 
 On the formation you have saved, every change you make to the lineup (a drag, a tap swap, **BEST XI**) is saved at once. A different formation card opens as an unsaved draft: the **SAVE** button appears at the top of the page next to **BEST XI**. The draft (with any change you make to it) is committed only when you click it. The saved formation carries a green **Saved** badge. The Squad Readiness widget on PlayMatch shows the formation you saved next to its **ready / owned** count.
 
 If you leave a draft unsaved, your saved formation and lineup stay in effect.
+
+**SAVE** commits the formation and its lineup together in one save. If the lineup is refused (a player listed for sale in the meantime, for example) neither changes: your saved formation keeps its **Saved** badge and its lineup. A new formation is always saved together with a lineup that fits it.
 
 ## Rotating reserves in
 
@@ -1371,11 +1380,13 @@ Level does not change in-match performance. Condition does: every stat of a star
 
 The widget on **PlayMatch** shows ready / owned players, where **ready** means the player's condition is at or above the match floor (currently **30**). It's a health check, not the kickoff gate. To kick off you need a saved lineup of 11 starters + 7 substitutes, at least **18 unlisted players** in your wallet, no starter at 0 condition and none of the 18 (starters or bench) in a transfer cooldown or listed for sale.
 
+Save a lineup with fewer than 7 substitutes and the bench is completed for you **position for position**: 1 goalkeeper plus 6 outfield players split like the lines of your formation (4-3-3: 2 DEF, 2 MID, 2 FWD; 4-4-2: 2 DEF, 3 MID, 1 FWD; 5-3-2: 3 DEF, 2 MID, 1 FWD). The substitutes you picked stay and count toward their line. Each line takes your strongest eligible cards; a line without enough cards gives its places to your strongest remaining ones. During a match the coach can bring a substitute on for a tired player. Today it picks from the whole bench, whatever the line: a forward can come on in a defender's shirt. A rule that brings on only a substitute of the tired player's own line is built but not switched on yet.
+
 While one of your 18 is listed for sale, **KICK OFF** stays disabled and the line under it reads **1 player is listed for sale: cancel the listing or swap it out** (with two of them: **2 players are listed for sale: cancel the listing or swap them out**). Below it, **My Listings** opens your listings to cancel one; **Open Tactics** lets you swap the player for a reserve.
 
 Reasons a player might NOT be ready:
 
-- **Below the condition floor**: condition under 30. In tournaments and 1v1s such starters are auto-substituted from the bench; if fewer than 11 fit players remain the match is forfeited 3-0
+- **Below the condition floor**: condition under 30. In tournaments and 1v1s such starters are auto-substituted from the bench by a player of their own line first (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)); if fewer than 11 fit players remain the match is forfeited 3-0
 
 Reasons a player can't be fielded even when ready:
 
@@ -1528,9 +1539,24 @@ The creator sets the exact FOXSY amount when creating a Silver or Gold tournamen
 
 ## Creating a tournament
 
-Open **Tournaments → Create** and step through format, tier, configuration, schedule and a final confirmation. Champions FoxLeague is the one format you cannot pick: the FoxLeague team creates it. You can have at most one active tournament you created as a player plus one you created as organizer-only at any time (admins are uncapped as organizers). 1v1 challenges have a separate cap of one active challenge per team. Two creation options are worth calling out.
+Open **Tournaments → Create** and step through format, tier, configuration, schedule and a final confirmation. Champions FoxLeague is the one format you cannot pick: the FoxLeague team creates it. You can have at most one active tournament you created as a player plus one you created as organizer-only at any time (admins are uncapped as organizers). A paid tournament waiting for your payment counts as the one you play in. 1v1 challenges have a separate cap of one active challenge per team. A few creation options are worth calling out.
 
 ![Create Tournament configuration step with the Private (invite-only) toggle on, the invited teams listed below it, plus the Organizer only toggle](/screenshots/tournament-create-private.png)
+
+### Creating a paid tournament you play in
+
+On a Silver or Gold tournament that you play in (**Organizer only** off), **Create Tournament** works in two steps today: the game creates the tournament on chain first, then your wallet asks for **one signature**, the entry fee, which takes your seat like any other team's. If you close the wallet without signing, nothing is charged and the tournament stays created without you: open it and click **Join** to take your seat. You can also delete it while registration is open (see [Deleting your tournament](#deleting-your-tournament)).
+
+FoxLeague can switch on a **one-signature create** for these tournaments. It is off today. With it on, the one signature (the entry fee) creates the tournament on chain and seats you in it, with the deadline and the start you picked. Other teams see the tournament only once your payment has landed. Until then your lobby and the tournament page show it as **Waiting for your payment**. Its time slot is held for you meanwhile: on the calendar other players see that slot taken by a tournament being created, without its name.
+
+- **You closed the wallet without signing**: nothing is charged and nothing is created. Press **Try again** to sign the same tournament. Before it opens your wallet again, the game checks the chain, so a first signature that is still on its way is never paid twice.
+- **Your earlier tournament or challenge is still waiting for its payment**: the form says so and counts down until you can start a different one, with a link to the pending one. One payment can wait at a time. When the countdown ends the time slot is yours again: a tournament you start there replaces the unpaid one.
+- **Your payment is not confirmed yet**: the tournament opens as soon as it lands, even if you leave the page; nothing is charged twice. Closing the tab in that moment asks you to stay first.
+- **The registration deadline is too close**: pick a deadline about 13 minutes away or more (by default: the time your signature stays valid, a minute for the chain and two minutes for the check that opens your tournament if your confirmation never arrives), so your payment always lands before registration closes. The form tells you the exact number of minutes.
+- **It could not open**: the tournament is cancelled and your entry fee is refunded when the deadline passed before your payment was confirmed. The same happens when you created another tournament you play in meanwhile and when a Champions FoxLeague tournament your team is in started meanwhile. A first payment that lands after all once you started again at its time slot is refunded too: the new tournament replaced it.
+- **A private tournament** tells the teams you invited once it is open, never before.
+
+Organizer-only tournaments, developer tournaments and Champions FoxLeague keep the two steps even with the switch on: the game creates the tournament first. On a paid developer tournament you play in, your signature then pays the entry fee.
 
 ### Private (invite-only)
 
@@ -1617,6 +1643,13 @@ Each tournament reserves a **blocking window** from one hour before its first ki
 
 You do not have to guess a free time. On the Schedule step the form tells you whether the start you picked is free and, when it is not, proposes the **next free slot** with a **Use this slot** button. **See free times** opens a calendar in your own time zone: every start where your tournament fits is green. The windows of other tournaments are shown with their titles. A gray block is another tournament's start window: the hour before its kickoff, the time it needs to get its first round under way and an hour after. Hover over it or tap it to see the tournament and its booked times. A tournament that runs for days books only this window; its later rounds run alongside other tournaments, so they do not block the calendar. A new tournament cannot start inside a gray block. One tap on a green start sets the start and the registration deadline and keeps the rest of the form. The calendar and the creation check use the same rule, so a green start is one that creation accepts.
 
+### Cancelled while under way
+
+In rare cases FoxLeague cancels a tournament or a 1v1 challenge that has already started (a fault the game cannot repair). Every entry fee is refunded on chain, as for any cancelled tournament. Each match is then decided by its broadcast:
+
+- A match whose broadcast had ended before the cancel keeps its result and everything it counts for (ELO, W-D-L, XP, condition and card stats), applied once.
+- A match whose broadcast had not ended is **void**: no page, post or history ever shows its result. It changes nothing on your team or your cards. A match on air at that moment stops there. Its "live now" post in the FoxLeague Telegram group is removed.
+
 ---
 
 ## Seeding
@@ -1658,6 +1691,9 @@ Champions FoxLeague always plays its 3rd place match, as a single match before t
 
 FoxLeague expects you to own a full 18 (11 starters + 7 substitutes) when your next tournament match locks. If a starter is not match-fit at that moment (condition below 30 or in the transfer cooldown), the tournament **automatically substitutes** a fit bench player in.
 
+- **Who comes on follows the lines of your formation.** Your keeper is replaced only by a fit keeper from the bench. An outfield player is replaced by a fit substitute of his own line first, then of the nearest line (defenders and midfielders are one line apart, as are midfielders and forwards), never by your bench keeper. Between two players equally near, the higher OVR comes on
+- An outfield player goes in goal only when no fit keeper is left on your bench, so your team is not forfeited for want of a keeper
+- A starter saved in a slot of another line (lineups saved before 28 October 2026 could hold one) is replaced the same way when your bench has a fit player nearer that slot's line. Otherwise he plays there: this alone never forfeits a match
 - The match report shows which auto-subs were applied for each side
 - If fewer than 11 match-fit players can be assembled from your 18 (or you no longer own all 18), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
 - If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero. In a knockout match, where one side must go through, the home side of the fixture advances (in round 1 of a Knockout, the higher seed)
@@ -1779,7 +1815,7 @@ Play matches (Silver/Gold, 1v1: XP) ───┘
 
 ### XP by shirt
 
-A match scores each player on the role of the shirt he wore in it, not on the card's position. Any card can be fielded in any shirt: a keeper card in an outfield shirt is scored as a field player, a midfielder card in goal as a keeper.
+A match scores each player on the role of the shirt he wore in it, not on the card's position. A card starts in a shirt of its own line. When a card wears another role's shirt anyway, for example a bench keeper brought on during the match for a field player or an outfielder sent in goal because no fit keeper was left, it is scored on that shirt: a keeper card in an outfield shirt as a field player, a midfielder card in goal as a keeper.
 
 | Shirt | The actions that earn XP |
 |-------|--------------------------|
