@@ -6,6 +6,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { parseAction } from '../src/executor/actions.ts'
 import { ApiRefusal } from '../src/foxleague/api.ts'
+import { BroadcastRefused } from '../src/chain/gateway.ts'
 import { levelsLive, organizerFeesLive, leaveLockLive } from '../src/foxleague/levels.ts'
 import { matchesAtMost } from '../src/executor/rules.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
@@ -621,5 +622,70 @@ test('CL7: the dashboard has the Bronze amounts with an info bubble', async () =
   assert.match(html, /data-tip="bronze"/)
   assert.match(html, /entryFeesBronze: list\('sBronze'\)/)
   assert.match(html, /bronze: \['Bronze amounts/)
+})
+
+// Agent review of PR #41, second round (medium): an unclear broadcast may still land, and the row written only after the
+// send's answer left nothing to stop the next plan paying again.
+test('R41-3: an organizer payment whose broadcast answer is unclear is kept, and the next create pays no second one', async () => {
+  const sends: string[] = []
+  const bodies: Record<string, unknown>[] = []
+  const m = setup({
+    fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks(bodies), tournament: async () => tournament(55), joinTournament: async () => ({}) },
+    chain: { send: async () => { sends.push('send'); if (sends.length === 1) throw new Error('broadcast unclear (HTTP 502, no hash)'); return 'hashseat' } },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    const held = m.store.pending(0)
+    assert.deepEqual(held.map(p => p.kind), ['organizer_fee'])
+    const [again] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(again!.status, 'confirmed', again!.summary)
+    assert.equal(bodies.at(-1)!.organizer_fee_tx_hash, held[0]!.hash)
+  })
+  assert.equal(sends.length, 2, 'the unclear payment and the seat: no second deposit')
+})
+
+test('R41-3: a ticket whose broadcast answer is unclear is kept, and the next ranked start pays no second one', async () => {
+  let pressed = 0
+  const sends: string[] = []
+  const m = setup({
+    fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => { pressed++; throw required() } },
+    chain: { send: async () => { sends.push('send'); throw new Error('broadcast unclear (HTTP 502, no hash)') } },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    assert.deepEqual(m.store.pending(0).map(p => p.kind), ['ranked_ticket'])
+    const [again] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
+    assert.equal(again!.status, 'refused', again!.summary)
+  })
+  assert.equal(sends.length, 1)
+  assert.equal(pressed, 1)
+})
+
+test('R41-3: a broadcast the gateway definitely refused leaves nothing kept and nothing counted', async () => {
+  const m = setup({
+    fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => { throw required() } },
+    chain: { send: async () => { throw new BroadcastRefused('insufficient funds') }, lookupTransaction: async () => 'not_found' },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+  })
+  assert.equal(m.store.pending(0).length, 0)
+  assert.deepEqual(rowsOf(m, ''), [])
+})
+
+// Agent review of PR #41, second round (low): the organizer transaction's gas sat in the seat's row.
+test('R41-2: the organizer transaction keeps its gas when anything after it fails', async () => {
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks([]), tournament: async () => { throw new Error('HTTP 502') } } })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+  })
+  const gas = m.store.db.prepare("SELECT tx_hash FROM spend WHERE agent_idx = 0 AND dry_run = 0 AND foxsy_atomic = '0' AND usd > 0").all() as { tx_hash: string }[]
+  assert.deepEqual(gas.map(g => g.tx_hash), ['hash1'], 'the gas of what was sent, under its hash')
+  assert.deepEqual(spendOf(m, 'join:'), [], 'nothing was signed for the seat')
+  assert.deepEqual(spendOf(m, 'shop:'), [['shop:organizer_fee', wholeToAtomic(150).toString()]])
 })
 
