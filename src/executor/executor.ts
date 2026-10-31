@@ -178,10 +178,12 @@ export class Executor {
       // An error before FoxLeague was asked to create or seat and before any signature (the kill switch, a pause or a
       // stop before the signature, a booking that failed) left nothing on FoxLeague, as a refusal (audit A1, 2026-10-23).
       const untouched = status === 'error' && REACH_TRACKED.has(a.type) && !booking?.sent && !booking?.reached
+      // The organizer's payment counts: it may have left the wallet whatever became of the seat.
+      const sent = booking?.sent || booking?.organizer?.sent
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
       // `untouched`: the 1v1 checks after a restart know that this error left no challenge and no seat.
-      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(booking?.sent ? { sent: true } : {}), ...(untouched ? { untouched: true } : {}) }, costUsd: costUsdValue || null, txHash })
-      const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(booking?.sent ? { sent: true } : {}) }
+      store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(sent ? { sent: true } : {}), ...(untouched ? { untouched: true } : {}) }, costUsd: costUsdValue || null, txHash })
+      const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(sent ? { sent: true } : {}) }
       // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
       const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
       if (!quietPiece) this.d.notify?.(agent.index, formatResult(agent.index, result), result)

@@ -636,6 +636,7 @@ test('R41-3: an organizer payment whose broadcast answer is unclear is kept, and
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
     assert.equal(r!.status, 'error', r!.summary)
+    assert.equal(r!.sent, true, 'R41-4: the owner hears at once that a payment may have left the wallet')
     const held = m.store.pending(0)
     assert.deepEqual(held.map(p => p.kind), ['organizer_fee'])
     const [again] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
