@@ -85,6 +85,8 @@ export interface RulesContext {
   pendingTicket?: boolean
   /** A tournament create once the organizer fees are live: what it owes, null when unread. */
   organizerQuote?: OrganizerFeeQuote | null
+  /** An organizer payment no create has used yet: the next create sends this hash, never a second payment. */
+  pendingOrganizer?: { hash: string; total: number }
   /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
   lastBoosterAt?: Date | null
   /** A seat in this tournament is paid and waiting for FoxLeague's confirmation (retried with the same hash). */
@@ -1011,8 +1013,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (worn) return refuse(worn)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
-      // What the organizer owes goes first, one payment before the create; nothing on a tournament FoxLeague exempts.
+      // What the organizer owes: one payment, once FoxLeague asks for it at the create; nothing on a tournament it exempts.
       let organizerFoxsy = 0
+      let organizerHash: string | undefined
       const organizerNotes: string[] = []
       if (organizerFeesLive(cfg, ctx.now)) {
         const q = ctx.organizerQuote
@@ -1020,13 +1023,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (q.owed) {
           if (!Number.isSafeInteger(q.total_foxsy) || q.total_foxsy <= 0) return refuse('the organizer payment could not be read: not paying blind')
           if (q.total_foxsy > ctx.settings.maxShopPaymentFoxsy) return refuse(`an organizer payment of ${q.total_foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy}: a smaller tournament owes less`)
-          organizerFoxsy = q.total_foxsy
+          const held = ctx.pendingOrganizer
+          if (held && held.total !== q.total_foxsy) return refuse(`an organizer payment of ${held.total} FOXSY waits to be used or returned, and this tournament owes ${q.total_foxsy}: not paying a second one; a tournament that owes ${held.total} can use it`)
+          if (held) organizerHash = held.hash
+          else organizerFoxsy = q.total_foxsy
           organizerNotes.push(`organizer payment ${q.total_foxsy} FOXSY (deposit ${q.deposit_foxsy}, private fee ${q.private_fee_foxsy}, ${q.games} games): the deposit is kept if too few teams join by the deadline`)
           if (q.no_free_cancel) organizerNotes.push('this time slot has no free cancel')
         }
       }
       const total = a.entry_fee_foxsy + organizerFoxsy
-      return needFoxsy(total, allow(total, { fee: a.entry_fee_foxsy, organizerFoxsy, ...(a.invite_user_ids?.length ? { invites } : {}) }, 'play', organizerNotes))
+      return needFoxsy(total, allow(total, { fee: a.entry_fee_foxsy, organizerFoxsy, ...(organizerHash ? { organizerHash } : {}), ...(a.invite_user_ids?.length ? { invites } : {}) }, 'play', organizerNotes))
     }
 
     case 'create_challenge': {

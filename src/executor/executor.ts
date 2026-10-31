@@ -23,6 +23,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
+import { SHOP_FINAL, SHOP_REFUNDED, creditShopPayment } from './pending.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
@@ -386,6 +387,10 @@ export class Executor {
       market.rankedTicket = await soft(() => fox.rankedTicket(wallet))
       market.pendingTicket = store.pending(agent.index).some(p => p.kind === 'ranked_ticket')
     }
+    if (a.type === 'create_tournament') {
+      const held = store.pending(agent.index).find(p => p.kind === 'organizer_fee')
+      if (held) market.pendingOrganizer = { hash: held.hash, total: Number((held.payload as { total?: number }).total) }
+    }
     if (a.type === 'create_tournament' && organizerFeesLive(snap.config, now)) {
       market.organizerQuote = await soft(() =>
         fox.organizerFeeQuote(wallet, { format: a.format, max_teams: a.max_teams, home_and_away: Boolean(a.home_and_away), has_third_place_match: a.format === 'knockout', private: Boolean(a.invite_user_ids?.length), developer_mode: false, starts_at: new Date(now.getTime() + a.starts_in_hours * 3600_000).toISOString() }),
@@ -653,6 +658,14 @@ export class Executor {
       }
     }
     booking.ids = []
+  }
+
+  /** The organizer's payment went out but no seat will follow: the entry goes, the gas of what was sent stays (its row is the last). */
+  private dropEntry(booking: Booking, hash: string): void {
+    const [entry, ...gas] = booking.ids
+    if (entry !== undefined) this.unbook({ ids: [entry], sent: false })
+    booking.ids = gas
+    this.settle(booking, hash)
   }
 
   private settle(booking: Booking, hash: string): void {
@@ -1010,34 +1023,59 @@ export class Executor {
                 ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),
                 ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}),
               }
-        // The organizer's payment first: one shopPay, its hash goes with the create (FoxLeague's quote named the amount).
-        let organizerHash: string | undefined
-        if (booking.organizer && built.txs.length) {
-          const paid = await this.sendAndWait(wallet, built.txs[0]!, booking.organizer)
-          organizerHash = paid.hash
-          if (paid.outcome.kind !== 'success') {
-            this.unbook(booking)
-            if (paid.outcome.kind === 'failed') return finish('failed', `${desc}: organizer payment reverted (${paid.outcome.reason})`, this.revert(booking.organizer, agent, v, fees, paid.hash, now, snap), paid.hash)
-            return finish('unconfirmed', `${desc}: organizer payment sent, not final yet (${paid.outcome.reason}); nothing was created and the payment stays counted`, usd, paid.hash)
-          }
-          body.organizer_fee_tx_hash = organizerHash
-        }
+        const newKey = () => `agent${agent.index}-${randomUUID()}`
+        // An earlier organizer payment no create used goes with this one: never a second payment.
+        let organizerHash = typeof v.facts.organizerHash === 'string' ? v.facts.organizerHash : undefined
+        if (organizerHash) body.organizer_fee_tx_hash = organizerHash
         booking.reached = true // from here a tournament or a 1v1 may exist, whatever the answer
         let created: Tournament | undefined
+        if (booking.organizer && built.txs.length) {
+          // Pressed first, as the ranked ticket: FoxLeague runs its other checks (the time slot too) before it asks for the
+          // payment, so a refusal here costs nothing. A refusal goes to the caller's catch, which releases the bookings.
+          try {
+            created = await fox.createTournament(wallet, body, newKey())
+            this.unbook(booking.organizer)
+          } catch (err) {
+            if (!(err instanceof ApiRefusal && err.code === 'organizer_fee_required')) throw err
+            const hash = await this.send(wallet, built.txs[0]!, booking.organizer)
+            // Kept from the send on, as FoxLeague's own app does: a create that does not use it leaves it for the next one.
+            store.addPending(hash, agent.index, 'organizer_fee', { total: v.facts.organizerFoxsy })
+            const outcome = await this.outcome(hash)
+            if (outcome.kind === 'failed') {
+              store.resolvePending(hash, 'failed')
+              this.unbook(booking)
+              return finish('failed', `${desc}: organizer payment reverted (${outcome.reason})`, this.revert(booking.organizer, agent, v, fees, hash, now, snap), hash)
+            }
+            if (outcome.kind === 'unconfirmed') {
+              this.dropEntry(booking, hash)
+              return finish('unconfirmed', `${desc}: organizer payment sent, not final yet (${outcome.reason}); nothing was created, and the next create of this amount uses this payment`, 0, hash)
+            }
+            organizerHash = hash
+            body.organizer_fee_tx_hash = hash
+          }
+        }
         for (let i = 0; !created; i++) {
           try {
-            created = await fox.createTournament(wallet, body, `agent${agent.index}-${randomUUID()}`)
+            created = await fox.createTournament(wallet, body, newKey())
           } catch (err) {
             if (!organizerHash) throw err
-            // Its hash is kept and sent again while FoxLeague cannot verify it yet: never a second payment.
+            // FoxLeague cannot verify it yet: the same hash again, never a second payment.
             if (err instanceof ApiRefusal && err.isTxPending && i < 5) {
               await sleep(6000)
               continue
             }
-            this.unbook(booking)
-            return finish('error', `${desc}: organizer payment ${organizerHash} made but not created: ${err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)}; FoxLeague keeps or returns an unused payment by its refund net; it stays counted here`, 0, organizerHash)
+            const why = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+            this.dropEntry(booking, organizerHash)
+            // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
+            if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
+              store.resolvePending(organizerHash, 'done')
+              if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
+              return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)
+            }
+            return finish('error', `${desc}: organizer payment ${organizerHash} made, nothing created: ${why}; the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
           }
         }
+        if (organizerHash) store.resolvePending(organizerHash, 'done')
         store.retagSpend(booking.ids, 'join:new', `join:${created.id}`)
         // Its row keeps the id it made, whatever comes after: what this agent created itself (ownCreations).
         const done: typeof finish = (st, summary, cost, hash, extra) => finish(st, summary, cost, hash, { ...((extra as object) ?? {}), createdTournamentId: created.id })
@@ -1048,8 +1086,9 @@ export class Executor {
           await sleep(3000)
         }
         if (!detail || detail.tournament.sc_tournament_id === null) {
-          // Nothing was signed: the booked seat is not spent (it would otherwise stay counted until the tournament ends).
-          if (!booking.sent) this.unbook(booking)
+          // Nothing was signed for the seat: it is not spent (it would otherwise stay counted until the tournament ends).
+          if (!booking.sent && organizerHash && booking.organizer?.sent) this.dropEntry(booking, organizerHash)
+          else if (!booking.sent) this.unbook(booking)
           return done('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
         }
         const spec = joinTournamentTx(detail.tournament.sc_tournament_id, v.foxsy - wholeToAtomic(Number(v.facts.organizerFoxsy ?? 0)))

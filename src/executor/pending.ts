@@ -33,16 +33,16 @@ export const ABANDON_AFTER_MIN = 60
  * a refusal. Not the timeout's "after that it is refunded automatically" (the payment may still be confirmed), not a
  * refund only queued or left to the support team (nothing came back yet).
  */
-const SHOP_REFUNDED = /already refunded|being refunded automatically/i
+export const SHOP_REFUNDED = /already refunded|being refunded automatically/i
 
 /** A final answer for a shop payment's hash: used, refunded or held by FoxLeague's support team. */
-const SHOP_FINAL = /already processed|refunded|cannot be used/i
+export const SHOP_FINAL = /already processed|refunded|cannot be used/i
 
 /** A final answer for a seat's hash: seated, used, refunded, or the tournament closed (a paid entry is refunded). */
 const JOIN_FINAL = /already|Do NOT pay again|refunded|not open for registration/i
 
 /** Credits the FOXSY row (shop:<product>) booked for this payment; true when one was still counting. */
-function creditShopPayment(store: Store, agentIndex: number, hash: string): boolean {
+export function creditShopPayment(store: Store, agentIndex: number, hash: string): boolean {
   let credited = false
   for (const r of store.openSpend(agentIndex, 'shop:', false)) {
     if (r.txHash !== hash || !/^shop:[a-z_]+$/.test(r.action)) continue
@@ -65,6 +65,15 @@ function givenUp(agentIndex: number, p: { hash: string; kind: string; payload: u
 
 export async function retryPendingPayments(d: PendingDeps, agentIndex: number, wallet: AgentWallet, now = Date.now()): Promise<void> {
   for (const p of d.store.pending(agentIndex)) {
+    // No route confirms an organizer payment: only a create uses it (the executor). Past the window FoxLeague's net has
+    // refunded one that stayed unused, and the next create may pay again.
+    if (p.kind === 'organizer_fee') {
+      if ((now - new Date(p.sentAt).getTime()) / 60_000 > ABANDON_AFTER_MIN) {
+        d.store.resolvePending(p.hash, 'abandoned')
+        ;(d.alert ?? d.notify)(`${agentName(agentIndex)}: organizer payment ${p.hash} was not used by a create. FoxLeague's unconfirmed-payment net refunds a payment that stays unused; it stays counted against the budget here.`)
+      }
+      continue
+    }
     if (p.kind !== 'shop' && p.kind !== 'join' && p.kind !== 'ranked_ticket') continue
     const ageMin = (now - new Date(p.sentAt).getTime()) / 60_000
     let last: string

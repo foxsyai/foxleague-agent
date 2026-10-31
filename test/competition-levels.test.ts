@@ -338,16 +338,19 @@ test('CL14: the digest says when your own seat is locked', () => {
 const SILVER_CUP = parseAction({ ...CUP, tier: 'silver', entry_fee_foxsy: 1000 })
 const OWED = { owed: true, games: 6, private_fee_foxsy: 0, deposit_foxsy: 150, total_foxsy: 150, grace_minutes: 60, no_free_cancel: false }
 
-test('CL15: the deposit goes first with one shopPay, its hash with the create, and the seat pays the entry alone', async () => {
+const feeRequired = () => new ApiRefusal('This tournament needs a payment of 150 FOXSY from its organizer before it is created.', 'organizer_fee_required')
+/** FoxLeague's create: every other check first, then it asks for the payment; `then` answers once a hash is sent. */
+const createAsks = (bodies: Record<string, unknown>[], then: () => unknown = () => ({ id: 55 })) => async (_w: unknown, body: Record<string, unknown>) => {
+  bodies.push({ ...body })
+  if (!body.organizer_fee_tx_hash) throw feeRequired()
+  return then()
+}
+
+test('CL15: the create is pressed first; asked for the payment it pays once, sends the hash, and the seat pays the entry alone', async () => {
   const calls: string[] = []
   const created: Record<string, unknown>[] = []
   const m = setup({
-    fox: {
-      organizerFeeQuote: async () => OWED,
-      createTournament: async (_w: unknown, body: Record<string, unknown>) => { created.push(body); return { id: 55 } },
-      tournament: async () => tournament(55),
-      joinTournament: async () => ({}),
-    },
+    fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks(created), tournament: async () => tournament(55), joinTournament: async () => ({}) },
     chain: { send: async (tx: { data?: string }) => { const d = Buffer.from(tx.data ?? '', 'base64').toString().split('@').slice(0, 3).join('@'); calls.push(d); return calls.length === 1 ? 'hashfee' : 'hashseat' } },
   })
   await withLive(m.store, async () => {
@@ -357,9 +360,29 @@ test('CL15: the deposit goes first with one shopPay, its hash with the create, a
   })
   assert.match(calls[0]!, /@0821ab0d4414980000$/, '150 FOXSY for the deposit')
   assert.match(calls[1]!, /@3635c9adc5dea00000$/, '1000 FOXSY for the seat, not 1150')
-  assert.equal(created[0]!.organizer_fee_tx_hash, 'hashfee')
+  assert.deepEqual(created.map(b => b.organizer_fee_tx_hash), [undefined, 'hashfee'])
   assert.deepEqual(spendOf(m, 'shop:'), [['shop:organizer_fee', wholeToAtomic(150).toString()]])
   assert.deepEqual(spendOf(m, 'join:'), [['join:55', wholeToAtomic(1000).toString()]], 'a refunded seat credits the entry, never the deposit')
+  assert.equal(m.store.pending(0).filter(p => p.kind === 'organizer_fee').length, 0, 'the hash is settled')
+})
+
+test('CL15: a create refused before the payment pays nothing and counts nothing', async () => {
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: async () => { throw new ApiRefusal('time slot taken') } }, chain: { send: async () => assert.fail('nothing is paid') } })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+  })
+  assert.deepEqual(rowsOf(m, ''), [])
+})
+
+test('CL15: asked nothing after all, the organizer booking goes and the seat follows', async () => {
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: async () => ({ id: 55 }), tournament: async () => tournament(55), joinTournament: async () => ({}) } })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(spendOf(m, 'shop:'), [])
+  assert.deepEqual(spendOf(m, 'join:'), [['join:55', wholeToAtomic(1000).toString()]])
 })
 
 test('CL15: a create that owes nothing pays nothing extra and sends no hash; a 1v1 asks no quote', async () => {
@@ -397,12 +420,12 @@ test('CL15: a quote that cannot be read is no "owes nothing"; the owner\'s limit
 
 test('CL15: a payment FoxLeague cannot verify yet is sent again with the same hash, never paid twice', async () => {
   const sends: string[] = []
-  const hashes: unknown[] = []
+  const bodies: Record<string, unknown>[] = []
   let tries = 0
   const m = setup({
     fox: {
       organizerFeeQuote: async () => OWED,
-      createTournament: async (_w: unknown, b: Record<string, unknown>) => { hashes.push(b.organizer_fee_tx_hash); if (tries++ === 0) throw new ApiRefusal('Could not verify transaction yet.', 'tx_pending'); return { id: 55 } },
+      createTournament: createAsks(bodies, () => { if (tries++ === 0) throw new ApiRefusal('Could not verify transaction yet.', 'tx_pending'); return { id: 55 } }),
       tournament: async () => tournament(55),
       joinTournament: async () => ({}),
     },
@@ -412,30 +435,119 @@ test('CL15: a payment FoxLeague cannot verify yet is sent again with the same ha
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
   })
-  assert.deepEqual(hashes, ['hashfee', 'hashfee'])
+  assert.deepEqual(bodies.map(b => b.organizer_fee_tx_hash), [undefined, 'hashfee', 'hashfee'])
   assert.equal(sends.length, 2, 'one deposit, one seat')
 })
 
-test('CL15: a create refused after the payment says so; the entry is released, the payment stays counted', async () => {
-  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: async () => { throw new ApiRefusal('time slot taken') } } })
+// Agent review of PR #41 (medium): a payment no create used was dropped, so the next plan paid a second one. FoxLeague's
+// own app keeps the hash and reuses it for the same amount (useOrganizerFee.ts).
+test('R41-1: a create refused after the payment keeps its hash, and the next create uses it with no second payment', async () => {
+  const sends: string[] = []
+  const bodies: Record<string, unknown>[] = []
+  let refuse = true
+  const m = setup({
+    fox: {
+      organizerFeeQuote: async () => OWED,
+      createTournament: createAsks(bodies, () => { if (refuse) throw new ApiRefusal('time slot taken'); return { id: 55 } }),
+      tournament: async () => tournament(55),
+      joinTournament: async () => ({}),
+    },
+    chain: { send: async () => { sends.push('send'); return sends.length === 1 ? 'hashfee' : 'hashseat' } },
+  })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
     assert.equal(r!.status, 'error', r!.summary)
     assert.match(r!.summary, /time slot taken/)
-    assert.match(r!.summary, /hash1/)
+    assert.match(r!.summary, /hashfee/)
+    assert.deepEqual(spendOf(m, 'shop:'), [['shop:organizer_fee', wholeToAtomic(150).toString()]])
+    assert.deepEqual(spendOf(m, 'join:'), [], 'nothing was signed for the seat')
+    assert.deepEqual(m.store.pending(0).map(p => [p.hash, p.kind]), [['hashfee', 'organizer_fee']])
+    refuse = false
+    const [again] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(again!.status, 'confirmed', again!.summary)
   })
-  assert.deepEqual(spendOf(m, 'shop:'), [['shop:organizer_fee', wholeToAtomic(150).toString()]])
-  assert.deepEqual(spendOf(m, 'join:'), [], 'nothing was signed for the seat')
+  assert.equal(sends.length, 2, 'one deposit, one seat: never a second deposit')
+  assert.deepEqual(bodies.map(b => b.organizer_fee_tx_hash), [undefined, 'hashfee', 'hashfee'])
+  assert.deepEqual(spendOf(m, 'shop:'), [['shop:organizer_fee', wholeToAtomic(150).toString()]], 'counted once')
+  assert.equal(m.store.pending(0).length, 0)
+})
+
+test('R41-1: an organizer payment not final yet creates nothing, and the next create uses the same hash', async () => {
+  const sends: string[] = []
+  const bodies: Record<string, unknown>[] = []
+  let outcome = 'unconfirmed'
+  const m = setup({
+    fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks(bodies), tournament: async () => tournament(55), joinTournament: async () => ({}) },
+    chain: { send: async () => { sends.push('send'); return sends.length === 1 ? 'hashfee' : 'hashseat' }, waitForOutcome: async () => ({ kind: outcome, reason: 'still on its way' }) },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'unconfirmed', r!.summary)
+    assert.deepEqual(m.store.pending(0).map(p => p.hash), ['hashfee'])
+    outcome = 'success'
+    const [again] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(again!.status, 'confirmed', again!.summary)
+  })
+  assert.equal(sends.length, 2)
+  assert.equal(bodies.at(-1)!.organizer_fee_tx_hash, 'hashfee')
+})
+
+test('R41-1: while a payment waits, a tournament that owes another amount pays no second one', async () => {
+  const m = setup({ fox: { organizerFeeQuote: async () => ({ ...OWED, total_foxsy: 200, deposit_foxsy: 200 }), createTournament: async () => assert.fail('no create') }, chain: { send: async () => assert.fail('nothing is paid') } })
+  m.store.addPending('hashfee', 0, 'organizer_fee', { total: 150 })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'refused', r!.summary)
+    assert.match(r!.summary, /150 FOXSY/)
+  })
+})
+
+test('R41-1: an answer that settles the hash forgets it; a refunded payment stops counting', async () => {
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: async () => { throw new ApiRefusal('This payment was already refunded and cannot be used for a purchase.') } }, chain: { send: async () => assert.fail('nothing is paid') } })
+  const id = m.store.recordSpend({ agentIndex: 0, at: new Date(), gameDay: 'd', category: 'play', action: 'shop:organizer_fee', foxsyAtomic: wholeToAtomic(150), egldAtomic: 0n, usd: 0.4, txHash: 'hashfee', dryRun: false })
+  assert.ok(id)
+  m.store.addPending('hashfee', 0, 'organizer_fee', { total: 150 })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+  })
+  assert.equal(m.store.pending(0).length, 0)
+  assert.equal(m.store.openSpend(0, 'shop:organizer_fee', false).length, 0, 'credited')
+})
+
+test('R41-1: a payment no create used is given up after the window, and the owner hears of it', async () => {
+  const m = setup()
+  m.store.addPending('hashfee', 0, 'organizer_fee', { total: 150 })
+  const told: string[] = []
+  const deps = { store: m.store, fox: {} as never, notify: () => assert.fail('routine news'), alert: (t: string) => told.push(t) }
+  await retryPendingPayments(deps, 0, liveWallet)
+  assert.equal(m.store.pending(0).length, 1, 'kept inside the window')
+  await retryPendingPayments(deps, 0, liveWallet, Date.now() + 61 * 60_000)
+  assert.equal(m.store.pending(0).length, 0)
+  assert.match(told[0]!, /organizer payment hashfee/)
+})
+
+// Agent review of PR #41 (low): a sent transaction keeps at least its gas (AGENTS.md rule 3).
+test('R41-2: the organizer transaction keeps its gas when no tournament comes of it', async () => {
+  const gas = (m: { store: Store }) => m.store.db.prepare("SELECT count(*) n FROM spend WHERE agent_idx = 0 AND dry_run = 0 AND foxsy_atomic = '0' AND usd > 0").get() as { n: number }
+  const refused = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks([], () => { throw new ApiRefusal('time slot taken') }) } })
+  await withLive(refused.store, async () => { await refused.exec.run(refused.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }]) })
+  assert.equal(Number(gas(refused).n), 1, 'a refused create')
+  const open = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks([]) }, chain: { waitForOutcome: async () => ({ kind: 'unconfirmed', reason: 'later' }) } })
+  await withLive(open.store, async () => { await open.exec.run(open.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }]) })
+  assert.equal(Number(gas(open).n), 1, 'an outcome not read yet')
 })
 
 test('CL15: a deposit payment that reverts creates nothing and leaves only the gas', async () => {
-  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: async () => assert.fail('no create without the payment') }, chain: { waitForOutcome: async () => ({ kind: 'failed', reason: 'insufficient funds' }) } })
+  const bodies: Record<string, unknown>[] = []
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament: createAsks(bodies, () => assert.fail('no create without the payment')) }, chain: { waitForOutcome: async () => ({ kind: 'failed', reason: 'insufficient funds' }) } })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
     assert.equal(r!.status, 'failed', r!.summary)
   })
   assert.deepEqual(spendOf(m, 'shop:'), [])
   assert.deepEqual(spendOf(m, 'join:'), [])
+  assert.equal(m.store.pending(0).length, 0)
 })
 
 // ---- flexible groups ----
