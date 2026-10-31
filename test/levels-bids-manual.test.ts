@@ -161,3 +161,11 @@ test('a failed read of either auction list leaves the other one', async () => {
   assert.deepEqual(auctionsShown(null, [row(3, 'Common'), row(4, 'Uncommon')], 'erd1me').map(l => (l as { nft_nonce: number }).nft_nonce), [3, 4], 'the cheapest without the strongest')
   assert.deepEqual(auctionsShown(null, null, 'erd1me'), [])
 })
+
+// Agent review of PR #40: the Zeus strategy still priced ranked at K 24; mainnet runs 9 / 13 / 17 since 2026-10-30.
+test('R78-2: no strategy prices ranked as the largest ELO swing', () => {
+  for (const [level, text] of Object.entries(STRATEGY_PRESETS)) {
+    assert.doesNotMatch(text, /K 24|ELO the most/, level)
+  }
+  assert.match(STRATEGY_PRESETS.zeus!, /Ranked matches move ELO at K 9, less than a Silver or Gold match/)
+})
