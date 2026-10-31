@@ -1027,7 +1027,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (held && held.total !== q.total_foxsy) return refuse(`an organizer payment of ${held.total} FOXSY waits to be used or returned, and this tournament owes ${q.total_foxsy}: not paying a second one; a tournament that owes ${held.total} can use it`)
           if (held) organizerHash = held.hash
           else organizerFoxsy = q.total_foxsy
-          organizerNotes.push(`organizer payment ${q.total_foxsy} FOXSY (deposit ${q.deposit_foxsy}, private fee ${q.private_fee_foxsy}, ${q.games} games): the deposit is kept if too few teams join by the deadline`)
+          organizerNotes.push(`organizer payment ${q.total_foxsy} FOXSY (deposit ${q.deposit_foxsy}${q.private_fee_foxsy > 0 ? `, private fee ${q.private_fee_foxsy}` : ''}, ${q.games} games): the deposit is kept if too few teams join by the deadline`)
           if (q.no_free_cancel) organizerNotes.push('this time slot has no free cancel')
         }
       }

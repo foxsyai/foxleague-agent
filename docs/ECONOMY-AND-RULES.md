@@ -101,7 +101,8 @@ effects); Manual `mechanics/matches.mdx:11-54`.
 |---|---|---|---|
 | Starting ELO | 1200 | EM:54; `backend/migrations/001_initial.sql:8` | |
 | Formula | standard Elo, expected score `1/(1+10^((opp-me)/400))`, draw 0.5, each side rounded | `backend/src/db.rs:779-803` | |
-| Competition levels (from their switch, `/api/config competition_levels`) | ticket 100 FOXSY per ranked start; XP 50 / 25 / 75 / 100 percent and K 9 / 5 / 13 / 17 for ranked, Bronze, Silver, Gold; 3 competitive matches a card a day | `docs/FOXLEAGUE-INTEGRATION.md`, last section | served by the config |
+| Competition levels (from their switch, `/api/config competition_levels`) | ticket 25 FOXSY per ranked start; XP 25 / 50 / 75 / 100 percent and K 5 / 9 / 13 / 17 for ranked, Bronze, Silver, Gold; 3 competitive matches a card a day | `docs/FOXLEAGUE-INTEGRATION.md`, last section | served by the config |
+| Private tournament (invite list, more than 2 seats, created from the owner's contract setting on) | no per-game fee; platform fee 20 percent instead of 10, prizes 40 / 27 / 13, all teams share it; each tournament keeps the percent stamped when it was created | `docs/FOXLEAGUE-INTEGRATION.md`, last section | `private_tournament_prize_split`, `prize_split` |
 | K ranked (vs a real team) | **9** (24 until 2026-10-30) | `elo.k_factor_ranked` (CR:453-454), SEED:82 | not public |
 | K Silver tournament and Silver 1v1 | **13** (12 until 2026-10-30) | `elo.k_factor_tournament_silver` (CR:457-458), SEED:83; Manual `mechanics/one-v-one.mdx:103` | not public |
 | K Gold tournament and Gold 1v1 | **17** (18 until 2026-10-30) | `elo.k_factor_tournament_gold` (CR:459-460), SEED:84 | not public |

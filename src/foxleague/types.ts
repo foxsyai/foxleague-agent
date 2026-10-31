@@ -20,6 +20,14 @@ export interface CompetitionLevels {
   competitive_daily_cap: number
 }
 
+/** How a tournament's pool is shared, in whole percents summing to 100. */
+export interface PrizeSplit {
+  winner_percent: number
+  runner_up_percent: number
+  third_percent: number
+  platform_fee_percent: number
+}
+
 /** GET /api/config `organizer_fees`: the calendar deposit and the private fee of a tournament's organizer. */
 export interface OrganizerFees {
   live: boolean
@@ -71,7 +79,9 @@ export interface FoxConfig {
   tournament_fee_bounds: { silver_min: number; silver_max: number; gold_min: number; bronze_min?: number; bronze_max?: number }
   competition_levels?: CompetitionLevels
   organizer_fees?: OrganizerFees
-  tournament_prize_split: { winner_percent: number; runner_up_percent: number; third_percent: number; platform_fee_percent: number }
+  tournament_prize_split: PrizeSplit
+  /** The split a private tournament created now pays; the public one until FoxLeague raises its platform fee. */
+  private_tournament_prize_split?: PrizeSplit | null
   one_v_one_prize_split: { winner_percent: number; platform_fee_percent: number }
   tournament_defaults: {
     match_stagger_minutes: number
@@ -241,6 +251,8 @@ export interface Tournament {
   targeted_to_you?: boolean
   challenge_deadline_minutes: number | null
   is_private: boolean
+  /** Set by the agent from the tournament's own answer: the split its platform fee pays, fixed when it was created. */
+  prize_split?: PrizeSplit | null
   /** Set by the agent: a private tournament its own team is invited to (FoxLeague tells this to the team's session only). */
   invited?: boolean
   home_and_away: boolean
@@ -253,6 +265,8 @@ export interface TournamentDetail {
   user_is_participant?: boolean
   /** Only filled for the caller's own session: true when that team is invited to this private tournament. */
   user_can_join_private?: boolean | null
+  /** The split this tournament pays, from the platform fee the contract fixed at its creation; null while unknown. */
+  prize_split?: PrizeSplit | null
   /**
    * A 1v1 read with the caller's wallet: true when FoxLeague's join gate would refuse it because the team is busy with
    * a tournament (the same rows, matches.rs tournament_busy_exists_sql). FoxLeague answers false on its own failed read.

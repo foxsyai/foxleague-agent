@@ -1,6 +1,7 @@
 // FoxLeague's rule change of 9 November 2026, 14:00 UTC (its branch feat/competition-levels, feat/organizer-fees,
 // feat/leave-lock, feat/flexible-groups): a paid ranked ticket, paid Bronze, XP and ELO by level, a leave lock, a calendar
-// deposit and a private fee. Everything follows the switches in /api/config, so nothing changes before them.
+// deposit and a higher platform fee on a private tournament (feat/private-fee). Everything follows the switches in
+// /api/config, so nothing changes before them.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -11,6 +12,8 @@ import { levelsLive, organizerFeesLive, leaveLockLive } from '../src/foxleague/l
 import { matchesAtMost } from '../src/executor/rules.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
+import { takeSnapshot } from '../src/snapshot/snapshot.ts'
+import type { Tournament } from '../src/foxleague/types.ts'
 import { validateSettingsPatch } from '../src/store/settings.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
 import { STRATEGY_PRESETS } from '../src/store/settings.ts'
@@ -18,11 +21,11 @@ import type { Store } from '../src/store/db.ts'
 import { dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 const LIVE_LEVELS = {
-  live: true, live_from: '2026-11-09T14:00:00Z', ranked_ticket_price_foxsy: 100,
-  xp_factor_pct: { ranked: 50, bronze: 25, silver: 75, gold: 100 }, elo_k: { ranked: 9, bronze: 5, silver: 13, gold: 17 },
+  live: true, live_from: '2026-11-09T14:00:00Z', ranked_ticket_price_foxsy: 25,
+  xp_factor_pct: { ranked: 25, bronze: 50, silver: 75, gold: 100 }, elo_k: { ranked: 5, bronze: 9, silver: 13, gold: 17 },
   private_bronze_earns: true, competitive_daily_cap: 3,
 }
-const LIVE_FEES = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 15, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 100, calendar_deposit_grace_minutes: 60 }
+const LIVE_FEES = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 0, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 100, calendar_deposit_grace_minutes: 60 }
 
 /** The fixture's snapshot with the switches on. */
 function liveSnapshot() {
@@ -40,7 +43,7 @@ const RANKED = { type: 'play_match' as const, match_type: 'ranked' as const }
 const rowsOf = (m: { store: Store }, prefix: string) =>
   (m.store.db.prepare("SELECT action, foxsy_atomic FROM spend WHERE agent_idx = 0 AND dry_run = 0 AND foxsy_atomic <> '0' AND action LIKE ? ORDER BY id").all(`${prefix}%`) as { action: string; foxsy_atomic: string }[]).map(r => [r.action, r.foxsy_atomic])
 const spendOf = rowsOf
-const required = () => new ApiRefusal('A ranked game costs 100 FOXSY: pay for a ticket first.', 'ranked_ticket_required')
+const required = () => new ApiRefusal('A ranked game costs 25 FOXSY: pay for a ticket first.', 'ranked_ticket_required')
 
 // ---- the switches ----
 
@@ -67,7 +70,7 @@ test('CL0: the switches read only what FoxLeague serves; no block or off is the 
 
 test('CL1: before the switch a ranked start reads no ticket and pays nothing', async () => {
   const calls: string[] = []
-  const m = setup({ fox: { rankedTicket: async () => { calls.push('read'); return { live: false, price_foxsy: 100, tickets: 0 } }, playMatch: async () => { calls.push('play'); return { match_id: 7 } } }, chain: { send: async () => assert.fail('nothing is paid') } })
+  const m = setup({ fox: { rankedTicket: async () => { calls.push('read'); return { live: false, price_foxsy: 25, tickets: 0 } }, playMatch: async () => { calls.push('play'); return { match_id: 7 } } }, chain: { send: async () => assert.fail('nothing is paid') } })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
@@ -76,7 +79,7 @@ test('CL1: before the switch a ranked start reads no ticket and pays nothing', a
 })
 
 test('CL2: live, no ticket: the start is pressed first, so any other gate refuses with nothing paid and nothing counted', async () => {
-  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => { throw new ApiRefusal('Ranked cooldown: your squad needs to rest. Wait 2m (97s) before the next ranked match.') } }, chain: { send: async () => assert.fail('nothing is paid') } })
+  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => { throw new ApiRefusal('Ranked cooldown: your squad needs to rest. Wait 2m (97s) before the next ranked match.') } }, chain: { send: async () => assert.fail('nothing is paid') } })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'error', r!.summary)
@@ -90,9 +93,9 @@ test('CL3: live, no ticket: FoxLeague asks, one shopPay of the price, the ticket
   let pressed = 0
   const m = setup({
     fox: {
-      rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }),
+      rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }),
       playMatch: async () => { calls.push('play'); if (pressed++ === 0) throw required(); return { match_id: 11, ranked_paid: true } },
-      buyRankedTicket: async (_w: unknown, hash: string) => { calls.push(`ticket ${hash}`); return { live: true, price_foxsy: 100, tickets: 1 } },
+      buyRankedTicket: async (_w: unknown, hash: string) => { calls.push(`ticket ${hash}`); return { live: true, price_foxsy: 25, tickets: 1 } },
     },
     chain: { send: async (tx: { data?: string }) => { calls.push(`send ${Buffer.from(tx.data ?? '', 'base64').toString().split('@').slice(0, 3).join('@')}`); return 'hash1' } },
   })
@@ -100,19 +103,19 @@ test('CL3: live, no ticket: FoxLeague asks, one shopPay of the price, the ticket
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
     assert.match(r!.summary, /match #11 started \(ranked\)/)
-    assert.match(r!.summary, /100 FOXSY/)
+    assert.match(r!.summary, /25 FOXSY/)
     assert.equal(r!.txHash, 'hash1')
   })
   assert.equal(calls[0], 'play')
-  assert.match(calls[1]!, /^send ESDTTransfer@[0-9a-f]+@056bc75e2d63100000$/, 'exactly 100 FOXSY')
+  assert.match(calls[1]!, /^send ESDTTransfer@[0-9a-f]+@015af1d78b58c40000$/, 'exactly 25 FOXSY')
   assert.deepEqual(calls.slice(2), ['ticket hash1', 'play'])
-  assert.deepEqual(spendOf(m, 'shop:'), [['shop:ranked_ticket', wholeToAtomic(100).toString()]], 'booked once')
+  assert.deepEqual(spendOf(m, 'shop:'), [['shop:ranked_ticket', wholeToAtomic(25).toString()]], 'booked once')
   assert.equal(m.store.pending(0).length, 0)
 })
 
 test('CL4: a ticket already held pays nothing', async () => {
   const calls: string[] = []
-  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 1 }), playMatch: async () => { calls.push('play'); return { match_id: 12, ranked_paid: true } } }, chain: { send: async () => assert.fail('nothing is paid') } })
+  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 1 }), playMatch: async () => { calls.push('play'); return { match_id: 12, ranked_paid: true } } }, chain: { send: async () => assert.fail('nothing is paid') } })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
@@ -132,7 +135,7 @@ test('CL5: tickets that cannot be read are no "none": no start, nothing paid', a
 })
 
 test('CL6: a ticket payment still waiting is never paid again, and its retry confirms with the same hash', async () => {
-  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => assert.fail('no start') }, chain: { send: async () => assert.fail('never paid twice') } })
+  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => assert.fail('no start') }, chain: { send: async () => assert.fail('never paid twice') } })
   m.store.addPending('hash9', 0, 'ranked_ticket', { tx_hash: 'hash9' })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
@@ -141,7 +144,7 @@ test('CL6: a ticket payment still waiting is never paid again, and its retry con
   })
   const told: string[] = []
   const seen: string[] = []
-  await retryPendingPayments({ store: m.store, fox: { shopConfirm: async () => assert.fail('not a shop product'), joinTournament: async () => assert.fail('not a seat'), buyRankedTicket: async (_w: unknown, h: string) => { seen.push(h); return { live: true, price_foxsy: 100, tickets: 1 } } } as never, notify: t => told.push(t) }, 0, liveWallet)
+  await retryPendingPayments({ store: m.store, fox: { shopConfirm: async () => assert.fail('not a shop product'), joinTournament: async () => assert.fail('not a seat'), buyRankedTicket: async (_w: unknown, h: string) => { seen.push(h); return { live: true, price_foxsy: 25, tickets: 1 } } } as never, notify: t => told.push(t) }, 0, liveWallet)
   assert.deepEqual(seen, ['hash9'])
   assert.equal(m.store.pending(0).length, 0)
   assert.match(told[0]!, /ticket/)
@@ -158,7 +161,7 @@ test('CL7: a payment FoxLeague cannot verify yet keeps its hash; nothing is paid
   let pressed = 0
   const m = setup({
     fox: {
-      rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }),
+      rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }),
       playMatch: async () => { if (pressed++ === 0) throw required(); assert.fail('no start without the ticket') },
       buyRankedTicket: async () => { throw new ApiRefusal('Could not verify transaction yet. Please confirm again in a moment.', 'tx_pending') },
     },
@@ -175,9 +178,9 @@ test('CL8: a start refused after the ticket was bought says the ticket stays, an
   let pressed = 0
   const m = setup({
     fox: {
-      rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }),
+      rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }),
       playMatch: async () => { if (pressed++ === 0) throw required(); throw new ApiRefusal('Servers are busy with other matches right now. Please try again in a few seconds.') },
-      buyRankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 1 }),
+      buyRankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 1 }),
     },
   })
   await withLive(m.store, async () => {
@@ -190,7 +193,7 @@ test('CL8: a start refused after the ticket was bought says the ticket stays, an
 })
 
 test('CL9: a game the AI fills says so: free, the ticket stays', async () => {
-  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 1 }), playMatch: async () => ({ match_id: 13, ranked_paid: false }) } })
+  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 1 }), playMatch: async () => ({ match_id: 13, ranked_paid: false }) } })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
@@ -200,20 +203,20 @@ test('CL9: a game the AI fills says so: free, the ticket stays', async () => {
 })
 
 test('CL10: the ticket keeps to the owner\'s limit and the wallet', async () => {
-  const over = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => assert.fail('no start') } })
-  over.store.updateSettings(0, { maxShopPaymentFoxsy: 99 })
+  const over = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => assert.fail('no start') } })
+  over.store.updateSettings(0, { maxShopPaymentFoxsy: 24 })
   await withLive(over.store, async () => {
     const [r] = await over.exec.run(over.agent(), liveWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'refused', r!.summary)
     assert.match(r!.summary, /maximum|limit/)
   })
-  const poor = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => assert.fail('no start') } })
+  const poor = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => assert.fail('no start') } })
   const s = liveSnapshot()
-  s.chain!.foxsy = wholeToAtomic(99)
+  s.chain!.foxsy = wholeToAtomic(24)
   await withLive(poor.store, async () => {
     const [r] = await poor.exec.run(poor.agent(), liveWallet, s, [{ action: RANKED, reason: '' }])
     assert.equal(r!.status, 'refused', r!.summary)
-    assert.match(r!.summary, /needs 100 FOXSY/)
+    assert.match(r!.summary, /needs 25 FOXSY/)
   })
   // Casual stays free whatever the switch says.
   const casual = setup({ fox: { playMatch: async () => ({ match_id: 2 }) }, chain: { send: async () => assert.fail('nothing is paid') } })
@@ -224,11 +227,11 @@ test('CL10: the ticket keeps to the owner\'s limit and the wallet', async () => 
 })
 
 test('CL11: a dry run simulates the ticket and presses nothing', async () => {
-  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => assert.fail('no start in a dry run') } })
+  const m = setup({ fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => assert.fail('no start in a dry run') } })
   const [r] = await m.exec.run(m.agent(), dryWallet, liveSnapshot(), [{ action: RANKED, reason: '' }])
   assert.equal(r!.status, 'dry_run', r!.summary)
   assert.match(r!.summary, /shopPay: simulation ok/)
-  assert.match(r!.summary, /100 FOXSY/)
+  assert.match(r!.summary, /25 FOXSY/)
 })
 
 // ---- paid Bronze ----
@@ -597,9 +600,9 @@ test('CL18: the digest states the levels only from what FoxLeague serves', () =>
   assert.match(soon, /Competition levels: not live yet, from 2026-11-09T14:00:00Z/)
   const on = renderDigest(liveSnapshot())
   assert.match(on, /Competition levels: LIVE/)
-  assert.match(on, /ranked ticket 100 FOXSY/)
-  assert.match(on, /XP ranked 50%, Bronze 25%, Silver 75%, Gold 100%/)
-  assert.match(on, /K ranked 9, Bronze 5, Silver 13, Gold 17/)
+  assert.match(on, /ranked ticket 25 FOXSY/)
+  assert.match(on, /XP ranked 25%, Bronze 50%, Silver 75%, Gold 100%/)
+  assert.match(on, /K ranked 5, Bronze 9, Silver 13, Gold 17/)
   assert.match(on, /3 competitive matches a card a day/)
   assert.match(on, /calendar deposit 25 FOXSY a game/)
   assert.doesNotMatch(on, /ranked, casual and Bronze never count/)
@@ -650,7 +653,7 @@ test('R41-3: a ticket whose broadcast answer is unclear is kept, and the next ra
   let pressed = 0
   const sends: string[] = []
   const m = setup({
-    fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => { pressed++; throw required() } },
+    fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => { pressed++; throw required() } },
     chain: { send: async () => { sends.push('send'); throw new Error('broadcast unclear (HTTP 502, no hash)') } },
   })
   await withLive(m.store, async () => {
@@ -666,7 +669,7 @@ test('R41-3: a ticket whose broadcast answer is unclear is kept, and the next ra
 
 test('R41-3: a broadcast the gateway definitely refused leaves nothing kept and nothing counted', async () => {
   const m = setup({
-    fox: { rankedTicket: async () => ({ live: true, price_foxsy: 100, tickets: 0 }), playMatch: async () => { throw required() } },
+    fox: { rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }), playMatch: async () => { throw required() } },
     chain: { send: async () => { throw new BroadcastRefused('insufficient funds') }, lookupTransaction: async () => 'not_found' },
   })
   await withLive(m.store, async () => {
@@ -690,3 +693,69 @@ test('R41-2: the organizer transaction keeps its gas when anything after it fail
   assert.deepEqual(spendOf(m, 'shop:'), [['shop:organizer_fee', wholeToAtomic(150).toString()]])
 })
 
+// ---- FoxLeague's change of 31 October: ranked 25 FOXSY, a quarter, K 5; Bronze half, K 9; private pays through 20% ----
+
+const PUBLIC_SPLIT = { winner_percent: 45, runner_up_percent: 30, third_percent: 15, platform_fee_percent: 10 }
+const PRIVATE_SPLIT = { winner_percent: 40, runner_up_percent: 27, third_percent: 13, platform_fee_percent: 20 }
+
+test('R41-6: with no per-game fee the organizer line and the plan name no private fee', async () => {
+  assert.doesNotMatch(renderDigest(liveSnapshot()), /private fee/)
+  const dearer = liveSnapshot()
+  dearer.config!.organizer_fees = { ...LIVE_FEES, private_match_fee_foxsy: 15 }
+  assert.match(renderDigest(dearer), /private fee 15 a game/, 'a fee FoxLeague does serve is still told')
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED } })
+  const [r] = await m.exec.run(m.agent(), dryWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+  assert.equal(r!.status, 'dry_run', r!.summary)
+  assert.match(r!.summary, /deposit 150, 6 games/)
+  assert.doesNotMatch(r!.summary, /private fee/)
+})
+
+test('R41-7: the digest says what a private tournament created now pays, only when it differs from a public one', () => {
+  const s = liveSnapshot()
+  assert.doesNotMatch(renderDigest(s), /A private tournament created now/, 'an older backend has no split')
+  s.config!.tournament_prize_split = PUBLIC_SPLIT
+  s.config!.private_tournament_prize_split = PUBLIC_SPLIT
+  assert.doesNotMatch(renderDigest(s), /A private tournament created now/, 'the same split is nothing to tell')
+  s.config!.private_tournament_prize_split = PRIVATE_SPLIT
+  assert.match(renderDigest(s), /A private tournament created now pays 40\/27\/13, platform 20%/)
+})
+
+test('R41-8: an invited private tournament shows its own split, a public one at the usual split none', () => {
+  const s = liveSnapshot()
+  s.config!.tournament_prize_split = PUBLIC_SPLIT
+  s.market.openStandard = [
+    { ...(tournament(71, { is_private: true }) as { tournament: Tournament }).tournament, invited: true, prize_split: PRIVATE_SPLIT },
+    { ...(tournament(72) as { tournament: Tournament }).tournament, prize_split: PUBLIC_SPLIT },
+  ]
+  const text = renderDigest(s)
+  assert.match(text, /T71[^\n]*pays 40\/27\/13, platform 20%/)
+  assert.doesNotMatch(text, /T72[^\n]*platform/)
+})
+
+test('R41-8: the snapshot keeps the split FoxLeague answers for an invited private tournament', async () => {
+  const row = (id: number) => (tournament(id, { is_private: true }) as { tournament: Tournament }).tournament
+  const off = async () => { throw new Error('off') }
+  const known: Record<string, unknown> = {
+    user: async () => ({ id: 1, wallet_address: dryWallet.address, team_name: 'A', elo_rating: 1200 }),
+    tournaments: async (q: { status?: string }) => (q.status === 'open' ? [row(81), row(82)] : []),
+    tournament: async (id: number) => ({ ...(tournament(id, { is_private: true }) as object), user_can_join_private: id === 81, prize_split: PRIVATE_SPLIT }),
+  }
+  const fox = new Proxy({}, { get: (_t, name) => known[String(name)] ?? off })
+  const chain = new Proxy({}, { get: () => off })
+  const s = await takeSnapshot({ chain, fox } as never, { wallet: dryWallet })
+  assert.deepEqual(s.market.openStandard.map(t => [t.id, t.prize_split]), [[81, PRIVATE_SPLIT]])
+})
+
+test('R41-9: the prompt says who pays for a private tournament and no ticket is half rate', async () => {
+  const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
+  assert.doesNotMatch(SYSTEM_PROMPT, /half-rate/)
+  assert.doesNotMatch(SYSTEM_PROMPT, /plus a private fee per game/)
+  assert.match(SYSTEM_PROMPT, /every team on an invite list shares a higher platform fee/i)
+  assert.match(SYSTEM_PROMPT, /counted on its maximum number of teams/)
+})
+
+test('R41-10: the Zeus text holds before and after the switch: no number of the K values', () => {
+  const z = STRATEGY_PRESETS.zeus!
+  assert.match(z, /Ranked matches move ELO less than a Silver or Gold match and earn less XP/)
+  assert.doesNotMatch(z, /K \d/)
+})

@@ -621,15 +621,15 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
   }
 
-  // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent never
-  // creates one; it may join one it is invited to, so only those are kept.
+  // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent may join one it
+  // is invited to, so only those are kept, with the split their own platform fee pays.
   // A League + Knockout is by invitation only: it shows among the invitations, never as an open tournament.
   const openStandard = (openAll ?? []).filter(t => t.max_teams > 2 && !t.is_private && t.format !== 'league_knockout')
   if (wallet && registered) {
     const privates = (openAll ?? []).filter(t => t.max_teams > 2 && t.is_private).sort((a, b) => a.deadline.localeCompare(b.deadline)).slice(0, 8)
     const details = await Promise.all(privates.map(t => attempt(warnings, `private T${t.id}`, () => fox.tournament(t.id, wallet))))
     privates.forEach((t, i) => {
-      if (details[i]?.user_can_join_private === true) openStandard.push({ ...t, invited: true })
+      if (details[i]?.user_can_join_private === true) openStandard.push({ ...t, invited: true, prize_split: details[i]?.prize_split ?? null })
     })
   }
 
