@@ -938,3 +938,16 @@ deadlines.
 (per-agent lock, booking before signing, swap allowance, price valuation), `src/executor/tx.ts` (`syncTx`),
 `src/chain/gateway.ts` (EGLD price band), `src/snapshot/digest.ts` (`txt`), `src/telegram/telegram.ts`,
 `src/web/server.ts` and `src/web/auth.ts`.
+
+## FoxLeague rc.78 and the live K values, 2026-10-31
+
+Checked against FoxLeague v1.0.0-rc.78 (`0931413e8`) and the live `/api/config`. FoxLeague #566 made the server keep the position rule and refuse a formation saved alone when the saved eleven does not fit it, so the agent's two saves (formation first, lineup after) were refused on mainnet: agent 6 on 2026-10-30 and 2026-10-31, and no change of lines went through after 2026-10-29.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R78-1 | medium | `set_formation` with a lineup sent `POST /api/teams/formation` first; since rc.78 FoxLeague refuses that when the saved eleven does not fit, so a change of lines could not be saved at all. Nothing was paid; the team kept its old formation. | One save: `POST /api/teams/lineup` with `formation`. A refusal changed nothing, so the old put-back is gone; a timeout is still read back. Between formations of the same lines the formation still goes alone. |
+| R78-2 | low | The prompt priced ranked ELO at K 24 and tournaments at K 12 and 18. Mainnet runs 9, 13 and 17 since 2026-10-30 20:15 UTC, so ranked looked like the largest ELO swing when it is now the smallest. | Prompt and docs state the live values and say the manual may lag: FoxLeague's main still printed the old K until its next promotion. |
+| R78-3 | low | The manual was behind (4e42b94c9). | Synced to 4f82e988f. The prompt states the line-by-line auto-substitution at the lock. |
+
+Stays open: the 9 November rules (ranked ticket, paid Bronze, levels, leave lock, organizer fees) are not in this change; they follow when FoxLeague's code reaches main. Ranked and casual starts refused by FoxLeague's round gate ("Round N is not finished yet") are not mirrored here: a start costs nothing today, so a refusal costs one planned match.
+

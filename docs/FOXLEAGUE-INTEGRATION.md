@@ -245,7 +245,7 @@ measured (`gasLimits.ts:36-41`).
 | `GET /api/shop/status` (auth) | Shop prices, booster state, training quota, pack quota | `backend/src/routes/shop.rs:730-910` |
 | `GET /api/matches/daily-allowance` (auth) | Match count today, cap, reset hour | `backend/src/routes/matches.rs:527-570` |
 
-Not public anywhere: ELO K factors, ELO decay parameters, the per-card daily XP cap, the training
+Not public anywhere (the K values are 9 ranked, 13 Silver, 17 Gold since 2026-10-30, set by hand on mainnet): ELO K factors, ELO decay parameters, the per-card daily XP cap, the training
 condition cost, the aging multiplier, the match and ranked cooldowns and the tournament strategy-lock
 lead. Use the documented values and treat the server's refusal as the truth.
 
@@ -802,12 +802,15 @@ Body `{wallet_address, lineup:[11 nonces], substitutes:[0..7 nonces]}` (auth).
 - **Slot order matters.** Index 0 is the goalkeeper; the rest follow the formation's slot list
   (`frontend/src/lib/formations.ts:8-100`, for example `4-4-2`: GK, DEF x4, MID x4, FW x2). The match
   launches the eleven in this order (`backend/src/routes/matches.rs:1459-1460`).
-- **The server does not check positions**; the web app does (manual `mechanics/tactics.md:37-41`).
-  Keep positions matching yourself. The agent saves a new formation together with its eleven (`set_formation`
-  with `lineup` and `substitutes`, the formation first, the lineup right after; the old formation is saved back when
-  the lineup is refused) and starts no match or entry while the saved eleven does not fit the saved formation.
-- Fewer than 7 substitutes: the server fills the bench from your eligible reserves (unlisted, not in a
-  transfer cooldown, highest total stats first) (`teams.rs:285-322`).
+- **The server checks positions since rc.78** (FoxLeague #566): a starter in a slot of another line is refused with
+  the editor's words (`Card 10 is a FW. Slot requires DEF`) and nothing is saved. `POST /api/teams/lineup` takes an
+  optional `formation`: both are written in one save or neither. `POST /api/teams/formation` alone refuses a shape the
+  saved eleven does not fit (`<name> is a <line>. Slot requires <line> in <formation>. Save the formation together
+  with a lineup that fits it.`); between formations of the same lines it still saves alone. The agent sends a change
+  of lines as the one save (`set_formation` with `lineup` and `substitutes`) and starts no match or entry while the
+  saved eleven does not fit the saved formation.
+- Fewer than 7 substitutes: the server completes the bench position for position (1 goalkeeper plus 6 outfield
+  players split like the formation's lines), from your eligible reserves (unlisted, not in a transfer cooldown).
 
 Errors (`teams.rs:257-391`): `Lineup must have exactly 11 players`,
 `Substitutes cannot exceed 7 players`,
@@ -959,8 +962,8 @@ transactions are `joinTournament` (pay a seat) and `claimRefund`.
 | Tier | Seat fee (mainnet) | Pool | ELO | XP and competitive count |
 |---|---|---|---|---|
 | `bronze` | free (a fee is refused) | none | none | no |
-| `silver` | 1,000 to 4,999 FOXSY | yes | K 12 | yes |
-| `gold` | 5,000 FOXSY and up | yes | K 18 | yes |
+| `silver` | 1,000 to 4,999 FOXSY | yes | K 13 | yes |
+| `gold` | 5,000 FOXSY and up | yes | K 17 | yes |
 
 Fee bounds: `/api/config` `tournament_fee_bounds {silver_min, silver_max, gold_min}`. The effective
 Silver top is `min(silver_max, gold_min - 1)` = 4,999, although `silver_max` is served as 5,000
@@ -1228,8 +1231,8 @@ queue load, pushed past either side's busy windows (`tournaments.rs:4922-5147`;
 
 **Outcome**: no draws (extra time, then penalties). Winner 90 percent, platform 10 percent (seeded),
 loser nothing; paid about 180 s after the reveal (`backend/src/tournament_engine.rs:490-521`;
-`tournament_simulator.rs:3712-3748`). Condition cost 10 per appearance for both sides; ELO K 12 (Silver)
-or 18 (Gold); counts as competitive. A 1v1 win does not count as a tournament win.
+`tournament_simulator.rs:3712-3748`). Condition cost 10 per appearance for both sides; ELO K 13 (Silver)
+or 17 (Gold); counts as competitive. A 1v1 win does not count as a tournament win.
 
 ---
 

@@ -279,8 +279,9 @@ export class FoxLeague {
     return this.call<Team>('/teams/formation', { method: 'POST', wallet: w, body: { wallet_address: w.address, formation } })
   }
 
-  setLineup(w: AgentWallet, lineup: number[], substitutes: number[]): Promise<Team> {
-    return this.call<Team>('/teams/lineup', { method: 'POST', wallet: w, body: { wallet_address: w.address, lineup, substitutes } })
+  /** With a `formation`, both are written in one save or neither is; alone, /teams/formation refuses a shape the saved eleven does not fit. */
+  setLineup(w: AgentWallet, lineup: number[], substitutes: number[], formation?: string): Promise<Team> {
+    return this.call<Team>('/teams/lineup', { method: 'POST', wallet: w, body: { wallet_address: w.address, lineup, substitutes, ...(formation ? { formation } : {}) } })
   }
 
   /**

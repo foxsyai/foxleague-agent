@@ -679,7 +679,7 @@ function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], su
   return allow(0, {}, 'play', notes)
 }
 
-/** Why `lineup` does not fit `formation` (slot order GK, DEF, MID, FWD; the server does not check), or null. */
+/** Why `lineup` does not fit `formation` (slot order GK, DEF, MID, FWD; FoxLeague refuses such a save since rc.78), or null. */
 export function lineupPositionsOk(s: AgentSnapshot, formation: string, lineup: number[]): string | null {
   const slots = FORMATION_SLOTS[formation]
   if (!slots) return `unknown formation ${formation}`
@@ -755,7 +755,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!registered) return refuse('not registered')
       if (!s.team) return refuse(TEAM_UNREADABLE)
       if (s.team.formation === a.formation) return refuse(`formation is already ${a.formation}${a.lineup ? ' (a new eleven alone is set_lineup)' : ''}`)
-      // Saved apart, a match between the two saves would play the old eleven in the new shape (the server does not check).
+      // With a lineup both go in one save; alone, FoxLeague refuses a shape the saved eleven does not fit.
       if (a.lineup) return lineupVerdict(s, a.formation, a.lineup, a.substitutes ?? [], cfg.min_field_condition)
       const mismatch = lineupPositionsOk(s, a.formation, s.team.lineup)
       if (mismatch) return refuse(`${a.formation} needs a lineup that fits it (${mismatch}): send set_formation with lineup and substitutes in its slot order`)
