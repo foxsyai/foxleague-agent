@@ -13,6 +13,8 @@ import { matchesAtMost } from '../src/executor/rules.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import { takeSnapshot } from '../src/snapshot/snapshot.ts'
+import { renderPlanRequest } from '../src/strategist/strategist.ts'
+import { budgetView } from '../src/executor/budget.ts'
 import type { Tournament } from '../src/foxleague/types.ts'
 import { validateSettingsPatch } from '../src/store/settings.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
@@ -720,7 +722,7 @@ test('R41-7: the digest says what a private tournament created now pays, only wh
   assert.match(renderDigest(s), /A private tournament created now pays 40\/27\/13, platform 20%/)
 })
 
-test('R41-8: an invited private tournament shows its own split, a public one at the usual split none', () => {
+test('R41-7: an invited private tournament shows its own split, a public one at the usual split none', () => {
   const s = liveSnapshot()
   s.config!.tournament_prize_split = PUBLIC_SPLIT
   s.market.openStandard = [
@@ -732,7 +734,7 @@ test('R41-8: an invited private tournament shows its own split, a public one at 
   assert.doesNotMatch(text, /T72[^\n]*platform/)
 })
 
-test('R41-8: the snapshot keeps the split FoxLeague answers for an invited private tournament', async () => {
+test('R41-7: the snapshot keeps the split FoxLeague answers for an invited private tournament', async () => {
   const row = (id: number) => (tournament(id, { is_private: true }) as { tournament: Tournament }).tournament
   const off = async () => { throw new Error('off') }
   const known: Record<string, unknown> = {
@@ -746,7 +748,7 @@ test('R41-8: the snapshot keeps the split FoxLeague answers for an invited priva
   assert.deepEqual(s.market.openStandard.map(t => [t.id, t.prize_split]), [[81, PRIVATE_SPLIT]])
 })
 
-test('R41-9: the prompt says who pays for a private tournament and no ticket is half rate', async () => {
+test('R41-5, R41-7: the prompt says who pays for a private tournament and no ticket is half rate', async () => {
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
   assert.doesNotMatch(SYSTEM_PROMPT, /half-rate/)
   assert.doesNotMatch(SYSTEM_PROMPT, /plus a private fee per game/)
@@ -754,8 +756,15 @@ test('R41-9: the prompt says who pays for a private tournament and no ticket is 
   assert.match(SYSTEM_PROMPT, /counted on its maximum number of teams/)
 })
 
-test('R41-10: the Zeus text holds before and after the switch: no number of the K values', () => {
+test('R41-8: the Zeus text holds before and after the switch: no number of the K values', () => {
   const z = STRATEGY_PRESETS.zeus!
   assert.match(z, /Ranked matches move ELO less than a Silver or Gold match and earn less XP/)
   assert.doesNotMatch(z, /K \d/)
+})
+
+test('R41-9: the plan is told the owner\'s Bronze amounts, and off for an empty list', () => {
+  const m = setup()
+  const input = (entryFeesBronze: number[]) => ({ snapshot: liveSnapshot(), settings: { ...m.agent().settings, entryFeesBronze }, budget: budgetView(m.store, 0, m.agent().settings, true, new Date(), 14), recent: [] })
+  assert.match(renderPlanRequest(input([100, 250, 500]) as never), /Round amounts for creating: Bronze 100\/250\/500, Silver/)
+  assert.match(renderPlanRequest(input([]) as never), /Round amounts for creating: Bronze off \(this agent creates no Bronze tournaments\), Silver/)
 })
