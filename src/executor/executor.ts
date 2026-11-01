@@ -1029,6 +1029,10 @@ export class Executor {
                 ...(a.home_and_away ? { home_and_away: true } : {}),
                 // A non-empty invite list makes it private (FoxLeague's whitelist_user_ids): the one the rules kept.
                 ...(Array.isArray(v.facts.invites) && v.facts.invites.length ? { whitelist_user_ids: v.facts.invites } : {}),
+                // The platform fee the plan was told, as FoxLeague's own page sends it: another percent is refused before anything is written.
+                ...(Array.isArray(v.facts.invites) && v.facts.invites.length && a.entry_fee_foxsy > 0 && typeof snap.config?.private_tournament_prize_split?.platform_fee_percent === 'number'
+                  ? { expected_platform_fee_percent: snap.config.private_tournament_prize_split.platform_fee_percent }
+                  : {}),
                 // An OVR range the rules checked against the team's best XI OVR (FoxLeague's ovr_min / ovr_max).
                 ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),
                 ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}),

@@ -27,7 +27,7 @@ const LIVE_LEVELS = {
   xp_factor_pct: { ranked: 25, bronze: 50, silver: 75, gold: 100 }, elo_k: { ranked: 5, bronze: 9, silver: 13, gold: 17 },
   private_bronze_earns: true, competitive_daily_cap: 3,
 }
-const LIVE_FEES = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 0, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 100, calendar_deposit_grace_minutes: 60 }
+const LIVE_FEES = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 0, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 0, calendar_deposit_grace_minutes: 60 }
 
 /** The fixture's snapshot with the switches on. */
 function liveSnapshot() {
@@ -698,7 +698,7 @@ test('R41-2: the organizer transaction keeps its gas when anything after it fail
 // ---- FoxLeague's change of 31 October: ranked 25 FOXSY, a quarter, K 5; Bronze half, K 9; private pays through 20% ----
 
 const PUBLIC_SPLIT = { winner_percent: 45, runner_up_percent: 30, third_percent: 15, platform_fee_percent: 10 }
-const PRIVATE_SPLIT = { winner_percent: 40, runner_up_percent: 27, third_percent: 13, platform_fee_percent: 20 }
+const PRIVATE_SPLIT = { winner_percent: 40, runner_up_percent: 25, third_percent: 15, platform_fee_percent: 20 }
 
 test('R41-6: with no per-game fee the organizer line and the plan name no private fee', async () => {
   assert.doesNotMatch(renderDigest(liveSnapshot()), /private fee/)
@@ -719,7 +719,7 @@ test('R41-7: the digest says what a private tournament created now pays, only wh
   s.config!.private_tournament_prize_split = PUBLIC_SPLIT
   assert.doesNotMatch(renderDigest(s), /A private tournament created now/, 'the same split is nothing to tell')
   s.config!.private_tournament_prize_split = PRIVATE_SPLIT
-  assert.match(renderDigest(s), /A private tournament created now pays 40\/27\/13, platform 20%/)
+  assert.match(renderDigest(s), /A private tournament created now pays 40\/25\/15, platform 20%/)
 })
 
 test('R41-7: an invited private tournament shows its own split, a public one at the usual split none', () => {
@@ -730,7 +730,7 @@ test('R41-7: an invited private tournament shows its own split, a public one at 
     { ...(tournament(72) as { tournament: Tournament }).tournament, prize_split: PUBLIC_SPLIT },
   ]
   const text = renderDigest(s)
-  assert.match(text, /T71[^\n]*pays 40\/27\/13, platform 20%/)
+  assert.match(text, /T71[^\n]*pays 40\/25\/15, platform 20%/)
   assert.doesNotMatch(text, /T72[^\n]*platform/)
 })
 
@@ -767,4 +767,40 @@ test('R41-9: the plan is told the owner\'s Bronze amounts, and off for an empty 
   const input = (entryFeesBronze: number[]) => ({ snapshot: liveSnapshot(), settings: { ...m.agent().settings, entryFeesBronze }, budget: budgetView(m.store, 0, m.agent().settings, true, new Date(), 14), recent: [] })
   assert.match(renderPlanRequest(input([100, 250, 500]) as never), /Round amounts for creating: Bronze 100\/250\/500, Silver/)
   assert.match(renderPlanRequest(input([]) as never), /Round amounts for creating: Bronze off \(this agent creates no Bronze tournaments\), Silver/)
+})
+
+test('R41-11: the organizer line names a lowest deposit only when there is one', () => {
+  const s = liveSnapshot()
+  assert.match(renderDigest(s), /calendar deposit 25 FOXSY a game/)
+  assert.doesNotMatch(renderDigest(s), /at least 0/, 'FoxLeague\'s default has no lowest deposit')
+  s.config!.organizer_fees = { ...LIVE_FEES, calendar_deposit_min_foxsy: 100 }
+  assert.match(renderDigest(s), /calendar deposit 25 FOXSY a game \(at least 100\)/)
+})
+
+const zeusCreate = async (more: Record<string, unknown>, split: typeof PRIVATE_SPLIT | undefined, s = liveSnapshot()) => {
+  const bodies: Record<string, unknown>[] = []
+  const m = setup({
+    fox: {
+      organizerFeeQuote: async () => ({ ...OWED, owed: false, total_foxsy: 0, deposit_foxsy: 0 }),
+      createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push({ ...body }); return { id: 55 } },
+      tournament: async () => tournament(55),
+      joinTournament: async () => ({}),
+    },
+  })
+  m.store.updateSettings(0, { ...m.agent().settings, strategy: STRATEGY_PRESETS.zeus! })
+  s.config!.private_tournament_prize_split = split
+  s.market.recentStandard = [{ id: 1, tier: 'silver', format: 'round_robin', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }] as never
+  const action = parseAction({ type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, ...more })
+  let summary = ''
+  await withLive(m.store, async () => { summary = (await m.exec.run(m.agent(), liveWallet, s, [{ action, reason: '' }]))[0]!.summary })
+  assert.equal(bodies.length, 1, summary)
+  return bodies[0]!
+}
+
+test('R41-12: a paid private create states the platform fee the plan was told', async () => {
+  const invites = { invite_user_ids: [11, 12, 13] }
+  assert.equal((await zeusCreate(invites, PRIVATE_SPLIT)).expected_platform_fee_percent, 20)
+  assert.equal((await zeusCreate(invites, PUBLIC_SPLIT)).expected_platform_fee_percent, 10, 'before the setting moves: the percent served')
+  assert.equal('expected_platform_fee_percent' in (await zeusCreate({}, PRIVATE_SPLIT)), false, 'a public one compares nothing')
+  assert.equal('expected_platform_fee_percent' in (await zeusCreate(invites, undefined)), false, 'mainnet today serves no split: nothing to state')
 })

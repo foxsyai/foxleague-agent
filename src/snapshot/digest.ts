@@ -171,7 +171,7 @@ function levelLines(s: AgentSnapshot): string[] {
     out.push(`Competition levels: ${whenLive(levelsLive(s.config, now), c.live_from)}: ranked ticket ${c.ranked_ticket_price_foxsy} FOXSY a game you start${bronze}; XP ranked ${c.xp_factor_pct.ranked}%, Bronze ${c.xp_factor_pct.bronze}%, Silver ${c.xp_factor_pct.silver}%, Gold ${c.xp_factor_pct.gold}%; K ranked ${c.elo_k.ranked}, Bronze ${c.elo_k.bronze}, Silver ${c.elo_k.silver}, Gold ${c.elo_k.gold}; at most ${c.competitive_daily_cap} competitive matches a card a day`)
   }
   const f = s.config?.organizer_fees
-  if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${f.calendar_deposit_per_match_foxsy} FOXSY a game (at least ${f.calendar_deposit_min_foxsy})${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
+  if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${f.calendar_deposit_per_match_foxsy} FOXSY a game${f.calendar_deposit_min_foxsy > 0 ? ` (at least ${f.calendar_deposit_min_foxsy})` : ''}${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   return out
