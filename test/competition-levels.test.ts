@@ -5,7 +5,12 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { parseAction } from '../src/executor/actions.ts'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { Mnemonic } from '@multiversx/sdk-core'
+import { parseAction, type PlannedAction } from '../src/executor/actions.ts'
+import { Service } from '../src/service.ts'
 import { ApiRefusal } from '../src/foxleague/api.ts'
 import { BroadcastRefused } from '../src/chain/gateway.ts'
 import { levelsLive, organizerFeesLive, leaveLockLive } from '../src/foxleague/levels.ts'
@@ -803,4 +808,58 @@ test('R41-12: a paid private create states the platform fee the plan was told', 
   assert.equal((await zeusCreate(invites, PUBLIC_SPLIT)).expected_platform_fee_percent, 10, 'before the setting moves: the percent served')
   assert.equal('expected_platform_fee_percent' in (await zeusCreate({}, PRIVATE_SPLIT)), false, 'a public one compares nothing')
   assert.equal('expected_platform_fee_percent' in (await zeusCreate(invites, undefined)), false, 'mainnet today serves no split: nothing to state')
+})
+
+const PRIVATE_CUP = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
+
+test('R41-13: the fee moved between the plan and the action: the create states the plan\'s percent, FoxLeague refuses and nothing is paid', async () => {
+  const bodies: Record<string, unknown>[] = []
+  const m = setup({
+    fox: {
+      organizerFeeQuote: async () => OWED,
+      // FoxLeague's gate: the percent served now is 20; its check runs before it asks for the organizer's payment.
+      createTournament: async (_w: unknown, body: Record<string, unknown>) => {
+        bodies.push({ ...body })
+        if (body.expected_platform_fee_percent !== 20) throw new ApiRefusal('The platform fee of private tournaments changed since this page was loaded. Reload the page to read the new split.')
+        return { id: 55 }
+      },
+    },
+    chain: { send: async () => assert.fail('nothing is paid') },
+  })
+  m.store.updateSettings(0, { ...m.agent().settings, strategy: STRATEGY_PRESETS.zeus! })
+  const atAction = liveSnapshot()
+  atAction.config!.private_tournament_prize_split = PRIVATE_SPLIT
+  atAction.market.recentStandard = [{ id: 1, tier: 'silver', format: 'round_robin', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }] as never
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, atAction, [{ action: parseAction(PRIVATE_CUP), reason: '', planPlatformFeePercent: 10 }])
+    assert.notEqual(r!.status, 'confirmed', r!.summary)
+    assert.equal(r!.sent ?? false, false, r!.summary)
+  })
+  assert.equal(bodies.length, 1)
+  assert.equal(bodies[0]!.expected_platform_fee_percent, 10, 'what the plan was told, not what the action read')
+  assert.deepEqual(spendOf(m, ''), [], 'every booking released')
+})
+
+test('R41-13: a tick stamps a private create with the percent its plan saw; the model cannot name one', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-levels-'))
+  const svc = new Service({ mnemonic: Mnemonic.generate().toString(), dataDir: dir, gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5, isServer: false, defaultDryRun: true, maxAgents: 5 } as never)
+  svc.ensureAgents()
+  const seen = liveSnapshot()
+  seen.config!.private_tournament_prize_split = PRIVATE_SPLIT
+  let ran: PlannedAction[] = []
+  const planned = (more: object = {}): PlannedAction => ({ action: parseAction({ ...PRIVATE_CUP, ...more }), reason: '' })
+  Object.assign(svc as object, {
+    schedule: () => undefined,
+    strategist: {},
+    inActiveHours: () => true,
+    waitingForFunds: () => null,
+    retryPending: async () => undefined,
+    noticeInvitations: async () => undefined,
+    snapshot: async () => seen,
+    makePlan: async () => ({ summary: 'plan', actions: [planned(), planned({ invite_user_ids: undefined }), { action: { type: 'sync' }, reason: '' }] }),
+    runPlan: async (_a: unknown, actions: PlannedAction[]) => { ran = actions },
+  })
+  assert.equal(await svc.tick(0), 'plan')
+  assert.deepEqual(ran.map(p => p.planPlatformFeePercent), [20, undefined, undefined], 'only the private create')
+  assert.equal('planPlatformFeePercent' in (parseAction({ ...PRIVATE_CUP, planPlatformFeePercent: 5 })), false, 'never from the model')
 })

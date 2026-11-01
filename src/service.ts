@@ -1307,6 +1307,9 @@ export class Service {
       }
       const plan = await this.makePlan(agent, snap, ownerRequest)
       this.failStreak.delete(index)
+      // What the plan weighed goes with its private creates: each action reads a fresh snapshot, up to 0.8 of a tick later.
+      const planFee = snap.config?.private_tournament_prize_split?.platform_fee_percent
+      if (typeof planFee === 'number') for (const p of plan.actions) if (p.action.type === 'create_tournament' && p.action.invite_user_ids?.length) p.planPlatformFeePercent = planFee
       await this.runPlan(agent, plan.actions, !ownerRequest)
       return plan.summary
     } catch (err) {

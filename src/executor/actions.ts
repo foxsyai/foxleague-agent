@@ -84,6 +84,8 @@ export interface PlannedAction {
   byOwner?: true
   /** One of several smaller actions an extension made from one (see src/extensions.ts); never from a plan. */
   piece?: { group: number; index: number; of: number }
+  /** The private platform fee the plan's own snapshot showed. Set only by the service after the plan; never from a plan. */
+  planPlatformFeePercent?: number
 }
 
 class ParseError extends Error {}

@@ -280,6 +280,7 @@ export class Executor {
       if (built.txs.length || seat.length || verdict.foxsy > 0n) booking = this.book(agent, verdict, usd, fees, built.swapUsd, false, now, snap, a, prices)
       // A free action gets one too: it says when FoxLeague was asked (`reached`).
       booking ??= { ids: [], sent: false }
+      if (planned.planPlatformFeePercent !== undefined) verdict.facts.planPlatformFeePercent = planned.planPlatformFeePercent
       return await this.live(agent, wallet, snap, a, verdict, built, usd, fees, desc, costText, finish, now, booking)
     } catch (err) {
       // Nothing was signed: the booking goes. Signed (maybe sent): it stays, the conservative side.
@@ -1030,9 +1031,11 @@ export class Executor {
                 // A non-empty invite list makes it private (FoxLeague's whitelist_user_ids): the one the rules kept.
                 ...(Array.isArray(v.facts.invites) && v.facts.invites.length ? { whitelist_user_ids: v.facts.invites } : {}),
                 // The platform fee the plan was told, as FoxLeague's own page sends it: another percent is refused before anything is written.
-                ...(Array.isArray(v.facts.invites) && v.facts.invites.length && a.entry_fee_foxsy > 0 && typeof snap.config?.private_tournament_prize_split?.platform_fee_percent === 'number'
-                  ? { expected_platform_fee_percent: snap.config.private_tournament_prize_split.platform_fee_percent }
-                  : {}),
+                // An action no plan made (Telegram /do) states the one read just now; none served, none stated.
+                ...(() => {
+                  const percent = v.facts.planPlatformFeePercent ?? snap.config?.private_tournament_prize_split?.platform_fee_percent
+                  return Array.isArray(v.facts.invites) && v.facts.invites.length && a.entry_fee_foxsy > 0 && typeof percent === 'number' ? { expected_platform_fee_percent: percent } : {}
+                })(),
                 // An OVR range the rules checked against the team's best XI OVR (FoxLeague's ovr_min / ovr_max).
                 ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),
                 ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}),
