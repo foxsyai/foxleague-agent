@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Builds agent.foxleague.ai from a fresh clone of one commit and ships it to the FOXSY website droplet.
 #   ./site/deploy-site.sh [commit]        (default: the current commit)
-# The host comes from SITE_HOST=root@host or site/.host (git ignores it).
+# The host comes from SITE_HOST=web@host or site/.host (git ignores it). The deploy user needs no sudo.
 # Never built from this working folder: Astro copies public/ as is, so a stray key there would be published.
 # A clone holds only committed files. (Not git archive: .gitattributes keeps site/ out of archives.)
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 HOST=${SITE_HOST:-$(cat "$REPO/site/.host" 2>/dev/null || true)}
-[ -n "$HOST" ] || { echo "Set SITE_HOST=root@your-website-server or write it into site/.host" >&2; exit 1; }
+[ -n "$HOST" ] || { echo "Set SITE_HOST=web@your-website-server or write it into site/.host" >&2; exit 1; }
 COMMIT=$(git -C "$REPO" rev-parse --verify "${1:-HEAD}^{commit}")
 ROOT=/var/www/agent.foxleague.ai
 
