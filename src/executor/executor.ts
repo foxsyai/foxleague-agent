@@ -1033,8 +1033,8 @@ export class Executor {
                 // The platform fee the plan was told, as FoxLeague's own page sends it: another percent is refused before anything is written.
                 // An action no plan made (Telegram /do) states the one read just now; none served, none stated.
                 ...(() => {
-                  const percent = v.facts.planPlatformFeePercent ?? snap.config?.private_tournament_prize_split?.platform_fee_percent
-                  return Array.isArray(v.facts.invites) && v.facts.invites.length && a.entry_fee_foxsy > 0 && typeof percent === 'number' ? { expected_platform_fee_percent: percent } : {}
+                  const served = snap.config?.private_tournament_prize_split?.platform_fee_percent
+                  return Array.isArray(v.facts.invites) && v.facts.invites.length && a.entry_fee_foxsy > 0 && typeof served === 'number' ? { expected_platform_fee_percent: v.facts.planPlatformFeePercent ?? served } : {}
                 })(),
                 // An OVR range the rules checked against the team's best XI OVR (FoxLeague's ovr_min / ovr_max).
                 ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),

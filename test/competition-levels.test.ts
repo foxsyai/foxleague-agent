@@ -863,3 +863,51 @@ test('R41-13: a tick stamps a private create with the percent its plan saw; the 
   assert.deepEqual(ran.map(p => p.planPlatformFeePercent), [20, undefined, undefined], 'only the private create')
   assert.equal('planPlatformFeePercent' in (parseAction({ ...PRIVATE_CUP, planPlatformFeePercent: 5 })), false, 'never from the model')
 })
+
+const tickWith = async (seen: ReturnType<typeof liveSnapshot>) => {
+  const svc = new Service({ mnemonic: Mnemonic.generate().toString(), dataDir: mkdtempSync(join(tmpdir(), 'foxagent-levels-')), gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5, isServer: false, defaultDryRun: true, maxAgents: 5 } as never)
+  svc.ensureAgents()
+  let ran: PlannedAction[] = []
+  Object.assign(svc as object, {
+    schedule: () => undefined,
+    strategist: {},
+    inActiveHours: () => true,
+    waitingForFunds: () => null,
+    retryPending: async () => undefined,
+    noticeInvitations: async () => undefined,
+    snapshot: async () => seen,
+    makePlan: async () => ({ summary: 'plan', actions: [{ action: parseAction(PRIVATE_CUP), reason: '' }, { action: { type: 'sync' }, reason: '' }] }),
+    runPlan: async (_a: unknown, actions: PlannedAction[]) => { ran = actions },
+  })
+  assert.equal(await svc.tick(0), 'plan')
+  return { ran, store: svc.store }
+}
+
+test('R41-14: a plan told only the public split is stamped with its percent, and the field goes out only while FoxLeague serves a private split', async () => {
+  const seen = liveSnapshot()
+  seen.config!.tournament_prize_split = PUBLIC_SPLIT
+  const { ran } = await tickWith(seen)
+  assert.equal(ran[0]!.planPlatformFeePercent, 10)
+  const bodyWith = async (split: typeof PRIVATE_SPLIT | undefined) => {
+    const bodies: Record<string, unknown>[] = []
+    const m = setup({ fox: { organizerFeeQuote: async () => ({ ...OWED, owed: false, total_foxsy: 0, deposit_foxsy: 0 }), createTournament: async (_w: unknown, b: Record<string, unknown>) => { bodies.push({ ...b }); throw new ApiRefusal('refused') } } })
+    m.store.updateSettings(0, { ...m.agent().settings, strategy: STRATEGY_PRESETS.zeus! })
+    const s = liveSnapshot()
+    s.config!.private_tournament_prize_split = split
+    s.market.recentStandard = [{ id: 1, tier: 'silver', format: 'round_robin', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }] as never
+    await withLive(m.store, () => m.exec.run(m.agent(), liveWallet, s, [{ action: parseAction(PRIVATE_CUP), reason: '', planPlatformFeePercent: 10 }]))
+    assert.equal(bodies.length, 1)
+    return bodies[0]!
+  }
+  assert.equal((await bodyWith(PRIVATE_SPLIT)).expected_platform_fee_percent, 10, 'the fee moved: FoxLeague refuses')
+  assert.equal('expected_platform_fee_percent' in (await bodyWith(undefined)), false, 'an older backend never sees the field')
+})
+
+test('R41-14: a plan that could not read FoxLeague\'s config makes no private create; its other actions run', async () => {
+  const seen = liveSnapshot()
+  seen.config = null as never
+  const { ran, store } = await tickWith(seen)
+  assert.deepEqual(ran.map(p => p.action.type), ['sync'])
+  const logged = store.db.prepare("SELECT summary FROM activity WHERE kind = 'create_tournament'").all() as { summary: string }[]
+  assert.match(logged.map(r => r.summary).join(' | '), /could not read FoxLeague's settings/)
+})

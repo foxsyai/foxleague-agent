@@ -1308,8 +1308,17 @@ export class Service {
       const plan = await this.makePlan(agent, snap, ownerRequest)
       this.failStreak.delete(index)
       // What the plan weighed goes with its private creates: each action reads a fresh snapshot, up to 0.8 of a tick later.
-      const planFee = snap.config?.private_tournament_prize_split?.platform_fee_percent
-      if (typeof planFee === 'number') for (const p of plan.actions) if (p.action.type === 'create_tournament' && p.action.invite_user_ids?.length) p.planPlatformFeePercent = planFee
+      // No private split served: it was told the public one. An unread config told it nothing: no private create from this plan.
+      const planFee = (snap.config?.private_tournament_prize_split ?? snap.config?.tournament_prize_split)?.platform_fee_percent
+      plan.actions = plan.actions.filter(p => {
+        if (p.action.type !== 'create_tournament' || !p.action.invite_user_ids?.length) return true
+        if (snap.config) {
+          if (typeof planFee === 'number') p.planPlatformFeePercent = planFee
+          return true
+        }
+        this.store.log({ agentIndex: index, kind: p.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(p.action)}: it could not read FoxLeague's settings, so it did not know the platform fee` })
+        return false
+      })
       await this.runPlan(agent, plan.actions, !ownerRequest)
       return plan.summary
     } catch (err) {
