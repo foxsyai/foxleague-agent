@@ -23,7 +23,7 @@ if find "$DIST" \( -iname '*.pem' -o -iname '.env*' -o -iname '*.key' -o -iname 
   exit 1
 fi
 
-# A sudo user on the server: the copy runs through sudo and the files belong to root, readable by nginx.
-rsync -rlptz --delete --no-owner --no-group --chmod=D755,F644 --rsync-path="sudo rsync" "$DIST/" "$HOST:$ROOT/"
-ssh "$HOST" "printf '%s %s\n' '$(date -u +%FT%TZ)' '$COMMIT' | sudo tee -a $ROOT.deploys >/dev/null"
+# The deploy user owns the site's folder and needs no sudo. The files stay readable by nginx.
+rsync -rlptz --delete --no-owner --no-group --chmod=D755,F644 "$DIST/" "$HOST:$ROOT/"
+ssh "$HOST" "printf '%s %s\n' '$(date -u +%FT%TZ)' '$COMMIT' >> $ROOT.deploys"
 echo "agent.foxleague.ai now serves foxleague-agent $COMMIT (log: $ROOT.deploys on the server)"
