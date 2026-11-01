@@ -31,6 +31,8 @@ export interface AgentSettings {
   /** The owner is told when the wallet's EGLD and FOXSY together are worth less than this (USD); 0 switches it off. */
   topUpWarningUsd: number
   /** Round entry amounts to choose from when creating (never odd numbers like 1,246). */
+  /** Round amounts for a Bronze it creates; empty: it creates none. */
+  entryFeesBronze: number[]
   entryFeesSilver: number[]
   entryFeesGold: number[]
   /** Timing. */
@@ -60,7 +62,7 @@ export const STRATEGY_PRESETS: Record<string, string> = {
   beast:
     'Beast (level 5 of 6): everything a predator does, plus every paid advantage: maximum growth, whatever it costs within the limits and the wallet. Use all 15 training sessions every day (5 free and the 10 paid slots) on starters below their cap, keep the strongest fit lineup, play ranked matches whenever allowed and sync before match days. Play 3 competitive matches a day in Silver and Gold tournaments and 1v1s, and create tournaments. Keep the XP booster running every day and buy condition recovery whenever condition holds back training or a match. Buy both Common packs every week and fuse every 20 hours whenever a triplet can be made, with the fusion match waiver for every missing match and the cooldown waiver down to 3 days, so fusions never wait. Bid on Common, Uncommon, Rare and Epic players when they clearly strengthen the starting eleven at a fair price, below the market price of their rarity; the max bid and your limits per rarity decide which are in reach. Keep at least 22 cards so the squad can rotate, with no upper limit: hold spares to fuse, to grow and to sell, and list a spare card when its price beats its use. Never move cards between wallets.',
   zeus:
-    'Zeus (level 6 of 6): the aim is No. 1 on the leaderboard with the least spending that gets there. Everything a beast may do, but only when it pays: every action must name its benefit (ELO, rank, XP or card value) against its cost and risk, and without a clear benefit the right move is to wait. Climb in steps: a new team starts at 1200 ELO with a starter squad, so begin with the teams you beat, build ELO and XP from those wins, and move up to stronger teams as the squad and the win chance allow (a win over a stronger team pays more ELO). Decide from the numbers: the engine facts, the win chance shown for each team (ELO and lineup strength: yours at today\'s condition, theirs at full condition) and how often a team plays and accepts 1v1s. Play 1v1s only against active teams that accept them and only when the win chance is good, at the stake that chance justifies. Enter a tournament only with a real chance of the top three and when the expected prize plus the XP is worth the fee; create tournaments sized to the active teams that will join, and private ones that invite active teams you should beat but that still see a chance, enough of them to reach the minimum. Ranked matches move ELO at K 9, less than a Silver or Gold match (K 13, K 17): play them while the squad is fit and no better match needs its condition. Before every match lock, set the formation and the eleven against that opponent\'s formation and strengths. Train each starter on the stats its role needs (keeper defense; defenders defense, power and speed; midfielders control, vision, accuracy and stamina; forwards speed, power and control), never a stat at its cap; buy paid slots only when they beat every other use of that FOXSY. Sync only when the synced gains change a match that counts. Condition multiplies every stat: buy recovery only for key starters before a match that matters and rotate the bench to keep them fresh. Buy a player only at a good price and for a reason that pays: a fusion input, a resale margin or a clear upgrade of the eleven per FOXSY; list spare cards when their price beats their use. Fuse toward Legendary when the fees and waivers pay back in strength or value. Run the XP booster only on days with 3 sure competitive matches and starters below their cap. Play at least every 10 days so ELO never decays. Keep at least 22 cards to rotate. Every other team is a rival: never arrange a result. Never move cards between wallets.',
+    'Zeus (level 6 of 6): the aim is No. 1 on the leaderboard with the least spending that gets there. Everything a beast may do, but only when it pays: every action must name its benefit (ELO, rank, XP or card value) against its cost and risk, and without a clear benefit the right move is to wait. Climb in steps: a new team starts at 1200 ELO with a starter squad, so begin with the teams you beat, build ELO and XP from those wins, and move up to stronger teams as the squad and the win chance allow (a win over a stronger team pays more ELO). Decide from the numbers: the engine facts, the win chance shown for each team (ELO and lineup strength: yours at today\'s condition, theirs at full condition) and how often a team plays and accepts 1v1s. Play 1v1s only against active teams that accept them and only when the win chance is good, at the stake that chance justifies. Enter a tournament only with a real chance of the top three and when the expected prize plus the XP is worth the fee; create tournaments sized to the active teams that will join, and private ones that invite active teams you should beat but that still see a chance, enough of them to reach the minimum. Ranked matches move ELO less than a Silver or Gold match and earn less XP: play them while the squad is fit and no better match needs its condition. Before every match lock, set the formation and the eleven against that opponent\'s formation and strengths. Train each starter on the stats its role needs (keeper defense; defenders defense, power and speed; midfielders control, vision, accuracy and stamina; forwards speed, power and control), never a stat at its cap; buy paid slots only when they beat every other use of that FOXSY. Sync only when the synced gains change a match that counts. Condition multiplies every stat: buy recovery only for key starters before a match that matters and rotate the bench to keep them fresh. Buy a player only at a good price and for a reason that pays: a fusion input, a resale margin or a clear upgrade of the eleven per FOXSY; list spare cards when their price beats their use. Fuse toward Legendary when the fees and waivers pay back in strength or value. Run the XP booster only on days with 3 sure competitive matches and starters below their cap. Play at least every 10 days so ELO never decays. Keep at least 22 cards to rotate. Every other team is a rival: never arrange a result. Never move cards between wallets.',
 }
 
 /**
@@ -115,6 +117,7 @@ export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
+  entryFeesBronze: [100, 250, 500],
   maxBidCommonFoxsy: 500,
   maxBidUncommonFoxsy: 1500,
   maxBidRareFoxsy: 7000,
@@ -142,8 +145,8 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
     }
     ;(out as Record<string, unknown>)[k] = v
   }
-  // Silver needs at least one amount; an empty Gold list turns Gold off for the agent.
-  const fees = (k: 'entryFeesSilver' | 'entryFeesGold', min: number, max: number, least = 1): void => {
+  // Silver needs at least one amount; an empty Gold list turns Gold off for the agent, an empty Bronze list its Bronze creates.
+  const fees = (k: 'entryFeesBronze' | 'entryFeesSilver' | 'entryFeesGold', min: number, max: number, least = 1): void => {
     if (!(k in raw)) return
     const v = raw[k]
     if (!Array.isArray(v) || v.length < least || v.length > 10 || v.some(x => typeof x !== 'number' || !Number.isInteger(x) || x < min || x > max)) {
@@ -174,6 +177,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
     if (typeof v !== 'string' || !/^\d{1,2}(\.\d{1,4})?$/.test(v) || Number(v) > 10 || Number(v) < MIN_GAS_RESERVE_EGLD) throw new Error(`egldGasReserve must be a decimal EGLD amount from ${MIN_GAS_RESERVE_EGLD} to 10`)
     out.egldGasReserve = v
   }
+  fees('entryFeesBronze', 100, 999, 0)
   fees('entryFeesSilver', 1000, 4999)
   fees('entryFeesGold', 5000, 1_000_000, 0)
   num('tickMinutes', MIN_TICK_MINUTES, 240, true)

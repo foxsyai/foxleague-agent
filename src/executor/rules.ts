@@ -7,11 +7,12 @@ import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
-import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, PendingLeagueInvitation, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
+import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
+import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import type { SpendCategory } from '../store/db.ts'
 
 export interface Verdict {
@@ -78,6 +79,14 @@ export interface RulesContext {
   priorBids?: number
   /** Shop products whose payment is still waiting for FoxLeague's confirmation. */
   pendingShop?: Set<string>
+  /** A ranked start once the levels are live: the tickets held and their price, null when unread. */
+  rankedTicket?: RankedTicketView | null
+  /** A ticket payment still waits for FoxLeague's confirmation. */
+  pendingTicket?: boolean
+  /** A tournament create once the organizer fees are live: what it owes, null when unread. */
+  organizerQuote?: OrganizerFeeQuote | null
+  /** An organizer payment no create has used yet: the next create sends this hash, never a second payment. */
+  pendingOrganizer?: { hash: string; total: number }
   /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
   lastBoosterAt?: Date | null
   /** A seat in this tournament is paid and waiting for FoxLeague's confirmation (retried with the same hash). */
@@ -190,11 +199,17 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
 }
 
 /** Effective tier bounds (Silver top is min(silver_max, gold_min - 1), docs 10.1). */
-export function tierBounds(s: AgentSnapshot, tier: 'silver' | 'gold'): [number, number] | null {
+export function tierBounds(s: AgentSnapshot, tier: 'bronze' | 'silver' | 'gold'): [number, number] | null {
   const b = s.config?.tournament_fee_bounds
   if (!b) return null
+  if (tier === 'bronze') return typeof b.bronze_min === 'number' && typeof b.bronze_max === 'number' ? [b.bronze_min, Math.min(b.bronze_max, b.silver_min - 1)] : null
   return tier === 'silver' ? [b.silver_min, Math.min(b.silver_max, b.gold_min - 1)] : [b.gold_min, Number.MAX_SAFE_INTEGER]
 }
+
+/** FoxLeague's GROUPS_KNOCKOUT_MIN_TEAMS, GROUP_MIN_TEAMS and GROUP_MAX_TEAMS (tournament_engine.rs). */
+const GROUPS_MIN_TEAMS = 6
+const GROUP_MIN_TEAMS = 3
+const GROUP_MAX_TEAMS = 6
 
 const VALID_SIZES: Record<string, (n: number) => boolean> = {
   knockout: n => [4, 8, 16, 32].includes(n),
@@ -365,13 +380,31 @@ function runningLeagueKnockout(s: AgentSnapshot): Tournament | undefined {
 }
 
 /** Matches one team may play in a tournament at most (it goes all the way), by format and size. */
-export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boolean, groupSize = 4): number {
+/**
+ * FoxLeague's flexible Groups + Knockout (tournament_engine.rs flexible_group_count, groups_knockout_most_matches): from 6
+ * teams, as many groups as give each at least 3 teams, a power of 2, never more than a full one has; the top 2 advance.
+ * The most one team can play over every field from `minTeams` up: the largest group and a run to the final.
+ */
+function groupsKnockoutMostMatches(maxTeams: number, groupSize: number, minTeams: number): number {
+  const full = Math.max(2, 2 ** Math.ceil(Math.log2(Math.ceil(maxTeams / Math.max(1, groupSize)))))
+  let most = 0
+  for (let teams = Math.max(GROUPS_MIN_TEAMS, minTeams); teams <= maxTeams; teams++) {
+    let groups = full
+    while (groups > 2 && GROUP_MIN_TEAMS * groups > teams) groups /= 2
+    const largest = Math.ceil(teams / groups)
+    if (GROUP_MIN_TEAMS * groups > teams || largest > Math.max(GROUP_MAX_TEAMS, groupSize)) continue
+    most = Math.max(most, largest - 1 + Math.log2(groups * 2))
+  }
+  return most
+}
+
+export function matchesAtMost(format: string, maxTeams: number, homeAndAway: boolean, groupSize = 4, minTeams = GROUPS_MIN_TEAMS): number {
   const rounds = (n: number) => Math.ceil(Math.log2(Math.max(2, n)))
   switch (format) {
     case 'knockout':
       return rounds(maxTeams)
     case 'groups_knockout':
-      return groupSize - 1 + rounds((maxTeams / groupSize) * 2) // groups of 4, the top 2 of each advance
+      return groupsKnockoutMostMatches(maxTeams, groupSize, minTeams) || groupSize - 1 + rounds((maxTeams / groupSize) * 2)
     case 'round_robin':
       return (maxTeams - 1) * (homeAndAway ? 2 : 1)
     case 'swiss':
@@ -419,7 +452,7 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
   let beforeEnd = now.getTime()
   for (const x of mine.active) {
     if (x.id === id || x.max_teams === 2) continue
-    const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize)
+    const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize, x.min_teams)
     const xStart = new Date(x.starts_at).getTime()
     const xEnd = xStart + scheduleSpanMinutes(x.format, x.max_teams, Boolean(x.home_and_away), x.round_interval_minutes ?? 30, groupSize) * 60_000
     if (xStart > end || (xEnd < start && xEnd < now.getTime())) continue
@@ -467,13 +500,13 @@ export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: 
  */
 function scheduleRefusal(
   s: AgentSnapshot,
-  t: { id?: number; format: string; max_teams: number; home_and_away?: boolean; round_interval_minutes?: number | null; starts_at: string },
+  t: { id?: number; format: string; max_teams: number; min_teams?: number; home_and_away?: boolean; round_interval_minutes?: number | null; starts_at: string },
   now: Date,
 ): string | null {
   const cfg = s.config
   if (!cfg || !s.team) return null
   const groupSize = cfg.tournament_defaults?.groups_knockout_group_size ?? 4
-  const own = matchesAtMost(t.format, t.max_teams, Boolean(t.home_and_away), groupSize)
+  const own = matchesAtMost(t.format, t.max_teams, Boolean(t.home_and_away), groupSize, t.min_teams)
   const interval = t.round_interval_minutes ?? 30
   const start = new Date(t.starts_at).getTime()
   const span = scheduleSpanMinutes(t.format, t.max_teams, Boolean(t.home_and_away), interval, groupSize)
@@ -598,8 +631,8 @@ const BOOSTER_PHASES = new Set(['upcoming', 'locked', 'live'])
 
 /**
  * Why Zeus would buy the XP booster with nothing of its own to double, or null: it needs a Silver or Gold tournament
- * or 1v1 match of its own listed, not over, kicking off within the booster's 24 hours (Bronze, ranked and casual
- * matches earn no XP). FoxLeague reads the booster when a match's result is applied (at the reveal of a tournament or
+ * or 1v1 match of its own listed, not over, kicking off within the booster's 24 hours, or a paid Bronze one once the
+ * competition levels are live (casual and free Bronze matches earn no XP; a ranked game is no fixture to count on). FoxLeague reads the booster when a match's result is applied (at the reveal of a tournament or
  * 1v1 match; matches.rs apply_match_results, a purchase verified within the last 24 h), so buying it once the fixture
  * is drawn loses nothing, while a seat in an open tournament can still come back (audit D9, 2026-10-23). Either list
  * unreadable is no "none".
@@ -611,7 +644,8 @@ function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
   const sure = upcoming.matches.some(m => {
     const at = Date.parse(m.scheduled_at)
     const t = mine.active.find(x => x.id === m.tournament_id)
-    return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && (t?.tier === 'silver' || t?.tier === 'gold')
+    const earns = t?.tier === 'silver' || t?.tier === 'gold' || (t?.tier === 'bronze' && t.entry_fee_foxsy > 0 && levelsLive(s.config, now))
+    return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && earns
   })
   return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): Zeus buys the XP booster once its fixtures are drawn'
 }
@@ -783,6 +817,17 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (exhausted.length) return refuse(`starters at condition 0: ${exhausted.map(n => `#${n}`).join(',')}`)
       if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < MATCH_COOLDOWN_MS) return refuse('match cooldown (30 s)')
       if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < RANKED_COOLDOWN_MS) return refuse('ranked cooldown (15 min)')
+      if (a.match_type === 'ranked' && levelsLive(cfg, ctx.now)) {
+        // One ticket per game, paid before the draw. Tickets that cannot be read are no "none": it could pay for nothing.
+        if (ctx.pendingTicket) return refuse("a ranked ticket payment is still waiting for FoxLeague's confirmation: not paying twice")
+        const ticket = ctx.rankedTicket
+        if (!ticket) return refuse('your ranked tickets could not be read: no ranked start blind')
+        if (ticket.tickets > 0) return allow(0, { ticket: 'held' })
+        const price = ticket.price_foxsy
+        if (!Number.isSafeInteger(price) || price <= 0) return refuse('the ranked ticket price could not be read: not paying blind')
+        if (price > ctx.settings.maxShopPaymentFoxsy) return refuse(`a ranked ticket of ${price} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy}`)
+        return needFoxsy(price, allow(price, { ticket: 'buy' }, 'play', [`a ranked ticket of ${price} FOXSY, once FoxLeague asks for one`]))
+      }
       return allow(0)
     }
 
@@ -868,7 +913,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (field.stronger >= ZEUS_FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
         }
       }
-      if (t.tier === 'bronze') return allow(0, { tier: 'bronze', scId: t.sc_tournament_id ?? t.id, fee: 0 })
+      // A free Bronze (created before the levels) seats without a payment and earns nothing; a paid one goes on chain like Silver.
+      if (t.tier === 'bronze' && !(t.entry_fee_foxsy > 0)) return allow(0, { free: true, tier: 'bronze', scId: t.sc_tournament_id ?? t.id, fee: 0 })
       if (t.entry_fee_foxsy <= 0) return refuse('paid tier without a fee cannot take entries')
       if (t.entry_fee_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`entry fee ${t.entry_fee_foxsy} exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
       if (t.sc_tournament_id === null) return refuse(`T${t.id} is not on chain yet (pending_sc)`)
@@ -880,6 +926,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!d || !s.profile) return refuse(`tournament T${a.tournament_id} not found`)
       if (!d.participants.some(p => p.user_id === s.profile!.id)) return refuse(`not in T${a.tournament_id}`)
       if (d.tournament.status !== 'open' || new Date(d.tournament.deadline) <= ctx.now) return refuse('can only leave an open tournament before its deadline')
+      // The leave lock: a tournament that reached its minimum is played, so the seat stays until more teams join.
+      if (leaveLockLive(cfg) && d.participants.length === d.tournament.min_teams) return refuse(`T${a.tournament_id} is at its minimum of ${d.tournament.min_teams} teams: its seats are locked until more teams join`)
       // A League + Knockout (owner, 2026-10-24): the agent may leave one it sees no chance of the top 24 in, but only while
       // leaving returns the whole entry, before its seats lock (FoxLeague refuses any leave after it). Leaving closes the
       // invitation for good, so an unreadable lock time is no leave. The owner may leave as before.
@@ -923,6 +971,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'create_tournament': {
       if (!registered || !s.profile) return refuse('not registered')
+      if (a.tier === 'bronze' && !levelsLive(cfg, ctx.now)) return refuse('a Bronze tournament earns nothing until the competition levels are live: none is created before them')
       const invites = a.invite_user_ids ?? []
       if (a.invite_user_ids?.length) {
         if (!ctx.zeus) return refuse('only the Zeus level creates private tournaments')
@@ -933,8 +982,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const tournamentRange = createRangeRefusal(a, ctx)
       if (tournamentRange) return refuse(tournamentRange)
-      const list = a.tier === 'silver' ? ctx.settings.entryFeesSilver : ctx.settings.entryFeesGold
-      if (!list.includes(a.entry_fee_foxsy)) return refuse(`entry fee ${a.entry_fee_foxsy} is not one of the configured amounts ${list.join('/')}`)
+      const list = a.tier === 'bronze' ? ctx.settings.entryFeesBronze : a.tier === 'silver' ? ctx.settings.entryFeesSilver : ctx.settings.entryFeesGold
+      if (!list.includes(a.entry_fee_foxsy)) return refuse(`entry fee ${a.entry_fee_foxsy} is not one of the configured amounts ${list.join('/') || '(none set)'}`)
       const bounds = tierBounds(s, a.tier)
       if (!bounds || a.entry_fee_foxsy < bounds[0] || a.entry_fee_foxsy > bounds[1]) return refuse(`fee outside the ${a.tier} bounds`)
       if (a.entry_fee_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`entry fee exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
@@ -942,7 +991,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const unknownCreate = unsupportedFormat(a.format, 'creating')
       if (unknownCreate) return refuse(unknownCreate)
       if (!VALID_SIZES[a.format]!(a.max_teams)) return refuse(`${a.max_teams} teams is not a valid ${a.format} size`)
-      if ((a.format === 'knockout' || a.format === 'groups_knockout') && a.min_teams !== a.max_teams) return refuse(`${a.format} needs min_teams = max_teams`)
+      if (a.format === 'knockout' && a.min_teams !== a.max_teams) return refuse('knockout needs min_teams = max_teams')
+      if (a.format === 'groups_knockout' && a.min_teams < GROUPS_MIN_TEAMS) return refuse(`groups_knockout needs min_teams of ${GROUPS_MIN_TEAMS} or more`)
       if (a.min_teams > a.max_teams || a.min_teams < 3) return refuse('min_teams must be 3..max_teams')
       const ceiling = sizeCeiling(s)
       if (a.max_teams > ceiling) return refuse(`${a.max_teams} teams is larger than recent tournaments fill (ceiling ${ceiling})`)
@@ -959,11 +1009,30 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
         return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(taken.end)} UTC); ${free !== null ? `the first free start for this format and size is starts_in_hours ${free}` : 'no free start in the next 72 hours'}`)
       }
-      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() }, ctx.now)
+      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() }, ctx.now)
       if (worn) return refuse(worn)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
-      return needFoxsy(a.entry_fee_foxsy, allow(a.entry_fee_foxsy, { fee: a.entry_fee_foxsy, ...(a.invite_user_ids?.length ? { invites } : {}) }))
+      // What the organizer owes: one payment, once FoxLeague asks for it at the create; nothing on a tournament it exempts.
+      let organizerFoxsy = 0
+      let organizerHash: string | undefined
+      const organizerNotes: string[] = []
+      if (organizerFeesLive(cfg, ctx.now)) {
+        const q = ctx.organizerQuote
+        if (!q) return refuse('what this tournament owes its organizer could not be read: not creating blind')
+        if (q.owed) {
+          if (!Number.isSafeInteger(q.total_foxsy) || q.total_foxsy <= 0) return refuse('the organizer payment could not be read: not paying blind')
+          if (q.total_foxsy > ctx.settings.maxShopPaymentFoxsy) return refuse(`an organizer payment of ${q.total_foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy}: a smaller tournament owes less`)
+          const held = ctx.pendingOrganizer
+          if (held && held.total !== q.total_foxsy) return refuse(`an organizer payment of ${held.total} FOXSY waits to be used or returned, and this tournament owes ${q.total_foxsy}: not paying a second one; a tournament that owes ${held.total} can use it`)
+          if (held) organizerHash = held.hash
+          else organizerFoxsy = q.total_foxsy
+          organizerNotes.push(`organizer payment ${q.total_foxsy} FOXSY (deposit ${q.deposit_foxsy}${q.private_fee_foxsy > 0 ? `, private fee ${q.private_fee_foxsy}` : ''}, ${q.games} games): the deposit is kept if too few teams join by the deadline`)
+          if (q.no_free_cancel) organizerNotes.push('this time slot has no free cancel')
+        }
+      }
+      const total = a.entry_fee_foxsy + organizerFoxsy
+      return needFoxsy(total, allow(total, { fee: a.entry_fee_foxsy, organizerFoxsy, ...(organizerHash ? { organizerHash } : {}), ...(a.invite_user_ids?.length ? { invites } : {}) }, 'play', organizerNotes))
     }
 
     case 'create_challenge': {

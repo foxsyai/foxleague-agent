@@ -367,6 +367,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sBidRare">Max bid for a Rare<i class="info" data-tip="bidRare">i</i></label><input id="sBidRare" type="number" min="0" step="100"><div class="hint" id="hBidRare"></div></div>
           <div><label for="sBidEpic">Max bid for an Epic<i class="info" data-tip="bidEpic">i</i></label><input id="sBidEpic" type="number" min="0" step="100"><div class="hint" id="hBidEpic"></div></div>
           <div><label for="sBidLegendary">Max bid for a Legendary<i class="info" data-tip="bidLegendary">i</i></label><input id="sBidLegendary" type="number" min="0" step="100"><div class="hint" id="hBidLegendary"></div></div>
+          <div><label for="sBronze">Bronze amounts<i class="info" data-tip="bronze">i</i></label><input id="sBronze" placeholder="100, 250, 500"><div class="hint">Empty: it creates no Bronze</div></div>
           <div><label for="sSilver">Silver amounts<i class="info" data-tip="silver">i</i></label><input id="sSilver" placeholder="1000, 1500, 2000"><div class="hint">Round amounts for creating</div></div>
           <div><label for="sGold">Gold amounts<i class="info" data-tip="gold">i</i></label><input id="sGold" placeholder="5000"></div>
           <div class="sep">Timing</div>
@@ -634,7 +635,7 @@ function fillForm(st) {
   $('sBidCommon').value = st.maxBidCommonFoxsy; $('sBidUncommon').value = st.maxBidUncommonFoxsy
   $('sBidRare').value = st.maxBidRareFoxsy; $('sBidEpic').value = st.maxBidEpicFoxsy; $('sBidLegendary').value = st.maxBidLegendaryFoxsy
   renderLimitHints()
-  $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
+  $('sBronze').value = st.entryFeesBronze.join(', '); $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
   formDirty = false
@@ -681,7 +682,7 @@ function readForm() {
     strategy: $('sStrategy').value, dailyCapUsd: n('sDaily'), monthlyBudgetUsd: n('sMonthly'), setupBudgetUsd: n('sSetup'),
     egldGasReserve: $('sReserve').value.trim(), topUpWarningUsd: n('sTopUp'), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
     maxBidCommonFoxsy: n('sBidCommon'), maxBidUncommonFoxsy: n('sBidUncommon'), maxBidRareFoxsy: n('sBidRare'), maxBidEpicFoxsy: n('sBidEpic'), maxBidLegendaryFoxsy: n('sBidLegendary'),
-    entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
+    entryFeesBronze: list('sBronze'), entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
     activeHoursUtc: [n('sFrom'), n('sTo')],
   }
 }
@@ -1003,6 +1004,7 @@ const TIPS = {
     <p>The agent aims below the market price it is shown. Max bid holds above this. Raising it asks for your password.</p>`],
   bidLegendary: ['Max bid for a Legendary (FOXSY)', `<p>The most the agent may bid for a Legendary card. The default, 38,000, is about 20 percent above the Legendary's market price when it was set, measured the same way.</p>
     <p>The agent aims below the market price it is shown. Max bid holds above this, so with a max bid under it, the max bid is the limit. Raising it asks for your password.</p>`],
+  bronze: ['Bronze amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Bronze tournament, between 100 and 999 FOXSY. Leave it empty and it creates none; it can still join one, within Max entry or stake.</p><p>A Bronze costs an entry and earns only once FoxLeague's competition levels are live. Before that the agent creates none.</p>`],
   silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
     <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
   gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>

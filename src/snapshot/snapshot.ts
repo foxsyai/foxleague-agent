@@ -369,7 +369,7 @@ export const FIELD_SEATS = 16
  */
 async function readFields(fox: FoxLeague, wallet: AgentWallet, open: Tournament[], myId: number, board: UserProfile[], now: Date): Promise<NonNullable<MarketSummary['fields']>> {
   const joinable = open
-    .filter(t => (t.tier === 'silver' || t.tier === 'gold') && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams)
+    .filter(t => (t.tier === 'silver' || t.tier === 'gold' || (t.tier === 'bronze' && t.entry_fee_foxsy > 0)) && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams)
     .sort((a, b) => a.deadline.localeCompare(b.deadline))
     .slice(0, FIELD_TOURNAMENTS)
   const out: NonNullable<MarketSummary['fields']> = []
@@ -621,15 +621,15 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
   }
 
-  // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent never
-  // creates one; it may join one it is invited to, so only those are kept.
+  // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent may join one it
+  // is invited to, so only those are kept, with the split their own platform fee pays.
   // A League + Knockout is by invitation only: it shows among the invitations, never as an open tournament.
   const openStandard = (openAll ?? []).filter(t => t.max_teams > 2 && !t.is_private && t.format !== 'league_knockout')
   if (wallet && registered) {
     const privates = (openAll ?? []).filter(t => t.max_teams > 2 && t.is_private).sort((a, b) => a.deadline.localeCompare(b.deadline)).slice(0, 8)
     const details = await Promise.all(privates.map(t => attempt(warnings, `private T${t.id}`, () => fox.tournament(t.id, wallet))))
     privates.forEach((t, i) => {
-      if (details[i]?.user_can_join_private === true) openStandard.push({ ...t, invited: true })
+      if (details[i]?.user_can_join_private === true) openStandard.push({ ...t, invited: true, prize_split: details[i]?.prize_split ?? null })
     })
   }
 

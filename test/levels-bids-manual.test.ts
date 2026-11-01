@@ -167,5 +167,5 @@ test('R78-2: no strategy prices ranked as the largest ELO swing', () => {
   for (const [level, text] of Object.entries(STRATEGY_PRESETS)) {
     assert.doesNotMatch(text, /K 24|ELO the most/, level)
   }
-  assert.match(STRATEGY_PRESETS.zeus!, /Ranked matches move ELO at K 9, less than a Silver or Gold match/)
+  assert.match(STRATEGY_PRESETS.zeus!, /Ranked matches move ELO less than a Silver or Gold match/)
 })

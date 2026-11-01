@@ -1,5 +1,6 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
+import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
 import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
@@ -7,7 +8,7 @@ import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
 import { EVEN_BAND, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
-import type { ShopStatus, Tournament } from '../foxleague/types.ts'
+import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
 
 /**
  * Text written by other players or servers (titles, team, card and listing names, error messages) as
@@ -151,6 +152,31 @@ function ovrRange(t: { ovr_min?: number | null; ovr_max?: number | null }): stri
   return lo === null && hi === null ? '' : `, OVR range ${lo ?? 'any'} to ${hi ?? 'any'}`
 }
 
+/** The competition levels and the organizer's amounts, only as FoxLeague serves them (the prompt holds no number of them). */
+const splitText = (p: PrizeSplit) => `pays ${p.winner_percent}/${p.runner_up_percent}/${p.third_percent}, platform ${p.platform_fee_percent}%`
+/** A split to tell the plan about: one FoxLeague names that differs from the public tournaments' split. */
+const otherSplit = (s: AgentSnapshot, p: PrizeSplit | null | undefined) => {
+  const pub = s.config?.tournament_prize_split
+  return p && pub && p.platform_fee_percent !== pub.platform_fee_percent ? splitText(p) : ''
+}
+
+function levelLines(s: AgentSnapshot): string[] {
+  const out: string[] = []
+  const now = new Date(s.takenAt)
+  const whenLive = (live: boolean, from: string | null | undefined) => (live ? 'LIVE' : from ? `not live yet, from ${from}` : 'not switched on yet')
+  const c = s.config?.competition_levels
+  if (c) {
+    const b = s.config?.tournament_fee_bounds
+    const bronze = typeof b?.bronze_min === 'number' && typeof b?.bronze_max === 'number' ? `; a paid Bronze costs ${b.bronze_min} to ${b.bronze_max} FOXSY` : ''
+    out.push(`Competition levels: ${whenLive(levelsLive(s.config, now), c.live_from)}: ranked ticket ${c.ranked_ticket_price_foxsy} FOXSY a game you start${bronze}; XP ranked ${c.xp_factor_pct.ranked}%, Bronze ${c.xp_factor_pct.bronze}%, Silver ${c.xp_factor_pct.silver}%, Gold ${c.xp_factor_pct.gold}%; K ranked ${c.elo_k.ranked}, Bronze ${c.elo_k.bronze}, Silver ${c.elo_k.silver}, Gold ${c.elo_k.gold}; at most ${c.competitive_daily_cap} competitive matches a card a day`)
+  }
+  const f = s.config?.organizer_fees
+  if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${f.calendar_deposit_per_match_foxsy} FOXSY a game${f.calendar_deposit_min_foxsy > 0 ? ` (at least ${f.calendar_deposit_min_foxsy})` : ''}${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
+  const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
+  if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
+  return out
+}
+
 export function renderDigest(s: AgentSnapshot): string {
   const scout = (id: number) => {
     const r = (s.market.scouted ?? []).find(x => x.id === id)
@@ -190,7 +216,7 @@ export function renderDigest(s: AgentSnapshot): string {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
     }
-    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}`)
+    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && t.participant_count === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}`)
     // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining (only one
     // this agent created itself: a range the owner set with the same team is the owner's).
     for (const t of a.myTournaments?.active ?? []) {
@@ -203,9 +229,11 @@ export function renderDigest(s: AgentSnapshot): string {
     for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}${rivalNote(s, c.creator_user_id)}`)
   }
 
+  out.push(...levelLines(s))
+
   if (s.players.length) {
     out.push(`Squad (${s.players.length}; stats synced>live, (xp/${XP_PER_POINT}) = that stat's XP pool when ${XP_SHOWN_FROM} or more, ${XP_PER_POINT} gives +1; comp = competitive matches of the rarity's match gate):`)
-    if (s.config) out.push(`Match gates (fusion input or listing; ranked, casual and Bronze never count): ${gateLine(s.config)}`)
+    if (s.config) out.push(`Match gates (fusion input or listing; ${levelsLive(s.config, new Date(s.takenAt)) ? 'a ranked game you started and paid for and a paid Bronze match count too, casual and free Bronze never' : 'ranked, casual and Bronze never count'}): ${gateLine(s.config)}`)
     const order = { starter: 0, bench: 1, reserve: 2 }
     const cfg = s.config
     for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p, cfg ? matchGate(cfg, p.rarity) : undefined)}`)
@@ -243,7 +271,7 @@ export function renderDigest(s: AgentSnapshot): string {
   const zeus = s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')
   if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${ZEUS_STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((ZEUS_STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way${zeus ? `; Zeus never joins a field with ${ZEUS_FIELD_LIMIT} or more clearly stronger teams, or ${ZEUS_FIELD_LIMIT} or more unknown ones` : ''})`)
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${ovrRange(t)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
   }

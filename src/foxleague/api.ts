@@ -9,6 +9,8 @@ import type {
   FoxConfig,
   PlayerCard,
   MatchWaiverQuote,
+  OrganizerFeeQuote,
+  RankedTicketView,
   ShopStatus,
   Team,
   Tournament,
@@ -288,7 +290,7 @@ export class FoxLeague {
    * With every match slot busy FoxLeague holds the answer until one frees, up to match.sim_slot_wait_ms (30 s by
    * default, 35 s at most), then starts the match; its own app waits 90 s (PLAY_MATCH_TIMEOUT_MS). Audit C2.
    */
-  playMatch(w: AgentWallet, matchType: 'casual' | 'ranked'): Promise<{ match_id: number }> {
+  playMatch(w: AgentWallet, matchType: 'casual' | 'ranked'): Promise<{ match_id: number; ranked_paid?: boolean }> {
     return this.call('/matches/play', { method: 'POST', wallet: w, body: { wallet_address: w.address, match_type: matchType }, timeoutMs: PLAY_MATCH_TIMEOUT_MS })
   }
 
@@ -312,6 +314,20 @@ export class FoxLeague {
 
   createTournament(w: AgentWallet, body: Record<string, unknown>, idempotencyKey: string): Promise<Tournament> {
     return this.call<Tournament>('/tournaments/create', { method: 'POST', wallet: w, body, timeoutMs: 60_000, headers: { 'idempotency-key': idempotencyKey } })
+  }
+
+  /** What a ranked game costs its starter and the tickets this wallet holds. */
+  rankedTicket(w: AgentWallet): Promise<RankedTicketView> {
+    return this.call<RankedTicketView>(`/shop/ranked-ticket?wallet_address=${w.address}`, { wallet: w })
+  }
+
+  /** Records one ticket for a settled shopPay of its price; tx_pending: send the same hash again, never pay twice. */
+  buyRankedTicket(w: AgentWallet, txHash: string): Promise<RankedTicketView> {
+    return this.call<RankedTicketView>('/shop/ranked-ticket', { method: 'POST', wallet: w, body: { wallet_address: w.address, tx_hash: txHash }, timeoutMs: 60_000 })
+  }
+
+  organizerFeeQuote(w: AgentWallet, body: { format: string; max_teams: number; home_and_away: boolean; has_third_place_match: boolean; private: boolean; developer_mode: boolean; starts_at: string }): Promise<OrganizerFeeQuote> {
+    return this.call<OrganizerFeeQuote>('/tournaments/organizer-fee/quote', { method: 'POST', wallet: w, body })
   }
 
   shopConfirm(w: AgentWallet, body: { tx_hash: string; product: string; player_nonce?: number; player_nonces?: number[]; quantity?: number }): Promise<{ purchase_id: number; message: string }> {

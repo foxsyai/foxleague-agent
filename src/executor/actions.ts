@@ -41,7 +41,7 @@ export type Action =
       type: 'create_tournament'
       title: string
       format: 'knockout' | 'round_robin' | 'swiss' | 'groups_knockout'
-      tier: 'silver' | 'gold'
+      tier: 'bronze' | 'silver' | 'gold'
       max_teams: number
       min_teams: number
       entry_fee_foxsy: number
@@ -84,6 +84,8 @@ export interface PlannedAction {
   byOwner?: true
   /** One of several smaller actions an extension made from one (see src/extensions.ts); never from a plan. */
   piece?: { group: number; index: number; of: number }
+  /** The private platform fee the plan's own snapshot showed. Set only by the service after the plan; never from a plan. */
+  planPlatformFeePercent?: number
 }
 
 class ParseError extends Error {}
@@ -169,7 +171,7 @@ export function parseAction(raw: unknown): Action {
         type: o.type,
         title: str(o, 'title', /^[\p{L}\p{N} .,!?'&()-]{3,60}$/u, '3-60 plain characters'),
         format,
-        tier: oneOf(o, 'tier', ['silver', 'gold'] as const),
+        tier: oneOf(o, 'tier', ['bronze', 'silver', 'gold'] as const),
         max_teams: int(o, 'max_teams', 3, 64),
         min_teams: int(o, 'min_teams', 2, 64),
         entry_fee_foxsy: int(o, 'entry_fee_foxsy', 1, 1_000_000),

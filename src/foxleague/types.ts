@@ -1,6 +1,62 @@
 // Response shapes of the FoxLeague routes the agent reads (subset of the backend's ts-rs types,
 // frontend/src/types/generated; checked against live mainnet answers on 2026-09-28).
 
+/** One value per level of competition. */
+export interface LevelValues {
+  ranked: number
+  bronze: number
+  silver: number
+  gold: number
+}
+
+/** GET /api/config `competition_levels`: what a ranked game costs its starter and what each level earns. */
+export interface CompetitionLevels {
+  live: boolean
+  live_from?: string | null
+  ranked_ticket_price_foxsy: number
+  xp_factor_pct: LevelValues
+  elo_k: LevelValues
+  private_bronze_earns: boolean
+  competitive_daily_cap: number
+}
+
+/** How a tournament's pool is shared, in whole percents summing to 100. */
+export interface PrizeSplit {
+  winner_percent: number
+  runner_up_percent: number
+  third_percent: number
+  platform_fee_percent: number
+}
+
+/** GET /api/config `organizer_fees`: the calendar deposit and the private fee of a tournament's organizer. */
+export interface OrganizerFees {
+  live: boolean
+  live_from?: string | null
+  private_match_fee_foxsy: number
+  calendar_deposit_per_match_foxsy: number
+  calendar_deposit_min_foxsy: number
+  calendar_deposit_grace_minutes: number
+}
+
+/** GET /api/shop/ranked-ticket. */
+export interface RankedTicketView {
+  live: boolean
+  live_from?: string | null
+  price_foxsy: number
+  tickets: number
+}
+
+/** POST /api/tournaments/organizer-fee/quote: what a tournament of this shape owes its organizer, before anything is signed. */
+export interface OrganizerFeeQuote {
+  owed: boolean
+  games: number
+  private_fee_foxsy: number
+  deposit_foxsy: number
+  total_foxsy: number
+  grace_minutes: number
+  no_free_cancel: boolean
+}
+
 export interface FoxConfig {
   registration_fee_foxsy: number
   registration_fee_wei: string
@@ -19,8 +75,13 @@ export interface FoxConfig {
   common_pack_unavailable_reason?: string | null
   common_pack_epoch_remaining?: number
   sync_cost_foxsy: number
-  tournament_fee_bounds: { silver_min: number; silver_max: number; gold_min: number }
-  tournament_prize_split: { winner_percent: number; runner_up_percent: number; third_percent: number; platform_fee_percent: number }
+  /** bronze_min and bronze_max: the band of a paid Bronze, served since FoxLeague's competition levels. */
+  tournament_fee_bounds: { silver_min: number; silver_max: number; gold_min: number; bronze_min?: number; bronze_max?: number }
+  competition_levels?: CompetitionLevels
+  organizer_fees?: OrganizerFees
+  tournament_prize_split: PrizeSplit
+  /** The split a private tournament created now pays; the public one until FoxLeague raises its platform fee. */
+  private_tournament_prize_split?: PrizeSplit | null
   one_v_one_prize_split: { winner_percent: number; platform_fee_percent: number }
   tournament_defaults: {
     match_stagger_minutes: number
@@ -32,6 +93,8 @@ export interface FoxConfig {
     one_v_one_prize_delivery_seconds: number
     /** FoxLeague's League + Knockout format (admin-created, by invitation) is on; it ships off. */
     league_knockout_enabled?: boolean
+    /** A team may leave only if the tournament keeps its min_teams. */
+    leave_lock_live?: boolean
   }
   min_field_condition: number
   condition_regen_points_per_day: number
@@ -188,6 +251,8 @@ export interface Tournament {
   targeted_to_you?: boolean
   challenge_deadline_minutes: number | null
   is_private: boolean
+  /** Set by the agent from the tournament's own answer: the split its platform fee pays, fixed when it was created. */
+  prize_split?: PrizeSplit | null
   /** Set by the agent: a private tournament its own team is invited to (FoxLeague tells this to the team's session only). */
   invited?: boolean
   home_and_away: boolean
@@ -200,6 +265,8 @@ export interface TournamentDetail {
   user_is_participant?: boolean
   /** Only filled for the caller's own session: true when that team is invited to this private tournament. */
   user_can_join_private?: boolean | null
+  /** The split this tournament pays, from the platform fee the contract fixed at its creation; null while unknown. */
+  prize_split?: PrizeSplit | null
   /**
    * A 1v1 read with the caller's wallet: true when FoxLeague's join gate would refuse it because the team is busy with
    * a tournament (the same rows, matches.rs tournament_busy_exists_sql). FoxLeague answers false on its own failed read.
