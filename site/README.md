@@ -27,7 +27,7 @@ static files. DNS: `A agent → 134.209.228.52` in the foxleague.ai zone.
 
 First time, on the droplet (with sudo):
 
-1. `sudo mkdir -p /var/www/agent.foxleague.ai`, then install `nginx/agent.foxleague.ai.http-only.conf` as
+1. `sudo mkdir -p /var/www/agent.foxleague.ai`, `sudo touch /var/www/agent.foxleague.ai.deploys` and `sudo chown -R web:www-data` on both: the deploy runs as the deploy user `web`, which has no sudo. Then install `nginx/agent.foxleague.ai.http-only.conf` as
    `/etc/nginx/sites-available/foxleague-agent`, link it from `sites-enabled`, `sudo nginx -t` and reload. (The
    name sorts after `foxkeeper.foxsy.ai`, so the site that answers unknown hosts on 443 stays the same.)
 2. Once the DNS answers the droplet's address everywhere:
