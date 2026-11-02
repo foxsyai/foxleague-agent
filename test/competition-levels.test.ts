@@ -911,3 +911,52 @@ test('R41-14: a plan that could not read FoxLeague\'s config makes no private cr
   const logged = store.db.prepare("SELECT summary FROM activity WHERE kind = 'create_tournament'").all() as { summary: string }[]
   assert.match(logged.map(r => r.summary).join(' | '), /could not read FoxLeague's settings/)
 })
+
+// ---- FoxLeague's promotion of 2026-11-02 (next-foxleague PR #597) ----
+
+test('P597-6: a private paid Bronze is a booster fixture only while FoxLeague says it earns; privacy unread counts as private', async () => {
+  const booster = { action: { type: 'buy' as const, product: 'xp_booster' as const }, reason: '' }
+  const run = async (earns: boolean | undefined, isPrivate: boolean | undefined) => {
+    const s = liveSnapshot()
+    s.config!.competition_levels = { ...LIVE_LEVELS, private_bronze_earns: earns as boolean }
+    s.auth!.myTournaments = { active: [{ id: 7, tier: 'bronze', entry_fee_foxsy: 250, format: 'round_robin', max_teams: 4, min_teams: 3, status: 'active', ...(isPrivate === undefined ? {} : { is_private: isPrivate }) }], completed: [] } as never
+    s.auth!.upcoming!.matches = [{ tournament_id: 7, phase: 'upcoming', scheduled_at: new Date(Date.now() + 3 * 3600_000).toISOString(), strategy_locks_at: new Date(Date.now() + 3 * 3600_000).toISOString() }] as never
+    const m = setup()
+    m.store.updateSettings(0, { strategy: STRATEGY_PRESETS.zeus! })
+    const [r] = await m.exec.run(m.agent(), dryWallet, s, [booster])
+    return r!
+  }
+  const off = await run(false, true)
+  assert.equal(off.status, 'refused', off.summary)
+  assert.equal((await run(false, undefined)).status, 'refused', 'privacy unread counts as private')
+  assert.equal((await run(undefined, true)).status, 'refused', 'no flag is no')
+  const on = await run(true, true)
+  assert.notEqual(on.status, 'refused', on.summary)
+  const pub = await run(false, false)
+  assert.notEqual(pub.status, 'refused', `a public paid Bronze earns whatever the flag: ${pub.summary}`)
+})
+
+test('P597-6: a private Bronze is created only while FoxLeague says it earns', async () => {
+  const quote = async () => ({ owed: false, games: 6, private_fee_foxsy: 0, deposit_foxsy: 0, total_foxsy: 0, grace_minutes: 60, no_free_cancel: false })
+  const create = async (earns: boolean | undefined) => {
+    const m = setup({ fox: { organizerFeeQuote: quote } })
+    m.store.updateSettings(0, { strategy: STRATEGY_PRESETS.zeus!, entryFeesBronze: [100] })
+    const s = liveSnapshot()
+    s.config!.competition_levels = { ...LIVE_LEVELS, private_bronze_earns: earns as boolean }
+    const [r] = await m.exec.run(m.agent(), dryWallet, s, [{ action: parseAction({ ...PRIVATE_CUP, tier: 'bronze', entry_fee_foxsy: 100 }), reason: '' }])
+    return r!
+  }
+  const off = await create(false)
+  assert.equal(off.status, 'refused', off.summary)
+  assert.match(off.summary, /private Bronze earns nothing/)
+  assert.match((await create(undefined)).summary, /private Bronze earns nothing/, 'no flag is no')
+  const on = await create(true)
+  assert.doesNotMatch(on.summary, /private Bronze earns nothing/)
+})
+
+test('P597-6: the digest says whether a private Bronze earns', () => {
+  assert.match(renderDigest(liveSnapshot()), /a private paid Bronze \(an invite list\) earns like a public one/)
+  const off = liveSnapshot()
+  off.config!.competition_levels = { ...LIVE_LEVELS, private_bronze_earns: false }
+  assert.match(renderDigest(off), /a private Bronze \(an invite list\) earns nothing/)
+})

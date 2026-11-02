@@ -15,6 +15,15 @@ export function levelsLive(cfg: FoxConfig | null | undefined, now: Date): boolea
   return Boolean(c) && (c!.live === true || passed(c!.live_from, now))
 }
 
+/**
+ * A paid Bronze earns XP, ELO and a competitive match once the levels are live; a private one (an invite list) only
+ * while FoxLeague serves `private_bronze_earns: true` (competition_levels.rs level_of). An unread flag, or a
+ * tournament whose privacy was not read, is no.
+ */
+export function paidBronzeEarns(cfg: FoxConfig | null | undefined, now: Date, isPrivate: boolean | undefined): boolean {
+  return levelsLive(cfg, now) && (isPrivate === false || cfg?.competition_levels?.private_bronze_earns === true)
+}
+
 /** A tournament's organizer pays a calendar deposit and, on an invite list, a private fee. */
 export function organizerFeesLive(cfg: FoxConfig | null | undefined, now: Date): boolean {
   const c = cfg?.organizer_fees

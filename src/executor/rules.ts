@@ -12,7 +12,7 @@ import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
-import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns } from '../foxleague/levels.ts'
 import type { SpendCategory } from '../store/db.ts'
 
 export interface Verdict {
@@ -644,7 +644,7 @@ function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
   const sure = upcoming.matches.some(m => {
     const at = Date.parse(m.scheduled_at)
     const t = mine.active.find(x => x.id === m.tournament_id)
-    const earns = t?.tier === 'silver' || t?.tier === 'gold' || (t?.tier === 'bronze' && t.entry_fee_foxsy > 0 && levelsLive(s.config, now))
+    const earns = t?.tier === 'silver' || t?.tier === 'gold' || (t?.tier === 'bronze' && t.entry_fee_foxsy > 0 && paidBronzeEarns(s.config, now, t.is_private))
     return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && earns
   })
   return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): Zeus buys the XP booster once its fixtures are drawn'
@@ -975,6 +975,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const invites = a.invite_user_ids ?? []
       if (a.invite_user_ids?.length) {
         if (!ctx.zeus) return refuse('only the Zeus level creates private tournaments')
+        if (a.tier === 'bronze' && !paidBronzeEarns(cfg, ctx.now, true)) return refuse('a private Bronze earns nothing while FoxLeague keeps private_bronze_earns off: create it public or at Silver')
         if (invites.includes(s.profile.id)) return refuse('cannot invite yourself')
         if (invites.length > a.max_teams - 1) return refuse(`at most ${a.max_teams - 1} invited teams for ${a.max_teams} seats`)
         if (invites.length + 1 < a.min_teams) return refuse(`a private tournament fills only with its invited teams and you: ${invites.length + 1} cannot reach the minimum of ${a.min_teams}; invite more active teams`)
