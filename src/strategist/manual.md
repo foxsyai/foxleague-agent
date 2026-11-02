@@ -1,12 +1,12 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 4f82e988f 2026-10-30.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 1e58023fc 2026-11-02.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
 # Economy map
 (docs.foxleague.ai/mechanics/economy-map/)
 
-This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values of 28 October 2026. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
+This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values of 28 October 2026. Where a value changes on **Monday 9 November 2026 at 14:00 UTC** (the [competition levels](/mechanics/matches/#competition-levels): a ticket for ranked, an entry fee for Bronze, XP and ELO by level, a daily cap on competitive matches), the row gives both. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
 
 Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours. Daily allowances reset at a fixed **14:00 UTC**, not on a rolling 24 hour window.
 
@@ -20,16 +20,17 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Stat caps by rarity** | Common 30, Uncommon 55, Rare 75, Epic 90, Legendary 100 per stat | The ceiling training can reach on each of the 7 stats | XP earned on a capped stat is discarded. Only fusion raises the ceiling | None |
 | **Casual plus ranked matches per day** | 5 | The matches you may start yourself per day, casual and ranked combined | Being drawn in as someone's ranked opponent does not count. Tournament and 1v1 games do not count either | Not for sale |
 | **Match cooldown** | 30 seconds from the start of your previous match; 15 minutes from the start of your last ranked game | Pacing between the matches you start | Both clocks run from the start of the match, not from full time. The ranked cooldown counts from your last ranked game, started or drawn into | Not for sale |
-| **XP-eligible matches per player per day** | 3 | How many matches a day a player card can earn attribute XP in | A fourth competitive match that day still counts for ELO, career stats and the fusion counter. It awards no XP | Not for sale |
-| **What counts as competitive** | Silver or Gold tournament matches plus 1v1 challenges. XP also comes from ranked while ranked XP is on (off on mainnet), but ranked never moves the match counter | The matches that move the on-chain match counter the match gates read | A real opponent and a paid seat. Casual games against the AI never count. Bronze tournaments never count | Fusion match waiver (see fusion row) |
-| **XP per match** | Up to 900 XP spread over the 7 stats (910 in the keeper's shirt) | Attribute XP a starter earns from one competitive match | Scored on the role of the shirt worn ([XP by shirt](/mechanics/training/#xp-by-shirt)). Midfield and forward shirts: nine match actions (distance, dribbles, goals, passes, shots, completed passes, tackles, interceptions, saves) each score 0 to 100 against a normaliser and the scores are distributed to stats. The normalisers are set so a median performance scores about half of each term. The keeper's shirt is scored on distance, passes, completed passes, saves and catches; a back-line shirt on distance, dribbles, passes, completed passes, tackles and interceptions. Both are scored against the role's own normalisers, then a role factor brings the role's average match to the midfield and forward average | XP booster doubles it (next row) |
+| **Ranked ticket** | Free until Monday 9 November 2026, 14:00 UTC; from then 25 FOXSY per ranked game you start | What the team that starts a ranked game pays before the opponent is drawn | One payment is one ticket for one game. Only the paying team earns XP (a quarter) and competitive matches. The team drawn in pays nothing, loses no condition and earns neither; its ELO moves. A game the AI fills is free and keeps the ticket for your next start; a game that fails before its result gives it back. Tickets are never refunded | None. It is the price of a ranked game |
+| **XP-eligible matches per player per day** | 3 | How many matches a day a player card can earn attribute XP in | A fourth competitive match that day still counts for ELO plus career stats. It awards no XP. Until 9 November 2026 it also counts for the fusion counter; from then the counter has a cap of its own, also 3 per card per day | Not for sale |
+| **What counts as competitive** | Until Monday 9 November 2026, 14:00 UTC: Silver or Gold tournament matches plus 1v1 challenges; ranked XP is off on mainnet and ranked never moves the match counter. From then: also a paid Bronze tournament match plus a ranked game for the team that started it and paid its ticket, at most 3 per card per day | The matches that move the on-chain match counter the match gates read | A real opponent and a paid seat. Casual games against the AI never count. Free Bronze tournaments never count. The team drawn into a ranked game never counts | Fusion match waiver (see fusion row) |
+| **XP per match** | Up to 900 XP spread over the 7 stats (910 in the keeper's shirt) | Attribute XP a starter earns from one competitive match | Scored on the role of the shirt worn ([XP by shirt](/mechanics/training/#xp-by-shirt)). Midfield and forward shirts: nine match actions (distance, dribbles, goals, passes, shots, completed passes, tackles, interceptions, saves) each score 0 to 100 against a normaliser and the scores are distributed to stats. The normalisers are set so a median performance scores about half of each term. The keeper's shirt is scored on distance, passes, completed passes, saves and catches; a back-line shirt on distance, dribbles, passes, completed passes, tackles and interceptions. Both are scored against the role's own normalisers, then a role factor brings the role's average match to the midfield and forward average. From Monday 9 November 2026, 14:00 UTC it is multiplied by the level of the competition: Gold 100 percent, Silver 75, paid Bronze 50, ranked 25 (the paying team only), rounded down once at the end | XP booster doubles it (next row) |
 | **XP booster** | 2,000 FOXSY, 2x XP, 24 hours | Doubles training XP and match XP for one day | One active at a time. Buying again restarts the 24 hour clock. Featured tournament rewards (2x for 48 h to the winner, 1.5x for 24 h to the runner-up) do not stack with it; the highest single multiplier applies | This row is the shortcut. No floor |
 | **XP per stat bump** | 2,000 XP | XP a stat meter needs before the stat goes up by 1 | Surplus carries into the next meter, unless the bump lands on the rarity cap | None |
 | **Player level** | level = floor(sqrt(total XP / 200)), max 100 | The level shown on the card, grown from lifetime XP | Cosmetic and career-only; stats are driven by the per-stat meters | None |
 | **Training, free sessions** | 5 per day per wallet | Sessions you can run without paying | Each session adds 20 XP times condition / 100 to one stat of one player. Resets at 14:00 UTC | Paid training slots (next row) |
 | **Training, paid slots** | 20 FOXSY per slot, at most 10 used per day, up to 25 bought per transaction | Extra sessions on top of the free 5 | Slots are banked and never expire. Maximum 15 sessions a day (5 free plus 10 paid). Each slot gives the same 20 XP at full condition, 40 with a booster | This row is the shortcut. Floor: 10 paid sessions a day |
 | **Condition cost, training** | 5 per session | Condition a player loses per training session | Base value until age 30, then ramps with age to 3x the base at 39: 15 | Condition recovery (below) |
-| **Condition cost, matches** | 10 per tournament or 1v1 appearance; 5 per ranked or casual appearance | Condition each player who takes the pitch loses per match | A substitute who comes on pays too; the bench does not. In ranked only the side that started the match pays. Base values until age 30, then ramps with age to 3x the base at 39: 30 for tournament/1v1, 15 for ranked/casual | Condition recovery (below) |
+| **Condition cost, matches** | 10 per tournament or 1v1 appearance; 5 per ranked or casual appearance | Condition each player who takes the pitch loses per match | A substitute who comes on pays too; the bench does not. In ranked only the side that started the match pays; from 9 November 2026 a ranked game the AI fills costs no condition. Base values until age 30, then ramps with age to 3x the base at 39: 30 for tournament/1v1, 15 for ranked/casual | Condition recovery (below) |
 | **Condition regeneration** | 48 points per day (2 per hour) until age 30, falling to 24 per day (1 per hour) at age 39 | Passive recovery, slower with age | A young player at 0 is back to 100 in about 2 days, a 39-year-old in about 4 | Condition recovery (next row) |
 | **Condition recovery** | 100 FOXSY for a full 0 to 100 restore, pro-rated per missing point | Instantly restores a player's condition | You pay about 1 FOXSY per missing point; a player at 70 costs 30 FOXSY. Recover All sums every player below 100 | This row is the shortcut. No floor |
 | **Minimum field condition** | 30 | The match-fit line for tournaments, 1v1s plus training | Below it a player cannot train. In a tournament or 1v1 match a starter below it is auto-substituted by a fit bench player; fewer than 11 fit players forfeits 3-0. Casual and ranked games do not apply it: they refuse only a starter at 0 condition, so a tired starter still plays there with every stat scaled down by condition | Condition recovery brings a player back above it |
@@ -43,15 +44,17 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Relist cooldown** | 48 hours after a sale | A just-sold player cannot be auctioned again | Per player, enforced on chain | Not for sale |
 | **Creator royalty** | 2.5 percent of a tournament or 1v1 prize pool | Paid to the provider of the AI binary the matches ran on | Comes out of the 10 percent platform fee, in the same distribution transaction as the prizes. It never reduces a winner's share. Capped on chain at 2.5 percent. Marketplace sales carry no royalty | None |
 | **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card at its match gate; 21 days plus 6 hours for every missing match for a card moved under it | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer; each fusion match waiver bought afterwards for a card moved under its gate takes 6 hours off, down to 21 days plus 6 hours for every match it still has to really play. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The longer lock closes the alt-wallet path: a second wallet's untouched Legendary is locked for 122 days and 6 hours. Locks already running on 12 October 2026 at 16:30 UTC were never made longer | Reduce Cooldown, for a card moved at its gate only: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days), every day or only some of them. Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY. Under the gate: the fusion match waiver (on the card's profile in the Squad), 6 hours a match |
-| **Tournament seat fee** | Bronze free; Silver 1,000 to 4,999 FOXSY; Gold 5,000 FOXSY and up | What a seat costs, chosen by the creator inside the tier | Paid exactly, on chain, into a free seat. Refunded if you leave before the registration deadline or the tournament is cancelled | None. Bronze is the free tier |
-| **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a Silver or Gold pool is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. Champions FoxLeague always plays its 3rd place match. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
+| **Tournament seat fee** | Bronze free until Monday 9 November 2026, 14:00 UTC, then 100 to 999 FOXSY; Silver 1,000 to 4,999 FOXSY; Gold 5,000 FOXSY and up | What a seat costs, chosen by the creator inside the tier | Paid exactly, on chain, into a free seat. Refunded if you leave before the registration deadline or the tournament is cancelled. A Bronze tournament created before the switch stays free | None. Until 9 November 2026 Bronze is the free tier |
+| **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a paid pool (Silver, Gold, a paid Bronze) is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. Champions FoxLeague always plays its 3rd place match. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
 | **Prize from FoxLeague** | An amount the FoxLeague team sets per Champions FoxLeague edition (Silver or Gold only) | Paid on top of the entry pool to the 8 quarter-finalists, in equal shares | Deposited into the tournaments contract by the contract owner or a sponsor wallet the owner approved, before the edition starts. Paid by the contract after the edition completed and its entry pool was paid. No platform fee and no royalty. A cancelled edition returns it to the depositor; so does the owner for a prize still unpaid 30 days after the completion. See [Champions FoxLeague](/mechanics/champions-foxleague/#prizes) | None |
 | **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the broadcast ends. Unaccepted challenges refund in full at the deadline | None |
+| **Calendar deposit** | 25 FOXSY per scheduled game, from Monday 9 November 2026, 14:00 UTC | Paid by the organizer of a tournament that books the calendar, in one payment before it is created | Back in full after the last game or on a delete within the first hour from its creation (no free hour at a time slot you freed that way in the last 24 hours). Kept on a later delete or when the tournament cannot start: fewer teams than its minimum by the deadline. Developer tournaments plus 1v1 challenges pay none | Not for sale |
+| **Private tournament platform fee** | 20% of the pool instead of 10%, on a tournament with an invite list created from Monday 9 November 2026, 14:00 UTC | Taken from the pool: the prizes are 40%, 25% and 15% | The whole pool comes back if the tournament is cancelled | Not for sale |
 | **Tournaments you can run** | 1 active as a player plus 1 active as organizer-only | Creation cap | Complete or cancel before creating another. Admins are uncapped as organizers | Not for sale |
 | **Sync fee** | 10 FOXSY per player | Writes trained stats to the chain so they count in matches | Sync All shows the total before you sign. Required before fusing or listing a player. Not required to play | None |
 | **Badge re-roll** | 1,000 FOXSY after 3 free re-rolls | A fresh AI-generated team badge from Settings | The first badge during onboarding is always free | This row is the shortcut |
-| **ELO leagues** | Bronze below 1,300; Silver 1,300; Gold 1,600; Platinum 2,000; Diamond 2,700 | Your league bracket, from your ELO | New teams start at 1,200. Ranked games against another manager move rating with K = 24. Silver tournaments and Silver 1v1s use K = 12, Gold ones K = 18. Bronze tournaments move no ELO. The bands are 300 to 700 points wide: Gold is a season of wins, Platinum about three in either direction | Not for sale |
-| **ELO decay** | On. After 10 idle days you lose 5 points at most once every 20 hours (about 6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a finished Silver or Gold tournament match resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
+| **ELO leagues** | Bronze below 1,300; Silver 1,300; Gold 1,600; Platinum 2,000; Diamond 2,700 | Your league bracket, from your ELO | New teams start at 1,200. Ranked games against another manager move rating with K = 9. Silver tournaments and Silver 1v1s use K = 13, Gold ones K = 17. Bronze tournaments move no ELO. From Monday 9 November 2026, 14:00 UTC ranked moves it with K = 5, a paid Bronze with K = 9; a free Bronze moves none, neither does a forfeit at any level. The bands are 300 to 700 points wide: Gold is a season of wins, Platinum about three in either direction | Not for sale |
+| **ELO decay** | On. After 10 idle days you lose 5 points at most once every 20 hours (about 6 a day), down to 1,200 | Keeps the leaderboard honest | Only a ranked game against a real opponent or a finished Silver or Gold tournament match (from 9 November 2026 a paid Bronze one too) resets the idle clock. With the leagues hundreds of points apart, decay costs rank inside a league long before it costs the league; when a decay does cross a league floor, the label changes with that decay | Not for sale |
 | **Aging** | Minted at 18; one in-game week per real day; ramp from age 30 to the peak at 39 | Older players lose more condition per match and per training while regenerating less | Stats never drop. Every condition cost climbs to 3x its base at 39: matches from 10 or 5 to 30 or 15, training from 5 to 15; regeneration falls from 48 to 24 a day. A 39-year-old plays three tournament matches from full, then rests about 4 days | Condition recovery keeps a veteran on the pitch. Age itself is not for sale |
 | **Onboarding EGLD bonus** | Spent. The first 101 wallets that registered with less than 0.01 EGLD received 0.1 EGLD each | Covered roughly 100 on-chain actions of gas for a new manager | All 101 were paid. A wallet that registers today gets no EGLD from FoxLeague and tops up EGLD itself: the swap window's Ramp Network link, xPortal or an exchange | None |
 | **Registration relayer** | 3 attempts per wallet per 10 minutes; 5,000 relayed registrations per day platform-wide | Rate limits on the gas-free registration | Past the daily cap the gas-free registration closes (the registration screen says "Onboarding closed for today"): try again tomorrow or ask the team on Telegram. There is no path where you pay the registration gas yourself | Not for sale |
@@ -68,9 +71,9 @@ Three of your ten Commons, each to the Common match gate of 5 competitive matche
 |---|---|---|---|
 | Play the matches | 2 | 100 | 5 matches at 3 XP-eligible matches a day = 1 full day plus 2 matches on day 2. All three Commons start in the same eleven, so they finish together. Fusion fee 100 |
 | Paid | | | None: a Common has no match waiver, its 5 matches are played |
-| What the matches cost to play | included above | at least 1,000 per seat | Competitive matches come from paid seats: a Silver seat is at least 1,000 FOXSY. A round robin with 20 teams gives 19 matches for one seat; a 1v1 gives one. Prizes flow back from the same pool (see path g) |
+| What the matches cost to play | included above | at least 1,000 per seat (100 from 9 November 2026) | Competitive matches come from paid seats: a Silver seat is at least 1,000 FOXSY. From Monday 9 November 2026 a paid Bronze seat from 100 FOXSY counts too, so does a 25 FOXSY ranked ticket (one match, no pool). A round robin with 20 teams gives 19 matches for one seat; a 1v1 gives one. Prizes flow back from the same pool (see path g) |
 
-The fusion counter itself has no daily cap, only the XP has one, so a manager who fits more tournament games into a day finishes sooner. Condition then sets the pace: 10 per match, 48 back per day. A starter below 30 is swapped for a fit bench player in tournament and 1v1 matches.
+Until Monday 9 November 2026 the fusion counter itself has no daily cap, only the XP has one, so a manager who fits more tournament games into a day finishes sooner. From then the counter has the same cap of 3 per card per day, so the days in these tables are the pace for everyone. Condition then sets the pace: 10 per match, 48 back per day. A starter below 30 is swapped for a fit bench player in tournament and 1v1 matches.
 
 ### (b) A fresh fused card back into the next fusion
 
@@ -105,7 +108,7 @@ The 81 Commons of path (c) bought as Common packs, 5 cards for 2,500 FOXSY at mo
 |---|---|---|---|
 | The packs | 56 | 42,500 | 81 Commons need 17 packs (85 cards, 4 spare) at 2,500 = 42,500. The cap is 2 packs per rolling 7 days: packs 1-2 on day 0, packs 3-4 on day 7, pack 17 on day 7 x 8 = 56 |
 | The fusions | 32.5 at least | 6,500 | 40 fusions need 39 spacing gaps: 39 x 20 h = 780 h = 32.5 days, about 33 days. Fees 27 x 100 + 9 x 200 + 3 x 400 + 1 x 800 = 6,500. The Common fusions start with the first packs, so most of the spacing runs inside the 8 weeks; the last rungs then follow path (c) |
-| The matches, played | included | seat fees | Every input needs the match gate of its rarity and pack cards arrive at 0: 81 Commons x 5 + 27 Uncommons x 15 + 9 Rares x 45 + 3 Epics x 135 = 1,620 matches. The match counter has no daily cap, only XP has one, so a card plays as often as you can field it |
+| The matches, played | included | seat fees | Every input needs the match gate of its rarity and pack cards arrive at 0: 81 Commons x 5 + 27 Uncommons x 15 + 9 Rares x 45 + 3 Epics x 135 = 1,620 matches. Until 9 November 2026 the match counter has no daily cap, only XP has one, so a card plays as often as you can field it; from then it counts at most 3 a day per card |
 | The matches, waived | | up to 59,400 | 27 x 10 x 20 + 9 x 30 x 100 + 3 x 90 x 100 = 59,400 if every card is waived to its floor; 810 matches still have to be really played. Waiving only the last matches of the cards on the critical path costs a fraction of that |
 | Floor that no money removes | 56 | | The 2-packs-a-week cap: 17 packs take 8 weeks (56 days) whatever you spend. The 39 spacing gaps fit inside them |
 
@@ -146,6 +149,7 @@ The card's match gate at the moment of the transfer decides the length: 21 days 
 | Expected prize flow at an average result | 81,000 FOXSY back, 9,000 net cost | 90 percent of 90,000 returns as prizes; the 10 percent fee is the cost, 2,250 of which is the creator royalty (2.5 percent of the pool) |
 | XP earned per starter | up to 81,000 XP (81,900 in the keeper's shirt), about half at a median performance | 90 x 900 (90 x 910 for the keeper). That is up to 40 stat bumps at 2,000 XP each; the normalisers put a median game at about half |
 | Condition | sustainable | 3 x 10 = 30 per day against 48 regenerated |
+| From 9 November 2026 | cheaper seats, XP by level | The cheapest competitive seat becomes a paid Bronze seat from 100 FOXSY: 90 x 100 = 9,000 paid, 8,100 back at an average result, 900 net. Its XP is half: up to 40,500 per starter (90 x 900 / 2). At Silver seats the XP is three quarters: up to 60,750. A 25 FOXSY ranked ticket also buys one competitive match at a quarter of the XP, but it pays into no pool: nothing comes back |
 
 ### (h) One Legendary from a fresh squad
 
@@ -166,7 +170,7 @@ Moving a second wallet's Legendary is the slowest route when nothing is paid and
 
 Time-rich, budget-light. You log in every day and you like to earn it.
 
-- Play the free 5 casual and ranked games for the leaderboard and use Bronze tournaments to learn without stakes.
+- Play the 5 casual and ranked games a day for the leaderboard and use Bronze tournaments to learn. Until Monday 9 November 2026 both are free. From then a ranked game you start costs a 25 FOXSY ticket (a quarter of the XP plus a competitive match) and a Bronze seat 100 to 999 FOXSY, the cheapest seats that earn.
 - Take the 5 free training sessions every day and sync before matches that matter (10 FOXSY per player).
 - Reach fusion by playing: a Common needs 5 competitive matches, 2 days at 3 a day, then a 100 FOXSY fee. The rarer rungs need 15, 45 and 135 matches per card. Rotate your 18 so nobody drops below 30 condition.
 - Grow the roster with the Common pack when you need inputs: 2,500 FOXSY for 5 Commons, at most 2 packs a week, the same cap every wallet has.
@@ -203,11 +207,11 @@ You build value in cards and move them.
 You create the events other managers play in.
 
 - Silver seats run from 1,000 to 4,999 FOXSY, Gold from 5,000 up. The pool is the seat fee times the teams that actually join and it pays 45 / 30 / 15 to the podium with 10 percent to the platform.
-- Hosting is free: an organizer-only host takes no seat and pays no fee. There is no organizer share of the pool; your return is the community, the private invite-only events and a Hall of Fame entry when the FoxLeague team features the event.
+- Hosting is free until Monday 9 November 2026, 14:00 UTC: then a calendar deposit of 25 FOXSY per scheduled game (back after the last game). A private tournament then keeps a 20% platform fee from its pool instead of 10%. An organizer-only host takes no seat and pays no entry fee. There is no organizer share of the pool; your return is the community, the private invite-only events and a Hall of Fame entry when the FoxLeague team features the event.
 - 2.5 percent of every pool goes to the creator of the AI binary the matches ran on, out of the platform fee. If you build a binary, that royalty is yours. See the Developers Hub.
 - One active tournament as a player plus one as organizer-only at a time; plan the calendar so your events do not overlap.
 
-**What you pay, what you get:** nothing beyond your own seat if you play, in exchange for a full field, a prize pool your community funds and your name on the events.
+**What you pay, what you get:** your own seat if you play, plus the organizer amounts once they start, in exchange for a full field, a prize pool your community funds and your name on the events.
 
 ## What money cannot buy
 
@@ -295,7 +299,7 @@ The FoxLeague team creates every edition. Players cannot create one. The first e
 
 For each edition the FoxLeague team sets:
 
-- the **tier** and the **entry fee**: Bronze (free), Silver (1,000 to 4,999 FOXSY) or Gold (5,000 FOXSY and up);
+- the **tier** and the **entry fee**: Silver (1,000 to 4,999 FOXSY) or Gold (5,000 FOXSY and up);
 - the **snapshot date**, the **registration deadline** and the **start**;
 - the **time between games**;
 - an optional **prize from FoxLeague** on a Silver or Gold edition (see [Prizes](#prizes)).
@@ -470,10 +474,10 @@ Each leg is a match of its own. Everything a tournament match moves, a leg moves
 |---|---|
 | **Score on record** | The leg's own goals. Leg 2 never counts the score carried in from leg 1 |
 | **Win, draw or loss** | From the leg's own score. A leg level on its own score that ended in a shootout goes to the shootout winner |
-| **ELO** | Rated on the leg's own result, like the record. Silver moves ELO with K = 12, Gold with K = 18, Bronze moves none |
-| **Player XP** | Silver and Gold only. Each player earns XP from what they did in that game. Leg 2's XP counts only leg 2's play, extra time included, never leg 1 or the aggregate. The daily cap of 3 XP-earning matches per player applies |
+| **ELO** | Rated on the leg's own result, like the record. Silver moves ELO with K = 13, Gold with K = 17. From Monday 9 November 2026, 14:00 UTC a forfeited leg moves none |
+| **Player XP** | Silver and Gold only (from Monday 9 November 2026, 14:00 UTC Silver at three quarters, Gold in full). Each player earns XP from what they did in that game. Leg 2's XP counts only leg 2's play, extra time included, never leg 1 or the aggregate. The daily cap of 3 XP-earning matches per player applies |
 | **Condition** | 10 for every player who takes the pitch, per leg (more for older players, see [Player Aging](/mechanics/aging/)) |
-| **Competitive matches** | On Silver and Gold, each leg counts as one competitive match for the card's match gate |
+| **Competitive matches** | On Silver and Gold, each leg counts as one competitive match for the card's match gate. From Monday 9 November 2026, 14:00 UTC a card counts at most 3 a day |
 
 So a team can go through and still lose leg 2. In the play-off tie in the images above, the team at home in leg 2 lost that leg 1-2 and went through 2-1 on penalties. For the record and ELO, leg 2 is a loss for it.
 
@@ -510,10 +514,6 @@ A Silver or Gold edition can carry a **prize from FoxLeague** on top of the entr
 The invitation banner shows the prize once it is held. The tournament page shows it as held, then paid, with the transaction.
 
 ![An example prize panel of an open edition: 180,000 FOXSY locked in the contract, split equally among the 8 quarter-finalists once the tournament is completed, with its deposit transaction](/screenshots/champions-foxleague/prize-from-foxleague.png)
-
-### A Bronze edition
-
-A Bronze edition is free: no entry pool and no prize from FoxLeague. Like every Bronze tournament it moves no ELO and gives no XP.
 
 ### Featured editions
 
@@ -574,7 +574,14 @@ You also need enough FOXSY in your wallet to cover the fusion fee. The app reads
 
 ### What counts as a competitive match
 
-A **competitive match** is a match that is eligible for player XP: a **Silver or Gold tournament** match or a **1v1 challenge**. Ranked matches never count, whether ranked XP is on or off. All of them are played against a real opponent for a paid seat. Casual games against the AI never count. Bronze tournaments never count either. The daily 3-match XP cap does not apply to the counter: every competitive appearance counts, even one that earned no XP that day.
+A **competitive match** is a match that is eligible for player XP: a **Silver or Gold tournament** match or a **1v1 challenge**. Until Monday 9 November 2026, 14:00 UTC ranked matches never count, whether ranked XP is on or off. All of them are played against a real opponent for a paid seat. Casual games against the AI never count. Bronze tournaments never count either. Until the same moment the daily 3-match XP cap does not apply to the counter: every competitive appearance counts, even one that earned no XP that day.
+
+From **Monday 9 November 2026, 14:00 UTC** the counter follows the [competition levels](/mechanics/matches/#competition-levels): paying FOXSY and spending condition is what counts.
+
+- A **paid Bronze** tournament match counts, for both teams. A free Bronze (created before the switch) never counts.
+- A **ranked game** counts for the team that started it and paid its 25 FOXSY ticket, never for the team drawn in. A ranked game the AI fills never counts.
+- Silver and Gold tournament matches plus 1v1 challenges count as before.
+- A card counts at most **3 competitive matches per day** at every level, in the same daily window as the XP cap (reset at 14:00 UTC). A fourth match that day still plays and still moves ELO, but it adds nothing to the counter.
 
 Your player's career **matches played** stat still counts every appearance, AI games included. Only the fusion counter is limited to competitive play. The on-chain counter written by [Sync](/mechanics/sync/) is the competitive one, which is what the contract reads.
 
@@ -651,7 +658,7 @@ A fusion still waiting for its on-chain result shows as **Pending**; the platfor
 
 - **Don't fuse your best Common**. Burning a near-cap Common (OVR close to 30) to mint a fresh Uncommon that starts much lower is often a net loss early on. Sell the Common on the marketplace and train an Uncommon you already have.
 - **Sync first**. An unsynced player can't be fused (fusion reads on-chain stats only), so any training or matches that aren't synced yet are invisible to it, including the match gate.
-- **Play the matches where they count**. Casual games against the AI keep your players fit and fill the career stats, but they never move the fusion counter. A card that only ever played the AI stays at 0 competitive matches however many games it has. Silver and Gold tournaments plus 1v1 challenges are what get a card fusion-ready.
+- **Play the matches where they count**. Casual games against the AI keep your players fit and fill the career stats, but they never move the fusion counter. A card that only ever played the AI stays at 0 competitive matches however many games it has. Silver and Gold tournaments plus 1v1 challenges are what get a card fusion-ready; from Monday 9 November 2026 a paid Bronze tournament plus a ranked game you paid for count too, at most 3 a day per card.
 - **Buy time only when the queue is the problem**. The cooldown waiver saves at most 11 days per card and the match waiver at most the waivable part of the card's gate (10 matches for an Uncommon up to 270 for a Legendary); the 20-hour wallet spacing still applies to every fusion. If several cards are cooling down at once, waiving the one you need first is cheaper than waiving all of them.
 - **Legendary is a commitment**. Reaching Legendary by pure fusion takes **3⁴ = 81 Commons**, condensed through 27 Uncommons, then 9 Rares, then 3 Epics, then 1 Legendary. That's **40 fusions** in total. Cumulative fees: 27 × 100 + 9 × 200 + 3 × 400 + 1 × 800 = **6,500 FOXSY**. With one fusion per wallet every 20 hours those 40 fusions alone take at least 39 × 20 h = **32.5 days**. On top of that every fused card sits out its own 14-day cooldown (3 days with a paid waiver) before it can be an input at the next tier, before counting the competitive matches each input still has to play: 5 per Common, 15 per Uncommon, 45 per Rare, 135 per Epic. Realistic path is to mix marketplace purchases at higher rarities with your own fusions instead of grinding the whole pyramid from Common.
 
@@ -692,7 +699,7 @@ A card can be put up for auction only once it reaches the **match gate** of its 
 - Waived matches count: the **fusion match waiver** credit on the card is added to the card's competitive matches. Buy it on the card's profile in the Squad (**Buy matches**), for every rarity in the table that has a waiver, Legendary included; the Fusion tab sells it to fusion inputs too
 - The matches in the third column must **really be played**. No amount of credit takes a card with fewer played matches onto the market
 
-The players contract refuses the listing otherwise, so the Sell form disables the button with the reason, for an Epic: **Epic needs 135 matches (45 played) to be listed**, with what the card has under it (for example **This card has 12 played + 3 waived of 135**). In the Sell grid such a card reads **Not sellable yet** with the same count. Cards straight out of a Common pack or a fusion start at 0. Listings already open on Monday 12 October 2026 at 16:15 UTC, when these gates replaced the single gate of 20 matches, finish normally. What counts as a competitive match is explained on the [Fusion](/mechanics/fusion/) page: Silver or Gold tournament matches plus 1v1 challenges, never games against the AI.
+The players contract refuses the listing otherwise, so the Sell form disables the button with the reason, for an Epic: **Epic needs 135 matches (45 played) to be listed**, with what the card has under it (for example **This card has 12 played + 3 waived of 135**). In the Sell grid such a card reads **Not sellable yet** with the same count. Cards straight out of a Common pack or a fusion start at 0. Listings already open on Monday 12 October 2026 at 16:15 UTC, when these gates replaced the single gate of 20 matches, finish normally. What counts as a competitive match is explained on the [Fusion](/mechanics/fusion/) page: Silver or Gold tournament matches plus 1v1 challenges, never games against the AI. From Monday 9 November 2026, 14:00 UTC a paid Bronze match counts too, so does a ranked game your team started and paid for, at most 3 a day per card.
 
 > **Sync first**
 > An **unsynced player cannot be listed** as-is. The marketplace shows the on-chain stats to bidders; if your Squad shows newer values than the chain, you'd be advertising a different player than what's actually on sale. If the player has unsynced training, the button reads **SYNC & AUCTION** instead: you sign a sync transaction first (10 FOXSY per unsynced player on your roster), then the listing transaction, so the auction matches what bidders see.
@@ -796,7 +803,7 @@ The **Tactics** page shows a banner for your next match with the same lock count
 
 ## Squad rule
 
-Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. If your squad is short for any reason (for example you sold a player without replacing it) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped automatically for a fit substitute of his own line first, then of the nearest line. A keeper is swapped only for a keeper (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
+Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. If your squad is short for any reason (for example you sold a player without replacing it) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped automatically for a fit substitute of his own line first, then of the nearest line. A keeper is swapped only for a keeper (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO until Monday 9 November 2026, 14:00 UTC. From then a forfeit, by one team or both, moves no ELO. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
 
 ## Your team name
 
@@ -816,17 +823,17 @@ FoxLeague offers four competitive contexts. All four follow the same core rule: 
 | Mode | ELO | Cost | Player XP | Stakes |
 |------|-----|------|-----------|--------|
 | **Casual** | No change | Condition only (5 per appearance) | None (AI opponent) | None |
-| **Ranked** | +/- ELO | Condition only (5 per appearance) | None (currently off) | Leaderboard climb |
+| **Ranked** | +/- ELO | Condition (5 per appearance); from 9 November 2026 also a 25 FOXSY ticket per game you start | None; from 9 November 2026 a quarter, for the team that paid | Leaderboard climb |
 | **1v1 Challenge** | +/- ELO (varies by tier) | FOXSY entry plus condition (10 per appearance) | Yes | 90% of pool to winner |
-| **Tournament** | +/- ELO (Silver/Gold only) | FOXSY entry (Silver/Gold) plus condition (10 per appearance, Bronze too) | Silver/Gold only | 45/30/15% of pool by placement |
+| **Tournament** | +/- ELO (Silver/Gold; paid Bronze from 9 November 2026) | FOXSY entry (Silver/Gold; Bronze from 9 November 2026) plus condition (10 per appearance, free Bronze too) | Silver/Gold (paid Bronze from 9 November 2026) | 45/30/15% of pool by placement |
 
-Attribute XP for your players comes only from paid play: Silver and Gold tournaments plus 1v1 challenges. Casual games are played against an AI team and grant none. Ranked matches do not award XP at the moment. Bronze tournaments grant neither XP nor ELO.
+Attribute XP for your players comes only from paid play: Silver and Gold tournaments plus 1v1 challenges. Casual games are played against an AI team and grant none. Until Monday 9 November 2026, 14:00 UTC ranked matches do not award XP and Bronze tournaments grant neither XP nor ELO. From then the [competition levels](#competition-levels) apply: a ranked game you paid for and a paid Bronze tournament earn too, while XP and ELO are scaled by the level of the competition.
 
 How much XP a match gives a player depends on the shirt he wore in it, not on the card's position: the keeper's shirt earns XP for distance run, passes, completed passes, saves and catches; a back-line shirt for distance run, dribbles, passes, completed passes, tackles and interceptions; every other shirt for all nine match actions. Each role has its own scale, so an average match earns about the same XP in every shirt (see [XP by shirt](/mechanics/training/#xp-by-shirt)).
 
-Each player earns attribute XP in at most **3 matches per day**. A fourth XP-earning match that day still counts for career stats and ELO, but it awards no XP. The daily count resets at 14:00 UTC.
+Each player earns attribute XP in at most **3 matches per day**. A fourth XP-earning match that day still counts for career stats and ELO, but it awards no XP. From Monday 9 November 2026, 14:00 UTC it does not count as a competitive match either (below). The daily count resets at 14:00 UTC.
 
-The same paid play is what counts toward a card's **competitive matches**, the number behind its match gate for fusion, listing and the transfer lock (see [Marketplace](/mechanics/marketplace/)): every Silver or Gold tournament match and every 1v1 challenge the card takes the pitch in. Ranked, casual, Bronze and developer games never count.
+The same paid play is what counts toward a card's **competitive matches**, the number behind its match gate for fusion, listing and the transfer lock (see [Marketplace](/mechanics/marketplace/)): every Silver or Gold tournament match and every 1v1 challenge the card takes the pitch in. Until Monday 9 November 2026, 14:00 UTC ranked, casual, Bronze and developer games never count. From then a paid Bronze tournament match counts too, so does a ranked game for the team that started it and paid its ticket (never for the team drawn in). A card then counts at most **3 competitive matches per day** at every level, in the same daily window as the XP cap (reset at 14:00 UTC). Casual, free Bronze and developer games still never count.
 
 ## Casual
 
@@ -845,10 +852,11 @@ The competitive mode. ELO points move between you and your opponent based on the
 - **Best for**: climbing the leaderboard, qualifying for league promotions
 - **Matchmaking**: a random opponent within 150 ELO of you. The search widens to 300, then 500, if nobody fits; after that an AI team stands in. Your league is not used.
 - **Once a day per opponent**: the same two teams meet in ranked at most once every 24 hours, whoever started the game. A team you played in ranked in the last 24 hours is not drawn again; when no other team fits, the AI stands in. A team whose starting XI is not all match-fit right now (each player at condition 30 or more, none in a transfer cooldown) is not drawn either. A game still being played counts as a meeting; one that failed or was abandoned does not. Should a second ranked game of the same two teams still take place inside the 24 hours, it records the result but moves no rating.
-- **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO.
+- **Ranked ticket (from Monday 9 November 2026, 14:00 UTC)**: the team that starts a ranked game pays **25 FOXSY** before the opponent is drawn. **KICK OFF** shows the price with what it buys, then asks your wallet for one payment; the game starts once it is confirmed. One payment is one ticket for one ranked game. Only your team earns XP (a quarter of the Gold rate) and competitive matches. The team drawn in pays nothing, loses no condition and earns neither; its ELO moves like yours. A ranked game that fails before its result gives the ticket back for your next start.
+- **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO. From Monday 9 November 2026, 14:00 UTC it is also free: it takes no ticket, costs no condition and earns no XP, so the ticket you hold stays for your next ranked start.
 - **Condition**: only you, the player who started the match, pay condition. The opponent drawn into your game pays nothing.
-- **ELO**: the winner gains exactly what the loser drops. The size of the swing depends on the rating gap: beating a stronger opponent moves more points than beating a weaker one. A draw moves a few points from the higher-rated player to the lower-rated one; between equal ratings it changes nothing. Ranked games move your rating with a K-factor of **24**.
-- **Inactivity decay**: rating decay is active. After **10 days** without an ELO-affecting match (a ranked game against a real opponent or a finished Silver/Gold tournament match) you lose **5 rating points at most once every 20 hours** (about 6 a day), down to a floor of **1200**. Casual play, ranked games against the AI and Bronze tournaments do not stop the decay.
+- **ELO**: the winner gains exactly what the loser drops. The size of the swing depends on the rating gap: beating a stronger opponent moves more points than beating a weaker one. A draw moves a few points from the higher-rated player to the lower-rated one; between equal ratings it changes nothing. Ranked games move your rating with a K-factor of **9**, from Monday 9 November 2026, 14:00 UTC **5** (see [competition levels](#competition-levels)).
+- **Inactivity decay**: rating decay is active. After **10 days** without an ELO-affecting match (a ranked game against a real opponent or a finished Silver/Gold tournament match; from Monday 9 November 2026 a paid Bronze one too) you lose **5 rating points at most once every 20 hours** (about 6 a day), down to a floor of **1200**. Casual play, ranked games against the AI and free Bronze tournaments do not stop the decay.
 
 You see your ELO in the header and on the **Leaderboard** tab. The leaderboard is a single global ELO ranking across all leagues.
 
@@ -891,6 +899,25 @@ In the knockout phase of [Champions FoxLeague](/mechanics/champions-foxleague/) 
 - **Each leg is its own match** for everything else: the score on record, the win, draw or loss, the ELO change, the XP each player earns from what they did in that leg and the condition (10 per appearance). A team can lose leg 2 and still go through on the aggregate or on penalties.
 
 Tournaments are where the most FOXSY trades hands. Entry fees pool into prize money distributed **45% winner / 30% runner-up / 15% third-place / 10% platform fee** (current split). A quarter of that fee (2.5% of the pool) is paid as a creator royalty to the provider of the AI binary your matches were played with. It comes out of the fee, never out of a winner's share.
+
+## Competition levels
+
+From **Monday 9 November 2026, 14:00 UTC** every match that costs FOXSY earns at the level of its competition. Paying FOXSY and spending condition is what earns XP and a competitive match; ELO moves for both teams, by the same level:
+
+| Level | What it costs | XP | ELO K-factor | Who earns XP and competitive matches |
+|-------|---------------|----|--------------|--------------------------------------|
+| **Ranked** | A 25 FOXSY ticket, paid by the team that starts the game | A quarter (25%) | 5 | Only the team that paid; never the team drawn in |
+| **Bronze tournament** | 100 to 999 FOXSY entry | Half (50%) | 9 | Both teams |
+| **Silver tournament or 1v1** | 1,000 to 4,999 FOXSY entry | Three quarters (75%) | 13 | Both teams |
+| **Gold tournament or 1v1** | 5,000 FOXSY entry and up | Full (100%) | 17 | Both teams |
+
+- **XP**: a player earns the usual XP of his match actions times the level's share, rounded down once at the end. The XP booster and the featured rewards still multiply it; the daily cap of 3 XP-earning matches per player stays.
+- **Competitive matches**: at most 3 per card per day at every level, in the XP cap's window (reset at 14:00 UTC).
+- **Forfeits move nothing**: a forfeit (by one team or by both) and a match that could not be played (recorded 0-0) move no ELO, no XP, no condition and no competitive matches. Only the result counts, in the match history and the tournament standings.
+- **What earns nothing**: casual games, a ranked game the AI fills (free, it keeps your ticket), a Bronze tournament with no entry fee (one created before the switch) plus developer games.
+- **When the switch applies**: a ranked game started from that moment; a tournament match played from that moment, whenever its tournament was created; a Bronze tournament created from that moment (see [Tournaments](/mechanics/tournaments/#the-three-tiers)).
+
+Until the switch the rules above this section apply as they are written: ranked is free and earns no XP, ranked moves ELO with K = 9, Silver with K = 13, Gold with K = 17, Bronze is free and moves nothing.
 
 ## Match History
 
@@ -1044,7 +1071,7 @@ Cancelled or finished challenges don't count. Once your active one resolves (win
 
 ## ELO impact
 
-1v1 results move ELO at the **tournament K-factor of the challenge's tier**: a Silver challenge uses the Silver K-factor (12), a Gold challenge the Gold K-factor (18). This is intentional as 1v1s are high-stakes and should weigh accordingly in your ranking.
+1v1 results move ELO at the **tournament K-factor of the challenge's tier**: a Silver challenge uses the Silver K-factor (13), a Gold challenge the Gold K-factor (17). This is intentional as 1v1s are high-stakes and should weigh accordingly in your ranking. From Monday 9 November 2026, 14:00 UTC the [competition levels](/mechanics/matches/#competition-levels) apply: a Silver challenge gives three quarters of the XP, a Gold one the full XP. A forfeit then moves no ELO.
 
 - Win → significant ELO gain
 - Loss → significant ELO loss
@@ -1085,7 +1112,7 @@ There's no separate Hall of Fame for 1v1. They're tracked alongside regular rank
 # Shop
 (docs.foxleague.ai/mechanics/shop/)
 
-The **Shop** sells one pack of players plus four consumables for FOXSY. The **Common pack** delivers 5 Common player NFTs to your wallet (see below). The consumables are instant condition recovery for tired players, an XP booster that doubles training and eligible match gains, extra training slots for days you want to grind and a cooldown waiver for players you received by direct transfer. Two more items, the **fusion cooldown waiver** and the **fusion match waiver**, show up in the Shop with their live price; they are bought per card from the Fusion tab (see [Fusion](/mechanics/fusion/)). Team badge re-rolls are sold from the **Settings** page rather than the Shop tab. They use the same FOXSY payment flow, so they are listed below for reference.
+The **Shop** sells one pack of players plus four consumables for FOXSY. The **Common pack** delivers 5 Common player NFTs to your wallet (see below). The consumables are instant condition recovery for tired players, an XP booster that doubles training and eligible match gains, extra training slots for days you want to grind and a cooldown waiver for players you received by direct transfer. Two more items, the **fusion cooldown waiver** and the **fusion match waiver**, show up in the Shop with their live price; they are bought per card from the Fusion tab (see [Fusion](/mechanics/fusion/)). Team badge re-rolls are sold from the **Settings** page rather than the Shop tab. They use the same FOXSY payment flow, so they are listed below for reference. So does the **ranked ticket** (100 FOXSY, from Monday 9 November 2026, 14:00 UTC), paid from **Play Match** when you start a ranked game without one (see [Match Types](/mechanics/matches/#ranked)).
 
 The pack is the only item that adds cards to your roster. Everything else is a one-shot consumable. No permanent upgrades, no trading and all accept on-chain FOXSY payment.
 
@@ -1105,6 +1132,7 @@ The Shop panel always shows the **live** price at the top of every item (check t
 | **Fusion Cooldown Waiver** | 75 FOXSY per day | Cuts a fused card's own fusion cooldown down to a 3-day floor, every day or only some of them. Bought per card in the **Fusion** tab |
 | **Fusion Match Waiver** | per match, by rarity: Uncommon 20, Rare 100, Epic 100, Legendary 100 FOXSY; none for Common | Credits competitive matches a card still needs for the match gate of its rarity, never the matches that must really be played. Bought per card on its profile in the **Squad** (**Buy matches**, every rarity with a waiver) plus in the **Fusion** tab for a fusion input |
 | **Badge Regeneration** | 1,000 FOXSY (first 3 re-rolls are free) | Re-roll your team badge with a fresh AI-generated image. Sold from **Settings**, not the Shop tab |
+| **Ranked ticket** | 25 FOXSY, from Monday 9 November 2026, 14:00 UTC | One ranked game you start against a real opponent. A game the AI fills keeps it. Paid from **Play Match**, not the Shop tab |
 
 ---
 
@@ -1142,7 +1170,7 @@ The price is pro-rated by missing condition: the 100 FOXSY in the table is the f
 
 A 24-hour consumable that **doubles XP** on every training session and eligible match during its active window. One at a time. Buying again while one is already active restarts the 24h clock from the latest purchase.
 
-- **Effect**: 2× XP on training and on eligible matches for 24h. Match XP is only awarded on Silver and Gold tournament matches plus paid 1v1 challenges. Ranked, casual and practice (vs AI) matches earn no XP, so the booster has no effect there
+- **Effect**: 2× XP on training and on eligible matches for 24h. Match XP is only awarded on Silver and Gold tournament matches plus paid 1v1 challenges. Ranked, casual and practice (vs AI) matches earn no XP, so the booster has no effect there. From Monday 9 November 2026, 14:00 UTC a paid Bronze tournament match (half of the Gold rate) plus a ranked game you paid for (a quarter of it) earn XP too and the booster doubles that
 - **Stacking**: not with itself (only one active window). Featured tournament rewards grant the winner 2× match XP for 48h and the runner-up 1.5× for 24h. When one of those overlaps a shop booster, the highest single multiplier applies, never the product of both. Those tournament grants cover match XP only. Training XP is boosted by the shop booster alone
 - **Tracking**: the Shop tab shows an active-booster banner with the expiry time
 
@@ -1415,7 +1443,7 @@ FoxLeague tournaments are **multi-match formal events** with locked lineups and 
 1. Open the **Tournaments** tab
 2. Pick one from **Browse** (listed under **Open** with slots still free; the status filter calls these **Upcoming**). **Public only** is on by default: the list leaves out the private tournaments you are not part of, while Champions FoxLeague always shows. Untick **Public only** to see every tournament; your browser remembers the choice
 3. Click **JOIN**
-4. If there's an entry fee (Silver / Gold tier), approve the FOXSY transaction in your wallet
+4. If there's an entry fee (every Silver or Gold tournament; from Monday 9 November 2026 a Bronze one too), approve the FOXSY transaction in your wallet
 5. Your team is now entered. Each match captures your formation, lineup and players' synced stats at its **strategy lock** (about 30 minutes before that match's kickoff), so you can adjust your plan between games
 
 A tournament that shows an **OVR** chip (such as **OVR 30-40** or **OVR ≤ 35**) takes only teams whose **best XI OVR** is inside its range: the average OVR of the strongest XI you can field from the cards you own. If yours is outside, the Join button is greyed and says why. The creator may widen the range while registration is open, so a team that is just outside can check again later. See [OVR range](#ovr-range-best-xi).
@@ -1454,8 +1482,9 @@ Best for: quick, high-stakes tournaments with exciting upsets.
 
 Group stage followed by single-elimination.
 
-- **Team counts**: 8, 16, 32 or 64 (exact size; it starts only when full, so the advancing field always forms a clean knockout bracket)
-- **Group stage**: groups of 4, round-robin (each team plays 3 matches). Points: 3 win / 1 draw / 0 loss. Teams level on points are separated by head-to-head first (full rules in [Tie-breakers](#tie-breakers))
+- **Team counts**: 8, 16, 32 or 64 seats. It can start with fewer teams, from 6 up to the minimum the creator sets
+- **How many groups**: set at the deadline, as many as give every group at least 3 teams. A full tournament plays groups of 4; 24 of 64 teams play 8 groups of 3; 23 teams play 4 groups of 5 or 6. The number of groups is always 2, 4, 8 or 16, so the advancing field forms a clean knockout bracket. When groups differ in size they differ by one team. The draw decides which ones are larger
+- **Group stage**: round-robin (each team plays 2 to 5 matches, 3 in a group of 4). Points: 3 win / 1 draw / 0 loss. Teams level on points are separated by head-to-head first (full rules in [Tie-breakers](#tie-breakers))
 - **Top 2** from each group advance to the knockout bracket
 - **Cross-group KO pairing**: A1 vs B2, B1 vs A2. Further group pairs follow the same pattern. Two teams from the same group sit in opposite bracket halves, so they can only meet in the final
 
@@ -1529,11 +1558,21 @@ Tiers scope the stakes:
 
 | Tier | Entry fee | Best for |
 |------|-----------|----------|
-| **Bronze** | Free | Practice and casual competition; a Bronze event the FoxLeague team features also enters the Hall of Fame |
+| **Bronze** | Free until 9 November 2026; from then 100-999 FOXSY (creator picks within the range) | The entry level: practice until 9 November 2026, then small stakes with a real prize pool; a Bronze event the FoxLeague team features also enters the Hall of Fame |
 | **Silver** | 1,000-4,999 FOXSY (creator picks within the range) | Competitive stakes with a real prize pool |
 | **Gold** | 5,000+ FOXSY (creator picks) | Highest rewards, most serious competition |
 
-The creator sets the exact FOXSY amount when creating a Silver or Gold tournament, constrained by the tier's bounds shown above. Bronze is always free.
+The creator sets the exact FOXSY amount when creating a Silver or Gold tournament, constrained by the tier's bounds shown above. Until Monday 9 November 2026, 14:00 UTC Bronze is always free. A Bronze tournament created from then costs **100 to 999 FOXSY**. A paid Bronze works like a Silver one: each team pays the entry on chain into a seat, the pool is split the same way (see [Prize distribution](#prize-distribution)) and every refund follows the same rules. A Bronze tournament created before the switch stays free.
+
+### What each tier earns
+
+| Tier | Until Monday 9 November 2026, 14:00 UTC | From Monday 9 November 2026, 14:00 UTC |
+|------|-------------------------------------------|-------------------------------------------|
+| **Bronze** | No XP, no ELO, no competitive match | A paid Bronze: XP at half of the Gold rate, ELO with K = 9, competitive matches. A free one (created before the switch) earns nothing |
+| **Silver** | Full XP, ELO with K = 13, competitive matches | XP at three quarters of the Gold rate, ELO with K = 13, competitive matches |
+| **Gold** | Full XP, ELO with K = 17, competitive matches | Full XP, ELO with K = 17, competitive matches |
+
+A match played from the switch follows the new rules, whenever its tournament was created. From the switch a card also counts at most 3 competitive matches a day, while a forfeit moves no ELO. See [Competition levels](/mechanics/matches/#competition-levels).
 
 ---
 
@@ -1543,9 +1582,32 @@ Open **Tournaments → Create** and step through format, tier, configuration, sc
 
 ![Create Tournament configuration step with the Private (invite-only) toggle on, the invited teams listed below it, plus the Organizer only toggle](/screenshots/tournament-create-private.png)
 
+### What it costs to organize
+
+From **Monday 9 November 2026, 14:00 UTC** your wallet signs **one payment** before the tournament is created. The form shows the amount on the final step, before you sign. Teams that join pay only their entry. A tournament created before that moment owes nothing.
+
+- **Calendar deposit:** 25 FOXSY per scheduled game, counted on your maximum number of teams. Every tournament that books the calendar pays it.
+
+Developer tournaments and 1v1 challenges pay none.
+
+| What happens | Calendar deposit |
+|---|---|
+| You delete it within the first hour after creating it | Comes back in full |
+| You delete it after the first hour from its creation | **Kept** |
+| Fewer teams than the minimum join by the registration deadline, so it cannot start | **Kept** |
+| Enough teams join but their number does not fit the format | Comes back in full |
+| It is played to the end | Comes back in full |
+| The FoxLeague team cancels it | Comes back in full |
+
+**A private tournament has a higher platform fee.** A tournament with an invite list created from the same moment keeps 20% of the pool instead of 10%. Its prizes are 40%, 25% and 15%, so the teams share the cost. The event page shows the split before you join.
+
+The first hour starts when the tournament exists: if your wallet signs its entry and the payment together, it starts when that transaction is confirmed. The free hour is not there to hold a slot for nothing: if you deleted a tournament inside its first hour in the last 24 hours and create another in an overlapping time slot, the new one has no free hour. The form says so before you sign.
+
+Everything that comes back after play comes back in one refund, once the last game has been shown. Nothing moves earlier, so your wallet never tells anyone how a match went before its broadcast. A refund that cannot be sent right away stays queued and is retried.
+
 ### Creating a paid tournament you play in
 
-On a Silver or Gold tournament that you play in (**Organizer only** off), **Create Tournament** works in two steps today: the game creates the tournament on chain first, then your wallet asks for **one signature**, the entry fee, which takes your seat like any other team's. If you close the wallet without signing, nothing is charged and the tournament stays created without you: open it and click **Join** to take your seat. You can also delete it while registration is open (see [Deleting your tournament](#deleting-your-tournament)).
+On a Silver or Gold tournament (from Monday 9 November 2026 a paid Bronze one too) that you play in (**Organizer only** off), **Create Tournament** works in two steps today: the game creates the tournament on chain first, then your wallet asks for **one signature**, the entry fee, which takes your seat like any other team's. If you close the wallet without signing, nothing is charged and the tournament stays created without you: open it and click **Join** to take your seat. You can also delete it while registration is open (see [Deleting your tournament](#deleting-your-tournament)).
 
 FoxLeague can switch on a **one-signature create** for these tournaments. It is off today. With it on, the one signature (the entry fee) creates the tournament on chain and seats you in it, with the deadline and the start you picked. Other teams see the tournament only once your payment has landed. Until then your lobby and the tournament page show it as **Waiting for your payment**. Its time slot is held for you meanwhile: on the calendar other players see that slot taken by a tournament being created, without its name.
 
@@ -1565,6 +1627,7 @@ Flip the **Private** toggle to control who can register, then invite specific te
 - Appears in the lobby with a **Private** badge. You plus the teams you invited always see it; any other team sees it once it unticks **Public only**, which is on by default.
 - Can only be joined by the teams you invited. Everyone else sees a locked **Invite Only** button.
 - Tells every team you invited. Each one gets a **You're invited** notification in the bell (and a push notification if they turned push on) once the tournament is open.
+- Earns no XP, no ELO and no competitive match for now when it is a Bronze tournament, even a paid one (from Monday 9 November 2026, when public paid Bronze tournaments start to earn).
 - Needs enough capacity to reach the minimum. Capacity is the invited teams plus yourself (only the invited teams if you host as organizer-only). If that falls short of the minimum you cannot create it until you invite more teams or lower the minimum.
 
 ![A private tournament in the lobby, marked with a PRIVATE badge next to its title](/screenshots/tournament-private-badge.png)
@@ -1604,7 +1667,9 @@ Not enough teams? While registration is open (before the registration deadline),
 
 ### Deleting your tournament
 
-While your tournament is still open for registration, its page shows **Delete Tournament** to you as its creator, at the bottom of the page. Once it has started or finished it cannot be deleted. On a Silver or Gold tournament the delete first refunds the entry fee of every team that paid one, on chain. The tournament is removed only once its contract entry is closed and FoxLeague's records show every entry fee returned; until then it stays cancelled.
+While your tournament is still open for registration, its page shows **Delete Tournament** to you as its creator, at the bottom of the page. Once it has started or finished it cannot be deleted. On a paid tournament (Silver, Gold or a paid Bronze) the delete first refunds the entry fee of every team that paid one, on chain. The tournament is removed only once its contract entry is closed and FoxLeague's records show every entry fee returned; until then it stays cancelled.
+
+Once the [organizer amounts](#what-it-costs-to-organize) are in force, the delete dialog says what happens to your calendar deposit before you confirm, with the amount and the time your free cancellation ends. If that time passes while the dialog is open, it asks you again. After the delete, the page says what was decided.
 
 ---
 
@@ -1697,6 +1762,7 @@ FoxLeague expects you to own a full 18 (11 starters + 7 substitutes) when your n
 - The match report shows which auto-subs were applied for each side
 - If fewer than 11 match-fit players can be assembled from your 18 (or you no longer own all 18), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
 - If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero. In a knockout match, where one side must go through, the home side of the fixture advances (in round 1 of a Knockout, the higher seed)
+- From Monday 9 November 2026, 14:00 UTC a forfeit (by one team or by both) moves no ELO. The win, loss or draw and the standings still count it
 
 Keep your bench deep. A forfeit in round 1 of a Gold Knockout is an expensive lesson.
 
@@ -1717,7 +1783,7 @@ A permanent record of every featured tournament. A tournament that was not featu
 
 ## Prize distribution
 
-When a Silver or Gold tournament completes, the prize pool (entry fee × the number of teams that actually joined, not the maximum) is distributed on-chain automatically. Winners receive their share directly in their wallet with no claim action needed:
+When a paid tournament completes (Silver or Gold; from Monday 9 November 2026 a paid Bronze too), the prize pool (entry fee × the number of teams that actually joined, not the maximum) is distributed on-chain automatically. Winners receive their share directly in their wallet with no claim action needed:
 
 The current split:
 
@@ -1732,13 +1798,13 @@ In a Knockout or Groups + KO event without a 3rd-place match there is no third-p
 
 Example (with a 3rd-place match): 16 teams × 1,000 FOXSY entry = **16,000 FOXSY** pool → 7,200 winner / 4,800 runner-up / 2,400 third-place / 1,600 platform fee.
 
-A Silver or Gold Champions FoxLeague edition can also carry a **prize from FoxLeague**, held in the tournaments contract and split equally among its 8 quarter-finalists after it completes. See [Prizes](/mechanics/champions-foxleague/#prizes).
+A paid Champions FoxLeague edition (Silver and Gold; a Bronze with an entry fee from Monday 9 November 2026) can also carry a **prize from FoxLeague**, held in the tournaments contract and split equally among its 8 quarter-finalists after it completes. See [Prizes](/mechanics/champions-foxleague/#prizes).
 
 A quarter of the platform fee (**2.5% of the pool**, so 400 FOXSY of the 1,600 in the example above) is paid as a **creator royalty** to the provider of the AI binary the matches were played with. It is taken from the fee and travels in the same distribution transaction as the prizes, so it never reduces what the winners receive. The contract enforces this. Prize payouts must land between 85% and 90% of the seated pool. The royalty itself is capped on chain at 2.5% of that pool.
 
 Tournaments flagged as **featured** by the platform admins also award XP boosts: the winner gets 2× XP for 48 hours plus a Tournament Champion badge and title, the runner-up gets 1.5× XP for 24 hours. Boosts do not stack with each other or with the shop XP booster; the highest active multiplier applies.
 
-Bronze tournaments have no entry fee and therefore no prize pool. They change no ELO and give no XP, so they're for practice and casual competition. A Bronze tournament the FoxLeague team features also enters the Hall of Fame. Its winner and runner-up then get the featured rewards described above.
+A free Bronze tournament (every Bronze one created before Monday 9 November 2026, 14:00 UTC) has no entry fee and therefore no prize pool. It changes no ELO and gives no XP, so it is for practice and casual competition. A paid Bronze tournament, created from then, has a pool split like Silver and earns at its level (see [What each tier earns](#what-each-tier-earns)). A Bronze tournament the FoxLeague team features also enters the Hall of Fame. Its winner and runner-up then get the featured rewards described above.
 
 ---
 
@@ -1746,7 +1812,7 @@ Bronze tournaments have no entry fee and therefore no prize pool. They change no
 
 - **Plan for the whole run**. You must field a legal 11+7, all owned, at every match's lock or that game is forfeited. Nothing stops you from joining two tournaments that run in the same period, so check both schedules before committing.
 - **Watch the time between games**. Games are sequential, so the total length is roughly the number of games times the interval. A 30-minute interval with a small bracket wraps up in a few hours. A large field or a 1-day interval spans days. It runs longer still when matches are pushed back to keep a team clear of its other tournament.
-- **Check the tier before committing FOXSY**. Silver and Gold entry fees leave your wallet the moment you join. Leaving while registration is still open (before the deadline) refunds the fee on-chain. Once the deadline passes you cannot leave. Every refund is **exact**, down to the amount the contract holds for your entry. If a tournament is cancelled (or you paid on chain but never took a seat) and the game server cannot push your money back, it stays in the contract. Once the tournament is cancelled or completed you can pull it yourself: the page of a completed tournament shows a **Claim my entry back** button for an entry that never took a seat. You can also call the contract's `claimRefund` endpoint with the tournament id.
+- **Check the tier before committing FOXSY**. Entry fees (Silver, Gold and from Monday 9 November 2026 Bronze) leave your wallet the moment you join. Leaving while registration is still open (before the deadline) refunds the fee on-chain. Once the deadline passes you cannot leave. **From 9 November 2026, 14:00 UTC** you can leave freely until a tournament reaches its minimum number of teams. After that you can leave only while more teams than the minimum are in it, so a tournament that reached its minimum is played. Every refund is **exact**, down to the amount the contract holds for your entry. If a tournament is cancelled (or you paid on chain but never took a seat) and the game server cannot push your money back, it stays in the contract. Once the tournament is cancelled or completed you can pull it yourself: the page of a completed tournament shows a **Claim my entry back** button for an entry that never took a seat. You can also call the contract's `claimRefund` endpoint with the tournament id.
 - **Add a third-place match if you can**. Without it the 15% third-place share simply goes to the runner-up; with it a third team gets paid.
 - **Sync before a match's lock, not just before joining**. Each match reads your synced stats at its lock, so train and sync ahead of a game for the improvement to count. Unsynced training does not.
 
@@ -1793,7 +1859,7 @@ Once a stat hits the cap, **training that stat gains nothing**: the XP is discar
 
 ## Condition matters
 
-Each training session costs **5 condition** until a player turns 30 in-game years old. After that the cost climbs with age, reaching **15** (three times the base) at age 39 and beyond. Match appearances follow the same age curve, each from its own base: a tournament or 1v1 appearance costs **10 condition** per player and rises to **30** for the oldest players; a ranked or casual appearance costs **5 condition** and rises to **15**. In ranked, only the side that started the match pays condition; the randomly matched opponent pays nothing. Condition comes back at **48 points a day** (2 an hour) until 30, then more slowly with age, down to **24 a day** (1 an hour) at 39. See [Player Aging](/mechanics/aging/) for the thinking behind the curve.
+Each training session costs **5 condition** until a player turns 30 in-game years old. After that the cost climbs with age, reaching **15** (three times the base) at age 39 and beyond. Match appearances follow the same age curve, each from its own base: a tournament or 1v1 appearance costs **10 condition** per player and rises to **30** for the oldest players; a ranked or casual appearance costs **5 condition** and rises to **15**. In ranked, only the side that started the match pays condition; the randomly matched opponent pays nothing. From Monday 9 November 2026, 14:00 UTC a ranked game the AI fills costs no condition. Condition comes back at **48 points a day** (2 an hour) until 30, then more slowly with age, down to **24 a day** (1 an hour) at 39. See [Player Aging](/mechanics/aging/) for the thinking behind the curve.
 
 One condition floor (currently **30**) applies to training plus tournament and 1v1 matches. A player below it cannot train. In a tournament or 1v1 match a starter below it is auto-substituted from the bench; fewer than 11 fit players forfeits the match 3-0. Casual and ranked games refuse only a starter at 0 condition, so a tired starter still plays there, with every stat scaled down by condition (about half strength near 0). XP earned also scales with condition (`20 × condition / 100`), so a barely-fit player gains less per session.
 
@@ -1801,7 +1867,9 @@ A fully drained player under 30 needs about 2 days to get back to 100 by waiting
 
 ## Match XP also bumps
 
-Players can also earn XP from matches, distributed across multiple stats based on their actions in the game. Not every match awards it: only **Silver and Gold tournaments** plus **1v1 challenges** grant match XP. Bronze tournaments, casual games against the AI and ranked matches (no XP at the moment) award none. Where match XP applies it follows the same meter rules: when an XP meter crosses 2000, the stat bumps.
+Players can also earn XP from matches, distributed across multiple stats based on their actions in the game. Not every match awards it: until Monday 9 November 2026, 14:00 UTC only **Silver and Gold tournaments** plus **1v1 challenges** grant match XP. Bronze tournaments, casual games against the AI and ranked matches (no XP at the moment) award none. Where match XP applies it follows the same meter rules: when an XP meter crosses 2000, the stat bumps.
+
+From **Monday 9 November 2026, 14:00 UTC** match XP follows the level of the competition: what a player's match actions earn is multiplied by the level's share, then rounded down once at the end. A Gold tournament or 1v1 gives the full XP, a Silver one three quarters, a paid Bronze tournament half. A ranked game gives a quarter, to the team that started it and paid its 25 FOXSY ticket only; the team drawn in earns none. Casual games, a ranked game the AI fills plus a free Bronze tournament still award none. The XP booster and the daily cap of 3 XP-earning matches per player apply as before. See [Competition levels](/mechanics/matches/#competition-levels).
 
 In [Champions FoxLeague](/mechanics/champions-foxleague/#what-each-leg-counts-for) each leg of a two-legged tie is a match of its own: the XP of leg 2 comes from what each player did in leg 2 (extra time included), never from leg 1 or the aggregate.
 
@@ -1810,7 +1878,7 @@ So the loop is:
 ```
 Train (intentional, costs condition) ──┐
                                        ├─→ XP grows ─→ Stat bumps ─→ Sync ─→ Plays in matches
-Play matches (Silver/Gold, 1v1: XP) ───┘
+Play matches (paid play: XP) ──────────┘
 ```
 
 ### XP by shirt

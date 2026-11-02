@@ -167,7 +167,8 @@ function levelLines(s: AgentSnapshot): string[] {
   const c = s.config?.competition_levels
   if (c) {
     const b = s.config?.tournament_fee_bounds
-    const bronze = typeof b?.bronze_min === 'number' && typeof b?.bronze_max === 'number' ? `; a paid Bronze costs ${b.bronze_min} to ${b.bronze_max} FOXSY` : ''
+    const bronze = (typeof b?.bronze_min === 'number' && typeof b?.bronze_max === 'number' ? `; a paid Bronze costs ${b.bronze_min} to ${b.bronze_max} FOXSY` : '')
+      + (c.private_bronze_earns === true ? '; a private paid Bronze (an invite list) earns like a public one' : '; a private Bronze (an invite list) earns nothing')
     out.push(`Competition levels: ${whenLive(levelsLive(s.config, now), c.live_from)}: ranked ticket ${c.ranked_ticket_price_foxsy} FOXSY a game you start${bronze}; XP ranked ${c.xp_factor_pct.ranked}%, Bronze ${c.xp_factor_pct.bronze}%, Silver ${c.xp_factor_pct.silver}%, Gold ${c.xp_factor_pct.gold}%; K ranked ${c.elo_k.ranked}, Bronze ${c.elo_k.bronze}, Silver ${c.elo_k.silver}, Gold ${c.elo_k.gold}; at most ${c.competitive_daily_cap} competitive matches a card a day`)
   }
   const f = s.config?.organizer_fees
