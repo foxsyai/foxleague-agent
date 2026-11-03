@@ -1018,3 +1018,15 @@ FoxLeague upgraded its tournaments contract on mainnet at 15:38 UTC on 2026-11-0
 Stays open:
 - FoxLeague still sets the private fee to 20 (the contract's `setPrivatePlatformFee` and its own setting together) and turns `leave_lock_live` on; the agent reads both and needs no change.
 - The two stale lines of FoxLeague's manual of the previous section (Shop: ticket 100 FOXSY; Tournaments: private Bronze "for now"): sync again when FoxLeague corrects them.
+
+## FoxLeague's promotion of 2026-11-03: the prize from FoxLeague for the top 24
+
+FoxLeague's main moved from `d51552986` to `c339519ca` (next-foxleague PR #617, 20 commits). Its backend runs on mainnet since about 19:03 UTC on 2026-11-03 (its OpenAPI serves `prize_tiered`); the tournaments contract upgrade of #605 is not on mainnet yet (`getSponsorWeights` is an invalid function, the code hash is still that of 2026-11-02). Every commit read; the routes, fields and numbers the agent reads are unchanged except one new field. Read and asking nothing of the agent: #577 (a live board of the current 36 before the snapshot, a new route the agent does not need), #603 (an admin cancels an edition that holds a prize: every entry refunded), #604 and #606 (screens), #607, #609, #611, #612 and #613 (the login panel; the backend's login is unchanged), #599 (the leave lock's admin field), #590, #598, #600, #601, #602 and #616 (memory, CI, changelog, tests, the deploy record).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CT1 | low | The prize from FoxLeague of a Champions FoxLeague edition now goes to the top 24 by the round reached, 4 / 2 / 1 shares (56) to the 8 quarter-finalists, the 8 round-of-16 losers and the 8 play-off losers (#605 contract, #608 backend, owner of FoxLeague 2026-11-02). The plan was told every prize was "shared by the last 8", so it undervalued an invitation where a play-off or round-of-16 exit now earns. No money path reads the prize. | The invitation's `prize_tiered` (true only for a held prize on the tiered terms) picks the text: tiered, each group's amount per team, floored as the contract pays; false or absent (equal terms, an older FoxLeague), the 8 quarter-finalists' equal share. `src/strategist/manual.md` synced to `bc3379734`. |
+
+Stays open:
+- The tournaments contract upgrade of #605 on mainnet. Until it lands FoxLeague cannot set tiered terms, so `prize_tiered` stays false and the plan reads the equal split, as the contract would pay it. The agent signs no sponsor call, so no gas of its own changes.
+- The two stale lines of FoxLeague's manual (Shop: ticket 100 FOXSY; Tournaments: private Bronze "for now") are still in `bc3379734`.

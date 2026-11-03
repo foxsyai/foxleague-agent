@@ -1747,8 +1747,10 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
 - **League + Knockout ("Champions FoxLeague").** An admin-created format, off by default
   (`TOURNAMENT_LEAGUE_KNOCKOUT_ENABLED_DEFAULT 0`), seats by invitation in waves from the frozen leaderboard, one seat
   per team, a sponsor prize. Routes: `GET /api/tournaments/invitations` (own pending invitations: tournament_id,
-  title, tier, entry_fee_foxsy, wave, expires_at, seats_lock_at, can_accept, refusal, prize_atomic;
-  `league_invitations.rs:1632`), `GET /api/tournaments/{id}/invitations`, `POST /api/tournaments/{id}/invitation/decline`,
+  title, tier, entry_fee_foxsy, wave, expires_at, seats_lock_at, can_accept, refusal, prize_atomic, and since
+  2026-11-03 prize_tiered: true when the held prize is on the tiered terms of #605/#608, 4 / 2 / 1 shares to the 8
+  quarter-finalists, the 8 round-of-16 losers and the 8 play-off losers, false for equal shares among the 8
+  quarter-finalists or no prize; `league_invitations.rs`), `GET /api/tournaments/{id}/invitations`, `POST /api/tournaments/{id}/invitation/decline`,
   `GET/POST /api/tournaments/{id}/prize[/deposit]`; accepting is the ordinary paid join through the invitation gate
   (`tournaments.rs:4881`). New join refusals (not invited, expired, declined, left, one seat, "still in <title>"),
   a leave refusal ("seats are locked since <time>") and create refusals (`snapshot_at`, `sponsor_prize_foxsy`,
@@ -1808,7 +1810,8 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
 - **Champions FoxLeague page** (`mechanics/champions-foxleague`), synced into `src/strategist/manual.md`: it states the
   rules the agent already follows (36 teams, 8 league matches, places 1 to 24 to the knockout, 190 matches one at a
   time, leaving until wave 3 with the entry refunded, no other standard tournament while it runs, one at a time,
-  prizes 45/30/15 plus the prize from FoxLeague for the 8 quarter-finalists). One difference: a team that is out is free
+  prizes 45/30/15 plus the prize from FoxLeague, for the top 24 in 4 / 2 / 1 shares since FoxLeague's main of
+  2026-11-03, synced at bc3379734). One difference: a team that is out is free
   again at once, while the agent's rule waits until the edition ends (the stricter side).
 - **OVR range** (`ovr_min`, `ovr_max` on a tournament or a 1v1, whole numbers 1 to 100; next-foxleague
   `tournament_models.rs:241-252`, `ovr_range.rs`): checked once at the join against the team's best XI OVR (the average

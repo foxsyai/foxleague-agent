@@ -491,6 +491,12 @@ export interface PendingLeagueInvitation {
   can_accept: boolean
   refusal: string | null
   prize_atomic: string | null
+  /**
+   * The held prize is on the tiered terms (FoxLeague #605/#608, owner of FoxLeague 2026-11-02): the top 24, 4 shares
+   * to each quarter-finalist, 2 to each round-of-16 loser, 1 to each play-off loser. False (or absent, from an older
+   * FoxLeague): split equally among the 8 quarter-finalists.
+   */
+  prize_tiered?: boolean
 }
 
 /** GET /api/tournaments/{id}/invitations (league_invitations.rs LeagueInvitationsView): the parts the agent reads. */

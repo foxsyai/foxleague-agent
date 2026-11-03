@@ -152,6 +152,18 @@ function ovrRange(t: { ovr_min?: number | null; ovr_max?: number | null }): stri
   return lo === null && hi === null ? '' : `, OVR range ${lo ?? 'any'} to ${hi ?? 'any'}`
 }
 
+/**
+ * A League + Knockout's prize from FoxLeague, in whole FOXSY per team. Tiered (FoxLeague's `prize_tiered`, its
+ * TIERED_WEIGHTS): the top 24 by the round reached, 4 / 2 / 1 shares of 56, each floored as the contract pays it.
+ * Otherwise the 8 quarter-finalists share it equally.
+ */
+function prizeText(atomic: bigint, tiered: boolean): string {
+  const whole = (a: bigint) => (a / 10n ** 18n).toString()
+  if (!tiered) return `prize from FoxLeague ${whole(atomic)} FOXSY shared equally by the 8 quarter-finalists (${whole(atomic / 8n)} each)`
+  const share = (w: bigint) => whole((atomic * w) / 56n)
+  return `prize from FoxLeague ${whole(atomic)} FOXSY for the top 24 by the round reached: ${share(4n)} to each quarter-finalist (4 shares), ${share(2n)} to each round-of-16 loser (2), ${share(1n)} to each play-off loser (1); places 25 to 36 get none`
+}
+
 /** The competition levels and the organizer's amounts, only as FoxLeague serves them (the prompt holds no number of them). */
 const splitText = (p: PrizeSplit) => `pays ${p.winner_percent}/${p.runner_up_percent}/${p.third_percent}, platform ${p.platform_fee_percent}%`
 /** A split to tell the plan about: one FoxLeague names that differs from the public tournaments' split. */
@@ -283,7 +295,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const at = (iso: string | null | undefined) => (iso && Number.isFinite(Date.parse(iso)) ? new Date(Date.parse(iso)).toISOString().slice(0, 16).replace('T', ' ') : '?')
     for (const i of invitations) {
       const t = i.tournament
-      const prize = i.prize_atomic && /^\d+$/.test(i.prize_atomic) ? `, sponsor prize ${(BigInt(i.prize_atomic) / 10n ** 18n).toString()} FOXSY shared by the last 8` : ''
+      const prize = i.prize_atomic && /^\d+$/.test(i.prize_atomic) ? `, ${prizeText(BigInt(i.prize_atomic), i.prize_tiered === true)}` : ''
       const run = t ? `, one match every ${t.round_interval_minutes ?? '?'} min from ${at(t.starts_at)}` : ', its schedule could not be read'
       const can = i.can_accept ? 'accept with join_tournament' : `FoxLeague says it cannot be accepted now${i.refusal ? ` (${txt(i.refusal, 120)})` : ''}`
       out.push(`  T${Number(i.tournament_id)} "${txt(i.title, 60)}" ${txt(i.tier, 10)}, entry ${Number(i.entry_fee_foxsy)} FOXSY${prize}${run}, expires ${at(i.expires_at)}, seats lock ${at(i.seats_lock_at)}: ${can}`)
