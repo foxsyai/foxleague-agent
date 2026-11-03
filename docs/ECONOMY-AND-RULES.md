@@ -394,8 +394,11 @@ among the called-up players by contribution. Nothing of it exists in the code on
   competitive matches, 135 of them really played) to be listed, and the waivable 270 can be bought (at most 27,000
   FOXSY). Manual: mechanics/fusion, marketplace, shop.
 - **League + Knockout ("Champions FoxLeague").** Admin-created, off by default, seats by invitation in waves from the
-  frozen leaderboard, one seat per team, a sponsor prize on top of the entry pool (an example in the API texts: Gold,
-  10,000 FOXSY fee, 100,000 FOXSY for the 8 quarter-finalists). Manual page `mechanics/champions-foxleague` since
+  frozen leaderboard, one seat per team, a prize from FoxLeague on top of the entry pool. Since FoxLeague's main of
+  2026-11-03 (#605, #608) a new prize goes to the top 24 by the round reached: 4 shares to each quarter-finalist, 2 to
+  each round-of-16 loser, 1 to each play-off loser (56 shares; 168,000 FOXSY pays 12,000 / 6,000 / 3,000), places 25 to
+  36 none. An invitation says which with `prize_tiered`; without it (equal terms, or an older FoxLeague) the 8
+  quarter-finalists share it equally. The plan sees each team's amount. Manual page `mechanics/champions-foxleague` since
   2026-10-24 (688088787, synced). FoxLeague frees a team that is out at once; the agent's rule waits until the edition
   ends (the stricter side). Since 2026-10-24 (owner) the agent accepts an invitation by itself at every level within the owner's limits (Zeus with a real chance of the knockout), never creates one, leaves one only before its seats lock (when leaving still returns the whole entry) once it sees no real chance of the top 24, and only a seat it paid itself (never one the owner took), and tells the owner of each pending invitation. From FoxLeague's code: 36 teams, 8 league matches each, then places 1 to 24 play the knockout (two-legged play-off, round of 16, quarter-finals and semi-finals, then the final or the third place match): at most 17 matches; one match at a time for the whole tournament (144 league then 46 knockout matches, one per round interval); while it runs a team joins or creates no other standard tournament; one League + Knockout at a time; no leaving once the seats lock.
 - **OVR range** (manual of 2026-10-24, live on mainnet that evening). A tournament or 1v1 can carry `ovr_min` and

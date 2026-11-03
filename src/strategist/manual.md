@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 1e58023fc 2026-11-02.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at bc3379734 2026-11-03.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -46,7 +46,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Transfer cooldown** | 21 days (504 hours) after a wallet-to-wallet transfer of a card at its match gate; 21 days plus 6 hours for every missing match for a card moved under it | The received player cannot play or be fused | Only direct wallet-to-wallet transfers trigger it. The length is fixed on the card at the moment of the transfer; each fusion match waiver bought afterwards for a card moved under its gate takes 6 hours off, down to 21 days plus 6 hours for every match it still has to really play. Auction wins, fusion outputs plus shop mints never start one. A sale does not clear a running lock: the buyer inherits the rest, shown on the listing. The longer lock closes the alt-wallet path: a second wallet's untouched Legendary is locked for 122 days and 6 hours. Locks already running on 12 October 2026 at 16:30 UTC were never made longer | Reduce Cooldown, for a card moved at its gate only: per day above the floor, by rarity: Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY (the 10 percent fee on the reference price spread over 20 days), every day or only some of them. Floor 3 days (72 hours). Full waiver of a fresh 21-day transfer: 18 days, from 450 (Common) to 22,500 (Legendary) FOXSY. Under the gate: the fusion match waiver (on the card's profile in the Squad), 6 hours a match |
 | **Tournament seat fee** | Bronze free until Monday 9 November 2026, 14:00 UTC, then 100 to 999 FOXSY; Silver 1,000 to 4,999 FOXSY; Gold 5,000 FOXSY and up | What a seat costs, chosen by the creator inside the tier | Paid exactly, on chain, into a free seat. Refunded if you leave before the registration deadline or the tournament is cancelled. A Bronze tournament created before the switch stays free | None. Until 9 November 2026 Bronze is the free tier |
 | **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a paid pool (Silver, Gold, a paid Bronze) is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. Champions FoxLeague always plays its 3rd place match. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
-| **Prize from FoxLeague** | An amount the FoxLeague team sets per Champions FoxLeague edition (Silver or Gold only) | Paid on top of the entry pool to the 8 quarter-finalists, in equal shares | Deposited into the tournaments contract by the contract owner or a sponsor wallet the owner approved, before the edition starts. Paid by the contract after the edition completed and its entry pool was paid. No platform fee and no royalty. A cancelled edition returns it to the depositor; so does the owner for a prize still unpaid 30 days after the completion. See [Champions FoxLeague](/mechanics/champions-foxleague/#prizes) | None |
+| **Prize from FoxLeague** | An amount the FoxLeague team sets per Champions FoxLeague edition (Silver or Gold only) | Paid on top of the entry pool to the top 24 by how far they got: 4 shares to each quarter-finalist, 2 to each round-of-16 loser, 1 to each play-off loser (56 shares: 57.1, 28.6 and 14.3 percent) | Set at the create or added while registration is open. Deposited into the tournaments contract by the contract owner or a sponsor wallet the owner approved, before the edition starts. Paid by the contract after the edition completed and its entry pool was paid. No platform fee and no royalty. A cancelled edition returns it to the depositor; so does the owner for a prize still unpaid 30 days after the completion. See [Champions FoxLeague](/mechanics/champions-foxleague/#prizes) | None |
 | **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the broadcast ends. Unaccepted challenges refund in full at the deadline | None |
 | **Calendar deposit** | 25 FOXSY per scheduled game, from Monday 9 November 2026, 14:00 UTC | Paid by the organizer of a tournament that books the calendar, in one payment before it is created | Back in full after the last game or on a delete within the first hour from its creation (no free hour at a time slot you freed that way in the last 24 hours). Kept on a later delete or when the tournament cannot start: fewer teams than its minimum by the deadline. Developer tournaments plus 1v1 challenges pay none | Not for sale |
 | **Private tournament platform fee** | 20% of the pool instead of 10%, on a tournament with an invite list created from Monday 9 November 2026, 14:00 UTC | Taken from the pool: the prizes are 40%, 25% and 15% | The whole pool comes back if the tournament is cancelled | Not for sale |
@@ -319,6 +319,12 @@ A team on the frozen board can be invited only when:
 - it holds no seat and no open invitation in **another Champions FoxLeague** that is not over. A team plays one Champions FoxLeague at a time;
 - its account can be invited (banned, admin and FoxLeague test accounts cannot).
 
+### The current 36
+
+Until the snapshot, an edition's Lobby tab lists **the current 36**: the teams the snapshot would invite right now, in the leaderboard's order, by the same rules as above. Below them come the next eligible teams, with a line where the last seat ends. With your team you see your own place, how much ELO you are behind the last seat or why your team could not be invited. The edition's card says it in one line.
+
+Nothing can be done on this list: it only shows where you stand. It is read again at most every 5 minutes. A tournament match counts once its broadcast has ended. At the snapshot the frozen leaderboard takes over, as below: that board decides.
+
 ### The three waves
 
 | Wave | When | Who is invited |
@@ -403,7 +409,7 @@ This head-to-head rule is for Champions FoxLeague only. The other formats keep t
 
 ### The knockout draw
 
-The knockout bracket is drawn when registration closes, over league **places**, not teams. So the Knockout tab shows "9th v 24th" style pairings from the first day. The teams take their seats when the league phase ends.
+The knockout bracket is drawn when registration closes, over league **places**, not teams. So the Play-off and Knockout tabs show "9th v 24th" style pairings from the first day. The teams take their seats when the league phase ends.
 
 ### Play-off (places 9 to 24)
 
@@ -444,9 +450,9 @@ The top-8 team plays leg 2 at home. The draw puts 1st and 2nd into opposite halv
 | 3rd place match | 1 | 1 |
 | Final | 1 | 1 |
 
-The Knockout tab shows the whole bracket, one column per round. Each tie lists both legs (**L1**, **L2**) and the aggregate (**Agg**); the team that went through is in green. A shootout score is shown in brackets after the aggregate.
+The **Play-off** tab shows the 8 play-off ties. The **Knockout** tab shows the bracket from the round of 16 to the final, one column per round. Each tie lists both legs (**L1**, **L2**) and the aggregate (**Agg**); the team that went through is in green. A shootout score is shown in brackets after the aggregate.
 
-![The Knockout tab of a finished edition: play-off, round of 16, quarter-finals and semi-finals with L1, L2 and Agg per tie, then the 3rd place match and the final; play-off tie 2 and the final were decided on penalties](/screenshots/champions-foxleague/knockout-bracket.png)
+![The Knockout tab of a finished edition: round of 16, quarter-finals and semi-finals with L1, L2 and Agg per tie, then the 3rd place match and the final; the final was decided on penalties](/screenshots/champions-foxleague/knockout-bracket.png)
 
 ## Two legs and the aggregate
 
@@ -464,7 +470,7 @@ Each team plays one leg at home and one away. The **aggregate** (the goals of bo
 - The **3rd place match** and the **final** are single matches: level at full time goes to extra time, then penalties.
 - A tie is never decided by lot. In the rare case of a level aggregate with no shootout (for example when both teams forfeit leg 2, which counts 0-0), the team higher in the league table goes through. The same rule covers the 3rd place match and the final.
 
-The match card of each leg shows that leg's own score. The Knockout tab shows each tie with **L1**, **L2** and **Agg** (see [the bracket](#quarter-finals-semi-finals-3rd-place-match-and-final) above).
+The match card of each leg shows that leg's own score. The Play-off and Knockout tabs show each tie with **L1**, **L2** and **Agg** (see [the bracket](#quarter-finals-semi-finals-3rd-place-match-and-final) above).
 
 ## What each leg counts for
 
@@ -504,16 +510,24 @@ The edition completes once the broadcasts of the 3rd place match and the final h
 
 A Silver or Gold edition can carry a **prize from FoxLeague** on top of the entry pool:
 
-- The FoxLeague team sets the amount when it creates the edition and deposits the FOXSY into the tournaments contract while registration is open. Only the contract owner or a wallet it approved as a sponsor (`setSponsorApproved`) can deposit. Before the deposit the contract records that wallet and the number of recipients, 8 (`setSponsorTerms`). At payout FoxLeague names the 8 quarter-finalists; the contract checks that they are 8 distinct teams seated in the edition.
-- The prize is split **equally among the 8 quarter-finalists**: the 8 teams of the quarter-final round, the podium included. 100,000 FOXSY gives 12,500 to each.
+- The FoxLeague team sets the amount when it creates the edition or adds it later while registration is open. It deposits the FOXSY into the tournaments contract while registration is open. Only the contract owner or a wallet it approved as a sponsor (`setSponsorApproved`) can deposit. Before the deposit the contract records that wallet and the weights of the 24 teams that share the prize (`setSponsorTieredTerms`). The deposit states the same weights, so the contract refuses it if the terms changed in between. At payout FoxLeague names the 24 teams in the order of their weights; the contract checks that they are 24 distinct teams seated in the edition.
+
+The prize goes to the **top 24 by how far they got**, in shares (56 in all; places 25 to 36 of the league phase get none):
+
+| Teams | Shares each | Share of the prize |
+|---|---|---|
+| The 8 quarter-finalists (the podium included) | 4 | 57.1% |
+| The 8 teams that went out in the round of 16 | 2 | 28.6% |
+| The 8 teams that went out in the play-off | 1 | 14.3% |
+
+56,000 FOXSY gives 4,000 to each quarter-finalist, 2,000 to each round-of-16 loser and 1,000 to each play-off loser.
+
 - It has **no platform fee and no royalty**.
-- The contract pays it right after the edition completed and its entry pool was paid. It never pays more than was deposited; a remainder too small to split goes back to the depositor.
+- The contract pays it right after the edition completed and its entry pool was paid. Each team gets its shares of the prize rounded down to the smallest unit of FOXSY. It never pays more than was deposited: the remainder, less than one smallest unit per team, goes back to the depositor.
 - The contract settles an edition that holds a prize from FoxLeague no sooner than 24 hours after its start.
 - If the edition is cancelled, the prize goes back to the depositor. A prize still unpaid 30 days after the edition completed can be returned to the depositor by the contract owner.
 
-The invitation banner shows the prize once it is held. The tournament page shows it as held, then paid, with the transaction.
-
-![An example prize panel of an open edition: 180,000 FOXSY locked in the contract, split equally among the 8 quarter-finalists once the tournament is completed, with its deposit transaction](/screenshots/champions-foxleague/prize-from-foxleague.png)
+The invitation banner shows the prize once it is held. The tournament page shows it as held, then paid, with each group's amount and the transaction.
 
 ### Featured editions
 
@@ -1521,7 +1535,7 @@ A league phase, then a two-legged knockout phase. The FoxLeague team creates eac
 - **Team count**: exactly 36, invited from the leaderboard in three waves
 - **League phase**: one table of 36 drawn from four pots of 9 by ELO. Each team plays 8 matches, 2 against each pot, 4 at home and 4 away
 - **Knockout phase**: places 1 to 8 go to the round of 16, places 9 to 24 play a two-legged play-off, places 25 to 36 are out. The play-off, round of 16, quarter-finals and semi-finals are two-legged and decided on aggregate (no away goals rule). The 3rd place match and the final are single matches
-- **Prizes**: the entry pool with the split below, plus an optional prize from FoxLeague shared equally by the 8 quarter-finalists
+- **Prizes**: the entry pool with the split below, plus an optional prize from FoxLeague for the top 24: 4 shares to each quarter-finalist, 2 to each round-of-16 loser, 1 to each play-off loser
 
 The full rules are on [Champions FoxLeague](/mechanics/champions-foxleague/).
 
@@ -1798,7 +1812,7 @@ In a Knockout or Groups + KO event without a 3rd-place match there is no third-p
 
 Example (with a 3rd-place match): 16 teams × 1,000 FOXSY entry = **16,000 FOXSY** pool → 7,200 winner / 4,800 runner-up / 2,400 third-place / 1,600 platform fee.
 
-A paid Champions FoxLeague edition (Silver and Gold; a Bronze with an entry fee from Monday 9 November 2026) can also carry a **prize from FoxLeague**, held in the tournaments contract and split equally among its 8 quarter-finalists after it completes. See [Prizes](/mechanics/champions-foxleague/#prizes).
+A paid Champions FoxLeague edition (Silver and Gold; a Bronze with an entry fee from Monday 9 November 2026) can also carry a **prize from FoxLeague**, held in the tournaments contract and paid after it completes to its top 24 by how far they got: 57.1% to the 8 quarter-finalists, 28.6% to the 8 round-of-16 losers, 14.3% to the 8 play-off losers. See [Prizes](/mechanics/champions-foxleague/#prizes).
 
 A quarter of the platform fee (**2.5% of the pool**, so 400 FOXSY of the 1,600 in the example above) is paid as a **creator royalty** to the provider of the AI binary the matches were played with. It is taken from the fee and travels in the same distribution transaction as the prizes, so it never reduces what the winners receive. The contract enforces this. Prize payouts must land between 85% and 90% of the seated pool. The royalty itself is capped on chain at 2.5% of that pool.
 
