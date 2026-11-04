@@ -1157,13 +1157,15 @@ export class Executor {
               await sleep(6000)
               continue
             }
-            // No answer is no refusal: FoxLeague may have created it, so the same create (same key) is asked again.
-            if (!(err instanceof ApiRefusal) && lost < 3) {
+            // No answer is no refusal (an answer that is not FoxLeague's envelope neither, R51A-2): FoxLeague may have
+            // created it, so the same create (same key) is asked again.
+            const noAnswer = !(err instanceof ApiRefusal) || /^unexpected answer/.test(err.message)
+            if (noAnswer && lost < 3) {
               lost++
               await sleep(6000)
               continue
             }
-            const why = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+            const why = err instanceof ApiRefusal && !noAnswer ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
             this.unbook(booking)
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
             if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
@@ -1171,7 +1173,7 @@ export class Executor {
               if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
               return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)
             }
-            if (!(err instanceof ApiRefusal)) return finish('error', `${desc}: organizer payment ${organizerHash} made, and the create got no answer (${why}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
+            if (noAnswer) return finish('error', `${desc}: organizer payment ${organizerHash} made, and the create got no answer (${why}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
             return finish('error', `${desc}: organizer payment ${organizerHash} made, nothing created: ${why}; the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
           }
         }

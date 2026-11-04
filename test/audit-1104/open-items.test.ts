@@ -149,3 +149,32 @@ test('OPEN-8: a tournament the agent created and holds no seat in is named to th
   const seated = renderDigest(await takeSnapshot(base([{ user_id: 100, wallet_address: ADDR, team_name: 'Agent' }]), { wallet: dryWallet }))
   assert.doesNotMatch(seated, /with no seat of yours/)
 })
+
+// Agent review of PR #51 (medium): an empty or non-envelope 502/503/504 reaches the create as ApiRefusal('unexpected
+// answer ...'), which the INTEG-1 retry treated as a refusal: "nothing created", no second ask with the same key.
+test('R51A-2: a create answered by an empty gateway error after the organizer payment is asked again with the same key', async () => {
+  const { parseAction } = await import('../../src/executor/actions.ts')
+  const { tournament } = await import('../fixtures.ts')
+  const calls: { body: Record<string, unknown>; key: string }[] = []
+  const createTournament = async (_w: unknown, body: Record<string, unknown>, key: string) => {
+    calls.push({ body: { ...body }, key })
+    if (!body.organizer_fee_tx_hash) throw new ApiRefusal('This tournament needs a payment of 150 FOXSY from its organizer before it is created.', 'organizer_fee_required')
+    const withHash = calls.filter(c => c.body.organizer_fee_tx_hash)
+    if (withHash.length === 1) throw new ApiRefusal('unexpected answer from /tournaments (HTTP 502)')
+    if (key === withHash[0]!.key) return { id: 55 }
+    throw new ApiRefusal('Transaction already processed')
+  }
+  const OWED = { owed: true, games: 6, private_fee_foxsy: 0, deposit_foxsy: 150, total_foxsy: 150, grace_minutes: 60, no_free_cancel: false }
+  const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament, tournament: async () => tournament(55), joinTournament: async () => ({}) }, chain: { send: async () => `hash${calls.length}` } })
+  const s = snapshot()
+  s.config!.organizer_fees = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 0, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 0, calendar_deposit_grace_minutes: 60 }
+  const cup = parseAction({ type: 'create_tournament', title: 'Autumn Cup', format: 'round_robin', tier: 'silver', max_teams: 4, min_teams: 3, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 30 })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action: cup, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+    assert.doesNotMatch(r!.summary, /nothing created/)
+  })
+  const withHash = calls.filter(c => c.body.organizer_fee_tx_hash)
+  assert.ok(withHash.length >= 2)
+  assert.equal(withHash[1]!.key, withHash[0]!.key)
+})

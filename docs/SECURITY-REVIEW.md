@@ -1124,6 +1124,7 @@ critical or high finding.
 | DOCS-5 | low | The economy notes still said a Groups + Knockout needs its full field | It starts from min_teams 6, in groups of 3 to 6. |
 | DOCS-6 | low | The prompt suggested an open challenge when no named opponent fits, which a Zeus agent (all ten live) is always refused (predates the window) | The prompt says never at the Zeus level. |
 | R51A-1 | low | Agent review of PR #51: MONEY-2 missed the ranked start pressed again after a ticket was bought; with no answer and no read-back it was logged as refused and the ticket said to stay | It counts as a start that may have happened, and the ticket is not said to stay. |
+| R51A-2 | medium | Agent review of PR #51: an empty or non-envelope 502/503/504 after the organizer payment reached the create as `ApiRefusal('unexpected answer ...')`, which the INTEG-1 retry took for a refusal: "nothing created", no second ask with the same key (nothing paid twice: the organizer row stayed pending, and OPEN-8 names an unseated creation) | An answer that is not FoxLeague's envelope is a lost answer there too, as elsewhere in the executor: asked again with the same key. |
 
 The owner then asked for the open items below that are not hard to close (each test in `test/audit-1104/open-items.test.ts` failed on the branch before its fix):
 
