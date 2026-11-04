@@ -84,7 +84,8 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
         d.store.resolvePending(p.hash, 'done')
         d.notify(`${agentName(agentIndex)}: pending ranked ticket confirmed`)
       } else if (p.kind === 'shop') {
-        const r = await d.fox.shopConfirm(wallet, p.payload as { tx_hash: string; product: string })
+        // The row's hash is the payment's; rows kept before 2026-11-04 carry it in the payload too.
+        const r = await d.fox.shopConfirm(wallet, { ...(p.payload as { product: string }), tx_hash: p.hash })
         d.store.resolvePending(p.hash, 'done')
         d.notify(`${agentName(agentIndex)}: pending shop payment confirmed: ${r.message}`)
       } else {
