@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { agentName } from '../names.ts'
 import { DEFAULT_SETTINGS, type AgentSettings } from './settings.ts'
 import type { MatchFormations } from '../foxleague/types.ts'
-import { summariseFormations, type FormationMatch, type FormationRecord } from '../snapshot/formations.ts'
+import { LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
 import type { MarketSale } from '../snapshot/market.ts'
 
 export interface AgentRow {
@@ -165,6 +165,21 @@ export class Store {
         ga INTEGER NOT NULL,
         edge REAL,
         PRIMARY KEY (agent_idx, match_key)
+      );
+      CREATE TABLE IF NOT EXISTS league_matches (
+        key TEXT PRIMARY KEY,
+        at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        home_user_id INTEGER NOT NULL,
+        away_user_id INTEGER NOT NULL,
+        home TEXT NOT NULL,
+        away TEXT NOT NULL,
+        home_score INTEGER NOT NULL,
+        away_score INTEGER NOT NULL,
+        home_strength REAL,
+        away_strength REAL,
+        home_elo INTEGER,
+        away_elo INTEGER
       );
     `)
     // Added with Import team: where the key comes from and when a team was removed (the row stays for the history).
@@ -426,6 +441,54 @@ export class Store {
       .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[])
       .filter(r => r.rival_user_id === null || !own.has(Number(r.rival_user_id)))
     return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: r.theirs, gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: r.rival_user_id })))
+  }
+
+  /** The FoxLeague user ids of the install's own teams: every one the store keeps (agent_user_id:N) and every one with rows in the pooled record. */
+  ownUserIds(): Set<number> {
+    const kept = this.kvWithPrefix('agent_user_id:').map(([, v]) => Number(v))
+    const pooled = (this.db.prepare('SELECT DISTINCT own_user_id FROM formation_results').all() as { own_user_id: number }[]).map(r => Number(r.own_user_id))
+    return new Set([...kept, ...pooled].filter(n => Number.isSafeInteger(n) && n > 0))
+  }
+
+  // ---- the league formation table (owner, 2026-11-04) ----
+
+  hasLeagueMatch(key: string): boolean {
+    return this.db.prepare('SELECT 1 FROM league_matches WHERE key = ?').get(key) !== undefined
+  }
+
+  /** A public match of two other teams, kept once and for 30 days (the table counts the last 14). */
+  putLeagueMatch(m: LeagueMatch): void {
+    this.db
+      .prepare('INSERT INTO league_matches (key, at, kind, home_user_id, away_user_id, home, away, home_score, away_score, home_strength, away_strength, home_elo, away_elo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(key) DO NOTHING')
+      .run(m.key, m.at, m.kind, m.homeUserId, m.awayUserId, m.home, m.away, m.homeScore, m.awayScore, m.homeStrength, m.awayStrength, m.homeElo, m.awayElo)
+    this.db.prepare('DELETE FROM league_matches WHERE at < ?').run(new Date(Date.now() - 30 * 86_400_000).toISOString())
+  }
+
+  /** The next team of the leaderboard's top to read (a position, wrapped by the reader). */
+  get leagueCursor(): number {
+    const n = Number(this.getKv('league_cursor'))
+    return Number.isSafeInteger(n) && n >= 0 ? n : 0
+  }
+
+  setLeagueCursor(n: number): void {
+    this.setKv('league_cursor', String(n))
+  }
+
+  /** What a planning snapshot reads and writes the league matches through. */
+  leagueCache(): LeagueCache {
+    return { has: k => this.hasLeagueMatch(k), put: m => this.putLeagueMatch(m), cursor: () => this.leagueCursor, setCursor: n => this.setLeagueCursor(n), own: () => this.ownUserIds() }
+  }
+
+  /** The league formation table of the last 14 days, the owner's teams left out (also one learned after its matches were kept). */
+  leagueFormations(): LeagueTable {
+    const rows = this.db
+      .prepare('SELECT key, at, kind, home_user_id, away_user_id, home, away, home_score, away_score, home_strength, away_strength, home_elo, away_elo FROM league_matches WHERE at >= ?')
+      .all(new Date(Date.now() - LEAGUE_DAYS * 86_400_000).toISOString()) as Record<string, unknown>[]
+    const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+    return leagueTable(
+      rows.map(r => ({ key: String(r.key), at: String(r.at), kind: String(r.kind), homeUserId: Number(r.home_user_id), awayUserId: Number(r.away_user_id), home: String(r.home), away: String(r.away), homeScore: Number(r.home_score), awayScore: Number(r.away_score), homeStrength: num(r.home_strength), awayStrength: num(r.away_strength), homeElo: num(r.home_elo), awayElo: num(r.away_elo) })),
+      this.ownUserIds(),
+    )
   }
 
   // ---- activity ----

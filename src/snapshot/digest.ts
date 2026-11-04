@@ -6,7 +6,7 @@ import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNO
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
-import { EVEN_BAND, type FormationRecordRow } from './formations.ts'
+import { ELO_BAND, EVEN_BAND, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
 
@@ -82,7 +82,8 @@ function formationsText(f: string[] | null): string {
 
 function formationRow(r: FormationRecordRow): string {
   const bands = (['stronger', 'even', 'weaker'] as const).filter(b => r.bands[b].some(n => n > 0)).map(b => `${b} W${r.bands[b][0]} D${r.bands[b][1]} L${r.bands[b][2]}`)
-  return `${txt(r.mine, 12)} vs ${txt(r.theirs, 12)}: ${r.played} played, W${r.won} D${r.drawn} L${r.lost}, goals ${r.goalsFor}-${r.goalsAgainst}${r.edge === null ? '' : `, strength edge ${r.edge >= 0 ? '+' : ''}${r.edge}%`}${bands.length ? `; by strength: ${bands.join(', ')}` : ''}`
+  const u = r.underdog?.some(n => n > 0) ? `; as the ELO underdog: W${r.underdog[0]} D${r.underdog[1]} L${r.underdog[2]}` : ''
+  return `${txt(r.mine, 12)} vs ${txt(r.theirs, 12)}: ${r.played} played, W${r.won} D${r.drawn} L${r.lost}, goals ${r.goalsFor}-${r.goalsAgainst}${r.edge === null ? '' : `, strength edge ${r.edge >= 0 ? '+' : ''}${r.edge}%`}${bands.length ? `; by strength: ${bands.join(', ')}` : ''}${u}`
 }
 
 /** A coming rival: its last formations and its best eleven at full condition against yours today. */
@@ -265,6 +266,12 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`Pooled formation record (${pool.matches} matches of the last 14 days of every team your owner runs here, yours included, matches between them left out; names not shown):`)
     for (const r of pool.rows.slice(0, 20)) out.push(`  ${formationRow(r)}`)
     if (pool.field.length) out.push(`Rival formations in the pooled matches: ${pool.field.map(f => `${txt(f.formation, 12)} ${f.matches}`).join(', ')}`)
+  }
+  const league = s.leagueFormations
+  if (league?.matches) {
+    out.push(`League formation table (the public matches of the top ${LEAGUE_TEAMS} teams by ELO in the last ${LEAGUE_DAYS} days, your owner's teams left out, names not shown: ${league.matches} matches between ${league.teams} teams, ${league.withStrength} with both strengths known; each match counted from both sides, same-formation matches left out, pairings of fewer than ${LEAGUE_MIN_PLAYED} matches not shown; underdog = rated more than ${ELO_BAND} ELO below the rival at kickoff):`)
+    for (const r of league.rows.filter(x => x.played >= LEAGUE_MIN_PLAYED).slice(0, 30)) out.push(`  ${formationRow(r)}`)
+    if (league.field.length) out.push(`Formations the league played (each side of each match once): ${league.field.map(f => `${txt(f.formation, 12)} ${f.matches}`).join(', ')}`)
   }
 
   const m = s.market

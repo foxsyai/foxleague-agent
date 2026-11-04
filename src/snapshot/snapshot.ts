@@ -9,7 +9,7 @@ import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import { winChance } from './winchance.ts'
-import { summariseFormations, type FormationMatch, type FormationRecord } from './formations.ts'
+import { LEAGUE_DAYS, LEAGUE_READS_PER_TICK, LEAGUE_TEAMS, LEAGUE_TEAMS_PER_TICK, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueTable } from './formations.ts'
 import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache } from './market.ts'
 
 /** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
@@ -164,6 +164,8 @@ export interface AgentSnapshot {
   formationRecord?: FormationRecord | null
   /** Planning snapshots only, added by the service: every team the install runs, matches between them left out. */
   formationPool?: FormationRecord
+  /** Planning snapshots only, added by the service: the public matches of the top teams by ELO, the owner's teams left out. */
+  leagueFormations?: LeagueTable
   /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
   rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null; strength?: number | null }[]
   leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null; bestXiOvr?: number | null })[]
@@ -315,6 +317,68 @@ async function formationRecord(fox: FoxLeague, cache: MatchFactsCache, address: 
   return { ...summariseFormations(games, unread), games }
 }
 
+/**
+ * The league formation table (owner, 2026-11-04): the next few teams of the leaderboard's top, in turn from plan to
+ * plan, and their new public matches, newest first within this plan's reads, each kept once. Only matches between two
+ * real teams count (no AI side, no casual game, a ranked or tournament match only), never one of the owner's teams.
+ * A failed read is skipped and read again when its team comes round, never kept as anything. When this plan's reads run
+ * out inside a team, the turn stays on that team and no further history is read (agent review of PR #48); a match
+ * whose statistics did not answer waits 6 hours before it is tried again, so it never holds the turn.
+ */
+async function collectLeague(fox: FoxLeague, cache: MatchFactsCache, league: LeagueCache, users: UserProfile[], selfId: number, now: Date): Promise<void> {
+  const own = league.own()
+  own.add(selfId)
+  const teams = users.slice(0, LEAGUE_TEAMS).filter(u => Number.isSafeInteger(u.id) && !own.has(u.id) && typeof u.wallet_address === 'string' && u.wallet_address)
+  if (!teams.length) return
+  const start = league.cursor() % teams.length
+  const count = Math.min(LEAGUE_TEAMS_PER_TICK, teams.length)
+  const budget = { left: LEAGUE_READS_PER_TICK }
+  const since = now.getTime() - LEAGUE_DAYS * 86_400_000
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  let next = (start + count) % teams.length
+  teams: for (let i = 0; i < count; i++) {
+    const at0 = (start + i) % teams.length
+    if (budget.left <= 0) {
+      next = at0
+      break
+    }
+    const rows = await fox.matchHistory(teams[at0]!.wallet_address, 20).catch(() => [] as MatchHistoryRow[])
+    for (const m of rows) {
+      if (!revealed(m) || (m.match_type !== 'ranked' && m.match_type !== 'tournament')) continue
+      const home = m.home_user_id
+      const away = m.away_user_id
+      if (typeof home !== 'number' || typeof away !== 'number' || own.has(home) || own.has(away)) continue
+      const at = Date.parse(m.finished_at ?? '')
+      if (!Number.isFinite(at) || at < since) continue
+      const key = m.tournament_match_id ? `t:${m.tournament_match_id}` : typeof m.id === 'number' ? `m:${m.id}` : null
+      if (!key || league.has(key)) continue
+      const tried = leagueTried.get(key)
+      if (tried !== undefined && now.getTime() - tried < LEAGUE_RETRY_MS) continue
+      if (!cache.get(key) && budget.left <= 0) {
+        next = at0
+        break teams
+      }
+      const f = await factsOf(fox, cache, budget, m)
+      if (!f) {
+        leagueTried.set(key, now.getTime())
+        if (leagueTried.size > 2000) leagueTried.delete(leagueTried.keys().next().value!)
+        continue
+      }
+      const kickoff = strengthAtKickoff(m, f)
+      league.put({
+        key, at: new Date(at).toISOString(), kind: m.match_type, homeUserId: home, awayUserId: away, home: f.home, away: f.away,
+        homeScore: m.home_score!, awayScore: m.away_score!, homeStrength: kickoff ? f.homeStrength : null, awayStrength: kickoff ? f.awayStrength : null,
+        homeElo: num(m.home_elo_at_match), awayElo: num(m.away_elo_at_match),
+      })
+    }
+  }
+  league.setCursor(next)
+}
+
+/** League matches whose statistics did not answer, with when they were tried (within the process; a restart tries them again). */
+const leagueTried = new Map<string, number>()
+const LEAGUE_RETRY_MS = 6 * 3600_000
+
 /** A rival's formations in its last revealed matches, newest first (only those read; an empty list is unknown). */
 async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: { left: number }, wallet: string, userId: number): Promise<string[]> {
   const out: string[] = []
@@ -435,7 +499,7 @@ export function auctionsShown(strongest: MarketListing[] | null, cheapest: Marke
   return out
 }
 
-export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache; marketSales?: MarketSalesCache } = {}): Promise<AgentSnapshot> {
+export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache; marketSales?: MarketSalesCache; league?: LeagueCache } = {}): Promise<AgentSnapshot> {
   const { chain, fox } = deps
   const warnings: string[] = []
   const wallet = 'wallet' in target ? target.wallet : null
@@ -564,6 +628,9 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       }
       rivalFormations.push({ tournamentId: m.tournament_id, opponent: m.opponent_name!, formations, strength })
     }
+    // The league formation table: a few more public matches of the top teams each plan, kept for the service's table.
+    const league = opts.league
+    if (league && board) await attempt(warnings, 'league matches', () => collectLeague(fox, facts, league, board.users, profile.id, now))
   }
 
   // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse.

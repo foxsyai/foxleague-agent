@@ -53,8 +53,8 @@ the dashboard or by chatting with it on Telegram.
 - **Fair play.** Public information only and a human pace. Your agents are never coordinated against anyone: each
   plays its own game as if it were alone, without knowing which teams are yours, so two of them may meet in a
   tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance (FoxLeague's Fair
-  Play forbids arranging results, not meeting). The one thing they share is a pooled formation record with no team
-  named. Guards against rivals who try to farm
+  Play forbids arranging results, not meeting). What they share is a pooled formation record with no team named
+  and a league formation table built from public matches. Guards against rivals who try to farm
   an agent (1v1s only against teams of similar strength, at most two played 1v1s a week each).
 - **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release.
   Every confirmed finding is fixed or decided; the few still open are listed
