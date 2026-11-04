@@ -1,11 +1,20 @@
 // Rate-limited JSON over HTTP. One limiter per upstream host is shared by every agent in the
 // process: FoxLeague's edge and the MultiversX public API limit per IP, not per wallet.
 
+/** The host of a request, never its path or query: a configured base URL may carry a provider's key (audit 2026-11-04, ATTACK-1). */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host
+  } catch {
+    return 'the server'
+  }
+}
+
 export class HttpError extends Error {
   readonly status: number
   readonly body: string
   constructor(status: number, body: string, url: string) {
-    super(`HTTP ${status} from ${url}: ${body.slice(0, 300)}`)
+    super(`HTTP ${status} from ${hostOf(url)}: ${body.slice(0, 300)}`)
     this.status = status
     this.body = body
   }
