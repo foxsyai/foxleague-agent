@@ -211,5 +211,5 @@ test('R2C-1 the README does not promise a rule the executor does not have (agent
   const readme = readFileSync(join(REPO, 'README.md'), 'utf8').replace(/\s+/g, ' ')
   assert.doesNotMatch(readme, /never a 1v1 or trade between your own agents/, 'README.md promises a check the executor does not have')
   assert.match(readme, /two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance/, 'the README says what the safety page says')
-  assert.match(readme, /What they share is a pooled formation record with no team named and a league formation table built from public matches/)
+  assert.match(readme, /What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests/)
 })

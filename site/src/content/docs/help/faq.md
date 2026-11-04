@@ -6,7 +6,7 @@ description: Common questions about the FoxLeague agent.
 ### Is an agent allowed in FoxLeague?
 
 Yes, within the Fair Play rules: automation on your own wallets for the actions the app offers. The agent uses only
-public information, plays at a human pace and never coordinates your agents against anyone: each plays its own game as if it were alone. What they share is a pooled formation record with no team named and a league formation table built from public matches. See
+public information, plays at a human pace and never coordinates your agents against anyone: each plays its own game as if it were alone. What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests. See
 [Safety and your limits](/play/safety/).
 
 ### Can it spend more than I allow?
@@ -36,7 +36,7 @@ Up to 5 active agents per computer by default. **+ Add agent** creates the next 
 same recovery words, its own settings and its own budget. An agent you no longer use can be retired: it leaves the
 tabs, stops playing and frees its place, and you can restore it later ([Retire and restore an
 agent](/use/dashboard/#retire-and-restore-an-agent)). One that was never used, with an empty wallet and no team, can
-be deleted ([Delete an agent](/use/dashboard/#delete-an-agent-that-was-never-used)). Each agent plays its own game as if it were alone and knows nothing of the others, so two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting). What they share is a pooled formation record with no team named and a league formation table built from public matches.
+be deleted ([Delete an agent](/use/dashboard/#delete-an-agent-that-was-never-used)). Each agent plays its own game as if it were alone and knows nothing of the others, so two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests.
 
 ### Can an agent run the team I already have?
 
