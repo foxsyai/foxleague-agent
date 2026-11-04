@@ -166,6 +166,10 @@ export interface AgentSnapshot {
   formationPool?: FormationRecord
   /** Planning snapshots only, added by the service: the public matches of the top teams by ELO, the owner's teams left out. */
   leagueFormations?: LeagueTable
+  /** Planning snapshots only, added by the service: the casual games of every team the install runs, by formation against the AI. */
+  casualBench?: FormationRecord
+  /** Planning snapshots only, added by the service: the casual games this agent started in the current game day. */
+  casualToday?: number
   /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
   rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null; strength?: number | null }[]
   leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null; bestXiOvr?: number | null })[]
@@ -288,22 +292,28 @@ function strengthAtKickoff(m: MatchHistoryRow, f: MatchFormations): boolean {
   return Number.isFinite(read) && Number.isFinite(end) && read - end <= RANKED_STRENGTH_READ_MS
 }
 
-/** The agent's results by its formation against the rival's, over its last 50 revealed matches. */
+/**
+ * The agent's results by its formation against the rival's, over its last 50 revealed matches. A casual game (against
+ * FoxLeague's AI) goes to the casual test bench instead; a ranked game the AI filled counts in neither (owner, 2026-11-04).
+ */
 async function formationRecord(fox: FoxLeague, cache: MatchFactsCache, address: string, userId: number): Promise<FormationRecord> {
   const budget = { left: OWN_READS_PER_TICK }
   const games: FormationMatch[] = []
+  const casual: FormationMatch[] = []
   let unread = 0
   for (const m of await fox.matchHistory(address, 50)) {
     if (!revealed(m)) continue
     const home = m.home_user_id === userId
     if (!home && m.away_user_id !== userId) continue
+    const isCasual = m.match_type === 'casual'
+    if (!isCasual && typeof (home ? m.away_user_id : m.home_user_id) !== 'number') continue
     const f = await factsOf(fox, cache, budget, m)
     if (!f) {
-      unread++
+      if (!isCasual) unread++
       continue
     }
     const [ms, ts] = !strengthAtKickoff(m, f) ? [null, null] : home ? [f.homeStrength, f.awayStrength] : [f.awayStrength, f.homeStrength]
-    games.push({
+    ;(isCasual ? casual : games).push({
       key: m.tournament_match_id ? `t:${m.tournament_match_id}` : `m:${m.id}`,
       at: m.finished_at ?? new Date(0).toISOString(),
       mine: home ? f.home : f.away,
@@ -314,7 +324,7 @@ async function formationRecord(fox: FoxLeague, cache: MatchFactsCache, address: 
       rivalUserId: home ? m.away_user_id : m.home_user_id,
     })
   }
-  return { ...summariseFormations(games, unread), games }
+  return { ...summariseFormations(games, unread), games, casual }
 }
 
 /**

@@ -32,7 +32,11 @@ export type Action =
   /** With `lineup` and `substitutes` (in the new formation's slot order) the eleven is saved right after the formation. */
   | { type: 'set_formation'; formation: string; lineup?: number[]; substitutes?: number[] }
   | { type: 'set_lineup'; lineup: number[]; substitutes: number[] }
-  | { type: 'play_match'; match_type: 'casual' | 'ranked' }
+  /**
+   * With `test` (casual only, owner 2026-11-04): the formation, eleven and bench of a test, saved for the start and the
+   * team's own put back right after it (FoxLeague plays a casual game with what was saved at its start).
+   */
+  | { type: 'play_match'; match_type: 'casual' | 'ranked'; test?: { formation: string; lineup: number[]; substitutes: number[] } }
   | { type: 'join_tournament'; tournament_id: number }
   | { type: 'leave_tournament'; tournament_id: number }
   /** Widen the OVR range of the agent's own open tournament or challenge (null removes a bound); nothing is paid. */
@@ -153,8 +157,15 @@ export function parseAction(raw: unknown): Action {
     }
     case 'set_lineup':
       return { type: o.type, lineup: nonces(o, 'lineup', 11, 11), substitutes: nonces(o, 'substitutes', 0, 7) }
-    case 'play_match':
-      return { type: o.type, match_type: oneOf(o, 'match_type', ['casual', 'ranked'] as const) }
+    case 'play_match': {
+      const match_type = oneOf(o, 'match_type', ['casual', 'ranked'] as const)
+      if (o.test === undefined) return { type: o.type, match_type }
+      if (match_type !== 'casual') throw new ParseError('test: only a casual game carries a test formation')
+      if (typeof o.test !== 'object' || o.test === null || Array.isArray(o.test)) throw new ParseError('test must be an object with formation, lineup and substitutes')
+      const t = o.test as Record<string, unknown>
+      const formation = oneOf(t, 'formation', Object.keys(FORMATION_SLOTS).filter(f => !FORMATIONS_COMING_SOON.has(f)))
+      return { type: o.type, match_type, test: { formation, lineup: nonces(t, 'lineup', 11, 11), substitutes: nonces(t, 'substitutes', 0, 7) } }
+    }
     case 'join_tournament':
     case 'leave_tournament':
     case 'claim_refund':
@@ -240,7 +251,7 @@ export function describeAction(a: Action): string {
     case 'train': return `train #${a.player_nonce} ${a.attribute}`
     case 'set_formation': return `formation ${a.formation}${a.lineup ? ` with lineup ${a.lineup.join(',')} | bench ${(a.substitutes ?? []).join(',')}` : ''}`
     case 'set_lineup': return `lineup ${a.lineup.join(',')} | bench ${a.substitutes.join(',')}`
-    case 'play_match': return `play ${a.match_type} match`
+    case 'play_match': return `play ${a.match_type} match${a.test ? ` (test ${a.test.formation}: lineup ${a.test.lineup.join(',')} | bench ${a.test.substitutes.join(',')})` : ''}`
     case 'join_tournament': return `join tournament T${a.tournament_id}`
     case 'leave_tournament': return `leave tournament T${a.tournament_id}`
     case 'widen_range': return `widen the OVR range of T${a.tournament_id}${a.ovr_min !== undefined ? `, minimum ${a.ovr_min ?? 'none'}` : ''}${a.ovr_max !== undefined ? `, maximum ${a.ovr_max ?? 'none'}` : ''}`

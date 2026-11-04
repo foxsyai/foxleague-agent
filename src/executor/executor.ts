@@ -26,7 +26,7 @@ import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budg
 import { SHOP_FINAL, SHOP_REFUNDED, creditShopPayment } from './pending.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
-import { lastMatchStarts } from './match-starts.ts'
+import { casualStartsSince, gameDayStart, lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -509,6 +509,7 @@ export class Executor {
       ...market,
       lastMatchStartAt: starts.match,
       lastRankedStartAt: starts.ranked,
+      casualToday: casualStartsSince(store, agent.index, gameDayStart(now, snap.gameDay.resetHourUtc)),
       now,
     }
   }
@@ -585,6 +586,37 @@ export class Executor {
       default:
         return none
     }
+  }
+
+  /**
+   * Saves a formation with its eleven and bench in one call (FoxLeague rc.78). Only FoxLeague's own refusal says nothing
+   * was saved; after any other failure the team read back decides, and a team that cannot be read back is no save.
+   */
+  private async saveEleven(wallet: AgentWallet, formation: string, lineup: number[], substitutes: number[]): Promise<void> {
+    try {
+      await this.d.fox.setLineup(wallet, lineup, substitutes, formation)
+    } catch (err) {
+      if (err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)) throw err
+      const team = await this.d.fox.team(wallet.address, wallet).then(t => (t && !t.hidden ? t : null), () => null)
+      if (!team || team.formation !== formation || team.lineup.join(',') !== lineup.join(',')) throw err
+    }
+  }
+
+  /**
+   * Puts the team's own formation, eleven and bench back after a casual test: tried twice, then read back. Null when it
+   * is back; otherwise what the next plan must do (the test formation would play every match until then).
+   */
+  private async putBack(wallet: AgentWallet, back: { formation: string; lineup: number[]; substitutes: number[] }, test: string): Promise<string | null> {
+    let why = ''
+    for (let i = 0; i < 2; i++) {
+      try {
+        await this.saveEleven(wallet, back.formation, back.lineup, back.substitutes)
+        return null
+      } catch (err) {
+        why = err instanceof Error ? err.message : String(err)
+      }
+    }
+    return `the test formation ${test} may still be saved: ${back.formation} could not be put back (${why}); put back ${back.formation} with set_formation, lineup ${back.lineup.join(',')} | bench ${back.substitutes.join(',')}`
   }
 
   /** Why a team name cannot be registered (FoxLeague's check before the fee), or null when it is free. */
@@ -891,6 +923,35 @@ export class Executor {
           applyEffect(a, v, snap, built)
           return `${desc}: match #${matchId} started (${a.match_type})${readBack}${paid === false ? '; the AI filled it: free, and the ticket stays for the next start' : ''}`
         }
+        if (a.test && snap.team) {
+          // The casual test bench (owner, 2026-11-04): FoxLeague plays a casual game with the formation and eleven saved
+          // at its start, so the test is saved, the game started and the team's own put back at once.
+          const t = a.test
+          const back = { formation: snap.team.formation, lineup: [...snap.team.lineup], substitutes: [...snap.team.substitutes] }
+          const same = (x: number[], y: number[]) => x.join(',') === y.join(',')
+          if (back.formation === t.formation && same(back.lineup, t.lineup) && same(back.substitutes, t.substitutes)) return finish('confirmed', await start())
+          try {
+            await this.saveEleven(wallet, t.formation, t.lineup, t.substitutes)
+          } catch (err) {
+            // Only FoxLeague's own refusal says nothing was saved; after any other failure the team's own goes back, and a
+            // put-back that fails too says what the next plan must do (agent review of PR #49).
+            if (!(err instanceof ApiRefusal && !/^unexpected answer/.test(err.message))) {
+              const restored = await this.putBack(wallet, back, t.formation)
+              if (restored) throw new Error(`${err instanceof Error ? err.message : String(err)}; ${restored}`)
+            }
+            throw err
+          }
+          let text: string
+          try {
+            text = await start()
+          } catch (err) {
+            const restored = await this.putBack(wallet, back, t.formation)
+            if (restored) throw new Error(`${err instanceof Error ? err.message : String(err)}; ${restored}`)
+            throw err
+          }
+          const restored = await this.putBack(wallet, back, t.formation)
+          return restored ? finish('error', `${text}; ${restored}`) : finish('confirmed', `${text}; ${back.formation} put back`)
+        }
         if (v.facts.ticket !== 'buy') return finish('confirmed', await start())
         // Pressed first, as FoxLeague's own app does: any other gate refuses with nothing paid, and only a real need for
         // a ticket reaches the payment. A refusal here goes to the caller's catch, which releases the booking.
@@ -1188,7 +1249,7 @@ function apiCallsFor(a: Action): string | null {
     case 'train': return `POST /api/training/train {player_nonce: ${a.player_nonce}, attribute: ${a.attribute}}`
     case 'set_formation': return a.lineup ? `POST /api/teams/lineup {formation: ${a.formation}}` : `POST /api/teams/formation {formation: ${a.formation}}`
     case 'set_lineup': return 'POST /api/teams/lineup'
-    case 'play_match': return `POST /api/matches/play {match_type: ${a.match_type}}`
+    case 'play_match': return a.test ? `POST /api/teams/lineup {formation: ${a.test.formation}}, POST /api/matches/play {match_type: casual}, POST /api/teams/lineup (the team's own back)` : `POST /api/matches/play {match_type: ${a.match_type}}`
     case 'join_tournament': return `POST /api/tournaments/${a.tournament_id}/join`
     case 'leave_tournament': return `POST /api/tournaments/${a.tournament_id}/leave (and /cancel for your own unaccepted 1v1)`
     case 'widen_range': return `POST /api/tournaments/${a.tournament_id}/ovr-range`
@@ -1240,7 +1301,8 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
       break
     case 'play_match':
       if (s.auth?.allowance) s.auth.allowance.today_count++
-      for (const n of s.team?.lineup ?? []) {
+      // A casual test is played by its own eleven; the team's own is back afterwards.
+      for (const n of a.test?.lineup ?? s.team?.lineup ?? []) {
         const p = card(n)
         if (p) { p.condition = Math.max(0, p.condition - 5); p.dirty = true }
       }

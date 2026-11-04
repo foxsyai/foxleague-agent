@@ -28,7 +28,7 @@ import { describeAction, parseAction, type PlannedAction } from './executor/acti
 import { budgetView } from './executor/budget.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
-import { lastMatchStarts } from './executor/match-starts.ts'
+import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
@@ -834,6 +834,10 @@ export class Service {
       if (snap.formationRecord?.games) this.store.putFormationResults(index, snap.profile.id, snap.formationRecord.games)
       snap.formationPool = this.store.formationPool()
       snap.leagueFormations = this.store.leagueFormations()
+      // The casual test bench (owner, 2026-11-04): the casual games of all of them, and this agent's count today.
+      if (snap.formationRecord?.casual) this.store.putCasualResults(index, snap.formationRecord.casual)
+      snap.casualBench = this.store.casualBench()
+      snap.casualToday = casualStartsSince(this.store, index, gameDayStart(new Date(), snap.gameDay.resetHourUtc))
     }
     this.noteTeams(index, snap)
     this.snapshots.set(index, snap)

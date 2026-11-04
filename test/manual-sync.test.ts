@@ -151,7 +151,7 @@ test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.m
   assert.match(server, /Ubuntu with systemd, on an x86-64 processor/, 'C3')
   // Owner, 2026-10-27: each agent plays alone; the pooled formation record is all they share (test/agents-alone.test.ts),
   // with the league formation table of public matches since 2026-11-04.
-  const shared = /What they share is a pooled formation record with no team named and a league formation table built from public matches/
+  const shared = /What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests/
   for (const f of [`${DOCS}/help/faq.md`, `${DOCS}/help/update.md`, 'INSTALL.md', 'README.md', `${DOCS}/play/safety.md`]) assert.match(read(f), shared, `C4 ${f}`)
   assert.match(read(`${DOCS}/help/costs.md`), /you are warned there, in the morning summary on Telegram \(at once with `\/updates all`\)/, 'C5')
   assert.match(read(`${DOCS}/help/troubleshooting.md`), /By default Telegram sends only the morning summary and urgent messages; send `\/updates all` for every plan and result as it happens/, 'C6')

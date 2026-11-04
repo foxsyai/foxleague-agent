@@ -67,7 +67,7 @@ Source priority used by the manual itself (EM:13): SEED > CC > CR defaults > con
 
 | Match type | Started by | Opponent | Counts toward the daily 5 | ELO | XP and competitive count | Condition cost | FOXSY |
 |---|---|---|---|---|---|---|---|
-| Casual | you | AI at your lineup's OVR | yes | no | no | 5, you only | none |
+| Casual | you | AI at your lineup's OVR, formation drawn at random | yes | no | no | 5, you only | none |
 | Ranked | you | a real team within 150/300/500 ELO, else AI | yes | K 9 against a real team, none against AI | no while ranked XP is off (launch) | 5, initiator only | none |
 | Bronze tournament | schedule | real | no | no | no | 10, both | none (free) |
 | Silver / Gold tournament | schedule | real | no | K 13 / K 17 | yes | 10, both | pool prizes |
@@ -424,4 +424,8 @@ among the called-up players by contribution. Nothing of it exists in the code on
 - **The agent's own checks (not FoxLeague rules).** The schedule check judges the squad at a tournament's start;
   Zeus compares a seated field with our eleven at the start; a plan spaces its casual and ranked matches 11 minutes
   apart and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
+  The casual test bench (owner, 2026-11-04): at most 4 casual games a game day, and only when every card that plays
+  is back to full condition before the next strategy lock of a tournament or 1v1 match (age-adjusted: the appearance
+  costs up to 3 times the base at 39 and a card over 30 regains half as fast), never while a 1v1 of ours waits for
+  an opponent, never while a tournament of ours is under way with no next match listed.
 

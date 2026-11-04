@@ -33,6 +33,8 @@ export interface RulesContext {
   /** Last match starts recorded by this agent (the cooldowns are not public). */
   lastMatchStartAt?: Date | null
   lastRankedStartAt?: Date | null
+  /** Casual games this agent started in the current game day (its own log). */
+  casualToday?: number
   /** Escrow the tournaments contract holds for this wallet (view getEntryAmount), for refund claims. */
   entryAmount?: bigint
   /** Fusion pre-check (GET /api/fusion/can-fuse) and the pool stock of the output, fetched for fuse. */
@@ -426,6 +428,59 @@ function regenPerHour(p: PlayerView, cfg: FoxConfig): number {
   return p.ageYears > 30 ? rate / 2 : rate
 }
 
+/** Casual games a game day: the owner's 1 to 3 tests a day, never more than 4 (2026-11-04). */
+export const CASUAL_PER_DAY = 4
+
+/** The condition an appearance costs a card: FoxLeague's base until age 30, rising evenly to 3 times it at 39 (Player Aging). */
+export function appearanceCost(p: PlayerView, base: number): number {
+  return base * (1 + 2 * Math.min(1, Math.max(0, (p.ageYears - 30) / 9)))
+}
+
+/**
+ * Why a casual game now would cost the next match that counts some condition, or null when it is free (owner,
+ * 2026-11-04): every card of `squad` (the eleven and bench that would play) must be back to full condition before the
+ * next strategy lock of a tournament or 1v1 match of ours, so the game takes nothing from that match. A 1v1 of ours that
+ * waits for an opponent can be accepted, and played minutes later, at any time; a tournament under way whose next match
+ * is not listed may play at any time; a calendar that cannot be read is no free time.
+ */
+export function casualCostRefusal(s: AgentSnapshot, squad: number[], now: Date): string | null {
+  const cfg = s.config
+  const upcoming = s.auth?.upcoming
+  const mine = s.auth?.myTournaments
+  if (!cfg || !upcoming || !mine) return 'your calendar could not be read: no casual game blind'
+  const waiting = mine.active.find(t => t.max_teams === 2 && NOT_STARTED_STATUSES.has(t.status))
+  if (waiting) return `your 1v1 T${waiting.id} waits for an opponent: it can be accepted at any time and played minutes later, so a casual game now could cost it condition`
+  const lead = (upcoming.lead_minutes ?? 30) * 60_000
+  const locks: { at: number; what: string }[] = []
+  for (const m of upcoming.matches) {
+    if (m.phase !== 'upcoming') continue
+    const lock = Date.parse(m.strategy_locks_at)
+    if (!Number.isFinite(lock)) return `the lock of your T${m.tournament_id} match could not be read`
+    locks.push({ at: lock, what: `your T${m.tournament_id} match locks at ${m.strategy_locks_at}` })
+  }
+  for (const t of mine.active) {
+    if (t.max_teams === 2) continue
+    if (NOT_STARTED_STATUSES.has(t.status)) {
+      const startsAt = Date.parse(t.starts_at)
+      if (!Number.isFinite(startsAt)) return `the start of your T${t.id} could not be read`
+      locks.push({ at: startsAt - lead, what: `your T${t.id} starts at ${t.starts_at}` })
+    } else if (!upcoming.matches.some(m => m.tournament_id === t.id && m.phase === 'upcoming')) {
+      return `your T${t.id} is under way and its next match is not listed yet: it may play at any time`
+    }
+  }
+  const next = locks.filter(l => l.at > now.getTime()).sort((x, y) => x.at - y.at)[0]
+  if (!next) return null
+  const hours = (next.at - now.getTime()) / 3600_000
+  const base = cfg.condition_loss_per_match_ranked ?? 5
+  for (const n of squad) {
+    const p = card(s, n)
+    if (!p) continue
+    const back = p.condition - appearanceCost(p, base) + regenPerHour(p, cfg) * hours
+    if (back < MAX_CONDITION) return `#${n} would not be back to full condition before ${next.what} (${Math.floor(back)} of ${MAX_CONDITION}): a casual game now would cost that match condition`
+  }
+  return null
+}
+
 /** Hours from `now` to an ISO time, 0 when it is past or unreadable. */
 export function hoursUntil(iso: string, now: Date): number {
   const h = (new Date(iso).getTime() - now.getTime()) / 3600_000
@@ -813,8 +868,20 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (busy) return refuse(s.auth?.upcoming ? `pre-match lockout: ${busy}` : `${busy} (the pre-match lockout is unknown): no match started blind`)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
-      const exhausted = s.team.lineup.filter(n => (card(s, n)?.condition ?? 0) <= 0)
+      // A casual test is played by its own eleven (agent review of PR #49).
+      const exhausted = (a.match_type === 'casual' && a.test ? a.test.lineup : s.team.lineup).filter(n => (card(s, n)?.condition ?? 0) <= 0)
       if (exhausted.length) return refuse(`starters at condition 0: ${exhausted.map(n => `#${n}`).join(',')}`)
+      if (a.match_type === 'casual') {
+        // The casual test bench (owner, 2026-11-04): an eleven that fits its formation, at most 4 a day, and only when
+        // the condition it costs is back before the next match that counts.
+        if (a.test) {
+          const fit = lineupVerdict(s, a.test.formation, a.test.lineup, a.test.substitutes, cfg.min_field_condition)
+          if (!fit.ok) return fit
+        }
+        if ((ctx.casualToday ?? 0) >= CASUAL_PER_DAY) return refuse(`${ctx.casualToday} casual games today already: ${CASUAL_PER_DAY} is the most a game day`)
+        const cost = casualCostRefusal(s, a.test ? [...a.test.lineup, ...a.test.substitutes] : [...s.team.lineup, ...s.team.substitutes], ctx.now)
+        if (cost) return refuse(cost)
+      }
       if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < MATCH_COOLDOWN_MS) return refuse('match cooldown (30 s)')
       if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < RANKED_COOLDOWN_MS) return refuse('ranked cooldown (15 min)')
       if (a.match_type === 'ranked' && levelsLive(cfg, ctx.now)) {

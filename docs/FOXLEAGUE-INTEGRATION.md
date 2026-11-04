@@ -863,7 +863,12 @@ Body `{wallet_address, match_type: "casual"|"ranked"}` (auth) (`backend/src/rout
 | 14 | Platform capacity (`match.sim_max_concurrent`, 3) | `Servers are busy with other matches right now {EM} please try again in a few seconds.` (1667-1729) |
 
 **Opponent** (`matches.rs:1531-1629`, `:7727-7840`): casual is always an AI team at your lineup's
-average OVR. Ranked picks a random real team within 150 ELO, then 300, then 500 that has a full
+average OVR, its players within a few points of it, with a formation drawn at random from the supported ones
+(`play_match`: `formation_registry::supported_ids()`, next-foxleague main `dd57cf4e7`). The home side plays the
+formation, eleven and bench saved when the game starts: `play_match` reads them and hands them to the match engine
+(`MatchSetup`), and the statistics name the formation from the launch record (`get_match_stats`, rc.27), so a change
+saved after the start touches neither the game nor its record. The agent's casual test bench (owner, 2026-11-04)
+rests on both: it saves the test formation, starts the game and puts the team's own back at once. Ranked picks a random real team within 150 ELO, then 300, then 500 that has a full
 11 + 7, at least 18 cards, no tournament match within 1 h and no match in flight; otherwise an AI
 stands in (no ELO change against the AI).
 

@@ -10,3 +10,20 @@ export function lastMatchStarts(store: Store, agentIndex: number, now: Date): { 
   const lastRanked = recent.find(r => r.summary.includes('ranked'))
   return { match: lastMatch ? new Date(lastMatch.at) : null, ranked: lastRanked ? new Date(lastRanked.at) : null }
 }
+
+/** When the current game day began: the last reset hour (UTC) at or before `now`. */
+export function gameDayStart(now: Date, resetHourUtc: number): Date {
+  const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), resetHourUtc))
+  if (start > now) start.setUTCDate(start.getUTCDate() - 1)
+  return start
+}
+
+/**
+ * Casual games this agent started since `since`, from its own log: confirmed and simulated starts, and a test whose
+ * start went through although putting the team's formation back did not (it counts in FoxLeague's allowance too).
+ */
+export function casualStartsSince(store: Store, agentIndex: number, since: Date): number {
+  return store
+    .activityOf(agentIndex, ['play_match'], since)
+    .filter(r => r.summary.includes('play casual match') && (r.status === 'confirmed' || r.status === 'dry_run' || r.summary.includes('started (casual)'))).length
+}

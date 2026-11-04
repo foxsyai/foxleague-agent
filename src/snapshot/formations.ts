@@ -1,5 +1,9 @@
 // What formation wins against which: one match per row (from FoxLeague's public match statistics), summed into the
-// agent's own formation record, the pooled record of every team the install runs and the league formation table.
+// agent's own formation record, the pooled record of every team the install runs, the league formation table and the
+// casual test bench.
+
+import { FORMATION_SLOTS, FORMATIONS_COMING_SOON } from '../executor/actions.ts'
+import type { PlayerView } from './snapshot.ts'
 
 /** One revealed match from a team's side: its formation, the rival's, the score and how much stronger it was. */
 export interface FormationMatch {
@@ -50,6 +54,8 @@ export interface FormationRecord {
   field: { formation: string; matches: number }[]
   /** The matches counted, kept for the pooled record (not shown to the plan). */
   games?: FormationMatch[]
+  /** The casual games read (against FoxLeague's AI), kept for the casual test bench, never counted here. */
+  casual?: FormationMatch[]
 }
 
 /** Results by formation pair, most played first. */
@@ -157,4 +163,25 @@ export function leagueTable(matches: LeagueMatch[], own: Set<number>): LeagueTab
     rows: all.rows.filter(r => r.mine !== r.theirs),
     field: [...all.field].sort((a, b) => b.matches - a.matches || a.formation.localeCompare(b.formation)),
   }
+}
+
+// ---- the casual test bench (owner, 2026-11-04) ----
+
+/** The bench counts the casual games of this many days; the store keeps 60. */
+export const CASUAL_DAYS = 40
+
+/**
+ * The next formations to test in a casual game: every formation the squad can field (a goalkeeper and enough defenders,
+ * midfielders and forwards free to play), the ones with the fewest tests on the bench first, so each formation's sample
+ * grows evenly; ties in FoxLeague's order of the formations.
+ */
+export function formationsToTest(players: PlayerView[], bench: FormationRecord | undefined): { formation: string; tests: number }[] {
+  const free = players.filter(p => !p.listed && !p.transferLockedUntil)
+  const count = (position: string) => free.filter(p => p.position === position).length
+  const tests = new Map((bench?.rows ?? []).map(r => [r.mine, r.played]))
+  return Object.entries(FORMATION_SLOTS)
+    .filter(([f, slots]) => !FORMATIONS_COMING_SOON.has(f) && count('GK') >= 1 && count('DEF') >= slots.DEF && count('MID') >= slots.MID && count('FWD') >= slots.FWD)
+    .map(([formation], i) => ({ formation, tests: tests.get(formation) ?? 0, i }))
+    .sort((a, b) => a.tests - b.tests || a.i - b.i)
+    .map(({ formation, tests }) => ({ formation, tests }))
 }

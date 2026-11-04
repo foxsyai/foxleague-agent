@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { agentName } from '../names.ts'
 import { DEFAULT_SETTINGS, type AgentSettings } from './settings.ts'
 import type { MatchFormations } from '../foxleague/types.ts'
-import { LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
+import { CASUAL_DAYS, LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
 import type { MarketSale } from '../snapshot/market.ts'
 
 export interface AgentRow {
@@ -161,6 +161,17 @@ export class Store {
         rival_user_id INTEGER,
         mine TEXT NOT NULL,
         theirs TEXT NOT NULL,
+        gf INTEGER NOT NULL,
+        ga INTEGER NOT NULL,
+        edge REAL,
+        PRIMARY KEY (agent_idx, match_key)
+      );
+      CREATE TABLE IF NOT EXISTS casual_results (
+        agent_idx INTEGER NOT NULL,
+        match_key TEXT NOT NULL,
+        at TEXT NOT NULL,
+        mine TEXT NOT NULL,
+        ai TEXT NOT NULL,
         gf INTEGER NOT NULL,
         ga INTEGER NOT NULL,
         edge REAL,
@@ -441,6 +452,21 @@ export class Store {
       .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[])
       .filter(r => r.rival_user_id === null || !own.has(Number(r.rival_user_id)))
     return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: r.theirs, gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: r.rival_user_id })))
+  }
+
+  /** An agent's casual games (against FoxLeague's AI), kept for the casual test bench; read again each plan, stored once, kept 60 days. */
+  putCasualResults(index: number, games: FormationMatch[]): void {
+    const put = this.db.prepare('INSERT INTO casual_results (agent_idx, match_key, at, mine, ai, gf, ga, edge) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(agent_idx, match_key) DO NOTHING')
+    for (const g of games) put.run(index, g.key, g.at, g.mine, g.theirs, g.gf, g.ga, g.edge)
+    this.db.prepare('DELETE FROM casual_results WHERE at < ?').run(new Date(Date.now() - 60 * 86_400_000).toISOString())
+  }
+
+  /** The casual test bench: the casual games of every team the install runs in the last 40 days, by formation against the AI. */
+  casualBench(): FormationRecord {
+    const rows = this.db
+      .prepare('SELECT match_key, at, mine, gf, ga, edge FROM casual_results WHERE at >= ?')
+      .all(new Date(Date.now() - CASUAL_DAYS * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; gf: number; ga: number; edge: number | null }[]
+    return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: 'AI', gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: null })))
   }
 
   /** The FoxLeague user ids of the install's own teams: every one the store keeps (agent_user_id:N) and every one with rows in the pooled record. */
