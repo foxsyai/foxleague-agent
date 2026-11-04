@@ -153,7 +153,8 @@ test('AL5 an earlier refusal of the removed rules is flagged as no longer holdin
   assert.doesNotMatch(plan('bid 700 FOXSY on #20: refused: bid exceeds the per-action maximum'), /## Earlier entries/)
 })
 
-test('AL6 the owner-facing pages say each agent plays alone, sharing only the pooled formation record', () => {
+// Owner, 2026-11-04: they also share the league formation table, built from public matches of other teams.
+test('AL6 the owner-facing pages say each agent plays alone, sharing only the pooled formation record and the league formation table', () => {
   const pages = ['README.md', 'INSTALL.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/help/faq.md', 'site/src/content/docs/play/safety.md', 'site/src/content/docs/play/how-it-plays.md', 'site/src/content/docs/play/strategy-levels.md']
   for (const f of pages) {
     const page = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
@@ -162,7 +163,7 @@ test('AL6 the owner-facing pages say each agent plays alone, sharing only the po
   for (const f of pages.slice(0, 5)) {
     const page = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
     assert.match(page, /plays its own game as if it were alone/, f)
-    assert.match(page, /The one thing they share is a pooled formation record with no team named/, f)
+    assert.match(page, /What they share is a pooled formation record with no team named and a league formation table built from public matches/, f)
   }
   assert.doesNotMatch(readFileSync(new URL('../src/strategist/prompt.ts', import.meta.url), 'utf8'), OWN_RULE, 'the prompt names no such rule')
 })

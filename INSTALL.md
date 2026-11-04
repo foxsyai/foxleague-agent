@@ -122,7 +122,8 @@ Press **+ Add agent** in the dashboard. Each agent has its own wallet from the s
 file in `pem/`, its own settings and strategy. Fund it like the first one. Each agent plays its own game as if it
 were alone and knows nothing of the others, so two of them may meet in a tournament or a 1v1, bid on the same card
 or buy a card from each other at auction, by chance: FoxLeague's Fair Play allows that (it forbids arranging
-results, not meeting). The one thing they share is a pooled formation record with no team named.
+results, not meeting). What they share is a pooled formation record with no team named and a league formation
+table built from public matches.
 
 ## What it costs
 

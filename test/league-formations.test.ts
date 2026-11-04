@@ -1,0 +1,234 @@
+// Owner, 2026-11-04: every agent had moved to 4-3-3b from its own record and the pooled one, but none had ever played
+// plain 4-3-3 or 4-3-3w, so nothing told the plan what those do. FoxLeague's public match history and statistics show
+// what every team played. The league formation table counts the public matches of the top 100 teams by ELO, by
+// formation pair, by strength band and as the ELO underdog, so the plan learns from the whole league and not only from
+// what its owner's teams happened to try.
+
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { takeSnapshot } from '../src/snapshot/snapshot.ts'
+import { renderDigest } from '../src/snapshot/digest.ts'
+import { leagueTable, summariseFormations, type LeagueMatch, type LeagueTable } from '../src/snapshot/formations.ts'
+import { Store } from '../src/store/db.ts'
+import { ADDR, dryWallet, snapshot } from './fixtures.ts'
+
+type Row = Record<string, unknown>
+const HOUR = 3600_000
+// Finished `hoursAgo` hours ago (1 by default); a key of digits is a ranked match, any other a tournament match.
+const row = (key: string, home: number | null, away: number | null, score: [number, number] | null, more: Row = {}, hoursAgo = 1): Row => ({
+  id: /^\d+$/.test(key) ? Number(key) : null, tournament_match_id: /^\d+$/.test(key) ? null : key,
+  home_user_id: home, away_user_id: away, home_team_name: `T${home}`, away_team_name: `T${away}`,
+  home_score: score?.[0] ?? null, away_score: score?.[1] ?? null, match_type: /^\d+$/.test(key) ? 'ranked' : 'tournament',
+  status: score ? 'finished' : 'scheduled', finished_at: score ? new Date(Date.now() - hoursAgo * HOUR).toISOString() : null,
+  home_elo_at_match: 1400, away_elo_at_match: 1400, tournament_id: null, ...more,
+})
+const facts = (home: string, away: string, homeStrength = 1500, awayStrength = 1500) => ({ home, away, homeStrength, awayStrength })
+const user = (id: number, wallet: string, elo = 1500) => ({ id, wallet_address: wallet, elo_rating: elo, team_name: `T${id}`, league: 'Silver', matches_won: 0, matches_lost: 0, matches_drawn: 0 })
+
+function fakes(o: { users: Row[]; history: Record<string, Row[] | Error>; facts: Record<string, unknown> }) {
+  const reads: string[] = []
+  const histories: string[] = []
+  const fox: Record<string, unknown> = {
+    config: async () => snapshot().config,
+    user: async (a: string) => (a === ADDR ? snapshot().profile : null),
+    team: async () => snapshot().team,
+    players: async () => [],
+    tournaments: async () => [],
+    leaderboard: async () => ({ users: o.users, total: o.users.length, limit: 200, offset: 0 }),
+    listings: async () => [],
+    floorPrices: async () => [],
+    shopStatus: async () => snapshot().auth!.shop,
+    dailyAllowance: async () => snapshot().auth!.allowance,
+    activeMatch: async () => null,
+    myTournaments: async () => ({ active: [], completed: [] }),
+    upcomingMatches: async () => ({ lead_minutes: 30, my_team_name: 'Agent', matches: [] }),
+    challengesForMe: async () => [],
+    matchHistory: async (a: string) => {
+      if (a !== ADDR) histories.push(a)
+      const h = o.history[a] ?? []
+      if (h instanceof Error) throw h
+      return h
+    },
+    matchFormations: async (m: Row) => {
+      const key = String(m.tournament_match_id ?? m.id)
+      reads.push(key)
+      const f = o.facts[key]
+      if (f instanceof Error) throw f
+      return f ?? null
+    },
+  }
+  const chain = { account: async () => ({ balance: 0n, nonce: 1 }), esdts: async () => [], egldUsd: async () => 25, query: async () => { throw new Error('no pool in this test') } }
+  return { deps: { chain, fox } as never, reads, histories }
+}
+
+function cache() {
+  const m = new Map<string, unknown>()
+  return { get: (k: string) => m.get(k) as never, put: (k: string, v: unknown) => void m.set(k, v) }
+}
+
+const plan = (deps: never, store: Store, facts = cache()) => takeSnapshot(deps, { wallet: dryWallet }, new Date(), { matchFacts: facts, league: store.leagueCache() } as never)
+const rowsOf = (t: LeagueTable) => t.rows.map(r => `${r.mine} vs ${r.theirs} ${r.played} W${r.won} D${r.drawn} L${r.lost}`)
+
+test('LF1: the league table counts the matches of the top teams from both sides, without AI, casual, own teams or same-formation rows', async () => {
+  const store = new Store('', ':memory:')
+  store.setKv('agent_user_id:2', '101') // another team the owner runs here
+  const { deps } = fakes({
+    users: [user(100, ADDR), user(201, 'wA'), user(202, 'wB'), user(101, 'wOwn')],
+    history: {
+      wA: [
+        row('1', 201, 300, [2, 1]),
+        row('2', 201, null, [3, 0], { match_type: 'ranked' }), // the AI stood in
+        row('3', 201, null, [1, 0], { match_type: 'casual' }),
+        row('4', 201, 101, [0, 1]), // against one of the owner's teams
+        row('5', 100, 201, [1, 1]), // against this agent itself
+        row('TA', 201, 202, [1, 1]),
+        row('TB', 201, 300, null), // not played yet
+      ],
+      wB: [row('TA', 201, 202, [1, 1]), row('6', 202, 400, [0, 2]), row('7', 202, 400, [1, 0], {}, 20 * 24)],
+      wOwn: [row('8', 101, 500, [5, 0])],
+    },
+    facts: { 1: facts('4-3-3', '4-3-3b'), 2: facts('4-3-3', '4-4-2'), 3: facts('4-3-3', '4-4-2'), 4: facts('4-3-3', '4-4-2'), 5: facts('4-3-3', '4-4-2'), TA: facts('4-3-3', '4-3-3'), 6: facts('4-4-2', '4-3-3'), 7: facts('4-4-2', '4-3-3'), 8: facts('4-4-2', '4-3-3') },
+  })
+  await plan(deps, store)
+  const t = store.leagueFormations()
+  assert.equal(t.matches, 3, 'm:1, t:TA (read from both teams, kept once) and m:6; m:7 is older than 14 days')
+  assert.equal(t.teams, 4)
+  assert.deepEqual(rowsOf(t).sort(), ['4-3-3 vs 4-3-3b 1 W1 D0 L0', '4-3-3 vs 4-4-2 1 W1 D0 L0', '4-3-3b vs 4-3-3 1 W0 D0 L1', '4-4-2 vs 4-3-3 1 W0 D0 L1'])
+  assert.deepEqual(t.field, [{ formation: '4-3-3', matches: 4 }, { formation: '4-3-3b', matches: 1 }, { formation: '4-4-2', matches: 1 }], 'each side of each match once, the same-formation match too')
+})
+
+test('LF2: each plan reads 3 team histories and at most 6 new matches, newest first, and the next plan moves on to the next teams', async () => {
+  const store = new Store('', ':memory:')
+  const teams = [1, 2, 3, 4, 5].map(i => user(200 + i, `w${i}`))
+  const history: Record<string, Row[]> = {}
+  const all: Record<string, unknown> = {}
+  for (const i of [1, 2, 3, 4, 5]) {
+    history[`w${i}`] = [0, 1, 2, 3].map(j => row(String(i * 10 + j), 200 + i, 300 + j, [1, 0], {}, 1 + j))
+    for (const j of [0, 1, 2, 3]) all[String(i * 10 + j)] = facts('4-3-3', '4-4-2')
+  }
+  const one = fakes({ users: teams, history, facts: all })
+  await plan(one.deps, store)
+  assert.deepEqual(one.histories, ['w1', 'w2', 'w3'])
+  assert.deepEqual(one.reads, ['10', '11', '12', '13', '20', '21'])
+  const two = fakes({ users: teams, history, facts: all })
+  await plan(two.deps, store)
+  assert.deepEqual(two.histories, ['w4', 'w5', 'w1'])
+  assert.deepEqual(two.reads, ['40', '41', '42', '43', '50', '51'], 'the kept matches of w1 are not read again')
+  assert.equal(store.leagueFormations().matches, 12)
+})
+
+test('LF3: a ranked match read more than 6 hours after its end counts its result but no strength; a tournament match keeps its kickoff strengths', async () => {
+  const store = new Store('', ':memory:')
+  const { deps } = fakes({
+    users: [user(201, 'wA')],
+    history: { wA: [row('1', 201, 300, [2, 0], {}, 8), row('TA', 201, 300, [0, 1], {}, 8)] },
+    facts: { 1: facts('4-3-3', '4-4-2', 1800, 1500), TA: facts('4-3-3', '4-4-2', 1300, 1500) },
+  })
+  await plan(deps, store)
+  const t = store.leagueFormations()
+  assert.equal(t.matches, 2)
+  assert.equal(t.withStrength, 1, 'only the tournament match')
+  const r = t.rows.find(x => x.mine === '4-3-3')!
+  assert.deepEqual(r.bands, { stronger: [0, 0, 0], even: [0, 0, 0], weaker: [0, 0, 1] }, 'the ranked win is in no band')
+})
+
+test('LF4: a failed history or statistics read is skipped and read again later, never kept as anything', async () => {
+  const store = new Store('', ':memory:')
+  const users = [user(201, 'wA'), user(202, 'wB')]
+  const f: Record<string, unknown> = { 1: new Error('HTTP 502'), 2: facts('4-3-3', '4-4-2') }
+  const one = fakes({ users, history: { wA: new Error('HTTP 500'), wB: [row('1', 202, 300, [1, 0]), row('2', 202, 301, [0, 0])] }, facts: f })
+  await plan(one.deps, store)
+  assert.equal(store.leagueFormations().matches, 1, 'm:2 only')
+  f[1] = facts('4-3-3b', '4-4-2')
+  const two = fakes({ users, history: { wA: [], wB: [row('1', 202, 300, [1, 0]), row('2', 202, 301, [0, 0])] }, facts: f })
+  await plan(two.deps, store)
+  assert.deepEqual(two.reads, ['1'])
+  assert.equal(store.leagueFormations().matches, 2)
+})
+
+test('LF5: each pairing also counts its results as the ELO underdog (rated more than 100 below the rival at kickoff)', () => {
+  const g = (gf: number, ga: number, eloGap: number | null) => ({ key: `k${Math.random()}`, at: new Date().toISOString(), mine: '4-3-3', theirs: '4-3-3b', gf, ga, edge: null, rivalUserId: 1, eloGap })
+  const [r] = summariseFormations([g(1, 0, -150), g(0, 2, -101), g(1, 1, -100), g(2, 0, 50), g(0, 0, null)]).rows
+  assert.deepEqual(r!.underdog, [1, 0, 1])
+  const [own] = summariseFormations([{ key: 'k', at: '', mine: '4-3-3', theirs: '4-4-2', gf: 1, ga: 0, edge: null, rivalUserId: 1 }]).rows
+  assert.equal(own!.underdog, undefined, 'a record without ELO has no underdog count')
+  const m = (homeElo: number | null, awayElo: number | null): LeagueMatch => ({ key: `m:${Math.random()}`, at: new Date().toISOString(), kind: 'ranked', homeUserId: 1, awayUserId: 2, home: '4-3-3', away: '4-3-3b', homeScore: 2, awayScore: 1, homeStrength: null, awayStrength: null, homeElo, awayElo })
+  const t = leagueTable([m(1300, 1450), m(null, 1450)], new Set())
+  assert.deepEqual(t.rows.find(r => r.mine === '4-3-3')!.underdog, [1, 0, 0], 'the home side was 150 below and won; an unknown ELO is no gap')
+  assert.deepEqual(t.rows.find(r => r.mine === '4-3-3b')!.underdog, [0, 0, 0])
+})
+
+test('LF6: the store keeps a match once, prunes after 30 days, counts 14 days and leaves out a team of the owner learned later', () => {
+  const store = new Store('', ':memory:')
+  const m = (key: string, days: number, home = 1, away = 2): LeagueMatch => ({ key, at: new Date(Date.now() - days * 86_400_000).toISOString(), kind: 'ranked', homeUserId: home, awayUserId: away, home: '4-3-3', away: '4-4-2', homeScore: 1, awayScore: 0, homeStrength: null, awayStrength: null, homeElo: null, awayElo: null })
+  store.putLeagueMatch(m('m:1', 1))
+  store.putLeagueMatch(m('m:1', 1))
+  store.putLeagueMatch(m('m:2', 20))
+  store.putLeagueMatch(m('m:3', 1, 3, 4))
+  assert.equal(store.hasLeagueMatch('m:2'), true, 'kept 30 days')
+  assert.equal(store.leagueFormations().matches, 2, 'm:1 and m:3; m:2 is older than 14 days')
+  store.putLeagueMatch(m('m:4', 31))
+  assert.equal(store.hasLeagueMatch('m:4'), false, 'pruned')
+  store.setKv('agent_user_id:5', '3')
+  assert.equal(store.leagueFormations().matches, 1, 'm:3 was against a team the owner runs')
+})
+
+test('LF7: the plan sees the league table, pairings of fewer than 8 matches left out', () => {
+  const s = snapshot() as ReturnType<typeof snapshot> & { leagueFormations?: LeagueTable }
+  const bands = { stronger: [0, 0, 0] as [number, number, number], even: [10, 4, 6] as [number, number, number], weaker: [2, 1, 5] as [number, number, number] }
+  s.leagueFormations = {
+    matches: 640, teams: 92, withStrength: 410,
+    rows: [
+      { mine: '4-3-3', theirs: '4-3-3b', played: 40, won: 18, drawn: 8, lost: 14, goalsFor: 60, goalsAgainst: 50, edge: 1, bands, underdog: [3, 1, 4] },
+      { mine: '5-2-3', theirs: '4-3-3b', played: 7, won: 5, drawn: 0, lost: 2, goalsFor: 12, goalsAgainst: 6, edge: 0, bands, underdog: [0, 0, 0] },
+    ],
+    field: [{ formation: '4-3-3b', matches: 700 }, { formation: '4-3-3', matches: 420 }],
+  }
+  const d = renderDigest(s)
+  assert.match(d, /League formation table \(the public matches of the top 100 teams by ELO in the last 14 days, your owner's teams left out, names not shown: 640 matches between 92 teams, 410 with both strengths known; each match counted from both sides, same-formation matches left out, pairings of fewer than 8 matches not shown; underdog = rated more than 100 ELO below the rival at kickoff\):/)
+  assert.match(d, /\n {2}4-3-3 vs 4-3-3b: 40 played, W18 D8 L14, goals 60-50, strength edge \+1%; by strength: even W10 D4 L6, weaker W2 D1 L5; as the ELO underdog: W3 D1 L4\n/)
+  assert.doesNotMatch(d, /5-2-3 vs 4-3-3b/)
+  assert.match(d, /Formations the league played \(each side of each match once\): 4-3-3b 700, 4-3-3 420/)
+  s.leagueFormations = { matches: 0, teams: 0, withStrength: 0, rows: [], field: [] }
+  assert.doesNotMatch(renderDigest(s), /League formation table/)
+})
+
+test('LF8: a planning snapshot collects league matches and carries the table; the checks before an action read nothing', async () => {
+  const { mkdtempSync } = await import('node:fs')
+  const { tmpdir } = await import('node:os')
+  const { join } = await import('node:path')
+  const { Mnemonic } = await import('@multiversx/sdk-core')
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service({ mnemonic: Mnemonic.generate().toString(), dataDir: mkdtempSync(join(tmpdir(), 'foxagent-')), gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9', gatewayRps: 5, apiRps: 1, foxleagueRps: 5, isServer: false, defaultDryRun: true, maxAgents: 3 } as never)
+  svc.ensureAgents()
+  ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
+  const fail = async () => { throw new Error('offline') }
+  let histories = 0
+  const fakeFox: Record<string, unknown> = {
+    user: async () => snapshot().profile,
+    team: async () => snapshot().team,
+    players: async () => [],
+    leaderboard: async () => ({ users: [user(201, 'wA')], total: 1, limit: 200, offset: 0 }),
+    matchHistory: async (a: string) => {
+      if (a !== 'wA') return []
+      histories++
+      return [row('11', 201, 300, [2, 0])]
+    },
+    matchFormations: async () => facts('4-3-3', '4-3-3b'),
+  }
+  const fox = svc.fox as unknown as Record<string, unknown>
+  for (const client of [svc.chain, svc.fox] as unknown as Record<string, unknown>[]) {
+    for (const k of Object.getOwnPropertyNames(Object.getPrototypeOf(client))) if (k !== 'constructor' && typeof client[k] === 'function') client[k] = (client === fox ? fakeFox[k] : undefined) ?? fail
+  }
+  const planned = await (svc as unknown as { snapshot(i: number, plan: boolean): Promise<{ leagueFormations?: LeagueTable }> }).snapshot(0, true)
+  assert.equal(planned.leagueFormations?.matches, 1)
+  const check = await (svc as unknown as { snapshot(i: number): Promise<{ leagueFormations?: unknown }> }).snapshot(0)
+  assert.equal(check.leagueFormations, undefined)
+  assert.equal(histories, 1, 'the check before an action read no history')
+})
+
+test('LF9: the prompt tells the plan to weigh the league table, and to look at its weaker band and underdog results against a stronger rival', async () => {
+  const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
+  assert.match(SYSTEM_PROMPT, /The league formation table adds the public matches of the top teams by ELO/)
+  assert.match(SYSTEM_PROMPT, /against a stronger rival look at its weaker band and its underdog results/)
+})

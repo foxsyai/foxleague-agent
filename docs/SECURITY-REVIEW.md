@@ -1045,3 +1045,21 @@ FoxLeague upgraded its tournaments contract on mainnet at 11:46 UTC on 2026-11-0
 Stays open:
 - Before 2026-11-09 14:00 UTC FoxLeague still sets the private fee to 20 (the contract's `setPrivatePlatformFee` and its own setting together) and turns `leave_lock_live` on; the agent reads both and needs no change.
 - The two stale lines of FoxLeague's manual (Shop: ticket 100 FOXSY; Tournaments: private Bronze "for now") are still in `6c7f26166`.
+
+## The league formation table, 2026-11-04
+
+The owner's direction after reading the formation results: every agent had moved to 4-3-3b from its own record and
+the pooled one, and none had ever played plain 4-3-3 or 4-3-3w, so nothing told the plan what those do. FoxLeague's
+public match history and statistics show what every team played. Test first: `test/league-formations.test.ts`, each
+test seen failing before the change. No cap, limit, rule or money path changed; the executor never reads the table.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LF1 | design | The agents learned only from formations their owner's teams had played, so a formation none of them tried was never weighed, and "what lifts a weaker team against a stronger one" had no sample beyond their own matches | Each planning snapshot reads the history of the next 3 of the leaderboard's top 100 by ELO, in turn, and at most 6 new match statistics (newest first, each match kept once). The table counts the last 14 days by formation pair, from both sides, with the strength bands and the results as the ELO underdog (more than 100 below the rival at kickoff, from the history's ELO at the match). The prompt names it in one sentence. |
+| LF2 | info | What reaches the prompt is FoxLeague's formation names and numbers, never a team name: formations pass through `txt()` like the other records, and a match between a top team and one of the owner's teams is left out (their records hold it), also one of a team the store learns later | None needed beyond the design: no rival text is stored (`league_matches` keeps user ids, formations, scores, strengths and ELO). |
+| LF3 | info | Load on FoxLeague: 3 history reads and at most 6 statistics reads (about 120 KB each) per plan, after the agent's own reads; with 10 agents planning hourly about 60 statistics an hour | The constants sit in `src/snapshot/formations.ts` (`LEAGUE_TEAMS_PER_TICK`, `LEAGUE_READS_PER_TICK`); a failed read is skipped and read again when its team comes round. |
+| LF4 | info | Unknown is not a value: a ranked match read more than 6 hours after its end keeps its result but no strength (FoxLeague rebuilds a ranked match's elevens from today's cards), a missing ELO is no gap, AI and casual games are never counted | As in the formation record (`strengthAtKickoff`); a failed history or statistics read keeps nothing. |
+
+Stays open:
+- The casual matches as a test bench (the AI opponent is built at the team's own OVR with a random formation), to be
+  weighed once a ranked start costs a ticket (2026-11-09); results against the AI would need their own record.
