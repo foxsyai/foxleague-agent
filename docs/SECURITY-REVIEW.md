@@ -1064,4 +1064,26 @@ test seen failing before the change. No cap, limit, rule or money path changed; 
 
 Stays open:
 - The casual matches as a test bench (the AI opponent is built at the team's own OVR with a random formation), to be
-  weighed once a ranked start costs a ticket (2026-11-09); results against the AI would need their own record.
+  weighed once a ranked start costs a ticket (2026-11-09); results against the AI would need their own record. Done:
+  the owner asked for it at once (next section).
+
+## The casual test bench, 2026-11-04
+
+The owner's direction: test every formation in casual games, 1 to 3 a day and never more than 4, whenever the condition
+they cost is back before the matches that count, rotating through the formations so each one's sample grows evenly,
+and weigh those results with the league formation table. FoxLeague plays a casual game against an AI built at the
+team's own OVR with a random formation, with the formation, eleven and bench saved at the start; its statistics name the
+formation from the launch record (next-foxleague `play_match`, `get_match_stats`). Test first:
+`test/casual-bench.test.ts`, each test seen failing before the change. No cap, payment or signature changed: a casual
+game costs no FOXSY, and the test is three calls to FoxLeague's API.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CB1 | design | A formation test meant saving another formation for a while, and a plan's actions run at moments spread over the hour, so a tournament lock, a 1v1 capture or a ranked draw in between would have played the test formation | `play_match` casual takes a `test` (formation, eleven, bench); the executor saves it, starts the game and puts the team's own back at once, all in one action. A start FoxLeague refuses puts it back too; a put-back that fails twice is an error naming the formation still saved and the one to put back, which the next plan reads in its log. |
+| CB2 | design | Casual costs condition, which a match that counts may need | Rules (code): at most 4 casual games a game day; every card that would play must be back to full condition before the next strategy lock of a tournament or 1v1 match (the appearance's cost rises with age to 3 times the base at 39; a card over 30 regains half as fast); none while a 1v1 of ours waits for an opponent (it can be accepted and played minutes later) or while a tournament of ours is under way with no next match listed; a calendar that cannot be read is no free time. The digest says whether a casual game is free now and why not. |
+| CB3 | design | Results against the AI would have mixed into the formation record and the pooled one | A casual game goes to its own record, pooled over the owner's teams for 40 days (`casual_results`), shown by formation against the AI; a ranked game the AI filled goes into neither. The snapshot names the next formations to test: the ones the squad can field, the least tested first. |
+| CB4 | info | A casual start takes one of the 5 daily starts it shares with ranked, and ranked is what moves ELO (the leaderboard that Champions FoxLeague invites from) | The prompt keeps enough ranked games for ELO until ranked costs a ticket, and calls casual the free way to test once it does. |
+
+Stays open:
+- A crash between saving the test formation and putting the team's own back (a restart in those seconds) leaves the test
+  formation saved with no log line; the next plan sees the formation in its snapshot.

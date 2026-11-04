@@ -33,6 +33,14 @@ An empty plan is a good answer too: the agent never spends just because budget i
   ranked cooldown (15 minutes in the game; the plan spaces ranked games 16 minutes apart to be sure), counting the last match before the plan; a match that no longer
   fits waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
+- **Casual test bench**: FoxLeague plays a casual game against an AI built at your team's own OVR with a random
+  formation, so it is a fair, free test of a formation (no ELO, XP or FOXSY; 5 condition for each player who plays and
+  one of the 5 daily starts). The agent plays 1 to 3 such tests a day, never more than 4, and only when every card that
+  plays is back to full condition before your next tournament or 1v1 match (never while a 1v1 of yours waits for an
+  opponent). It rotates through every formation your squad can field, the least tested first. For each test it saves
+  the test formation, starts the game and puts your formation back at once. The results of all your agents form one
+  test bench, apart from the formation record, and the agent weighs it with the league table and its own record
+  before it changes its formation.
 - **Competition levels**: once FoxLeague switches them on, a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament then has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
 
 ## Competition

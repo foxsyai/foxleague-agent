@@ -2,11 +2,11 @@
 
 import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
+import { CASUAL_PER_DAY, casualCostRefusal, conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
-import { ELO_BAND, EVEN_BAND, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
+import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
 
@@ -272,6 +272,16 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`League formation table (the public matches of the top ${LEAGUE_TEAMS} teams by ELO in the last ${LEAGUE_DAYS} days, your owner's teams left out, names not shown: ${league.matches} matches between ${league.teams} teams, ${league.withStrength} with both strengths known; each match counted from both sides, same-formation matches left out, pairings of fewer than ${LEAGUE_MIN_PLAYED} matches not shown; underdog = rated more than ${ELO_BAND} ELO below the rival at kickoff):`)
     for (const r of league.rows.filter(x => x.played >= LEAGUE_MIN_PLAYED).slice(0, 30)) out.push(`  ${formationRow(r)}`)
     if (league.field.length) out.push(`Formations the league played (each side of each match once): ${league.field.map(f => `${txt(f.formation, 12)} ${f.matches}`).join(', ')}`)
+  }
+  const bench = s.casualBench
+  if (bench) {
+    out.push(bench.matches ? `Casual test bench (the casual games of every team your owner runs here in the last ${CASUAL_DAYS} days, against FoxLeague's AI built at the team's own OVR with a random formation; no ELO, XP or FOXSY):` : 'Casual test bench: no casual test played yet')
+    for (const r of bench.rows) out.push(`  ${formationRow(r)}`)
+    const next = formationsToTest(s.players, bench)
+    if (next.length) out.push(`Next formations to test (fewest casual tests first, ones your squad can field): ${next.map(f => `${f.formation} ${f.tests}`).join(', ')}`)
+    if (typeof s.casualToday === 'number') out.push(`Casual games today: ${s.casualToday} of ${CASUAL_PER_DAY}`)
+    const why = s.team ? casualCostRefusal(s, [...s.team.lineup, ...s.team.substitutes], new Date(s.takenAt)) : 'your team could not be read'
+    out.push(why ? `Casual game now: not free: ${why}` : 'Casual game now: free for your saved eleven and bench (each back to full condition before your next match that counts)')
   }
 
   const m = s.market
