@@ -471,13 +471,17 @@ export function casualCostRefusal(s: AgentSnapshot, squad: number[], now: Date):
   const next = locks.filter(l => l.at > now.getTime()).sort((x, y) => x.at - y.at)[0]
   if (!next) return null
   const hours = (next.at - now.getTime()) / 3600_000
-  const base = cfg.condition_loss_per_match_ranked ?? 5
+  // Unknown is not a value (OPEN-1): with a match that counts ahead, a cost or a regeneration that cannot be read is no free game.
+  const base = cfg.condition_loss_per_match_ranked
+  const regen = cfg.condition_regen_points_per_day
+  if (typeof base !== 'number' || !(base > 0) || !Number.isFinite(base)) return 'the condition a casual game costs could not be read: no casual game blind'
+  if (typeof regen !== 'number' || !(regen > 0) || !Number.isFinite(regen)) return 'the condition a card regains could not be read: no casual game blind'
   for (const n of squad) {
     const p = card(s, n)
     // A card that could not be read is no free card (audit 2026-11-04, INPUT-3).
     if (!p) return `#${n} could not be read: no casual game blind`
     const back = p.condition - appearanceCost(p, base) + regenPerHour(p, cfg) * hours
-    if (back < MAX_CONDITION) return `#${n} would not be back to full condition before ${next.what} (${Math.floor(back)} of ${MAX_CONDITION}): a casual game now would cost that match condition`
+    if (!Number.isFinite(back) || back < MAX_CONDITION) return `#${n} would not be back to full condition before ${next.what} (${Math.floor(back)} of ${MAX_CONDITION}): a casual game now would cost that match condition`
   }
   return null
 }

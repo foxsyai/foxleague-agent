@@ -1123,27 +1123,33 @@ critical or high finding.
 | DOCS-4 | low | The integration notes (9.3) gave the ELO K values of before 2026-10-30 (24, 12, 18) | The live 9, 13, 17, and 5 and 9 after the levels' switch. |
 | DOCS-5 | low | The economy notes still said a Groups + Knockout needs its full field | It starts from min_teams 6, in groups of 3 to 6. |
 | DOCS-6 | low | The prompt suggested an open challenge when no named opponent fits, which a Zeus agent (all ten live) is always refused (predates the window) | The prompt says never at the Zeus level. |
+| R51A-1 | low | Agent review of PR #51: MONEY-2 missed the ranked start pressed again after a ticket was bought; with no answer and no read-back it was logged as refused and the ticket said to stay | It counts as a start that may have happened, and the ticket is not said to stay. |
 
-Stays open (reasoned by the reviewers, no failing test; none moves money):
-- A create whose answer stays lost after the three asks: the tournament may exist without the agent's seat; the next plan
-  reads its tournaments, and if no plan takes the seat and it stays unfilled, FoxLeague keeps the deposit.
-- FoxLeague serving `condition_loss_per_match_ranked` as 0 or a non-number would let the casual condition rule pass
-  (hypothetical; mainnet 5).
-- A Telegram /do in the seconds between a plan's snapshot and the per-agent lock can see a stale balance (caps read the
-  ledger fresh; at most a reverted payment's gas). The kill switch is re-checked before every signature, not before a
-  free FoxLeague call such as a casual test.
-- The digest's competition levels line reads nested config objects without a guard: a FoxLeague build that drops them
-  makes every plan fail until a change (fails closed).
-- A rival strength read that failed is kept as unknown for 20 minutes for every agent (pre-existing, conservative).
-- The "Casual game now" line judges the saved eleven while the executor judges the test eleven (the executor binds).
+The owner then asked for the open items below that are not hard to close (each test in `test/audit-1104/open-items.test.ts` failed on the branch before its fix):
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| OPEN-1 | low | A `condition_loss_per_match_ranked` of 0, missing or not a number, or a regeneration that is not a number, let the casual condition rule call a game free | With a match that counts ahead, a cost or a regeneration that cannot be read refuses the casual game; a result that is not a number is never "back to full". |
+| OPEN-2 | low | The kill switch, a pause or a stop between saving a casual test formation and the start did not stop the start | Checked before the start: no game, and the team's own formation goes back. |
+| OPEN-3 | low | The competition levels and organizer lines read nested config objects without a guard: a FoxLeague build without them would fail every plan | A missing number reads unknown. |
+| OPEN-4 | low | A rival strength read that failed was kept as unknown for 20 minutes for every agent | A failed read is not kept; the next plan reads it again. |
+| OPEN-5 | low | `activeHoursUtc` [24, 0] passed the validator and never planned | From 0 to 23 and to 1 to 24, as the dashboard's fields. |
+| OPEN-6 | low | FoxLeague's "Do NOT pay again" was final for a pending seat in the retry, although it means the entry is verified and the seat not recorded yet | The retry asks for the seat without the hash, as FoxLeague's app and payAndJoin do, and keeps the row until the seat is there or the window ends. |
+| OPEN-7 | low | The prompt did not say an organizer payment must fit Max shop payment, the plan did not see the invitation's 30-minute margin, and the levels page did not name the ranked ticket for the Steady level | The prompt's organizer sentence, the invitations line and the levels page say so. |
+| OPEN-8 | low | A tournament the agent created but holds no seat in (a create whose answer stayed lost) was not named to the plan, so an unfilled one could keep the deposit | The snapshot reads the seats of an open tournament the agent created (at most two) and the plan's line says it holds no seat, take it with join_tournament, and, while organizer fees are live, that an unfilled one keeps the deposit. |
+
+Stays open (reasoned by the reviewers, no failing test; none moves money), with the reason each stays:
+- A Telegram /do in the seconds between a plan's snapshot and the per-agent lock can see a stale balance: the caps read
+  the ledger fresh, so at most a reverted payment's gas.
+- The kill switch is checked when an action starts, before every signature and (OPEN-2) between a casual test's save and
+  its start; a free action (training, a free Bronze join, widening) whose checks were running when it was turned on
+  still reaches FoxLeague: the window is the time of those reads, and none of them pays.
+- The "Casual game now" line judges the saved eleven while the executor judges the test eleven: the line says so, and
+  the executor binds.
 - Casual bench rows never get a strength band: FoxLeague serves no lineup for the AI side.
-- FoxLeague's "Do NOT pay again" is final for a pending seat in the retry (its app keeps polling); reachable only if
-  FoxLeague's observer lags the agent's.
-- Two pending Champions FoxLeague invitations block each other at FoxLeague (its design; the owner can decline one).
-- `home_elo_at_match` of a ranked game is stamped when the result applies, not strictly at kickoff.
-- `activeHoursUtc` [24, 0] passes the validator and never plans (fails closed; the dashboard cannot produce it).
-- Telegram links URLs in plain text, so a refusal quoting a player's title can carry a link (decided with R30A-1).
-- The Bronze amounts default reaches agents saved before PR #41 (the owner's amounts, CL7, within Max entry).
-- The prompt does not say the organizer payment must fit Max shop payment, nor the invitation's 30-minute margin; a plan
-  meets each once as a refusal. The levels page does not name the ranked ticket as a shop purchase of the Steady level.
-- R49A-3 (a tournament the team is out of blocks casual games until it ends).
+- Two pending Champions FoxLeague invitations block each other at FoxLeague: its design; the owner can decline one.
+- `home_elo_at_match` of a ranked game is stamped when the result applies, not strictly at kickoff: information only.
+- Telegram links URLs in plain text, so a refusal quoting a player's title can carry a link: decided with R30A-1.
+- The Bronze amounts default reaches agents saved before PR #41: the owner's amounts (CL7), within Max entry.
+- R49A-3 (a tournament the team is out of blocks casual games until it ends): it fails closed; telling that the team is
+  out needs the bracket.

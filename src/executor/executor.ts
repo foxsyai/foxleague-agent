@@ -946,6 +946,10 @@ export class Executor {
           }
           let text: string
           try {
+            // The kill switch, a pause or a stop between the save and the start: no game, the team's own goes back (OPEN-2).
+            if (store.killSwitch) throw new Error('the kill switch was turned on during the test: no game started')
+            if (store.agent(agent.index)?.paused) throw new Error('the agent was paused during the test: no game started')
+            if (this.d.stopping?.()) throw new Error('the service is stopping during the test: no game started')
             text = await start()
           } catch (err) {
             const restored = await this.putBack(wallet, back, t.formation)
@@ -983,6 +987,8 @@ export class Executor {
         try {
           return finish('confirmed', `${await start()}; ${costText}`, usd, hash)
         } catch (err) {
+          // No answer and no read-back: the game may have started with the ticket, so it counts as a start (R51A-1).
+          if ((err as { startUnknown?: boolean }).startUnknown) return finish('error', `${desc}: ticket bought; the start got no answer and the active match could not be read (${err instanceof Error ? err.message : err}): it may have started, so it counts as a start; ${costText}`, usd, hash, { startUnknown: true })
           return finish('error', `${desc}: ticket bought but the start was refused (${err instanceof Error ? err.message : err}); the ticket stays for the next start; ${costText}`, usd, hash)
         }
       }

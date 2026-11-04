@@ -14,10 +14,12 @@ import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache }
 
 /** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
 const rivalSeen = new Map<string, { at: number; strength: number | null }>()
-async function rivalStrengthCached(fox: FoxLeague, wallet: string): Promise<number | null> {
+export async function rivalStrengthCached(fox: Pick<FoxLeague, 'players'>, wallet: string): Promise<number | null> {
   const hit = rivalSeen.get(wallet)
   if (hit && Date.now() - hit.at < 20 * 60_000) return hit.strength
-  const strength = await rivalStrength(fox, wallet).catch(() => null)
+  const strength = await rivalStrength(fox, wallet).catch(() => undefined)
+  // A failed read is not kept: the next plan asks again, as for the ELO below (OPEN-4).
+  if (strength === undefined) return null
   rivalSeen.set(wallet, { at: Date.now(), strength })
   if (rivalSeen.size > 500) rivalSeen.delete(rivalSeen.keys().next().value!)
   return strength
@@ -153,6 +155,8 @@ export interface AgentSnapshot {
     bestXiOvr?: number | null
     /** The team's League + Knockout seats not started yet: when their seats lock (leaving refunds the entry until then). */
     leagueSeats?: { tournamentId: number; seatsLockAt: string | null; accepted: number | null }[]
+    /** Open tournaments this team created and holds no seat in (read from their seats; OPEN-8). */
+    unseatedCreated?: number[]
   } | null
   market: MarketSummary
   /**
@@ -624,6 +628,17 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       const lock = view?.seats_lock_at && Number.isFinite(Date.parse(view.seats_lock_at)) ? new Date(Date.parse(view.seats_lock_at)).toISOString() : null
       return { tournamentId: t.id, seatsLockAt: lock, accepted: view && Array.isArray(view.invitations) ? view.invitations.filter(i => i.state === 'accepted').length : null }
     }))
+  }
+  // A tournament this team created and holds no seat in, as a create whose answer was lost can leave (audit 2026-11-04,
+  // OPEN-8): the plan takes its seat, or an unfilled one keeps the organizer's deposit. A seat list that cannot be read
+  // flags nothing.
+  if (auth && profile && wallet) {
+    const unseated: number[] = []
+    for (const t of (auth.myTournaments?.active ?? []).filter(x => x.creator_user_id === profile.id && x.status === 'open').slice(0, 2)) {
+      const d = await attempt(warnings, `created T${t.id}`, () => fox.tournament(t.id, wallet))
+      if (d && Array.isArray(d.participants) && !d.participants.some(p => p.user_id === profile.id)) unseated.push(t.id)
+    }
+    if (unseated.length) auth.unseatedCreated = unseated
   }
   // Each invitation's tournament (its start and interval): from the open list, or read by its id.
   if (auth?.invitations?.length) {

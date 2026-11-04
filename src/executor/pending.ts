@@ -39,7 +39,8 @@ export const SHOP_REFUNDED = /already refunded|being refunded automatically/i
 export const SHOP_FINAL = /already processed|refunded|cannot be used/i
 
 /** A final answer for a seat's hash: seated, used, refunded, or the tournament closed (a paid entry is refunded). */
-const JOIN_FINAL = /already|Do NOT pay again|refunded|not open for registration/i
+// "Do NOT pay again" is not final: the entry is verified but the seat not recorded yet (tournaments.rs; OPEN-6).
+const JOIN_FINAL = /already|refunded|not open for registration/i
 
 /** Credits the FOXSY row (shop:<product>) booked for this payment; true when one was still counting. */
 export function creditShopPayment(store: Store, agentIndex: number, hash: string): boolean {
@@ -90,7 +91,14 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
         d.notify(`${agentName(agentIndex)}: pending shop payment confirmed: ${r.message}`)
       } else {
         const { tournamentId } = p.payload as { tournamentId: number }
-        await d.fox.joinTournament(wallet, tournamentId, p.hash)
+        try {
+          await d.fox.joinTournament(wallet, tournamentId, p.hash)
+        } catch (err) {
+          // The entry is verified and the seat not recorded yet: asked for without the hash, as FoxLeague's app does
+          // (paidJoin.ts) and as payAndJoin does; a failure there leaves the row for the next pass (OPEN-6).
+          if (!(err instanceof ApiRefusal && /Do NOT pay again/i.test(err.message))) throw err
+          await d.fox.joinTournament(wallet, tournamentId)
+        }
         d.store.resolvePending(p.hash, 'done')
         d.notify(`${agentName(agentIndex)}: paid seat in T${tournamentId} confirmed`)
       }
