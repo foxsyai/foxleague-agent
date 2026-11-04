@@ -273,3 +273,43 @@ test('R48A-1: a match whose statistics never answer is tried again after 6 hours
   assert.deepEqual(two.reads, ['8106', '8107', '8200'], 'the six that did not answer are not read again yet')
   assert.equal(store.leagueFormations().matches, 2)
 })
+
+// Agent review of PR #48 (note R48A-2), seen live on 2026-11-04: right after the deploy all 10 agents planned within 22
+// seconds, so their league reads ran at once from the same turn and read the same newest matches of the same first
+// team (about 60 reads for 17 matches kept). Plans that run at once now take turns within the process.
+test('R48A-2: plans that run at once take turns, so each reads other teams and no match twice', async () => {
+  const store = new Store('', ':memory:')
+  const teams = [1, 2, 3, 4, 5, 6].map(i => user(1000 + i, `z${i}`))
+  const history: Record<string, Row[]> = {}
+  const all: Record<string, unknown> = {}
+  for (const i of [1, 2, 3, 4, 5, 6]) {
+    history[`z${i}`] = [0, 1].map(j => row(String(10_000 + i * 10 + j), 1000 + i, 1100 + j, [1, 0], {}, 1 + j))
+    for (const j of [0, 1]) all[String(10_000 + i * 10 + j)] = facts('4-3-3', '4-4-2')
+  }
+  const slow = (f: ReturnType<typeof fakes>) => {
+    const fox = (f.deps as unknown as { fox: Record<string, (...a: unknown[]) => Promise<unknown>> }).fox
+    const read = fox.matchHistory!
+    fox.matchHistory = async (...a: unknown[]) => { await new Promise(r => setTimeout(r, 5)); return read(...a) }
+    return f
+  }
+  const one = slow(fakes({ users: teams, history, facts: all }))
+  const two = slow(fakes({ users: teams, history, facts: all }))
+  await Promise.all([plan(one.deps, store), plan(two.deps, store)])
+  assert.deepEqual([...one.histories, ...two.histories].sort(), ['z1', 'z2', 'z3', 'z4', 'z5', 'z6'])
+  const reads = [...one.reads, ...two.reads]
+  assert.equal(new Set(reads).size, reads.length, 'no statistics read twice')
+  assert.equal(store.leagueFormations().matches, 12)
+})
+
+test('R48A-2: a plan waits a bounded time for its turn and otherwise reads no league matches this time', async () => {
+  const { takeLeagueTurn } = await import('../src/snapshot/snapshot.ts')
+  let release!: () => void
+  const held = takeLeagueTurn(() => new Promise<void>(r => { release = r }), 1000)
+  let ran = false
+  assert.equal(await takeLeagueTurn(async () => { ran = true }, 20), false, 'gave up waiting')
+  assert.equal(ran, false, 'and never runs later')
+  release()
+  assert.equal(await held, true)
+  assert.equal(await takeLeagueTurn(async () => { ran = true }, 20), true, 'the turn is free again')
+  assert.equal(ran, true)
+})

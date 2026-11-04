@@ -389,6 +389,36 @@ async function collectLeague(fox: FoxLeague, cache: MatchFactsCache, league: Lea
 const leagueTried = new Map<string, number>()
 const LEAGUE_RETRY_MS = 6 * 3600_000
 
+/** How long a plan waits for its turn at the league reads before it skips them this time (the table is information only). */
+const LEAGUE_TURN_WAIT_MS = 60_000
+let leagueTurn: Promise<void> = Promise.resolve()
+
+/**
+ * One league collection at a time within the process (R48A-2): plans that run at once, as every agent does right after
+ * a restart, take turns, so each reads on from the turn and the matches the one before left. A plan that waits longer
+ * than `waitMs` gives up its turn and never runs later; true when `fn` ran.
+ */
+export async function takeLeagueTurn(fn: () => Promise<void>, waitMs = LEAGUE_TURN_WAIT_MS): Promise<boolean> {
+  const before = leagueTurn
+  let release!: () => void
+  const mine = new Promise<void>(r => { release = r })
+  leagueTurn = before.then(() => mine)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const got = await Promise.race([before.then(() => true), new Promise<boolean>(r => { timer = setTimeout(() => r(false), waitMs) })])
+  clearTimeout(timer)
+  if (!got) {
+    // The turns behind this one wait only for the one before it.
+    void before.then(release)
+    return false
+  }
+  try {
+    await fn()
+    return true
+  } finally {
+    release()
+  }
+}
+
 /** A rival's formations in its last revealed matches, newest first (only those read; an empty list is unknown). */
 async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: { left: number }, wallet: string, userId: number): Promise<string[]> {
   const out: string[] = []
@@ -640,7 +670,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
     // The league formation table: a few more public matches of the top teams each plan, kept for the service's table.
     const league = opts.league
-    if (league && board) await attempt(warnings, 'league matches', () => collectLeague(fox, facts, league, board.users, profile.id, now))
+    if (league && board) await attempt(warnings, 'league matches', () => takeLeagueTurn(() => collectLeague(fox, facts, league, board.users, profile.id, now)))
   }
 
   // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse.
