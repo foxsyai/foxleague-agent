@@ -447,10 +447,11 @@ export class Store {
     const rows = (this.db
       .prepare(
         `SELECT match_key, at, mine, theirs, gf, ga, edge, rival_user_id FROM formation_results
-         WHERE at >= ? AND (rival_user_id IS NULL OR rival_user_id NOT IN (SELECT DISTINCT own_user_id FROM formation_results))`,
+         WHERE at >= ? AND rival_user_id IS NOT NULL AND rival_user_id NOT IN (SELECT DISTINCT own_user_id FROM formation_results)`,
       )
       .all(new Date(Date.now() - 14 * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; theirs: string; gf: number; ga: number; edge: number | null; rival_user_id: number | null }[])
-      .filter(r => r.rival_user_id === null || !own.has(Number(r.rival_user_id)))
+      // A game against the AI is no match of the field: since PR #49 none is kept here, and the rows kept before it are left out (audit 2026-11-04, INPUT-1).
+      .filter(r => r.rival_user_id !== null && !own.has(Number(r.rival_user_id)))
     return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: r.theirs, gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: r.rival_user_id })))
   }
 

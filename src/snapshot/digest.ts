@@ -112,6 +112,8 @@ function scheduleText(t: { format: string; max_teams: number; home_and_away?: bo
  */
 function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot['market']['fields']>[number]): string {
   if (!f.seats || !s.profile) return 'field: unknown (the seated teams could not be read)'
+  // An unread roster is an unknown eleven, never a lineup of 0 (audit 2026-11-04, INPUT-3).
+  if (!s.players.length) return 'field: unknown (your roster could not be read, so your eleven cannot be compared)'
   const atStart = conditionAtStart(s, t, new Date(s.takenAt))
   const ours = lineupStrength(s, atStart?.at)
   const j = judgeField(f.seats, ours, s.profile.elo_rating)
@@ -182,7 +184,7 @@ function levelLines(s: AgentSnapshot): string[] {
     const b = s.config?.tournament_fee_bounds
     const bronze = (typeof b?.bronze_min === 'number' && typeof b?.bronze_max === 'number' ? `; a paid Bronze costs ${b.bronze_min} to ${b.bronze_max} FOXSY` : '')
       + (c.private_bronze_earns === true ? '; a private paid Bronze (an invite list) earns like a public one' : '; a private Bronze (an invite list) earns nothing')
-    out.push(`Competition levels: ${whenLive(levelsLive(s.config, now), c.live_from)}: ranked ticket ${c.ranked_ticket_price_foxsy} FOXSY a game you start${bronze}; XP ranked ${c.xp_factor_pct.ranked}%, Bronze ${c.xp_factor_pct.bronze}%, Silver ${c.xp_factor_pct.silver}%, Gold ${c.xp_factor_pct.gold}%; K ranked ${c.elo_k.ranked}, Bronze ${c.elo_k.bronze}, Silver ${c.elo_k.silver}, Gold ${c.elo_k.gold}; at most ${c.competitive_daily_cap} competitive matches a card a day`)
+    out.push(`Competition levels: ${whenLive(levelsLive(s.config, now), c.live_from)}: ranked ticket ${c.ranked_ticket_price_foxsy} FOXSY a game you start${bronze}; XP ranked ${c.xp_factor_pct.ranked}%, Bronze ${c.xp_factor_pct.bronze}%, Silver ${c.xp_factor_pct.silver}%, Gold ${c.xp_factor_pct.gold}%; K ranked ${c.elo_k.ranked}, Bronze ${c.elo_k.bronze}, Silver ${c.elo_k.silver}, Gold ${c.elo_k.gold}; ${c.competitive_daily_cap > 0 ? `at most ${c.competitive_daily_cap} competitive matches a card a day` : 'no daily cap on the competitive matches a card counts'}`)
   }
   const f = s.config?.organizer_fees
   if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${f.calendar_deposit_per_match_foxsy} FOXSY a game${f.calendar_deposit_min_foxsy > 0 ? ` (at least ${f.calendar_deposit_min_foxsy})` : ''}${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
@@ -322,7 +324,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const lock = seat.seatsLockAt ? `seats lock ${seat.seatsLockAt.slice(0, 16).replace('T', ' ')} UTC: until then you may leave a seat you joined yourself for the whole entry back, but only when you see no real chance of the top 24 (places 1 to 24 play the knockout; leaving closes the invitation for good); after that nobody can leave` : 'when its seats lock could not be read: no leaving'
     out.push(`Your League + Knockout T${Number(seat.tournamentId)}: ${seat.accepted ?? '?'} of 36 seats taken; ${lock}`)
   }
-  if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(`Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.`)
+  if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.` : 'Your lineup strength today: unknown (your roster could not be read); a 1v1 is refused until it is known.')
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)

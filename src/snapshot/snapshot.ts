@@ -422,7 +422,8 @@ export async function takeLeagueTurn(fn: () => Promise<void>, waitMs = LEAGUE_TU
 /** A rival's formations in its last revealed matches, newest first (only those read; an empty list is unknown). */
 async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: { left: number }, wallet: string, userId: number): Promise<string[]> {
   const out: string[] = []
-  const theirs = (await fox.matchHistory(wallet, 10)).filter(m => revealed(m) && (m.home_user_id === userId || m.away_user_id === userId)).slice(0, RIVAL_MATCHES)
+  // A casual game is a test against the AI, not a formation the rival plays for real (audit 2026-11-04, INPUT-4).
+  const theirs = (await fox.matchHistory(wallet, 10)).filter(m => revealed(m) && m.match_type !== 'casual' && (m.home_user_id === userId || m.away_user_id === userId)).slice(0, RIVAL_MATCHES)
   for (const m of theirs) {
     const f = await factsOf(fox, cache, budget, m)
     if (f) out.push(m.home_user_id === userId ? f.home : f.away)
