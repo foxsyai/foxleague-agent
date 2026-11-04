@@ -1028,5 +1028,20 @@ FoxLeague's main moved from `d51552986` to `c339519ca` (next-foxleague PR #617, 
 | CT1 | low | The prize from FoxLeague of a Champions FoxLeague edition now goes to the top 24 by the round reached, 4 / 2 / 1 shares (56) to the 8 quarter-finalists, the 8 round-of-16 losers and the 8 play-off losers (#605 contract, #608 backend, owner of FoxLeague 2026-11-02). The plan was told every prize was "shared by the last 8", so it undervalued an invitation where a play-off or round-of-16 exit now earns. No money path reads the prize. | The invitation's `prize_tiered` (true only for a held prize on the tiered terms) picks the text: tiered, each group's amount per team, floored as the contract pays; false or absent (equal terms, an older FoxLeague), the 8 quarter-finalists' equal share. `src/strategist/manual.md` synced to `bc3379734`. |
 
 Stays open:
-- The tournaments contract upgrade of #605 on mainnet. Until it lands FoxLeague cannot set tiered terms, so `prize_tiered` stays false and the plan reads the equal split, as the contract would pay it. The agent signs no sponsor call, so no gas of its own changes.
+- The tournaments contract upgrade of #605 on mainnet. Until it lands FoxLeague cannot set tiered terms, so `prize_tiered` stays false and the plan reads the equal split, as the contract would pay it. The agent signs no sponsor call, so no gas of its own changes. Done: on mainnet since 2026-11-04 (next section).
 - The two stale lines of FoxLeague's manual (Shop: ticket 100 FOXSY; Tournaments: private Bronze "for now") are still in `bc3379734`.
+
+## The tiered prize on the mainnet contract, 2026-11-04
+
+FoxLeague upgraded its tournaments contract on mainnet at 11:46 UTC on 2026-11-04 (tx `f0c1c659cae7`, the #605 code that `c339519ca` already holds). FoxLeague's main moved on to `dd57cf4e7` (#615 permanent match records on Autonomys, #619, #620): one new field, `permanent_record`, on public match rows, which the agent does not read. `GET /api/config` is unchanged: the private split still 45/30/15/10, `leave_lock_live` false, both `live_from` `2026-11-09T14:00:00Z`. Read-only on chain, on FoxLeague's routes and in its code.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| TP1 | info | The tiered prize runs on mainnet. `getSponsorWeights` answers. Edition I (T4122) holds 168,000 FOXSY on the tiered terms: they were set at 12:01 UTC and the prize was deposited at 12:02 UTC. Edition I is Gold, 5,000 FOXSY entry, 36 seats, invitations from 2026-12-01 14:00 UTC. FoxLeague's prize route answers 12,000 / 6,000 / 3,000, the amounts the digest gives (floor of pool times weight over 56). FoxLeague sets `prize_tiered` when the prize is held and its weights are set, so that edition's invitations will carry true. | None: the digest reads `prize_tiered` since PR #46. |
+| TP2 | info | The join gas on the new code. The first 10 joins used 7,200,119 to 7,448,067 gas; the 90 joins on the code of 2026-11-02 used 6,962,881 to 7,278,069. The rise, about 200,000 a join, comes with the larger contract code, not the seats: four joins of one tournament stayed within 50,000 of each other. 8.4M is 1.13 times the heaviest. #605 changes no join, refund or `getEntryAmount` code. | None: `GAS.joinTournament` stays 8,400,000, as FoxLeague's app signs (its `gasLimits.ts` comment still names a heaviest join of about 5.55M). Every upgrade that adds code eats some of the margin: read the join gas again after the next one. |
+
+`src/strategist/manual.md` is synced to `6c7f26166`. The one new page, Permanent Match Records (`mechanics/permanent-records.mdx`), is taken in by the mechanics folder rule and holds no number the agent reads. The other changed page (`connect-ai.mdx`) stays left out.
+
+Stays open:
+- Before 2026-11-09 14:00 UTC FoxLeague still sets the private fee to 20 (the contract's `setPrivatePlatformFee` and its own setting together) and turns `leave_lock_live` on; the agent reads both and needs no change.
+- The two stale lines of FoxLeague's manual (Shop: ticket 100 FOXSY; Tournaments: private Bronze "for now") are still in `6c7f26166`.

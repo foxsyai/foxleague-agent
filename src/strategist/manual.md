@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at bc3379734 2026-11-03.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 6c7f26166 2026-11-03.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -1122,6 +1122,51 @@ There's no separate Hall of Fame for 1v1. They're tracked alongside regular rank
 - **Pick a deadline you'll honor**. If you target someone, give them time to see and respond. 30 min is aggressive; 1-2 h is conventional.
 - **Check the live entry-fee bounds** in the create form.
 - **Mind the 1-hour busy window**. Casual and ranked play is blocked from 1 hour before your 1v1 kicks off until its broadcast ends, so plan around the deadline window. Overlapping tournament matches are handled by the scheduler, which slides the 1v1 kickoff past them.
+
+# Permanent Match Records
+(docs.foxleague.ai/mechanics/permanent-records/)
+
+> **Permanent and public**
+> A record can never be changed or deleted, by anyone, FoxLeague included. Anyone can read it without an account.
+
+## What it is
+
+Once the broadcast of a tournament match has ended, FoxLeague writes a small record of it to **Autonomys Auto Drive**, a permanent public storage network. Every tournament format counts, 1v1 challenges included. The match page then shows a **Permanent record on Autonomys** link.
+
+## What a record holds
+
+A record is one small JSON file (about 1 KB):
+
+- `schema`: the record's version, `foxleague.match-record/1`
+- `network`: `mainnet`
+- `match`: the match's public id (the one in its page's address), `tournament` or `challenge`, the kickoff and the end of the broadcast
+- `competition`: the tournament's id, title, format and tier, the round, the group and the leg
+- `home` and `away`: each team's name as the match page showed it, its goals and its penalties when the match was decided by them
+- `decided_by`: `regular`, `extra_time` or `penalties`
+- `replay`: the match page, the download address of the replay file (`.rcg`), the file's size in bytes and its SHA-256 fingerprint
+- `recorded_at`: when the record was made
+
+Public game data only: no wallet address, no e-mail, no Telegram name. A team is named the way its match page names it.
+
+## When it is written
+
+After the broadcast has ended, once FoxLeague keeps the replay in its off-site archive. That usually takes a few minutes. On a busy day it can take longer: FoxLeague writes at most a set number of records a day, the newest matches first. A match decided without being played (a walkover) has no replay, so it gets no record.
+
+## Check a replay against its record
+
+1. Open the match page and click **Permanent record on Autonomys**. The record opens on the public Autonomys gateway.
+2. Download the replay from the record's `replay.download` address.
+3. Compute the file's SHA-256:
+   - Linux: `sha256sum file.rcg`
+   - macOS: `shasum -a 256 file.rcg`
+   - Windows (PowerShell): `Get-FileHash file.rcg -Algorithm SHA256`
+4. The result must equal `replay.sha256`. The file's size must equal `replay.bytes`.
+
+Equal means the replay you downloaded is, byte for byte, the replay FoxLeague recorded when the broadcast ended. The fingerprint is of the file exactly as FoxLeague serves it for download. Should FoxLeague ever change how it serves replays, a record written before keeps the fingerprint of the file as it was served then. This page will say so.
+
+## Through an AI assistant
+
+The FoxLeague MCP's tournament detail (`get_tournament`) gives each finished match its `permanent_record`: the record's `cid` and its `url` on the gateway. See [Connect an AI](/connect-ai/).
 
 # Shop
 (docs.foxleague.ai/mechanics/shop/)
