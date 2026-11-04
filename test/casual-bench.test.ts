@@ -141,7 +141,7 @@ test('CB10: a put-back that fails twice is an error that names the formation sti
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: casual(), reason: '' }])
     assert.equal(r!.status, 'error', r!.summary)
-    assert.match(r!.summary, /5-2-3 is still saved/)
+    assert.match(r!.summary, /5-2-3 may still be saved/)
     assert.match(r!.summary, /put back 4-4-2/)
   })
   assert.deepEqual(calls, ['lineup 5-2-3', 'play casual', 'lineup 4-4-2', 'lineup 4-4-2'])
@@ -272,4 +272,33 @@ test('CB18: a planning snapshot keeps its casual games for the bench and carries
   assert.equal(planned.casualBench?.matches, 1)
   assert.equal(planned.casualToday, 1)
   assert.equal(planned.formationPool?.matches, 0, 'not in the pooled record')
+})
+
+// Agent review of PR #49 (medium): a save of the test that failed without FoxLeague's refusal, followed by a put-back
+// that failed twice, dropped the put-back's message: the log said only the first error, not what the next plan must do.
+test('R49A-1: a failed save of the test followed by a failed put-back still says what to put back', async () => {
+  const calls: string[] = []
+  const m = setup({
+    fox: recorder(calls, {
+      setLineup: async (_w: unknown, _l: number[], _s: number[], f?: string) => { calls.push(`lineup ${f}`); throw new Error('HTTP 502') },
+      team: async () => { throw new Error('HTTP 502') },
+    }),
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: casual(), reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    assert.match(r!.summary, /5-2-3 may still be saved/)
+    assert.match(r!.summary, /put back 4-4-2 with set_formation/)
+  })
+  assert.deepEqual(calls, ['lineup 5-2-3', 'lineup 4-4-2', 'lineup 4-4-2'], 'no game started')
+})
+
+// Agent review of PR #49 (low): the check for starters at condition 0 read the saved eleven, so a test eleven with an
+// exhausted card was saved before FoxLeague refused the start.
+test('R49A-2: a test eleven with a starter at condition 0 is refused before anything is saved', async () => {
+  const s = snapshot()
+  s.players.find(p => p.nonce === 13)!.condition = 0
+  const r = await verdict(s)
+  assert.equal(r.status, 'refused', r.summary)
+  assert.match(r.summary, /starters at condition 0: #13/)
 })

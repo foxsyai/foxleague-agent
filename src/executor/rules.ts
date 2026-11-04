@@ -868,7 +868,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (busy) return refuse(s.auth?.upcoming ? `pre-match lockout: ${busy}` : `${busy} (the pre-match lockout is unknown): no match started blind`)
       const legal = squadLegal(s)
       if (legal) return refuse(legal)
-      const exhausted = s.team.lineup.filter(n => (card(s, n)?.condition ?? 0) <= 0)
+      // A casual test is played by its own eleven (agent review of PR #49).
+      const exhausted = (a.match_type === 'casual' && a.test ? a.test.lineup : s.team.lineup).filter(n => (card(s, n)?.condition ?? 0) <= 0)
       if (exhausted.length) return refuse(`starters at condition 0: ${exhausted.map(n => `#${n}`).join(',')}`)
       if (a.match_type === 'casual') {
         // The casual test bench (owner, 2026-11-04): an eleven that fits its formation, at most 4 a day, and only when

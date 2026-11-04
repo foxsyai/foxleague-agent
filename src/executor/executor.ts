@@ -616,7 +616,7 @@ export class Executor {
         why = err instanceof Error ? err.message : String(err)
       }
     }
-    return `the test formation ${test} is still saved: ${back.formation} could not be put back (${why}); put back ${back.formation} with set_formation, lineup ${back.lineup.join(',')} | bench ${back.substitutes.join(',')}`
+    return `the test formation ${test} may still be saved: ${back.formation} could not be put back (${why}); put back ${back.formation} with set_formation, lineup ${back.lineup.join(',')} | bench ${back.substitutes.join(',')}`
   }
 
   /** Why a team name cannot be registered (FoxLeague's check before the fee), or null when it is free. */
@@ -933,8 +933,12 @@ export class Executor {
           try {
             await this.saveEleven(wallet, t.formation, t.lineup, t.substitutes)
           } catch (err) {
-            // Only FoxLeague's own refusal says nothing was saved; after any other failure the team's own goes back.
-            if (!(err instanceof ApiRefusal && !/^unexpected answer/.test(err.message))) await this.putBack(wallet, back, t.formation)
+            // Only FoxLeague's own refusal says nothing was saved; after any other failure the team's own goes back, and a
+            // put-back that fails too says what the next plan must do (agent review of PR #49).
+            if (!(err instanceof ApiRefusal && !/^unexpected answer/.test(err.message))) {
+              const restored = await this.putBack(wallet, back, t.formation)
+              if (restored) throw new Error(`${err instanceof Error ? err.message : String(err)}; ${restored}`)
+            }
             throw err
           }
           let text: string
