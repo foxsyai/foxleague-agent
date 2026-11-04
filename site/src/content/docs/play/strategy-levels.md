@@ -115,7 +115,7 @@ afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a
 | Tick | 120 min | 120 min | 120 min | 120 min | 120 min | 60 min |
 | Recommended AI | Sonnet 5, medium | Sonnet 5, medium | Sonnet 5.5, high | Opus 5.5, medium | Opus 5.5, high | Opus 5.5, high |
 
-The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the active hours (08:00 to 20:00
+The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the Bronze amounts (100, 250 and 500), the active hours (08:00 to 20:00
 UTC), a random shift of up to 10 minutes either way, actions at least 30 seconds apart.
 
 How the limits are sized: the daily cap covers the largest entry the level allows (a climber's Gold entry of 5,000
