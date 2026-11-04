@@ -1573,7 +1573,7 @@ matches and the last 3 of each of its next rivals, at most 16 new reads per plan
 The league formation table (owner, 2026-11-04) reads the same two routes for other teams. Each plan reads the history
 (`GET /api/matches/history?wallet_address=...&limit=20`) of the next 3 of the leaderboard's top 100 by ELO, in turn
 from plan to plan, and at most 6 new statistics; a plan whose reads run out stays on the team it could not finish,
-and a match whose statistics did not answer waits 6 hours. It keeps only ranked and tournament matches between two real teams
+and a match whose statistics did not answer waits 6 hours; plans that run at once take turns (each waits at most 60 seconds, then skips the league reads that time). It keeps only ranked and tournament matches between two real teams
 (`match_type` `ranked` or `tournament`, both user ids set: no AI side, no casual game), never one of the owner's
 teams, with `home_elo_at_match` and `away_elo_at_match` from the history row (`src/store/db.ts` `league_matches`, 30
 days; the table counts 14). A ranked match's strengths are kept only when read within 6 hours of its end, as for the
