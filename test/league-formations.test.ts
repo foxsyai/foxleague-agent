@@ -97,24 +97,24 @@ test('LF1: the league table counts the matches of the top teams from both sides,
   assert.deepEqual(t.field, [{ formation: '4-3-3', matches: 4 }, { formation: '4-3-3b', matches: 1 }, { formation: '4-4-2', matches: 1 }], 'each side of each match once, the same-formation match too')
 })
 
-test('LF2: each plan reads 3 team histories and at most 6 new matches, newest first, and the next plan moves on to the next teams', async () => {
+test('LF2: each plan reads up to 3 team histories and at most 6 new matches, newest first, and the next plan moves on to the next teams', async () => {
   const store = new Store('', ':memory:')
   const teams = [1, 2, 3, 4, 5].map(i => user(200 + i, `w${i}`))
   const history: Record<string, Row[]> = {}
   const all: Record<string, unknown> = {}
   for (const i of [1, 2, 3, 4, 5]) {
-    history[`w${i}`] = [0, 1, 2, 3].map(j => row(String(i * 10 + j), 200 + i, 300 + j, [1, 0], {}, 1 + j))
-    for (const j of [0, 1, 2, 3]) all[String(i * 10 + j)] = facts('4-3-3', '4-4-2')
+    history[`w${i}`] = [0, 1].map(j => row(String(i * 10 + j), 200 + i, 300 + j, [1, 0], {}, 1 + j))
+    for (const j of [0, 1]) all[String(i * 10 + j)] = facts('4-3-3', '4-4-2')
   }
   const one = fakes({ users: teams, history, facts: all })
   await plan(one.deps, store)
   assert.deepEqual(one.histories, ['w1', 'w2', 'w3'])
-  assert.deepEqual(one.reads, ['10', '11', '12', '13', '20', '21'])
+  assert.deepEqual(one.reads, ['10', '11', '20', '21', '30', '31'])
   const two = fakes({ users: teams, history, facts: all })
   await plan(two.deps, store)
   assert.deepEqual(two.histories, ['w4', 'w5', 'w1'])
-  assert.deepEqual(two.reads, ['40', '41', '42', '43', '50', '51'], 'the kept matches of w1 are not read again')
-  assert.equal(store.leagueFormations().matches, 12)
+  assert.deepEqual(two.reads, ['40', '41', '50', '51'], 'the kept matches of w1 are not read again')
+  assert.equal(store.leagueFormations().matches, 10)
 })
 
 test('LF3: a ranked match read more than 6 hours after its end counts its result but no strength; a tournament match keeps its kickoff strengths', async () => {
@@ -135,14 +135,18 @@ test('LF3: a ranked match read more than 6 hours after its end counts its result
 test('LF4: a failed history or statistics read is skipped and read again later, never kept as anything', async () => {
   const store = new Store('', ':memory:')
   const users = [user(201, 'wA'), user(202, 'wB')]
-  const f: Record<string, unknown> = { 1: new Error('HTTP 502'), 2: facts('4-3-3', '4-4-2') }
-  const one = fakes({ users, history: { wA: new Error('HTTP 500'), wB: [row('1', 202, 300, [1, 0]), row('2', 202, 301, [0, 0])] }, facts: f })
+  const f: Record<string, unknown> = { 41: new Error('HTTP 502'), 42: facts('4-3-3', '4-4-2') }
+  const history = { wA: [] as Row[], wB: [row('41', 202, 300, [1, 0]), row('42', 202, 301, [0, 0])] }
+  const one = fakes({ users, history: { ...history, wA: new Error('HTTP 500') }, facts: f })
   await plan(one.deps, store)
-  assert.equal(store.leagueFormations().matches, 1, 'm:2 only')
-  f[1] = facts('4-3-3b', '4-4-2')
-  const two = fakes({ users, history: { wA: [], wB: [row('1', 202, 300, [1, 0]), row('2', 202, 301, [0, 0])] }, facts: f })
-  await plan(two.deps, store)
-  assert.deepEqual(two.reads, ['1'])
+  assert.equal(store.leagueFormations().matches, 1, 'm:42 only')
+  f[41] = facts('4-3-3b', '4-4-2')
+  const soon = fakes({ users, history, facts: f })
+  await plan(soon.deps, store)
+  assert.deepEqual(soon.reads, [], 'tried again 6 hours later at the earliest (R48A-1)')
+  const later = fakes({ users, history, facts: f })
+  await takeSnapshot(later.deps, { wallet: dryWallet }, new Date(Date.now() + 7 * HOUR), { matchFacts: cache(), league: store.leagueCache() } as never)
+  assert.deepEqual(later.reads, ['41'])
   assert.equal(store.leagueFormations().matches, 2)
 })
 
@@ -231,4 +235,41 @@ test('LF9: the prompt tells the plan to weigh the league table, and to look at i
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
   assert.match(SYSTEM_PROMPT, /The league formation table adds the public matches of the top teams by ELO/)
   assert.match(SYSTEM_PROMPT, /against a stronger rival look at its weaker band and its underdog results/)
+})
+
+// Agent review of PR #48 (low): the turn moved on by 3 teams even when this plan's reads ran out inside the first one,
+// so the teams after it waited a whole round of the top 100 and their history reads were spent for nothing.
+test('R48A-1: a plan whose reads run out stays on the team it could not finish and reads no further history', async () => {
+  const store = new Store('', ':memory:')
+  const teams = [1, 2, 3, 4].map(i => user(600 + i, `x${i}`))
+  const history: Record<string, Row[]> = { x1: Array.from({ length: 8 }, (_, j) => row(String(6100 + j), 601, 700 + j, [1, 0], {}, 1 + j)) }
+  for (const i of [2, 3, 4]) history[`x${i}`] = [0, 1].map(j => row(String(6000 + i * 10 + j), 600 + i, 700 + j, [0, 1], {}, 1 + j))
+  const all = Object.fromEntries(Object.values(history).flat().map(m => [String(m.id), facts('4-3-3', '4-4-2')]))
+  const one = fakes({ users: teams, history, facts: all })
+  await plan(one.deps, store)
+  assert.deepEqual(one.histories, ['x1'], 'no history read once the reads are spent')
+  assert.equal(one.reads.length, 6)
+  assert.equal(store.leagueCursor, 0, 'x1 is not finished')
+  const two = fakes({ users: teams, history, facts: all })
+  await plan(two.deps, store)
+  assert.deepEqual(two.histories, ['x1', 'x2', 'x3'])
+  assert.deepEqual(two.reads, ['6106', '6107', '6020', '6021', '6030', '6031'])
+  assert.equal(store.leagueCursor, 3, 'x4 is next')
+})
+
+test('R48A-1: a match whose statistics never answer is tried again after 6 hours at the earliest, so it never holds the turn', async () => {
+  const store = new Store('', ':memory:')
+  const teams = [1, 2].map(i => user(800 + i, `y${i}`))
+  const history: Record<string, Row[]> = {
+    y1: Array.from({ length: 8 }, (_, j) => row(String(8100 + j), 801, 900 + j, [1, 0], {}, 1 + j)),
+    y2: [row('8200', 802, 900, [2, 2])],
+  }
+  const f: Record<string, unknown> = { 8107: facts('4-3-3', '4-4-2'), 8200: facts('4-3-3', '4-3-3w') } // 8100 to 8106 have no statistics
+  const one = fakes({ users: teams, history, facts: f })
+  await plan(one.deps, store)
+  assert.deepEqual(one.reads, ['8100', '8101', '8102', '8103', '8104', '8105'])
+  const two = fakes({ users: teams, history, facts: f })
+  await plan(two.deps, store)
+  assert.deepEqual(two.reads, ['8106', '8107', '8200'], 'the six that did not answer are not read again yet')
+  assert.equal(store.leagueFormations().matches, 2)
 })

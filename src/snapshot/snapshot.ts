@@ -321,7 +321,9 @@ async function formationRecord(fox: FoxLeague, cache: MatchFactsCache, address: 
  * The league formation table (owner, 2026-11-04): the next few teams of the leaderboard's top, in turn from plan to
  * plan, and their new public matches, newest first within this plan's reads, each kept once. Only matches between two
  * real teams count (no AI side, no casual game, a ranked or tournament match only), never one of the owner's teams.
- * A failed read is skipped and read again when its team comes round, never kept as anything.
+ * A failed read is skipped and read again when its team comes round, never kept as anything. When this plan's reads run
+ * out inside a team, the turn stays on that team and no further history is read (agent review of PR #48); a match
+ * whose statistics did not answer waits 6 hours before it is tried again, so it never holds the turn.
  */
 async function collectLeague(fox: FoxLeague, cache: MatchFactsCache, league: LeagueCache, users: UserProfile[], selfId: number, now: Date): Promise<void> {
   const own = league.own()
@@ -333,8 +335,14 @@ async function collectLeague(fox: FoxLeague, cache: MatchFactsCache, league: Lea
   const budget = { left: LEAGUE_READS_PER_TICK }
   const since = now.getTime() - LEAGUE_DAYS * 86_400_000
   const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-  for (let i = 0; i < count; i++) {
-    const rows = await fox.matchHistory(teams[(start + i) % teams.length]!.wallet_address, 20).catch(() => [] as MatchHistoryRow[])
+  let next = (start + count) % teams.length
+  teams: for (let i = 0; i < count; i++) {
+    const at0 = (start + i) % teams.length
+    if (budget.left <= 0) {
+      next = at0
+      break
+    }
+    const rows = await fox.matchHistory(teams[at0]!.wallet_address, 20).catch(() => [] as MatchHistoryRow[])
     for (const m of rows) {
       if (!revealed(m) || (m.match_type !== 'ranked' && m.match_type !== 'tournament')) continue
       const home = m.home_user_id
@@ -344,8 +352,18 @@ async function collectLeague(fox: FoxLeague, cache: MatchFactsCache, league: Lea
       if (!Number.isFinite(at) || at < since) continue
       const key = m.tournament_match_id ? `t:${m.tournament_match_id}` : typeof m.id === 'number' ? `m:${m.id}` : null
       if (!key || league.has(key)) continue
+      const tried = leagueTried.get(key)
+      if (tried !== undefined && now.getTime() - tried < LEAGUE_RETRY_MS) continue
+      if (!cache.get(key) && budget.left <= 0) {
+        next = at0
+        break teams
+      }
       const f = await factsOf(fox, cache, budget, m)
-      if (!f) continue
+      if (!f) {
+        leagueTried.set(key, now.getTime())
+        if (leagueTried.size > 2000) leagueTried.delete(leagueTried.keys().next().value!)
+        continue
+      }
       const kickoff = strengthAtKickoff(m, f)
       league.put({
         key, at: new Date(at).toISOString(), kind: m.match_type, homeUserId: home, awayUserId: away, home: f.home, away: f.away,
@@ -354,8 +372,12 @@ async function collectLeague(fox: FoxLeague, cache: MatchFactsCache, league: Lea
       })
     }
   }
-  league.setCursor((start + count) % teams.length)
+  league.setCursor(next)
 }
+
+/** League matches whose statistics did not answer, with when they were tried (within the process; a restart tries them again). */
+const leagueTried = new Map<string, number>()
+const LEAGUE_RETRY_MS = 6 * 3600_000
 
 /** A rival's formations in its last revealed matches, newest first (only those read; an empty list is unknown). */
 async function recentFormations(fox: FoxLeague, cache: MatchFactsCache, budget: { left: number }, wallet: string, userId: number): Promise<string[]> {
