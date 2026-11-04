@@ -225,7 +225,7 @@ processing part, MultiversX keeps the whole limit (`frontend/src/lib/gasLimits.t
 | `fusion` (3 NFTs + FOXSY) | 21,000,000 | `gasLimits.ts:17` |
 | `payFusionMatchWaiver`, `payFusionCooldownWaiver` | 15,000,000 | `gasLimits.ts:21` |
 | `shopPay` (every shop product, the transfer-cooldown waiver, the paid badge) | 12,864,100 (12,000,000 before the players contract upgrade, live on mainnet 2026-10-26) | `gasLimits.ts` `SHOP_PAY_GAS_LIMIT` |
-| `joinTournament` (every tournament and 1v1 seat) | 8,400,000 (7,000,000 before the League + Knockout upgrade of the contract, live on mainnet 2026-10-24; a mainnet join used at most 7,237,267 after the private fee upgrade of 2026-11-02) | `gasLimits.ts:32` |
+| `joinTournament` (every tournament and 1v1 seat) | 8,400,000 (7,000,000 before the League + Knockout upgrade of the contract, live on mainnet 2026-10-24; a mainnet join used at most 7,278,069 after the private fee upgrade of 2026-11-02 and 7,448,067 after the tiered prize upgrade of 2026-11-04) | `gasLimits.ts:32` |
 | `claimRefund` | 6,500,000 | `gasLimits.ts:34` |
 | `auctionList` / `auctionBid` / `auctionSettle` / `auctionCancel` | 15,000,000 / 13,500,000 / 13,500,000 / 12,000,000 | `gasLimits.ts:42-47` |
 | `registerAndPay` (relayed) | `min(12,000,000, relayer_max_gas_limit)` | `gasLimits.ts:51-69` |
@@ -1811,7 +1811,7 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   rules the agent already follows (36 teams, 8 league matches, places 1 to 24 to the knockout, 190 matches one at a
   time, leaving until wave 3 with the entry refunded, no other standard tournament while it runs, one at a time,
   prizes 45/30/15 plus the prize from FoxLeague, for the top 24 in 4 / 2 / 1 shares since FoxLeague's main of
-  2026-11-03, synced at bc3379734). One difference: a team that is out is free
+  2026-11-03, on the mainnet contract since 2026-11-04, synced at 6c7f26166). One difference: a team that is out is free
   again at once, while the agent's rule waits until the edition ends (the stricter side).
 - **OVR range** (`ovr_min`, `ovr_max` on a tournament or a 1v1, whole numbers 1 to 100; next-foxleague
   `tournament_models.rs:241-252`, `ovr_range.rs`): checked once at the join against the team's best XI OVR (the average
