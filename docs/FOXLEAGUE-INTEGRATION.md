@@ -902,9 +902,11 @@ are deferred and applied by an abandoned-match sweep about 11 minutes after the 
 
 Source: `apply_match_results`, `matches.rs:3074-4040`.
 
-- **ELO** (standard Elo, 400 scale; `backend/src/db.rs:779-803`): ranked against a real team K = 24,
-  both sides move (the drawn-in opponent too). Casual and ranked against the AI: no ELO. Silver
-  tournaments and 1v1s K = 12, Gold K = 18, Bronze none (`matches.rs:3589-3645`).
+- **ELO** (standard Elo, 400 scale; `backend/src/db.rs:779-803`): ranked against a real team K = 9 (24 until
+  2026-10-30), both sides move (the drawn-in opponent too). Casual and ranked against the AI: no ELO. Silver
+  tournaments and 1v1s K = 13, Gold K = 17 (12 and 18 until 2026-10-30), Bronze none until the competition levels'
+  switch, then K 5 for ranked and 9 for a paid Bronze, read from `/api/config` (`deploy/mainnet/seed.sh:83-85`,
+  `competition_levels.rs`, `matches.rs:3589-3645`).
 - **XP** only when the match is XP-eligible: a real opponent, not Bronze, not ranked while
   `xp.ranked_enabled` is 0 (the launch setting) and analyzer stats present (`matches.rs:3448-3451`).
   In practice **only Silver/Gold tournament and 1v1 matches award XP**. At most 3 XP-earning matches per

@@ -1226,8 +1226,10 @@ export class Service {
       const key = `league_invite_told:${index}:${inv.tournament_id}:${inv.can_accept ? 'open' : 'refused'}`
       if (this.store.getKv(key) || !(Date.parse(inv.expires_at) > Date.now())) continue
       this.store.setKv(key, new Date().toISOString())
-      const title = String(inv.title).replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 80)
-      const refusal = inv.can_accept ? '' : ` (FoxLeague says it cannot be accepted now: ${String(inv.refusal ?? 'no reason given').replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 160)})`
+      // The same characters as txt() leaves out: a refusal can quote a title another player wrote (audit 2026-11-04, ATTACK-2).
+      const plain = (v: unknown) => String(v).replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, ' ')
+      const title = plain(inv.title).slice(0, 80)
+      const refusal = inv.can_accept ? '' : ` (FoxLeague says it cannot be accepted now: ${plain(inv.refusal ?? 'no reason given').slice(0, 160)})`
       const id = Number(inv.tournament_id)
       const terms = `${/^[a-z]+$/.test(String(inv.tier)) ? inv.tier : 'tier unknown'}, entry ${Number(inv.entry_fee_foxsy)} FOXSY`
       const until = `${new Date(Date.parse(inv.expires_at)).toISOString().slice(0, 16).replace('T', ' ')} UTC`

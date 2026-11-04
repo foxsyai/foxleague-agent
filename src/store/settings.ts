@@ -184,7 +184,8 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('tickJitterMinutes', 0, 60, true)
   if ('activeHoursUtc' in raw) {
     const v = raw.activeHoursUtc
-    if (!Array.isArray(v) || v.length !== 2 || !v.every(x => Number.isInteger(x) && x >= 0 && x <= 24) || v[0] === v[1]) throw new Error('activeHoursUtc must be [from, to] hours 0-24')
+    // From 0 to 23 and to 1 to 24, as the dashboard's fields: [24, 0] would be a window that never opens (OPEN-5).
+    if (!Array.isArray(v) || v.length !== 2 || !v.every(x => Number.isInteger(x)) || v[0] < 0 || v[0] > 23 || v[1] < 1 || v[1] > 24 || v[0] === v[1]) throw new Error('activeHoursUtc must be [from, to]: from 0-23, to 1-24')
     out.activeHoursUtc = [v[0] as number, v[1] as number]
   }
   num('minGapSeconds', 30, 3600, true)

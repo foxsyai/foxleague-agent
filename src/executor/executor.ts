@@ -287,7 +287,7 @@ export class Executor {
       if (booking && !booking.sent) this.unbook(booking)
       if (booking?.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
       const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
-      return finish('error', `${desc}: ${msg}`)
+      return finish('error', `${desc}: ${msg}`, 0, undefined, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
     }
   }
 
@@ -915,7 +915,10 @@ export class Executor {
             // Only FoxLeague's own refusal says no match started. An answer lost on the way (a timeout after its wait
             // for a match slot, a 502) may come after the start: the active match read back says (audit C2).
             if (err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)) throw err
-            const active = await fox.activeMatch(wallet).catch(() => null)
+            // A read-back that fails too leaves the start unknown, which counts as a start (audit 2026-11-04, MONEY-2).
+            const active = await fox.activeMatch(wallet).catch(() => {
+              throw Object.assign(err instanceof Error ? err : new Error(String(err)), { startUnknown: true })
+            })
             if (typeof active?.match_id !== 'number') throw err
             matchId = active.match_id
             readBack = ` (the answer was lost: ${err instanceof Error ? err.message : String(err)}; the active match read back shows it)`
@@ -943,10 +946,14 @@ export class Executor {
           }
           let text: string
           try {
+            // The kill switch, a pause or a stop between the save and the start: no game, the team's own goes back (OPEN-2).
+            if (store.killSwitch) throw new Error('the kill switch was turned on during the test: no game started')
+            if (store.agent(agent.index)?.paused) throw new Error('the agent was paused during the test: no game started')
+            if (this.d.stopping?.()) throw new Error('the service is stopping during the test: no game started')
             text = await start()
           } catch (err) {
             const restored = await this.putBack(wallet, back, t.formation)
-            if (restored) throw new Error(`${err instanceof Error ? err.message : String(err)}; ${restored}`)
+            if (restored) throw Object.assign(new Error(`${err instanceof Error ? err.message : String(err)}; ${restored}`), { startUnknown: (err as { startUnknown?: boolean }).startUnknown })
             throw err
           }
           const restored = await this.putBack(wallet, back, t.formation)
@@ -980,6 +987,8 @@ export class Executor {
         try {
           return finish('confirmed', `${await start()}; ${costText}`, usd, hash)
         } catch (err) {
+          // No answer and no read-back: the game may have started with the ticket, so it counts as a start (R51A-1).
+          if ((err as { startUnknown?: boolean }).startUnknown) return finish('error', `${desc}: ticket bought; the start got no answer and the active match could not be read (${err instanceof Error ? err.message : err}): it may have started, so it counts as a start; ${costText}`, usd, hash, { startUnknown: true })
           return finish('error', `${desc}: ticket bought but the start was refused (${err instanceof Error ? err.message : err}); the ticket stays for the next start; ${costText}`, usd, hash)
         }
       }
@@ -1014,9 +1023,11 @@ export class Executor {
         return this.payAndJoin(agent, wallet, snap, a.tournament_id, built.txs[0]!, v, usd, fees, desc, costText, finish, now, booking)
       }
       case 'buy': {
-        const hash = await this.send(wallet, built.txs[0]!, booking)
-        const body = { tx_hash: hash, product: a.product, ...(a.player_nonces ? { player_nonces: a.player_nonces } : {}), ...(a.quantity ? { quantity: a.quantity } : {}) }
-        store.addPending(hash, agent.index, 'shop', body)
+        // Pending from the signature on, as the ranked ticket and the organizer payment (R41-3; audit 2026-11-04,
+        // MONEY-1): a broadcast that may have gone out is confirmed later with its hash, never paid again.
+        const order = { product: a.product, ...(a.player_nonces ? { player_nonces: a.player_nonces } : {}), ...(a.quantity ? { quantity: a.quantity } : {}) }
+        const hash = await this.send(wallet, built.txs[0]!, booking, { kind: 'shop', payload: order })
+        const body = { tx_hash: hash, ...order }
         const outcome = await this.outcome(hash)
         if (outcome.kind === 'failed') {
           store.resolvePending(hash, 'failed')
@@ -1101,7 +1112,11 @@ export class Executor {
                 ...(a.ovr_min !== undefined ? { ovr_min: a.ovr_min } : {}),
                 ...(a.ovr_max !== undefined ? { ovr_max: a.ovr_max } : {}),
               }
-        const newKey = () => `agent${agent.index}-${randomUUID()}`
+        // One idempotency key for the whole action (audit 2026-11-04, INTEG-1): FoxLeague stores only a create that
+        // succeeded and replays it for the same key (idempotency.rs), so the same key after a refusal or a tx_pending
+        // runs the create again, and after an answer lost on the way returns the tournament it made.
+        const key = `agent${agent.index}-${randomUUID()}`
+        const newKey = () => key
         // An earlier organizer payment no create used goes with this one: never a second payment.
         let organizerHash = typeof v.facts.organizerHash === 'string' ? v.facts.organizerHash : undefined
         if (organizerHash) body.organizer_fee_tx_hash = organizerHash
@@ -1131,6 +1146,7 @@ export class Executor {
             body.organizer_fee_tx_hash = hash
           }
         }
+        let lost = 0
         for (let i = 0; !created; i++) {
           try {
             created = await fox.createTournament(wallet, body, newKey())
@@ -1141,7 +1157,15 @@ export class Executor {
               await sleep(6000)
               continue
             }
-            const why = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+            // No answer is no refusal (an answer that is not FoxLeague's envelope neither, R51A-2): FoxLeague may have
+            // created it, so the same create (same key) is asked again.
+            const noAnswer = !(err instanceof ApiRefusal) || /^unexpected answer/.test(err.message)
+            if (noAnswer && lost < 3) {
+              lost++
+              await sleep(6000)
+              continue
+            }
+            const why = err instanceof ApiRefusal && !noAnswer ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
             this.unbook(booking)
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
             if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
@@ -1149,6 +1173,7 @@ export class Executor {
               if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
               return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)
             }
+            if (noAnswer) return finish('error', `${desc}: organizer payment ${organizerHash} made, and the create got no answer (${why}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
             return finish('error', `${desc}: organizer payment ${organizerHash} made, nothing created: ${why}; the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
           }
         }
@@ -1189,10 +1214,10 @@ export class Executor {
     now: Date,
     booking: Booking,
   ): Promise<ExecutionResult> {
-    const hash = await this.send(wallet, spec, booking)
-    // Pending from the send on, as a shop payment: a stop or a crash in the outcome wait (up to 2 min) keeps the
-    // hash, so the pending retry (src/executor/pending.ts) confirms this seat with it and the next plan does not pay it again.
-    this.d.store.addPending(hash, agent.index, 'join', { tournamentId })
+    // Pending from the signature on (R41-3; audit 2026-11-04, MONEY-1): a broadcast that may have gone out, a stop or a
+    // crash in the outcome wait (up to 2 min) keeps the hash, so the pending retry (src/executor/pending.ts) confirms this
+    // seat with it and the next plan does not pay it again.
+    const hash = await this.send(wallet, spec, booking, { kind: 'join', payload: { tournamentId } })
     const outcome = await this.outcome(hash)
     if (outcome.kind === 'failed') {
       this.d.store.resolvePending(hash, 'failed')
@@ -1206,6 +1231,12 @@ export class Executor {
         return finish('confirmed', `${desc}: seated${r.condition_warning ? ` (${r.condition_warning})` : ''}; ${costText}`, usd, hash)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
+        // FoxLeague answers a wallet that holds the seat this way before any other gate (tournaments.rs
+        // join_seated_before_status): after a lost answer the seat is the fact (audit 2026-11-04, INTEG-2).
+        if (/already in this tournament/i.test(msg)) {
+          this.d.store.resolvePending(hash, 'done')
+          return finish('confirmed', `${desc}: seated (FoxLeague answers that the team is already in it, after an answer lost on the way); ${costText}`, usd, hash)
+        }
         if (/Do NOT pay again/i.test(msg)) withHash = false
         else if (!retryable(err, /not confirmed on chain yet|retry/i)) return finish('error', `${desc}: paid ${hash} but not seated: ${msg} (FoxLeague refunds an unseated entry; the creator of a 1v1 is seated from it instead)`, usd, hash)
         await sleep(6000)
