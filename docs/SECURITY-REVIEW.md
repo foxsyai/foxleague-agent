@@ -1093,3 +1093,57 @@ Stays open:
 - A crash between saving the test formation and putting the team's own back (a restart in those seconds) leaves the test
   formation saved with no log line; the next plan sees the formation in its snapshot.
 - R49A-3 above.
+
+## Audit of PRs #29 to #50, 2026-11-04
+
+The owner's request after the league formation table, the casual test bench and the read turns: an adversarial review of
+everything since the last audits (PR #24 and PR #28). Five Claude Fable 5.1 reviewers at max effort, read-only, on a
+frozen copy at `afc3238` (main and PR #50), one area each: money and limits; what the plan sees, prompt injection and
+data; FoxLeague and chain integration (against next-foxleague `origin/main` and its contracts); outside attackers,
+owner controls and secrets; docs, website and prompt against the code. A finding counted only with a test that fails
+on the code; each of the 20 tests in `test/audit-1104/` failed on `main` (`9fd10de`) and passes after its fix. No
+critical or high finding.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MONEY-1 | medium | A seat payment (a join, or the seat of a create) and a shop payment were held as pending only after the broadcast answered, so a broadcast that may have gone out left no pending row and a later plan could pay the same seat (reverted on chain: gas lost) or the same product again (a second purchase until FoxLeague's net returns the first). The reviewer rated it low; the owner rated the same mechanism medium for the ticket and the organizer payment (R41-3) | Both are held from the signature on, under the hash computed before the broadcast, as the ticket and the organizer payment are; the pending retry confirms a shop row with the row's own hash. |
+| INTEG-1 | medium | A create whose answer was lost after the organizer payment was declared "nothing created" and not asked again; FoxLeague may have created it, and a tournament that stays unfilled keeps the calendar deposit | One idempotency key for the whole action (FoxLeague replays a stored success for the same key and stores only successes); a create with no answer is asked again with it up to 3 times, 6 seconds apart; still no answer says FoxLeague may have created it and the next plan reads the agent's tournaments. |
+| INPUT-4 | medium | "Their last formations" for an upcoming rival and in the 1v1 scouting counted the rival's casual games, tests against the AI that the owner's own agents now play every day, steering the formation for a match with a stake | Casual games are left out of a rival's last formations. |
+| DOCS-1 | medium | The website's settings page explains every setting but had no row for the Bronze amounts the dashboard has (paid entries from 9 November) | A row, and the levels page names them among the settings every level shares. |
+| DOCS-2 | medium | Max shop payment also caps the ranked ticket and the calendar deposit of a tournament the agent creates; its settings row and bubble did not say so, so an owner sizing it could not see it decides which tournaments the agent may create (at 500 a round robin of 8 owes 700 and is refused) | The row and the bubble say it, with examples and no dated price. |
+| MONEY-2 | low | A casual start whose answer was lost and whose read-back failed too was not counted toward the 4 a day | Such a start is marked (`startUnknown`) and counts, in the daily count and the cooldowns alike (`maybeStarted`). |
+| INTEG-2 | low | After a lost answer to the join, FoxLeague's "You are already in this tournament" (the seat holds) was read as "paid but not seated", with a refund promised to the owner | That answer settles the seat as confirmed. |
+| INTEG-3 | low | A competitive daily cap of 0, FoxLeague's "no cap", was told to the plan as "at most 0 competitive matches a card a day" | 0 reads "no daily cap". |
+| INPUT-1 | low | Games against the AI kept in the pooled record before the casual split stayed in it for up to 14 days as matches of the field | The pooled record counts only matches against a real team. |
+| INPUT-2 | low | The 30-second match cooldown and the plan's match spacing did not see a casual start whose put-back failed (logged as an error), so the next start of the plan was refused once | The cooldowns read every start that may have happened, as the daily count does. |
+| INPUT-3 | low | An unread roster showed as a lineup of 0 on the field lines and the 1v1 line, and a casual game as free, where the condition was unknown | Unknown says unknown; a card that cannot be read is no free card. |
+| ATTACK-1 | low | A provider key in a configured base URL would be copied by an HTTP error into the snapshot warnings, the dashboard's state, the activity log and the prompt | An HTTP error names the host only. |
+| ATTACK-2 | low | FoxLeague's refusal of a Champions FoxLeague invitation can quote a title another player wrote; its Unicode format characters (a right-to-left override) reached the owner's Telegram | The notice leaves them out, as `txt()` does. |
+| DOCS-3 | low | The "In tournaments" bubble and the dashboard page promised that Leave always gives the seat back; once FoxLeague's leave lock is on, a tournament exactly at its minimum cannot be left, the owner's Leave included | Both say so. |
+| DOCS-4 | low | The integration notes (9.3) gave the ELO K values of before 2026-10-30 (24, 12, 18) | The live 9, 13, 17, and 5 and 9 after the levels' switch. |
+| DOCS-5 | low | The economy notes still said a Groups + Knockout needs its full field | It starts from min_teams 6, in groups of 3 to 6. |
+| DOCS-6 | low | The prompt suggested an open challenge when no named opponent fits, which a Zeus agent (all ten live) is always refused (predates the window) | The prompt says never at the Zeus level. |
+
+Stays open (reasoned by the reviewers, no failing test; none moves money):
+- A create whose answer stays lost after the three asks: the tournament may exist without the agent's seat; the next plan
+  reads its tournaments, and if no plan takes the seat and it stays unfilled, FoxLeague keeps the deposit.
+- FoxLeague serving `condition_loss_per_match_ranked` as 0 or a non-number would let the casual condition rule pass
+  (hypothetical; mainnet 5).
+- A Telegram /do in the seconds between a plan's snapshot and the per-agent lock can see a stale balance (caps read the
+  ledger fresh; at most a reverted payment's gas). The kill switch is re-checked before every signature, not before a
+  free FoxLeague call such as a casual test.
+- The digest's competition levels line reads nested config objects without a guard: a FoxLeague build that drops them
+  makes every plan fail until a change (fails closed).
+- A rival strength read that failed is kept as unknown for 20 minutes for every agent (pre-existing, conservative).
+- The "Casual game now" line judges the saved eleven while the executor judges the test eleven (the executor binds).
+- Casual bench rows never get a strength band: FoxLeague serves no lineup for the AI side.
+- FoxLeague's "Do NOT pay again" is final for a pending seat in the retry (its app keeps polling); reachable only if
+  FoxLeague's observer lags the agent's.
+- Two pending Champions FoxLeague invitations block each other at FoxLeague (its design; the owner can decline one).
+- `home_elo_at_match` of a ranked game is stamped when the result applies, not strictly at kickoff.
+- `activeHoursUtc` [24, 0] passes the validator and never plans (fails closed; the dashboard cannot produce it).
+- Telegram links URLs in plain text, so a refusal quoting a player's title can carry a link (decided with R30A-1).
+- The Bronze amounts default reaches agents saved before PR #41 (the owner's amounts, CL7, within Max entry).
+- The prompt does not say the organizer payment must fit Max shop payment, nor the invitation's 30-minute margin; a plan
+  meets each once as a refusal. The levels page does not name the ranked ticket as a shop purchase of the Steady level.
+- R49A-3 (a tournament the team is out of blocks casual games until it ends).
