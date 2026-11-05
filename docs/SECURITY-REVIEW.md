@@ -1154,3 +1154,39 @@ Stays open (reasoned by the reviewers, no failing test; none moves money), with 
 - The Bronze amounts default reaches agents saved before PR #41: the owner's amounts (CL7), within Max entry.
 - R49A-3 (a tournament the team is out of blocks casual games until it ends): it fails closed; telling that the team is
   out needs the bracket.
+
+## Audit of PR #51, 2026-11-05
+
+The owner's request after PR #51: a second look at the fixes themselves, as the agent review of PR #51 had found a
+medium (R51A-2) inside them and the paths that go live on 9 November (organizer deposit, ranked ticket, paid private
+tournaments) have not run with real money yet. Two Claude Fable 5.1 reviewers at max effort, read-only, on a frozen copy
+of `main` at `3ba4216`: the money paths (executor, pending payments, match starts, rules) and what the plan sees with the
+outside surfaces (snapshot, digest, database, Telegram, HTTP errors, settings, prompt). A finding counted only with a test
+that fails on the code; each test in `test/audit-1105/` failed on `main` (`3ba4216`) and passes after its fix. No
+critical, high or medium finding, and none of the six lets a payment repeat.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R52A-M1 | low | The put-back after a casual test was read back by formation and eleven only, so a test that changed only the bench and a put-back whose answer was lost (and not applied) were reported as "put back" while the test bench stayed for the next match with a stake | The read-back checks the bench too (every card named is on it, as FoxLeague completes a bench of fewer than 7); a bench that is not back is tried again and then told to the owner with what to put back. |
+| R52A-M2a | low | The kill switch, a pause or a stop between the create after an organizer payment and the seat's signature ended the action with "nothing sent" and no created id on its row, although the payment went out and the tournament existed with no seat of the agent's | Anything after the create keeps the tournament's id on the row and says it was created, with the organizer payment, and waits with no seat (unfilled at its deadline it keeps the deposit). |
+| R52A-M2b | low | The lost-answer retry of the create after an organizer payment (INTEG-1) did not look at the kill switch, a pause or a stop: FoxLeague was asked again, which could turn a payment its net refunds into a tournament with no seat and its deposit at risk | After the organizer payment no create is asked while one of them is on: the payment is left for the next create of that amount or FoxLeague's refund, and the action says so. |
+| R52A-I1 | low | ATTACK-2 left out Unicode format characters from the invitation notice only; a FoxLeague refusal quoting a rival's title (the time slot conflict of a create) still reached the owner's Telegram with them, as an action result and through `/log` | Every message to Telegram leaves them out where it is sent; line breaks stay. |
+| R52A-I2 | low | ATTACK-1 named the host only, but the error still quoted the server's answer, and an error page that echoes the request path ("Cannot GET /path") put a key of a configured base URL back into the warnings and the prompt | The request's own path is cut from the quoted answer. |
+| R52A-I3 | low | OPEN-8 also named a 1v1 the agent created and a created tournament that filled up without it, both refused by the join rule: every plan was sent to a join that cannot happen | A 1v1 (no deposit, refunded in full at its deadline) and a tournament with no seat left are not named. |
+
+Dropped: the same bench blind spot in `set_formation` with a lineup. It needs a new formation and FoxLeague saves
+formation, eleven and bench in one call, so a read-back with the new formation means the whole save landed; the test
+could not fail.
+
+Stays open (reasoned by the reviewers, no failing test; none moves money), with the reason each stays:
+- An organizer-only tournament created with the agent's team (only the owner can, from FoxLeague's app) never has a
+  creator seat, so it would be named as unseated; neither `/tournaments/my` nor the executor can tell it apart today,
+  and the join FoxLeague refuses would cost gas only.
+- OPEN-8 reads the seats of at most two created tournaments, in FoxLeague's order: a third is not named, as before OPEN-8.
+- A casual test bench of fewer than 7 is completed by FoxLeague; the condition rule judges only the cards named. Which
+  cards FoxLeague adds, and whether a substitute who comes on costs condition before a staked match, is FoxLeague's.
+- The pending retry's `/already/` also matches FoxLeague's other "already" gates; a hash-less retry refused by one marks
+  the row done while the escrow is unseated, and FoxLeague's reconcile seats or refunds it; a later payment for the same
+  seat reverts on chain (gas only).
+- A future AI-side match type other than `casual` would count again in a rival's last formations: none is served.
+- With an unread roster the Upcoming line says the rival's strength is unknown where it is the agent's: no decision reads it.
