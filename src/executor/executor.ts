@@ -917,6 +917,7 @@ export class Executor {
           let matchId: number
           let readBack = ''
           let paid: boolean | undefined
+          const pressed = Date.now()
           try {
             const r = await fox.playMatch(wallet, a.match_type)
             matchId = r.match_id
@@ -930,6 +931,11 @@ export class Executor {
               throw Object.assign(err instanceof Error ? err : new Error(String(err)), { startUnknown: true })
             })
             if (typeof active?.match_id !== 'number') throw err
+            // The previous match still airs is no start (FoxLeague's #638: the active match read returns it, 'finished',
+            // for its whole broadcast; a start is refused until then). Ours was created after the press (a minute for the
+            // two clocks), or without a readable time is still being played (R85-2).
+            const created = Date.parse(active.created_at)
+            if (Number.isFinite(created) ? created < pressed - 60_000 : active.status !== 'pending' && active.status !== 'simulating') throw err
             matchId = active.match_id
             readBack = ` (the answer was lost: ${err instanceof Error ? err.message : String(err)}; the active match read back shows it)`
           }

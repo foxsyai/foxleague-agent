@@ -84,8 +84,8 @@ export interface ScheduledAction {
 
 /**
  * When each action of a plan runs, in ms after its start: at random moments of the window, sorted so the plan's order
- * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (11 minutes
- * after its start) and a ranked one until the ranked cooldown after the last ranked start has passed, the agent's last
+ * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (13 minutes
+ * after its start: MATCH_RUNS_MS) and a ranked one until the ranked cooldown after the last ranked start has passed, the agent's last
  * starts before the plan included (`lastMatchMs` and `lastRankedMs`, in ms after the plan's start, so negative). A
  * match pushed past the window is dropped (returned with the reason) and pushes nothing; every other action keeps its
  * random moment unless the action before it now runs later.
@@ -108,7 +108,7 @@ export function scheduleActions(
       const spaced = Math.max(at, afterMatch, afterRanked)
       // Dropped only when a gate pushes it out of the window (the 30-second gaps alone never drop an action).
       if (spaced > o.windowMs && spaced > at) {
-        dropped.push({ p, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match runs about 10 minutes)' })
+        dropped.push({ p, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team about 13 minutes)' })
         return
       }
       at = spaced

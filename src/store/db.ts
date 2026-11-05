@@ -7,7 +7,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { agentName } from '../names.ts'
 import { DEFAULT_SETTINGS, type AgentSettings } from './settings.ts'
 import type { MatchFormations } from '../foxleague/types.ts'
-import { CASUAL_DAYS, LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
+import { CASUAL_AI_FULL_FROM, CASUAL_DAYS, LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
 import type { MarketSale } from '../snapshot/market.ts'
 
 export interface AgentRow {
@@ -462,11 +462,14 @@ export class Store {
     this.db.prepare('DELETE FROM casual_results WHERE at < ?').run(new Date(Date.now() - 60 * 86_400_000).toISOString())
   }
 
-  /** The casual test bench: the casual games of every team the install runs in the last 40 days, by formation against the AI. */
+  /**
+   * The casual test bench: the casual games of every team the install runs in the last 40 days, by formation against the AI,
+   * none from before the AI played at its full strength (CASUAL_AI_FULL_FROM, R85-3).
+   */
   casualBench(): FormationRecord {
     const rows = this.db
       .prepare('SELECT match_key, at, mine, gf, ga, edge FROM casual_results WHERE at >= ?')
-      .all(new Date(Date.now() - CASUAL_DAYS * 86_400_000).toISOString()) as { match_key: string; at: string; mine: string; gf: number; ga: number; edge: number | null }[]
+      .all(new Date(Math.max(Date.now() - CASUAL_DAYS * 86_400_000, Date.parse(CASUAL_AI_FULL_FROM))).toISOString()) as { match_key: string; at: string; mine: string; gf: number; ga: number; edge: number | null }[]
     return summariseFormations(rows.map(r => ({ key: r.match_key, at: r.at, mine: r.mine, theirs: 'AI', gf: r.gf, ga: r.ga, edge: r.edge, rivalUserId: null })))
   }
 

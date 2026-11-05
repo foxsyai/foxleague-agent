@@ -71,11 +71,11 @@ test('D1 scheduleActions spaces the matches by their gates, keeps the other acti
   const three = scheduleActions([ranked, ranked, ranked, sync], { ...base, random: () => 0.5 })
   assert.deepEqual(at(three), [24, 40, 40.5])
   assert.deepEqual(three.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
-  // After any match the next waits until it is over (11 min); a casual start does not wait the ranked cooldown.
-  assert.deepEqual(at(scheduleActions([casual, ranked, casual], { ...base, random: () => 0 })), [0, 11, 22])
+  // After any match the next waits until it is over (13 min, R85-1); a casual start does not wait the ranked cooldown.
+  assert.deepEqual(at(scheduleActions([casual, ranked, casual], { ...base, random: () => 0 })), [0, 13, 26])
   // The agent's last ranked start 5 minutes before the plan counts too.
   assert.deepEqual(at(scheduleActions([ranked], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [11])
-  assert.deepEqual(at(scheduleActions([casual], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [6])
+  assert.deepEqual(at(scheduleActions([casual], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [8])
   // The other actions keep their random moments; only a match pushed later moves what follows it.
   assert.deepEqual(at(scheduleActions([train, sync, train], { ...base, random: seq(0.1, 0.5, 0.9) })), [4.8, 24, 43.2])
   assert.deepEqual(at(scheduleActions([ranked, train, ranked, sync], { ...base, random: seq(0.2, 0.25, 0.3, 0.9) })), [9.6, 12, 25.6, 43.2])
