@@ -113,3 +113,33 @@ test('R52A-M2b: a pause pressed while the organizer payment confirms: no create 
     assert.equal(m.store.openSpend(0, 'join:', false).length, 0, 'the seat, never signed, is not counted')
   })
 })
+
+test('R52A-M2a: a seat payment signed after the create whose broadcast got no answer stays counted and pending, and the row keeps the created id', async () => {
+  let sends = 0
+  const createTournament = async (_w: unknown, body: Record<string, unknown>) => {
+    if (!body.organizer_fee_tx_hash) throw FEE_REQUIRED()
+    return { id: 55 }
+  }
+  const m = setup({
+    fox: { organizerFeeQuote: async () => OWED, createTournament, tournament: async () => tournament(55), joinTournament: async () => assert.fail('no join without a known seat payment') },
+    chain: {
+      send: async () => {
+        sends++
+        if (sends === 1) return 'hashO'
+        throw new Error('fetch failed: socket hang up') // the seat's broadcast: no answer, it may have gone out
+      },
+    },
+  })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, liveSnapshot(), [{ action: SILVER_CUP, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    assert.equal(r!.sent, true)
+    assert.match(r!.summary, /created T55 with organizer payment hashO; the seat payment: fetch failed/)
+    assert.doesNotMatch(r!.summary, /seat not paid|nothing sent/)
+    assert.equal(m.store.openSpend(0, 'join:55', false).length, 1, 'the seat that may have gone out stays counted')
+    assert.equal(m.store.openSpend(0, 'shop:organizer_fee', false).length, 1, 'the deposit stays counted')
+    assert.equal(m.store.pending(0).filter(p => p.kind === 'join').length, 1, 'the seat is held as pending, so the next plan does not pay it again')
+    const [row] = m.store.activity(0, 1)
+    assert.equal((JSON.parse(row!.detail ?? '{}') as { createdTournamentId?: number }).createdTournamentId, 55)
+  })
+})
