@@ -590,7 +590,9 @@ export class Executor {
 
   /**
    * Saves a formation with its eleven and bench in one call (FoxLeague rc.78). Only FoxLeague's own refusal says nothing
-   * was saved; after any other failure the team read back decides, and a team that cannot be read back is no save.
+   * was saved; after any other failure the team read back decides, and a team that cannot be read back is no save. The
+   * bench counts too, as a test may change only the bench: every card named must be on it (FoxLeague completes a bench
+   * of fewer than 7 itself) (audit of PR #51, R52A-M1).
    */
   private async saveEleven(wallet: AgentWallet, formation: string, lineup: number[], substitutes: number[]): Promise<void> {
     try {
@@ -599,6 +601,7 @@ export class Executor {
       if (err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)) throw err
       const team = await this.d.fox.team(wallet.address, wallet).then(t => (t && !t.hidden ? t : null), () => null)
       if (!team || team.formation !== formation || team.lineup.join(',') !== lineup.join(',')) throw err
+      if (!Array.isArray(team.substitutes) || substitutes.some(n => !team.substitutes.includes(n))) throw err
     }
   }
 
@@ -716,10 +719,17 @@ export class Executor {
   // ---- live ----
 
   /** The kill switch, a pause or a graceful stop while an action was being prepared stops it before the signature. */
+  /** Why nothing more may be signed or asked for this agent now (the kill switch, a pause, a stop), or null. */
+  private stopReason(agentIndex: number): string | null {
+    if (this.d.store.killSwitch) return 'the kill switch was turned on'
+    if (this.d.store.agent(agentIndex)?.paused) return 'the agent was paused'
+    if (this.d.stopping?.()) return 'the service is stopping (a restart or a deploy)'
+    return null
+  }
+
   private assertNotStopped(agentIndex: number): void {
-    if (this.d.store.killSwitch) throw new Error('the kill switch was turned on before signing: nothing sent')
-    if (this.d.store.agent(agentIndex)?.paused) throw new Error('the agent was paused before signing: nothing sent')
-    if (this.d.stopping?.()) throw new Error('the service is stopping (a restart or a deploy) before signing: nothing sent')
+    const why = this.stopReason(agentIndex)
+    if (why) throw new Stopped(why)
   }
 
   /**
@@ -1148,6 +1158,20 @@ export class Executor {
         }
         let lost = 0
         for (let i = 0; !created; i++) {
+          // After the organizer payment nothing more is asked under the kill switch, a pause or a stop: a payment no create
+          // uses is refunded by FoxLeague, a tournament with no seat keeps the deposit when unfilled (audit of PR #51, R52A-M2b).
+          const stop = organizerHash ? this.stopReason(agent.index) : null
+          if (stop) {
+            this.unbook(booking)
+            return finish(
+              'error',
+              lost
+                ? `${desc}: organizer payment ${organizerHash} made, and the create got no answer; it was not asked again (${stop}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`
+                : `${desc}: organizer payment ${organizerHash} made, nothing created (${stop}); the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`,
+              0,
+              organizerHash,
+            )
+          }
           try {
             created = await fox.createTournament(wallet, body, newKey())
           } catch (err) {
@@ -1181,19 +1205,32 @@ export class Executor {
         store.retagSpend(booking.ids, 'join:new', `join:${created.id}`)
         // Its row keeps the id it made, whatever comes after: what this agent created itself (ownCreations).
         const done: typeof finish = (st, summary, cost, hash, extra) => finish(st, summary, cost, hash, { ...((extra as object) ?? {}), createdTournamentId: created.id })
-        let detail: TournamentDetail | undefined
-        for (let i = 0; i < 20; i++) {
-          detail = await fox.tournament(created.id, wallet)
-          if (detail.tournament.status === 'open' && detail.tournament.sc_tournament_id !== null) break
-          await sleep(3000)
-        }
-        if (!detail || detail.tournament.sc_tournament_id === null) {
-          // Nothing was signed for the seat: it is not spent (it would otherwise stay counted until the tournament ends).
+        try {
+          let detail: TournamentDetail | undefined
+          for (let i = 0; i < 20; i++) {
+            detail = await fox.tournament(created.id, wallet)
+            if (detail.tournament.status === 'open' && detail.tournament.sc_tournament_id !== null) break
+            await sleep(3000)
+          }
+          if (!detail || detail.tournament.sc_tournament_id === null) {
+            // Nothing was signed for the seat: it is not spent (it would otherwise stay counted until the tournament ends).
+            if (!booking.sent) this.unbook(booking)
+            return done('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
+          }
+          const spec = joinTournamentTx(detail.tournament.sc_tournament_id, v.foxsy - wholeToAtomic(Number(v.facts.organizerFoxsy ?? 0)))
+          return await this.payAndJoin(agent, wallet, snap, created.id, spec, v, usd, fees, `${desc} (T${created.id})`, costText, done, now, booking)
+        } catch (err) {
+          // Anything after the create (the kill switch, a pause or a stop before the seat's signature, a read that fails):
+          // the row keeps the tournament it made and says it exists (audit of PR #51, R52A-M2a). The bookings as in the
+          // caller's catch: a seat not signed is released, one signed stays counted.
           if (!booking.sent) this.unbook(booking)
-          return done('error', `${desc}: created T${created.id} but it is not on chain yet; seat not paid`)
+          if (booking.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
+          const why = err instanceof Stopped ? `${err.reason} before the seat was signed` : err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+          const paid = organizerHash ? ` with organizer payment ${organizerHash}` : ''
+          return done('error', booking.sent
+            ? `${desc}: created T${created.id}${paid}; the seat payment: ${why}`
+            : `${desc}: created T${created.id}${paid}, its seat not paid: ${why}; T${created.id} waits with no seat of yours${organizerHash ? ' (unfilled at its deadline it keeps the organizer\'s deposit)' : ''}`, 0, organizerHash)
         }
-        const spec = joinTournamentTx(detail.tournament.sc_tournament_id, v.foxsy - wholeToAtomic(Number(v.facts.organizerFoxsy ?? 0)))
-        return this.payAndJoin(agent, wallet, snap, created.id, spec, v, usd, fees, `${desc} (T${created.id})`, costText, done, now, booking)
       }
     }
   }
@@ -1243,6 +1280,15 @@ export class Executor {
       }
     }
     return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the join is retried with the same hash, never paid again`, usd, hash)
+  }
+}
+
+/** The kill switch, a pause or a stop before a signature: nothing was sent. */
+class Stopped extends Error {
+  readonly reason: string
+  constructor(reason: string) {
+    super(`${reason} before signing: nothing sent`)
+    this.reason = reason
   }
 }
 
