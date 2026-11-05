@@ -29,7 +29,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   The agent tests another formation in ranked matches when its own record is thin or keeps losing, starting with the
   one that does best in the pooled record and the league table, and saves a new formation together with the eleven
   it needs.
-- **Ranked and casual matches**: the daily allowance, never closer than a match lasts (about 11 minutes) or the
+- **Ranked and casual matches**: the daily allowance, never closer than a match holds the team (about 13 minutes: the game and its broadcast) or the
   ranked cooldown (15 minutes in the game; the plan spaces ranked games 16 minutes apart to be sure), counting the last match before the plan; a match that no longer
   fits waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).

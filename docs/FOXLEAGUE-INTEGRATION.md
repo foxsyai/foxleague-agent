@@ -396,7 +396,7 @@ Both tokens have 18 decimals. The web app flags "low EGLD" under 0.01 EGLD
 |---|---|---|---|
 | `GET /api/shop/status?wallet_address=` | auth, must match | booster state, flat (`xp_booster_active` bool, `xp_booster_expires_at` RFC 3339 or null; a failed booster query on the server reads as inactive, `shop.rs:794-816`), shop prices, training quota (`daily_free`, `premium_cap`, `used_today`, `premium_used_today`, `slots_banked`), Common pack quota | `backend/src/routes/shop.rs:52-142`, `:730-910` |
 | `GET /api/matches/daily-allowance?wallet_address=` | auth, must match | `{today_count, daily_limit, reset_hour_utc}` | `backend/src/routes/matches.rs:527-570` |
-| `GET /api/matches/active?wallet_address=` | auth, must match | the match you are in right now or `null`: `{match_id, is_home, home_team_name, away_team_name, status, tm_game_id, created_at, kind ("ranked"/"challenge"/"tournament"), tournament_id, tournament_title, opponent_badge}` | `matches.rs:4471-4640` |
+| `GET /api/matches/active?wallet_address=` | auth, must match | the match you are in right now or `null`: `{match_id, is_home, home_team_name, away_team_name, status, tm_game_id, created_at, kind ("ranked"/"challenge"/"tournament"), tournament_id, tournament_title, opponent_badge}`; a ranked or casual match being played (`pending`, `simulating`) first, then one whose broadcast still airs (`finished`, since rc.85 for every such match: section 9.2) | `matches.rs:6340-6500` |
 | `GET /api/tournaments/my` | auth | `{active[], completed[]}` tournaments you play in or created | `backend/src/routes/tournaments.rs:6652-6907` |
 | `GET /api/tournaments/upcoming-matches` | auth | your scheduled tournament matches with `strategy_locks_at` (section 10.8) | `tournaments.rs:6320-6595` |
 | `GET /api/tournaments/my-squad` | auth | your CURRENT squad as a tournament would snapshot it (`null` if you cannot field a legal 11 + 7) | `tournaments.rs:6597-6650` |
@@ -876,8 +876,18 @@ stands in (no ELO change against the AI).
 
 ### 9.2 Learning the result
 
-The simulation runs on the match runner (about 10 minutes of match time); status moves
-`pending`, `simulating`, `rcg_ready`, `finished` (or `error`) (`matches.rs:1929-2069`).
+The simulation runs on the match runner (about 1.5 minutes, at least 45 s, polled for up to 5 minutes) and writes a
+recording of 6000 frames plus stoppage time (6149 seen), which is broadcast at 10 frames a second (about 615 s); status
+moves `pending`, `simulating`, `rcg_ready`, `finished` (or `error`) (`matches.rs:1929-2069`).
+
+A ranked or casual match holds its team until its broadcast has aired: another start is refused ("Already in match")
+until the latest of `rcg_ready_at`, `playback_started_at` and `finished_at` plus the recording's length plus 30 s
+(`ACTIVE_MATCH_GATE_SQL`, `live_match_predicate`, `broadcast_holds_its_team_sql`; `matches.rs:251`, `:340`, `:411`):
+about 12 to 12.5 minutes after the start's answer, up to about 16 with a slow simulation. Since rc.85 (2026-11-05, #638)
+the broadcast starts by itself when the recording is ready, and `GET /api/matches/active` returns the match, `finished`,
+while it airs (without the gate's 30 s). The agent spaces its casual and ranked starts 13 minutes apart and reads the
+active match before each start; after a lost start answer it takes an active match for its own only when it was created
+after the press (R85-1, R85-2).
 
 - `wss://foxleague.ai/ws/match/{id}` (no auth): `{match_id, status, home_score?, away_score?, error?}`.
   Scores are never sent before the reveal (`matches.rs:2162-2340`).
