@@ -631,12 +631,13 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   }
   // A tournament this team created and holds no seat in, as a create whose answer was lost can leave (audit 2026-11-04,
   // OPEN-8): the plan takes its seat, or an unfilled one keeps the organizer's deposit. A seat list that cannot be read
-  // flags nothing.
+  // flags nothing. A 1v1 (no deposit, refunded in full at its deadline) and a tournament with no seat left are not
+  // flagged: the join would be refused (audit of PR #51, R52A-I3).
   if (auth && profile && wallet) {
     const unseated: number[] = []
-    for (const t of (auth.myTournaments?.active ?? []).filter(x => x.creator_user_id === profile.id && x.status === 'open').slice(0, 2)) {
+    for (const t of (auth.myTournaments?.active ?? []).filter(x => x.creator_user_id === profile.id && x.status === 'open' && x.max_teams !== 2).slice(0, 2)) {
       const d = await attempt(warnings, `created T${t.id}`, () => fox.tournament(t.id, wallet))
-      if (d && Array.isArray(d.participants) && !d.participants.some(p => p.user_id === profile.id)) unseated.push(t.id)
+      if (d && Array.isArray(d.participants) && d.participants.length < t.max_teams && !d.participants.some(p => p.user_id === profile.id)) unseated.push(t.id)
     }
     if (unseated.length) auth.unseatedCreated = unseated
   }

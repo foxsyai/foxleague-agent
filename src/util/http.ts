@@ -10,11 +10,31 @@ function hostOf(url: string): string {
   }
 }
 
+/**
+ * An error page without the request's own path: an upstream may echo it ("Cannot GET /path", "The requested URL /path
+ * was not found"), and with it a key in the configured base URL (audit of PR #51, R52A-I2).
+ */
+function withoutPath(body: string, url: string): string {
+  let u: URL
+  try {
+    u = new URL(url)
+  } catch {
+    return body
+  }
+  const paths = [u.pathname + u.search, u.pathname]
+  try {
+    paths.push(decodeURIComponent(u.pathname + u.search), decodeURIComponent(u.pathname))
+  } catch {
+    // a malformed escape: the path as sent is removed all the same
+  }
+  return paths.filter(p => p.length > 1).sort((a, b) => b.length - a.length).reduce((text, p) => text.split(p).join('[path]'), body)
+}
+
 export class HttpError extends Error {
   readonly status: number
   readonly body: string
   constructor(status: number, body: string, url: string) {
-    super(`HTTP ${status} from ${hostOf(url)}: ${body.slice(0, 300)}`)
+    super(`HTTP ${status} from ${hostOf(url)}: ${withoutPath(body, url).slice(0, 300)}`)
     this.status = status
     this.body = body
   }

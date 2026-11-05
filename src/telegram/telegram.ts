@@ -42,7 +42,7 @@ export class Telegram {
 
   /** Queued, at most about one message per second (Telegram's per-chat limit). */
   send(text: string, buttons?: Button[]): void {
-    const chunks = split(text)
+    const chunks = split(forTelegram(text))
     chunks.forEach((chunk, n) => {
       const markup = buttons?.length && n === chunks.length - 1 ? { reply_markup: { inline_keyboard: [buttons.map(b => ({ text: b.label, callback_data: b.data }))] } } : {}
       this.queue = this.queue.then(async () => {
@@ -205,6 +205,15 @@ export function parseCommand(text: string): { command: string; args: string[]; r
   if (!m) return null
   const rawArgs = (m[2] ?? '').trim()
   return { command: m[1]!.toLowerCase(), args: rawArgs ? rawArgs.split(/\s+/) : [], rawArgs }
+}
+
+/**
+ * Every message to the owner without invisible characters: a FoxLeague answer can quote a title another player wrote,
+ * and a right-to-left override or a zero-width character in it would change what the owner reads (audit of PR #51,
+ * R52A-I1). Control and format characters become a space; line breaks stay.
+ */
+export function forTelegram(text: string): string {
+  return text.replace(/[\p{Cf}\u2028\u2029]+|(?:(?!\n)\p{Cc})+/gu, ' ')
 }
 
 function split(text: string): string[] {
