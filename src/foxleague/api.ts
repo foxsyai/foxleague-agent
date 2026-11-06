@@ -428,7 +428,14 @@ export function elevenStrength(side: unknown): number | null {
 export async function rivalStrength(fox: Pick<FoxLeague, 'players'>, wallet: string): Promise<number | null> {
   const cards = await fox.players(wallet)
   if (cards.length < 11) return null
-  const totals = cards.map(c => c.speed_synced + c.accuracy_synced + c.defense_synced + c.power_synced + c.control_synced + c.vision_synced + c.stamina_synced)
+  // Each card at the stronger of its synced and its live stats: a rival syncs its unsynced training (one cheap
+  // transaction) before the match it plays, so the live stats are what may face us (grand audit 2026-11-06, ATTACK-1).
+  // Live stats that cannot be read leave the synced ones.
+  const totals = cards.map(c => {
+    const synced = c.speed_synced + c.accuracy_synced + c.defense_synced + c.power_synced + c.control_synced + c.vision_synced + c.stamina_synced
+    const live = c.speed + c.accuracy + c.defense + c.power + c.control + c.vision + c.stamina
+    return Number.isFinite(live) && live > synced ? live : synced
+  })
   if (totals.some(t => !Number.isFinite(t))) return null
   return totals.sort((a, b) => b - a).slice(0, 11).reduce((sum, t) => sum + t, 0)
 }

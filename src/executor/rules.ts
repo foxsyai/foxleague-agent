@@ -627,6 +627,14 @@ export function elevenOvrToday(s: AgentSnapshot, lineup: number[] | undefined = 
   return sum / 11
 }
 
+/**
+ * The paid training sessions of this game day: the sessions past the free ones, both counted from the 14:00 UTC reset.
+ * FoxLeague's premium_used_today counts training_slot purchases in the last 24 hours (shop.rs), not sessions (INTEG-1).
+ */
+export function paidSessionsToday(t: { used_today: number; daily_free: number }): number {
+  return Math.max(0, t.used_today - t.daily_free)
+}
+
 /** The condition a training session costs a card (FoxLeague's `training_condition_loss`, not public), before age. */
 export const TRAINING_CONDITION_LOSS = 5
 
@@ -679,9 +687,12 @@ export interface FieldSeat {
  * neither known. The rest is even (or known only in part).
  */
 export function judgeField(field: FieldSeat[], ours: number, myElo: number): { stronger: number; weaker: number; even: number; unread: number; strongestElo: number | null; strongestLineup: number | null } {
-  const stronger = field.filter(f => f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD)).length
+  const isStronger = (f: FieldSeat) => f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD)
+  const stronger = field.filter(isStronger).length
   const weaker = field.filter(f => f.elo !== null && f.elo < myElo - STRONGER_ELO && f.strength !== null && f.strength * STRONGER_SQUAD < ours).length
-  const unread = field.filter(f => f.strength === null && f.elo === null).length
+  // A seat known only in part (its ELO or its lineup unread) and not already clearly stronger is unread, never even
+  // (grand audit 2026-11-06, EDGE-2).
+  const unread = field.filter(f => !isStronger(f) && (f.strength === null || f.elo === null)).length
   const elos = field.map(f => f.elo).filter((e): e is number => e !== null)
   const lineups = field.map(f => f.strength).filter((x): x is number => x !== null)
   return { stronger, weaker, unread, even: field.length - stronger - weaker - unread, strongestElo: elos.length ? Math.max(...elos) : null, strongestLineup: lineups.length ? Math.max(...lineups) : null }
@@ -691,7 +702,9 @@ export function judgeField(field: FieldSeat[], ours: number, myElo: number): { s
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
   const opp = ctx.opponent
   if (!opp || opp.elo === null) return "the opponent's strength could not be read"
-  const mine = s.profile?.elo_rating ?? 1200
+  const mine = s.profile?.elo_rating
+  // An ELO that cannot be read is no 1200 (EDGE-1).
+  if (typeof mine !== 'number' || !Number.isFinite(mine)) return 'your own ELO could not be read: no 1v1 blind'
   if (opp.elo - mine >= MAX_1V1_ELO_GAP) return `the opponent is far stronger (ELO ${opp.elo} vs ${mine})`
   // ELO alone is the one number a rival controls (new teams start at 1200): compare the squads too.
   if (opp.strength === null || opp.strength === undefined) return "the opponent's squad could not be read"
@@ -792,6 +805,9 @@ function squadLegal(s: AgentSnapshot): string | null {
     if (!p) return `#${n} in the squad is not in the wallet`
     if (p.listed) return `#${n} is listed for sale`
     if (p.transferLockedUntil) return `#${n} is in a transfer cooldown until ${p.transferLockedUntil}`
+    // Stats or condition FoxLeague's answer left out make the squad's strength NaN, which no "stronger than" test
+    // catches (grand audit 2026-11-06, EDGE-1): no match, entry or 1v1 on a squad that cannot be read.
+    if (!Number.isFinite(p.syncedTotal) || !Number.isFinite(p.condition)) return `#${n}'s stats or condition could not be read: not acting blind`
   }
   const fit = lineupPositionsOk(s, s.team.formation, s.team.lineup)
   if (fit) return `the saved lineup does not fit the formation ${s.team.formation} (${fit}): save one that fits first (set_formation with lineup and substitutes, or set_lineup)`
@@ -884,11 +900,15 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if ((p.live[a.attribute] ?? 0) >= p.cap) return refuse(`#${p.nonce} ${a.attribute} is at its ${p.rarity} cap ${p.cap}: XP would be lost`)
       const t = s.auth?.shop?.training
       if (!t) return refuse('training quota unknown (shop status unavailable)')
+      // Whether this session is paid, and how many paid ones the game day has had: the sessions past the free ones
+      // (FoxLeague's premium_used_today counts purchases in 24 hours, not sessions: grand audit 2026-11-06, INTEG-1).
+      // Numbers it cannot read are no count (EDGE-3, R55A-3).
+      if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse('training quota unknown (the sessions used today or the free ones could not be read)')
       const paid = t.used_today >= t.daily_free
       if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
-      // The level's count of paid sessions a day (owner, 2026-11-06); numbers it cannot read are no count (R55A-3).
       if (paid && (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked))) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
-      if (paid && t.premium_used_today >= ctx.settings.paidTrainingPerDay) return refuse(`${ctx.settings.paidTrainingPerDay} paid training sessions a day at this level, ${t.premium_used_today} used today`)
+      const paidToday = paidSessionsToday(t)
+      if (paid && paidToday >= ctx.settings.paidTrainingPerDay) return refuse(`${ctx.settings.paidTrainingPerDay} paid training sessions a day at this level, ${paidToday} used today`)
       // The team unread: the card may be a starter (R54A-5).
       if (!s.team || s.team.lineup.includes(p.nonce)) {
         const waits = waitingOpenRefusal(s, ctx, 'training', s.team?.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
@@ -1034,6 +1054,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!ctx.field) return refuse('the invited teams could not be read: no field is accepted blind')
           const atStart = conditionAtStart(s, t, ctx.now)
           if (!atStart) return refuse('your current tournaments could not be read: no field is judged blind')
+          if (!Number.isFinite(s.profile.elo_rating)) return refuse('your own ELO could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
           if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (lineup and ELO): no real chance of the knockout`)
           if (field.stronger + field.unread >= LK_KNOCKOUT_PLACES) return refuse(`${field.unread} invited teams could not be read: no field is accepted blind`)
@@ -1043,6 +1064,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           // Our eleven as it will be at the start (the rivals are taken at full condition): rested, less what our other tournaments cost before it.
           const atStart = conditionAtStart(s, t, ctx.now)
           if (!atStart) return refuse('your current tournaments could not be read: no field is judged blind')
+          if (!Number.isFinite(s.profile.elo_rating)) return refuse('your own ELO could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
           if (field.unread >= FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: no field is entered blind`)
           if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
@@ -1257,10 +1279,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           // The level's count of paid sessions a day (owner, 2026-11-06): those used today and those still banked count.
           const t = s.auth?.shop?.training
           if (!t) return refuse('training quota unknown (shop status unavailable)')
-          if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked)) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
+          if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked) || !Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
           const more = a.quantity ?? 1
           const limit = ctx.settings.paidTrainingPerDay
-          if (t.premium_used_today + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${t.premium_used_today} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - t.premium_used_today - t.slots_banked)}`)
+          const paidToday = paidSessionsToday(t)
+          if (paidToday + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - paidToday - t.slots_banked)}`)
           amount = prices.training * more
           facts.quantity = a.quantity
           break
@@ -1311,6 +1334,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (ctx.fusionPool === 0) return refuse(`no ${output} left in the fusion pool; try later`)
       const fee = cfg.fusion_costs_foxsy?.[RARITY_LEVEL[rarity]]
       if (!fee) return refuse(`fusion cost for ${rarity} unknown`)
+      // The level's largest single shop payment holds the fee too (owner's level table, 2026-11-06: Steady's 500 reaches
+      // the fees up to 400; grand audit DOCS-1).
+      if (fee > ctx.settings.maxShopPaymentFoxsy) return refuse(`a fusion fee of ${fee} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy} (Max shop payment)`)
       return needFoxsy(fee, allow(fee, { fee, nonces: a.player_nonces, positionChoice: a.position_of }, 'play', [`2 cards fewer, one ${output} in their place`]))
     }
 

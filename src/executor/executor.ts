@@ -501,7 +501,8 @@ export class Executor {
         }
       }
     } else if (a.type === 'join_tournament' && tournament && worthReading) {
-      const seated = tournament.participants.filter(p => p.user_id !== snap.profile?.id).slice(0, 32)
+      // Every seated team, not the first 32: one left out is neither judged nor counted unread (grand audit 2026-11-06, MONEY-1).
+      const seated = tournament.participants.filter(p => p.user_id !== snap.profile?.id)
       market.field = await Promise.all(seated.map(async p => {
         const known = snap.leaderboardNeighbours.find(u => u.id === p.user_id)
         const elo = known?.elo_rating ?? (p.wallet_address ? (await soft(() => fox.user(p.wallet_address!)))?.elo_rating ?? null : null)
@@ -1204,6 +1205,13 @@ export class Executor {
             }
             const why = err instanceof ApiRefusal && !noAnswer ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
             this.unbook(booking)
+            // FoxLeague committed the tournament pending on chain with this payment on it ("could not be confirmed yet ...
+            // stays pending", tournaments.rs), and its reconcile opens it later: the payment is used, not refunded (grand
+            // audit 2026-11-06, INTEG-2). The plan is shown a tournament it created without a seat (OPEN-8).
+            if (err instanceof ApiRefusal && /could not be confirmed yet|stays pending/i.test(err.message)) {
+              store.resolvePending(organizerHash, 'done')
+              return finish('error', `${desc}: organizer payment ${organizerHash} made, and FoxLeague may have created it: its creation is still pending on chain (${why}); the payment is on that tournament, not refunded, so the next plan reads your tournaments`, 0, organizerHash)
+            }
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
             if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
               store.resolvePending(organizerHash, 'done')

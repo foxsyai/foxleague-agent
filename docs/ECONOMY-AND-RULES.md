@@ -424,7 +424,11 @@ among the called-up players by contribution. Nothing of it exists in the code on
   `tx_signature_check_mode`.
 - **XP booster timing.** The multiplier is read when a match result is applied (at the reveal for tournament and 1v1
   matches): a booster bought once the fixture is drawn loses nothing.
-- **The agent's own checks (not FoxLeague rules).** The schedule check judges the squad at a tournament's start;
+- **The agent's own checks (not FoxLeague rules).** Since the grand audit of 2026-11-06: a rival is judged at the
+  stronger of its synced and its live stats card by card (it may sync before the match); a squad, an own ELO or a
+  training status the agent cannot read refuses a 1v1, an entry or a session; a seated team known only in part is
+  unread; every seated team is judged; a fusion fee is held to the Max shop payment; the level's paid sessions a day
+  are the sessions past the free ones. The schedule check judges the squad at a tournament's start;
   every level compares a seated field with our eleven at the start (Zeus only until 2026-11-06); a plan spaces its casual and ranked matches 13 minutes
   apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
