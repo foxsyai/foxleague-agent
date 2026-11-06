@@ -206,5 +206,5 @@ test('the dashboard has the three limits, each with its info bubble, and asks th
     assert.match(html, new RegExp(`<label for="${id}">[^<]*<i class="info" data-tip="${tip}">i</i></label><input id="${id}"`))
     assert.match(html, new RegExp(`\\n  ${tip}: \\[`), `the ${tip} info bubble`)
   }
-  assert.match(html, /const LIMITS = \[[^\]]*'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy'\]/)
+  assert.match(html, /const LIMITS = \[[^\]]*'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek'\]/)
 })

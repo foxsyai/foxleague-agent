@@ -45,8 +45,6 @@ export interface RulesContext {
   floorPrice?: number | null
   /** The other side of a 1v1 (joined or created): its ELO and lineup strength at full condition, null when unreadable. */
   opponent?: { userId: number; elo: number | null; strength?: number | null }
-  /** The agent plays at the Zeus level: a 1v1 needs a good win chance, a tournament a chance of the top three. */
-  zeus?: boolean
   /**
    * For joining a League + Knockout: the team's pending invitation to it, read again right before the payment;
    * 'not invited' when there is none, null when the invitations could not be read (refused).
@@ -62,10 +60,13 @@ export interface RulesContext {
   ownSeat?: boolean
   /** For widening an OVR range: this agent created the tournament or 1v1 itself (its own create in its log), not the owner. */
   ownCreation?: boolean
-  /** For a Zeus join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
+  /** For a join of a standard tournament: each seated team's lineup strength and ELO, null when unread. */
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
+  /** XP boosters and Common packs this agent bought in the last 7 days (its own log), for the level's counts. */
+  boostersThisWeek?: number
+  packsThisWeek?: number
   /** An open challenge this agent created in the last 4 hours (its longest deadline) may still wait (R54A-3). */
   openChallengeRecent?: boolean
   /**
@@ -344,7 +345,7 @@ const NEXT_RARITY = ['Uncommon', 'Rare', 'Epic', 'Legendary'] as const
 export const LK_LEAGUE_MATCHES = 8
 export const LK_KNOCKOUT_MATCHES = 9
 const LK_KNOCKOUT_SLOTS = 46
-/** Zeus accepts with a real chance of the knockout: places 1 to 24 (owner, 2026-10-24). */
+/** A League + Knockout is accepted with a real chance of the knockout: places 1 to 24 (owner, 2026-10-24). */
 export const LK_KNOCKOUT_PLACES = 24
 /** An invitation this close to its expiry is not paid into (FoxLeague closes it when the next wave runs). */
 const INVITATION_MARGIN_MS = 30 * 60_000
@@ -654,12 +655,15 @@ function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, l
   return null
 }
 
-/** A Zeus 1v1 needs at least this win chance; a seated team is clearly stronger with both margins below. */
-export const ZEUS_MIN_1V1_CHANCE = 0.55
-export const ZEUS_STRONGER_SQUAD = 1.05
-export const ZEUS_STRONGER_ELO = 50
-/** Zeus does not enter a field with this many clearly stronger teams, or this many it could not read. */
-export const ZEUS_FIELD_LIMIT = 3
+/**
+ * A 1v1 against a known team needs at least this win chance (Zeus's floor, every level's since 2026-11-06: a 1v1 pays
+ * on average from about 56 percent); a seated team is clearly stronger with both margins below.
+ */
+export const MIN_1V1_CHANCE = 0.55
+export const STRONGER_SQUAD = 1.05
+export const STRONGER_ELO = 50
+/** No entry into a field with this many clearly stronger teams, or this many unread (every level since 2026-11-06). */
+export const FIELD_LIMIT = 3
 
 /** One seated team of a tournament: its lineup strength at full condition and its ELO, null when unread. */
 export interface FieldSeat {
@@ -669,14 +673,14 @@ export interface FieldSeat {
 }
 
 /**
- * How a seated field compares with us, the one test the Zeus join rule and the plan's field line both use. Clearly
+ * How a seated field compares with us, the one test the join rule and the plan's field line both use. Clearly
  * stronger: ELO more than 50 above ours and a lineup more than 5 percent above ours (a lineup that could not be read
  * counts when its ELO alone is clearly higher). Clearly weaker: both margins the other way, both known. Unread:
  * neither known. The rest is even (or known only in part).
  */
 export function judgeField(field: FieldSeat[], ours: number, myElo: number): { stronger: number; weaker: number; even: number; unread: number; strongestElo: number | null; strongestLineup: number | null } {
-  const stronger = field.filter(f => f.elo !== null && f.elo > myElo + ZEUS_STRONGER_ELO && (f.strength === null || f.strength > ours * ZEUS_STRONGER_SQUAD)).length
-  const weaker = field.filter(f => f.elo !== null && f.elo < myElo - ZEUS_STRONGER_ELO && f.strength !== null && f.strength * ZEUS_STRONGER_SQUAD < ours).length
+  const stronger = field.filter(f => f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD)).length
+  const weaker = field.filter(f => f.elo !== null && f.elo < myElo - STRONGER_ELO && f.strength !== null && f.strength * STRONGER_SQUAD < ours).length
   const unread = field.filter(f => f.strength === null && f.elo === null).length
   const elos = field.map(f => f.elo).filter((e): e is number => e !== null)
   const lineups = field.map(f => f.strength).filter((x): x is number => x !== null)
@@ -694,10 +698,8 @@ function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | n
   const ours = lineupStrength(s)
   if (opp.strength > ours * MAX_1V1_STRENGTH_RATIO) return `the opponent's squad is stronger (lineup strength ${Math.round(opp.strength)} vs ours ${Math.round(ours)} at today's condition)`
   if ((ctx.oneVOneWithOpponentThisWeek ?? 0) >= MAX_1V1_PER_OPPONENT_WEEK) return `already ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against user ${opp.userId} in the last 7 days`
-  if (ctx.zeus) {
-    const p = winChance({ myElo: mine, oppElo: opp.elo, myStrength: ours || null, oppStrength: opp.strength })
-    if (p !== null && p < ZEUS_MIN_1V1_CHANCE) return `the win chance against user ${opp.userId} is about ${percent(p)}; Zeus plays a 1v1 from ${percent(ZEUS_MIN_1V1_CHANCE)}`
-  }
+  const p = winChance({ myElo: mine, oppElo: opp.elo, myStrength: ours || null, oppStrength: opp.strength })
+  if (p !== null && p < MIN_1V1_CHANCE) return `the win chance against user ${opp.userId} is about ${percent(p)}; a 1v1 against a known team is played from ${percent(MIN_1V1_CHANCE)}`
   return null
 }
 
@@ -732,7 +734,7 @@ function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
 const BOOSTER_PHASES = new Set(['upcoming', 'locked', 'live'])
 
 /**
- * Why Zeus would buy the XP booster with nothing of its own to double, or null: it needs a Silver or Gold tournament
+ * Why the XP booster would have nothing of its own to double, or null (every level since 2026-11-06): it needs a Silver or Gold tournament
  * or 1v1 match of its own listed, not over, kicking off within the booster's 24 hours, or a paid Bronze one once the
  * competition levels are live (casual and free Bronze matches earn no XP; a ranked game is no fixture to count on). FoxLeague reads the booster when a match's result is applied (at the reveal of a tournament or
  * 1v1 match; matches.rs apply_match_results, a purchase verified within the last 24 h), so buying it once the fixture
@@ -742,14 +744,14 @@ const BOOSTER_PHASES = new Set(['upcoming', 'locked', 'live'])
 function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
   const upcoming = s.auth?.upcoming
   const mine = s.auth?.myTournaments
-  if (!upcoming || !mine) return 'your fixtures could not be read: Zeus buys the XP booster only for competitive matches of its own'
+  if (!upcoming || !mine) return 'your fixtures could not be read: the XP booster is bought only for competitive matches of your own'
   const sure = upcoming.matches.some(m => {
     const at = Date.parse(m.scheduled_at)
     const t = mine.active.find(x => x.id === m.tournament_id)
     const earns = t?.tier === 'silver' || t?.tier === 'gold' || (t?.tier === 'bronze' && t.entry_fee_foxsy > 0 && paidBronzeEarns(s.config, now, t.is_private))
     return BOOSTER_PHASES.has(m.phase) && Number.isFinite(at) && at - now.getTime() <= 24 * 3600_000 && earns
   })
-  return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): Zeus buys the XP booster once its fixtures are drawn'
+  return sure ? null : 'no competitive match of yours is scheduled in the next 24 hours (a seat in an open tournament can still come back): the XP booster is bought once your fixtures are drawn'
 }
 
 /**
@@ -884,6 +886,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!t) return refuse('training quota unknown (shop status unavailable)')
       const paid = t.used_today >= t.daily_free
       if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
+      // The level's count of paid sessions a day (owner, 2026-11-06).
+      if (paid && t.premium_used_today >= ctx.settings.paidTrainingPerDay) return refuse(`${ctx.settings.paidTrainingPerDay} paid training sessions a day at this level, ${t.premium_used_today} used today`)
       // The team unread: the card may be a starter (R54A-5).
       if (!s.team || s.team.lineup.includes(p.nonce)) {
         const waits = waitingOpenRefusal(s, ctx, 'training', s.team?.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
@@ -1022,24 +1026,25 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!oneVOne) {
         const worn = scheduleRefusal(s, t, ctx.now)
         if (worn) return refuse(worn)
-        // Zeus enters only with a chance of the top three: not when three seated teams are clearly stronger. A League +
-        // Knockout is judged on its invited teams, with a chance of the knockout (places 1 to 24, owner 2026-10-24).
-        if (ctx.zeus && lk) {
-          if (!ctx.field) return refuse('the invited teams could not be read: Zeus does not accept a field it cannot judge')
+        // Every level (Zeus's rule until 2026-11-06) enters only with a chance of the top three: not when three seated
+        // teams are clearly stronger. A League + Knockout is judged on its invited teams, with a chance of the knockout
+        // (places 1 to 24, owner 2026-10-24).
+        if (lk) {
+          if (!ctx.field) return refuse('the invited teams could not be read: no field is accepted blind')
           const atStart = conditionAtStart(s, t, ctx.now)
-          if (!atStart) return refuse('your current tournaments could not be read: Zeus does not judge a field blind')
+          if (!atStart) return refuse('your current tournaments could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
           if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (lineup and ELO): no real chance of the knockout`)
-          if (field.stronger + field.unread >= LK_KNOCKOUT_PLACES) return refuse(`${field.unread} invited teams could not be read: Zeus does not accept a field it cannot judge`)
-        } else if (ctx.zeus) {
+          if (field.stronger + field.unread >= LK_KNOCKOUT_PLACES) return refuse(`${field.unread} invited teams could not be read: no field is accepted blind`)
+        } else {
           // Never blind: a field that could not be read is no field to pay into.
-          if (!ctx.field) return refuse('the seated teams could not be read: Zeus does not enter a field it cannot judge')
+          if (!ctx.field) return refuse('the seated teams could not be read: no field is entered blind')
           // Our eleven as it will be at the start (the rivals are taken at full condition): rested, less what our other tournaments cost before it.
           const atStart = conditionAtStart(s, t, ctx.now)
-          if (!atStart) return refuse('your current tournaments could not be read: Zeus does not judge a field blind')
+          if (!atStart) return refuse('your current tournaments could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
-          if (field.unread >= ZEUS_FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: Zeus does not enter a field it cannot judge`)
-          if (field.stronger >= ZEUS_FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
+          if (field.unread >= FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: no field is entered blind`)
+          if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
         }
       }
       // A free Bronze (created before the levels) seats without a payment and earns nothing; a paid one goes on chain like Silver.
@@ -1237,20 +1242,35 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
             const hours = (ctx.now.getTime() - ctx.lastBoosterAt.getTime()) / 3600_000
             if (hours < 24 - XP_BOOSTER_RENEW_HOURS) return refuse(`an XP booster was bought ${Math.max(0, Math.floor(hours))} h ago: another one now would throw away the hours left`)
           }
-          if (ctx.zeus) {
-            const none = noBoosterFixture(s, ctx.now)
-            if (none) return refuse(none)
-          }
+          const none = noBoosterFixture(s, ctx.now)
+          if (none) return refuse(none)
+          // The level's count (owner, 2026-11-06), from the agent's own purchases of the last 7 days.
+          const perWeek = ctx.settings.boostersPerWeek
+          if (perWeek <= 0) return refuse('no XP booster at this level (Boosters a week is 0)')
+          if (typeof ctx.boostersThisWeek !== 'number') return refuse('the XP boosters bought this week could not be counted: not buying blind')
+          if (ctx.boostersThisWeek >= perWeek) return refuse(`${perWeek} XP booster${perWeek === 1 ? '' : 's'} a week at this level, ${ctx.boostersThisWeek} bought in the last 7 days`)
           amount = prices.xp_booster
           break
         }
-        case 'training_slot':
-          amount = prices.training * (a.quantity ?? 1)
+        case 'training_slot': {
+          // The level's count of paid sessions a day (owner, 2026-11-06): those used today and those still banked count.
+          const t = s.auth?.shop?.training
+          if (!t) return refuse('training quota unknown (shop status unavailable)')
+          const more = a.quantity ?? 1
+          const limit = ctx.settings.paidTrainingPerDay
+          if (t.premium_used_today + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${t.premium_used_today} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - t.premium_used_today - t.slots_banked)}`)
+          amount = prices.training * more
           facts.quantity = a.quantity
           break
+        }
         case 'common_pack': {
           if (!cfg.common_pack_available) return refuse(`Common pack unavailable${cfg.common_pack_unavailable_reason ? `: ${cfg.common_pack_unavailable_reason}` : ''}`)
           if (s.auth?.shop?.common_pack_remaining_this_week === 0) return refuse('weekly Common pack quota used')
+          // The level's count (owner, 2026-11-06), from the agent's own purchases of the last 7 days.
+          const perWeek = ctx.settings.packsPerWeek
+          if (perWeek <= 0) return refuse('no Common packs at this level (Packs a week is 0)')
+          if (typeof ctx.packsThisWeek !== 'number') return refuse('the Common packs bought this week could not be counted: not buying blind')
+          if (ctx.packsThisWeek >= perWeek) return refuse(`${perWeek} Common pack${perWeek === 1 ? '' : 's'} a week at this level, ${ctx.packsThisWeek} bought in the last 7 days`)
           amount = cfg.common_pack_price_foxsy
           break
         }

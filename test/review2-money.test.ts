@@ -8,7 +8,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Config } from '../src/config.ts'
-import { ADDR, STRANGER, dryWallet, encodeAuction, liveWallet, setup, snapshot, withLive } from './fixtures.ts'
+import { ADDR, STRANGER, dryWallet, encodeAuction, liveWallet, setup, snapshot, withLive, withFixture } from './fixtures.ts'
 import { ApiRefusal } from '../src/foxleague/api.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
 import { creditRefunds } from '../src/executor/refunds.ts'
@@ -306,10 +306,10 @@ test('R2A-4 a won card relisted by the agent before the won-close: the bid it pa
 test('R2A-5 a booster this agent bought and confirmed an hour ago is not bought again while FoxLeague reports none active', async () => {
   const m = setup({ chain: { send: async () => 'hb2' }, fox: { user: async () => null, shopConfirm: async () => ({ message: 'XP booster activated' }) } })
   await withLive(m.store, async () => {
-    const [first] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+    const [first] = await m.exec.run(m.agent(), liveWallet, withFixture(snapshot()), act({ type: 'buy', product: 'xp_booster' }))
     assert.equal(first!.status, 'confirmed', first!.summary)
     // The next plan: FoxLeague's shop status lost its booster query and says "none active" (shop.rs, defaulting inactive).
-    const s = snapshot()
+    const s = withFixture(snapshot())
     s.auth!.shop!.xp_booster_active = false
     s.auth!.shop!.xp_booster_expires_at = null
     const [again] = await m.exec.run(m.agent(), liveWallet, s, act({ type: 'buy', product: 'xp_booster' }))
@@ -320,15 +320,15 @@ test('R2A-5 a booster this agent bought and confirmed an hour ago is not bought 
 
 test('R2A-5 the same in dry run: a simulated booster holds the next simulated one', async () => {
   const m = setup()
-  const [first] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+  const [first] = await m.exec.run(m.agent(), dryWallet, withFixture(snapshot()), act({ type: 'buy', product: 'xp_booster' }))
   assert.equal(first!.status, 'dry_run', first!.summary)
-  const [again] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+  const [again] = await m.exec.run(m.agent(), dryWallet, withFixture(snapshot()), act({ type: 'buy', product: 'xp_booster' }))
   assert.equal(again!.status, 'refused', again!.summary)
 })
 
 /** FoxLeague's shop status after its own booster query failed: "none active". */
 const noBoosterSeen = () => {
-  const s = snapshot()
+  const s = withFixture(snapshot())
   s.auth!.shop!.xp_booster_active = false
   s.auth!.shop!.xp_booster_expires_at = null
   return s
@@ -344,7 +344,7 @@ test('R2A-5 (review of #12) a booster whose first confirm answered tx_pending, c
   let answer: () => { message: string } = () => { throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending') }
   const m = setup({ chain: { send: async () => 'hb3' }, fox: { user: async () => null, shopConfirm: async () => answer() } })
   await withLive(m.store, async () => {
-    const [first] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+    const [first] = await m.exec.run(m.agent(), liveWallet, withFixture(snapshot()), act({ type: 'buy', product: 'xp_booster' }))
     assert.equal(first!.status, 'unconfirmed', first!.summary)
     // The pending timer confirms it a minute later: the booster runs, its log row stays "unconfirmed".
     answer = () => ({ message: 'XP booster activated' })

@@ -11,7 +11,7 @@ import type { FoxLeague } from '../src/foxleague/api.ts'
 import type { Config } from '../src/config.ts'
 import type { AgentWallet } from '../src/wallet/wallet.ts'
 import { decimalToAtomic, hexOfString, numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
-import { liveWallet, withLive } from './fixtures.ts'
+import { liveWallet, withLive, withFixture } from './fixtures.ts'
 
 const ADDR = 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl'
 const wallet: AgentWallet = { index: 0, address: ADDR, pubkeyHex: '00', shard: 0, signTransaction: () => assert.fail('must not sign in dry run'), signMessage: () => assert.fail('must not sign') }
@@ -90,11 +90,11 @@ test('kill switch and pause refuse everything', async () => {
 
 test('daily cap: a second booster the same game day is refused', async () => {
   const { exec, agent, store } = setup()
-  store.updateSettings(0, { dailyCapUsd: 5, maxShopPaymentFoxsy: 2500 })
-  const first = await exec.run(agent(), wallet, snapshot(), [{ action: { type: 'buy', product: 'xp_booster' }, reason: '' }])
-  assert.equal(first[0]!.status, 'dry_run') // 2,000 FOXSY at $0.00225 = $4.50
+  store.updateSettings(0, { dailyCapUsd: 4.8, maxShopPaymentFoxsy: 2500, boostersPerWeek: 7, paidTrainingPerDay: 10 })
+  const first = await exec.run(agent(), wallet, withFixture(snapshot()), [{ action: { type: 'buy', product: 'xp_booster' }, reason: '' }])
+  assert.equal(first[0]!.status, 'dry_run', first[0]!.summary) // 2,000 FOXSY at $0.00225 = $4.50
   assert.ok(store.spentUsd(0, { category: 'play', dryRun: true, gameDay: gameDayKey(new Date()) }) > 4.4)
-  const second = await exec.run(agent(), wallet, snapshot(), [{ action: { type: 'buy', product: 'training_slot', quantity: 25 }, reason: '' }])
+  const second = await exec.run(agent(), wallet, withFixture(snapshot()), [{ action: { type: 'buy', product: 'training_slot', quantity: 10 }, reason: '' }]) // $0.45 more, over $4.80
   assert.equal(second[0]!.status, 'refused')
   assert.match(second[0]!.summary, /daily cap/)
   // The live ledger is separate: dry-run spend never blocks live spending.

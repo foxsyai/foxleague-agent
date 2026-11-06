@@ -17,7 +17,8 @@ const ranged = (more: Record<string, unknown>) => tournament(4100, { ...more }) 
 
 test('a tournament with an OVR range is joined only when the team\'s best XI OVR is inside it', () => {
   const s = snapshot()
-  const ctx = (t: TournamentDetail, bestXiOvr: number | null | undefined) => ({ settings: TEST_SETTINGS, now: new Date(), tournament: t, bestXiOvr } as RulesContext)
+  // field: [] is a seated field read with nobody in it (every level is held to the field rule since 2026-11-06).
+  const ctx = (t: TournamentDetail, bestXiOvr: number | null | undefined) => ({ settings: TEST_SETTINGS, now: new Date(), tournament: t, bestXiOvr, field: [] } as RulesContext)
   assert.equal(checkAction(join(4100), s, ctx(ranged({ ovr_min: 25, ovr_max: 35 }), 30.4)).ok, true)
   assert.match(checkAction(join(4100), s, ctx(ranged({ ovr_max: 29 }), 29.4)).refusal!, /takes teams with a best XI OVR up to 29; yours is 29\.4/)
   assert.match(checkAction(join(4100), s, ctx(ranged({ ovr_min: 31 }), 30.9)).refusal!, /takes teams with a best XI OVR from 31; yours is 30\.9/)

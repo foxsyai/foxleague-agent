@@ -6,7 +6,6 @@
 // Live needs BOTH the platform in live mode (one switch for all agents) AND AGENT_LIVE_ENABLED=1 in the environment.
 
 import { randomUUID } from 'node:crypto'
-import { isZeus } from '../store/settings.ts'
 import { winChance } from '../snapshot/winchance.ts'
 import { Address, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
@@ -414,6 +413,15 @@ export class Executor {
         .find(r => !(r.txHash && refunded.has(r.txHash)) && (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'xp_booster')
       market.lastBoosterAt = last ? new Date(last.at) : null
     }
+    // The level's counts (owner, 2026-11-06): the agent's own purchases of the last 7 days, on the safe side as above.
+    if (a.type === 'buy' && (a.product === 'xp_booster' || a.product === 'common_pack')) {
+      const refunded = store.refundedHashes(agent.index, `shop:${a.product}`)
+      const bought = store
+        .activityOf(agent.index, ['buy'], since(7 * 86_400_000))
+        .filter(r => !(r.txHash && refunded.has(r.txHash)) && (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === a.product).length
+      if (a.product === 'xp_booster') market.boostersThisWeek = bought
+      else market.packsThisWeek = bought
+    }
     if (a.type === 'fuse') {
       market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
       const first = snap.players.find(p => p.nonce === a.player_nonces[0])
@@ -443,8 +451,6 @@ export class Executor {
       const floors = await soft(() => fox.floorPrices())
       market.floorPrice = floors ? (floors.find(f => f.rarity === rarity)?.floor_price ?? 0) : null
     }
-    // Zeus: its own extra check needs the seated field (the podium).
-    const zeus = isZeus(agent.settings.strategy)
     // An OVR range: the best XI OVR read right now (null: unreadable, refused).
     const t1 = tournament?.tournament
     const createsRange = (a.type === 'create_tournament' || a.type === 'create_challenge') && (a.ovr_min !== undefined || a.ovr_max !== undefined)
@@ -475,7 +481,8 @@ export class Executor {
     // The field is read only for an entry the cheap checks would allow (open, before its deadline, a seat left).
     const t0 = tournament?.tournament
     const worthReading = t0 && t0.max_teams > 2 && t0.status === 'open' && new Date(t0.deadline) > now && tournament!.participants.length < t0.max_teams && !tournament!.participants.some(p => p.user_id === snap.profile?.id)
-    if (zeus && a.type === 'join_tournament' && tournament && worthReading && t0.format === 'league_knockout') {
+    // Every level's join reads the field (Zeus's rule until 2026-11-06): the podium, or the knockout of a League + Knockout.
+    if (a.type === 'join_tournament' && tournament && worthReading && t0.format === 'league_knockout') {
       // Judged on the invited teams, not only the seated ones; their wallets and ELO from the leaderboard.
       const view = await soft(() => fox.leagueInvitationsView(t0.id, wallet))
       const board = view ? await soft(() => fox.leaderboard(200)) : null
@@ -493,7 +500,7 @@ export class Executor {
           }))
         }
       }
-    } else if (zeus && a.type === 'join_tournament' && tournament && worthReading) {
+    } else if (a.type === 'join_tournament' && tournament && worthReading) {
       const seated = tournament.participants.filter(p => p.user_id !== snap.profile?.id).slice(0, 32)
       market.field = await Promise.all(seated.map(async p => {
         const known = snap.leaderboardNeighbours.find(u => u.id === p.user_id)
@@ -505,7 +512,6 @@ export class Executor {
     const starts = lastMatchStarts(store, agent.index, now)
     return {
       settings: agent.settings,
-      ...(zeus ? { zeus } : {}),
       ...(tournament !== undefined ? { tournament } : {}),
       ...(entryAmount !== undefined ? { entryAmount } : {}),
       ...market,

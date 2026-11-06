@@ -7,7 +7,7 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Config } from '../src/config.ts'
-import { liveWallet, setup, snapshot, withLive } from './fixtures.ts'
+import { liveWallet, setup, snapshot, withLive, withFixture } from './fixtures.ts'
 import { ApiRefusal } from '../src/foxleague/api.ts'
 import { retryPendingPayments } from '../src/executor/pending.ts'
 import type { Store } from '../src/store/db.ts'
@@ -31,7 +31,7 @@ test('R3-1 a booster payment FoxLeague refunded (nothing delivered, the FOXSY ba
   const m = setup({ chain: { send: async () => 'hb9' }, fox: { user: async () => null, shopConfirm: async () => answer() } })
   const live = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
   await withLive(m.store, async () => {
-    const [first] = await m.exec.run(m.agent(), liveWallet, snapshot(), act({ type: 'buy', product: 'xp_booster' }))
+    const [first] = await m.exec.run(m.agent(), liveWallet, withFixture(snapshot()), act({ type: 'buy', product: 'xp_booster' }))
     assert.equal(first!.status, 'unconfirmed', first!.summary)
     // The grace passed: FoxLeague's sweep refunded the 2,000 FOXSY and says so to the next confirm (12.1).
     answer = () => { throw new ApiRefusal('This payment was already refunded and cannot be used for a purchase.') }
@@ -41,7 +41,7 @@ test('R3-1 a booster payment FoxLeague refunded (nothing delivered, the FOXSY ba
     // An hour later: no booster runs (FoxLeague delivered none and its status says so), the FOXSY is back.
     ageActivity(m.store, 'buy', 3600_000)
     answer = () => ({ message: 'XP booster activated' })
-    const s = snapshot()
+    const s = withFixture(snapshot())
     s.auth!.shop!.xp_booster_active = false
     s.auth!.shop!.xp_booster_expires_at = null
     const [again] = await m.exec.run(m.agent(), liveWallet, s, act({ type: 'buy', product: 'xp_booster' }))

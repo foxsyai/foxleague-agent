@@ -14,7 +14,7 @@ import { applyEffect } from '../src/executor/executor.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
 import type { AgentSnapshot } from '../src/snapshot/snapshot.ts'
-import { setup, snapshot, dryWallet, TEST_SETTINGS } from './fixtures.ts'
+import { setup, snapshot, dryWallet, TEST_SETTINGS, withFixture } from './fixtures.ts'
 
 type Shop = NonNullable<NonNullable<AgentSnapshot['auth']>['shop']>
 
@@ -42,7 +42,8 @@ const act = (action: unknown): PlannedAction[] => [{ action: action as PlannedAc
 const BUY = { type: 'buy', product: 'xp_booster' } as const
 
 function withShop(shop: Shop | null): AgentSnapshot {
-  const s = snapshot()
+  // A competitive match of ours within 24 hours: the booster has something to double (every level since 2026-11-06).
+  const s = withFixture(snapshot())
   s.auth!.shop = shop
   return s
 }

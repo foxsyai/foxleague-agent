@@ -289,7 +289,7 @@ test('C4: the slot estimate of a 36-team League + Knockout tournament is FoxLeag
 // ---- D9: Zeus buys the XP booster only once a competitive fixture of its own is listed ----
 
 test('D9: Zeus buys the XP booster only once a competitive fixture of its own is scheduled within 24 hours', () => {
-  const ctx = (): RulesContext => ({ settings: { ...TEST_SETTINGS, maxShopPaymentFoxsy: 2500 }, now: new Date(), zeus: true })
+  const ctx = (): RulesContext => ({ settings: { ...TEST_SETTINGS, maxShopPaymentFoxsy: 2500 }, now: new Date(), boostersThisWeek: 0 })
   const booster = { type: 'buy', product: 'xp_booster' } as const
   const seat = (more: Record<string, unknown> = {}) => ({ ...(tournament(60) as { tournament: Record<string, unknown> }).tournament, format: 'swiss', max_teams: 10, min_teams: 3, status: 'open', deadline: hours(1), starts_at: hours(1.5), ...more })
   const fixture = (more: Record<string, unknown> = {}) => ({ tournament_id: 60, tournament_title: 'T60', round_label: 'Round 1', group_name: null, is_home: true, opponent_name: 'Rival', scheduled_at: hours(1.5), strategy_locks_at: hours(1), locked: false, phase: 'upcoming', home_score: null, away_score: null, ...more })
@@ -317,7 +317,7 @@ test('D9: Zeus buys the XP booster only once a competitive fixture of its own is
   blind.auth!.upcoming = null as never
   assert.match(checkAction(booster, blind, ctx()).refusal ?? '', /could not be read/)
 
-  assert.equal(checkAction(booster, seated, { ...ctx(), zeus: undefined }).ok, true, 'the other levels keep their own judgement')
+  // Every level since 2026-11-06 (one brain): no level buys a booster with nothing of its own to double.
 })
 
 // ---- E2: the formations test does not depend on the calendar ----
@@ -334,8 +334,8 @@ globalThis.Date = class extends R { constructor(...a) { if (a.length === 0) supe
 })
 
 // The prompt follows C1 and D9 (audit 2026-10-23): the AI is told what the rules now allow and require.
-test('the prompt says a Legendary buys its match waiver for its listing gate, and Zeus buys the booster once its fixtures are drawn', async () => {
+test('the prompt says a Legendary buys its match waiver for its listing gate, and the booster is bought once the fixtures are drawn', async () => {
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
   assert.match(SYSTEM_PROMPT, /A Legendary is never fused, but its match waiver \(100 FOXSY a match, at most 270\) buys the matches of its listing gate, only for a spare you would sell/)
-  assert.match(SYSTEM_PROMPT, /At the Zeus level the executor sells the booster only once a Silver, Gold or 1v1 match of your own is drawn within its 24 hours/)
+  assert.match(SYSTEM_PROMPT, /The executor sells the booster only once a Silver, Gold or 1v1 match of your own is drawn within its 24 hours/)
 })

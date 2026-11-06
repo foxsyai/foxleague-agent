@@ -10,7 +10,7 @@ import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { AddressInfo } from 'node:net'
 import { Address, Mnemonic } from '@multiversx/sdk-core'
-import { ADDR, OTHER, STRANGER, card, rivalSquad, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
+import { ADDR, OTHER, STRANGER, card, rivalSquad, dryWallet, encodeAuction, liveWallet, setup, snapshot, tournament, withLive, withFixture } from './fixtures.ts'
 import { MAINNET, type Config } from '../src/config.ts'
 import { hexOfString, numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
 import { parseAction } from '../src/executor/actions.ts'
@@ -60,7 +60,7 @@ test('M2 two runs of one agent at the same time share one cap', async () => {
   const { exec, agent, store } = setup({ chain: { simulate: slow } })
   store.updateSettings(0, { dailyCapUsd: 5 })
   const buy = act({ type: 'buy', product: 'xp_booster' })
-  const [a, b] = await Promise.all([exec.run(agent(), dryWallet, snapshot(), buy), exec.run(agent(), dryWallet, snapshot(), buy)])
+  const [a, b] = await Promise.all([exec.run(agent(), dryWallet, withFixture(snapshot()), buy), exec.run(agent(), dryWallet, withFixture(snapshot()), buy)])
   assert.deepEqual([a[0]!.status, b[0]!.status].sort(), ['dry_run', 'refused'])
   assert.ok(store.spentUsd(0, { category: 'play', dryRun: true }) <= 5)
 })
@@ -283,7 +283,10 @@ test('AA1 a 1v1 against a stronger squad is refused even at the same ELO', async
   const hidden = await join(oneVOne({ players: async () => { throw new Error('HTTP 500') } }))
   assert.equal(hidden.status, 'refused')
   assert.match(hidden.summary, /could not be read/)
-  assert.equal((await join(oneVOne(rivalSquad(21)))).status, 'dry_run', 'a squad within 10 percent is fair')
+  // A squad within 10 percent passes A2, and since 2026-11-06 every level also needs 55 percent against a known team:
+  // 5 percent stronger at the same ELO is about 45 percent, 10 percent weaker about 60.
+  assert.match((await join(oneVOne(rivalSquad(21)))).summary, /a 1v1 against a known team is played from 55 percent/)
+  assert.equal((await join(oneVOne(rivalSquad(18)))).status, 'dry_run', 'a weaker squad is played')
   // A targeted challenge reads the rival's wallet from the leaderboard.
   const s = snapshot()
   s.leaderboardNeighbours = [{ id: 50, wallet_address: STRANGER, team_name: 'Rival', elo_rating: 1190, league: 'Bronze', accepted7d: 0 }]
@@ -404,7 +407,10 @@ test('A4 (owner, 2026-09-30) two of your agents may meet by chance: a tournament
   m.store.addAgent(1, OTHER)
   const [w] = await m.exec.run(m.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 557 }))
   assert.equal(w!.status, 'dry_run')
-  assert.ok(!lookups.includes(OTHER), 'the other agents are not even looked up')
+  // Since 2026-11-06 every level reads the seated field before it joins: the owner's other agent is read as any team
+  // would be, never as the owner's (each agent plays as if it were alone).
+  assert.ok(lookups.includes(OTHER), 'read like any seated team')
+  assert.ok(!m.store.activity(0, 5).some(r => /another of your owner|agent 2/.test(r.summary)), 'never named as the owner\'s')
 })
 
 async function poll(chatId: string, batch: unknown[]): Promise<string[]> {

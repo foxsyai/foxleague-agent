@@ -193,7 +193,8 @@ test('D2 the counts come from the executor\'s own helpers: the free-again date, 
   // The open challenge 877 created (joining it is a 1v1 against 877) carries the same count.
   assert.match(text, /T2500 [^\n]*creator user 877[^\n]*2 of 2 1v1s against it this week \(the limit\)/)
   // What the plan is told is what the executor refuses (an executor on the same store, FoxLeague mocked).
-  const exec = new Executor({ cfg: {} as Config, chain: {} as never, fox: { user: async () => null, ...rivalSquad(20) } as never, store: svc.store })
+  // A rival 10 percent weaker than ours (18 against 20): a 1v1 every level may play (55 percent and up since 2026-11-06).
+  const exec = new Executor({ cfg: {} as Config, chain: {} as never, fox: { user: async () => null, ...rivalSquad(18) } as never, store: svc.store })
   const wallet = { ...dryWallet, address: svc.store.agent(0)!.address }
   const [r] = await exec.run(svc.store.agent(0)!, wallet, s, [act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 878, deadline_minutes: 60 })])
   assert.equal(r!.status, 'dry_run', r!.summary)
@@ -257,7 +258,7 @@ test('D3 the open-tournament line shows the seated field the Zeus join rule judg
   assert.match(block.join('\n'), /field: 3 clearly stronger, 0 even, 0 clearly weaker \(strongest ELO 1500, lineup 3080; yours ELO 1200, lineup 1540 at its start\)/)
   // The line and the rule share one test: the same seats refuse a Zeus join.
   const seats = s.market.fields!.find(f => f.id === 60)!.seats!
-  const verdict = checkAction({ type: 'join_tournament', tournament_id: 60 }, s, ctx({ zeus: true, field: seats, tournament: { tournament: open, participants: seated } as never }))
+  const verdict = checkAction({ type: 'join_tournament', tournament_id: 60 }, s, ctx({ field: seats, tournament: { tournament: open, participants: seated } as never }))
   assert.match(verdict.refusal ?? '', /3 seated teams are clearly stronger/)
 })
 
@@ -299,13 +300,14 @@ const weekAway = () => tournament(301, { format: 'round_robin', max_teams: 14, m
 
 test('D4 a tournament a week away is judged on the condition the squad will have at its start, not tonight', () => {
   const join = { type: 'join_tournament', tournament_id: 301 } as const
+  // field: [] is a seated field read with nobody in it (every level is held to the field rule since 2026-11-06).
   const fresh = snapshot()
-  const ok = checkAction(join, fresh, ctx({ tournament: weekAway() }))
+  const ok = checkAction(join, fresh, ctx({ field: [], tournament: weekAway() }))
   assert.equal(ok.ok, true, `at full condition the schedule fits: ${ok.refusal}`)
 
   const tired = snapshot()
   for (const p of tired.players) p.condition = 60 // after the day's ranked matches and training; back to 100 within 20 hours
-  const v = checkAction(join, tired, ctx({ tournament: weekAway() }))
+  const v = checkAction(join, tired, ctx({ field: [], tournament: weekAway() }))
   assert.equal(v.ok, true, `refused a seat the squad is fit for in 7 days: ${v.refusal}`)
 })
 
@@ -318,17 +320,17 @@ test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable 
   }
   // The same 14-team round robin starting in an hour: 2 points of rest per card change nothing.
   const soon = tournament(301, { format: 'round_robin', max_teams: 14, min_teams: 3, round_interval_minutes: 30, deadline: hours(0.5), starts_at: hours(1) }) as TournamentDetail
-  assert.match(checkAction(join, tired(), ctx({ tournament: soon })).refusal ?? '', /the schedule would wear the squad down/)
+  assert.match(checkAction(join, tired(), ctx({ field: [], tournament: soon })).refusal ?? '', /the schedule would wear the squad down/)
   // A start that cannot be read is judged at today's condition, never projected.
   const unreadable = tournament(301, { format: 'round_robin', max_teams: 14, min_teams: 3, round_interval_minutes: 30, starts_at: 'soon' }) as TournamentDetail
-  assert.match(checkAction(join, tired(), ctx({ tournament: unreadable })).refusal ?? '', /the schedule would wear the squad down/)
+  assert.match(checkAction(join, tired(), ctx({ field: [], tournament: unreadable })).refusal ?? '', /the schedule would wear the squad down/)
   // Seated in a 7-match round robin that plays from in 1 h to in 4 h: its matches cost the condition the rest until
   // a start in 5 h would bring, so a small round robin then is refused; three days later the squad is fresh again.
   const busy = tired()
   busy.auth!.myTournaments!.active = [{ ...(tournament(400) as { tournament: Record<string, unknown> }).tournament, format: 'round_robin', max_teams: 8, min_teams: 3, round_interval_minutes: 30, starts_at: hours(1), started_at: null, home_and_away: false } as never]
   const small = (startsIn: number) => tournament(301, { format: 'round_robin', max_teams: 4, min_teams: 3, round_interval_minutes: 30, deadline: hours(startsIn - 0.5), starts_at: hours(startsIn) }) as TournamentDetail
-  assert.match(checkAction(join, busy, ctx({ tournament: small(5) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
-  assert.equal(checkAction(join, busy, ctx({ tournament: small(72) })).ok, true)
+  assert.match(checkAction(join, busy, ctx({ field: [], tournament: small(5) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
+  assert.equal(checkAction(join, busy, ctx({ field: [], tournament: small(72) })).ok, true)
   // The instructions state the rule as it now judges: the squad at the start, rested until then.
   assert.match(SYSTEM_PROMPT, /more condition than it will have above 30 at the start \(rested until then\) plus what it regenerates between rounds/)
 })
@@ -343,18 +345,18 @@ test('D5 Zeus judges a field days away against the squad at the condition it wil
   const field = seated.map(p => ({ userId: p.user_id, strength: 1540, elo: 1270 }))
   const fresh = snapshot()
   assert.equal(lineupStrength(fresh), 1540)
-  assert.equal(checkAction(join, fresh, ctx({ tournament: inThreeDays(), zeus: true, field })).ok, true, 'equal squads at full condition: a real chance of the top three')
+  assert.equal(checkAction(join, fresh, ctx({ tournament: inThreeDays(), field })).ok, true, 'equal squads at full condition: a real chance of the top three')
 
   const tired = snapshot()
   for (const p of tired.players) p.condition = 70 // tonight, after the ranked matches; 100 again by tomorrow noon
-  const v = checkAction(join, tired, ctx({ tournament: inThreeDays(), zeus: true, field }))
+  const v = checkAction(join, tired, ctx({ tournament: inThreeDays(), field }))
   assert.equal(v.ok, true, `the same field, the same squad, judged 72 hours early at 70 condition: ${v.refusal}`)
 
   // A start within the hour leaves the squad tired: the same field is still three clearly stronger teams.
   const soon = tournament(302, { format: 'swiss', max_teams: 8, min_teams: 3, round_interval_minutes: 60, deadline: hours(0.5), starts_at: hours(1) }, seated) as TournamentDetail
-  assert.match(checkAction(join, tired, ctx({ tournament: soon, zeus: true, field })).refusal ?? '', /3 seated teams are clearly stronger/)
+  assert.match(checkAction(join, tired, ctx({ tournament: soon, field })).refusal ?? '', /3 seated teams are clearly stronger/)
   // A 1v1 is played now: still judged at today's condition.
-  const oneVOne = checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 501, deadline_minutes: 60 }, tired, ctx({ zeus: true, opponent: { userId: 501, elo: 1200, strength: 1500 } }))
+  const oneVOne = checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 501, deadline_minutes: 60 }, tired, ctx({ opponent: { userId: 501, elo: 1200, strength: 1500 } }))
   assert.match(oneVOne.refusal ?? '', /the opponent's squad is stronger .* at today's condition/)
 })
 

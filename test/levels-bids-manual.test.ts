@@ -34,17 +34,17 @@ test('the limits per rarity leave room over the market price to be outbid once a
 })
 
 test('each level\'s max bid is the limit of the dearest rarity it buys, and fits its daily cap', () => {
-  assert.deepEqual(LEVELS.map(l => LEVEL_SETTINGS[l]!.maxBidFoxsy), [0, 0, D.maxBidUncommonFoxsy, D.maxBidRareFoxsy, D.maxBidEpicFoxsy, D.maxBidLegendaryFoxsy])
+  // Every level bids since 2026-11-06, on any rarity within its max bid and the limit per rarity.
+  assert.deepEqual(LEVELS.map(l => LEVEL_SETTINGS[l]!.maxBidFoxsy), [D.maxBidCommonFoxsy, D.maxBidUncommonFoxsy, D.maxBidRareFoxsy, D.maxBidEpicFoxsy, D.maxBidEpicFoxsy, D.maxBidLegendaryFoxsy])
   // The manual sizes the dollar limits for a FOXSY price of about $0.0027.
   for (const l of LEVELS) assert.ok(LEVEL_SETTINGS[l]!.maxBidFoxsy * 0.0027 < LEVEL_SETTINGS[l]!.dailyCapUsd, `${l}: a bid at the max fits the daily cap`)
 })
 
-test('the hunter, predator and beast texts name the rarities each buys; Zeus buys any at a good price', () => {
-  assert.match(STRATEGY_PRESETS.hunter!, /Bid on Common and Uncommon players/)
-  assert.match(STRATEGY_PRESETS.predator!, /Bid on Common, Uncommon and Rare players/)
-  assert.match(STRATEGY_PRESETS.beast!, /Bid on Common, Uncommon, Rare and Epic players/)
-  for (const k of ['hunter', 'predator', 'beast']) assert.doesNotMatch(STRATEGY_PRESETS[k]!, /never Common or Uncommon/)
-  assert.match(STRATEGY_PRESETS.zeus!, /Buy a player only at a good price/)
+test('every level buys a player of any rarity at a good price; the max bid and the limit per rarity decide what is in reach', () => {
+  for (const [level, text] of Object.entries(STRATEGY_PRESETS)) {
+    assert.match(text, /Buy a player of any rarity only at a good price/, level)
+    assert.doesNotMatch(text, /Bid on Common|never Common or Uncommon/, level)
+  }
 })
 
 test('the manual\'s tables of the levels show the code\'s defaults', () => {
@@ -59,7 +59,10 @@ test('the manual\'s tables of the levels show the code\'s defaults', () => {
   assert.deepEqual(row('Max shop payment (FOXSY)'), L.map(l => n(l.maxShopPaymentFoxsy)))
   assert.deepEqual(row('Max swap (FOXSY)'), L.map(l => n(l.maxSwapFoxsy)))
   assert.deepEqual(row('Max bid (FOXSY)'), L.map(l => (l.maxBidFoxsy ? n(l.maxBidFoxsy) : '0 (off)')))
-  assert.deepEqual(row('Default max bid (FOXSY)'), L.map(l => (l.maxBidFoxsy ? n(l.maxBidFoxsy) : '')))
+  // The level counts (2026-11-06).
+  assert.deepEqual(row('Paid training a day'), L.map(l => String(l.paidTrainingPerDay)))
+  assert.deepEqual(row('Boosters a week'), L.map(l => String(l.boostersPerWeek)))
+  assert.deepEqual(row('Packs a week'), L.map(l => String(l.packsPerWeek)))
   assert.deepEqual(row('Tick'), L.map(l => `${l.tickMinutes} min`))
   const ai = (m: string) => m.replace('claude-', '').replace(/^(\w)/, c => c.toUpperCase()).replace(/-(\d+)-(\d+)$/, ' $1.$2').replace(/-(\d+)$/, ' $1')
   assert.deepEqual(row('Recommended AI'), LEVELS.map(l => `${ai(LEVEL_AI[l]!.model)}, ${LEVEL_AI[l]!.effort}`))
@@ -89,10 +92,11 @@ test('the manual, README, INSTALL.md and the dashboard\'s info bubbles tell no d
   }
 })
 
-test('the strategy levels page says which rarities each level buys, as the texts do', () => {
+test('the strategy levels page says every level bids on any rarity within its max bid, as the texts do', () => {
   const page = read('site/src/content/docs/play/strategy-levels.md').replace(/\s+/g, ' ')
   assert.doesNotMatch(page, /never on Common or Uncommon ones/)
-  assert.match(page, /\| Bids at auction \| \| \| Common, Uncommon \| up to Rare \| up to Epic \| any rarity, only at a good price, for a reason \|/)
+  assert.match(page, /\| Bids at auction \| any rarity, up to 500 \| up to 1,500 \| up to 7,000 \| up to 14,000 \| up to 14,000 \| up to 38,000 \|/)
+  assert.match(page, /So a Steady agent can take a Legendary listed at 500 FOXSY, and Zeus can buy a Common, never above 500 for it\./)
 })
 
 // Agent review of PR #27 (medium): an agent saves its whole settings (at creation since PR #21, or on any save), and a
@@ -118,7 +122,7 @@ test('an agent that saved its limits keeps them; one that never did gets the new
 test('no info bubble or manual page keeps the old bidding rule', () => {
   const html = read('src/web/dashboard.html').replace(/\s+/g, ' ')
   assert.doesNotMatch(html, /never Common or Uncommon/)
-  assert.match(html, /<b>Hunter<\/b>: plus its own tournaments, the booster on strong match days and bids on Common and Uncommon players/)
+  assert.match(html, /the largest entry, shop payment and bid \(any rarity, within its limit\)/, 'every level bids on any rarity (2026-11-06)')
   for (const p of pages('site/src/content/docs')) assert.doesNotMatch(read(p).replace(/\s+/g, ' '), /never (on )?Common or Uncommon/, p)
 })
 

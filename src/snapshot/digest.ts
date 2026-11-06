@@ -2,7 +2,7 @@
 
 import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { casualCostRefusal, conditionAtStart, elevenOvrToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
+import { casualCostRefusal, conditionAtStart, elevenOvrToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
@@ -107,7 +107,7 @@ function scheduleText(t: { format: string; max_teams: number; home_and_away?: bo
 }
 
 /**
- * How an open tournament's seated field compares with this team, by the Zeus join rule's own test (judgeField), with
+ * How an open tournament's seated field compares with this team, by the join rule's own test (judgeField), with
  * our eleven at the tournament's start as the rule takes it (conditionAtStart).
  */
 function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot['market']['fields']>[number]): string {
@@ -306,9 +306,8 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}${count}; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it) and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
-  // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
-  const zeus = s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')
-  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${ZEUS_STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((ZEUS_STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way${zeus ? `; Zeus never joins a field with ${ZEUS_FIELD_LIMIT} or more clearly stronger teams, or ${ZEUS_FIELD_LIMIT} or more unknown ones` : ''})`)
+  // Every level is held to the field rule (Zeus only until 2026-11-06).
+  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
   for (const t of m.openStandard.slice(0, 30)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
     const field = m.fields?.find(f => f.id === t.id)
@@ -367,8 +366,8 @@ export function renderDigest(s: AgentSnapshot): string {
       out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
     }
   }
-  // Zeus: the threshold its 1v1s are held to, next to the chances below.
-  if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push('Win chances: ELO expectation and lineup strength averaged, ours at today\'s condition, theirs at full condition; Zeus plays a 1v1 from 55 percent.')
+  // The threshold every level's 1v1s against a known team are held to, next to the chances below.
+  if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: ELO expectation and lineup strength averaged, ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
   if (s.leaderboardNeighbours.length) {
     out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged; a targeted 1v1 played within 2 minutes of its creation counts as arranged): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged` : ', took no 1v1 in 7 days it had not arranged'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }

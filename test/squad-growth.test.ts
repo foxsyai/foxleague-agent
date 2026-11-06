@@ -19,16 +19,14 @@ test('cards have no upper limit, and a spare reaches its match gate only by play
 
 test('no level sells by a fixed card count', () => {
   for (const [level, text] of Object.entries(STRATEGY_PRESETS)) assert.doesNotMatch(text, /more than 36|above 36/, level)
-  // Every level that can get spare cards (bids, packs, fusions: hunter and up) may hold them and sell them; predator and beast take it from the hunter.
-  assert.match(STRATEGY_PRESETS.hunter!, /List a spare card when its price beats its use, with no upper limit on cards/)
-  assert.match(STRATEGY_PRESETS.predator!, /everything a hunter does/)
-  assert.match(STRATEGY_PRESETS.beast!, /with no upper limit: hold spares to fuse, to grow and to sell/)
+  // Every level holds spares and sells one when its price beats its use (one strategy core since 2026-11-06).
+  for (const [level, text] of Object.entries(STRATEGY_PRESETS)) assert.match(text, /list spare cards when their price beats their use/, level)
 })
 
 // Agent review of PR #16 (low): the dashboard's help for the levels still said the old thing.
-test('the dashboard tells the levels the same: Hunter and up sell spares by value, no card count', async () => {
+test('the dashboard tells the levels the same: every level sells spares by value, no card count', async () => {
   const { readFileSync } = await import('node:fs')
   const html = readFileSync(new URL('../src/web/dashboard.html', import.meta.url), 'utf8')
   assert.doesNotMatch(html, /above 36|more than 36/)
-  assert.match(html, /<b>Hunter<\/b>: [^<]*sells a spare card when its price beats its use/)
+  assert.match(html, /Six levels, one brain: [^<]*sells a spare card when its price beats its use/)
 })

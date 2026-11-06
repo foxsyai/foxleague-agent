@@ -20,6 +20,8 @@ export const TEST_SETTINGS: AgentSettings = {
   ...DEFAULT_SETTINGS,
   dailyCapUsd: 10, monthlyBudgetUsd: 300, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 2500,
   entryFeesSilver: [1000, 1500, 2000, 2500, 3000], entryFeesGold: [5000], tickMinutes: 30, tickJitterMinutes: 10, activeHoursUtc: [5, 21], minGapSeconds: 90,
+  // FoxLeague's own maximum: the counts of a level (2026-11-06) stay out of the way of tests about other rules.
+  paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2,
 }
 
 export const ADDR = 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl'
@@ -123,11 +125,23 @@ export function setup(over: Partial<Mocks> = {}) {
   const fox = {
     user: async () => null,
     tournament: async () => { throw new Error('no tournament in this test') },
-    ...rivalSquad(20),
+    // 10 percent weaker than ours (18 against 20): a rival every level may play since 2026-11-06 (55 percent and up).
+    ...rivalSquad(18),
     ...over.fox,
   }
   const exec = new Executor({ cfg: {} as Config, chain: chain as unknown as Chain, fox: fox as unknown as FoxLeague, store })
   return { store, exec, agent: () => store.agent(0)! }
+}
+
+/**
+ * A Silver tournament of ours under way with a match in 2 hours: the XP booster has a fixture of its own to double
+ * (every level since 2026-11-06, Zeus's rule before).
+ */
+export function withFixture<S extends ReturnType<typeof snapshot>>(s: S): S {
+  const at = (h: number) => new Date(Date.now() + h * 3600_000).toISOString()
+  s.auth!.myTournaments!.active = [...s.auth!.myTournaments!.active, { ...(tournament(60, { status: 'active' }) as { tournament: object }).tournament }] as never
+  s.auth!.upcoming!.matches = [...s.auth!.upcoming!.matches, { tournament_id: 60, tournament_title: 'T60', round_label: 'Round 1', group_name: null, is_home: true, opponent_name: 'Rival', scheduled_at: at(2), strategy_locks_at: at(1.5), locked: false, phase: 'upcoming', home_score: null, away_score: null }] as never
+  return s
 }
 
 /** A rival's public team and roster: eleven starters with every synced stat at `stat` (ours are 20 at full condition). */
