@@ -12,7 +12,7 @@ import { DEFAULT_SETTINGS, LEVEL_AI, LEVEL_SETTINGS, STRATEGY_PRESETS, STRATEGY_
 import { budgetView } from '../src/executor/budget.ts'
 import { renderPlanRequest } from '../src/strategist/strategist.ts'
 import { raisesLimit } from '../src/web/server.ts'
-import { TEST_SETTINGS, dryWallet, rivalSquad, setup, snapshot, tournament } from './fixtures.ts'
+import { TEST_SETTINGS, dryWallet, rivalSquad, setup, snapshot, tournament, withFixture } from './fixtures.ts'
 
 const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...TEST_SETTINGS }, now: new Date(), ...more })
 const why = (a: unknown, more: Partial<RulesContext> = {}, s = snapshot()) => {
@@ -146,4 +146,47 @@ test('OB-9: the six levels share one strategy core and differ in money and pace 
   const counts = { ...TEST_SETTINGS, paidTrainingPerDay: 4, boostersPerWeek: 1, packsPerWeek: 0 }
   const text = renderPlanRequest({ settings: counts, snapshot: snapshot(), budget: budgetView(setup().store, 0, counts, true, new Date()), recent: [], dryRun: true })
   assert.match(text, /Counts at this level: paid training sessions at most 4 a day, XP boosters at most 1 a week, Common packs none/)
+})
+
+// Agent review of PR #55 (low): the Boosters a week help said 3 sure matches, while the code needs one competitive
+// match of its own drawn within the booster's 24 hours; the integration notes still said Zeus for two rules every level
+// now follows.
+test('R55A-1: the counts\' help and the integration notes say what the code does', async () => {
+  const { readFileSync } = await import('node:fs')
+  const read = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  for (const f of ['src/web/dashboard.html', 'site/src/content/docs/use/settings.md']) {
+    assert.doesNotMatch(read(f), /only when 3 competitive matches of its own are sure/, f)
+    assert.match(read(f), /only once a competitive match of its own is drawn within the 24 hours/, f)
+  }
+  const notes = read('docs/FOXLEAGUE-INTEGRATION.md')
+  assert.doesNotMatch(notes, /Zeus with fewer than 24 clearly stronger invited teams/)
+  assert.doesNotMatch(notes, /at the Zeus level the agent buys one only with such a fixture/)
+})
+
+// Agent review of PR #55 (low, test): the 7-day count of the agent's own purchases had no executor-level test.
+test('R55A-2: the executor counts the agent\'s own boosters of the last 7 days: this mode, this product, sent or lost, never refunded', async () => {
+  const m = setup()
+  m.store.updateSettings(0, { boostersPerWeek: 2, maxShopPaymentFoxsy: 2500 })
+  const row = (status: string, product: string, more: Record<string, unknown> = {}, txHash: string | null = null) =>
+    m.store.log({ agentIndex: 0, kind: 'buy', status: status as never, summary: `buy ${product}`, detail: { action: { type: 'buy', product }, ...more }, txHash })
+  row('dry_run', 'xp_booster', {}, 'h1') // counted (dry run, this mode)
+  row('error', 'xp_booster', { sent: true }) // counted: it may have paid
+  row('confirmed', 'xp_booster', {}, 'h3') // the live ledger: not this mode
+  row('dry_run', 'common_pack', {}, 'h4') // another product
+  row('error', 'xp_booster', { sent: false }) // never sent
+  const age = (ms: number) => (m.store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): unknown } } }).db.prepare("UPDATE activity SET at = ? WHERE kind = 'buy'").run(new Date(Date.now() - ms).toISOString())
+  age(2 * 86_400_000) // two days ago: past the booster's own renewal window, inside the week
+  const buy = async () => (await m.exec.run(m.agent(), dryWallet, withFixture(snapshot()), [{ action: { type: 'buy', product: 'xp_booster' }, reason: '' }]))[0]!
+  const two = await buy()
+  assert.equal(two.status, 'refused', two.summary)
+  assert.match(two.summary, /2 XP boosters a week at this level, 2 bought in the last 7 days/)
+  // A refunded payment counts for nothing: the FOXSY came back and nothing was delivered.
+  m.store.recordSpend({ agentIndex: 0, at: new Date(), gameDay: '2026-11-06', category: 'play', action: 'shop:xp_booster:refunded', foxsyAtomic: 0n, egldAtomic: 0n, usd: 0, txHash: 'h1', dryRun: true })
+  assert.equal((await buy()).status, 'dry_run', 'one left after the refund')
+  // Older than 7 days: none count.
+  const n = setup()
+  n.store.updateSettings(0, { boostersPerWeek: 1, maxShopPaymentFoxsy: 2500 })
+  n.store.log({ agentIndex: 0, kind: 'buy', status: 'dry_run', summary: 'buy xp_booster', detail: { action: { type: 'buy', product: 'xp_booster' } } })
+  ;(n.store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): unknown } } }).db.prepare("UPDATE activity SET at = ? WHERE kind = 'buy'").run(new Date(Date.now() - 8 * 86_400_000).toISOString())
+  assert.equal((await n.exec.run(n.agent(), dryWallet, withFixture(snapshot()), [{ action: { type: 'buy', product: 'xp_booster' }, reason: '' }]))[0]!.status, 'dry_run')
 })

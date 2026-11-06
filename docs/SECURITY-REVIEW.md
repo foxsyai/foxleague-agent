@@ -1289,6 +1289,9 @@ asserts what the code there did not do.
 | OB-8 | design | New settings would have read the steady defaults for every agent saved before them, lowering the live agents' limits without the owner | A row without the counts reads FoxLeague's maximum (10, 7, 2); a new agent stores the steady level's. Raising a count asks for the password (`raisesLimit`, the dashboard's list). |
 | OB-9 | design | Six different texts, some forbidding what a level could afford | One strategy core (Zeus's, within the level's limits) for every level; one recommended AI; the new defaults: steady bids up to 500, climber 1,500, hunter 7,000, predator 14,000 at a $50 daily cap; the largest shop payment 2,000 at climber (the booster), 9,000 at beast and Zeus (an Epic's match waivers); ticks 120, 120, 90, 90, 75, 60. |
 
+| R55A-1 | low | Agent review of PR #55: the Boosters a week help said 3 sure matches while the code needs one competitive match of its own drawn within the 24 hours; the integration notes still said Zeus for the Champions FoxLeague field and the booster fixture | The help (dashboard and Settings page) and `docs/FOXLEAGUE-INTEGRATION.md` say what the code does. |
+| R55A-2 | low | Agent review of PR #55: the executor's 7-day count of the agent's own boosters had no test of its own | A test of the count from the log: this mode only, this product only, a purchase sent or with its answer lost counts, a refunded one and one older than 7 days do not (it fails with the refund or the product filter taken out). |
+
 The executor no longer reads the strategy text to decide anything (rule 2 of AGENTS.md): the Zeus check by text is gone.
 Older tests that ran as a non-Zeus agent now meet these rules; they were changed to keep testing their own rule (a
 rival 10 percent weaker by default, a fixture of its own for a booster, a seated field read for a join), not to drop a

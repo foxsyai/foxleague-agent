@@ -1784,7 +1784,7 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   (`tournaments.rs:1177-1181`). Since 2026-10-24 (owner) the agent accepts an invitation by itself
   (`join_tournament`: a pending invitation read again right before the payment with `can_accept` true and at least 30
   minutes to its `expires_at`, the entry within the owner's limits, the schedule check for 17 matches over its 190
-  slots and the knockout's 9 matches in 46 slots, Zeus with fewer than 24 clearly stronger invited teams read from
+  slots and the knockout's 9 matches in 46 slots, every level (Zeus only until 2026-11-06) with fewer than 24 clearly stronger invited teams read from
   `GET /api/tournaments/{id}/invitations`), never creates one (`unsupportedFormat`), leaves one only before its `seats_lock_at` (read again from
   `GET /api/tournaments/{id}/invitations`, 30 minutes of margin; leaving then refunds the whole entry) and only a seat
   it paid itself (never one the owner took, in FoxLeague or through Telegram `/do`), and
@@ -1822,7 +1822,7 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   6 hours of `finished_at`; `league_knockout` slot window (max_teams x 8 / 2 + 46) x 3 in `src/executor/slots.ts`;
   a Legendary's match waiver is bought only for a spare it would list; the XP booster is applied when a match result
   is applied (`apply_match_results`, a purchase verified within the last 24 h; tournament and 1v1 results at the
-  reveal), and at the Zeus level the agent buys one only with such a fixture within 24 h. A planning snapshot also
+  reveal), and every level (Zeus only until 2026-11-06) buys one only with such a fixture within 24 h, within its boosters a week. A planning snapshot also
   reads `GET /api/tournaments/{id}` (participants) for up to 4 open Silver or Gold tournaments and each seated team's
   players (and, when it is not on the leaderboard, its profile), with 20-minute caches. The one-card sync uses
   `/sync/prepare?wallet_address=&nonce=`.
