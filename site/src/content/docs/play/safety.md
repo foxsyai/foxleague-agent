@@ -53,10 +53,11 @@ abuse. The agent:
 - never coordinates your agents against anyone: each plays its own game as if it were alone, without knowing which
   teams are yours, so two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each
   other at auction, by chance (FoxLeague's Fair Play forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests;
-- protects itself from rivals trying to farm it (1v1s only against teams of similar strength, at most two played
-  1v1s a week against the same team, a challenge nobody accepted not counting; an open challenge, which any team may take, at most once a day and only at your lowest
-  Silver amount);
-- creates a private tournament only at the Zeus level and joins one only when your team is invited.
+- protects itself from rivals trying to farm it (a 1v1 against a named team or one it joins only when that team is of
+  similar strength, at most two played 1v1s a week against the same team, a challenge nobody accepted not counting; an
+  open challenge, which any team inside its range may take, always carries an OVR range that tops out at your team's
+  own best XI OVR, so FoxLeague itself keeps every stronger team out);
+- joins a private tournament only when your team is invited (every level may create one).
 
 You remain responsible for your agents.
 

@@ -8,6 +8,10 @@ the trim levels of a car: **each level does everything the level below does and 
 one level to the next is how much the agent pays to grow the squad. The sixth, **Zeus**, is different: it may do
 everything a beast does, but only what pays, and it aims every move at No. 1 on the leaderboard.
 
+**Every part of FoxLeague is open at every level**: ranked and casual games, joining and creating tournaments (public
+or private), 1v1s against a named team or as an open challenge, and the marketplace. What sets a level apart is what it
+pays for and how much: the shop, the waivers, the bids and the size of its entries and stakes, always within your limits.
+
 Pick one in **Settings → Strategy** or on Telegram (`/strategy 2 hunter`). In the dashboard, picking a level opens
 a short proposal: the settings the level would change (moving up, those that fall short, raised to the level;
 moving down, those above it, lowered to the level), each with a tick, and its recommended AI. **Accept and save** takes the ticked ones; **Cancel** keeps everything as it is saved. You can edit the text
@@ -17,12 +21,12 @@ afterwards or write your own. [Every setting explained](/use/settings/) covers t
 
 | Level | Adds on top of the level below | Typical spend a day |
 |---|---|---|
-| **1. Steady** | The free game used fully: the 5 free training sessions, lineup and formation, the 5 daily matches, sync before match days, the free team badge. Silver tournaments and 1v1s at your lowest amounts. No shop purchases (from FoxLeague's competition levels on, a ranked start pays the ranked ticket, within Max shop payment), no bids | Entries and sync: a few hundred FOXSY |
+| **1. Steady** | The free game used fully: the 5 free training sessions, lineup and formation, the 5 daily matches, sync before match days, the free team badge. Silver tournaments (joined or its own, public or private) and 1v1s (a named team or an open challenge) at your lowest amounts. No shop purchases (from FoxLeague's competition levels on, a ranked start pays the ranked ticket, within Max shop payment), no bids | Entries and sync: a few hundred FOXSY |
 | **2. Climber** | The push for ELO: ranked matches whenever allowed, Gold tournaments when the squad can compete, 1v1s at any of your amounts, condition recovery for key starters before a match that matters | Plus Gold entries (5,000 FOXSY) and some recovery |
-| **3. Hunter** | Tournaments and the first purchases: creates its own tournaments, the XP booster on days with 3 sure competitive matches, paid training slots while it runs, a fusion when three spare cards are ready, **bids at auction** (see below), sells a spare card when its price beats its use | Plus about 2,000 FOXSY on booster days, and bids |
+| **3. Hunter** | Tournaments and the first purchases: the tournaments with the best expected value, the XP booster on days with 3 sure competitive matches, paid training slots while it runs, a fusion when three spare cards are ready, **bids at auction** (see below), sells a spare card when its price beats its use | Plus about 2,000 FOXSY on booster days, and bids |
 | **4. Predator** | Pays for everything that grows the squad **except waivers**: all 15 training sessions every day, the booster on every match day, recovery whenever it helps, both Common packs a week, a fusion whenever a triplet is ready (real matches, full 14-day cooldown), a max bid that reaches Rares | About 3,500 FOXSY, plus entries and bids |
 | **5. Beast** | Every paid advantage: the booster always on, **both fusion waivers** so a fusion can happen every 20 hours, 3 competitive matches a day, a max bid that reaches Epics; keeps at least 22 cards, with no upper limit, to fuse, grow and sell | About 6,000 FOXSY, plus entries and bids |
-| **6. Zeus** | Not more spending, better decisions: a **win chance** for each team on its challenge list (up to 10, the teams that accept 1v1s first), 1v1s only from 55 percent against active teams that accept them, tournaments only with a real chance of the top three, its own tournaments including **private** ones that invite active teams it should beat, training on the stats each role needs, syncs and recovery only before matches that count, a player bought only at a good price and for a reason that pays. It climbs in steps, from the teams it beats to stronger ones | As little as winning needs, up to its limits |
+| **6. Zeus** | Not more spending, better decisions: a **win chance** for each team on its challenge list (up to 10, first the teams that take 1v1s they had not arranged), a 1v1 against a named team only from 55 percent, open challenges topped at its own best XI OVR, tournaments only with a real chance of the top three, its own tournaments including **private** ones that invite active teams it should beat, training on the stats each role needs, syncs and recovery only before matches that count, a player bought only at a good price and for a reason that pays. It climbs in steps, from the teams it beats to stronger ones | As little as winning needs, up to its limits |
 
 On average about 90 percent of all entry fees come back as prizes, so entries are mostly a stake that returns,
 not a cost. The shop, the waivers and the bids are real spending.
@@ -34,12 +38,14 @@ not a cost. The shop, the waivers and the bids are real spending.
 | 5 free training sessions a day | ✓ | ✓ | ✓ | ✓ | ✓ | on the stats each role needs |
 | Lineup, formation, the 5 daily matches | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Formation from its record, tested in ranked, set against a known opponent | ✓ | ✓ | ✓ | ✓ | ✓ | ✓, before every match lock |
-| Ranked matches whenever allowed | | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
+| Ranked and casual games (the 5 daily starts) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
+| Ranked matches whenever allowed (the push for ELO) | | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
 | Sync before match days | ✓ | ✓ | ✓ | ✓ | ✓ | only when it changes a match |
 | Free team badge | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Silver tournaments and 1v1s, lowest amounts | ✓ | ✓ | ✓ | ✓ | ✓ | when the win chance is good |
+| 1v1s against a named team or as an open challenge (topped at its own best XI OVR) | ✓ | ✓ | ✓ | ✓ | ✓ | a named team from 55 percent |
 | Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ | with a real chance of the top three (fewer than three clearly stronger seated teams, our eleven taken at the start) |
-| Creates its own tournaments | | | ✓ | ✓ | ✓ | ✓, also private ones |
+| Creates its own tournaments, public or private | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | with a real chance of the knockout (fewer than 24 of the invited teams clearly stronger) |
 | 3 competitive matches every day | | | | | ✓ | when they pay |
 | Condition recovery | | key starters, key matches | key starters, key matches | whenever it helps | whenever it helps | key starters, matches that count |
@@ -85,7 +91,7 @@ says: one fusion per wallet every 20 hours and two Common packs a week. An aucti
 
 **Zeus decides from numbers.** For each team on its challenge list (up to 10) it reads the ELO and the lineup
 strength, ours at today's condition and theirs at full condition, and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to
-its rules whatever the AI decides: no 1v1 under 55 percent, no Champions FoxLeague where 24 of the invited teams are clearly stronger and no tournament where three seated teams are clearly
+its rules whatever the AI decides: no 1v1 against a named team under 55 percent (an open challenge is topped at its own best XI OVR instead, so no stronger team can take it), no Champions FoxLeague where 24 of the invited teams are clearly stronger and no tournament where three seated teams are clearly
 stronger. Each 1v1 records the chance it was taken at, so
 the estimate can be checked against real results.
 
@@ -130,6 +136,7 @@ about $103 of its $150.
 - An agent keeps the text it has. Changing a preset here or in a later version does not change an agent's strategy
   until you pick the preset again.
 - The levels describe what the AI aims for; the code still checks every action: the game's rules, your limits, a
-  1v1 only against a team of similar strength, a waiver only when a fusion with that card can really happen.
+  1v1 against a named team or one it joins only when that team is of similar strength, an open challenge only to teams
+  no stronger by OVR, a waiver only when a fusion with that card can really happen.
 - A level higher than your wallet can carry runs out of FOXSY sooner. The **Top-up warning** in Settings tells you
   when the wallet runs low.

@@ -409,10 +409,11 @@ among the called-up players by contribution. Nothing of it exists in the code on
   value it cannot read refuses).
   The agent may set a range on a tournament or an open 1v1 it creates (whole numbers 1 to 100, min <= max), only one
   holding its own best XI OVR (FoxLeague refuses a creator outside their own range), never on a targeted challenge or a
-  private tournament. By default (prompt, PR #36) an open challenge or its own open tournament carries one, about 10
-  percent either way around its best XI OVR. While a tournament or 1v1 it created itself (never one the owner made) is
+  private tournament. An open challenge must carry one whose maximum is at most its best XI OVR rounded up (owner,
+  2026-11-06), so FoxLeague keeps every team stronger by OVR out; by default (prompt, PR #36) its own open tournament
+  carries one about 10 percent either way around its best XI OVR. While a tournament or 1v1 it created itself (never one the owner made) is
   open for joining it may widen the range (`widen_range`, FoxLeague #542): a lower minimum or a higher maximum, `null` removes a bound, never narrower and never a
-  new bound; nothing is paid and seated teams stay.
+  new bound, and on a 1v1 never a higher or no maximum; nothing is paid and seated teams stay.
 - **Royalties.** On the upgraded tournaments contract (on mainnet since 2026-10-24) a royalty goes only to an approved provider or
   a seated participant.
 - **Shop refunds.** A shop payment the treasury refunds is consumed only after delivery; a payment still being
@@ -424,7 +425,11 @@ among the called-up players by contribution. Nothing of it exists in the code on
 - **The agent's own checks (not FoxLeague rules).** The schedule check judges the squad at a tournament's start;
   Zeus compares a seated field with our eleven at the start; a plan spaces its casual and ranked matches 13 minutes
   apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
-  The casual test bench (owner, 2026-11-04): at most 4 casual games a game day, and only when every card that plays
+  Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
+  one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
+  caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
+  2 a week per rival; Zeus 55 percent), and the 18 strongest cards are never listed.
+  The casual test bench (owner, 2026-11-04): no count of its own since 2026-11-06 (casual and ranked share the 5 daily starts), and only when every card that plays
   is back to full condition before the next strategy lock of a tournament or 1v1 match (age-adjusted: the appearance
   costs up to 3 times the base at 39 and a card over 30 regains half as fast), never while a 1v1 of ours waits for
   an opponent, never while a tournament of ours is under way with no next match listed.

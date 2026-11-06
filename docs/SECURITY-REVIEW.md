@@ -1220,3 +1220,40 @@ Stays open, with the reason each stays:
 - The active match read ends 30 s before FoxLeague's gate, so a start in those 30 s is still refused by FoxLeague (no
   cost; the next plan plays it). With 13 minutes between starts this needs a simulation of more than about 2 minutes; a longer one is still shown
   by the read, and the agent's own check refuses the start without asking FoxLeague.
+
+## Every level open to every part of the game (owner, 2026-11-06)
+
+The production log of the week to 2026-11-06 showed the agents' 1v1s never played: the ten agents created 242
+targeted challenges and 2 were played, 231 expired unaccepted (only gas lost, but the agent's one 1v1 slot held for
+hours). FoxLeague's public list shows why: other players' targeted 1v1s were accepted 281 times out of 294, half of them
+within 36 seconds of their creation, so they were arranged between the two teams first, and the snapshot's "accepted N
+1v1s in 7 days" counted those; open challenges were taken 63 times out of 105, half within 11 minutes. Every agent plays
+at the Zeus level, which could not post an open one. The owner asked that every level may use every part of FoxLeague,
+the levels differing only in what they pay for and the caps. Each change has a test in `test/open-play.test.ts` that
+failed on `main` (`b3e602c`) and passes after it.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| OP-1 | design | The challenge list counted a team's accepted 1v1s, most of them arranged, so the plan aimed at teams that never take a stranger's challenge | A targeted 1v1 started within 2 minutes of its creation counts as arranged and is left out; the list and the suggested range count only the 1v1s a team took that it had not arranged, and the prompt says a targeted challenge is taken almost only when arranged. |
+| OP-2 | design | Zeus could not post an open challenge | Every level may post one. |
+| OP-3 | design | An open challenge was Silver at the owner's lowest amount, at most one in 24 hours | Any configured stake, Silver or Gold (Gold only when on), within the max entry fee; FoxLeague's one active 1v1 is the only count. R9-1 (a failed open create counted toward the one a day) went with that limit. |
+| OP-4 | design | Opening the stake opens the farming route A2 closed: anyone may take an open challenge | An open challenge must carry an OVR range whose maximum is at most the team's best XI OVR rounded up (read right before the create; unreadable refuses), so FoxLeague's own join check keeps every team stronger by OVR out. |
+| OP-5 | design | The agent could widen its own 1v1's range, which would let a stronger team in afterwards | The maximum of a 1v1's range is never raised or removed; its minimum may be lowered. |
+| OP-6 | design | Only Zeus created private tournaments | Every level may. |
+| OP-7 | design | Casual games had a count of their own (4 a game day) on top of FoxLeague's 5 daily starts | No count of their own; a casual game still runs only when every card that plays is back to full condition before the next match that counts. MONEY-2 keeps checking the day's count the plan sees; CB5 went with the cap. |
+| OP-8 | design | The level texts named only some parts of the game, so a level could read a missing feature as forbidden | Every level's text says every part of FoxLeague is open and the level sets what it pays for and how much. |
+
+Kept on purpose, after the owner was asked (2026-11-06): the farming guards of A2 on a targeted or joined 1v1 (a rival
+100 or more ELO above, one whose eleven is more than 10 percent stronger or cannot be read, more than 2 a week against
+one rival), Zeus's floors (a 1v1 from 55 percent, which is about where a 1v1 starts to pay, no tournament with three
+clearly stronger seated teams, no Champions FoxLeague with 24), and A3's rule that the 18 strongest cards are never
+listed. Also kept: one created tournament at a time (FoxLeague's own rule, `tournaments.rs` "You already have an active
+tournament you are organizing"), the size ceiling from what recently filled (a tournament that does not fill keeps the
+organizer's deposit once that switch is on), and every money limit.
+
+Stays open, with the reason each stays:
+- The saved strategy text of an agent does not change with the presets: the ten live agents keep their Zeus text until
+  the owner picks Zeus again (or the text is replaced with the owner's go).
+- An open challenge topped at the team's best XI OVR rounded up lets in a team up to 0.9 OVR above it (FoxLeague
+  compares tenths; the creator must fit its own range). The win chance against whoever takes it is unknown before.
+- The player interest signal (FoxLeague rc.85, switched off) has no action yet.
