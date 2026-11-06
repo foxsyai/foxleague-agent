@@ -203,9 +203,10 @@ test('CB13: a casual game goes to the test bench, not the formation record; a ra
 
 test('CB14: the test bench pools the casual games of every team the install runs over 40 days, by formation', () => {
   const store = new Store('', ':memory:')
-  const g = (key: string, mine: string, gf: number, ga: number, days = 1) => ({ key, at: new Date(Date.now() - days * 86_400_000).toISOString(), mine, theirs: '4-4-2', gf, ga, edge: 1, rivalUserId: null })
+  // A minute ago: no game from before FoxLeague's AI played at its full strength counts (R85-3).
+  const g = (key: string, mine: string, gf: number, ga: number, ago = 60_000) => ({ key, at: new Date(Date.now() - ago).toISOString(), mine, theirs: '4-4-2', gf, ga, edge: 1, rivalUserId: null })
   store.putCasualResults(0, [g('m:1', '4-3-3', 2, 1), g('m:2', '4-3-3', 0, 1)])
-  store.putCasualResults(1, [g('m:3', '5-2-3', 1, 1), g('m:4', '5-3-2', 3, 0, 45)])
+  store.putCasualResults(1, [g('m:3', '5-2-3', 1, 1), g('m:4', '5-3-2', 3, 0, 45 * 86_400_000)])
   store.putCasualResults(0, [g('m:1', '4-3-3', 2, 1)])
   const bench = store.casualBench()
   assert.equal(bench.matches, 3)
@@ -260,7 +261,7 @@ test('CB18: a planning snapshot keeps its casual games for the bench and carries
     user: async () => snapshot().profile,
     team: async () => snapshot().team,
     players: async () => [],
-    matchHistory: async () => [row('41', 100, null, [3, 1], { match_type: 'casual' })],
+    matchHistory: async () => [row('41', 100, null, [3, 1], { match_type: 'casual', finished_at: new Date(Date.now() - 60_000).toISOString() })],
     matchFormations: async () => ({ home: '4-2-3-1', away: '5-3-2', homeStrength: 1500, awayStrength: 1500 }),
   }
   const fox = svc.fox as unknown as Record<string, unknown>

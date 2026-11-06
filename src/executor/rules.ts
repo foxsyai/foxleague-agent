@@ -323,8 +323,13 @@ export function rarityBidLimit(settings: Pick<AgentSettings, 'maxBidCommonFoxsy'
 /** FoxLeague's 30 seconds between match starts and 15 minutes after a ranked start, each with a margin (play_match). */
 export const MATCH_COOLDOWN_MS = 35_000
 export const RANKED_COOLDOWN_MS = 15.5 * 60_000
-/** A casual or ranked match runs about 10 minutes; another start before it ends is refused ("already in match"). */
-export const MATCH_RUNS_MS = 11 * 60_000
+/**
+ * A casual or ranked match holds its team until its broadcast has aired, and another start before then is refused
+ * ("already in match"): the simulation (about 1.5 minutes, up to 5), the recording (600 s plus stoppage time, 615 s
+ * seen) and 30 s (matches.rs live_match_predicate, broadcast_holds_its_team_sql). 11 minutes was too short (FoxLeague's
+ * release of 2026-11-05, R85-1); a slower simulation is caught by the active match read before each start.
+ */
+export const MATCH_RUNS_MS = 13 * 60_000
 
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72

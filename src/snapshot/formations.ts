@@ -171,6 +171,13 @@ export function leagueTable(matches: LeagueMatch[], own: Set<number>): LeagueTab
 export const CASUAL_DAYS = 40
 
 /**
+ * The bench counts no casual game that ended before this moment: FoxLeague's release of 2026-11-05 (rc.85, its #647,
+ * live on mainnet at this time) plays the AI at the OVR it is built at; before, every AI player played as a Common, at
+ * 30 at most, so those games say nothing of a formation now (R85-3).
+ */
+export const CASUAL_AI_FULL_FROM = '2026-11-05T23:51:59.000Z'
+
+/**
  * The next formations to test in a casual game: every formation the squad can field (a goalkeeper and enough defenders,
  * midfielders and forwards free to play), the ones with the fewest tests on the bench first, so each formation's sample
  * grows evenly; ties in FoxLeague's order of the formations.

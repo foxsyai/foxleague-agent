@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 6c7f26166 2026-11-03.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at e4e8d99d3 2026-11-05.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -749,6 +749,28 @@ Changed your mind? Open **Marketplace → My Listings** and click **Cancel** on 
 
 Cancelling only works while the auction has **zero bids**. Once a bid lands you are committed until the clock ends, which is what stops a seller pulling a card out from under a bidder.
 
+## Showing interest in another team's player
+
+Like a player you saw in another team's squad (on the Leaderboard or in a tournament lobby)? Press **I'm interested** on the card. Nothing is paid, nothing is reserved and there is no message to write:
+
+- **Your offer (optional)** in whole FOXSY. It binds nobody: no FOXSY moves when you send it.
+- **Share my Telegram so they can contact me** (optional). The box shows only when your team has a Telegram account linked in **Settings > Connect Telegram** with a username. Ticked, the owner sees your username; unticked, they see no contact. Your chat id is never shown.
+
+The owner sees your team name, your coach name, your offer, the time and your Telegram username when you share it. Nobody else sees any of it.
+
+**Limits:** you can show interest in **5 players a day** (UTC) and in the **same player once every 7 days**. You cannot show interest in your own players or in a player already on the market (buy it there). A visitor without a wallet sees **Connect to show interest**.
+
+**As the owner** you get **one notification per player per day**, however many managers ask. The first one arrives with a push; every later one that day updates the same notification (for example "5 managers are interested in Maximiliano Romero. Best offer 15,000 FOXSY.") and puts it back on top as unread, without a second push. The next day starts a new one. Open it to see every manager with their offer. It carries two buttons:
+
+- **List for sale** opens the normal listing of that player with the best offer of the day filled in as the price. You can change it.
+- **Ignore** puts the notification away.
+
+The player's profile in your Squad also shows **Interested managers** with the list of the last 7 days. If the player changes owner, the new owner never sees the interests sent to the previous one.
+
+**When the owner lists the player**, every manager who showed interest in it during the last 7 days gets a notification that it is on the market, with its price. The listing is **public**: any manager can bid on it and buy it first, not only the one who made an offer.
+
+Do not want these requests? Turn off **Interest in players** in **Settings > Notify me about**. It also stops the market notice of players you showed interest in. When you do not see the button at all, the feature is not switched on yet.
+
 ## Wallet-to-wallet transfers (transfer cooldown)
 
 If someone sends you a player NFT directly (not through the marketplace), the player has a **transfer cooldown** before you can use them in matches. The cooldown is **21 days (504 hours)** for a card that had reached the match gate of its rarity (see the table above) when it moved. A card moved before its match gate is locked for **21 days plus 6 hours for every missing match** in the new wallet: a fresh starter card, a pack card or a fusion output cannot be handed to another wallet and played there the same season. A Legendary moved at 0 matches is locked for 122 days and 6 hours (2,934 hours); an Uncommon moved with 5 played and nothing waived, for 23 days and 12 hours. Each fusion match waiver bought for the card in the new wallet (on its profile in the Squad: **Buy matches**) takes 6 hours off that lock, down to 21 days plus 6 hours for every match it still has to really play (54 days and 18 hours for the Legendary at 0, 21 days for the Uncommon). The length is fixed on the card at the moment of the transfer. Locks already running on Monday 12 October 2026 at 16:30 UTC, when this rule replaced the 63-day lock for a card under 20 competitive matches, were never made longer: each ends at the shorter of its own length and the new length for the card. It encourages fair play plus marketplace use, preventing off-market roster manipulation right before a tournament. Auction wins, fusion results, distribute events plus shop mints never start one; only direct wallet-to-wallet transfers do. A lock that is already running stays on the card through a sale (see above). A cooled-down player also cannot be used as a fusion input, so you cannot launder the cooldown through fusion.
@@ -973,6 +995,8 @@ Your wallet asks for **one signature** (the entry fee): that one transaction cre
 A **developer challenge** keeps the earlier flow: the game creates the challenge first, then your one signature pays the entry fee and seats you.
 
 - **You closed the wallet without signing**: nothing is charged and nothing is created. Press **Try again** to sign the same challenge. Before it opens your wallet again, the game checks the chain, so a first signature that is still on its way is never paid twice.
+- **Your wallet is short of EGLD**: the one transaction needs about 0.0152 EGLD for its network fee. The form checks this before anything is created and asks you to add a little EGLD first.
+- **You left before paying**: open the challenge from your lobby. While it can still be paid, its page shows **Pay now** with the time left (about 9 minutes from the moment you created it). The button opens your wallet for the same challenge. The game checks the chain first, so nothing is paid twice. Once the time has run out, the page first checks the chain: a payment that landed opens the challenge. Otherwise it says so: unless a payment of yours still lands, nothing is charged and the challenge is removed on its own within about 30 minutes. You can create a new one right away.
 - **Your earlier challenge is still waiting for its payment**: the form says so and counts down until you can start a different one, with a link to the pending challenge.
 - **Your payment is not confirmed yet**: the challenge opens as soon as it lands, even if you leave the page; nothing is charged twice. Closing the tab in that moment asks you to stay first.
 

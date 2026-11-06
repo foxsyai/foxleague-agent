@@ -1190,3 +1190,33 @@ Stays open (reasoned by the reviewers, no failing test; none moves money), with 
   seat reverts on chain (gas only).
 - A future AI-side match type other than `casual` would count again in a rival's last formations: none is served.
 - With an unread roster the Upcoming line says the rival's strength is unknown where it is the agent's: no decision reads it.
+
+## FoxLeague's release of 2026-11-05 (rc.85), checked 2026-11-06
+
+FoxLeague promoted three releases to its main after the agent was last checked against it (`fcd79a74a`, 2026-11-04):
+#633, #644 and #649, live on mainnet with rc.85 (`16d9a455e`) from 23:51:59 UTC on 2026-11-05. Fourteen commits were
+read against what the agent calls and reads, and three refused starts in the production log of 2026-11-05 ("Already in
+match", 11 minutes 6 seconds after the agent's previous start) were traced to FoxLeague's in-match gate. Each test in
+`test/foxleague-rc85.test.ts` failed on `main` (`7fdb427`) and passes after its fix. No payment is involved in any of
+them: a refused start costs nothing and a ranked ticket is bought only when FoxLeague asks for it.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R85-1 | low | A plan spaced its casual and ranked starts 11 minutes apart, but FoxLeague holds a team until the match's broadcast has aired: the simulation (about 1.5 minutes), the recording (about 615 s) and 30 s, so about 12 to 12.5 minutes after the start. A casual test after a ranked game (or the reverse) was refused and lost its place in the plan | The plan spaces any two casual or ranked starts 13 minutes apart (16 between two ranked ones, unchanged); a slower simulation is caught by the active match read before each start. |
+| R85-2 | low | Since FoxLeague's #638 the broadcast starts by itself and `GET /api/matches/active` returns the previous match, `finished`, while it airs. After a start whose answer was lost, the read-back took that match for the new one: a start that never happened was logged as one (the day's count, the last start time) | The read-back counts an active match as the new start only when FoxLeague created it after the press (a minute allowed for the two clocks), or, without a readable time, while it is still being played. |
+| R85-3 | low | Since FoxLeague's #647 the AI of a casual game plays at the OVR it is built at; before, every AI player played as a Common, at 30 at most. The casual test bench pooled 40 days of games, all of them against the weaker AI, with the new ones | The bench counts no casual game that ended before rc.85 went live (`CASUAL_AI_FULL_FROM`); the record grows again from the new games. |
+
+Also in this release, with no change to the agent: the 1v1 "Pay now" route and its error code (#637, the agent creates
+and joins in two steps); `/api/config` gains `google_login_preview`, `guest_explore_enabled` and `player_interest`
+(switched off) and loses nothing; no contract or gas change; the ranked ticket, organizer deposit and private fee code
+is untouched. The game manual is synced to `e4e8d99d3` (the interest signal on the marketplace page and the 1v1 "Pay
+now" note).
+
+Stays open, with the reason each stays:
+- Yellow cards (#634, #640) are counted and shown only: FoxLeague's code says nothing is enforced yet. Its manual
+  announces a ban from about 18 November (three yellow cards miss the team's next tournament match). The agent will need
+  to read it and leave a banned player out once FoxLeague ships it; the page that says so (Getting started, Players) is
+  not among the pages the agent's manual carries.
+- The active match read ends 30 s before FoxLeague's gate, so a start in those 30 s is still refused by FoxLeague (no
+  cost; the next plan plays it). With 13 minutes between starts this needs a simulation of more than about 2 minutes; a longer one is still shown
+  by the read, and the agent's own check refuses the start without asking FoxLeague.
