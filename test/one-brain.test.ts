@@ -190,3 +190,16 @@ test('R55A-2: the executor counts the agent\'s own boosters of the last 7 days: 
   ;(n.store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): unknown } } }).db.prepare("UPDATE activity SET at = ? WHERE kind = 'buy'").run(new Date(Date.now() - 8 * 86_400_000).toISOString())
   assert.equal((await n.exec.run(n.agent(), dryWallet, withFixture(snapshot()), [{ action: { type: 'buy', product: 'xp_booster' }, reason: '' }]))[0]!.status, 'dry_run')
 })
+
+// Agent review of PR #55, second pass (low, rule 4): a training status without its used or banked numbers made the count
+// NaN, and a paid session or a slot purchase went through unchecked.
+test('R55A-3: a training status whose used or banked numbers cannot be read refuses a paid session and a slot purchase', () => {
+  for (const field of ['premium_used_today', 'slots_banked'] as const) {
+    const s = snapshot()
+    s.auth!.shop!.training = { ...s.auth!.shop!.training!, used_today: 7, daily_free: 5, premium_used_today: 1, premium_cap: 10, slots_banked: 2 }
+    delete (s.auth!.shop!.training as unknown as Record<string, unknown>)[field]
+    const limit = { settings: { ...TEST_SETTINGS, paidTrainingPerDay: 10 } }
+    assert.match(why({ type: 'buy', product: 'training_slot', quantity: 1 }, limit, s), /training quota unknown/, field)
+    if (field === 'premium_used_today') assert.match(why({ type: 'train', player_nonce: 12, attribute: 'defense' }, limit, s), /training quota unknown/, field)
+  }
+})

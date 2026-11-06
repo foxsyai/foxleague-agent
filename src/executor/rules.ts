@@ -886,7 +886,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!t) return refuse('training quota unknown (shop status unavailable)')
       const paid = t.used_today >= t.daily_free
       if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
-      // The level's count of paid sessions a day (owner, 2026-11-06).
+      // The level's count of paid sessions a day (owner, 2026-11-06); numbers it cannot read are no count (R55A-3).
+      if (paid && (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked))) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
       if (paid && t.premium_used_today >= ctx.settings.paidTrainingPerDay) return refuse(`${ctx.settings.paidTrainingPerDay} paid training sessions a day at this level, ${t.premium_used_today} used today`)
       // The team unread: the card may be a starter (R54A-5).
       if (!s.team || s.team.lineup.includes(p.nonce)) {
@@ -1256,6 +1257,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           // The level's count of paid sessions a day (owner, 2026-11-06): those used today and those still banked count.
           const t = s.auth?.shop?.training
           if (!t) return refuse('training quota unknown (shop status unavailable)')
+          if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked)) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
           const more = a.quantity ?? 1
           const limit = ctx.settings.paidTrainingPerDay
           if (t.premium_used_today + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${t.premium_used_today} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - t.premium_used_today - t.slots_banked)}`)
