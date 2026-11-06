@@ -199,6 +199,15 @@ test('R54A-6: a waiting challenge of ours without a target field is checked as a
   assert.match(why({ type: 'play_match', match_type: 'ranked' }, {}, s), /your open challenge T950 waits/)
 })
 
+// Agent review of PR #54, fourth pass (low): an open challenge of ours with no top (one the owner posted by hand) refused
+// even a stronger eleven, since the range check came before R54A-4's skip.
+test('R54A-7: with a waiting open challenge that has no top, a stronger eleven still passes and a weaker change is refused', () => {
+  const s = waitingAt(70, { ovr_max: null })
+  const fresher = { type: 'set_lineup', lineup: [1, 13, 3, 4, 5, 6, 7, 8, 9, 10, 11], substitutes: [12, 2, 14, 15, 16, 17, 18] } as const
+  assert.equal(why(fresher, {}, s), '')
+  assert.match(why({ type: 'play_match', match_type: 'ranked' }, {}, s), /the range of your open challenge T950 could not be read/)
+})
+
 test('OP-5: the top of a 1v1\'s OVR range is never raised or removed', () => {
   const s = snapshot()
   const me = s.profile!.id

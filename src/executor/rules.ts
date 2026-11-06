@@ -641,13 +641,14 @@ function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, l
   // A target the answer leaves out is no target: checked as open (R54A-6).
   const waiting = mine.active.filter(t => t.max_teams === 2 && NOT_STARTED_STATUSES.has(t.status) && t.creator_user_id === s.profile?.id && !t.targeted && typeof t.target_user_id !== 'number')
   for (const t of waiting) {
+    // An eleven already below the bar (a tournament match during the wait) may still be made stronger (R54A-4), whatever
+    // the range says (R54A-7).
+    const after = elevenOvrToday(s, lineup, condition)
+    const now = elevenOvrToday(s)
+    if (after !== null && now !== null && after >= now) continue
     const top = t.ovr_max
     if (typeof top !== 'number' || !Number.isFinite(top)) return `the range of your open challenge T${t.id} could not be read: no ${what} while it waits`
-    const after = elevenOvrToday(s, lineup, condition)
     if (after === null) return `your open challenge T${t.id} waits and your eleven after this ${what} could not be read: no ${what} blind`
-    // An eleven already below the bar (a tournament match during the wait) may still be made stronger (R54A-4).
-    const now = elevenOvrToday(s)
-    if (now !== null && after >= now) continue
     if (top > after * MAX_1V1_STRENGTH_RATIO) return `your open challenge T${t.id} waits for an opponent (up to OVR ${top}): after this ${what} your eleven would play at OVR ${after.toFixed(1)}, more than 10 percent below a fresh team at its top; wait until it is taken or expires, or leave it first`
   }
   return null
