@@ -11,7 +11,7 @@ import type { MatchFormations } from './foxleague/types.ts'
 import type { MarketSale } from './snapshot/market.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
-import { MIN_TICK_MINUTES, STRATEGY_PRESETS, isZeus, validateSettingsPatch } from './store/settings.ts'
+import { MIN_TICK_MINUTES, STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
 import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -822,7 +822,8 @@ export class Service {
 
   /** `plan`: the snapshot a plan is made from also reads the formation record (the checks before each action do not). */
   private async snapshot(index: number, plan = false): Promise<AgentSnapshot> {
-    const research = isZeus(this.store.agent(index)?.settings.strategy ?? '')
+    // Every level reads the win chances (Zeus only until 2026-11-06): one brain, the levels differ in money.
+    const research = true
     const matchFacts = plan ? { get: (k: string) => this.store.matchFacts(k), put: (k: string, f: MatchFormations) => this.store.putMatchFacts(k, f) } : undefined
     const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
     const league = plan ? this.store.leagueCache() : undefined

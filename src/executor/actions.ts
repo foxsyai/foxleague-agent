@@ -53,7 +53,7 @@ export type Action =
       registration_closes_minutes_before: number
       round_interval_minutes: number
       home_and_away?: boolean
-      /** Teams invited (their user ids): a non-empty list makes it private. The Zeus level only. */
+      /** Teams invited (their user ids): a non-empty list makes it private (every level since 2026-11-06). */
       invite_user_ids?: number[]
       /** An optional OVR range (FoxLeague, 2026-10-24): only teams whose best XI OVR is inside may join. */
       ovr_min?: number

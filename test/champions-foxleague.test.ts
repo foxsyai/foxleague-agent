@@ -21,7 +21,9 @@ const H = 3600_000
 const lk = (more: Record<string, unknown> = {}) => tournament(3001, { format: 'league_knockout', max_teams: 36, min_teams: 36, tier: 'silver', entry_fee_foxsy: 2000, round_interval_minutes: 60, deadline: new Date(Date.now() + 48 * H).toISOString(), starts_at: new Date(Date.now() + 49 * H).toISOString(), ...more }) as TournamentDetail
 const invitation = (more: Record<string, unknown> = {}) => ({ tournament_id: 3001, title: 'Champions FoxLeague', tier: 'silver', entry_fee_foxsy: 2000, wave: 1, expires_at: new Date(Date.now() + 24 * H).toISOString(), seats_lock_at: new Date(Date.now() + 36 * H).toISOString(), can_accept: true, refusal: null, prize_atomic: null, ...more })
 const join = { type: 'join_tournament' as const, tournament_id: 3001 }
-const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...TEST_SETTINGS, maxEntryFeeFoxsy: 10_000 }, now: new Date(), tournament: lk(), invitation: invitation(), ...more } as RulesContext)
+// Every level judges the invited teams since 2026-11-06: by default 35 of them read, all weaker than ours.
+const WEAKER_FIELD = Array.from({ length: 35 }, (_, i) => ({ userId: 7000 + i, strength: 1000, elo: 1100 }))
+const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { ...TEST_SETTINGS, maxEntryFeeFoxsy: 10_000 }, now: new Date(), tournament: lk(), invitation: invitation(), field: WEAKER_FIELD, ...more } as RulesContext)
 
 // ---- the format ----
 
@@ -142,9 +144,9 @@ test('Zeus accepts with a real chance of the knockout: fewer than 24 of the invi
   const s = snapshot()
   const strong = (n: number) => Array.from({ length: n }, (_, i) => ({ userId: 5000 + i, strength: 1e9, elo: 3000 }))
   const even = (n: number) => Array.from({ length: n }, (_, i) => ({ userId: 6000 + i, strength: 1, elo: 1 }))
-  assert.equal(checkAction(join, s, ctx({ zeus: true, field: [...strong(23), ...even(12)] })).ok, true)
-  assert.match(checkAction(join, s, ctx({ zeus: true, field: [...strong(24), ...even(11)] })).refusal!, /24 of the invited teams are clearly stronger \(lineup and ELO\): no real chance of the knockout/)
-  assert.match(checkAction(join, s, ctx({ zeus: true })).refusal!, /the invited teams could not be read/)
+  assert.equal(checkAction(join, s, ctx({ field: [...strong(23), ...even(12)] })).ok, true)
+  assert.match(checkAction(join, s, ctx({ field: [...strong(24), ...even(11)] })).refusal!, /24 of the invited teams are clearly stronger \(lineup and ELO\): no real chance of the knockout/)
+  assert.match(checkAction(join, s, ctx({ field: undefined })).refusal!, /the invited teams could not be read/)
 })
 
 // ---- while it runs ----
@@ -225,7 +227,9 @@ test('the executor reads the invitation again right before paying; a failed read
   assert.equal(r!.status, 'refused', r!.summary)
   assert.match(r!.summary, /invitations could not be read: not paying blind/)
   assert.equal(sends, 0)
-  const ok = setup({ fox: { tournament: async () => lk(), leagueInvitations: async () => [invitation()] } })
+  // A field it can judge (every level reads it since 2026-11-06): 30 invited teams, weaker than ours by ELO and squad.
+  const board = { users: Array.from({ length: 30 }, (_, i) => ({ id: 7000 + i, wallet_address: `erd1x${i}`, elo_rating: 1100 })), total: 30, limit: 200, offset: 0 }
+  const ok = setup({ fox: { tournament: async () => lk(), leagueInvitations: async () => [invitation()], leagueInvitationsView: async () => ({ invitations: board.users.map(u => ({ user_id: u.id, state: 'invited' })) }), leaderboard: async () => board } })
   ok.store.updateSettings(0, { maxEntryFeeFoxsy: 10_000 })
   const [d] = await ok.exec.run(ok.agent(), dryWallet, snapshot(), [{ action: join, reason: '' }])
   assert.equal(d!.status, 'dry_run', d!.summary)
@@ -237,7 +241,8 @@ test('the manual describes the rule', async () => {
   const plays = read('site/src/content/docs/play/how-it-plays.md')
   assert.match(plays, /\*\*Champions FoxLeague \(League \+ Knockout\)\*\*: FoxLeague invites the top of its leaderboard; the agent accepts an invitation by itself, at every level, when the entry fee fits your limits and the squad can carry up to 17 matches/)
   assert.match(plays, /It never creates one\. It may leave one it joined early when it sees no real chance of the top 24, but only before the seats lock, while leaving still returns the whole entry/)
-  assert.match(read('site/src/content/docs/play/strategy-levels.md'), /\| Champions FoxLeague \(League \+ Knockout\) invitations \| ✓ \| ✓ \| ✓ \| ✓ \| ✓ \| with a real chance of the knockout \(fewer than 24 of the invited teams clearly stronger\) \|/)
+  assert.match(read('site/src/content/docs/play/strategy-levels.md'), /\| Champions FoxLeague \(League \+ Knockout\) invitations \| ✓ \| ✓ \| ✓ \| ✓ \| ✓ \| ✓ \|/)
+  assert.match(read('site/src/content/docs/play/strategy-levels.md'), /a Champions FoxLeague invitation only with a real chance of the knockout \(fewer than 24 of the invited teams clearly stronger\)/)
 })
 
 // ---- the reviews of PR #31 ----

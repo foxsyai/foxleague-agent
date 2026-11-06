@@ -119,8 +119,9 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
   const dash = read(`${DOCS}/use/dashboard.md`)
   const talk = read(`${DOCS}/use/talk-to-your-manager.md`)
   const zeusTick = LEVEL_SETTINGS.zeus!.tickMinutes
-  assert.match(settings, new RegExp(`120 minutes is the default of every level but Zeus, which plans every ${zeusTick} minutes`), 'B1 the Zeus tick')
-  assert.match(tip('tick'), new RegExp(`The default is 120 for every level but Zeus, which plans every ${zeusTick} minutes`), 'B1')
+  const [h, b] = [LEVEL_SETTINGS.hunter!.tickMinutes, LEVEL_SETTINGS.beast!.tickMinutes]
+  assert.match(settings, new RegExp(`The defaults: 120 minutes at steady and climber, ${h} at hunter and predator, ${b} at beast and ${zeusTick} at Zeus`), 'B1 the ticks')
+  assert.match(tip('tick'), new RegExp(`The defaults: 120 for Steady and Climber, ${h} for Hunter and Predator, ${b} for Beast and ${zeusTick} for Zeus`), 'B1')
   assert.match(talk, /`\/topup <code> \[EGLD\]` \| Approve it \(with a smaller amount after the code, that much instead; more than proposed is refused\)/, 'B2')
   assert.match(talk, /`\/tick N` \| Plan and run now, inside the agent's active hours \(outside them it says so; `\/do N request` runs anyway\)/, 'B3')
   for (const [name, text] of [['settings', settings], ['tick bubble', tip('tick')]] as const) assert.match(text, /a planning cycle also runs about an hour before each match session locks \(matches whose locks fall within 2 hours of each other share it\)/i, `B4 ${name}`)
@@ -128,7 +129,7 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
   for (const [name, text] of [['dashboard', dash], ['settings', settings], ['funds bubble', tip('funds')], ['topup bubble', tip('topup')], ['costs', read(`${DOCS}/help/costs.md`)]] as const) {
     assert.match(text, /with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once \(once a day per agent\)/i, `B5 ${name}`)
   }
-  assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password, and so do a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
+  assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password, and so do a higher count \(paid training, boosters or packs\), a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
   assert.match(settings, /the Silver and Gold amounts or the tick; your limits per rarity stay as they are\)/, 'B7')
   assert.match(tip('strategy'), /the settings that do not fit it yet \(moving up, those under its values; moving down, those above them\), each with a tick, and its recommended AI/, 'B8')
   assert.match(settings, /Each level up to the predator adds two Silver steps; the beast and Zeus add the 4,999 ceiling\./, 'B9')

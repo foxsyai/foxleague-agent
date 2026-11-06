@@ -1,68 +1,71 @@
 ---
 title: Strategy levels
-description: The six strategy levels, five from careful to all-in and then Zeus, what each one does with your money and the limits to set for it.
+description: "The six strategy levels, one brain for all of them and a budget that grows from Steady to Zeus."
 ---
 
-The strategy is the direction the AI follows on every cycle. Six presets set it for you. The first five work like
-the trim levels of a car: **each level does everything the level below does and adds more**, and what grows from
-one level to the next is how much the agent pays to grow the squad. The sixth, **Zeus**, is different: it may do
-everything a beast does, but only what pays, and it aims every move at No. 1 on the leaderboard.
-
-**Every part of FoxLeague is open at every level**: ranked and casual games, joining and creating tournaments (public
-or private), 1v1s against a named team or as an open challenge, and the marketplace. What sets a level apart is what it
-pays for and how much: the shop, the waivers, the bids and the size of its entries and stakes, always within your limits.
+The strategy is the direction the AI follows on every cycle. Six presets set it for you, and they work like
+subscription tiers: **every level has the same brain**, and each level up adds money. The brain is the one Zeus
+had: every action has to name its benefit against its cost and risk, it weighs a win chance for every team, and it
+waits when nothing clearly pays. What grows from one level to the next is what the agent may spend: the daily cap and
+the monthly budget, the largest entry, shop payment and bid, and how many paid training sessions, XP boosters and
+Common packs it may buy. Higher levels also plan more often.
 
 Pick one in **Settings → Strategy** or on Telegram (`/strategy 2 hunter`). In the dashboard, picking a level opens
 a short proposal: the settings the level would change (moving up, those that fall short, raised to the level;
 moving down, those above it, lowered to the level), each with a tick, and its recommended AI. **Accept and save** takes the ticked ones; **Cancel** keeps everything as it is saved. You can edit the text
 afterwards or write your own. [Every setting explained](/use/settings/) covers the field itself.
 
+## The same at every level
+
+- Every part of FoxLeague is open: ranked and casual games, joining and creating tournaments (public or private),
+  1v1s against a named team or as an open challenge, Champions FoxLeague invitations and the marketplace.
+- It weighs a **win chance** for each team on its challenge list (up to 10, first the teams that take 1v1s they had not arranged).
+- A 1v1 against a known team only from 55 percent; an open challenge only to teams no stronger by OVR.
+- A tournament only with a real chance of the top three (fewer than three clearly stronger seated teams, our eleven
+  taken at the start); a Champions FoxLeague invitation only with a real chance of the knockout (fewer than 24 of the
+  invited teams clearly stronger).
+- Ranked while the squad is fit, casual formation tests when they cost nothing to a match that counts, the formation
+  and eleven set against each opponent before every lock, training on the stats each role needs.
+- A sync only when it changes a match that counts, condition recovery for key starters before a match that matters,
+  the XP booster only on days with 3 sure competitive matches of its own.
+- A player of any rarity bought only at a good price and for a reason; a spare card sold when its price beats its
+  use; a fusion when the fees pay back.
+
 ## The six levels
 
-| Level | Adds on top of the level below | Typical spend a day |
+| Level | What its money buys | Daily cap |
 |---|---|---|
-| **1. Steady** | The free game used fully: the 5 free training sessions, lineup and formation, the 5 daily matches, sync before match days, the free team badge. Silver tournaments (joined or its own, public or private) and 1v1s (a named team or an open challenge) at your lowest amounts. No shop purchases (from FoxLeague's competition levels on, a ranked start pays the ranked ticket, within Max shop payment), no bids | Entries and sync: a few hundred FOXSY |
-| **2. Climber** | The push for ELO: ranked matches whenever allowed, Gold tournaments when the squad can compete, 1v1s at any of your amounts, condition recovery for key starters before a match that matters | Plus Gold entries (5,000 FOXSY) and some recovery |
-| **3. Hunter** | Tournaments and the first purchases: the tournaments with the best expected value, the XP booster on days with 3 sure competitive matches, paid training slots while it runs, a fusion when three spare cards are ready, **bids at auction** (see below), sells a spare card when its price beats its use | Plus about 2,000 FOXSY on booster days, and bids |
-| **4. Predator** | Pays for everything that grows the squad **except waivers**: all 15 training sessions every day, the booster on every match day, recovery whenever it helps, both Common packs a week, a fusion whenever a triplet is ready (real matches, full 14-day cooldown), a max bid that reaches Rares | About 3,500 FOXSY, plus entries and bids |
-| **5. Beast** | Every paid advantage: the booster always on, **both fusion waivers** so a fusion can happen every 20 hours, 3 competitive matches a day, a max bid that reaches Epics; keeps at least 22 cards, with no upper limit, to fuse, grow and sell | About 6,000 FOXSY, plus entries and bids |
-| **6. Zeus** | Not more spending, better decisions: a **win chance** for each team on its challenge list (up to 10, first the teams that take 1v1s they had not arranged), a 1v1 against a named team only from 55 percent, open challenges topped at its own best XI OVR, tournaments only with a real chance of the top three, its own tournaments including **private** ones that invite active teams it should beat, training on the stats each role needs, syncs and recovery only before matches that count, a player bought only at a good price and for a reason that pays. It climbs in steps, from the teams it beats to stronger ones | As little as winning needs, up to its limits |
+| **1. Steady** | Entries at your lowest Silver amounts, 2 paid training sessions a day, cards at auction up to 500 FOXSY, fusion fees and small waivers; from FoxLeague's competition levels on, the ranked ticket of each ranked start (within Max shop payment) | $5 |
+| **2. Climber** | Gold entries too, 4 paid sessions a day, an XP booster a week, cards up to 1,500 FOXSY | $15 |
+| **3. Hunter** | 6 paid sessions a day, 2 boosters and a Common pack a week, cards up to 7,000 FOXSY | $25 |
+| **4. Predator** | 8 paid sessions a day, 3 boosters and 2 packs a week, a Rare's fusion match waivers, cards up to 14,000 FOXSY | $50 |
+| **5. Beast** | All 10 paid sessions a day, a booster every day, an Epic's fusion match waivers | $100 |
+| **6. Zeus** | Cards up to 38,000 FOXSY, the largest budget, a plan every hour | $150 |
 
 On average about 90 percent of all entry fees come back as prizes, so entries are mostly a stake that returns,
-not a cost. The shop, the waivers and the bids are real spending.
+not a cost. They still count toward the day's budget when they are paid: a prize goes back to the wallet but not
+back into the budget. The shop, the waivers and the bids are real spending.
 
-## Every action, level by level
+## What each level may buy
 
-| Action | Steady | Climber | Hunter | Predator | Beast | Zeus |
-|---|---|---|---|---|---| --- |
-| 5 free training sessions a day | ✓ | ✓ | ✓ | ✓ | ✓ | on the stats each role needs |
-| Lineup, formation, the 5 daily matches | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Formation from its record, tested in ranked, set against a known opponent | ✓ | ✓ | ✓ | ✓ | ✓ | ✓, before every match lock |
-| Ranked and casual games (the 5 daily starts) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
-| Ranked matches whenever allowed (the push for ELO) | | ✓ | ✓ | ✓ | ✓ | ✓ while the squad is fit |
-| Sync before match days | ✓ | ✓ | ✓ | ✓ | ✓ | only when it changes a match |
-| Free team badge | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Silver tournaments and 1v1s, lowest amounts | ✓ | ✓ | ✓ | ✓ | ✓ | when the win chance is good |
-| 1v1s against a named team or as an open challenge (topped at its own best XI OVR) | ✓ | ✓ | ✓ | ✓ | ✓ | a named team from 55 percent |
-| Gold tournaments, 1v1s at any amount | | ✓ | ✓ | ✓ | ✓ | with a real chance of the top three (fewer than three clearly stronger seated teams, our eleven taken at the start) |
-| Creates its own tournaments, public or private | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | with a real chance of the knockout (fewer than 24 of the invited teams clearly stronger) |
-| 3 competitive matches every day | | | | | ✓ | when they pay |
-| Condition recovery | | key starters, key matches | key starters, key matches | whenever it helps | whenever it helps | key starters, matches that count |
-| XP booster (2,000 FOXSY, 24 hours) | | | days with 3 sure matches | every match day | always on | days with 3 sure matches |
-| Paid training slots (10 a day, 20 FOXSY) | | | while the booster runs | all 10, every day | all 10, every day | when they beat other uses |
-| Common packs (2 a week, 2,500 FOXSY) | | | | ✓ | ✓ | when they pay |
-| Fusion | | | spare triplets | whenever ready | every 20 hours | toward Legendary, when it pays |
-| Fusion match waiver (Uncommon 20 FOXSY a match, Rare and Epic 100) | | | | | ✓ | when the time it wins counts |
-| Fusion cooldown waiver (75 FOXSY a day, every day or some) | | | | | ✓ | when the time it wins counts |
-| Bids at auction | | | Common, Uncommon | up to Rare | up to Epic | any rarity, only at a good price, for a reason |
-| Default max bid (FOXSY) | | | 1,500 | 7,000 | 14,000 | 38,000 |
-| Sells a spare card when its price beats its use (no upper limit on cards) | | | ✓ | ✓ | ✓ | ✓ |
+| Bought | Steady | Climber | Hunter | Predator | Beast | Zeus |
+|---|---|---|---|---|---|---|
+| Paid training sessions a day (20 FOXSY each) | 2 | 4 | 6 | 8 | 10 | 10 |
+| XP boosters a week (2,000 FOXSY) | none | 1 | 2 | 3 | every day | every day |
+| Common packs a week (2,500 FOXSY) | none | none | 1 | 2 | 2 | 2 |
+| Bids at auction | any rarity, up to 500 | up to 1,500 | up to 7,000 | up to 14,000 | up to 14,000 | up to 38,000 |
+| Fusion fees (100 to 800) | up to 400 | all | all | all | all | all |
+| Fusion waivers, one payment | up to 500 | up to 2,000 | up to 2,500 | up to 3,000 (a Rare's) | up to 9,000 (an Epic's) | up to 9,000 |
+| Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-**Bids.** From the hunter up, an agent bids at auction on the rarities its level buys: a hunter Commons and
-Uncommons, a predator up to Rares, a beast up to Epics, Zeus any rarity when the price is good and the card pays.
-Each level's default **Max bid** is your limit for the dearest rarity it buys, so it decides what is in reach. Raise
-a level's max bid and it can take a dearer card.
+The counts are upper limits, not targets: the agent buys a boost only when it pays. The largest single shop payment
+grades the waivers by itself: a fusion match waiver buys every missing match in one payment, so a level reaches only
+the rarities its limit covers.
+
+**Bids.** Every level bids at auction, on any rarity. A bid is limited by money, not by rarity: it stays at or under
+the lowest of three numbers, the level's **Max bid**, your limit for the card's rarity and the cost of building the
+card. So a Steady agent can take a Legendary listed at 500 FOXSY, and Zeus can buy a Common, never above 500 for it.
+Raise a level's max bid and it can take a dearer card.
 
 A bid is the whole price of the card, not an amount added to its start. The seller sets the reserve (at least 500
 FOXSY); the agent bids the reserve or 5 percent over the top bid, and if it is outbid it may bid once more (two bids
@@ -89,7 +92,7 @@ about **14,450 FOXSY** for a Rare (9 Commons, four fusions and their matches), *
 for a Legendary, so your limits per rarity (above) usually bind first. The fusion route is slower still than the money
 says: one fusion per wallet every 20 hours and two Common packs a week. An auction at a fair price under that cost often wins.
 
-**Zeus decides from numbers.** For each team on its challenge list (up to 10) it reads the ELO and the lineup
+**Every level decides from numbers.** For each team on its challenge list (up to 10) it reads the ELO and the lineup
 strength, ours at today's condition and theirs at full condition, and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to
 its rules whatever the AI decides: no 1v1 against a named team under 55 percent (an open challenge is topped at its own best XI OVR instead, so no stronger team can take it), no Champions FoxLeague where 24 of the invited teams are clearly stronger and no tournament where three seated teams are clearly
 stronger. Each 1v1 records the chance it was taken at, so
@@ -101,42 +104,48 @@ agents' Fair Play: it never arranges a result with any team.
 
 ## The default limits of each level
 
-The presets set the direction and your limits always win: an agent stops at its daily cap, its monthly budget and
-its largest single payment, whatever its strategy says. So each level comes with its own limits, and **picking a
+The presets set the direction and your limits always win: an agent stops at its daily cap, its monthly budget,
+its largest single payment and its counts, whatever its strategy says. So each level comes with its own limits, and **picking a
 level in Settings proposes them**: each setting that does not fit the level yet gets a row with a tick, and
 **Accept and save** saves the ticked ones (raising a limit or shortening the tick asks for your password). You can change any of them
 afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a very different price, adjust them:
 
 | Setting | Steady | Climber | Hunter | Predator | Beast | Zeus |
 |---|---|---|---|---|---|---|
-| Daily cap | $5 | $15 | $25 | $35 | $100 | $150 |
+| Daily cap | $5 | $15 | $25 | $50 | $100 | $150 |
 | Monthly budget | $150 | $250 | $400 | $750 | $2,000 | $3,000 |
-| Top-up warning | $10 | $30 | $50 | $70 | $200 | $300 |
+| Top-up warning | $10 | $30 | $50 | $100 | $200 | $300 |
 | Max entry fee or stake (FOXSY) | 1,500 | 5,000 | 7,500 | 10,000 | 20,000 | 25,000 |
-| Max shop payment (FOXSY) | 500 | 1,000 | 2,500 | 2,500 | 3,000 | 5,000 |
+| Max shop payment (FOXSY) | 500 | 2,000 | 2,500 | 3,000 | 9,000 | 9,000 |
 | Max swap (FOXSY) | 10,000 | 10,000 | 10,000 | 20,000 | 40,000 | 50,000 |
-| Max bid (FOXSY) | 0 (off) | 0 (off) | 1,500 | 7,000 | 14,000 | 38,000 |
+| Max bid (FOXSY) | 500 | 1,500 | 7,000 | 14,000 | 14,000 | 38,000 |
+| Paid training a day | 2 | 4 | 6 | 8 | 10 | 10 |
+| Boosters a week | 0 | 1 | 2 | 3 | 7 | 7 |
+| Packs a week | 0 | 0 | 1 | 2 | 2 | 2 |
 | Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 | as beast |
 | Gold amounts (FOXSY) | none (no Gold) | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 | up to 25,000 |
-| Tick | 120 min | 120 min | 120 min | 120 min | 120 min | 60 min |
-| Recommended AI | Sonnet 5, medium | Sonnet 5, medium | Sonnet 5.5, high | Opus 5.5, medium | Opus 5.5, high | Opus 5.5, high |
+| Tick | 120 min | 120 min | 90 min | 90 min | 75 min | 60 min |
+| Recommended AI | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high |
 
 The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the Bronze amounts (100, 250 and 500), the active hours (08:00 to 20:00
 UTC), a random shift of up to 10 minutes either way, actions at least 30 seconds apart.
 
 How the limits are sized: the daily cap covers the largest entry the level allows (a climber's Gold entry of 5,000
-FOXSY is about $13.50, a beast's of 20,000 about $54), the monthly budget is close to 30 days of typical play at that
-level, and the top-up warning comes when about two days of play at the daily cap are left.
+FOXSY is about $13.50, a beast's of 20,000 about $54) and a busy day of its buying (entries, ranked tickets, syncs,
+recovery, its paid sessions, booster and pack), the monthly budget is close to 30 days of typical play at that level,
+and the top-up warning comes when about two days of play at the daily cap are left. The AI is one setting for every
+agent; a level that plans twice as often costs about twice as much in AI calls.
 
-A bid also needs a daily cap above its value, and each level's daily cap fits its max bid: Zeus's 38,000 FOXSY is
-about $103 of its $150.
+A bid also needs a daily cap above its value, and each level's daily cap fits its max bid: a predator's 14,000 FOXSY
+is about $38 of its $50, Zeus's 38,000 about $103 of its $150.
 
 ## Good to know
 
-- An agent keeps the text it has. Changing a preset here or in a later version does not change an agent's strategy
-  until you pick the preset again.
-- The levels describe what the AI aims for; the code still checks every action: the game's rules, your limits, a
-  1v1 against a named team or one it joins only when that team is of similar strength, an open challenge only to teams
-  no stronger by OVR, a waiver only when a fusion with that card can really happen.
+- An agent keeps the text and limits it has. Changing a preset here or in a later version does not change an agent's
+  strategy until you pick the preset again. An agent saved before the counts existed plays on at FoxLeague's own
+  maximum (10 paid sessions a day, a booster every day, 2 packs a week) until you pick a level or lower them.
+- The levels describe what the AI aims for; the code still checks every action: the game's rules, your limits and
+  counts, a 1v1 against a named team or one it joins only when that team is of similar strength, an open challenge
+  only to teams no stronger by OVR, a waiver only when a fusion with that card can really happen.
 - A level higher than your wallet can carry runs out of FOXSY sooner. The **Top-up warning** in Settings tells you
   when the wallet runs low.

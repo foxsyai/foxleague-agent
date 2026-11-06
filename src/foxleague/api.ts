@@ -266,7 +266,7 @@ export class FoxLeague {
     return this.call<BestXiOvr>('/teams/best-xi-ovr', { wallet: w })
   }
 
-  /** Who a League + Knockout invited (the field a Zeus agent judges before accepting). */
+  /** Who a League + Knockout invited (the field an agent judges before accepting). */
   leagueInvitationsView(id: number, w: AgentWallet): Promise<LeagueInvitationsView> {
     return this.call<LeagueInvitationsView>(`/tournaments/${id}/invitations`, { wallet: w })
   }

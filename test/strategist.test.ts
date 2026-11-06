@@ -237,21 +237,17 @@ test('presets run from careful to all-in, and the AI is told the owner sets how 
   const { SYSTEM_PROMPT } = await import('../src/strategist/prompt.ts')
   assert.deepEqual(Object.keys(STRATEGY_PRESETS), ['steady', 'climber', 'hunter', 'predator', 'beast', 'zeus'])
   for (const text of Object.values(STRATEGY_PRESETS)) assert.equal(validateSettingsPatch({ strategy: text }).strategy, text)
-  assert.match(STRATEGY_PRESETS.beast!, /XP booster running every day/)
-  assert.match(STRATEGY_PRESETS.beast!, /Never move cards between wallets/)
-  assert.match(STRATEGY_PRESETS.predator!, /never a fusion match waiver, a fusion cooldown waiver or any other waiver/)
-  // A strict ladder: each text names its level and the auction step it adds, and is complete on its own.
+  // Each text names its level and is complete on its own (one strategy core since 2026-11-06, the money in the limits).
   Object.keys(STRATEGY_PRESETS).forEach((k, i) => assert.match(STRATEGY_PRESETS[k]!, new RegExp(`\\(level ${i + 1} of 6\\)`)))
-  // Zeus: No. 1 at the least spending, a benefit for every action, the numbers first, never an arranged result.
-  assert.match(STRATEGY_PRESETS.zeus!, /No\. 1 on the leaderboard with the least spending/)
-  assert.match(STRATEGY_PRESETS.zeus!, /every action must name its benefit/)
-  assert.match(STRATEGY_PRESETS.zeus!, /Climb in steps/)
-  assert.match(STRATEGY_PRESETS.zeus!, /never arrange a result/)
-  assert.match(STRATEGY_PRESETS.steady!, /No shop purchases, no auction bids/)
-  // Bidding from the hunter up, on the rarities each level buys (test/levels-bids-manual.test.ts); the max bid decides what is in reach.
-  for (const k of ['hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /Bid on Common[^.]*the max bid and your limits per rarity decide which are in reach/)
-  for (const k of ['steady', 'climber']) assert.doesNotMatch(STRATEGY_PRESETS[k]!, /Bid on/)
-  for (const k of ['climber', 'hunter', 'predator', 'beast']) assert.match(STRATEGY_PRESETS[k]!, /5 free training sessions every day|all 15 training sessions every day/)
+  // Every level: No. 1 at the least spending, a benefit for every action, the numbers first, never an arranged result.
+  for (const text of Object.values(STRATEGY_PRESETS)) {
+    assert.match(text, /No\. 1 on the leaderboard with the least spending/)
+    assert.match(text, /Every action must name its benefit/)
+    assert.match(text, /Climb in steps/)
+    assert.match(text, /never arrange a result/)
+    assert.match(text, /Never move cards between wallets/)
+    assert.match(text, /within this level's limits \(the budget section shows them\)/)
+  }
   assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
 })
 
@@ -261,12 +257,12 @@ test('each level brings its own default limits, rising with the level; every age
   const levels = Object.values(LEVEL_SETTINGS)
   for (const l of levels) assert.deepEqual(validateSettingsPatch({ ...l }), l, 'every level passes the settings check')
   for (let i = 1; i < levels.length; i++) {
-    for (const k of ['dailyCapUsd', 'monthlyBudgetUsd', 'topUpWarningUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy'] as const) assert.ok(levels[i]![k] >= levels[i - 1]![k], `${k} never falls with the level`)
+    for (const k of ['dailyCapUsd', 'monthlyBudgetUsd', 'topUpWarningUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek'] as const) assert.ok(levels[i]![k] >= levels[i - 1]![k], `${k} never falls with the level`)
     assert.ok(levels[i - 1]!.entryFeesSilver.every(f => levels[i]!.entryFeesSilver.includes(f)), 'Silver amounts only add up')
   }
   assert.deepEqual(LEVEL_SETTINGS.steady!.entryFeesSilver, [1000, 1500])
   assert.equal(LEVEL_SETTINGS.beast!.entryFeesSilver.at(-1), 4999)
-  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [0, 0], 'no bids below the hunter')
+  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [500, 1500], 'every level bids (2026-11-06): a Common\'s price at steady, an Uncommon\'s at climber')
   for (const l of levels) assert.ok(l.maxEntryFeeFoxsy * 0.0027 < l.dailyCapUsd, 'the largest entry fits the daily cap at a FOXSY price of $0.0027')
   assert.deepEqual([D.strategy, D.dailyCapUsd, D.activeHoursUtc, D.tickMinutes, D.tickJitterMinutes, D.minGapSeconds, D.actionProbability], [P.steady, 5, [8, 20], 120, 10, 30, 1])
   // The cycle: never under 10 minutes, the random window included.

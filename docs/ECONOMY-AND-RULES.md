@@ -425,12 +425,17 @@ among the called-up players by contribution. Nothing of it exists in the code on
 - **XP booster timing.** The multiplier is read when a match result is applied (at the reveal for tournament and 1v1
   matches): a booster bought once the fixture is drawn loses nothing.
 - **The agent's own checks (not FoxLeague rules).** The schedule check judges the squad at a tournament's start;
-  Zeus compares a seated field with our eleven at the start; a plan spaces its casual and ranked matches 13 minutes
+  every level compares a seated field with our eleven at the start (Zeus only until 2026-11-06); a plan spaces its casual and ranked matches 13 minutes
   apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
-  2 a week per rival; Zeus 55 percent), and the 18 strongest cards are never listed.
+  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. One brain for every level
+  (owner, 2026-11-06): what was Zeus's code holds at every level (the win chances in the plan, 55 percent against a
+  known team, the field rules, the booster only for its own fixtures), and each level's money adds three counts the
+  code holds: paid training sessions a game day (2, 4, 6, 8, 10, 10), XP boosters in any 7 days (0, 1, 2, 3, 7, 7) and
+  Common packs in any 7 days (0, 0, 1, 2, 2, 2), counted from FoxLeague's training status and the agent's own purchases.
+  An agent saved before them plays on at FoxLeague's maximum (10, 7, 2).
   The casual test bench (owner, 2026-11-04): no count of its own since 2026-11-06 (casual and ranked share the 5 daily starts), and only when every card that plays
   is back to full condition before the next strategy lock of a tournament or 1v1 match (age-adjusted: the appearance
   costs up to 3 times the base at 39 and a card over 30 regains half as fast), never while a 1v1 of ours waits for

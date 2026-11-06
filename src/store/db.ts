@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { agentName } from '../names.ts'
-import { DEFAULT_SETTINGS, type AgentSettings } from './settings.ts'
+import { DEFAULT_SETTINGS, FOXLEAGUE_MAX_COUNTS, type AgentSettings } from './settings.ts'
 import type { MatchFormations } from '../foxleague/types.ts'
 import { CASUAL_AI_FULL_FROM, CASUAL_DAYS, LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
 import type { MarketSale } from '../snapshot/market.ts'
@@ -678,7 +678,8 @@ function toAgentRow(r: Record<string, unknown>, live: boolean): AgentRow {
     dryRun: !live,
     paused: Number(r.paused) === 1,
     // Settings added after an agent was created fall back to the defaults.
-    settings: { ...DEFAULT_SETTINGS, ...(JSON.parse(String(r.settings)) as Partial<AgentSettings>) },
+    // A row saved before the level counts (2026-11-06) plays on at FoxLeague's own maximum (FOXLEAGUE_MAX_COUNTS).
+    settings: { ...DEFAULT_SETTINGS, ...FOXLEAGUE_MAX_COUNTS, ...(JSON.parse(String(r.settings)) as Partial<AgentSettings>) },
     createdAt: String(r.created_at),
     retired: r.retired ? (JSON.parse(String(r.retired)) as RetiredInfo) : null,
   }

@@ -105,7 +105,7 @@ export interface MarketSummary {
   prices?: Record<string, MarketPrice | null>
   /**
    * Planning snapshots only: the seated teams of the open Silver and Gold tournaments the agent could join (soonest
-   * deadline first, at most 4, 16 seats each), read as the Zeus join rule reads them; seats null = unreadable.
+   * deadline first, at most 4, 16 seats each), read as the join rule reads them; seats null = unreadable.
    */
   fields?: { id: number; seated: number; seats: FieldSeat[] | null }[]
 }
@@ -161,7 +161,7 @@ export interface AgentSnapshot {
   market: MarketSummary
   /**
    * Teams to challenge: the ones that take 1v1s they had not arranged first (`accepted7d`), then the nearest by ELO. `matches` is the
-   * team's record so far (its activity is the change over days); a Zeus agent also reads each team's lineup
+   * team's record so far (its activity is the change over days); every agent also reads each team's lineup
    * strength and its own win chance against it.
    */
   /** Planning snapshots only (absent otherwise); null when the match history could not be read. */
@@ -474,7 +474,7 @@ export const FIELD_SEATS = 16
 /**
  * The seated teams of the open Silver and Gold tournaments the agent could join (a supported format, before the
  * deadline, a seat free, someone seated, not in it already): each team's ELO (the leaderboard, else its profile) and
- * lineup strength at full condition, as the executor reads them for the Zeus join rule. A failed read is unknown.
+ * lineup strength at full condition, as the executor reads them for the join rule. A failed read is unknown.
  */
 async function readFields(fox: FoxLeague, wallet: AgentWallet, open: Tournament[], myId: number, board: UserProfile[], now: Date): Promise<NonNullable<MarketSummary['fields']>> {
   const joinable = open
@@ -521,7 +521,7 @@ async function attempt<T>(warnings: string[], what: string, fn: () => Promise<T>
  * Every section is independent: a failing route leaves a warning, not a failed tick.
  */
 /**
- * `research`: a Zeus agent reads every team it could challenge (its lineup strength) to weigh its win chance.
+ * `research`: the agent reads every team it could challenge (its lineup strength) to weigh its win chance (every level since 2026-11-06).
  * `matchFacts`: a planning snapshot also reads the formation record and the formations of the next rivals.
  */
 /**
@@ -771,7 +771,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     })
   }
 
-  // A field the plan can judge before paying (planning snapshots only), with the test the Zeus join rule applies.
+  // A field the plan can judge before paying (planning snapshots only), with the test the join rule applies.
   const fields = facts && wallet && registered && profile ? await readFields(fox, wallet, openStandard, profile.id, board?.users ?? [], now) : undefined
 
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null

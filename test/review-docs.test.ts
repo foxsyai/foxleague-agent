@@ -36,10 +36,8 @@ test('D3 the safety page says which levels create private tournaments (every lev
   assert.doesNotMatch(doc, /never creates a private tournament/)
   assert.match(doc, /every level may create one/)
   const invite = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
-  for (const zeus of [true, false]) {
-    const v = checkAction(parseAction(invite), snapshot(), { settings: TEST_SETTINGS, now: new Date(), zeus })
-    assert.equal(v.ok, true, `a private tournament is refused (zeus ${zeus}): ${v.ok ? "" : v.refusal}`)
-  }
+  const v = checkAction(parseAction(invite), snapshot(), { settings: TEST_SETTINGS, now: new Date() })
+  assert.equal(v.ok, true, `a private tournament is refused: ${v.ok ? "" : v.refusal}`)
 })
 
 test('D4 picking a level opens a proposal with ticks, and Accept and save saves the ticked rows', () => {

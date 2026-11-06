@@ -71,7 +71,7 @@ test('OP-1: a team is counted as taking 1v1s only for the ones it had not arrang
 })
 
 test('OP-2: Zeus may post an open challenge, with its OVR range', () => {
-  assert.equal(why(open(), { zeus: true, bestXiOvr: 20 }), '')
+  assert.equal(why(open(), { bestXiOvr: 20 }), '')
   assert.doesNotMatch(SYSTEM_PROMPT, /never at the Zeus level/)
 })
 
@@ -118,7 +118,7 @@ test('R54A-1: an open challenge is held to A2\'s strength test against the stron
   assert.equal(why(range, { bestXiOvr: 19.6 }, at(100)), '')
   assert.equal(why(range, { bestXiOvr: 19.6 }, at(82)), '', 'at 82 the eleven plays at 91 percent: OVR 18.2, and 20 is within 10 percent')
   assert.match(why(range, { bestXiOvr: 19.6 }, at(80)), /a team at the top of the range \(OVR 20\) at full condition would be more than 10 percent stronger than your eleven today \(OVR 18\.0/)
-  assert.match(why(range, { bestXiOvr: 19.6, zeus: true }, at(50)), /more than 10 percent stronger/, 'at 50 a fresh team of our OVR is a third stronger')
+  assert.match(why(range, { bestXiOvr: 19.6 }, at(50)), /more than 10 percent stronger/, 'at 50 a fresh team of our OVR is a third stronger')
   const unread = snapshot()
   unread.team = null
   assert.match(why(range, { bestXiOvr: 19.6 }, unread), /could not be read/)
@@ -221,7 +221,7 @@ test('OP-5: the top of a 1v1\'s OVR range is never raised or removed', () => {
 
 test('OP-6: every level may create a private tournament', () => {
   const a = parseAction({ type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] })
-  assert.doesNotMatch(why(a, { zeus: false }), /Zeus|private/)
+  assert.doesNotMatch(why(a, {}), /Zeus|private/)
   assert.doesNotMatch(SYSTEM_PROMPT, /Zeus level only: add "invite_user_ids"/)
 })
 
