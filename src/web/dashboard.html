@@ -370,6 +370,10 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sBronze">Bronze amounts<i class="info" data-tip="bronze">i</i></label><input id="sBronze" placeholder="100, 250, 500"><div class="hint">Empty: it creates no Bronze</div></div>
           <div><label for="sSilver">Silver amounts<i class="info" data-tip="silver">i</i></label><input id="sSilver" placeholder="1000, 1500, 2000"><div class="hint">Round amounts for creating</div></div>
           <div><label for="sGold">Gold amounts<i class="info" data-tip="gold">i</i></label><input id="sGold" placeholder="5000"></div>
+          <div class="sep">Counts</div>
+          <div><label for="sTraining">Paid training a day<i class="info" data-tip="paidTraining">i</i></label><input id="sTraining" type="number" min="0" max="10" step="1"></div>
+          <div><label for="sBoosters">Boosters a week<i class="info" data-tip="boosters">i</i></label><input id="sBoosters" type="number" min="0" max="7" step="1"></div>
+          <div><label for="sPacks">Packs a week<i class="info" data-tip="packs">i</i></label><input id="sPacks" type="number" min="0" max="2" step="1"></div>
           <div class="sep">Timing</div>
           <div><label for="sTick">Tick (minutes)<i class="info" data-tip="tick">i</i></label><input id="sTick" type="number" min="10" max="240" step="1"></div>
           <div><label for="sJitter">Random window (± min)<i class="info" data-tip="jitter">i</i></label><input id="sJitter" type="number" min="0" max="60" step="1"></div>
@@ -636,6 +640,7 @@ function fillForm(st) {
   $('sBidRare').value = st.maxBidRareFoxsy; $('sBidEpic').value = st.maxBidEpicFoxsy; $('sBidLegendary').value = st.maxBidLegendaryFoxsy
   renderLimitHints()
   $('sBronze').value = st.entryFeesBronze.join(', '); $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
+  $('sTraining').value = st.paidTrainingPerDay; $('sBoosters').value = st.boostersPerWeek; $('sPacks').value = st.packsPerWeek
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
   formDirty = false
@@ -683,6 +688,7 @@ function readForm() {
     egldGasReserve: $('sReserve').value.trim(), topUpWarningUsd: n('sTopUp'), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
     maxBidCommonFoxsy: n('sBidCommon'), maxBidUncommonFoxsy: n('sBidUncommon'), maxBidRareFoxsy: n('sBidRare'), maxBidEpicFoxsy: n('sBidEpic'), maxBidLegendaryFoxsy: n('sBidLegendary'),
     entryFeesBronze: list('sBronze'), entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
+    paidTrainingPerDay: n('sTraining'), boostersPerWeek: n('sBoosters'), packsPerWeek: n('sPacks'),
     activeHoursUtc: [n('sFrom'), n('sTo')],
   }
 }
@@ -973,7 +979,7 @@ const TIPS = {
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Six levels. The first five go from careful to all-in, each doing everything the level below does and more. <b>Steady</b>: the free game and modest Silver entries, no purchases. <b>Climber</b>: plus ranked matches, Gold tournaments and recovery for key matches. <b>Hunter</b>: plus its own tournaments, the booster on strong match days and bids on Common and Uncommon players; the max bid decides which are in reach. It holds as many cards as it likes and sells a spare card when its price beats its use. <b>Predator</b>: plus everything that grows the squad (all paid training, packs, fusions, bids up to Rares) but never a waiver. <b>Beast</b>: plus both fusion waivers, so a fusion can happen every 20 hours, and bids up to Epics. <b>Zeus</b> is different: everything a beast may do, but only what pays, aiming at No. 1. It weighs a win chance for every team, plays a 1v1 only from 55 percent and a tournament only with a real chance of the top three, and can create private tournaments. The manual's Strategy levels page has the full list. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that do not fit it yet (moving up, those under its values; moving down, those above them), each with a tick, and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
+    <p>Six levels, one brain: every level plays by the same rules (the ones Zeus had): it weighs a win chance for every team, plays a 1v1 against a known team only from 55 percent, enters a tournament only with a real chance of the top three, may post open challenges and create private tournaments, sells a spare card when its price beats its use, and spends only when it pays. What grows from one level to the next is the money: the daily cap and monthly budget, the largest entry, shop payment and bid (any rarity, within its limit), and the counts of paid training a day, boosters and packs a week. <b>Steady</b> has the smallest budget, <b>Zeus</b> the largest and plans every hour. The manual's Strategy levels page has the full table. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that do not fit it yet (moving up, those under its values; moving down, those above them), each with a tick, and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
@@ -1005,13 +1011,19 @@ const TIPS = {
     <p>The agent aims below the market price it is shown. Max bid holds above this. Raising it asks for your password.</p>`],
   bidLegendary: ['Max bid for a Legendary (FOXSY)', `<p>The most the agent may bid for a Legendary card. The default, 38,000, is about 20 percent above the Legendary's market price when it was set, measured the same way.</p>
     <p>The agent aims below the market price it is shown. Max bid holds above this, so with a max bid under it, the max bid is the limit. Raising it asks for your password.</p>`],
+  paidTraining: ['Paid training a day', `<p>How many paid training sessions (20 FOXSY each, on top of the 5 free ones) the agent may use in one game day: FoxLeague allows 10. Sessions it already holds count, so it never buys more than this.</p>
+    <p>The defaults grow with the level: 2, 4, 6, 8, then 10 for Beast and Zeus. Raising it asks for your password.</p>`],
+  boosters: ['Boosters a week', `<p>How many XP boosters (2,000 FOXSY, double XP for 24 hours) the agent may buy in any 7 days, counted from its own purchases. 7 is one every day; 0 turns the booster off.</p>
+    <p>It still buys one only when 3 competitive matches of its own are sure within the 24 hours. The defaults: none for Steady, then 1, 2, 3, and every day for Beast and Zeus. Raising it asks for your password.</p>`],
+  packs: ['Packs a week', `<p>How many Common packs (2,500 FOXSY for 5 Common cards) the agent may buy in any 7 days, counted from its own purchases: FoxLeague allows 2 a wallet a week. 0 turns packs off.</p>
+    <p>The defaults: none for Steady and Climber, 1 for Hunter, 2 from Predator up. Raising it asks for your password.</p>`],
   bronze: ['Bronze amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Bronze tournament, between 100 and 999 FOXSY. Leave it empty and it creates none; it can still join one, within Max entry or stake.</p><p>A Bronze costs an entry and earns only once FoxLeague's competition levels are live. Before that the agent creates none.</p>`],
   silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
     <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
   gold: ['Gold amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Gold tournament or challenge: 5,000 FOXSY or more.</p>
     <p>Leave it empty to keep the agent out of Gold altogether: it then never creates or joins a Gold tournament or 1v1. That is the steady level's default.</p>`],
   tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes, at least 30 seconds apart.</p>
-    <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. The default is 120 for every level but Zeus, which plans every 60 minutes: at 120 the daily trainings, matches and entries fit in 6 to 8 plans a day. A planning cycle also runs about an hour before each match session locks (matches whose locks fall within 2 hours of each other share it), whatever the tick.</p>
+    <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. The defaults: 120 for Steady and Climber, 90 for Hunter and Predator, 75 for Beast and 60 for Zeus; at 120 the daily trainings, matches and entries fit in 6 to 8 plans a day. A planning cycle also runs about an hour before each match session locks (matches whose locks fall within 2 hours of each other share it), whatever the tick.</p>
     <p>A shorter tick counts from the save: the next plan comes within one new tick.</p>`],
   jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. The default is 10; 0 keeps the exact tick.</p>
     <p>It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20.</p>`],
@@ -1234,6 +1246,7 @@ function fillLevel(l) {
   $('sDaily').value = l.dailyCapUsd; $('sMonthly').value = l.monthlyBudgetUsd; $('sTopUp').value = l.topUpWarningUsd
   $('sEntry').value = l.maxEntryFeeFoxsy; $('sShop').value = l.maxShopPaymentFoxsy; $('sSwap').value = l.maxSwapFoxsy; $('sBid').value = l.maxBidFoxsy
   $('sSilver').value = l.entryFeesSilver.join(', '); $('sGold').value = l.entryFeesGold.join(', '); $('sTick').value = l.tickMinutes
+  $('sTraining').value = l.paidTrainingPerDay; $('sBoosters').value = l.boostersPerWeek; $('sPacks').value = l.packsPerWeek
   // Set from code, so no input event: the market lines follow the new Max bid here (review of PR #22).
   renderLimitHints()
 }
@@ -1257,7 +1270,9 @@ function openLevel(k) {
   const longer = f => dir === 'up' ? Number(cur[f]) > Number(l[f]) : dir === 'down' ? Number(cur[f]) < Number(l[f]) : Number(cur[f]) !== Number(l[f])
   const fields = [['Daily cap', 'dailyCapUsd', usdv, below], ['Monthly budget', 'monthlyBudgetUsd', usdv, below], ['Top-up warning', 'topUpWarningUsd', usdv, below],
     ['Max entry or stake', 'maxEntryFeeFoxsy', fox, below], ['Max shop payment', 'maxShopPaymentFoxsy', fox, below], ['Max swap', 'maxSwapFoxsy', fox, below], ['Max bid', 'maxBidFoxsy', fox, below],
-    ['Silver amounts', 'entryFeesSilver', list, missing], ['Gold amounts', 'entryFeesGold', list, missing], ['Tick', 'tickMinutes', v => v + ' min', longer]]
+    ['Silver amounts', 'entryFeesSilver', list, missing], ['Gold amounts', 'entryFeesGold', list, missing],
+    ['Paid training a day', 'paidTrainingPerDay', v => String(v), below], ['Boosters a week', 'boostersPerWeek', v => String(v), below], ['Packs a week', 'packsPerWeek', v => String(v), below],
+    ['Tick', 'tickMinutes', v => v + ' min', longer]]
   const short = fields.filter(([, f, , isShort]) => isShort(f))
   $('lvlTitle').textContent = 'Use the ' + name + ' values for agent ' + (b.index + 1) + '?'
   $('lvlText').textContent = 'Accept gives this agent the ' + name + ' strategy and the ticked settings below' + (dir === 'down' ? ', lowered to the level' : dir === 'up' ? ', raised to the level' : '') + '; the others stay as they are. Untick a row to keep it. Cancel keeps everything as it is saved.'
@@ -1311,8 +1326,8 @@ $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('settingsForm').addEventListener('input', e => { if (/^sBid(Common|Uncommon|Rare|Epic|Legendary)?$/.test(e.target.id)) renderLimitHints() })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
 // Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
-const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy']
-const RAISE_TEXT = 'A higher cap, budget or per-action maximum, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.'
+const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek']
+const RAISE_TEXT = 'A higher cap, budget, per-action maximum or count, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.'
 function raisesForm(form, cur) {
   const hours = h => (h[1] - h[0] + 24) % 24 || 24
   return LIMITS.some(k => form[k] > cur[k]) || Number(form.egldGasReserve) < Number(cur.egldGasReserve)
