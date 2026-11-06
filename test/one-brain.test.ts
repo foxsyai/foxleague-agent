@@ -203,3 +203,14 @@ test('R55A-3: a training status whose used or banked numbers cannot be read refu
     if (field === 'premium_used_today') assert.match(why({ type: 'train', player_nonce: 12, attribute: 'defense' }, limit, s), /training quota unknown/, field)
   }
 })
+
+// Agent review of PR #55, third pass (low, docs): the Settings page still called a Max bid of 0 the Steady and Climber
+// default, while every level bids since 2026-11-06.
+test('R55A-4: no page or bubble says a level\'s default turns bidding off', async () => {
+  const { readFileSync } = await import('node:fs')
+  const read = (f: string) => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\s+/g, ' ')
+  for (const f of ['site/src/content/docs/use/settings.md', 'site/src/content/docs/play/strategy-levels.md', 'src/web/dashboard.html', 'README.md']) {
+    assert.doesNotMatch(read(f), /\(the Steady and Climber default\)|no bids below the hunter|Max bid \| 0 \(off\)/i, f)
+  }
+  assert.ok(Object.values(LEVEL_SETTINGS).every(l => l.maxBidFoxsy > 0), 'every level bids')
+})
