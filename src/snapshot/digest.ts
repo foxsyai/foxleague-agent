@@ -2,7 +2,7 @@
 
 import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { casualCostRefusal, conditionAtStart, elevenOvrToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
+import { casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
@@ -228,7 +228,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const a = s.auth
     if (a.allowance) out.push(`Matches started today: ${a.allowance.today_count}/${a.allowance.daily_limit}`)
     const t = a.shop?.training
-    if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid used ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
+    if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid sessions used today ${Number.isFinite(t.used_today) && Number.isFinite(t.daily_free) ? paidSessionsToday(t) : 'unknown'}, paid slots bought in 24 h ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
     out.push(boosterLine(a.shop, s.takenAt))
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
@@ -307,7 +307,7 @@ export function renderDigest(s: AgentSnapshot): string {
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // Every level is held to the field rule (Zeus only until 2026-11-06).
-  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${STRONGER_ELO} above yours and its lineup (synced stats at full condition) more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
+  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${STRONGER_ELO} above yours and its lineup (each card at the stronger of its synced and live stats, at full condition) more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
   for (const t of m.openStandard.slice(0, 30)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
     const field = m.fields?.find(f => f.id === t.id)
@@ -330,7 +330,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const lock = seat.seatsLockAt ? `seats lock ${seat.seatsLockAt.slice(0, 16).replace('T', ' ')} UTC: until then you may leave a seat you joined yourself for the whole entry back, but only when you see no real chance of the top 24 (places 1 to 24 play the knockout; leaving closes the invitation for good); after that nobody can leave` : 'when its seats lock could not be read: no leaving'
     out.push(`Your League + Knockout T${Number(seat.tournamentId)}: ${seat.accepted ?? '?'} of 36 seats taken; ${lock}`)
   }
-  if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a targeted or joined 1v1 is refused when the rival's lineup is more than 10 percent above it (an open challenge is held to its OVR range instead).` : 'Your lineup strength today: unknown (your roster could not be read); a targeted or joined 1v1 is refused until it is known.')
+  if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length && Number.isFinite(lineupStrength(s)) ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a targeted or joined 1v1 is refused when the rival's lineup (the stronger of its synced and live stats, at full condition) is more than 10 percent above it (an open challenge is held to its OVR range instead).` : 'Your lineup strength today: unknown (your roster or a starter\'s stats could not be read); a 1v1 and a tournament entry are refused until it is known.')
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
