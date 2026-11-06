@@ -379,6 +379,14 @@ export class Executor {
       // The count the plan request shows too (src/executor/rivals.ts): this agent's 1v1s against the rival this week.
       market.oneVOneWithOpponentThisWeek = oneVOnesThisWeek(store, agent.index, dry, now).get(opponentId)?.length ?? 0
     }
+    // While an open challenge may still wait (its longest deadline is 4 hours), a change that tires or weakens the eleven
+    // is checked against its range; when our tournaments cannot be read, the log says whether one may wait (R54A-3).
+    if (a.type === 'play_match' || a.type === 'train' || a.type === 'set_lineup' || a.type === 'set_formation') {
+      market.openChallengeRecent = store
+        .activityOf(agent.index, ['create_challenge'], since(4 * 3_600_000))
+        // On the safe side: a create that failed or errored may still have left a challenge on FoxLeague (an untouched one did not).
+        .some(r => (counted(r.status) || r.status === 'failed' || (r.status === 'error' && !detailOf(r).untouched)) && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null)
+    }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'play_match' && a.match_type === 'ranked' && levelsLive(snap.config, now)) {
       market.rankedTicket = await soft(() => fox.rankedTicket(wallet))

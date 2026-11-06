@@ -66,6 +66,8 @@ export interface RulesContext {
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
+  /** An open challenge this agent created in the last 4 hours (its longest deadline) may still wait (R54A-3). */
+  openChallengeRecent?: boolean
   /**
    * The action is one piece of a larger one (see src/extensions.ts). A match waiver piece may buy part of what is
    * missing; the first piece checks the whole group (exactly the missing matches, within the max shop payment).
@@ -607,15 +609,44 @@ export function lineupStrength(s: AgentSnapshot, condition: (p: PlayerView) => n
 
 /**
  * Our eleven's OVR today, in the unit of FoxLeague's OVR range: each starter's card OVR (its 7 synced stats averaged,
- * rounded down, as FoxLeague's `models::card_ovr`) scaled by today's condition, over the eleven (a slot without a card
- * counts 0). Null when the team or the roster could not be read.
+ * rounded down, as FoxLeague's `models::card_ovr`) scaled by its condition, over the eleven (a slot without a card
+ * counts 0). `lineup` and `condition` give another eleven or the condition after a change. Null when the team, the
+ * roster or a starter's stats or condition could not be read (R54A-2).
  */
-export function elevenOvrToday(s: AgentSnapshot): number | null {
-  if (!s.team || !s.players.length || !s.team.lineup.length) return null
-  return s.team.lineup.reduce((sum, n) => {
+export function elevenOvrToday(s: AgentSnapshot, lineup: number[] | undefined = s.team?.lineup, condition: (p: PlayerView) => number = p => p.condition): number | null {
+  if (!s.team || !s.players.length || !lineup?.length) return null
+  let sum = 0
+  for (const n of lineup) {
     const p = card(s, n)
-    return sum + (p ? (Math.floor(p.syncedTotal / 7) * (50 + p.condition / 2)) / 100 : 0)
-  }, 0) / 11
+    if (!p) continue
+    const c = condition(p)
+    if (!Number.isFinite(p.syncedTotal) || !Number.isFinite(c)) return null
+    sum += (Math.floor(p.syncedTotal / 7) * (50 + Math.max(0, c) / 2)) / 100
+  }
+  return sum / 11
+}
+
+/** The condition a training session costs a card (FoxLeague's `training_condition_loss`, not public), before age. */
+export const TRAINING_CONDITION_LOSS = 5
+
+/**
+ * An open 1v1 of ours waiting for an opponent was created while a team at the top of its range was at most 10 percent
+ * stronger than our eleven (R54A-1); a change while it waits keeps it so (agent review of PR #54, R54A-3): a ranked
+ * start, training a starter, another eleven. `lineup` and `condition` describe the eleven after the change. Our
+ * tournaments unread: refused only while an open challenge of ours may still wait (`ctx.openChallengeRecent`).
+ */
+function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, lineup: number[] | undefined, condition: (p: PlayerView) => number = p => p.condition): string | null {
+  const mine = s.auth?.myTournaments
+  if (!mine) return ctx.openChallengeRecent ? `your current tournaments could not be read and an open challenge of yours may still wait: no ${what} blind` : null
+  const waiting = mine.active.filter(t => t.max_teams === 2 && NOT_STARTED_STATUSES.has(t.status) && t.creator_user_id === s.profile?.id && !t.targeted && t.target_user_id === null)
+  for (const t of waiting) {
+    const top = t.ovr_max
+    if (typeof top !== 'number' || !Number.isFinite(top)) return `the range of your open challenge T${t.id} could not be read: no ${what} while it waits`
+    const after = elevenOvrToday(s, lineup, condition)
+    if (after === null) return `your open challenge T${t.id} waits and your eleven after this ${what} could not be read: no ${what} blind`
+    if (top > after * MAX_1V1_STRENGTH_RATIO) return `your open challenge T${t.id} waits for an opponent (up to OVR ${top}): after this ${what} your eleven would play at OVR ${after.toFixed(1)}, more than 10 percent below a fresh team at its top; wait until it is taken or expires, or leave it first`
+  }
+  return null
 }
 
 /** A Zeus 1v1 needs at least this win chance; a seated team is clearly stronger with both margins below. */
@@ -848,6 +879,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!t) return refuse('training quota unknown (shop status unavailable)')
       const paid = t.used_today >= t.daily_free
       if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
+      if (s.team?.lineup.includes(p.nonce)) {
+        const waits = waitingOpenRefusal(s, ctx, 'training', s.team.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
+        if (waits) return refuse(waits)
+      }
       return allow(0, { usesPaidSlot: paid })
     }
 
@@ -856,7 +891,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!s.team) return refuse(TEAM_UNREADABLE)
       if (s.team.formation === a.formation) return refuse(`formation is already ${a.formation}${a.lineup ? ' (a new eleven alone is set_lineup)' : ''}`)
       // With a lineup both go in one save; alone, FoxLeague refuses a shape the saved eleven does not fit.
-      if (a.lineup) return lineupVerdict(s, a.formation, a.lineup, a.substitutes ?? [], cfg.min_field_condition)
+      if (a.lineup) {
+        const waits = waitingOpenRefusal(s, ctx, 'lineup', a.lineup)
+        if (waits) return refuse(waits)
+        return lineupVerdict(s, a.formation, a.lineup, a.substitutes ?? [], cfg.min_field_condition)
+      }
       const mismatch = lineupPositionsOk(s, a.formation, s.team.lineup)
       if (mismatch) return refuse(`${a.formation} needs a lineup that fits it (${mismatch}): send set_formation with lineup and substitutes in its slot order`)
       return allow(0, {}, 'play')
@@ -865,6 +904,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
     case 'set_lineup': {
       if (!registered) return refuse('not registered')
       if (!s.team) return refuse(TEAM_UNREADABLE)
+      const waits = waitingOpenRefusal(s, ctx, 'lineup', a.lineup)
+      if (waits) return refuse(waits)
       return lineupVerdict(s, s.team.formation, a.lineup, a.substitutes, cfg.min_field_condition)
     }
 
@@ -895,6 +936,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       }
       if (ctx.lastMatchStartAt && ctx.now.getTime() - ctx.lastMatchStartAt.getTime() < MATCH_COOLDOWN_MS) return refuse('match cooldown (30 s)')
       if (a.match_type === 'ranked' && ctx.lastRankedStartAt && ctx.now.getTime() - ctx.lastRankedStartAt.getTime() < RANKED_COOLDOWN_MS) return refuse('ranked cooldown (15 min)')
+      if (a.match_type === 'ranked') {
+        const waits = waitingOpenRefusal(s, ctx, 'ranked game', s.team.lineup, p => p.condition - appearanceCost(p, cfg.condition_loss_per_match_ranked))
+        if (waits) return refuse(waits)
+      }
       if (a.match_type === 'ranked' && levelsLive(cfg, ctx.now)) {
         // One ticket per game, paid before the draw. Tickets that cannot be read are no "none": it could pay for nothing.
         if (ctx.pendingTicket) return refuse("a ranked ticket payment is still waiting for FoxLeague's confirmation: not paying twice")

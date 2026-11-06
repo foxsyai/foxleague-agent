@@ -126,6 +126,49 @@ test('R54A-1: an open challenge is held to A2\'s strength test against the stron
   assert.match(d, /your eleven today: OVR 18\.0 at today's condition, so an open challenge waits until it is within 10 percent of the top/)
 })
 
+// Agent review of PR #54 (medium): a starter's missing condition or synced stats made the eleven's OVR NaN, and the
+// R54A-1 test then let the challenge through (rule 4).
+test('R54A-2: a starter whose condition or stats cannot be read leaves the eleven unread: no open challenge', () => {
+  for (const field of ['condition', 'syncedTotal'] as const) {
+    const s = snapshot()
+    delete (s.players.find(p => p.nonce === s.team!.lineup[3])! as unknown as Record<string, unknown>)[field]
+    assert.match(why(open(), { bestXiOvr: 20 }, s), /your eleven could not be read/, field)
+    s.auth!.bestXiOvr = 20
+    assert.doesNotMatch(renderDigest(s), /NaN/, field)
+    assert.match(renderDigest(s), /your eleven today could not be read, so no open challenge/, field)
+  }
+})
+
+// Agent review of PR #54 (medium): R54A-1 ran only at the create, while an open challenge waits up to 240 minutes. A
+// ranked start, training on a starter or a weaker eleven could push our eleven past A2's 10 percent before anyone takes it.
+test('R54A-3: while an open challenge of ours waits, a ranked start, training a starter or a new eleven keeps a team at its top within 10 percent', () => {
+  const at = (condition: number, waiting = true) => {
+    const s = snapshot()
+    for (const n of s.team!.lineup) s.players.find(p => p.nonce === n)!.condition = condition
+    if (waiting) s.auth!.myTournaments = { active: [{ ...(tournament(950, { max_teams: 2, min_teams: 2, creator_user_id: s.profile!.id, ovr_min: 18, ovr_max: 20, status: 'open' }) as { tournament: object }).tournament, participant_count: 1 }], completed: [] } as never
+    return s
+  }
+  const ranked = { type: 'play_match', match_type: 'ranked' } as const
+  // At 83 the eleven plays at OVR 18.3 (20 within 10 percent); a ranked game takes 5: at 78 it is 17.8, and 20 is not.
+  assert.match(why(ranked, {}, at(83)), /your open challenge T950 waits for an opponent \(up to OVR 20\): after this ranked game your eleven would play at OVR 17\.8/)
+  assert.equal(why(ranked, {}, at(100)), '', 'a fresh eleven still within 10 percent after the game')
+  assert.equal(why(ranked, {}, at(83, false)), '', 'no open challenge waits')
+  // Training one starter at 82 (OVR 18.2) takes 5 from it: 18.155 (shown 18.2), and 20 is no longer within 10 percent.
+  assert.match(why({ type: 'train', player_nonce: 2, attribute: 'defense' }, {}, at(82)), /after this training your eleven would play at OVR 18\.2/)
+  assert.equal(why({ type: 'train', player_nonce: 12, attribute: 'defense' }, {}, at(82)), '', 'a bench card trains freely')
+  // A weaker defender in the eleven (card OVR 10 instead of 20) at condition 90: OVR 18.1 (19.0 with an equal one).
+  const weak = at(90)
+  Object.assign(weak.players.find(p => p.nonce === 13)!, { syncedTotal: 70, condition: 90 })
+  const rotated = { type: 'set_lineup', lineup: [1, 13, 3, 4, 5, 6, 7, 8, 9, 10, 11], substitutes: [12, 2, 14, 15, 16, 17, 18] } as const
+  assert.match(why(rotated, {}, weak), /after this lineup your eleven would play at OVR 18\.1/)
+  assert.equal(why({ ...rotated, lineup: [1, 14, 3, 4, 5, 6, 7, 8, 9, 10, 11], substitutes: [12, 2, 13, 15, 16, 17, 18] }, {}, weak), '', 'an equal defender is fine')
+  // Our tournaments unread: refused only while an open challenge of ours may still wait (created in the last 4 hours).
+  const unread = at(83, false)
+  unread.auth!.myTournaments = null
+  assert.match(why(ranked, { openChallengeRecent: true }, unread), /an open challenge of yours may still wait/)
+  assert.doesNotMatch(why(ranked, { openChallengeRecent: false }, unread), /open challenge/)
+})
+
 test('OP-5: the top of a 1v1\'s OVR range is never raised or removed', () => {
   const s = snapshot()
   const me = s.profile!.id

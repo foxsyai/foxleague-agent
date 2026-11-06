@@ -78,7 +78,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
   its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
   out at your team's own best XI OVR, so FoxLeague itself keeps every stronger team out, at any of your amounts and as
   often as FoxLeague's one active 1v1 allows; since that rating ignores condition, it waits while a fresh team at the
-  top would be more than 10 percent stronger than your starting eleven at today's condition. And it may take an open challenge another team posted. It can leave its
+  top would be more than 10 percent stronger than your starting eleven at today's condition, and while one waits for a
+  taker it plays no ranked game, trains no starter and sets no eleven that would break that. And it may take an open challenge another team posted. It can leave its
   own unaccepted challenge when a better one appears.
 - **Match preparation**: about an hour before each match session locks (inside its active hours), it syncs if the gains matter, sets the
   formation and lineup for that opponent (from the formations it played last and how strong its eleven is next to ours) and recovers condition only for key starters in a match that matters.
