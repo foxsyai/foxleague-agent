@@ -2,7 +2,7 @@
 
 import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { casualCostRefusal, conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
+import { casualCostRefusal, conditionAtStart, elevenOvrToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
@@ -299,8 +299,11 @@ export function renderDigest(s: AgentSnapshot): string {
     const inside = (v: number[]) => v.filter(x => x >= lo && x <= hi).length
     const b = s.market.boardOvrs
     const count = b?.all.length ? ` (inside it: ${inside(b.all)} of the ${b.all.length} leaderboard teams read, ${inside(b.takers)} of the ${b.takers.length} that took a 1v1 in 7 days they had not arranged)` : ''
-    // An open challenge tops out at the team's own best XI OVR, rounded up so the creator fits its own range (OP-4).
-    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}${count}; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it) and any ovr_min up to ${Math.floor(ovr)}`)
+    // An open challenge tops out at the team's own best XI OVR, rounded up so the creator fits its own range (OP-4), and
+    // waits while that top is more than 10 percent above our eleven at today's condition (R54A-1).
+    const today = elevenOvrToday(s)
+    const eleven = today === null ? '; your eleven today could not be read, so no open challenge' : `; your eleven today: OVR ${today.toFixed(1)} at today's condition, ${today * MAX_1V1_STRENGTH_RATIO < Math.ceil(ovr) ? 'so an open challenge waits until it is within 10 percent of the top' : 'within 10 percent of the top'}`
+    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}${count}; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it) and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.

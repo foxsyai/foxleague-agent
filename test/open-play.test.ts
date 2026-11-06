@@ -29,7 +29,8 @@ const why = (a: unknown, more: Partial<RulesContext> = {}, s = snapshot()) => {
   const v = checkAction(a as never, s, ctx(more))
   return v.ok ? '' : (v as { refusal: string }).refusal
 }
-const open = (more: Record<string, unknown> = {}) => parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 120, ovr_min: 36, ovr_max: 40, ...more })
+// The fixture's eleven plays at OVR 20 (11 cards of 140 synced stats at condition 100): a best XI OVR of 20 fits it.
+const open = (more: Record<string, unknown> = {}) => parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 120, ovr_min: 18, ovr_max: 20, ...more })
 
 test('OP-1: a team is counted as taking 1v1s only for the ones it had not arranged (a targeted 1v1 played within 2 minutes is arranged)', async () => {
   const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString()
@@ -70,37 +71,59 @@ test('OP-1: a team is counted as taking 1v1s only for the ones it had not arrang
 })
 
 test('OP-2: Zeus may post an open challenge, with its OVR range', () => {
-  assert.equal(why(open(), { zeus: true, bestXiOvr: 40 }), '')
+  assert.equal(why(open(), { zeus: true, bestXiOvr: 20 }), '')
   assert.doesNotMatch(SYSTEM_PROMPT, /never at the Zeus level/)
 })
 
 test('OP-3: an open challenge at any configured stake, Silver or Gold, and more than one in 24 hours', async () => {
-  const m = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 40 }) } })
+  const m = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 20 }) } })
   m.store.updateSettings(0, { ...TEST_SETTINGS, dailyCapUsd: 1000 })
   const create = async (tier: 'silver' | 'gold', stake: number) => (await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: open({ tier, stake_foxsy: stake }), reason: '' }]))[0]!
   for (const [tier, stake] of [['silver', 1000], ['silver', 2500], ['gold', 5000], ['silver', 1000]] as const) {
     const r = await create(tier, stake)
     assert.equal(r.status, 'dry_run', `${tier} ${stake}: ${r.summary}`)
   }
-  assert.match(why(open({ stake_foxsy: 1200 }), { bestXiOvr: 40 }), /not one of the configured amounts/, 'still only the owner\'s amounts')
-  assert.match(why(open({ tier: 'gold', stake_foxsy: 5000 }), { bestXiOvr: 40, settings: { ...TEST_SETTINGS, entryFeesGold: [] } }), /Gold is off/)
-  assert.match(why(open({ stake_foxsy: 3000 }), { bestXiOvr: 40, settings: { ...TEST_SETTINGS, maxEntryFeeFoxsy: 2500 } }), /per-action maximum 2500/)
+  assert.match(why(open({ stake_foxsy: 1200 }), { bestXiOvr: 20 }), /not one of the configured amounts/, 'still only the owner\'s amounts')
+  assert.match(why(open({ tier: 'gold', stake_foxsy: 5000 }), { bestXiOvr: 20, settings: { ...TEST_SETTINGS, entryFeesGold: [] } }), /Gold is off/)
+  assert.match(why(open({ stake_foxsy: 3000 }), { bestXiOvr: 20, settings: { ...TEST_SETTINGS, maxEntryFeeFoxsy: 2500 } }), /per-action maximum 2500/)
 })
 
 test('OP-4: an open challenge needs an OVR range whose top is the team\'s own best XI OVR, rounded up to a whole number', () => {
   const plain = parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 120 })
-  assert.match(why(plain, { bestXiOvr: 40 }), /an open challenge needs an OVR range up to your best XI OVR/)
-  assert.match(why(open({ ovr_max: 44 }), { bestXiOvr: 40 }), /ovr_max 40 at most/)
-  assert.match(why(open({ ovr_max: 41 }), { bestXiOvr: 39.4 }), /ovr_max 40 at most/)
-  assert.equal(why(open({ ovr_max: 40 }), { bestXiOvr: 39.4 }), '', 'a fractional OVR rounds up: the creator must fit its own range')
+  assert.match(why(plain, { bestXiOvr: 20 }), /an open challenge needs an OVR range up to your best XI OVR/)
+  assert.match(why(open({ ovr_max: 21 }), { bestXiOvr: 20 }), /ovr_max 20 at most/)
+  assert.match(why(open({ ovr_max: 21 }), { bestXiOvr: 19.4 }), /ovr_max 20 at most/)
+  assert.equal(why(open({ ovr_max: 20 }), { bestXiOvr: 19.4 }), '', 'a fractional OVR rounds up: the creator must fit its own range')
   assert.match(why(open(), { bestXiOvr: null }), /best XI OVR could not be read/)
-  assert.match(why(open({ ovr_max: 39 }), { bestXiOvr: 39.4 }), /outside the OVR range you set/)
+  assert.match(why(open({ ovr_max: 19 }), { bestXiOvr: 19.4 }), /outside the OVR range you set/)
   // A targeted 1v1 keeps its rival checks (A2) and takes no range.
-  assert.match(why(parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 50, deadline_minutes: 120 }), { bestXiOvr: 40 }), /strength could not be read/)
+  assert.match(why(parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 50, deadline_minutes: 120 }), { bestXiOvr: 20 }), /strength could not be read/)
   assert.match(SYSTEM_PROMPT, /open challenge[^.]*ovr_max[^.]*your best XI OVR/)
   const s = snapshot()
-  s.auth!.bestXiOvr = 39.4
-  assert.match(renderDigest(s), /for an open challenge: ovr_max 40 \(no stronger team can take it\)/)
+  s.auth!.bestXiOvr = 19.4
+  assert.match(renderDigest(s), /for an open challenge: ovr_max 20 \(no stronger team can take it\)/)
+})
+
+// Agent review of PR #54 (high): the best XI OVR ignores condition, so a fresh team at our own OVR could take an open
+// challenge while our starters are tired, far past A2's 10 percent. The strongest team a range lets in plays at its top
+// at full condition; our eleven plays at today's condition.
+test('R54A-1: an open challenge is held to A2\'s strength test against the strongest team its range lets in, at full condition, against our eleven today', () => {
+  // The fixture's eleven: 11 cards of 140 synced stats (card OVR 20) at condition 100, so OVR 20 today.
+  const at = (condition: number) => {
+    const s = snapshot()
+    for (const n of s.team!.lineup) s.players.find(p => p.nonce === n)!.condition = condition
+    return s
+  }
+  const range = open({ ovr_min: 18, ovr_max: 20 })
+  assert.equal(why(range, { bestXiOvr: 19.6 }, at(100)), '')
+  assert.equal(why(range, { bestXiOvr: 19.6 }, at(82)), '', 'at 82 the eleven plays at 91 percent: OVR 18.2, and 20 is within 10 percent')
+  assert.match(why(range, { bestXiOvr: 19.6 }, at(80)), /a team at the top of the range \(OVR 20\) at full condition would be more than 10 percent stronger than your eleven today \(OVR 18\.0/)
+  assert.match(why(range, { bestXiOvr: 19.6, zeus: true }, at(50)), /more than 10 percent stronger/, 'at 50 a fresh team of our OVR is a third stronger')
+  const unread = snapshot()
+  unread.team = null
+  assert.match(why(range, { bestXiOvr: 19.6 }, unread), /could not be read/)
+  const d = renderDigest(Object.assign(at(80), { auth: { ...at(80).auth!, bestXiOvr: 19.6 } }))
+  assert.match(d, /your eleven today: OVR 18\.0 at today's condition, so an open challenge waits until it is within 10 percent of the top/)
 })
 
 test('OP-5: the top of a 1v1\'s OVR range is never raised or removed', () => {

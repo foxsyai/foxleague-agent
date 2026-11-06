@@ -56,7 +56,8 @@ abuse. The agent:
 - protects itself from rivals trying to farm it (a 1v1 against a named team or one it joins only when that team is of
   similar strength, at most two played 1v1s a week against the same team, a challenge nobody accepted not counting; an
   open challenge, which any team inside its range may take, always carries an OVR range that tops out at your team's
-  own best XI OVR, so FoxLeague itself keeps every stronger team out);
+  own best XI OVR, so FoxLeague itself keeps every stronger team out, and none while your starters are too tired for
+  a fresh team of that rating);
 - joins a private tournament only when your team is invited (every level may create one).
 
 You remain responsible for your agents.

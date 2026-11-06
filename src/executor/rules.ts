@@ -605,6 +605,19 @@ export function lineupStrength(s: AgentSnapshot, condition: (p: PlayerView) => n
   }, 0)
 }
 
+/**
+ * Our eleven's OVR today, in the unit of FoxLeague's OVR range: each starter's card OVR (its 7 synced stats averaged,
+ * rounded down, as FoxLeague's `models::card_ovr`) scaled by today's condition, over the eleven (a slot without a card
+ * counts 0). Null when the team or the roster could not be read.
+ */
+export function elevenOvrToday(s: AgentSnapshot): number | null {
+  if (!s.team || !s.players.length || !s.team.lineup.length) return null
+  return s.team.lineup.reduce((sum, n) => {
+    const p = card(s, n)
+    return sum + (p ? (Math.floor(p.syncedTotal / 7) * (50 + p.condition / 2)) / 100 : 0)
+  }, 0) / 11
+}
+
 /** A Zeus 1v1 needs at least this win chance; a seated team is clearly stronger with both margins below. */
 export const ZEUS_MIN_1V1_CHANCE = 0.55
 export const ZEUS_STRONGER_SQUAD = 1.05
@@ -1116,6 +1129,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (a.ovr_max === undefined) return refuse('an open challenge needs an OVR range up to your best XI OVR (ovr_max, the snapshot gives it): FoxLeague then keeps every stronger team out')
         const top = Math.ceil(ctx.bestXiOvr!)
         if (a.ovr_max > top) return refuse(`an open challenge takes ovr_max ${top} at most (your best XI OVR ${ctx.bestXiOvr}, rounded up): a higher top lets a stronger team take it`)
+        // The best XI OVR ignores condition: the strongest team that may take it plays at the range's top at full
+        // condition, ours at today's, held to A2's ratio (agent review of PR #54, R54A-1).
+        const today = elevenOvrToday(s)
+        if (today === null) return refuse('your eleven could not be read: no open challenge blind')
+        if (a.ovr_max > today * MAX_1V1_STRENGTH_RATIO) return refuse(`a team at the top of the range (OVR ${a.ovr_max}) at full condition would be more than 10 percent stronger than your eleven today (OVR ${today.toFixed(1)} at today's condition): let the starters recover first`)
       } else {
         if (a.target_user_id === s.profile.id) return refuse('cannot challenge yourself')
         const opp = oneVOneOpponentRefusal(s, ctx)

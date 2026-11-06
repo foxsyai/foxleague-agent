@@ -27,13 +27,13 @@ const oneVOneRig = () =>
   setup({
     fox: {
       user: async (a: string) => (a === STRANGER ? { id: 900, wallet_address: STRANGER, elo_rating: 1200 } : null),
-      bestXiOvr: async () => ({ best_xi_ovr: 31.4 }),
+      bestXiOvr: async () => ({ best_xi_ovr: 19.6 }),
       tournament: async () => tournament(555, { max_teams: 2, min_teams: 2, creator_user_id: 900 }, [{ user_id: 900, wallet_address: STRANGER }]),
     },
   })
 const join1v1 = act({ type: 'join_tournament', tournament_id: 555 })
 // An open challenge carries its range topped at the team's best XI OVR (OP-4, 2026-11-06).
-const openChallenge = act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 })
+const openChallenge = act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 18, ovr_max: 20 })
 
 test('A3 C2 control: with the own tournaments and upcoming matches readable, the 1v1 join and the challenge go through', async () => {
   const m = oneVOneRig()

@@ -27,7 +27,8 @@ test('a create may carry an OVR range of whole numbers 1 to 100, the minimum not
 test('the range must hold the team\'s own best XI OVR, read right before the create; unreadable is no range', () => {
   const s = snapshot()
   const ctx = (bestXiOvr: number | null | undefined) => ({ settings: TEST_SETTINGS, now: new Date(), bestXiOvr } as RulesContext)
-  assert.equal(checkAction(parseAction(challenge({ ovr_max: 32 })), s, ctx(31.4)).ok, true, checkAction(parseAction(challenge({ ovr_max: 32 })), s, ctx(31.4)).refusal)
+  // The fixture's eleven plays at OVR 20: an open challenge topped above 22 waits (R54A-1).
+  assert.equal(checkAction(parseAction(challenge({ ovr_max: 20 })), s, ctx(19.6)).ok, true, checkAction(parseAction(challenge({ ovr_max: 20 })), s, ctx(19.6)).refusal)
   assert.match(checkAction(parseAction(challenge({ ovr_max: 30 })), s, ctx(31.4)).refusal!, /your best XI OVR is 31\.4, outside the OVR range you set \(at most 30\): FoxLeague refuses a creator outside their own range/)
   assert.match(checkAction(parseAction(challenge({ ovr_min: 32 })), s, ctx(31.4)).refusal!, /outside the OVR range you set \(at least 32\)/)
   assert.match(checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(null)).refusal!, /your best XI OVR could not be read: no OVR range without it/)
@@ -42,15 +43,15 @@ test('the create sends the range to FoxLeague; the executor reads the best XI OV
     createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 900 } },
     tournament: async () => tournament(900, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 900 }),
     joinTournament: async () => ({ participant_id: 1 }),
-    bestXiOvr: async () => { reads++; return { best_xi_ovr: 31.4 } },
+    bestXiOvr: async () => { reads++; return { best_xi_ovr: 19.6 } },
   }
   const m = setup({ fox })
   await withLive(m.store, async () => {
-    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge({ ovr_min: 28, ovr_max: 32 })), reason: '' }])
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge({ ovr_min: 18, ovr_max: 20 })), reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
   })
-  assert.equal(bodies[0]!.ovr_min, 28)
-  assert.equal(bodies[0]!.ovr_max, 32)
+  assert.equal(bodies[0]!.ovr_min, 18)
+  assert.equal(bodies[0]!.ovr_max, 20)
   assert.equal(reads, 1)
   // A tournament without a range (an open challenge must carry one since 2026-11-06, OP-4).
   const filled = snapshot()

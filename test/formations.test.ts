@@ -138,8 +138,8 @@ test('no match, entry or 1v1 while the saved eleven does not fit the saved forma
   assert.equal(join!.status, 'refused', join!.summary)
   assert.match(join!.summary, /does not fit the formation 4-3-3/)
   // An open challenge carries its range topped at the team's best XI OVR (OP-4), so only the eleven can refuse it here.
-  const o = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 31.4 }) } })
-  const [duel] = await o.exec.run(o.agent(), dryWallet, s, [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 }, reason: '' }])
+  const o = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 19.6 }) } })
+  const [duel] = await o.exec.run(o.agent(), dryWallet, s, [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 18, ovr_max: 20 }, reason: '' }])
   assert.equal(duel!.status, 'refused', duel!.summary)
   assert.match(duel!.summary, /does not fit the formation 4-3-3/)
 })

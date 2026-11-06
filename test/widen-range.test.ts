@@ -92,12 +92,12 @@ test('R38A-1 the agent widens only what it created itself, never a range the own
     createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 900 } },
     tournament: async () => mine({ sc_tournament_id: 900 }),
     joinTournament: async () => ({ participant_id: 1 }),
-    bestXiOvr: async () => ({ best_xi_ovr: 31.4 }),
+    bestXiOvr: async () => ({ best_xi_ovr: 19.6 }),
     widenOvrRange: async () => ({ ovr_min: 25, ovr_max: 35 }),
   }
   const m = setup({ fox })
   await withLive(m.store, async () => {
-    const [c] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 }), reason: '' }])
+    const [c] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 18, ovr_max: 20 }), reason: '' }])
     assert.equal(c!.status, 'confirmed', c!.summary)
     assert.deepEqual([...ownCreations(m.store, 0, new Date())], [900])
     const [w] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: widen({ ovr_min: 25 }), reason: '' }])

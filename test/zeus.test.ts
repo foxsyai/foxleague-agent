@@ -89,5 +89,5 @@ test('Zeus never acts blind: an unread field is refused, an unread squad with a 
   // Since 2026-11-06 (OP-2, OP-4) Zeus may post an open challenge, topped at its own best XI OVR, and none without the range.
   const open = checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 }, s, ctx({ zeus: true }))
   assert.match(open.ok ? '' : (open as { refusal: string }).refusal, /an open challenge needs an OVR range/)
-  assert.equal(checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 30, ovr_max: 34 }, s, ctx({ zeus: true, bestXiOvr: 34 })).ok, true)
+  assert.equal(checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 18, ovr_max: 20 }, s, ctx({ zeus: true, bestXiOvr: 20 })).ok, true)
 })

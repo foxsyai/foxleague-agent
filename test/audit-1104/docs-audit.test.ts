@@ -75,9 +75,9 @@ test('DOCS-5 the economy notes (11) still call a Groups + Knockout "full" while 
 
 test('DOCS-6 (predates the window) the prompt and the executor agree on the open challenge at the Zeus level', async () => {
   // Since 2026-11-06 (OP-2, OP-4) every level may post one, with its range topped at its own best XI OVR.
-  const m = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 31.4 }) } })
+  const m = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 19.6 }) } })
   m.store.updateSettings(0, { ...TEST_SETTINGS, strategy: STRATEGY_PRESETS.zeus! })
-  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 }, reason: '' }])
+  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 18, ovr_max: 20 }, reason: '' }])
   assert.equal(r!.status, 'dry_run', r!.summary)
   assert.match(SYSTEM_PROMPT, /An open challenge \(target_user_id null\) can be taken by any team inside its OVR range/)
   assert.doesNotMatch(SYSTEM_PROMPT, /Zeus[^.\n]*open challenge|open challenge[^.\n]*Zeus/, 'no level is kept from it')
