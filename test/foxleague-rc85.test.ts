@@ -43,10 +43,29 @@ test('R85-2: a Play whose answer was lost does not take the previous match, stil
   })
 })
 
-test('R85-3: the casual test bench counts no game played before FoxLeague\'s AI played at its full strength', () => {
+test('R85-2: without a readable creation time the read-back counts a match only while it is still being played', async () => {
+  const timeout = async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError') }
+  const read = (status: string) => async () => ({ match_id: 8, kind: 'ranked', status, tournament_id: null, created_at: 'unknown' })
+  const playing = setup({ fox: { playMatch: timeout, activeMatch: read('simulating') } })
+  await withLive(playing.store, async () => {
+    const [r] = await playing.exec.run(playing.agent(), liveWallet, snapshot(), [{ action: { type: 'play_match', match_type: 'casual' }, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+    assert.match(r!.summary, /match #8 started \(casual\)/)
+  })
+  const airing = setup({ fox: { playMatch: timeout, activeMatch: read('finished') } })
+  await withLive(airing.store, async () => {
+    const [r] = await airing.exec.run(airing.agent(), liveWallet, snapshot(), [{ action: { type: 'play_match', match_type: 'casual' }, reason: '' }])
+    assert.equal(r!.status, 'error', r!.summary)
+    assert.doesNotMatch(r!.summary, /match #8 started/)
+  })
+})
+
+test('R85-3: the casual test bench counts no game played before FoxLeague\'s AI played at its full strength', t => {
+  // The clock is pinned the night of the change, so the 40-day window keeps both games and only the cut-off can drop one.
+  t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-11-06T00:30:00.000Z') })
   const store = new Store('', ':memory:')
   const g = (key: string, at: string, mine: string) => ({ key, at, mine, theirs: '4-4-2', gf: 2, ga: 1, edge: 1, rivalUserId: null })
-  store.putCasualResults(0, [g('m:1', '2026-11-05T15:38:52.000Z', '4-3-3w'), g('m:2', new Date(Date.now() - MIN).toISOString(), '4-3-3b')])
+  store.putCasualResults(0, [g('m:1', '2026-11-05T15:38:52.000Z', '4-3-3w'), g('m:2', '2026-11-06T00:29:00.000Z', '4-3-3b')])
   const bench = store.casualBench()
   assert.deepEqual(bench.rows.map(r => [r.mine, r.played]), [['4-3-3b', 1]], 'the game against the AI capped at 30 is left out')
 })
