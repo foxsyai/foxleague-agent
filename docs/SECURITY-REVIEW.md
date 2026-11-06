@@ -1344,6 +1344,12 @@ substitution on, a paid private Bronze earning from the switch, a full Champions
 the deposit of a late chain confirm); How it plays says the agent aims at 1 to 3 casual tests a day (no cap of its
 own); `docs/FOXLEAGUE-INTEGRATION.md` section 24 records FoxLeague's release.
 
+PR #57's review (low, two notes): reading every seated team (MONEY-1) could meet FoxLeague's rate limit (30 a second
+per IP) in a big field. Checked: every FoxLeague call goes through the client's own limiter (`FoxLeague` in
+`src/foxleague/api.ts`, `FOXLEAGUE_RPS`, 5 a second by default, one client shared by every agent), so a big field is
+read slowly, never in a burst; no failing test, no change. The INTEG-2 test now also checks that the payment stays in
+the ledger, that nothing is left pending, and that a `tx_pending` answer is asked again with the same hash first.
+
 Stays open, with the reason each stays (no failing test, or a design limit):
 - A rival listing its strongest cards (left out of the public roster read) to look weak, then cancelling the auction
   before the match: depends on FoxLeague's roster and auction behaviour; would need the listed cards added to the read.

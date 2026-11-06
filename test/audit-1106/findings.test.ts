@@ -137,6 +137,27 @@ test('INTEG-2: a create FoxLeague left pending on chain after the organizer paym
     assert.deepEqual(bodies.map(b => b.organizer_fee_tx_hash), [undefined, 'hashfee'], 'paid once, the hash sent once')
     assert.doesNotMatch(r!.summary, /nothing created|FoxLeague refunds one that stays unused/, r!.summary)
     assert.match(r!.summary, /may have created it/, r!.summary)
+    // The payment stays counted (it is on that tournament) and is no longer held as a payment to reuse or refund.
+    assert.equal(m.store.openSpend(0, 'shop:organizer_fee', false).length, 1, 'the organizer payment stays in the ledger')
+    assert.equal(m.store.pending(0).filter(p => p.kind === 'organizer_fee').length, 0, 'nothing left pending')
+  })
+  // "Not verified yet" with the same words is FoxLeague's tx_pending: the same hash is asked again first, never paid twice.
+  let asked = 0
+  const retry = setup({
+    fox: {
+      organizerFeeQuote: async () => ({ owed: true, games: 6, private_fee_foxsy: 0, deposit_foxsy: 150, total_foxsy: 150, grace_minutes: 60, no_free_cancel: false }),
+      createTournament: async (_w: unknown, body: Record<string, unknown>) => {
+        if (!body.organizer_fee_tx_hash) throw new ApiRefusal('This tournament needs a payment of 150 FOXSY from its organizer before it is created.', 'organizer_fee_required')
+        if (++asked === 1) throw new ApiRefusal('Could not verify the payment state right now. Please retry in a moment.', 'tx_pending')
+        throw new ApiRefusal('On-chain tournament creation could not be confirmed yet. The tournament stays pending until its creation can be confirmed.')
+      },
+    },
+    chain: { send: async () => 'hashfee2' },
+  })
+  await withLive(retry.store, async () => {
+    const [r] = await retry.exec.run(retry.agent(), liveWallet, s, [{ action: cup, reason: '' }])
+    assert.equal(asked, 2, 'asked again after tx_pending, with the same hash')
+    assert.match(r!.summary, /hashfee2 made, and FoxLeague may have created it/, r!.summary)
   })
 })
 
