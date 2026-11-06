@@ -64,7 +64,7 @@ test('the create sends the range to FoxLeague; the executor reads the best XI OV
 
 test('the plan knows it may set a range on what it creates, and a refusal names the range', () => {
   assert.match(SYSTEM_PROMPT, /"ovr_min":N,"ovr_max":N/)
-  assert.match(SYSTEM_PROMPT, /take an OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
+  assert.match(SYSTEM_PROMPT, /An open tournament or an open challenge takes an OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
 })
 
 test('the manual describes creating with an OVR range', async () => {
@@ -115,7 +115,7 @@ test('the snapshot suggests a range about 10 percent either way around the best 
   const { renderDigest } = await import('../src/snapshot/digest.ts')
   const s = snapshot()
   s.auth!.bestXiOvr = 31.4
-  assert.match(renderDigest(s), /Your best XI OVR \(what OVR ranges are checked against\): 31\.4; a range about 10 percent either way for what you create: ovr_min 28, ovr_max 35/)
+  assert.match(renderDigest(s), /Your best XI OVR \(what OVR ranges are checked against\): 31\.4; a range about 10 percent either way for your own open tournament: ovr_min 28, ovr_max 35/)
   s.auth!.bestXiOvr = 95.5
   assert.match(renderDigest(s), /ovr_min 85, ovr_max 100/, 'at most 100')
   assert.match(SYSTEM_PROMPT, /On your own open tournament set one by default, about 10 percent either way around your best XI OVR \(the snapshot suggests it\), so teams of your strength can enter; widen it when recent tournaments filled slowly/)
