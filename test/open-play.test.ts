@@ -169,6 +169,36 @@ test('R54A-3: while an open challenge of ours waits, a ranked start, training a 
   assert.doesNotMatch(why(ranked, { openChallengeRecent: false }, unread), /open challenge/)
 })
 
+// Agent review of PR #54, third pass: R54A-3 judged only the eleven after a change, so once the eleven was already
+// below the bar (a tournament match during the wait) a stronger eleven was refused too (medium); training with the team
+// unread skipped the check (low); a waiting challenge without a target field was read as targeted (low).
+const waitingAt = (condition: number, more: Record<string, unknown> = {}) => {
+  const s = snapshot()
+  for (const n of s.team!.lineup) s.players.find(p => p.nonce === n)!.condition = condition
+  s.auth!.myTournaments = { active: [{ ...(tournament(950, { max_teams: 2, min_teams: 2, creator_user_id: s.profile!.id, ovr_min: 18, ovr_max: 20, status: 'open', ...more }) as { tournament: object }).tournament, participant_count: 1 }], completed: [] } as never
+  return s
+}
+
+test('R54A-4: an eleven already below the bar may still be made stronger while an open challenge waits', () => {
+  // At 70 the eleven plays at OVR 17.0; a fresh defender from the bench (100) lifts it to 17.3: still below, but better.
+  const s = waitingAt(70)
+  const fresher = { type: 'set_lineup', lineup: [1, 13, 3, 4, 5, 6, 7, 8, 9, 10, 11], substitutes: [12, 2, 14, 15, 16, 17, 18] } as const
+  assert.equal(why(fresher, {}, s), '')
+  s.players.find(p => p.nonce === 13)!.condition = 60
+  assert.match(why(fresher, {}, s), /after this lineup your eleven would play at OVR 16\.9/, 'a weaker one is still refused')
+})
+
+test('R54A-5: training with the team unread is checked like training a starter while an open challenge waits', () => {
+  const s = waitingAt(100)
+  s.team = null
+  assert.match(why({ type: 'train', player_nonce: 2, attribute: 'defense' }, {}, s), /could not be read/)
+})
+
+test('R54A-6: a waiting challenge of ours without a target field is checked as an open one', () => {
+  const s = waitingAt(83, { target_user_id: undefined })
+  assert.match(why({ type: 'play_match', match_type: 'ranked' }, {}, s), /your open challenge T950 waits/)
+})
+
 test('OP-5: the top of a 1v1\'s OVR range is never raised or removed', () => {
   const s = snapshot()
   const me = s.profile!.id

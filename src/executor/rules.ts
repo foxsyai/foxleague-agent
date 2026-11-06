@@ -638,12 +638,16 @@ export const TRAINING_CONDITION_LOSS = 5
 function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, lineup: number[] | undefined, condition: (p: PlayerView) => number = p => p.condition): string | null {
   const mine = s.auth?.myTournaments
   if (!mine) return ctx.openChallengeRecent ? `your current tournaments could not be read and an open challenge of yours may still wait: no ${what} blind` : null
-  const waiting = mine.active.filter(t => t.max_teams === 2 && NOT_STARTED_STATUSES.has(t.status) && t.creator_user_id === s.profile?.id && !t.targeted && t.target_user_id === null)
+  // A target the answer leaves out is no target: checked as open (R54A-6).
+  const waiting = mine.active.filter(t => t.max_teams === 2 && NOT_STARTED_STATUSES.has(t.status) && t.creator_user_id === s.profile?.id && !t.targeted && typeof t.target_user_id !== 'number')
   for (const t of waiting) {
     const top = t.ovr_max
     if (typeof top !== 'number' || !Number.isFinite(top)) return `the range of your open challenge T${t.id} could not be read: no ${what} while it waits`
     const after = elevenOvrToday(s, lineup, condition)
     if (after === null) return `your open challenge T${t.id} waits and your eleven after this ${what} could not be read: no ${what} blind`
+    // An eleven already below the bar (a tournament match during the wait) may still be made stronger (R54A-4).
+    const now = elevenOvrToday(s)
+    if (now !== null && after >= now) continue
     if (top > after * MAX_1V1_STRENGTH_RATIO) return `your open challenge T${t.id} waits for an opponent (up to OVR ${top}): after this ${what} your eleven would play at OVR ${after.toFixed(1)}, more than 10 percent below a fresh team at its top; wait until it is taken or expires, or leave it first`
   }
   return null
@@ -879,8 +883,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!t) return refuse('training quota unknown (shop status unavailable)')
       const paid = t.used_today >= t.daily_free
       if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
-      if (s.team?.lineup.includes(p.nonce)) {
-        const waits = waitingOpenRefusal(s, ctx, 'training', s.team.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
+      // The team unread: the card may be a starter (R54A-5).
+      if (!s.team || s.team.lineup.includes(p.nonce)) {
+        const waits = waitingOpenRefusal(s, ctx, 'training', s.team?.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
         if (waits) return refuse(waits)
       }
       return allow(0, { usesPaidSlot: paid })
