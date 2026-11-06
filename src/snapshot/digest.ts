@@ -2,7 +2,7 @@
 
 import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { CASUAL_PER_DAY, casualCostRefusal, conditionAtStart, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
+import { casualCostRefusal, conditionAtStart, elevenOvrToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, XP_BOOSTER_RENEW_HOURS, ZEUS_FIELD_LIMIT, ZEUS_STRONGER_ELO, ZEUS_STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
 import type { AgentSnapshot, PlayerView } from './snapshot.ts'
@@ -284,7 +284,7 @@ export function renderDigest(s: AgentSnapshot): string {
     for (const r of bench.rows) out.push(`  ${formationRow(r)}`)
     const next = formationsToTest(s.players, bench)
     if (next.length) out.push(`Next formations to test (fewest casual tests first, ones your squad can field): ${next.map(f => `${f.formation} ${f.tests}`).join(', ')}`)
-    if (typeof s.casualToday === 'number') out.push(`Casual games today: ${s.casualToday} of ${CASUAL_PER_DAY}`)
+    if (typeof s.casualToday === 'number') out.push(`Casual games today: ${s.casualToday} (casual and ranked share FoxLeague's daily starts)`)
     const why = s.team ? casualCostRefusal(s, [...s.team.lineup, ...s.team.substitutes], new Date(s.takenAt)) : 'your team could not be read'
     out.push(why ? `Casual game now: not free: ${why}` : 'Casual game now: free for your saved eleven and bench (each back to full condition before your next match that counts)')
   }
@@ -298,8 +298,12 @@ export function renderDigest(s: AgentSnapshot): string {
     // How many teams it lets in, from the leaderboard's best XI OVRs (FoxLeague, 2026-10-26).
     const inside = (v: number[]) => v.filter(x => x >= lo && x <= hi).length
     const b = s.market.boardOvrs
-    const count = b?.all.length ? ` (inside it: ${inside(b.all)} of the ${b.all.length} leaderboard teams read, ${inside(b.takers)} of the ${b.takers.length} that accepted a 1v1 in 7 days)` : ''
-    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}${count}`)
+    const count = b?.all.length ? ` (inside it: ${inside(b.all)} of the ${b.all.length} leaderboard teams read, ${inside(b.takers)} of the ${b.takers.length} that took a 1v1 in 7 days they had not arranged)` : ''
+    // An open challenge tops out at the team's own best XI OVR, rounded up so the creator fits its own range (OP-4), and
+    // waits while that top is more than 10 percent above our eleven at today's condition (R54A-1).
+    const today = elevenOvrToday(s)
+    const eleven = today === null ? '; your eleven today could not be read, so no open challenge' : `; your eleven today: OVR ${today.toFixed(1)} at today's condition, ${today * MAX_1V1_STRENGTH_RATIO < Math.ceil(ovr) ? 'so an open challenge waits until it is within 10 percent of the top' : 'within 10 percent of the top'}`
+    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for what you create: ovr_min ${lo}, ovr_max ${hi}${count}; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it) and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // A Zeus snapshot reads each team's win chance (research); only Zeus is held to the field rule.
@@ -327,7 +331,7 @@ export function renderDigest(s: AgentSnapshot): string {
     const lock = seat.seatsLockAt ? `seats lock ${seat.seatsLockAt.slice(0, 16).replace('T', ' ')} UTC: until then you may leave a seat you joined yourself for the whole entry back, but only when you see no real chance of the top 24 (places 1 to 24 play the knockout; leaving closes the invitation for good); after that nobody can leave` : 'when its seats lock could not be read: no leaving'
     out.push(`Your League + Knockout T${Number(seat.tournamentId)}: ${seat.accepted ?? '?'} of 36 seats taken; ${lock}`)
   }
-  if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a 1v1 is refused when the rival's lineup is more than 10 percent above it.` : 'Your lineup strength today: unknown (your roster could not be read); a 1v1 is refused until it is known.')
+  if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a targeted or joined 1v1 is refused when the rival's lineup is more than 10 percent above it (an open challenge is held to its OVR range instead).` : 'Your lineup strength today: unknown (your roster could not be read); a targeted or joined 1v1 is refused until it is known.')
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
@@ -366,7 +370,7 @@ export function renderDigest(s: AgentSnapshot): string {
   // Zeus: the threshold its 1v1s are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push('Win chances: ELO expectation and lineup strength averaged, ours at today\'s condition, theirs at full condition; Zeus plays a 1v1 from 55 percent.')
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (the ones that accept 1v1s first): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, accepted ${u.accepted7d} 1v1 in 7 days` : ', no 1v1 accepted in 7 days'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
+    out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged; a targeted 1v1 played within 2 minutes of its creation counts as arranged): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged` : ', took no 1v1 in 7 days it had not arranged'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')

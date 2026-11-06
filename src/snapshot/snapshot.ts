@@ -98,7 +98,7 @@ export interface MarketSummary {
   slots: SlotWindow[]
   /** Open auctions, never our own: the 10 strongest, then the 3 cheapest of each rarity (auctionsShown); and the reserve floor of each rarity. */
   auctions: MarketListing[]
-  /** The best XI OVR of the leaderboard teams read (ours left out), and of those that accepted a 1v1 in 7 days: how many a range lets in. */
+  /** The best XI OVR of the leaderboard teams read (ours left out), and of those that took a 1v1 in 7 days they had not arranged: how many a range lets in. */
   boardOvrs?: { all: number[]; takers: number[] }
   floors: FloorPrice[]
   /** Planning snapshots only: the market price of each rarity from the public sales (null: too few to tell). */
@@ -160,7 +160,7 @@ export interface AgentSnapshot {
   } | null
   market: MarketSummary
   /**
-   * Teams to challenge: the ones that accept 1v1s first (`accepted7d`), then the nearest by ELO. `matches` is the
+   * Teams to challenge: the ones that take 1v1s they had not arranged first (`accepted7d`), then the nearest by ELO. `matches` is the
    * team's record so far (its activity is the change over days); a Zeus agent also reads each team's lineup
    * strength and its own win chance against it.
    */
@@ -544,6 +544,16 @@ export function auctionsShown(strongest: MarketListing[] | null, cheapest: Marke
   return out
 }
 
+/** A targeted 1v1 played this soon after its creation was arranged between the two teams (OP-1). */
+export const ARRANGED_MS = 2 * 60_000
+
+/** Whether a completed 1v1 was arranged: targeted and started within ARRANGED_MS of its creation. Unknown times: not arranged. */
+export function arranged(t: Pick<Tournament, 'targeted' | 'target_user_id' | 'created_at' | 'started_at'>): boolean {
+  if (!t.targeted && typeof t.target_user_id !== 'number') return false
+  const lag = Date.parse(t.started_at ?? '') - Date.parse(t.created_at)
+  return Number.isFinite(lag) && lag < ARRANGED_MS
+}
+
 export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWallet } | { watch: string }, now = new Date(), opts: { research?: boolean; matchFacts?: MatchFactsCache; marketSales?: MarketSalesCache; league?: LeagueCache } = {}): Promise<AgentSnapshot> {
   const { chain, fox } = deps
   const warnings: string[] = []
@@ -715,11 +725,15 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   }
 
   // Who accepts 1v1s: the side of a 1v1 completed in the last 7 days that did not create it. A targeted
-  // challenge to a team that never accepts only locks the stake until the deadline.
+  // challenge to a team that never accepts only locks the stake until the deadline. A targeted 1v1 played within
+  // ARRANGED_MS of its creation was arranged between the two teams first, and says nothing of whether that team takes
+  // a stranger's challenge (owner, 2026-11-06, OP-1: 281 of 294 targeted 1v1s accepted, half within 36 seconds, against
+  // 2 of the agents' 233).
   const weekAgo = now.getTime() - 7 * 86_400_000
   const accepted = new Map<number, number>()
   for (const t of doneChallenges ?? []) {
     if (t.max_teams !== 2 || !t.completed_at || new Date(t.completed_at).getTime() < weekAgo) continue
+    if (arranged(t)) continue
     const taker = [t.winner_user_id, t.runner_up_user_id].find(u => typeof u === 'number' && u !== t.creator_user_id)
     if (typeof taker === 'number') accepted.set(taker, (accepted.get(taker) ?? 0) + 1)
   }

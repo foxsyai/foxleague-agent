@@ -1856,9 +1856,11 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   a developer tournament and a creator who takes a seat outside their own range (`ovr_range.rs` `validate`,
   `creator_check`, before any payment); the agent always takes its seat, so the rule refuses a range that does not hold
   its best XI OVR, read right before the create (unreadable: no range), and never sets one on a targeted challenge or a
-  private tournament (it could only lock out the teams chosen). Since PR #36 the prompt makes a range the default on an
-  open challenge or its own open tournament, about 10 percent either way around its best XI OVR (the snapshot suggests
-  `ovr_min` and `ovr_max`); the plan may widen it when recent tournaments filled slowly.
+  private tournament (it could only lock out the teams chosen). Since PR #36 the prompt makes a range the default on
+  its own open tournament, about 10 percent either way around its best XI OVR (the snapshot suggests `ovr_min` and
+  `ovr_max`); the plan may widen it when recent tournaments filled slowly. Since 2026-11-06 an open challenge, at every
+  level, must carry a range whose maximum is at most its best XI OVR rounded up (FoxLeague's join check then keeps
+  every team stronger by OVR out), and the maximum of a 1v1's range is never raised or removed.
 
 ## 23. Mainnet of 2026-10-26 (FoxLeague 4e42b94c9)
 
@@ -1873,7 +1875,7 @@ Checked read-only on 2026-10-26, after the owner upgraded mainnet:
   the one the agent uses (the switch only offers `POST /api/tournaments/challenges/authorize` and `createAndJoin`).
 - **One team OVR, the best XI OVR** (#541, #555): every team answer and leaderboard row carries `best_xi_ovr` (and
   `best_xi_formation`); `team_overall` is gone from the team answer (the client keeps it 0). The agent shows each rival's
-  best XI OVR and counts how many leaderboard teams, and how many that accepted a 1v1 in 7 days, its suggested range lets
+  best XI OVR and counts how many leaderboard teams, and how many that took a 1v1 in 7 days they had not arranged (since 2026-11-06), its suggested range lets
   in; the import preview shows the best XI OVR.
 - **Widening a range** (#542, `POST /api/tournaments/{id}/ovr-range`, `ovr_range.rs` `widen_refusal`): the creator (or
   an admin) may widen the range of its open tournament or challenge while it is open for joining (status open, not past

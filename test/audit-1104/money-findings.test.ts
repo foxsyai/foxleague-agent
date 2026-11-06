@@ -48,9 +48,8 @@ test('MONEY-1b: a shop payment whose broadcast may have gone out is held as pend
   assert.equal(sends, 1, 'never a second shop payment while the first may have landed')
 })
 
-test('MONEY-2: casual starts whose answer was lost and whose read-back failed are not "none" for the 4-a-day cap', async () => {
-  let lost = true
-  const m = setup({ fox: { playMatch: async () => { if (lost) throw new Error('HTTP 502'); return { match_id: 9 } }, activeMatch: async () => { throw new Error('HTTP 502') } } })
+test('MONEY-2: casual starts whose answer was lost and whose read-back failed are not "none" in the day\'s count', async () => {
+  const m = setup({ fox: { playMatch: async () => { throw new Error('HTTP 502') }, activeMatch: async () => { throw new Error('HTTP 502') } } })
   const casual = { action: { type: 'play_match' as const, match_type: 'casual' as const }, reason: '' }
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [casual])
@@ -60,10 +59,7 @@ test('MONEY-2: casual starts whose answer was lost and whose read-back failed ar
     // Three more like it (a start of unknown outcome also holds the 30 s cooldown, INPUT-2, so they are not run back to back here).
     const [row] = m.store.activity(0, 1)
     for (let i = 0; i < 3; i++) m.store.log({ agentIndex: 0, kind: 'play_match', status: 'error', summary: row!.summary, detail: JSON.parse(row!.detail ?? '{}') })
+    // The plan's count of the day (the 4-a-day cap it fed went on 2026-11-06, OP-7: casual and ranked share the 5 starts).
     assert.equal(casualStartsSince(m.store, 0, new Date(Date.now() - 3600_000)), 4)
-    lost = false
-    const [fifth] = await m.exec.run(m.agent(), liveWallet, snapshot(), [casual])
-    assert.equal(fifth!.status, 'refused', fifth!.summary)
-    assert.match(fifth!.summary, /casual games today/)
   })
 })

@@ -169,7 +169,7 @@ test('A1 S3 text written by other players cannot forge instructions for the stra
   assert.match(text, /written by other players/i, 'the snapshot is framed as untrusted data')
 })
 
-test('A2 1v1s: never against a far stronger team, open ones small and once a day, at most twice a week per opponent', async () => {
+test('A2 1v1s: never against a far stronger team, open ones only to teams no stronger by OVR, at most twice a week per opponent', async () => {
   const oneVOne = (elo: number) =>
     setup({
       fox: {
@@ -185,16 +185,13 @@ test('A2 1v1s: never against a far stronger team, open ones small and once a day
   assert.equal((await join(even)).status, 'dry_run')
   assert.equal((await join(even)).status, 'dry_run')
   assert.equal((await join(even)).status, 'refused', 'a third 1v1 against the same opponent this week')
-  // Open to anyone, a stronger team too: Silver at the owner's lowest amount, once in 24 hours.
-  const open = setup()
-  const create = async (tier: 'silver' | 'gold', stake: number) =>
-    (await open.exec.run(open.agent(), dryWallet, snapshot(), act({ type: 'create_challenge', tier, stake_foxsy: stake, target_user_id: null, deadline_minutes: 60 })))[0]!
-  assert.match((await create('gold', 5000)).summary, /lowest amount/)
-  assert.equal((await create('silver', 1500)).status, 'refused', 'above the lowest Silver amount')
-  assert.equal((await create('silver', 1000)).status, 'dry_run')
-  const again = await create('silver', 1000)
-  assert.equal(again.status, 'refused')
-  assert.match(again.summary, /24 hours/)
+  // Open (owner, 2026-11-06, OP-4): FoxLeague's range keeps every team stronger by OVR out, so it must top out at ours.
+  const open = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 19.6 }) } })
+  const create = async (ovr_max?: number) =>
+    (await open.exec.run(open.agent(), dryWallet, snapshot(), act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ...(ovr_max ? { ovr_min: 18, ovr_max } : {}) })))[0]!
+  assert.match((await create()).summary, /needs an OVR range/)
+  assert.match((await create(23)).summary, /ovr_max 20 at most/)
+  assert.equal((await create(20)).status, 'dry_run')
 })
 
 test('a private tournament is joined only when this team is invited; a hidden 1v1 target still locks it', async () => {
@@ -260,7 +257,7 @@ test('the snapshot lists teams that accept 1v1s first and only the private tourn
   assert.ok(asked.every(a => a === dryWallet.address), 'invitations are read with the agent session')
   const digest = renderDigest(s)
   assert.match(digest, /T62 .*private, you are invited/)
-  assert.match(digest, /Taker \(user 40\) 1050, accepted 2 1v1 in 7 days/)
+  assert.match(digest, /Taker \(user 40\) 1050, took 2 1v1 in 7 days it had not arranged/)
   const watched = await takeSnapshot({ chain, fox }, { watch: STRANGER })
   assert.deepEqual(watched.market.openStandard.map(t => t.id), [60], 'a watch view shows no private tournament')
 })
@@ -1264,33 +1261,8 @@ test('paging: the completed 1v1s are read page by page until a week is covered',
 
 // ---- ninth review (2026-10-05) ----
 
-test('R9-1 an open 1v1 whose seat payment reverted or whose join errored still counts toward the one a day', async () => {
-  const { ApiRefusal } = await import('../src/foxleague/api.ts')
-  const open = act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 })
-  let outcomes = 0
-  const reverted = setup({
-    chain: { waitForOutcome: async () => (++outcomes === 1 ? { kind: 'failed', reason: 'out of gas' } : { kind: 'success' }) },
-    fox: { createTournament: async () => ({ id: 800 }), tournament: async () => tournament(800, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 800 }), joinTournament: async () => ({ participant_id: 1 }) },
-  })
-  await withLive(reverted.store, async () => {
-    assert.equal((await reverted.exec.run(reverted.agent(), liveWallet, snapshot(), open))[0]!.status, 'failed')
-    const [second] = await reverted.exec.run(reverted.agent(), liveWallet, snapshot(), open)
-    assert.equal(second!.status, 'refused')
-    assert.match(second!.summary, /already 1 open challenge in the last 24 hours/)
-  })
-  let joins = 0
-  const errored = setup({
-    fox: {
-      createTournament: async () => ({ id: 801 }),
-      tournament: async () => tournament(801, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 801 }),
-      joinTournament: async () => { if (++joins === 1) throw new ApiRefusal('You already have an active challenge'); return { participant_id: 1 } },
-    },
-  })
-  await withLive(errored.store, async () => {
-    assert.equal((await errored.exec.run(errored.agent(), liveWallet, snapshot(), open))[0]!.status, 'error')
-    assert.match((await errored.exec.run(errored.agent(), liveWallet, snapshot(), open))[0]!.summary, /already 1 open challenge in the last 24 hours/)
-  })
-})
+// R9-1 (an open 1v1 whose seat payment reverted still counted toward the one a day) went with that limit on
+// 2026-11-06 (OP-3): FoxLeague's one active 1v1 is the bound, and a failed seat payment pays nothing.
 
 test('R9-2 turning Gold back on, a shorter tick or longer active hours needs the password, like a higher cap', async () => {
   const { raisesLimit, windowHours } = await import('../src/web/server.ts')

@@ -35,7 +35,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
 - **Casual test bench**: FoxLeague plays a casual game against an AI built at your team's own OVR with a random
   formation, so it is a fair, free test of a formation (no ELO, XP or FOXSY; 5 condition for each player who plays and
-  one of the 5 daily starts). The agent plays 1 to 3 such tests a day, never more than 4, and only when every card that
+  one of the 5 daily starts, shared with ranked). The agent plays 1 to 3 such tests a day, and only when every card that
   plays is back to full condition before your next tournament or 1v1 match (never while a 1v1 of yours waits for an
   opponent). It rotates through every formation your squad can field, the least tested first. For each test it saves
   the test formation, starts the game and puts your formation back at once. The results of all your agents form one
@@ -49,9 +49,9 @@ An empty plan is a good answer too: the agent never spends just because budget i
   platform time slot, sized from what recently filled. For the 4 open Silver or Gold tournaments it could join whose
   deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by rating and starting eleven). It
   refuses a schedule that would wear the squad out, counting the largest group a Groups + Knockout can draw, judged on the condition the squad will have at the start (rested
-  until then, less what its other tournaments cost before it). When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. A private tournament pays a higher platform fee out of its prize pool, shared by every team in it, so the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Only
-  Zeus creates private tournaments; every level joins one your team is invited to when it is worth it (only
-  your team's own FoxLeague login sees the invitation).
+  until then, less what its other tournaments cost before it). When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. A private tournament pays a higher platform fee out of its prize pool, shared by every team in it, so the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
+  level may create a private tournament, inviting the teams it chooses, and joins one your team is invited to when it
+  is worth it (only your team's own FoxLeague login sees the invitation).
 - **Champions FoxLeague (League + Knockout)**: FoxLeague invites the top of its leaderboard; the agent accepts an
   invitation by itself, at every level, when the entry fee fits your limits and the squad can carry up to 17 matches
   (8 league matches, then the knockout for places 1 to 24), judged on its condition at the start and through the
@@ -68,15 +68,19 @@ An empty plan is a good answer too: the agent never spends just because budget i
   A tournament or a 1v1 with an OVR range is joined
   only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it. It may set an OVR
   range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its
-  own best XI OVR, read right before the create. On an open challenge or its own open tournament it sets one by
-  default, about 10 percent either way around its best XI OVR, wider when recent tournaments filled slowly. When too few teams join its own open tournament or challenge, it may widen the range while it is open, never narrow it (a lower minimum, a higher maximum or no bound on that side); teams already seated stay. It widens only what it created itself: a range you set in FoxLeague stays yours. The plan sees how many 1v1s it played against each
+  own best XI OVR, read right before the create. On its own open tournament it sets one by default, about 10 percent
+  either way around its best XI OVR, wider when recent tournaments filled slowly. When too few teams join its own open tournament or challenge, it may widen the range while it is open, never narrow it (a lower minimum, a higher maximum or no bound on that side; on a 1v1 only a lower minimum); teams already seated stay. It widens only what it created itself: a range you set in FoxLeague stays yours. The plan sees how many 1v1s it played against each
   team this week and when the limit frees, and a team with its own challenge out is marked (it cannot accept another
-  until that one ends). When it
-  creates one, it prefers a team of similar or lower strength that accepts 1v1s: FoxLeague's public results show
-  who took challenges in the last 7 days, and a challenge to a team that never answers only locks the stake until
-  its deadline. When no such team fits, it may create one open challenge a day (never at the Zeus level, which challenges only a named team with a known win chance), which any team can take, a
-  stronger one too: always Silver at your lowest Silver amount, so the stake stays small. It can leave its own
-  unaccepted challenge when a better one appears.
+  until that one ends). Every level may play a 1v1 three ways. A challenge to a named team is taken almost only
+  when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
+  FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within
+  2 minutes of its creation counts as arranged); a challenge to a team that never answers only locks the stake until
+  its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
+  out at your team's own best XI OVR, so FoxLeague itself keeps every stronger team out, at any of your amounts and as
+  often as FoxLeague's one active 1v1 allows; since that rating ignores condition, it waits while a fresh team at the
+  top would be more than 10 percent stronger than your starting eleven at today's condition, and while one waits for a
+  taker it plays no ranked game, trains no starter and sets no eleven that would break that. And it may take an open challenge another team posted. It can leave its
+  own unaccepted challenge when a better one appears.
 - **Match preparation**: about an hour before each match session locks (inside its active hours), it syncs if the gains matter, sets the
   formation and lineup for that opponent (from the formations it played last and how strong its eleven is next to ours) and recovers condition only for key starters in a match that matters.
 - **Refunds**: seats and stakes that come back (a tournament that did not fill, an expired challenge) are claimed

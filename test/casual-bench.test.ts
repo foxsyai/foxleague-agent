@@ -1,6 +1,6 @@
 // Owner, 2026-11-04: the casual test bench. FoxLeague plays a casual game against an AI it builds at the team's own
 // OVR with a random formation: no ELO, XP or FOXSY, 5 condition for each player who takes the pitch (more after age 30)
-// and one of the 5 daily starts. The agents test formations there, 1 to 3 a day and never more than 4, only when every
+// and one of the 5 daily starts. The agents test formations there, 1 to 3 a day (no cap of their own since 2026-11-06), only when every
 // card that plays is back to full condition before the next match that counts, rotating through every formation the
 // squad can field. The results go into their own pooled record, never into the formation record or the pooled one.
 
@@ -77,14 +77,8 @@ test('CB4: no casual test while a 1v1 of ours waits for an opponent: it can be a
   assert.match(r.summary, /accepted at any time/)
 })
 
-test('CB5: at most 4 casual games a game day', async () => {
-  const { exec, agent, store } = setup()
-  for (let i = 0; i < 4; i++) store.log({ agentIndex: 0, kind: 'play_match', status: 'dry_run', summary: `DRY RUN play casual match (test 4-3-3w): match #${i} started (casual)` })
-  store.log({ agentIndex: 0, kind: 'play_match', status: 'dry_run', summary: 'DRY RUN play ranked match: match #9 started (ranked)' })
-  const [r] = await exec.run(agent(), dryWallet, snapshot(), [{ action: casual(), reason: '' }])
-  assert.equal(r!.status, 'refused', r!.summary)
-  assert.match(r!.summary, /4 casual games today/)
-})
+// CB5 (at most 4 casual games a game day) went on 2026-11-06 (OP-7 in test/open-play.test.ts): casual and ranked
+// share FoxLeague's 5 daily starts.
 
 test('CB6: a calendar that cannot be read is no free time', async () => {
   const s = snapshot()
@@ -230,7 +224,7 @@ test('CB16: the plan sees the bench, the next formations to test, today\'s count
   assert.match(d, /Casual test bench \(the casual games of every team your owner runs here in the last 40 days, against FoxLeague's AI built at the team's own OVR with a random formation; no ELO, XP or FOXSY\):/)
   assert.match(d, /\n {2}4-3-3 vs AI: 2 played, W1 D0 L1/)
   assert.match(d, /Next formations to test \(fewest casual tests first, ones your squad can field\): 4-4-2 0, 4-4-2o 0, 4-3-3w 0/)
-  assert.match(d, /Casual games today: 1 of 4/)
+  assert.match(d, /Casual games today: 1 \(casual and ranked share FoxLeague's daily starts\)/)
   assert.match(d, /Casual game now: not free: .*back to full condition/)
   const free = snapshot() as ReturnType<typeof snapshot> & { casualBench?: FormationRecord; casualToday?: number }
   free.casualBench = { matches: 0, unread: 0, rows: [], field: [] }

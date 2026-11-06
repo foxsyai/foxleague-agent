@@ -27,11 +27,13 @@ test('a create may carry an OVR range of whole numbers 1 to 100, the minimum not
 test('the range must hold the team\'s own best XI OVR, read right before the create; unreadable is no range', () => {
   const s = snapshot()
   const ctx = (bestXiOvr: number | null | undefined) => ({ settings: TEST_SETTINGS, now: new Date(), bestXiOvr } as RulesContext)
-  assert.equal(checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(31.4)).ok, true, checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(31.4)).refusal)
+  // The fixture's eleven plays at OVR 20: an open challenge topped above 22 waits (R54A-1).
+  assert.equal(checkAction(parseAction(challenge({ ovr_max: 20 })), s, ctx(19.6)).ok, true, checkAction(parseAction(challenge({ ovr_max: 20 })), s, ctx(19.6)).refusal)
   assert.match(checkAction(parseAction(challenge({ ovr_max: 30 })), s, ctx(31.4)).refusal!, /your best XI OVR is 31\.4, outside the OVR range you set \(at most 30\): FoxLeague refuses a creator outside their own range/)
   assert.match(checkAction(parseAction(challenge({ ovr_min: 32 })), s, ctx(31.4)).refusal!, /outside the OVR range you set \(at least 32\)/)
   assert.match(checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(null)).refusal!, /your best XI OVR could not be read: no OVR range without it/)
-  assert.equal(checkAction(parseAction(challenge()), s, ctx(undefined)).ok, true, 'no range: nothing to read')
+  // An open challenge must carry one since 2026-11-06 (OP-4): without it the refusal asks for the range, not a read.
+  assert.match(checkAction(parseAction(challenge()), s, ctx(undefined)).refusal!, /an open challenge needs an OVR range/)
 })
 
 test('the create sends the range to FoxLeague; the executor reads the best XI OVR only for a create with a range', async () => {
@@ -41,32 +43,36 @@ test('the create sends the range to FoxLeague; the executor reads the best XI OV
     createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 900 } },
     tournament: async () => tournament(900, { max_teams: 2, min_teams: 2, creator_user_id: 100, sc_tournament_id: 900 }),
     joinTournament: async () => ({ participant_id: 1 }),
-    bestXiOvr: async () => { reads++; return { best_xi_ovr: 31.4 } },
+    bestXiOvr: async () => { reads++; return { best_xi_ovr: 19.6 } },
   }
   const m = setup({ fox })
   await withLive(m.store, async () => {
-    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge({ ovr_min: 28, ovr_max: 34 })), reason: '' }])
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge({ ovr_min: 18, ovr_max: 20 })), reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)
   })
-  assert.equal(bodies[0]!.ovr_min, 28)
-  assert.equal(bodies[0]!.ovr_max, 34)
+  assert.equal(bodies[0]!.ovr_min, 18)
+  assert.equal(bodies[0]!.ovr_max, 20)
   assert.equal(reads, 1)
-  const n = setup({ fox: { ...fox, createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 901 } } } })
-  await withLive(n.store, async () => { await n.exec.run(n.agent(), liveWallet, snapshot(), [{ action: parseAction(challenge()), reason: '' }]) })
+  // A tournament without a range (an open challenge must carry one since 2026-11-06, OP-4).
+  const filled = snapshot()
+  filled.market.recentStandard = [{ id: 1, tier: 'silver', format: 'knockout', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }]
+  const n = setup({ fox: { ...fox, createTournament: async (_w: unknown, body: Record<string, unknown>) => { bodies.push(body); return { id: 901 } }, tournament: async () => tournament(901, { max_teams: 8, min_teams: 8, creator_user_id: 100, sc_tournament_id: 901 }) } })
+  await withLive(n.store, async () => { await n.exec.run(n.agent(), liveWallet, filled, [{ action: parseAction(cup()), reason: '' }]) })
   assert.equal('ovr_min' in bodies[1]!, false, 'no range: none sent')
   assert.equal(reads, 1, 'no read without a range')
 })
 
 test('the plan knows it may set a range on what it creates, and a refusal names the range', () => {
   assert.match(SYSTEM_PROMPT, /"ovr_min":N,"ovr_max":N/)
-  assert.match(SYSTEM_PROMPT, /optional OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
+  assert.match(SYSTEM_PROMPT, /take an OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
 })
 
 test('the manual describes creating with an OVR range', async () => {
   const { readFileSync } = await import('node:fs')
   const plays = readFileSync(new URL('../site/src/content/docs/play/how-it-plays.md', import.meta.url), 'utf8').replace(/\s+/g, ' ')
   assert.match(plays, /It may set an OVR range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its own best XI OVR/)
-  assert.match(plays, /On an open challenge or its own open tournament it sets one by default, about 10 percent either way around its best XI OVR/)
+  assert.match(plays, /On its own open tournament it sets one by default, about 10 percent either way around its best XI OVR/)
+  assert.match(plays, /An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops out at your team's own best XI OVR/)
 })
 
 // Agent review of PR #35 (medium): only the chosen team can accept a targeted challenge, so a range there can only lock
@@ -112,5 +118,5 @@ test('the snapshot suggests a range about 10 percent either way around the best 
   assert.match(renderDigest(s), /Your best XI OVR \(what OVR ranges are checked against\): 31\.4; a range about 10 percent either way for what you create: ovr_min 28, ovr_max 35/)
   s.auth!.bestXiOvr = 95.5
   assert.match(renderDigest(s), /ovr_min 85, ovr_max 100/, 'at most 100')
-  assert.match(SYSTEM_PROMPT, /On an open challenge or your own open tournament set one by default, about 10 percent either way around your best XI OVR \(the snapshot suggests it\), so teams of your strength can enter; widen it when recent tournaments filled slowly/)
+  assert.match(SYSTEM_PROMPT, /On your own open tournament set one by default, about 10 percent either way around your best XI OVR \(the snapshot suggests it\), so teams of your strength can enter; widen it when recent tournaments filled slowly/)
 })

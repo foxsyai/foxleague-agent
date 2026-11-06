@@ -55,7 +55,7 @@ test('Zeus tournaments: refused when three seated teams are clearly stronger, so
   assert.equal(checkAction(join, s, ctx({ tournament: d, field: field(4) })).ok, true, 'the other levels decide by the plan')
 })
 
-test('private tournaments: Zeus only, sized to the invites', () => {
+test('private tournaments: every level (owner, 2026-11-06, OP-6), sized to the invites', () => {
   const s = snapshot()
   const base = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60 }
   const parsed = parseAction({ ...base, invite_user_ids: [11, 12, 13] })
@@ -66,7 +66,7 @@ test('private tournaments: Zeus only, sized to the invites', () => {
     const v = checkAction(a as never, s, ctx(c))
     return v.ok ? '' : (v as { refusal: string }).refusal
   }
-  assert.match(refusal(parsed, {}), /only the Zeus level creates private tournaments/)
+  assert.doesNotMatch(refusal(parsed, {}), /Zeus|invite/, 'every level may make one private')
   // Every invited team is kept, one the owner runs too (owner, 2026-10-27: each agent plays as if it were alone).
   const three = checkAction(parsed as never, s, ctx({ zeus: true }))
   if (three.ok) assert.deepEqual(three.facts.invites, [11, 12, 13], 'the list FoxLeague gets is the plan\'s')
@@ -77,7 +77,7 @@ test('private tournaments: Zeus only, sized to the invites', () => {
   assert.doesNotMatch(refusal(parsed, { zeus: true }), /invite/, 'a good invite list passes the invite checks')
 })
 
-test('Zeus never acts blind: an unread field is refused, an unread squad with a clearly higher ELO counts as stronger, no open 1v1', () => {
+test('Zeus never acts blind: an unread field is refused, an unread squad with a clearly higher ELO counts as stronger; an open 1v1 only with its range', () => {
   const s = snapshot()
   const seated = [{ user_id: 501 }, { user_id: 502 }, { user_id: 503 }, { user_id: 504 }]
   const d = tournament(301, { max_teams: 8, min_teams: 8 }, seated) as TournamentDetail
@@ -86,6 +86,8 @@ test('Zeus never acts blind: an unread field is refused, an unread squad with a 
   assert.match(why({}), /the seated teams could not be read/)
   assert.match(why({ field: seated.map(p => ({ userId: p.user_id, strength: null, elo: null })) }), /4 seated teams could not be read/)
   assert.match(why({ field: seated.map(p => ({ userId: p.user_id, strength: null, elo: 1500 })) }), /4 seated teams are clearly stronger/)
+  // Since 2026-11-06 (OP-2, OP-4) Zeus may post an open challenge, topped at its own best XI OVR, and none without the range.
   const open = checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 }, s, ctx({ zeus: true }))
-  assert.match(open.ok ? '' : (open as { refusal: string }).refusal, /Zeus plays a 1v1 only against a named team/)
+  assert.match(open.ok ? '' : (open as { refusal: string }).refusal, /an open challenge needs an OVR range/)
+  assert.equal(checkAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 18, ovr_max: 20 }, s, ctx({ zeus: true, bestXiOvr: 20 })).ok, true)
 })

@@ -31,8 +31,8 @@ next minutes:
 
 - **Daily routine:** the free training sessions on the starters who gain most, syncing stats to chain when it
   matters, lineup and formation, ranked and casual matches.
-- **Competition:** joins Silver and Gold tournaments and 1v1 challenges it can win, creates its own in a free
-  platform time slot, prepares before each match session locks (sync, lineup, condition), leaves or cancels when a
+- **Competition:** joins Silver and Gold tournaments and 1v1 challenges it can win, creates its own (public or
+  private) in a free platform time slot, posts open challenges or challenges a named team, prepares before each match session locks (sync, lineup, condition), leaves or cancels when a
   better option appears, claims refunds.
 - **Growth:** XP booster and paid training when the numbers say so, Common packs, fusion and both fusion
   waivers, bids and listings on the marketplace.
@@ -54,7 +54,9 @@ the dashboard or by chatting with it on Telegram.
   plays its own game as if it were alone, without knowing which teams are yours, so two of them may meet in a
   tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance (FoxLeague's Fair
   Play forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests. Guards against rivals who try to farm
-  an agent (1v1s only against teams of similar strength, at most two played 1v1s a week each).
+  an agent (a 1v1 against a named team only when it is of similar strength, at most two played 1v1s a week each; an
+  open challenge only to teams no stronger by OVR). Every level may use every part of the game; the levels differ
+  in what they pay for and your limits.
 - **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release.
   Every confirmed finding is fixed or decided; the few still open are listed
   in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
