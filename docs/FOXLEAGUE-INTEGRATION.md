@@ -1904,3 +1904,31 @@ From FoxLeague's branches `feat/competition-levels`, `feat/organizer-fees`, `fea
 - **Forfeits.** From the competition levels' switch a forfeit (by one team or both) and a match that could not be played move no ELO, XP, condition or competitive matches; only the result counts. FoxLeague keeps the counts and the agent reads them, so no rule of the agent depends on it.
 - **Create budget.** At most `tournament.creates_per_wallet_per_day` creates in 24 hours per wallet, 1v1s included (default 48; not in `/api/config`), refused before any payment with "You have created as many tournaments as one wallet may in 24 hours". An ordinary refusal: the agents create far fewer.
 
+
+## 24. FoxLeague's release of 2026-11-06 (01290ebaf, mainnet since 15:43 UTC)
+
+Checked read-only in the grand audit of 2026-11-06 (INTEG reviewer, FoxLeague's main read through git only). Seven commits
+since rc.85 (`16d9a455e`); the ones that touch the agent:
+
+- **The leave lock binds the organizer** (`c355e04b3`): `leave_breaks_the_minimum` is "seats before the leave equal
+  min_teams" (`tournaments.rs:3357-3363`), the agent's `participants.length === min_teams`; the organizer cannot delete
+  a tournament at or above its minimum from the switch (`admin.rs` `organizer_delete_refusal`); the agent never calls
+  `/delete`, and its `/cancel` of an own unaccepted 1v1 is never at the minimum (1 of 2).
+- **Switch-day fixes** (`2d00b1f5a`): the leave lock's read fails closed (a 200 refusal the agent logs as an error,
+  nothing credited); the reconcile opens a create that was left `pending_sc` with its organizer payment on it
+  (`tournament_reconcile.rs` `open_with_its_payment`), and a late chain confirm keeps the deposit free
+  (`organizer_fees.rs` `opened_by_the_reconcile`). After the payment, FoxLeague's answer "On-chain tournament creation
+  could not be confirmed yet ... stays pending" means the tournament exists with the payment on it: since the audit
+  (INTEG-2) the agent says so and settles the payment as used, instead of "nothing created" and a refund.
+- **Docs** (`5af121732`): the manual says the rules the game runs (the ranked ticket 25 on the Shop page, like-for-like
+  substitution on, a paid private Bronze earning from the switch, a full Champions edition locking every seat at
+  once). The agent's game manual copy is synced to `c355e04b3`.
+- **Shop status** (`shop.rs:126-132`, `:866-873`): `premium_used_today` counts `training_slot` purchases verified in
+  the trailing 24 hours, not sessions. Since the audit (INTEG-1) the level's count of paid sessions a day reads the
+  sessions past the free ones (`used_today - daily_free`, both from the 14:00 UTC reset).
+- **Rival strength** (ATTACK-1, the agent's side): FoxLeague plays the synced stats at the lock and a rival may sync
+  its training first, so the agent judges each rival card at the stronger of its synced and its live stats (the public
+  roster carries both).
+
+No other agent behaviour changes: the ranked ticket, paid Bronze, the organizer quote and payment, the OVR range and
+the 1v1 flow read and pay as before; no hard-coded number differs from the live `/api/config`.

@@ -1315,3 +1315,44 @@ failed on `main` (`4351662`) and passes after the change.
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | TR-1 | low | The prompt showed one `create_challenge` form with `"target_user_id":N|null` and the range fields together, and the snapshot offered "a range about 10 percent either way for what you create", so the plan put a range on a targeted challenge | Two forms in the prompt: a challenge to one named team with no range fields ("never ovr_min or ovr_max"), and an open one with them; the snapshot offers the 10 percent range for its own open tournament and says a targeted challenge or a private tournament takes none. The executor's refusal is unchanged. |
+
+## Grand audit of 2026-11-06 (Fable 5.1 at max effort, PRs #53 to #56 and the manual against the code)
+
+The owner asked for the manual to be an exact mirror of the agent as it runs, and for an adversarial review of
+everything since the last audit. Five reviewers (MONEY, ATTACK, EDGE, INTEG, DOCS) worked read-only on the frozen
+production tree `20ceea1`; INTEG also read FoxLeague's release of the same day (`01290ebaf`, live since 15:43 UTC) and
+DOCS compared FoxLeague's numbers with the live `/api/config`. No critical or high finding. Each finding has a test in
+`test/audit-1106/findings.test.ts` that failed on `20ceea1` and passes after its fix.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| ATTACK-1 | medium | A rival's strength was read from its synced stats only; a rival whose training is unsynced passed A2's 10 percent and the 55 percent floor, then synced before the match | `rivalStrength` takes each card at the stronger of its synced and its live stats (live unreadable: synced). The prompt and the digest say so. |
+| EDGE-1 | medium | Our own squad strength with a starter's stats or condition unreadable was NaN, and an own ELO unreadable was 1200 or NaN: no rival or seated team was ever "stronger" than that | `squadLegal` refuses a squad whose stats or condition cannot be read (it runs before every match, entry and 1v1); an unreadable own ELO refuses a 1v1 and a field; the digest says "unknown", never NaN. |
+| EDGE-2 | medium | A seated team whose ELO could not be read but whose lineup read counted as even, not unread | A seat known only in part and not already clearly stronger counts as unread (`judgeField`); three refuse. |
+| DOCS-1 | medium | The levels page held the fusion fees to the Max shop payment (Steady: fees up to 400, the owner's table), while the code never did | The code follows the table: a fusion fee above the Max shop payment is refused; the Settings page and the shop bubble say so. |
+| INTEG-1 | low | The level's paid sessions a day read FoxLeague's `premium_used_today`, which counts purchases in the last 24 hours, not sessions (`shop.rs:866-873`) | Paid sessions of the day = `used_today - daily_free` (both from the 14:00 UTC reset), for the session and for a slot purchase; the digest shows it. |
+| EDGE-3 | low | With `used_today` or `daily_free` unreadable a session counted as free and skipped the level's count | Both must be read, or the session is refused. |
+| MONEY-1 | low | The executor judged only the first 32 seated teams (EDGE-4 found the same) | Every seated team is read and judged. |
+| INTEG-2 | low | After the organizer payment, FoxLeague's "creation could not be confirmed yet ... stays pending" (the tournament exists with the payment on it) was reported as "nothing created" and a refund to come | That answer settles the payment as used and says FoxLeague may have created the tournament; the next plan reads its tournaments (OPEN-8 shows one without a seat). |
+| DOCS-2 | low | The Settings page's list of what a level proposes left out the three counts | Listed. |
+| DOCS-3 | low | How it plays stated a higher private platform fee as today's rule; FoxLeague serves one split for both | Conditional: once FoxLeague charges it. |
+| DOCS-4 | low | The manual never said the agent lists none of its 18 strongest cards nor leaves fewer than 18 | Said in How it plays. |
+| DOCS-5 | low | The prompt's formation styles offered 4-4-2a, which no action accepts yet | Dropped from the styles line. |
+
+Also done: the game manual copy synced to FoxLeague's `c355e04b3` (the ranked ticket 25 on the Shop page, like-for-like
+substitution on, a paid private Bronze earning from the switch, a full Champions edition locking every seat at once,
+the deposit of a late chain confirm); How it plays says the agent aims at 1 to 3 casual tests a day (no cap of its
+own); `docs/FOXLEAGUE-INTEGRATION.md` section 24 records FoxLeague's release.
+
+Stays open, with the reason each stays (no failing test, or a design limit):
+- A rival listing its strongest cards (left out of the public roster read) to look weak, then cancelling the auction
+  before the match: depends on FoxLeague's roster and auction behaviour; would need the listed cards added to the read.
+- The takers of the agent's own open challenges are not counted in the 2-a-week limit per rival (unknown at the
+  create; the owner's open-challenge design); the one-week review of the 1v1 limits (about 13 November) will look at it.
+- The "unarranged" signal can be bought with a second account (a design limit; the stake still passes A2 and the 55
+  percent floor, now on the stronger of synced and live stats).
+- FoxLeague serves the leave lock's switch only as a boolean: a leave planned before 14:00 UTC on 9 November and run
+  after it may be refused by FoxLeague (nothing paid or credited).
+- A League + Knockout field is read up to 35 invited teams (36 seats, so all of them today).
+- The read-back after a lost Play answer allows a minute for clock skew; a larger skew logs a start as an error (no
+  payment). The casual bench cut-off reads the game's end, not its start (one 12-minute span).

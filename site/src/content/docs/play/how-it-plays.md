@@ -35,7 +35,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
 - **Casual test bench**: FoxLeague plays a casual game against an AI built at your team's own OVR with a random
   formation, so it is a fair, free test of a formation (no ELO, XP or FOXSY; 5 condition for each player who plays and
-  one of the 5 daily starts, shared with ranked). The agent plays 1 to 3 such tests a day, and only when every card that
+  one of the 5 daily starts, shared with ranked). The agent aims at 1 to 3 such tests a day, and only when every card that
   plays is back to full condition before your next tournament or 1v1 match (never while a 1v1 of yours waits for an
   opponent). It rotates through every formation your squad can field, the least tested first. For each test it saves
   the test formation, starts the game and puts your formation back at once. The results of all your agents form one
@@ -49,7 +49,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   platform time slot, sized from what recently filled. For the 4 open Silver or Gold tournaments it could join whose
   deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by rating and starting eleven). It
   refuses a schedule that would wear the squad out, counting the largest group a Groups + Knockout can draw, judged on the condition the squad will have at the start (rested
-  until then, less what its other tournaments cost before it). When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. A private tournament pays a higher platform fee out of its prize pool, shared by every team in it, so the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
+  until then, less what its other tournaments cost before it). When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. Once FoxLeague charges a private tournament a higher platform fee out of its prize pool (its prize split says so), shared by every team in it, the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
   level may create a private tournament, inviting the teams it chooses, and joins one your team is invited to when it
   is worth it (only your team's own FoxLeague login sees the invitation).
 - **Champions FoxLeague (League + Knockout)**: FoxLeague invites the top of its leaderboard; the agent accepts an
@@ -96,8 +96,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Common packs**: 5 Common cards, the spare cards the first fusion needs.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen.
-- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price, lists spare cards above the
-  floor. It judges each card on its own, whoever sells it or bids on it, another of your agents included.
+- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price, lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included.
 
 ## Getting started by itself
 
