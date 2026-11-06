@@ -64,7 +64,7 @@ test('the create sends the range to FoxLeague; the executor reads the best XI OV
 
 test('the plan knows it may set a range on what it creates, and a refusal names the range', () => {
   assert.match(SYSTEM_PROMPT, /"ovr_min":N,"ovr_max":N/)
-  assert.match(SYSTEM_PROMPT, /take an OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
+  assert.match(SYSTEM_PROMPT, /An open tournament or an open challenge takes an OVR range \(whole numbers 1 to 100\): only teams whose best XI OVR is inside may join; it must hold your own best XI OVR/)
 })
 
 test('the manual describes creating with an OVR range', async () => {
