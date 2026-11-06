@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at e4e8d99d3 2026-11-05.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at c355e04b3 2026-11-06.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -48,7 +48,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Tournament prize split** | Winner 45, runner-up 30, third 15, platform fee 10 percent of the pool | How a paid pool (Silver, Gold, a paid Bronze) is paid out | The pool is the seat fee times the teams that joined. Without a third-place finisher the 15 percent goes to the runner-up. Champions FoxLeague always plays its 3rd place match. No organizer share: an organizer-only host pays no seat and earns nothing from the pool | None |
 | **Prize from FoxLeague** | An amount the FoxLeague team sets per Champions FoxLeague edition (Silver or Gold only) | Paid on top of the entry pool to the top 24 by how far they got: 4 shares to each quarter-finalist, 2 to each round-of-16 loser, 1 to each play-off loser (56 shares: 57.1, 28.6 and 14.3 percent) | Set at the create or added while registration is open. Deposited into the tournaments contract by the contract owner or a sponsor wallet the owner approved, before the edition starts. Paid by the contract after the edition completed and its entry pool was paid. No platform fee and no royalty. A cancelled edition returns it to the depositor; so does the owner for a prize still unpaid 30 days after the completion. See [Champions FoxLeague](/mechanics/champions-foxleague/#prizes) | None |
 | **1v1 challenge** | Silver 1,000 to 4,999 or Gold 5,000 and up per side; winner 90 percent, platform 10 percent | A one-match stake against one opponent | Both sides pay the same fee. The loser gets nothing. One open or running challenge per wallet. Paid out about 180 seconds after the broadcast ends. Unaccepted challenges refund in full at the deadline | None |
-| **Calendar deposit** | 25 FOXSY per scheduled game, from Monday 9 November 2026, 14:00 UTC | Paid by the organizer of a tournament that books the calendar, in one payment before it is created | Back in full after the last game or on a delete within the first hour from its creation (no free hour at a time slot you freed that way in the last 24 hours). Kept on a later delete or when the tournament cannot start: fewer teams than its minimum by the deadline. Developer tournaments plus 1v1 challenges pay none | Not for sale |
+| **Calendar deposit** | 25 FOXSY per scheduled game, from Monday 9 November 2026, 14:00 UTC | Paid by the organizer of a tournament that books the calendar, in one payment before it is created | Back in full after the last game or on a delete within the first hour from its creation (no free hour at a time slot you freed that way in the last 24 hours). Kept on a later delete or when the tournament cannot start: fewer teams than its minimum by the deadline. Back in full when it cannot start after the chain confirmed it late, less than an hour before its deadline. Developer tournaments plus 1v1 challenges pay none | Not for sale |
 | **Private tournament platform fee** | 20% of the pool instead of 10%, on a tournament with an invite list created from Monday 9 November 2026, 14:00 UTC | Taken from the pool: the prizes are 40%, 25% and 15% | The whole pool comes back if the tournament is cancelled | Not for sale |
 | **Tournaments you can run** | 1 active as a player plus 1 active as organizer-only | Creation cap | Complete or cancel before creating another. Admins are uncapped as organizers | Not for sale |
 | **Sync fee** | 10 FOXSY per player | Writes trained stats to the chain so they count in matches | Sync All shows the total before you sign. Required before fusing or listing a player. Not required to play | None |
@@ -295,7 +295,7 @@ See also [Tournaments](/mechanics/tournaments/), [Match-Day Strategy](/mechanics
 
 ## Who organizes it
 
-The FoxLeague team creates every edition. Players cannot create one. The first edition has not been created yet. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on. There and in **My Tournaments** it has a card of its own: a night-blue card with a gold edge and the fox head drawn as stars, showing the edition's phase, its 36 seats, the entry fee and the next key date.
+The FoxLeague team creates every edition. Players cannot create one. An edition shows in **Tournaments → Browse** while registration is open, with the format **Champions FoxLeague**. It always stays in the list when **Public only** is on. There and in **My Tournaments** it has a card of its own: a night-blue card with a gold edge and the fox head drawn as stars, showing the edition's phase, its 36 seats, the entry fee and the next key date.
 
 For each edition the FoxLeague team sets:
 
@@ -340,7 +340,7 @@ When wave 2 or wave 3 starts, every invitation still unanswered expires and its 
 - You are told in the bell (and by push, if you turned it on). A banner in the app shows the invitation and the time to accept it by.
 - **Accept** is the join. On a Silver or Gold edition you pay the entry fee as you accept. There Accept opens once your wallet is on the contract's invite list: within a minute of the invitation.
 - **Decline** closes your invitation for good. Its seat goes to the next wave.
-- You can **leave** after accepting until wave 3 starts. A paid entry is refunded on chain. From the start of wave 3 your seat is locked in.
+- You can **leave** after accepting until wave 3 starts. A paid entry is refunded on chain. From the start of wave 3 your seat is locked in. From Monday 9 November 2026, 14:00 UTC a full edition locks every seat at once: once all 36 seats are taken you cannot leave, even before wave 3.
 - The tournament page lists every invitation by wave and the frozen leaderboard, with the reason a team could not be invited.
 
 > **Not full at the deadline**
@@ -758,7 +758,7 @@ Like a player you saw in another team's squad (on the Leaderboard or in a tourna
 
 The owner sees your team name, your coach name, your offer, the time and your Telegram username when you share it. Nobody else sees any of it.
 
-**Limits:** you can show interest in **5 players a day** (UTC) and in the **same player once every 7 days**. You cannot show interest in your own players or in a player already on the market (buy it there). A visitor without a wallet sees **Connect to show interest**.
+**Limits:** you can show interest in **5 players a day** (UTC) and in the **same player once every 7 days**. You cannot show interest in your own players or in a player already on the market (buy it there). A visitor without a wallet (Scout first) does not see it.
 
 **As the owner** you get **one notification per player per day**, however many managers ask. The first one arrives with a push; every later one that day updates the same notification (for example "5 managers are interested in Maximiliano Romero. Best offer 15,000 FOXSY.") and puts it back on top as unread, without a second push. The next day starts a new one. Open it to see every manager with their offer. It carries two buttons:
 
@@ -1155,7 +1155,7 @@ There's no separate Hall of Fame for 1v1. They're tracked alongside regular rank
 
 ## What it is
 
-Once the broadcast of a tournament match has ended, FoxLeague writes a small record of it to **Autonomys Auto Drive**, a permanent public storage network. Every tournament format counts, 1v1 challenges included. The match page then shows a **Permanent record on Autonomys** link.
+Once the broadcast of a tournament match has ended, FoxLeague writes a small record of it to **Autonomys Auto Drive**, a permanent public storage network. Every tournament format counts, 1v1 challenges included. Private (invite-only) tournaments count too: only the invited teams can join one, but its results are public. Ranked and casual games get no record, nor do developer tournaments and challenges. The match page then shows a **Permanent record on Autonomys** link.
 
 ## What a record holds
 
@@ -1170,7 +1170,7 @@ A record is one small JSON file (about 1 KB):
 - `replay`: the match page, the download address of the replay file (`.rcg`), the file's size in bytes and its SHA-256 fingerprint
 - `recorded_at`: when the record was made
 
-Public game data only: no wallet address, no e-mail, no Telegram name. A team is named the way its match page names it.
+Public game data only: no wallet address, no coach name, no e-mail address, no Telegram user id or username, no IP address. The replay itself is not uploaded, only its size and its fingerprint. A team is named the way its match page names it when the record is made: a later rename does not change a record already written. The [Privacy Policy](/legal/privacy/) (section 12) says the same.
 
 ## When it is written
 
@@ -1195,7 +1195,7 @@ The FoxLeague MCP's tournament detail (`get_tournament`) gives each finished mat
 # Shop
 (docs.foxleague.ai/mechanics/shop/)
 
-The **Shop** sells one pack of players plus four consumables for FOXSY. The **Common pack** delivers 5 Common player NFTs to your wallet (see below). The consumables are instant condition recovery for tired players, an XP booster that doubles training and eligible match gains, extra training slots for days you want to grind and a cooldown waiver for players you received by direct transfer. Two more items, the **fusion cooldown waiver** and the **fusion match waiver**, show up in the Shop with their live price; they are bought per card from the Fusion tab (see [Fusion](/mechanics/fusion/)). Team badge re-rolls are sold from the **Settings** page rather than the Shop tab. They use the same FOXSY payment flow, so they are listed below for reference. So does the **ranked ticket** (100 FOXSY, from Monday 9 November 2026, 14:00 UTC), paid from **Play Match** when you start a ranked game without one (see [Match Types](/mechanics/matches/#ranked)).
+The **Shop** sells one pack of players plus four consumables for FOXSY. The **Common pack** delivers 5 Common player NFTs to your wallet (see below). The consumables are instant condition recovery for tired players, an XP booster that doubles training and eligible match gains, extra training slots for days you want to grind and a cooldown waiver for players you received by direct transfer. Two more items, the **fusion cooldown waiver** and the **fusion match waiver**, show up in the Shop with their live price; they are bought per card from the Fusion tab (see [Fusion](/mechanics/fusion/)). Team badge re-rolls are sold from the **Settings** page rather than the Shop tab. They use the same FOXSY payment flow, so they are listed below for reference. So does the **ranked ticket** (25 FOXSY, from Monday 9 November 2026, 14:00 UTC), paid from **Play Match** when you start a ranked game without one (see [Match Types](/mechanics/matches/#ranked)).
 
 The pack is the only item that adds cards to your roster. Everything else is a one-shot consumable. No permanent upgrades, no trading and all accept on-chain FOXSY payment.
 
@@ -1491,7 +1491,7 @@ Level does not change in-match performance. Condition does: every stat of a star
 
 The widget on **PlayMatch** shows ready / owned players, where **ready** means the player's condition is at or above the match floor (currently **30**). It's a health check, not the kickoff gate. To kick off you need a saved lineup of 11 starters + 7 substitutes, at least **18 unlisted players** in your wallet, no starter at 0 condition and none of the 18 (starters or bench) in a transfer cooldown or listed for sale.
 
-Save a lineup with fewer than 7 substitutes and the bench is completed for you **position for position**: 1 goalkeeper plus 6 outfield players split like the lines of your formation (4-3-3: 2 DEF, 2 MID, 2 FWD; 4-4-2: 2 DEF, 3 MID, 1 FWD; 5-3-2: 3 DEF, 2 MID, 1 FWD). The substitutes you picked stay and count toward their line. Each line takes your strongest eligible cards; a line without enough cards gives its places to your strongest remaining ones. During a match the coach can bring a substitute on for a tired player. Today it picks from the whole bench, whatever the line: a forward can come on in a defender's shirt. A rule that brings on only a substitute of the tired player's own line is built but not switched on yet.
+Save a lineup with fewer than 7 substitutes and the bench is completed for you **position for position**: 1 goalkeeper plus 6 outfield players split like the lines of your formation (4-3-3: 2 DEF, 2 MID, 2 FWD; 4-4-2: 2 DEF, 3 MID, 1 FWD; 5-3-2: 3 DEF, 2 MID, 1 FWD). The substitutes you picked stay and count toward their line. Each line takes your strongest eligible cards; a line without enough cards gives its places to your strongest remaining ones. During a match the coach brings a substitute on for a tired player, position for position. Only a bench card of the tired player's own line comes on (a keeper only for a keeper). With no bench card of that line left, the player stays on. Substitutions open from the middle of the second half.
 
 While one of your 18 is listed for sale, **KICK OFF** stays disabled and the line under it reads **1 player is listed for sale: cancel the listing or swap it out** (with two of them: **2 players are listed for sale: cancel the listing or swap them out**). Below it, **My Listings** opens your listings to cancel one; **Open Tactics** lets you swap the player for a reserve.
 
@@ -1678,13 +1678,14 @@ Developer tournaments and 1v1 challenges pay none.
 | You delete it within the first hour after creating it | Comes back in full |
 | You delete it after the first hour from its creation | **Kept** |
 | Fewer teams than the minimum join by the registration deadline, so it cannot start | **Kept** |
+| The chain confirmed it late, so it opened less than an hour before its registration deadline. Then too few teams join | Comes back in full |
 | Enough teams join but their number does not fit the format | Comes back in full |
 | It is played to the end | Comes back in full |
 | The FoxLeague team cancels it | Comes back in full |
 
 **A private tournament has a higher platform fee.** A tournament with an invite list created from the same moment keeps 20% of the pool instead of 10%. Its prizes are 40%, 25% and 15%, so the teams share the cost. The event page shows the split before you join.
 
-The first hour starts when the tournament exists: if your wallet signs its entry and the payment together, it starts when that transaction is confirmed. The free hour is not there to hold a slot for nothing: if you deleted a tournament inside its first hour in the last 24 hours and create another in an overlapping time slot, the new one has no free hour. The form says so before you sign.
+The first hour starts when the tournament exists: if your wallet signs its entry and the payment together, it starts when that transaction is confirmed. If the chain confirms your create late, it starts when the tournament opens. The free hour is not there to hold a slot for nothing: if you deleted a tournament inside its first hour in the last 24 hours and create another in an overlapping time slot, the new one has no free hour. The form says so before you sign.
 
 Everything that comes back after play comes back in one refund, once the last game has been shown. Nothing moves earlier, so your wallet never tells anyone how a match went before its broadcast. A refund that cannot be sent right away stays queued and is retried.
 
@@ -1710,7 +1711,7 @@ Flip the **Private** toggle to control who can register, then invite specific te
 - Appears in the lobby with a **Private** badge. You plus the teams you invited always see it; any other team sees it once it unticks **Public only**, which is on by default.
 - Can only be joined by the teams you invited. Everyone else sees a locked **Invite Only** button.
 - Tells every team you invited. Each one gets a **You're invited** notification in the bell (and a push notification if they turned push on) once the tournament is open.
-- Earns no XP, no ELO and no competitive match for now when it is a Bronze tournament, even a paid one (from Monday 9 November 2026, when public paid Bronze tournaments start to earn).
+- A paid private Bronze (created from Monday 9 November 2026, 14:00 UTC) earns like a public one: XP at half of the Gold rate, ELO with K = 9 and competitive matches, unless FoxLeague switches that off (then it earns nothing). A free private Bronze earns nothing.
 - Needs enough capacity to reach the minimum. Capacity is the invited teams plus yourself (only the invited teams if you host as organizer-only). If that falls short of the minimum you cannot create it until you invite more teams or lower the minimum.
 
 ![A private tournament in the lobby, marked with a PRIVATE badge next to its title](/screenshots/tournament-private-badge.png)
@@ -1750,7 +1751,7 @@ Not enough teams? While registration is open (before the registration deadline),
 
 ### Deleting your tournament
 
-While your tournament is still open for registration, its page shows **Delete Tournament** to you as its creator, at the bottom of the page. Once it has started or finished it cannot be deleted. On a paid tournament (Silver, Gold or a paid Bronze) the delete first refunds the entry fee of every team that paid one, on chain. The tournament is removed only once its contract entry is closed and FoxLeague's records show every entry fee returned; until then it stays cancelled.
+While your tournament is still open for registration, its page shows **Delete Tournament** to you as its creator, at the bottom of the page. Once it has started or finished it cannot be deleted. **From Monday 9 November 2026, 14:00 UTC** a tournament that reached its minimum number of teams is played: you can no longer delete it, at the minimum or above it. Its page says so in place of the button. Only the FoxLeague team can still cancel it. Below its minimum you can delete it as before. On a paid tournament (Silver, Gold or a paid Bronze) the delete first refunds the entry fee of every team that paid one, on chain. The tournament is removed only once its contract entry is closed and FoxLeague's records show every entry fee returned; until then it stays cancelled.
 
 Once the [organizer amounts](#what-it-costs-to-organize) are in force, the delete dialog says what happens to your calendar deposit before you confirm, with the amount and the time your free cancellation ends. If that time passes while the dialog is open, it asks you again. After the delete, the page says what was decided.
 
@@ -1895,7 +1896,7 @@ A free Bronze tournament (every Bronze one created before Monday 9 November 2026
 
 - **Plan for the whole run**. You must field a legal 11+7, all owned, at every match's lock or that game is forfeited. Nothing stops you from joining two tournaments that run in the same period, so check both schedules before committing.
 - **Watch the time between games**. Games are sequential, so the total length is roughly the number of games times the interval. A 30-minute interval with a small bracket wraps up in a few hours. A large field or a 1-day interval spans days. It runs longer still when matches are pushed back to keep a team clear of its other tournament.
-- **Check the tier before committing FOXSY**. Entry fees (Silver, Gold and from Monday 9 November 2026 Bronze) leave your wallet the moment you join. Leaving while registration is still open (before the deadline) refunds the fee on-chain. Once the deadline passes you cannot leave. **From 9 November 2026, 14:00 UTC** you can leave freely until a tournament reaches its minimum number of teams. After that you can leave only while more teams than the minimum are in it, so a tournament that reached its minimum is played. Every refund is **exact**, down to the amount the contract holds for your entry. If a tournament is cancelled (or you paid on chain but never took a seat) and the game server cannot push your money back, it stays in the contract. Once the tournament is cancelled or completed you can pull it yourself: the page of a completed tournament shows a **Claim my entry back** button for an entry that never took a seat. You can also call the contract's `claimRefund` endpoint with the tournament id.
+- **Check the tier before committing FOXSY**. Entry fees (Silver, Gold and from Monday 9 November 2026 Bronze) leave your wallet the moment you join. Leaving while registration is still open (before the deadline) refunds the fee on-chain. Once the deadline passes you cannot leave. **From 9 November 2026, 14:00 UTC** you can leave freely until a tournament reaches its minimum number of teams. After that you can leave only while more teams than the minimum are in it, so a tournament that reached its minimum is played. Its organizer cannot delete it then either. Every refund is **exact**, down to the amount the contract holds for your entry. If a tournament is cancelled (or you paid on chain but never took a seat) and the game server cannot push your money back, it stays in the contract. Once the tournament is cancelled or completed you can pull it yourself: the page of a completed tournament shows a **Claim my entry back** button for an entry that never took a seat. You can also call the contract's `claimRefund` endpoint with the tournament id.
 - **Add a third-place match if you can**. Without it the 15% third-place share simply goes to the runner-up; with it a third team gets paid.
 - **Sync before a match's lock, not just before joining**. Each match reads your synced stats at its lock, so train and sync ahead of a game for the improvement to count. Unsynced training does not.
 
@@ -1966,7 +1967,7 @@ Play matches (paid play: XP) ──────────┘
 
 ### XP by shirt
 
-A match scores each player on the role of the shirt he wore in it, not on the card's position. A card starts in a shirt of its own line. When a card wears another role's shirt anyway, for example a bench keeper brought on during the match for a field player or an outfielder sent in goal because no fit keeper was left, it is scored on that shirt: a keeper card in an outfield shirt as a field player, a midfielder card in goal as a keeper.
+A match scores each player on the role of the shirt he wore in it, not on the card's position. A card starts in a shirt of its own line. Before a tournament or 1v1 match an auto-sub can still put a card in another line's shirt when no fit substitute of that line is left: a midfielder in for an unfit defender, an outfielder in goal for an unfit keeper (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). That card is scored on the shirt it wore: the midfielder as a defender, the outfielder as a keeper. During the match the coach brings on only a substitute of the tired player's own line (see [Tactics](/mechanics/tactics/)).
 
 | Shirt | The actions that earn XP |
 |-------|--------------------------|
