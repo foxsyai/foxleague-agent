@@ -27,8 +27,8 @@ test('the plan sees each rival\'s best XI OVR, and how many teams the suggested 
   ] as never
   s.market.boardOvrs = { all: [30.2, 44.9, 33, 28, 36], takers: [30.2, 44.9] }
   const text = renderDigest(s)
-  assert.match(text, /Near \(user 50\) 1190, accepted 2 1v1 in 7 days, best XI OVR 30\.2/)
-  assert.match(text, /a range about 10 percent either way for what you create: ovr_min 28, ovr_max 35 \(inside it: 3 of the 5 leaderboard teams read, 1 of the 2 that accepted a 1v1 in 7 days\)/)
+  assert.match(text, /Near \(user 50\) 1190, took 2 1v1 in 7 days it had not arranged, best XI OVR 30\.2/)
+  assert.match(text, /a range about 10 percent either way for what you create: ovr_min 28, ovr_max 35 \(inside it: 3 of the 5 leaderboard teams read, 1 of the 2 that took a 1v1 in 7 days they had not arranged\)/)
 })
 
 test('the snapshot keeps each leaderboard team\'s best XI OVR', async () => {

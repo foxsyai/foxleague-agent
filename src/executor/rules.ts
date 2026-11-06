@@ -33,8 +33,6 @@ export interface RulesContext {
   /** Last match starts recorded by this agent (the cooldowns are not public). */
   lastMatchStartAt?: Date | null
   lastRankedStartAt?: Date | null
-  /** Casual games this agent started in the current game day (its own log). */
-  casualToday?: number
   /** Escrow the tournaments contract holds for this wallet (view getEntryAmount), for refund claims. */
   entryAmount?: bigint
   /** Fusion pre-check (GET /api/fusion/can-fuse) and the pool stock of the output, fetched for fuse. */
@@ -68,8 +66,6 @@ export interface RulesContext {
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
-  /** Open 1v1 challenges this agent created in the last 24 hours. */
-  openChallengesToday?: number
   /**
    * The action is one piece of a larger one (see src/extensions.ts). A match waiver piece may buy part of what is
    * missing; the first piece checks the whole group (exactly the missing matches, within the max shop payment).
@@ -251,11 +247,6 @@ export const MAX_1V1_ELO_GAP = 100
 /** A 1v1 is refused when the rival's lineup (at full condition) is more than this much stronger than ours today. */
 export const MAX_1V1_STRENGTH_RATIO = 1.1
 export const MAX_1V1_PER_OPPONENT_WEEK = 2
-/**
- * Open 1v1 challenges (anyone may take them, a stronger team too): Silver only, at the owner's lowest Silver
- * amount, at most this many in 24 hours. They get games played when no targeted opponent answers.
- */
-export const MAX_OPEN_1V1_PER_DAY = 1
 export const MAX_BIDS_PER_AUCTION = 2
 
 /**
@@ -432,9 +423,6 @@ function regenPerHour(p: PlayerView, cfg: FoxConfig): number {
   const rate = (cfg.condition_regen_points_per_day ?? 48) / 24
   return p.ageYears > 30 ? rate / 2 : rate
 }
-
-/** Casual games a game day: the owner's 1 to 3 tests a day, never more than 4 (2026-11-04). */
-export const CASUAL_PER_DAY = 4
 
 /** The condition an appearance costs a card: FoxLeague's base until age 30, rising evenly to 3 times it at 39 (Player Aging). */
 export function appearanceCost(p: PlayerView, base: number): number {
@@ -882,13 +870,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const exhausted = (a.match_type === 'casual' && a.test ? a.test.lineup : s.team.lineup).filter(n => (card(s, n)?.condition ?? 0) <= 0)
       if (exhausted.length) return refuse(`starters at condition 0: ${exhausted.map(n => `#${n}`).join(',')}`)
       if (a.match_type === 'casual') {
-        // The casual test bench (owner, 2026-11-04): an eleven that fits its formation, at most 4 a day, and only when
-        // the condition it costs is back before the next match that counts.
+        // The casual test bench (owner, 2026-11-04): an eleven that fits its formation, and only when the condition it
+        // costs is back before the next match that counts. No count of its own: casual and ranked share FoxLeague's
+        // daily starts (owner, 2026-11-06, OP-7).
         if (a.test) {
           const fit = lineupVerdict(s, a.test.formation, a.test.lineup, a.test.substitutes, cfg.min_field_condition)
           if (!fit.ok) return fit
         }
-        if ((ctx.casualToday ?? 0) >= CASUAL_PER_DAY) return refuse(`${ctx.casualToday} casual games today already: ${CASUAL_PER_DAY} is the most a game day`)
         const cost = casualCostRefusal(s, a.test ? [...a.test.lineup, ...a.test.substitutes] : [...s.team.lineup, ...s.team.substitutes], ctx.now)
         if (cost) return refuse(cost)
       }
@@ -1043,6 +1031,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (next.min === cur.min && next.max === cur.max) return refuse(`the range is already ${rangeWords(cur.min ?? undefined, cur.max ?? undefined)}: nothing to change`)
       if ((cur.min === null && next.min !== null) || (cur.max === null && next.max !== null)) return refuse('never a new bound where there was none: widening only lowers a minimum or raises a maximum')
       if ((cur.min !== null && next.min !== null && next.min > cur.min) || (cur.max !== null && next.max !== null && next.max < cur.max)) return refuse('wider only: a lower minimum or a higher maximum')
+      // The top of a 1v1's range is what keeps a stronger team out of an open challenge (OP-4): never raised or removed (OP-5).
+      if (t.max_teams === 2 && next.max !== cur.max) return refuse(`the top of a 1v1's range stays at ${cur.max ?? 'none'}: a higher one lets a stronger team take it; lower the minimum, or let it expire and create another`)
       return allow(0, { min: next.min, max: next.max }, 'play', ['more teams can join; nobody seated is measured again'])
     }
 
@@ -1050,8 +1040,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!registered || !s.profile) return refuse('not registered')
       if (a.tier === 'bronze' && !levelsLive(cfg, ctx.now)) return refuse('a Bronze tournament earns nothing until the competition levels are live: none is created before them')
       const invites = a.invite_user_ids ?? []
+      // Private at every level (owner, 2026-11-06, OP-6).
       if (a.invite_user_ids?.length) {
-        if (!ctx.zeus) return refuse('only the Zeus level creates private tournaments')
         if (a.tier === 'bronze' && !paidBronzeEarns(cfg, ctx.now, true)) return refuse('a private Bronze earns nothing while FoxLeague keeps private_bronze_earns off: create it public or at Silver')
         if (invites.includes(s.profile.id)) return refuse('cannot invite yourself')
         if (invites.length > a.max_teams - 1) return refuse(`at most ${a.max_teams - 1} invited teams for ${a.max_teams} seats`)
@@ -1119,11 +1109,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const challengeRange = createRangeRefusal(a, ctx)
       if (challengeRange) return refuse(challengeRange)
       if (a.target_user_id === null) {
-        if (ctx.zeus) return refuse('Zeus plays a 1v1 only against a named team with a known win chance: challenge one of the teams listed')
-        // Open: the strength of whoever takes it cannot be checked, so the stake is the smallest the owner allows.
-        const lowest = Math.min(...ctx.settings.entryFeesSilver)
-        if (a.tier !== 'silver' || a.stake_foxsy !== lowest) return refuse(`an open challenge is Silver at your lowest amount (${lowest} FOXSY): anyone may take it, a stronger team too`)
-        if ((ctx.openChallengesToday ?? 0) >= MAX_OPEN_1V1_PER_DAY) return refuse(`already ${MAX_OPEN_1V1_PER_DAY} open challenge in the last 24 hours`)
+        // Open, at every level and any configured stake (owner, 2026-11-06, OP-2/OP-3): whoever takes it cannot be read
+        // before, so FoxLeague's own range check keeps every stronger team out: its top is the team's best XI OVR,
+        // rounded up so the creator fits its own range (OP-4; the farming guard of A2 for a rival nobody chose).
+        // createRangeRefusal above has read that OVR and checked the range holds it.
+        if (a.ovr_max === undefined) return refuse('an open challenge needs an OVR range up to your best XI OVR (ovr_max, the snapshot gives it): FoxLeague then keeps every stronger team out')
+        const top = Math.ceil(ctx.bestXiOvr!)
+        if (a.ovr_max > top) return refuse(`an open challenge takes ovr_max ${top} at most (your best XI OVR ${ctx.bestXiOvr}, rounded up): a higher top lets a stronger team take it`)
       } else {
         if (a.target_user_id === s.profile.id) return refuse('cannot challenge yourself')
         const opp = oneVOneOpponentRefusal(s, ctx)

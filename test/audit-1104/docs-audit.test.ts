@@ -73,12 +73,12 @@ test('DOCS-5 the economy notes (11) still call a Groups + Knockout "full" while 
   assert.match(row, /min_teams from 6|from 6 teams|6 or more/, 'the row does not give the flexible minimum')
 })
 
-test('DOCS-6 (predates the window) the prompt invites an open challenge that the executor refuses at the Zeus level', async () => {
-  const m = setup()
+test('DOCS-6 (predates the window) the prompt and the executor agree on the open challenge at the Zeus level', async () => {
+  // Since 2026-11-06 (OP-2, OP-4) every level may post one, with its range topped at its own best XI OVR.
+  const m = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 31.4 }) } })
   m.store.updateSettings(0, { ...TEST_SETTINGS, strategy: STRATEGY_PRESETS.zeus! })
-  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 }, reason: '' }])
-  assert.equal(r!.status, 'refused', r!.summary)
-  assert.match(r!.summary, /Zeus plays a 1v1 only against a named team/)
-  assert.match(SYSTEM_PROMPT, /Create an open challenge \(target_user_id null, Silver, your lowest amount\) only when no such opponent fits/)
-  assert.match(SYSTEM_PROMPT, /Zeus[^.\n]*open challenge|open challenge[^.\n]*Zeus/, 'the prompt never says Zeus may not create one (the site does: how-it-plays)')
+  const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 }, reason: '' }])
+  assert.equal(r!.status, 'dry_run', r!.summary)
+  assert.match(SYSTEM_PROMPT, /An open challenge \(target_user_id null\) can be taken by any team inside its OVR range/)
+  assert.doesNotMatch(SYSTEM_PROMPT, /Zeus[^.\n]*open challenge|open challenge[^.\n]*Zeus/, 'no level is kept from it')
 })

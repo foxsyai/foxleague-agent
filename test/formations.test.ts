@@ -137,7 +137,9 @@ test('no match, entry or 1v1 while the saved eleven does not fit the saved forma
   const [join] = await t.exec.run(t.agent(), dryWallet, s, [{ action: { type: 'join_tournament', tournament_id: 7 }, reason: '' }])
   assert.equal(join!.status, 'refused', join!.summary)
   assert.match(join!.summary, /does not fit the formation 4-3-3/)
-  const [duel] = await exec.run(agent(), dryWallet, s, [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60 }, reason: '' }])
+  // An open challenge carries its range topped at the team's best XI OVR (OP-4), so only the eleven can refuse it here.
+  const o = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 31.4 }) } })
+  const [duel] = await o.exec.run(o.agent(), dryWallet, s, [{ action: { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 }, reason: '' }])
   assert.equal(duel!.status, 'refused', duel!.summary)
   assert.match(duel!.summary, /does not fit the formation 4-3-3/)
 })

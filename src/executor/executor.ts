@@ -26,7 +26,7 @@ import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budg
 import { SHOP_FINAL, SHOP_REFUNDED, creditShopPayment } from './pending.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
-import { casualStartsSince, gameDayStart, lastMatchStarts } from './match-starts.ts'
+import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -379,12 +379,6 @@ export class Executor {
       // The count the plan request shows too (src/executor/rivals.ts): this agent's 1v1s against the rival this week.
       market.oneVOneWithOpponentThisWeek = oneVOnesThisWeek(store, agent.index, dry, now).get(opponentId)?.length ?? 0
     }
-    if (a.type === 'create_challenge' && a.target_user_id === null) {
-      market.openChallengesToday = store
-        .activityOf(agent.index, ['create_challenge'], since(24 * 3_600_000))
-        // On the safe side: a create that failed or errored may still have left a challenge on FoxLeague (an untouched one did not).
-        .filter(r => (counted(r.status) || r.status === 'failed' || (r.status === 'error' && !detailOf(r).untouched)) && (detailOf(r).action as { target_user_id?: number | null } | undefined)?.target_user_id === null).length
-    }
     if (a.type === 'join_tournament') market.pendingJoin = store.pending(agent.index).some(p => p.kind === 'join' && (p.payload as { tournamentId?: number }).tournamentId === a.tournament_id)
     if (a.type === 'play_match' && a.match_type === 'ranked' && levelsLive(snap.config, now)) {
       market.rankedTicket = await soft(() => fox.rankedTicket(wallet))
@@ -509,7 +503,6 @@ export class Executor {
       ...market,
       lastMatchStartAt: starts.match,
       lastRankedStartAt: starts.ranked,
-      casualToday: casualStartsSince(store, agent.index, gameDayStart(now, snap.gameDay.resetHourUtc)),
       now,
     }
   }

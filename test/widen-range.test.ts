@@ -31,7 +31,7 @@ test('widen_range takes the tournament and a new bound for either side (a whole 
 test('the agent widens only its own open tournament or challenge, only wider, as FoxLeague does', () => {
   const s = snapshot()
   assert.equal(checkAction(widen({ ovr_min: 25 }), s, ctx(mine())).ok, true, checkAction(widen({ ovr_min: 25 }), s, ctx(mine())).refusal)
-  assert.equal(checkAction(widen({ ovr_max: null }), s, ctx(mine())).ok, true, 'removing a bound is wider')
+  assert.equal(checkAction(widen({ ovr_max: null }), s, ctx(mine({ max_teams: 8 }))).ok, true, 'removing a bound is wider (a tournament: the top of a 1v1 stays, OP-5)')
   assert.match(checkAction(widen({ ovr_min: 25 }), s, ctx(mine({ creator_user_id: 4242 }))).refusal!, /only the creator of T900 can change its OVR range/)
   assert.match(checkAction(widen({ ovr_min: 25 }), s, ctx(mine({ status: 'active' }))).refusal!, /only while T900 is open for joining/)
   assert.match(checkAction(widen({ ovr_min: 25 }), s, ctx(mine({ deadline: new Date(Date.now() - 60_000).toISOString() }))).refusal!, /only while T900 is open for joining/)
@@ -46,7 +46,8 @@ test('the agent widens only its own open tournament or challenge, only wider, as
 
 test('the executor widens through FoxLeague, sends only the sides given, and only in live mode', async () => {
   const sent: Record<string, unknown>[] = []
-  const fox = { tournament: async () => mine(), widenOvrRange: async (_w: unknown, id: number, body: Record<string, unknown>) => { sent.push({ id, ...body }); return { ovr_min: 25, ovr_max: null } } }
+  // A tournament: the top of a 1v1's range is never removed (OP-5).
+  const fox = { tournament: async () => mine({ max_teams: 8 }), widenOvrRange: async (_w: unknown, id: number, body: Record<string, unknown>) => { sent.push({ id, ...body }); return { ovr_min: 25, ovr_max: null } } }
   const dry = setup({ fox })
   created(dry.store)
   const [d] = await dry.exec.run(dry.agent(), dryWallet, snapshot(), [{ action: widen({ ovr_min: 25 }), reason: '' }])
@@ -96,7 +97,7 @@ test('R38A-1 the agent widens only what it created itself, never a range the own
   }
   const m = setup({ fox })
   await withLive(m.store, async () => {
-    const [c] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 35 }), reason: '' }])
+    const [c] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ovr_min: 28, ovr_max: 32 }), reason: '' }])
     assert.equal(c!.status, 'confirmed', c!.summary)
     assert.deepEqual([...ownCreations(m.store, 0, new Date())], [900])
     const [w] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: widen({ ovr_min: 25 }), reason: '' }])
