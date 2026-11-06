@@ -1268,3 +1268,35 @@ Stays open, with the reason each stays:
   it can never reach 55 percent (that team is at least as strong as ours by OVR), so the floor would forbid what the owner
   asked for (Zeus posts open challenges, 2026-11-06); the strength test of R54A-1 holds it to A2's 10 percent instead.
 - The player interest signal (FoxLeague rc.85, switched off) has no action yet.
+
+## One brain for every level (owner, 2026-11-06)
+
+The owner asked that every level play with Zeus's intelligence and differ only in money, like subscription tiers.
+What was Zeus's code now holds at every level, every level reads the same strategy core, and the levels differ in
+their caps, their largest payments, their bid limits, three new counts and how often they plan. Each change has a test
+in `test/one-brain.test.ts`; the file could not load on `main` (`a7f2757`: the new exports were missing), and each test
+asserts what the code there did not do.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| OB-1 | design | Only Zeus was held to a 55 percent win chance on a 1v1 against a known team; the other levels could stake on a 41 percent match | Every level. |
+| OB-2 | design | Only Zeus read a tournament's seated field and stayed out of one with three clearly stronger teams (and a Champions FoxLeague with 24) | Every level's join reads the field; unread refuses. |
+| OB-3 | design | Only Zeus bought the XP booster only once a competitive match of its own was drawn within its 24 hours | Every level. |
+| OB-4 | design | Only Zeus's plans carried the win chance of each team on the challenge list | Every level's snapshot reads them (up to 10 rival reads a plan, cached 20 minutes). |
+| OB-5 | design | Paid training had no count of its own (the level text said how many) | `paidTrainingPerDay` (0 to 10): a paid session over it is refused, and a slot purchase counts those used today and those banked. An unreadable training status refuses. |
+| OB-6 | design | XP boosters had no count of their own | `boostersPerWeek` (0 to 7), from the agent's own purchases of the last 7 days (sent or answer-lost ones count, refunded ones do not); 0 refuses. |
+| OB-7 | design | Common packs had no count of their own beyond FoxLeague's 2 a week | `packsPerWeek` (0 to 2), counted the same way. |
+| OB-8 | design | New settings would have read the steady defaults for every agent saved before them, lowering the live agents' limits without the owner | A row without the counts reads FoxLeague's maximum (10, 7, 2); a new agent stores the steady level's. Raising a count asks for the password (`raisesLimit`, the dashboard's list). |
+| OB-9 | design | Six different texts, some forbidding what a level could afford | One strategy core (Zeus's, within the level's limits) for every level; one recommended AI; the new defaults: steady bids up to 500, climber 1,500, hunter 7,000, predator 14,000 at a $50 daily cap; the largest shop payment 2,000 at climber (the booster), 9,000 at beast and Zeus (an Epic's match waivers); ticks 120, 120, 90, 90, 75, 60. |
+
+The executor no longer reads the strategy text to decide anything (rule 2 of AGENTS.md): the Zeus check by text is gone.
+Older tests that ran as a non-Zeus agent now meet these rules; they were changed to keep testing their own rule (a
+rival 10 percent weaker by default, a fixture of its own for a booster, a seated field read for a join), not to drop a
+check.
+
+Stays open, with the reason each stays:
+- The ten live agents keep their saved Zeus text and limits until the owner picks a level again; their counts read
+  FoxLeague's maximum, so nothing changes for them except that the rules they already had now hold everywhere. The
+  higher largest shop payment of Zeus (9,000, was 5,000) reaches a live agent only through the level proposal and the
+  owner's password.
+- Every agent now reads up to 10 rivals' squads a plan, as Zeus did: more FoxLeague reads per install.

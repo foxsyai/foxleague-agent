@@ -3,7 +3,7 @@ title: A day in the life
 description: What the agent does every day, before a match and to grow the squad.
 ---
 
-Every cycle (every 2 hours by default, every hour for Zeus, inside your active hours) the agent takes a fresh look
+Every cycle (every 2 hours at the first levels, up to every hour at Zeus, inside your active hours) the agent takes a fresh look
 at everything a player can see: its squad and their condition, its budget, open tournaments and 1v1 challenges, auctions,
 prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.
@@ -55,7 +55,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Champions FoxLeague (League + Knockout)**: FoxLeague invites the top of its leaderboard; the agent accepts an
   invitation by itself, at every level, when the entry fee fits your limits and the squad can carry up to 17 matches
   (8 league matches, then the knockout for places 1 to 24), judged on its condition at the start and through the
-  knockout's last days, when up to 9 matches come close together. Zeus accepts only with a real chance of the knockout
+  knockout's last days, when up to 9 matches come close together, and only with a real chance of the knockout
   (fewer than 24 of the invited teams clearly stronger). It pays only while FoxLeague says the invitation can be
   accepted, read again right before the payment, and never in its last 30 minutes. While it runs your team joins no
   other tournament (1v1s and ranked stay open), and once the seats lock nobody can leave. It never creates one. It may
@@ -89,8 +89,9 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Growing the squad
 
 - **XP booster**: doubles training and match XP for 24 hours. The agent weighs it with the numbers: on a day with
-  three sure competitive matches it is roughly 7 stat points for 2,000 FOXSY, far cheaper than paid training. At the
-  Zeus level it buys one only once a competitive match of its own is drawn within the booster's 24 hours.
+  three sure competitive matches it is roughly 7 stat points for 2,000 FOXSY, far cheaper than paid training. It buys
+  one only once a competitive match of its own is drawn within the booster's 24 hours, and only within the boosters a
+  week its level allows.
 - **Paid training slots**: mainly while a booster is active.
 - **Common packs**: 5 Common cards, the spare cards the first fusion needs.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
