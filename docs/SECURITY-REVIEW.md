@@ -1304,3 +1304,14 @@ Stays open, with the reason each stays:
   higher largest shop payment of Zeus (9,000, was 5,000) reaches a live agent only through the level proposal and the
   owner's password.
 - Every agent now reads up to 10 rivals' squads a plan, as Zeus did: more FoxLeague reads per install.
+
+## A targeted challenge with an OVR range, seen in production (2026-11-06)
+
+After PR #54 and PR #55 went live, agents 7 and 1 each planned a targeted challenge with an OVR range ("OVR 1 to 100",
+"OVR 1 to 38"). The executor refused both before any payment (only the chosen team can accept a targeted challenge, so
+a range could only lock it out); the challenge was simply not sent. The test in `test/targeted-no-range.test.ts`
+failed on `main` (`4351662`) and passes after the change.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| TR-1 | low | The prompt showed one `create_challenge` form with `"target_user_id":N|null` and the range fields together, and the snapshot offered "a range about 10 percent either way for what you create", so the plan put a range on a targeted challenge | Two forms in the prompt: a challenge to one named team with no range fields ("never ovr_min or ovr_max"), and an open one with them; the snapshot offers the 10 percent range for its own open tournament and says a targeted challenge or a private tournament takes none. The executor's refusal is unchanged. |
