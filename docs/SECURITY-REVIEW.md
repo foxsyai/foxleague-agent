@@ -1389,6 +1389,12 @@ fix. The rules and their sources: `docs/ECONOMY-AND-RULES.md` section 6a, `docs/
 | CI-11, CI-13 | low | The prompt and the game manual copy held none of these rules (the manual's players page, which states the bans and the injuries, was left out with the app walkthroughs) | The prompt states them, with the forfeit penalty and the medicine action; the manual copy takes in the players page and is synced to FoxLeague's `e5e819e03`; the other getting-started pages stay out, each by name. |
 | LIVE-1 | low | A 1v1 stake signed just before the team's busy hour reaches the join after it: refused, refunded, the gas lost. FoxLeague now serves the seconds until that hour (`viewer_tournament_window_opens_in_secs`) | A 1v1 join is refused when it opens within 120 seconds. |
 
+PR #58's review (pass, two lows). R58A-1: LIVE-1 guarded only the join by FoxLeague's own count, which is absent for
+a create and can be null for a join; the agent's own reading of the busy hour (`oneVOneBusy`) used exactly one hour, so
+a stake signed in its last minutes was refused at the join gate (refunded, the gas lost). The same 120 seconds are now
+added to that hour, for the create and the join. R58A-2 (tests only, no change of code): a tournament the agent
+creates is judged at its start, and a final medicine refusal heard by the pending retry stops counting.
+
 Stays open:
 - FoxLeague's fusion refusal and its forfeit penalty are on its release branch, not on its main, on 2026-11-10. The
   agent's own fusion rule does not wait for it. The forfeit penalty's switch is not served in `/api/config`: the prompt

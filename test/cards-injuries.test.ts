@@ -265,3 +265,43 @@ test('CI-14: no bid on a card that would arrive injured for more than 72 hours, 
   assert.equal(r!.status, 'refused', r!.summary)
   assert.match(r!.summary, /#9 is injured until/)
 })
+
+// ---- Agent review of PR #58 (two lows) ----
+
+test('R58A-1: no 1v1 is created or joined when the team\'s busy hour opens within two minutes by its own fixtures', () => {
+  const s = (minutes: number) => {
+    const x = snapshot()
+    const at = new Date(Date.now() + minutes * 60_000).toISOString()
+    x.auth!.myTournaments!.active = [{ ...(tournament(60, { status: 'active', format: 'round_robin' }) as { tournament: object }).tournament }] as never
+    x.auth!.upcoming!.matches = [{ tournament_id: 60, tournament_title: 'T60', round_label: 'Round 1', group_name: null, is_home: true, opponent_name: 'Rival', scheduled_at: at, strategy_locks_at: at, locked: false, phase: 'upcoming', home_score: null, away_score: null }] as never
+    return x
+  }
+  // 61 minutes before kickoff FoxLeague's gate is still open, and shut before a stake signed now reaches the join.
+  assert.match(why(targeted, rival, s(61)), /T60 match at .*busy from an hour before kickoff/)
+  const d = tournament(301, { max_teams: 2, min_teams: 2 }, [{ user_id: 55 }]) as TournamentDetail
+  assert.match(why({ type: 'join_tournament', tournament_id: 301 }, { tournament: d, ...rival }, s(61)), /T60 match at/)
+  assert.equal(why(targeted, rival, s(70)), '')
+})
+
+test('R58A-2: a tournament the agent creates is judged at its start, and a final medicine refusal stops counting', async () => {
+  const create = { type: 'create_tournament', title: 'Cup', format: 'knockout', tier: 'silver', max_teams: 4, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 48, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
+  assert.doesNotMatch(why(create, {}, withCard(3, { injuredUntil: inDays(1) })), /injured/)
+  assert.match(why(create, {}, withCard(3, { injuredUntil: inDays(5) })), /starter #3 is injured until .* past the start of your tournament/)
+  // FoxLeague refuses the confirm for good and returns the payment: the retry hears it, and the FOXSY stops counting.
+  const until = inDays(8)
+  let answer: () => never = () => { throw new ApiRefusal('Could not verify transaction yet. Please confirm again in a moment.', 'tx_pending') }
+  const m = setup({
+    chain: { send: async () => 'hmed2' },
+    fox: { user: async () => null, medicineQuote: async (_w: unknown, nonce: number, days: number) => ({ player_nonce: nonce, injured_until: until, served_until: inDays(2), price_per_day: 300, max_days: 6, days_paid: days, cost_foxsy: 300 * days }), buyMedicine: async () => answer() },
+  })
+  const live = () => m.store.spentUsd(0, { category: 'play', dryRun: false })
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, withCard(3, { injuredUntil: until }), [{ action: { type: 'buy', product: 'medicine', player_nonces: [3], quantity: 2 }, reason: '' }])
+    assert.equal(r!.status, 'unconfirmed', r!.summary)
+    assert.ok(live() > 1.3, 'the 600 FOXSY are booked')
+    answer = () => { throw new ApiRefusal('This player is not injured. Your payment is being refunded automatically.') }
+    await retryPendingPayments({ store: m.store, fox: m.exec['d'].fox, notify: () => undefined }, 0, liveWallet)
+    assert.equal(m.store.pending(0).length, 0)
+    assert.ok(live() < 0.01, `refunded by FoxLeague: it must stop counting, got $${live().toFixed(2)}`)
+  })
+})

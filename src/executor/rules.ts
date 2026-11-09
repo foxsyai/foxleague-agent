@@ -161,9 +161,11 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
   if (!upcoming) return 'your upcoming matches could not be read'
   if (!mine) return 'your current tournaments could not be read'
   const t0 = now.getTime()
+  // A stake signed now settles and reaches FoxLeague's gate a minute or two later: busy that much earlier (R58A-1).
+  const lead = BUSY_LEAD_MS + BUSY_OPENS_MARGIN_S * 1000
   const at = (m: UpcomingMatch) => new Date(m.scheduled_at).getTime()
   for (const m of upcoming.matches) {
-    if (m.phase !== 'finished' && at(m) - t0 <= BUSY_LEAD_MS) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
+    if (m.phase !== 'finished' && at(m) - t0 <= lead) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
   }
   // The route is read without a limit: FoxLeague's page of 50, soonest first, the last day's finished games first.
   if (upcoming.matches.length >= UPCOMING_PAGE) return `your upcoming matches fill FoxLeague's page of ${UPCOMING_PAGE}: a match within the hour may be cut from it`
@@ -172,7 +174,7 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
     if (t.max_teams === 2 || t.status === 'completed' || t.status === 'cancelled') continue
     if (NOT_STARTED_STATUSES.has(t.status)) {
       // It can go active, with its fixtures, at any moment once the start is near.
-      if (new Date(t.starts_at).getTime() - t0 <= BUSY_LEAD_MS) return `T${t.id} starts at ${t.starts_at} and its fixtures are not out yet`
+      if (new Date(t.starts_at).getTime() - t0 <= lead) return `T${t.id} starts at ${t.starts_at} and its fixtures are not out yet`
       continue
     }
     if (!RUNNING_STATUSES.has(t.status)) return `T${t.id} has the status ${t.status}, which the agent does not know: whether it keeps you busy is unknown`
@@ -189,7 +191,7 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
         if (own.length > group.length) continue // an own knockout fixture is listed: the whole group has ended
         if (!group.length) return `T${t.id}: none of your group fixtures is in the list: whether your group has ended is unknown`
         // The group's last kickoff is no earlier than your own last group match: busy from an hour before that.
-        if (at(group[group.length - 1]!) - t0 <= BUSY_LEAD_MS) return `T${t.id}: your group has not ended for every team yet (no knockout fixture of yours is listed)`
+        if (at(group[group.length - 1]!) - t0 <= lead) return `T${t.id}: your group has not ended for every team yet (no knockout fixture of yours is listed)`
         continue
       }
       case 'swiss': {
@@ -252,7 +254,10 @@ export function sizeCeiling(s: AgentSnapshot): number {
 // Hard limits from the adversarial review (test/audit.test.ts), independent of what the model proposes.
 /** A 1v1 is refused against a team this many ELO points (or more) above the agent. */
 export const MAX_1V1_ELO_GAP = 100
-/** A 1v1 stake is not signed when FoxLeague says the team's busy hour opens this soon: the payment settles and reaches the join after it (its own app holds 60 s). */
+/**
+ * A 1v1 stake is not signed when the team's busy hour opens this soon, by FoxLeague's own count for a join or by the
+ * agent's fixtures for a create and a join: the payment settles and reaches the join gate after it (its own app holds 60 s).
+ */
 export const BUSY_OPENS_MARGIN_S = 120
 /** A 1v1 is refused when the rival's lineup (at full condition) is more than this much stronger than ours today. */
 export const MAX_1V1_STRENGTH_RATIO = 1.1
