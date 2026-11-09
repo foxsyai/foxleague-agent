@@ -59,7 +59,8 @@ back into the budget. The shop, the waivers and the bids are real spending.
 | Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 The counts are upper limits, not targets: the agent buys a boost only when it pays. The largest single shop payment
-grades the waivers by itself: a fusion match waiver buys every missing match in one payment, so a level reaches only the rarities its limit covers. A fusion fee is held to the same limit: Steady's 500 reaches the fees up to 400.
+grades the waivers by itself: a fusion match waiver buys every missing match in one payment, so a level reaches only the rarities its limit covers. A fusion fee is held to the same limit: Steady's 500 reaches the fees up to 400. Medicine for an injured player is one
+payment held to it too: Steady's 500 buys up to 5 days for a Common, Zeus's 9,000 the 18 days a Legendary's longest injury can save.
 
 **Bids.** Every level bids at auction, on any rarity. A bid is limited by money, not by rarity: it stays at or under
 the lowest of three numbers, the level's **Max bid**, your limit for the card's rarity and the cost of building the

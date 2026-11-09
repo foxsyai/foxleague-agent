@@ -1362,3 +1362,46 @@ Stays open, with the reason each stays (no failing test, or a design limit):
 - A League + Knockout field is read up to 35 invited teams (36 seats, so all of them today).
 - The read-back after a lost Play answer allows a minute for clock skew; a larger skew logs a start as an error (no
   payment). The casual bench cut-off reads the game's end, not its start (one 12-minute span).
+
+## FoxLeague's mainnet of 9 November and its rules of 13 November: cards, injuries, medicine, forfeits (2026-11-10)
+
+What mainnet runs since the competition levels' switch (FoxLeague `bbb1bfba7`, 32 commits after the agent's last
+sync) and what its release branch ships next (`2913ee7df`) were read through git only, by two readers, each fact
+checked against FoxLeague's code before it was built on. The agents ran through the switch of 9 November with no
+error (ranked tickets, paid Bronze seats and 1v1s paid and confirmed), and nothing they did before needs a change.
+From Friday 13 November 2026, 14:00 UTC (`/api/config` `card_bans.live_from`) FoxLeague counts yellow card bans and
+injuries, sells medicine and takes ELO for a forfeit; the agent read none of the five discipline fields its cards
+already carry. Each finding has a test in `test/cards-injuries.test.ts` that failed on `02824f0` and passes after its
+fix. The rules and their sources: `docs/ECONOMY-AND-RULES.md` section 6a, `docs/FOXLEAGUE-INTEGRATION.md` section 25.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CI-4 | medium | A 1v1's seat needs 11 match-fit players of the 18 and FoxLeague counts an injured card out, after the stake is paid (refunded, the gas lost). The agent counted condition and transfer cooldown only, and at the create of a challenge counted nothing | One count for the join and the create: condition, no transfer cooldown, not injured. |
+| CI-3 | medium | Every strength the rules compare (the 55 percent floor, the 10 percent rule, the field of a tournament) is the saved eleven's, but FoxLeague replaces an injured starter with a bench card of its own choice | No match, 1v1 or entry while an injured card is in the saved eleven (`squadLegal`); the snapshot says so in capitals and the plan saves an eleven without it. |
+| CI-5 | medium | Rule 4: once the bans are live, a card whose answer leaves its injury or ban out would have counted as healthy | Unknown from the switch on (`disciplineUnread`): it stops the eleven, counts as unfit, is no fusion input and takes no bid. Before the switch an older answer is the rules of before. |
+| CI-14 | medium | A sale keeps a card's injury, and the agent could bid on a card out for 27 days without seeing it | The auction lines show injury, ban and yellow cards; a bid is refused on a card injured for more than 72 hours (the limit of an inherited transfer lock) or whose injury cannot be read, from the card's own record read right before the bid. |
+| CI-6 | low | An injured or suspended card cannot be fused in FoxLeague's app; its contract sees neither, and FoxLeague's own pre-check learns the rule only with its next release | The fusion rule refuses both, whatever the pre-check answers. |
+| CI-8 | low | A tournament entry was judged on the squad as it is now, though its first lineup locks at its start | The injury check of an entry is taken at the tournament's start: a starter healed by then plays, one still out refuses. |
+| CI-12 | low | The schedule's wear counted the condition of a card that plays none of it | A card injured past the tournament's last match adds none. |
+| CI-7 | low | A casual test could name an injured card, which FoxLeague would replace: not the eleven under test | Refused; a saved eleven with an injured starter carries a note (saving is free, the next match may fall after the injury). |
+| CI-1, CI-2 | low | The snapshot showed nothing of yellow cards, bans or injuries, nor the switch | Each card's marks (INJURED-until, SUSPENDED, yellow n/3), the "Cards and injuries" line with the switch, the injured starters and the suspended cards of the 18. |
+| CI-9, CI-10 | new feature | Medicine is a new Shop product with a route of its own; `/shop/confirm` refuses it | `buy` product `medicine` for one injured card and whole days: priced only by FoxLeague's quote for exactly those days (unread or not matching: refused), within Max shop payment and the daily cap, booked before the signature, one `shopPay`, confirmed on `POST /api/shop/medicine`; `tx_pending` or no answer keeps the hash and the pending retry confirms it on the same route, never a second payment. No cap was raised and no setting added. |
+| CI-11, CI-13 | low | The prompt and the game manual copy held none of these rules (the manual's players page, which states the bans and the injuries, was left out with the app walkthroughs) | The prompt states them, with the forfeit penalty and the medicine action; the manual copy takes in the players page and is synced to FoxLeague's `e5e819e03`; the other getting-started pages stay out, each by name. |
+| LIVE-1 | low | A 1v1 stake signed just before the team's busy hour reaches the join after it: refused, refunded, the gas lost. FoxLeague now serves the seconds until that hour (`viewer_tournament_window_opens_in_secs`) | A 1v1 join is refused when it opens within 120 seconds. |
+
+Stays open:
+- FoxLeague's fusion refusal and its forfeit penalty are on its release branch, not on its main, on 2026-11-10. The
+  agent's own fusion rule does not wait for it. The forfeit penalty's switch is not served in `/api/config`: the prompt
+  states the rule as FoxLeague announced it, and the manual copy is synced again once the release is promoted.
+- The MetaStaking discount on Shop prices (1 December 2026): FoxLeague's code only computes the percent so far and no
+  payment check reads it. The agent pays list prices in exact amounts, and an amount FoxLeague does not take comes
+  back whole. Read how a wallet's price is quoted before that date.
+- Medicine was never bought on mainnet before the switch (no card can be injured until then): its first live
+  purchase is the first real test of the route. A wrong amount, a healed card or too many days comes back whole.
+- The most days a quote sells can fall by one between the quote and the confirm (a day served meanwhile): the payment
+  is then refunded and the gas lost.
+- A rival's lineup strength counts its injured and suspended cards as able to play: an overestimate, the safe side.
+- The prompt still words the competition levels as a switch ("once the levels are live"); they are live since
+  9 November and the snapshot says so. A rewrite is cosmetic.
+- The formations offered for a casual test count injured cards as fieldable; a test eleven that names one is refused.
+
