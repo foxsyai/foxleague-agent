@@ -21,7 +21,8 @@ export const FORMATION_SLOTS: Record<string, { DEF: number; MID: number; FWD: nu
  */
 export const FORMATIONS_COMING_SOON = new Set(['4-4-2a'])
 
-export const SHOP_PRODUCTS = ['condition_recovery', 'xp_booster', 'training_slot', 'common_pack'] as const
+/** `medicine` (FoxLeague, with the injuries): whole days off one injured card's time out; paid like the others, confirmed on its own route. */
+export const SHOP_PRODUCTS = ['condition_recovery', 'xp_booster', 'training_slot', 'common_pack', 'medicine'] as const
 export type ShopProduct = (typeof SHOP_PRODUCTS)[number]
 
 export type Action =
@@ -210,6 +211,8 @@ export function parseAction(raw: unknown): Action {
       const product = oneOf(o, 'product', SHOP_PRODUCTS)
       if (product === 'condition_recovery') return { type: o.type, product, player_nonces: nonces(o, 'player_nonces', 1, 18) }
       if (product === 'training_slot') return { type: o.type, product, quantity: int(o, 'quantity', 1, 25) }
+      // One card, 1 to 18 days: two thirds of the longest injury (27 days) is the most FoxLeague sells.
+      if (product === 'medicine') return { type: o.type, product, player_nonces: nonces(o, 'player_nonces', 1, 1), quantity: int(o, 'quantity', 1, 18) }
       return { type: o.type, product }
     }
     case 'fuse':

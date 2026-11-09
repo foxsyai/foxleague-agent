@@ -51,7 +51,7 @@ export function card(nonce: number, position: PlayerView['position'], role: Play
   return {
     nonce, name: `P${nonce}`, position, rarity: 'Common', cap: 30, role, condition: 100, ageYears: 18,
     synced: { ...stats }, live: { ...stats }, xp: {}, dirty: false, competitiveMatches: 20, fusionMatchCredit: 0,
-    fusionReadyAt: null, listed: false, transferLockedUntil: null, syncedTotal: 140, ...more,
+    fusionReadyAt: null, listed: false, transferLockedUntil: null, injuredUntil: null, suspended: false, banYellows: 0, syncedTotal: 140, ...more,
   }
 }
 

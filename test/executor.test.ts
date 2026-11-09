@@ -18,7 +18,7 @@ const wallet: AgentWallet = { index: 0, address: ADDR, pubkeyHex: '00', shard: 0
 
 function player(nonce: number, position: PlayerView['position'], role: PlayerView['role'], slot?: number): PlayerView {
   const stats = { speed: 20, accuracy: 20, defense: 20, power: 20, control: 20, vision: 20, stamina: 20 }
-  return { nonce, name: `P${nonce}`, position, rarity: 'Common', cap: 30, role, ...(slot !== undefined ? { slot } : {}), condition: 100, ageYears: 18, synced: { ...stats }, live: { ...stats }, xp: {}, dirty: false, competitiveMatches: 0, fusionMatchCredit: 0, fusionReadyAt: null, listed: false, transferLockedUntil: null, syncedTotal: 140 }
+  return { nonce, name: `P${nonce}`, position, rarity: 'Common', cap: 30, role, ...(slot !== undefined ? { slot } : {}), condition: 100, ageYears: 18, synced: { ...stats }, live: { ...stats }, xp: {}, dirty: false, competitiveMatches: 0, fusionMatchCredit: 0, fusionReadyAt: null, listed: false, transferLockedUntil: null, injuredUntil: null, suspended: false, banYellows: 0, syncedTotal: 140 }
 }
 
 function snapshot(): AgentSnapshot {

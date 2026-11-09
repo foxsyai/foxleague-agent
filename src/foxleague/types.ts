@@ -79,6 +79,8 @@ export interface FoxConfig {
   tournament_fee_bounds: { silver_min: number; silver_max: number; gold_min: number; bronze_min?: number; bronze_max?: number }
   competition_levels?: CompetitionLevels
   organizer_fees?: OrganizerFees
+  /** Yellow card bans and injuries (one switch): live from `live_from`; a ban at `yellow_cards_per_ban` tournament yellow cards. */
+  card_bans?: { live: boolean; live_from?: string | null; yellow_cards_per_ban: number }
   tournament_prize_split: PrizeSplit
   /** The split a private tournament created now pays; the public one until FoxLeague raises its platform fee. */
   private_tournament_prize_split?: PrizeSplit | null
@@ -211,6 +213,16 @@ export interface PlayerCard {
   transferred_at: string | null
   transfer_cooldown_hours: number | null
   minted_at: string | null
+  /**
+   * Discipline (served since 2026-11-07; the last three move only once `card_bans` is live). `bans_pending` above 0:
+   * suspended for the team's next tournament match of more than 2 teams. `injured_until` in the future: out of every
+   * match until then (null or a past time: not injured).
+   */
+  yellow_cards?: number
+  fouls_suffered?: number
+  ban_yellow_cards?: number
+  bans_pending?: number
+  injured_until?: string | null
   created_at: string
 }
 
@@ -272,6 +284,8 @@ export interface TournamentDetail {
    * a tournament (the same rows, matches.rs tournament_busy_exists_sql). FoxLeague answers false on its own failed read.
    */
   viewer_blocked_tournament_window?: boolean | null
+  /** A 1v1 read with the caller's wallet: the seconds until that same gate turns on for the team (null: none ahead, or unread). */
+  viewer_tournament_window_opens_in_secs?: number | null
   [key: string]: unknown
 }
 
@@ -299,6 +313,20 @@ export interface RarityMatchGate {
     waiver_enabled: boolean
     row_set: boolean
   }[]
+}
+
+/**
+ * GET /api/shop/medicine/quote (your own injured card): what `days_paid` whole days of medicine cost, and the most
+ * days it sells (a third of every injury is always served). POST /api/shop/medicine re-quotes and takes that exact amount.
+ */
+export interface MedicineQuote {
+  player_nonce: number
+  injured_until: string
+  served_until: string
+  price_per_day: number
+  max_days: number
+  days_paid: number
+  cost_foxsy: number
 }
 
 /** GET /api/players/nonce/{nonce}/match-waiver-quote (your own card). */
@@ -471,6 +499,12 @@ export interface MarketListing {
   ends_at: string | null
   transferred_at: string | null
   transfer_cooldown_hours: number | null
+  /** The card's discipline, as on PlayerCard: a sale keeps its yellow cards, its ban and its injury. */
+  yellow_cards?: number
+  fouls_suffered?: number
+  ban_yellow_cards?: number
+  bans_pending?: number
+  injured_until?: string | null
 }
 
 export interface FloorPrice {
