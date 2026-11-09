@@ -6,8 +6,11 @@ import { execFileSync } from 'node:child_process'
 
 export const MANUAL_BRANCH = 'origin/main'
 const ROOT = 'docs/manual/src/content/docs'
-/** What shapes play decisions: the economy map first, every mechanics page, fair play. A new page in these folders is taken in. */
-const FOLDERS = ['mechanics/economy-map.mdx', 'mechanics', 'legal/fair-play.md']
+/**
+ * What shapes play decisions: the economy map first, every mechanics page, the players page (rarity, OVR, the yellow
+ * card bans and the injuries, which no mechanics page states), fair play. A new page in these folders is taken in.
+ */
+const FOLDERS = ['mechanics/economy-map.mdx', 'mechanics', 'getting-started/players.md', 'legal/fair-play.md']
 
 /**
  * Every other page of the manual, each left out on purpose (a page or a whole folder). A page that is in neither
@@ -15,7 +18,11 @@ const FOLDERS = ['mechanics/economy-map.mdx', 'mechanics', 'legal/fair-play.md']
  */
 export const LEFT_OUT: Record<string, string> = {
   'mechanics/world-cup.mdx': 'a preview, not live',
-  'getting-started': 'onboarding and app walkthroughs; registration is handled by code',
+  'getting-started/first-match.md': 'an app walkthrough; the match rules are on the mechanics pages',
+  'getting-started/onboarding.mdx': 'onboarding; registration is handled by code',
+  'getting-started/quick-start.mdx': 'an app walkthrough',
+  'getting-started/squad.md': 'an app walkthrough; the tactics rules are on the mechanics pages',
+  'getting-started/wallet.mdx': 'wallet apps and logins; the agent signs with its own key',
   'reference': 'the FAQ and glossary: support answers and definitions the mechanics pages already give',
   'developer': 'guides for developer teams, not for playing',
   'legal/privacy.md': 'privacy policy',
