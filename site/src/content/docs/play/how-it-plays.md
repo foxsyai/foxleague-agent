@@ -48,7 +48,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
   and injury, also on the cards at auction. It starts no match, 1v1 or tournament entry while an injured player is in
   your starting eleven: it saves an eleven without him first. Before a 1v1 it counts 11 match-fit players among your
   18, an injured one not among them, so no stake is paid for a seat FoxLeague would refuse. It never fuses an injured
-  or suspended card and never bids on a card that would arrive injured for more than 72 hours. A forfeit costs your
+  or suspended card. It may bid on an injured card when the price is low enough for the days he cannot play, and
+  never on one whose injury it cannot read. A forfeit costs your
   team rating, so it keeps the 11 + 7 complete and fit before each lock, as before.
 
 ## Competition
@@ -103,7 +104,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Paid training slots**: mainly while a booster is active.
 - **Medicine**: shortens an injury by whole days (FoxLeague always keeps a third of it). The agent buys it only for a
   starter it cannot replace who would miss matches that matter, only the days up to that match, at FoxLeague's own
-  quote and within your Max shop payment and daily cap.
+  quote, within your level's medicine days a week, your Max shop payment and your daily cap.
 - **Common packs**: 5 Common cards, the spare cards the first fusion needs.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen.

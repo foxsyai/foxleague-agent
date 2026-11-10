@@ -21,7 +21,7 @@ export const TEST_SETTINGS: AgentSettings = {
   dailyCapUsd: 10, monthlyBudgetUsd: 300, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 2500,
   entryFeesSilver: [1000, 1500, 2000, 2500, 3000], entryFeesGold: [5000], tickMinutes: 30, tickJitterMinutes: 10, activeHoursUtc: [5, 21], minGapSeconds: 90,
   // FoxLeague's own maximum: the counts of a level (2026-11-06) stay out of the way of tests about other rules.
-  paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2,
+  paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 18,
 }
 
 export const ADDR = 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl'

@@ -146,7 +146,7 @@ function snapshotSummary(s: AgentSnapshot | undefined) {
 }
 
 /** Settings that let an agent spend more: raising one needs the password, lowering one never does. */
-const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek'] as const
+const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek', 'medicineDaysPerWeek'] as const
 
 /** Hours in an active window [from, to), which may cross midnight; [0, 24] is all day. */
 export function windowHours([from, to]: [number, number]): number {

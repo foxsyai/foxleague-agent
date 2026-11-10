@@ -67,6 +67,8 @@ export interface RulesContext {
   /** XP boosters and Common packs this agent bought in the last 7 days (its own log), for the level's counts. */
   boostersThisWeek?: number
   packsThisWeek?: number
+  /** Days of medicine this agent bought in the last 7 days (its own log), for the level's count. */
+  medicineDaysThisWeek?: number
   /** An open challenge this agent created in the last 4 hours (its longest deadline) may still wait (R54A-3). */
   openChallengeRecent?: boolean
   /**
@@ -1351,6 +1353,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!p || typeof days !== 'number') return refuse(`#${n} is not in the wallet`)
           if (p.listed) return refuse(`#${n} is listed for sale: only a card in the wallet takes medicine`)
           if (!p.injuredUntil) return refuse(`#${n} is not injured`)
+          // The level's count (owner, 2026-11-10), in days over all cards, from the agent's own purchases of the last 7 days.
+          const perWeek = ctx.settings.medicineDaysPerWeek
+          if (!(perWeek > 0)) return refuse('no medicine at this level (Medicine days a week is 0)')
+          if (typeof ctx.medicineDaysThisWeek !== 'number' || !Number.isFinite(ctx.medicineDaysThisWeek)) return refuse('the medicine bought this week could not be counted: not buying blind')
+          if (ctx.medicineDaysThisWeek + days > perWeek) return refuse(`${perWeek} medicine day${perWeek === 1 ? '' : 's'} a week at this level: ${ctx.medicineDaysThisWeek} bought in the last 7 days leave room for ${Math.max(0, perWeek - ctx.medicineDaysThisWeek)}`)
           const q = ctx.medicineQuote
           if (!q) return refuse(`the medicine quote for #${n} could not be read: not paying blind`)
           const whole = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
@@ -1445,13 +1452,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (ctx.cardLock === null) return refuse(`the details of #${a.nonce} could not be read: not bidding blind`)
       const lock = ctx.cardLock?.until
       if (lock && lock.getTime() - ctx.now.getTime() > MAX_INHERITED_LOCK_HOURS * 3600_000) return refuse(`#${a.nonce} carries a transfer lock until ${lock.toISOString()}: it could not play for weeks`)
-      // A sale keeps the card's injury: the same limit as an inherited lock, and unknown is not healthy.
+      // A sale keeps the card's injury. Whether an injured card is worth its price is the plan's call (owner,
+      // 2026-11-10), however long it is out; one whose injury cannot be read is not: unknown is not healthy.
       if (ctx.cardLock?.injuryUnread) return refuse(`the injury of #${a.nonce} could not be read: not bidding blind`)
       const hurt = ctx.cardLock?.injuredUntil
-      if (hurt && hurt.getTime() - ctx.now.getTime() > MAX_INHERITED_LOCK_HOURS * 3600_000) return refuse(`#${a.nonce} is injured until ${hurt.toISOString()}: it could not play for more than ${MAX_INHERITED_LOCK_HOURS} hours`)
       const notes = ['refunded at once if outbid; the card arrives when the auction is settled']
       if (lock && lock > ctx.now) notes.push(`the card carries a transfer lock until ${lock.toISOString()}`)
-      if (hurt && hurt > ctx.now) notes.push(`the card is injured until ${hurt.toISOString()}`)
+      if (hurt && hurt > ctx.now) notes.push(`the card is injured until ${hurt.toISOString()}: it plays no match before`)
       return needFoxsy(a.foxsy, allow(a.foxsy, { nonce: a.nonce, bid: a.foxsy }, 'play', notes))
     }
 

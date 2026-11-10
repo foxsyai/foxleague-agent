@@ -38,7 +38,7 @@ next minutes:
   waivers, bids and listings on the marketplace.
 - **Yellow cards and injuries:** sees each card's ban and injury (its own and those at auction), plays no match
   with an injured starter, counts its fit players before a 1v1 stake and buys medicine only for a starter it cannot
-  replace, within the shop payment limit.
+  replace, within the level's medicine days a week and the shop payment limit.
 - **Onboarding:** swaps EGLD to FOXSY, registers the team and generates its free badge.
 
 The AI reasons from the full player manual and its economy map. You steer it with a strategy in plain words, in

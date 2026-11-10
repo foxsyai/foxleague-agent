@@ -153,10 +153,10 @@ test('CI-9: medicine is a shop product for one injured card, priced by FoxLeague
   assert.throws(() => parseAction({ type: 'buy', product: 'medicine', player_nonces: [3] }), /quantity/)
   const until = inDays(8)
   const s = () => withCard(3, { injuredUntil: until })
-  const quote = (more = {}) => ({ medicineQuote: { player_nonce: 3, injured_until: until, served_until: inDays(2), price_per_day: 300, max_days: 6, days_paid: 2, cost_foxsy: 600, ...more } })
+  const quote = (more = {}) => ({ medicineDaysThisWeek: 0, medicineQuote: { player_nonce: 3, injured_until: until, served_until: inDays(2), price_per_day: 300, max_days: 6, days_paid: 2, cost_foxsy: 600, ...more } })
   assert.match(why(buy, quote(), snapshot()), /#3 is not injured/)
-  assert.match(why(buy, {}, s()), /the medicine quote for #3 could not be read: not paying blind/)
-  assert.match(why(buy, { medicineQuote: null }, s()), /could not be read: not paying blind/)
+  assert.match(why(buy, { medicineDaysThisWeek: 0 }, s()), /the medicine quote for #3 could not be read: not paying blind/)
+  assert.match(why(buy, { medicineDaysThisWeek: 0, medicineQuote: null }, s()), /could not be read: not paying blind/)
   assert.match(why({ ...buy, quantity: 7 }, quote({ days_paid: 7, cost_foxsy: 2100 }), s()), /medicine saves #3 6 days at most/)
   assert.match(why(buy, quote({ max_days: 0 }), s()), /a third of every injury is always served/)
   assert.match(why(buy, quote({ cost_foxsy: 900 }), s()), /the medicine quote does not match 2 days at 300 FOXSY: not paying blind/)
@@ -246,24 +246,25 @@ test('CI-13: the game manual copy holds the page that states the yellow card ban
   assert.deepEqual(undecidedPages([...pages, 'getting-started/transfers.md']), ['getting-started/transfers.md'])
 })
 
-test('CI-14: no bid on a card that would arrive injured for more than 72 hours, or whose injury cannot be read', async () => {
+test('CI-14: a bid on an injured card is the plan\'s call, with the injury said; one whose injury cannot be read takes no bid', async () => {
+  // Owner, 2026-11-10: an injured card may be bought, however long it is out, when its price deserves it.
   const auction: Auction = { seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }
-  const bid = (lock: RulesContext['cardLock']) => why({ type: 'bid', nonce: 9, foxsy: 500 }, { auction, cardRarity: 'Uncommon', priorBids: 0, cardLock: lock })
-  assert.equal(bid({ until: null, injuredUntil: null }), '')
-  assert.equal(bid({ until: null, injuredUntil: new Date(Date.now() + 71 * 3600_000) }), '', 'a short injury is the plan\'s call (the snapshot shows it)')
-  assert.match(bid({ until: null, injuredUntil: new Date(Date.now() + 9 * 86_400_000) }), /#9 is injured until .*: it could not play for more than 72 hours/)
-  assert.match(bid({ until: null, injuryUnread: true }), /the injury of #9 could not be read: not bidding blind/)
+  const bid = (lock: RulesContext['cardLock']) => checkAction({ type: 'bid', nonce: 9, foxsy: 500 } as never, snapshot(), ctx({ auction, cardRarity: 'Uncommon', priorBids: 0, cardLock: lock }))
+  assert.equal(bid({ until: null, injuredUntil: null }).ok, true)
+  const long = bid({ until: null, injuredUntil: new Date(Date.now() + 27 * 86_400_000) })
+  assert.equal(long.ok, true, long.refusal)
+  assert.ok(long.notes.some(n => /the card is injured until .*: it plays no match before/.test(n)), long.notes.join(' | '))
+  assert.match(bid({ until: null, injuryUnread: true }).refusal ?? '', /the injury of #9 could not be read: not bidding blind/)
   // The executor reads it from the card's own record, right before the bid.
-  const until = inDays(9)
   const m = setup({
     chain: { query: async () => [encodeAuction({ seller: OTHER, min: wholeToAtomic(500), top: 0n, bidder: null, endsInS: 3600 })] },
-    fox: { user: async () => null, player: async () => ({ nft_nonce: 9, rarity: 'Uncommon', transferred_at: null, transfer_cooldown_hours: null, injured_until: until, bans_pending: 0 }) },
+    fox: { user: async () => null, player: async () => ({ nft_nonce: 9, rarity: 'Uncommon', transferred_at: null, transfer_cooldown_hours: null }) },
   })
   const s = snapshot()
   s.config!.card_bans = LIVE
   const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action: { type: 'bid', nonce: 9, foxsy: 500 }, reason: '' }])
   assert.equal(r!.status, 'refused', r!.summary)
-  assert.match(r!.summary, /#9 is injured until/)
+  assert.match(r!.summary, /the injury of #9 could not be read: not bidding blind/)
 })
 
 // ---- Agent review of PR #58 (two lows) ----
@@ -304,4 +305,61 @@ test('R58A-2: a tournament the agent creates is judged at its start, and a final
     assert.equal(m.store.pending(0).length, 0)
     assert.ok(live() < 0.01, `refunded by FoxLeague: it must stop counting, got $${live().toFixed(2)}`)
   })
+})
+
+// ---- Owner, 2026-11-10: medicine has a count per level, like the boosters ----
+
+test('MED-1: medicine is held to the level\'s medicine days a week, counted from the agent\'s own purchases', () => {
+  const until = inDays(8)
+  const s = () => withCard(3, { injuredUntil: until })
+  const buy = (days: number) => ({ type: 'buy', product: 'medicine', player_nonces: [3], quantity: days })
+  const q = (days: number, more: Partial<RulesContext> = {}) => ({ medicineQuote: { player_nonce: 3, injured_until: until, served_until: inDays(2), price_per_day: 100, max_days: 6, days_paid: days, cost_foxsy: 100 * days }, ...more })
+  const at = (perWeek: number) => ({ settings: { ...TEST_SETTINGS, medicineDaysPerWeek: perWeek } })
+  assert.match(why(buy(1), { ...q(1, { medicineDaysThisWeek: 0 }), ...at(0) }, s()), /no medicine at this level \(Medicine days a week is 0\)/)
+  assert.match(why(buy(1), { ...q(1), ...at(4) }, s()), /the medicine bought this week could not be counted: not buying blind/)
+  assert.match(why(buy(3), { ...q(3, { medicineDaysThisWeek: 2 }), ...at(4) }, s()), /4 medicine days a week at this level: 2 bought in the last 7 days leave room for 2/)
+  assert.equal(why(buy(2), { ...q(2, { medicineDaysThisWeek: 2 }), ...at(4) }, s()), '')
+})
+
+test('MED-2: the executor counts the medicine days it paid for in the last 7 days', async () => {
+  const until = inDays(8)
+  const m = setup({
+    chain: { send: async () => `hm${Math.random()}` },
+    fox: { user: async () => null, medicineQuote: async (_w: unknown, nonce: number, days: number) => ({ player_nonce: nonce, injured_until: until, served_until: inDays(2), price_per_day: 100, max_days: 6, days_paid: days, cost_foxsy: 100 * days }), buyMedicine: async (_w: unknown, b: { player_nonce: number; days: number }) => ({ player_nonce: b.player_nonce, cost_foxsy: 100 * b.days, days_paid: b.days, injured_until: until }) },
+  })
+  m.store.updateSettings(0, { ...TEST_SETTINGS, medicineDaysPerWeek: 4 })
+  const buy = (days: number) => m.exec.run(m.agent(), liveWallet, withCard(3, { injuredUntil: until }), [{ action: { type: 'buy', product: 'medicine', player_nonces: [3], quantity: days }, reason: '' }])
+  await withLive(m.store, async () => {
+    const [first] = await buy(3)
+    assert.equal(first!.status, 'confirmed', first!.summary)
+    const [second] = await buy(2)
+    assert.equal(second!.status, 'refused', second!.summary)
+    assert.match(second!.summary, /4 medicine days a week at this level: 3 bought in the last 7 days leave room for 1/)
+    const [third] = await buy(1)
+    assert.equal(third!.status, 'confirmed', third!.summary)
+  })
+})
+
+test('MED-3: the count is a setting of every level, raised only with the password, and the plan is told it', async () => {
+  const { DEFAULT_SETTINGS, LEVEL_SETTINGS, validateSettingsPatch } = await import('../src/store/settings.ts')
+  const { raisesLimit } = await import('../src/web/server.ts')
+  const { renderPlanRequest } = await import('../src/strategist/strategist.ts')
+  const { Store } = await import('../src/store/db.ts')
+  assert.deepEqual(['steady', 'climber', 'hunter', 'predator', 'beast', 'zeus'].map(l => LEVEL_SETTINGS[l]!.medicineDaysPerWeek), [0, 2, 4, 6, 12, 18])
+  assert.equal(DEFAULT_SETTINGS.medicineDaysPerWeek, 0)
+  assert.throws(() => validateSettingsPatch({ medicineDaysPerWeek: 61 }), /medicineDaysPerWeek/)
+  assert.throws(() => validateSettingsPatch({ medicineDaysPerWeek: 1.5 }), /medicineDaysPerWeek/)
+  assert.equal(validateSettingsPatch({ medicineDaysPerWeek: 18 }).medicineDaysPerWeek, 18)
+  assert.equal(raisesLimit({ ...DEFAULT_SETTINGS, medicineDaysPerWeek: 2 }, { medicineDaysPerWeek: 3 }), true)
+  assert.equal(raisesLimit({ ...DEFAULT_SETTINGS, medicineDaysPerWeek: 2 }, { medicineDaysPerWeek: 1 }), false)
+  // An agent saved before the count existed could buy no medicine, and reads none until its owner sets it.
+  const store = new Store('', ':memory:')
+  store.addAgent(0, 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl')
+  const { medicineDaysPerWeek: _gone, ...before } = { ...LEVEL_SETTINGS.zeus!, ...DEFAULT_SETTINGS }
+  ;(store as unknown as { db: { prepare: (q: string) => { run: (...a: unknown[]) => unknown } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify(before))
+  assert.equal(store.agent(0)!.settings.medicineDaysPerWeek, 0)
+  const { budgetView } = await import('../src/executor/budget.ts')
+  const counts = { ...TEST_SETTINGS, medicineDaysPerWeek: 6 }
+  const text = renderPlanRequest({ settings: counts, snapshot: snapshot(), budget: budgetView(setup().store, 0, counts, true, new Date()), recent: [], dryRun: true })
+  assert.match(text, /medicine at most 6 days a week/)
 })

@@ -1972,11 +1972,11 @@ ahead). No contract changed.
   create too (the creator's own seat goes through the same join gate).
 - Leaves a card injured past a tournament's last match out of the condition its schedule is weighed against.
 - Refuses an injured or suspended card as a fusion input, whatever FoxLeague's pre-check answers.
-- Refuses a bid on a card injured for more than 72 hours (the limit of an inherited transfer lock) or whose injury
-  cannot be read; the auction lines show each card's injury, ban and yellow cards.
+- Refuses a bid on a card whose injury cannot be read; an injured card may be bid on when its price deserves it (the
+  owner, 2026-11-10), with the injury in the bid's notes; the auction lines show each card's injury, ban and yellow cards.
 - Buys medicine as the shop product `medicine` (one card, whole days): `GET /api/shop/medicine/quote` for exactly
-  those days, one `shopPay` of its `cost_foxsy` (within Max shop payment and the daily cap, booked before the
-  signature), then `POST /api/shop/medicine` with the hash; `tx_pending` or no answer keeps the hash, and the pending
+  those days, one `shopPay` of its `cost_foxsy` (within the level's medicine days a week, Max shop payment and the daily cap,
+  booked before the signature), then `POST /api/shop/medicine` with the hash; `tx_pending` or no answer keeps the hash, and the pending
   retry confirms it on the same route. A wrong amount, a healed card or too many days is refunded whole by FoxLeague
   (`refund_whole_payment`), heard by the retry as for every shop payment.
 - A suspended card needs no rule: the lock replaces it, and a 1v1 or a ranked game still takes it. The snapshot

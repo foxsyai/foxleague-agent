@@ -19,7 +19,7 @@ the strategy guides the choices, the code enforces the limits.
 
 **Picking a level opens a proposal** with its default limits: each setting that does not fit the level yet (the daily
 cap, the monthly budget, the top-up warning, the max entry fee or stake, the max shop payment, the max swap, the max
-bid, the Silver and Gold amounts, the paid training a day, the boosters and packs a week or the tick; your limits per rarity stay as they are) gets a row with a tick, and the level's recommended AI is offered apart. **Accept and save** saves the ticked ones; untick a
+bid, the Silver and Gold amounts, the paid training a day, the boosters and packs a week, the medicine days a week or the tick; your limits per rarity stay as they are) gets a row with a tick, and the level's recommended AI is offered apart. **Accept and save** saves the ticked ones; untick a
 row to keep your own value, and **Cancel** keeps everything as it is saved. Raising a limit or switching to a dearer
 AI asks for your password. The defaults below are the steady level's, the one every new agent starts with;
 [Strategy levels](/play/strategy-levels/#the-default-limits-of-each-level) lists every level's.
@@ -51,6 +51,7 @@ AI asks for your password. The defaults below are the steady level's, the one ev
 | Paid training a day | 2 | How many paid training sessions (20 FOXSY each, on top of the 5 free ones) the agent may use in one game day; FoxLeague allows 10. Sessions it already holds count, so it never buys more than this. The defaults grow with the level: 2, 4, 6, 8, then 10 for beast and Zeus. |
 | Boosters a week | 0 | How many XP boosters (2,000 FOXSY, double XP for 24 hours) the agent may buy in any 7 days, counted from its own purchases; 7 is one every day, 0 none. It still buys one only once a competitive match of its own is drawn within the 24 hours, and weighs whether the day's matches make it pay (about 3 sure ones). The defaults: none at steady, then 1, 2, 3, and every day for beast and Zeus. |
 | Packs a week | 0 | How many Common packs (2,500 FOXSY for 5 Common cards) the agent may buy in any 7 days, counted from its own purchases; FoxLeague allows 2 a wallet a week. The defaults: none at steady and climber, 1 at hunter, 2 from predator up. |
+| Medicine days a week | 0 | How many days of injury medicine the agent may buy in any 7 days, over all its players, counted from its own purchases. Medicine shortens an injury by whole days (100 FOXSY a day for a Common up to 500 for a Legendary); FoxLeague always keeps a third of the injury, so the most it sells is 2 days of a 3-day injury, 6 of 9 and 18 of 27. Each payment also stays within Max shop payment. The defaults: none at steady, then 2, 4, 6, 12 at beast and 18 at Zeus. An agent saved before this field existed has 0 until you set it. |
 | Bronze amounts | 100, 250 and 500 | The round entry fees the agent may choose when it creates a Bronze tournament, between 100 and 999 FOXSY, once FoxLeague's competition levels are live (before them it creates none: a Bronze earns nothing until then). Leave it empty and it creates none; it can still join one, within Max entry or stake. |
 
 ## Timing

@@ -339,7 +339,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; untouched?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; deadline_minutes?: number } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; untouched?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; quantity?: number; deadline_minutes?: number } }
       } catch {
         return {}
       }
@@ -421,6 +421,15 @@ export class Executor {
         .filter(r => !(r.txHash && refunded.has(r.txHash)) && (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === a.product).length
       if (a.product === 'xp_booster') market.boostersThisWeek = bought
       else market.packsThisWeek = bought
+    }
+    // Medicine counts in days (owner, 2026-11-10), on the same safe side; a purchase whose days cannot be read leaves the count unknown.
+    if (a.type === 'buy' && a.product === 'medicine') {
+      const refunded = store.refundedHashes(agent.index, 'shop:medicine')
+      const days = store
+        .activityOf(agent.index, ['buy'], since(7 * 86_400_000))
+        .filter(r => !(r.txHash && refunded.has(r.txHash)) && (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'medicine')
+        .map(r => detailOf(r).action?.quantity)
+      market.medicineDaysThisWeek = days.every(d => typeof d === 'number' && Number.isFinite(d)) ? (days as number[]).reduce((sum, d) => sum + d, 0) : undefined
     }
     if (a.type === 'fuse') {
       market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))

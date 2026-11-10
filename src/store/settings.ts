@@ -49,7 +49,16 @@ export interface AgentSettings {
   boostersPerWeek: number
   /** Common packs in any 7 days (FoxLeague allows 2 a wallet a week). */
   packsPerWeek: number
+  /**
+   * Days of injury medicine in any 7 days, over all cards, counted from the agent's own purchases (owner,
+   * 2026-11-10: a count per level, like the boosters). 0 buys none. An agent saved before it existed reads 0: it
+   * could buy no medicine before, and a count above 0 is the owner's to set.
+   */
+  medicineDaysPerWeek: number
 }
+
+/** The most medicine days a week a setting takes (three of the longest injuries' 18 days and some). */
+export const MAX_MEDICINE_DAYS_PER_WEEK = 60
 
 /**
  * The counts an agent saved before they existed (2026-11-06) reads: FoxLeague's own maximum, so nothing changes for an
@@ -89,7 +98,7 @@ export const MIN_GAS_RESERVE_EGLD = 0.05
 export const MIN_TICK_MINUTES = 10
 
 /** What a strategy level sets when the owner picks it (the manual's Strategy levels page lists them). */
-export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUsd' | 'topUpWarningUsd' | 'maxEntryFeeFoxsy' | 'maxShopPaymentFoxsy' | 'maxSwapFoxsy' | 'maxBidFoxsy' | 'entryFeesSilver' | 'entryFeesGold' | 'tickMinutes' | 'paidTrainingPerDay' | 'boostersPerWeek' | 'packsPerWeek'>
+export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUsd' | 'topUpWarningUsd' | 'maxEntryFeeFoxsy' | 'maxShopPaymentFoxsy' | 'maxSwapFoxsy' | 'maxBidFoxsy' | 'entryFeesSilver' | 'entryFeesGold' | 'tickMinutes' | 'paidTrainingPerDay' | 'boostersPerWeek' | 'packsPerWeek' | 'medicineDaysPerWeek'>
 
 /**
  * Default limits per level, from what the owner's agents spent per game day at each level in October 2026 (FOXSY
@@ -99,17 +108,19 @@ export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUs
  * Since 2026-11-06 (owner: one brain, the levels differ in money) every level bids, on any rarity within its max bid
  * and the limit per rarity (the max bid reaches a Common's price at steady, an Uncommon's at climber, a Rare's at
  * hunter, an Epic's at predator and beast, a Legendary's at Zeus), and the counts grow with the level: paid training
- * sessions a day, XP boosters and Common packs a week. The largest single shop payment opens the booster (2,000) at
+ * sessions a day, XP boosters and Common packs a week, and the days of injury medicine a week (none at steady, then
+ * 2, 4 and 6, the whole of a light and of a medium injury, 12 at beast and 18 at Zeus, the whole of a serious one).
+ * The largest single shop payment opens the booster (2,000) at
  * climber, a pack (2,500) at hunter, a Rare's match waivers (3,000) at predator and an Epic's (9,000) at beast; each
  * level's busy day (entries, tickets, syncs, recovery, its slots, booster and pack) fits its daily cap.
  */
 export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
-  steady: { dailyCapUsd: 5, monthlyBudgetUsd: 150, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 500, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 120, paidTrainingPerDay: 2, boostersPerWeek: 0, packsPerWeek: 0 },
-  climber: { dailyCapUsd: 15, monthlyBudgetUsd: 250, topUpWarningUsd: 30, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2000, maxSwapFoxsy: 10_000, maxBidFoxsy: 1500, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120, paidTrainingPerDay: 4, boostersPerWeek: 1, packsPerWeek: 0 },
-  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 400, topUpWarningUsd: 50, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 7000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 90, paidTrainingPerDay: 6, boostersPerWeek: 2, packsPerWeek: 1 },
-  predator: { dailyCapUsd: 50, monthlyBudgetUsd: 750, topUpWarningUsd: 100, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 20_000, maxBidFoxsy: 14_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 90, paidTrainingPerDay: 8, boostersPerWeek: 3, packsPerWeek: 2 },
-  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2_000, topUpWarningUsd: 200, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 40_000, maxBidFoxsy: 14_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 75, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2 },
-  zeus: { dailyCapUsd: 150, monthlyBudgetUsd: 3_000, topUpWarningUsd: 300, maxEntryFeeFoxsy: 25_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 50_000, maxBidFoxsy: 38_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000, 25_000], tickMinutes: 60, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2 },
+  steady: { dailyCapUsd: 5, monthlyBudgetUsd: 150, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 500, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 120, paidTrainingPerDay: 2, boostersPerWeek: 0, packsPerWeek: 0, medicineDaysPerWeek: 0 },
+  climber: { dailyCapUsd: 15, monthlyBudgetUsd: 250, topUpWarningUsd: 30, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2000, maxSwapFoxsy: 10_000, maxBidFoxsy: 1500, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120, paidTrainingPerDay: 4, boostersPerWeek: 1, packsPerWeek: 0, medicineDaysPerWeek: 2 },
+  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 400, topUpWarningUsd: 50, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 7000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 90, paidTrainingPerDay: 6, boostersPerWeek: 2, packsPerWeek: 1, medicineDaysPerWeek: 4 },
+  predator: { dailyCapUsd: 50, monthlyBudgetUsd: 750, topUpWarningUsd: 100, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 20_000, maxBidFoxsy: 14_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 90, paidTrainingPerDay: 8, boostersPerWeek: 3, packsPerWeek: 2, medicineDaysPerWeek: 6 },
+  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2_000, topUpWarningUsd: 200, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 40_000, maxBidFoxsy: 14_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 75, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 12 },
+  zeus: { dailyCapUsd: 150, monthlyBudgetUsd: 3_000, topUpWarningUsd: 300, maxEntryFeeFoxsy: 25_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 50_000, maxBidFoxsy: 38_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000, 25_000], tickMinutes: 60, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 18 },
 }
 
 /**
@@ -196,6 +207,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('paidTrainingPerDay', 0, FOXLEAGUE_MAX_COUNTS.paidTrainingPerDay, true)
   num('boostersPerWeek', 0, FOXLEAGUE_MAX_COUNTS.boostersPerWeek, true)
   num('packsPerWeek', 0, FOXLEAGUE_MAX_COUNTS.packsPerWeek, true)
+  num('medicineDaysPerWeek', 0, MAX_MEDICINE_DAYS_PER_WEEK, true)
   return out
 }
 
