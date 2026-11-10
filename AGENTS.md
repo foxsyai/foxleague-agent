@@ -37,11 +37,11 @@ rules and the owner's caps before anything is signed. Treat every change to that
 - Every change reaches `main` through a pull request, the maintainer's own included: small commits on a branch, then
   a pull request. Opening or updating one runs nothing. When the maintainer decides to merge it, they add the label
   `merge-check`, which runs CI (type check, tests, the dashboard script, the reviewer gate's tests, the manual build)
-  and the agent review (Claude Opus 5.5). Their results reach `main` as the commit statuses `foxleague-agent/ci` and
-  `foxleague-agent/review` of the project's GitHub App, and `main` takes the merge only when both are green and a
-  maintainer approved; a commit pushed afterwards needs `merge-check` added again. A pull request that changes
-  `.github/` or `scripts/ci/` fails the review on purpose: the maintainer checks it by hand and merges it with the
-  bypass. Never force-push `main`. Stage files by name; never `git add -A`.
+  and the agent review (Claude Fable 5.2 at high effort). Their results reach `main` as the commit statuses
+  `foxleague-agent/ci` and `foxleague-agent/review` of the project's GitHub App, and `main` takes the merge only when
+  both are green and a maintainer approved; a commit pushed afterwards needs `merge-check` added again. A pull request
+  that changes `.github/` or `scripts/ci/` fails the review on purpose: the maintainer checks it by hand and merges it
+  with the bypass. Never force-push `main`. Stage files by name; never `git add -A`.
 - Releases are tags on `main` (`v1.0.0`, `v1.0.1`, ...) with a GitHub release; the one-line installer (`get.sh`)
   installs the newest release, and users update by running it again. A release is cut from a `main` commit that
   passed both checks and already ran on the maintainer's own server.

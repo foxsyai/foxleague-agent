@@ -1415,3 +1415,23 @@ Stays open:
   9 November and the snapshot says so. A rewrite is cosmetic.
 - The formations offered for a casual test count injured cards as fieldable; a test eleven that names one is refused.
 
+
+## The agent review on GitHub runs Claude Fable 5.2 at high effort (2026-11-10)
+
+The owner's choice: the agent review of every pull request runs Claude Fable 5.2 at high effort. Until now it ran
+Claude Opus 5.5 at extra-high effort. Nothing else of the review changes: the prompt, the tools it may use, the
+workspace gate, the verdict script and the backup token are the same.
+
+The audits run from the maintainer's machine change with it: the reviewers are Claude Fable 5.2 at extra-high effort
+(they were Claude Fable 5.1 at max effort) and the fixes are made by Claude Fable 5.2 at high effort (they were made
+by Claude Opus 5.5 at extra-high effort). The method stays: a finding counts only with a test that fails before its
+fix and passes after it.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| REV-1 | design (the owner, 2026-11-10) | The review that gates `main` ran a model and an effort chosen in October | `.github/workflows/claude-review.yml` pins `--model claude-fable-5-2` and `--effort high` in the one place both tokens read; `AGENTS.md` names them; a test pins both |
+
+Stays open:
+- The first `merge-check` after this change is the first run of the new model in the workflow. A token that cannot
+  reach it leaves no verdict, which is a red review and no merge (fail closed), never a pass.
+- This pull request changes `.github/`, so the review fails it on purpose: the maintainer checks it by hand.
