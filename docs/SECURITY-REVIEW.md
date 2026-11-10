@@ -1389,6 +1389,7 @@ fix. The rules and their sources: `docs/ECONOMY-AND-RULES.md` section 6a, `docs/
 | MED-1 to MED-3 | design (the owner, 2026-11-10) | Medicine had no count of its own | `medicineDaysPerWeek`: the days of medicine in any 7 days over all cards, from the agent's own purchases (sent or answer-lost ones count, refunded ones do not; a purchase whose days cannot be read leaves the count unknown, which refuses). Per level 0, 2, 4, 6, 12, 18; 0 refuses. A raise asks for the password. An agent saved before it existed reads 0: it could buy no medicine before, so a count above 0 is the owner's to set. |
 | CI-11, CI-13 | low | The prompt and the game manual copy held none of these rules (the manual's players page, which states the bans and the injuries, was left out with the app walkthroughs) | The prompt states them, with the forfeit penalty and the medicine action; the manual copy takes in the players page and is synced to FoxLeague's `e5e819e03`; the other getting-started pages stay out, each by name. |
 | LIVE-1 | low | A 1v1 stake signed just before the team's busy hour reaches the join after it: refused, refunded, the gas lost. FoxLeague now serves the seconds until that hour (`viewer_tournament_window_opens_in_secs`) | A 1v1 join is refused when it opens within 120 seconds. |
+| CI-15 | low | FoxLeague promoted its release to its main on 2026-11-10 (its #715): the manual copy of 9 November still said a fused card starts healthy and with no ban, next to a prompt that says an injured or suspended card cannot be fused, and gave a forfeit no ELO cost after 13 November | The manual copy is synced to FoxLeague's main at `2913ee7df`: fusing clears no injury and no ban, the Fusion tab refuses such a card, a forfeit costs the full K of its level from 13 November. No rule of the agent changed: its fusion rule refused these cards already |
 
 PR #58's review (pass, two lows). R58A-1: LIVE-1 guarded only the join by FoxLeague's own count, which is absent for
 a create and can be null for a join; the agent's own reading of the busy hour (`oneVOneBusy`) used exactly one hour, so
@@ -1397,9 +1398,11 @@ added to that hour, for the create and the join. R58A-2 (tests only, no change o
 creates is judged at its start, and a final medicine refusal heard by the pending retry stops counting.
 
 Stays open:
-- FoxLeague's fusion refusal and its forfeit penalty are on its release branch, not on its main, on 2026-11-10. The
-  agent's own fusion rule does not wait for it. The forfeit penalty's switch is not served in `/api/config`: the prompt
-  states the rule as FoxLeague announced it, and the manual copy is synced again once the release is promoted.
+- The forfeit penalty's switch is not served in `/api/config`: the prompt states the rule as FoxLeague announced it.
+  FoxLeague's fusion refusal and its forfeit penalty reached its main on 2026-11-10 08:39 UTC (its promotion #715 of
+  the release branch at `2913ee7df`, the commit this review read), and the manual copy is synced to it (CI-15).
+  One commit waits on its release branch after that (`582b06f5e`: a ban or an injury still owed to a fused card is
+  carried on when that card is fused again), which asks nothing of the agent: it fuses no injured or suspended card.
 - The MetaStaking discount on Shop prices (1 December 2026): FoxLeague's code only computes the percent so far and no
   payment check reads it. The agent pays list prices in exact amounts, and an amount FoxLeague does not take comes
   back whole. Read how a wallet's price is quoted before that date.
