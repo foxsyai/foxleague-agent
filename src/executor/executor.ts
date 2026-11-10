@@ -13,8 +13,8 @@ import { BroadcastRefused, type Chain, type PlainTx, type TxOutcome } from '../c
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { Tournament, TournamentDetail } from '../foxleague/types.ts'
-import { levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
-import type { AgentSnapshot } from '../snapshot/snapshot.ts'
+import { cardBansLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { disciplineOf, type AgentSnapshot } from '../snapshot/snapshot.ts'
 import type { AgentRow, Store } from '../store/db.ts'
 import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, wholeToAtomic } from '../util/encoding.ts'
 import { sleep } from '../util/http.ts'
@@ -22,7 +22,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
-import { SHOP_FINAL, SHOP_REFUNDED, creditShopPayment } from './pending.ts'
+import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
@@ -339,7 +339,7 @@ export class Executor {
     const since = (ms: number) => new Date(now.getTime() - ms)
     const detailOf = (r: { detail: string | null }) => {
       try {
-        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; untouched?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; deadline_minutes?: number } }
+        return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; sent?: boolean; untouched?: boolean; action?: { nonce?: number; target_user_id?: number | null; product?: string; quantity?: number; deadline_minutes?: number } }
       } catch {
         return {}
       }
@@ -422,12 +422,22 @@ export class Executor {
       if (a.product === 'xp_booster') market.boostersThisWeek = bought
       else market.packsThisWeek = bought
     }
+    // Medicine counts in days (owner, 2026-11-10), on the same safe side; a purchase whose days cannot be read leaves the count unknown.
+    if (a.type === 'buy' && a.product === 'medicine') {
+      const refunded = store.refundedHashes(agent.index, 'shop:medicine')
+      const days = store
+        .activityOf(agent.index, ['buy'], since(7 * 86_400_000))
+        .filter(r => !(r.txHash && refunded.has(r.txHash)) && (counted(r.status) || r.status === 'sent' || (r.status === 'error' && detailOf(r).sent === true)) && detailOf(r).action?.product === 'medicine')
+        .map(r => detailOf(r).action?.quantity)
+      market.medicineDaysThisWeek = days.every(d => typeof d === 'number' && Number.isFinite(d)) ? (days as number[]).reduce((sum, d) => sum + d, 0) : undefined
+    }
     if (a.type === 'fuse') {
       market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
       const first = snap.players.find(p => p.nonce === a.player_nonces[0])
       const chosen = snap.players.find(p => p.nonce === a.player_nonces[a.position_of])
       if (first && chosen && first.rarity !== 'Legendary') market.fusionPool = await fusionPoolCount(this.d.chain, RARITY_LEVEL[first.rarity] + 1, chosen.position)
     }
+    if (a.type === 'buy' && a.product === 'medicine' && a.player_nonces?.length === 1 && a.quantity) market.medicineQuote = await soft(() => fox.medicineQuote(wallet, a.player_nonces![0]!, a.quantity!))
     if (a.type === 'fusion_cooldown_waiver') market.cooldownQuote = await soft(() => fusionCooldownQuote(this.d.chain, a.nonce))
     if (a.type === 'fusion_match_waiver') market.matchQuote = await soft(() => fox.matchWaiverQuote(wallet, a.nonce))
     if (a.type === 'bid' || a.type === 'cancel_listing') market.auction = await getAuction(this.d.chain, a.nonce)
@@ -439,7 +449,9 @@ export class Executor {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours
         const at = (c as { transferred_at?: string | null }).transferred_at
-        market.cardLock = { until: at && hours ? new Date(new Date(at).getTime() + hours * 3600_000) : null }
+        // The card's injury, read as the snapshot reads its own cards: a sale keeps it.
+        const view = disciplineOf(c, now, cardBansLive(snap.config, now))
+        market.cardLock = { until: at && hours ? new Date(new Date(at).getTime() + hours * 3600_000) : null, injuredUntil: view.injuredUntil ? new Date(view.injuredUntil) : null, ...(view.disciplineUnread ? { injuryUnread: true } : {}) }
         if (typeof c.rarity === 'string') market.cardRarity = c.rarity
       } catch {
         market.cardLock = null
@@ -1059,10 +1071,10 @@ export class Executor {
         }
         if (outcome.kind === 'unconfirmed') return finish('unconfirmed', `${desc}: paid, outcome not read yet (${outcome.reason}); the confirm is retried`, usd, hash)
         try {
-          const r = await fox.shopConfirm(wallet, body)
+          const message = await confirmShop(fox, wallet, body)
           store.resolvePending(hash, 'done')
           applyEffect(a, v, snap, built)
-          return finish('confirmed', `${desc}: ${r.message}; ${costText}`, usd, hash)
+          return finish('confirmed', `${desc}: ${message}; ${costText}`, usd, hash)
         } catch (err) {
           // tx_pending or a timeout: the payment is kept and confirmed again later (within 30 min).
           return finish('unconfirmed', `${desc}: paid, confirm pending (${err instanceof Error ? err.message : err}); will retry the same hash`, usd, hash)
@@ -1353,7 +1365,7 @@ function apiCallsFor(a: Action): string | null {
     case 'widen_range': return `POST /api/tournaments/${a.tournament_id}/ovr-range`
     case 'create_tournament':
     case 'create_challenge': return 'POST /api/tournaments/create, joinTournament, POST /join'
-    case 'buy': return `POST /api/shop/confirm {product: ${a.product}}`
+    case 'buy': return a.product === 'medicine' ? 'POST /api/shop/medicine' : `POST /api/shop/confirm {product: ${a.product}}`
     default: return null
   }
 }
@@ -1429,6 +1441,11 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
     }
     case 'buy':
       if (a.product === 'condition_recovery') for (const n of a.player_nonces ?? []) { const p = card(n); if (p) p.condition = 100 }
+      if (a.product === 'medicine') {
+        // Each day bought ends the injury one day earlier (the next snapshot reads FoxLeague's own end).
+        const p = card(a.player_nonces?.[0] ?? -1)
+        if (p?.injuredUntil) p.injuredUntil = new Date(Date.parse(p.injuredUntil) - (a.quantity ?? 0) * 86_400_000).toISOString()
+      }
       if (a.product === 'training_slot' && s.auth?.shop?.training) s.auth.shop.training.slots_banked += a.quantity ?? 1
       if (a.product === 'xp_booster' && s.auth?.shop) {
         s.auth.shop.xp_booster_active = true

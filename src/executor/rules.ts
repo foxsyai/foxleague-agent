@@ -7,7 +7,7 @@ import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
-import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
+import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, MedicineQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
@@ -67,6 +67,8 @@ export interface RulesContext {
   /** XP boosters and Common packs this agent bought in the last 7 days (its own log), for the level's counts. */
   boostersThisWeek?: number
   packsThisWeek?: number
+  /** Days of medicine this agent bought in the last 7 days (its own log), for the level's count. */
+  medicineDaysThisWeek?: number
   /** An open challenge this agent created in the last 4 hours (its longest deadline) may still wait (R54A-3). */
   openChallengeRecent?: boolean
   /**
@@ -95,8 +97,13 @@ export interface RulesContext {
   /** Fusion waiver quotes, fetched for the waiver actions; null = unreadable. */
   cooldownQuote?: { days: number; costAtomic: bigint } | null
   matchQuote?: MatchWaiverQuote | null
-  /** A transfer lock the card at auction carries (inherited by the buyer); null = its details could not be read. */
-  cardLock?: { until: Date | null } | null
+  /** FoxLeague's medicine quote for the card and the days asked, fetched for buy medicine; null = unreadable. */
+  medicineQuote?: MedicineQuote | null
+  /**
+   * A transfer lock the card at auction carries (inherited by the buyer), and its injury, which a sale keeps too
+   * (injuryUnread: once the bans are live, FoxLeague's answer left it out); null = its details could not be read.
+   */
+  cardLock?: { until: Date | null; injuredUntil?: Date | null; injuryUnread?: boolean } | null
   now: Date
 }
 
@@ -156,9 +163,11 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
   if (!upcoming) return 'your upcoming matches could not be read'
   if (!mine) return 'your current tournaments could not be read'
   const t0 = now.getTime()
+  // A stake signed now settles and reaches FoxLeague's gate a minute or two later: busy that much earlier (R58A-1).
+  const lead = BUSY_LEAD_MS + BUSY_OPENS_MARGIN_S * 1000
   const at = (m: UpcomingMatch) => new Date(m.scheduled_at).getTime()
   for (const m of upcoming.matches) {
-    if (m.phase !== 'finished' && at(m) - t0 <= BUSY_LEAD_MS) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
+    if (m.phase !== 'finished' && at(m) - t0 <= lead) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
   }
   // The route is read without a limit: FoxLeague's page of 50, soonest first, the last day's finished games first.
   if (upcoming.matches.length >= UPCOMING_PAGE) return `your upcoming matches fill FoxLeague's page of ${UPCOMING_PAGE}: a match within the hour may be cut from it`
@@ -167,7 +176,7 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
     if (t.max_teams === 2 || t.status === 'completed' || t.status === 'cancelled') continue
     if (NOT_STARTED_STATUSES.has(t.status)) {
       // It can go active, with its fixtures, at any moment once the start is near.
-      if (new Date(t.starts_at).getTime() - t0 <= BUSY_LEAD_MS) return `T${t.id} starts at ${t.starts_at} and its fixtures are not out yet`
+      if (new Date(t.starts_at).getTime() - t0 <= lead) return `T${t.id} starts at ${t.starts_at} and its fixtures are not out yet`
       continue
     }
     if (!RUNNING_STATUSES.has(t.status)) return `T${t.id} has the status ${t.status}, which the agent does not know: whether it keeps you busy is unknown`
@@ -184,7 +193,7 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
         if (own.length > group.length) continue // an own knockout fixture is listed: the whole group has ended
         if (!group.length) return `T${t.id}: none of your group fixtures is in the list: whether your group has ended is unknown`
         // The group's last kickoff is no earlier than your own last group match: busy from an hour before that.
-        if (at(group[group.length - 1]!) - t0 <= BUSY_LEAD_MS) return `T${t.id}: your group has not ended for every team yet (no knockout fixture of yours is listed)`
+        if (at(group[group.length - 1]!) - t0 <= lead) return `T${t.id}: your group has not ended for every team yet (no knockout fixture of yours is listed)`
         continue
       }
       case 'swiss': {
@@ -247,6 +256,11 @@ export function sizeCeiling(s: AgentSnapshot): number {
 // Hard limits from the adversarial review (test/audit.test.ts), independent of what the model proposes.
 /** A 1v1 is refused against a team this many ELO points (or more) above the agent. */
 export const MAX_1V1_ELO_GAP = 100
+/**
+ * A 1v1 stake is not signed when the team's busy hour opens this soon, by FoxLeague's own count for a join or by the
+ * agent's fixtures for a create and a join: the payment settles and reaches the join gate after it (its own app holds 60 s).
+ */
+export const BUSY_OPENS_MARGIN_S = 120
 /** A 1v1 is refused when the rival's lineup (at full condition) is more than this much stronger than ours today. */
 export const MAX_1V1_STRENGTH_RATIO = 1.1
 export const MAX_1V1_PER_OPPONENT_WEEK = 2
@@ -575,12 +589,13 @@ function scheduleRefusal(
   const hours = span / 60
   const floor = cfg.min_field_condition ?? 30
   const loss = cfg.condition_loss_per_match ?? 10
-  const available = matchSquad(s).reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
+  // A card injured past the schedule's end plays none of it: it adds no condition (one out for a part still counts whole).
+  const squad = matchSquad(s).filter(p => !outInjured(p, new Date(end)))
+  const available = squad.reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
   const needed = matches * 11 * loss
   if (t.format === 'league_knockout' && needed <= available) {
     // The binding stretch is the knockout: up to 9 matches within its 46 slots, from the squad as the league phase
     // leaves it (rested over its slots at most to 100, less an even share of its 8 matches; Fable review of PR #31).
-    const squad = matchSquad(s)
     const leagueHours = (span - (LK_KNOCKOUT_SLOTS - 1) * interval) / 60
     const leagueCost = squad.length ? (LK_LEAGUE_MATCHES * 11 * loss) / squad.length : 0
     const atKnockout = (p: PlayerView) => Math.max(0, Math.min(MAX_CONDITION, atStart.at(p) + regenPerHour(p, cfg) * leagueHours) - leagueCost)
@@ -796,7 +811,28 @@ function canFuseReason(c: CanFuse): string {
   return `${c.reason ?? 'not fusable'}${who ? ` (${who})` : ''}`
 }
 
-function squadLegal(s: AgentSnapshot): string | null {
+/**
+ * Out of every match at `at` (FoxLeague, card_injuries.rs: injured_until past the kickoff), or its injury unread
+ * once the bans are live: unknown is not healthy.
+ */
+export function outInjured(p: PlayerView, at: Date): boolean {
+  return p.disciplineUnread === true || (p.injuredUntil !== null && Date.parse(p.injuredUntil) > at.getTime())
+}
+
+/** The saved 18 that FoxLeague's 1v1 gate counts match-fit (squad_would_forfeit): condition, no transfer cooldown, not injured. */
+function matchFit(s: AgentSnapshot, minCondition: number, at: Date): number {
+  return [...s.team!.lineup, ...s.team!.substitutes].filter(n => {
+    const p = card(s, n)
+    return p && p.condition >= minCondition && !p.transferLockedUntil && !outInjured(p, at)
+  }).length
+}
+
+/**
+ * `at`: when the match is played (now for a game, a 1v1 or a casual test; a tournament's start for an entry). A
+ * starter injured then is refused: every strength the rules compare is the saved eleven's, and FoxLeague would put a
+ * bench card of its own choice in the shirt. `what` names the moment in the reason.
+ */
+function squadLegal(s: AgentSnapshot, at: Date, what = ''): string | null {
   if (!s.team) return 'no team'
   if (s.team.lineup.length !== 11) return 'lineup does not have 11 players'
   if (s.team.substitutes.length !== 7) return `bench has ${s.team.substitutes.length}/7 substitutes`
@@ -809,13 +845,18 @@ function squadLegal(s: AgentSnapshot): string | null {
     // catches (grand audit 2026-11-06, EDGE-1): no match, entry or 1v1 on a squad that cannot be read.
     if (!Number.isFinite(p.syncedTotal) || !Number.isFinite(p.condition)) return `#${n}'s stats or condition could not be read: not acting blind`
   }
+  for (const n of s.team.lineup) {
+    const p = card(s, n)!
+    if (p.disciplineUnread) return `#${n}'s injury could not be read: not acting blind`
+    if (outInjured(p, at)) return `starter #${n} is injured until ${p.injuredUntil}${what}: save an eleven without it first (set_lineup, or set_formation with a lineup when its line is short)`
+  }
   const fit = lineupPositionsOk(s, s.team.formation, s.team.lineup)
   if (fit) return `the saved lineup does not fit the formation ${s.team.formation} (${fit}): save one that fits first (set_formation with lineup and substitutes, or set_lineup)`
   return null
 }
 
 /** An eleven and bench for `formation`: cards in the wallet, free to play, each starter in a slot of its position. */
-function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], substitutes: number[], minCondition: number): Verdict {
+function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], substitutes: number[], minCondition: number, now: Date): Verdict {
   const all = [...lineup, ...substitutes]
   if (new Set(all).size !== all.length) return refuse('a card appears twice')
   for (const n of all) {
@@ -830,6 +871,11 @@ function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], su
   if (substitutes.length < 7) notes.push('fewer than 7 substitutes: the server fills the bench')
   const tired = lineup.filter(n => (card(s, n)?.condition ?? 0) < minCondition)
   if (tired.length) notes.push(`starters under condition ${minCondition}: ${tired.map(n => `#${n}`).join(',')}`)
+  // Saving is free and the next match may fall after the injury; no match starts while one is in the eleven (squadLegal).
+  for (const n of lineup) {
+    const p = card(s, n)!
+    if (outInjured(p, now)) notes.push(p.injuredUntil ? `starter #${n} is injured until ${p.injuredUntil}: no match starts with it in the eleven` : `starter #${n}'s injury could not be read`)
+  }
   return allow(0, {}, 'play', notes)
 }
 
@@ -925,7 +971,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.lineup) {
         const waits = waitingOpenRefusal(s, ctx, 'lineup', a.lineup)
         if (waits) return refuse(waits)
-        return lineupVerdict(s, a.formation, a.lineup, a.substitutes ?? [], cfg.min_field_condition)
+        return lineupVerdict(s, a.formation, a.lineup, a.substitutes ?? [], cfg.min_field_condition, ctx.now)
       }
       const mismatch = lineupPositionsOk(s, a.formation, s.team.lineup)
       if (mismatch) return refuse(`${a.formation} needs a lineup that fits it (${mismatch}): send set_formation with lineup and substitutes in its slot order`)
@@ -937,7 +983,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!s.team) return refuse(TEAM_UNREADABLE)
       const waits = waitingOpenRefusal(s, ctx, 'lineup', a.lineup)
       if (waits) return refuse(waits)
-      return lineupVerdict(s, s.team.formation, a.lineup, a.substitutes, cfg.min_field_condition)
+      return lineupVerdict(s, s.team.formation, a.lineup, a.substitutes, cfg.min_field_condition, ctx.now)
     }
 
     case 'play_match': {
@@ -949,7 +995,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (s.auth?.activeMatch) return refuse(`already in match #${s.auth.activeMatch.match_id ?? s.auth.activeMatch.tournament_match_id ?? '?'}`)
       const busy = tournamentMatchWithinHour(s, ctx.now)
       if (busy) return refuse(s.auth?.upcoming ? `pre-match lockout: ${busy}` : `${busy} (the pre-match lockout is unknown): no match started blind`)
-      const legal = squadLegal(s)
+      const legal = squadLegal(s, ctx.now)
       if (legal) return refuse(legal)
       // A casual test is played by its own eleven (agent review of PR #49).
       const exhausted = (a.match_type === 'casual' && a.test ? a.test.lineup : s.team.lineup).filter(n => (card(s, n)?.condition ?? 0) <= 0)
@@ -959,8 +1005,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         // costs is back before the next match that counts. No count of its own: casual and ranked share FoxLeague's
         // daily starts (owner, 2026-11-06, OP-7).
         if (a.test) {
-          const fit = lineupVerdict(s, a.test.formation, a.test.lineup, a.test.substitutes, cfg.min_field_condition)
+          const fit = lineupVerdict(s, a.test.formation, a.test.lineup, a.test.substitutes, cfg.min_field_condition, ctx.now)
           if (!fit.ok) return fit
+          // FoxLeague would start the game with a bench card in an injured starter's shirt: not the eleven under test.
+          const hurt = a.test.lineup.map(n => card(s, n)!).find(p => outInjured(p, ctx.now))
+          if (hurt) return refuse(hurt.injuredUntil ? `#${hurt.nonce} is injured until ${hurt.injuredUntil}: a test eleven plays without it` : `#${hurt.nonce}'s injury could not be read: not testing blind`)
         }
         const cost = casualCostRefusal(s, a.test ? [...a.test.lineup, ...a.test.substitutes] : [...s.team.lineup, ...s.team.substitutes], ctx.now)
         if (cost) return refuse(cost)
@@ -1026,9 +1075,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (d.participants.some(p => p.user_id === myId)) return refuse(`already in T${t.id}`)
       if (ctx.pendingJoin) return refuse(`a seat in T${t.id} is already paid and waiting for FoxLeague's confirmation: not paying twice`)
       if (d.participants.length >= t.max_teams) return refuse(`T${t.id} is full`)
-      const legal = squadLegal(s)
-      if (legal) return refuse(legal)
       const oneVOne = t.max_teams === 2
+      // A 1v1 locks minutes after the join; a tournament's first lineup locks at its start (a start that cannot be
+      // read is judged as now, the stricter of the two).
+      const startsAt = Date.parse(t.starts_at)
+      const legal = oneVOne || !(startsAt > ctx.now.getTime()) ? squadLegal(s, ctx.now) : squadLegal(s, new Date(startsAt), `, past the start of T${t.id}`)
+      if (legal) return refuse(legal)
       if (oneVOne) {
         if ((t.targeted || t.target_user_id !== null) && t.target_user_id !== s.profile.id && !t.targeted_to_you) return refuse('1v1 is locked to another opponent')
         if (d.participants.length < 1) return refuse('1v1 creator has not paid yet')
@@ -1036,13 +1088,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (opp) return refuse(opp)
         // FoxLeague's own answer by the rows of its join gate (it answers false on its own failed read: the rules below still decide).
         if (d.viewer_blocked_tournament_window === true) return refuse('FoxLeague says this team is busy with a tournament (viewer_blocked_tournament_window): it would refuse the join after the stake is paid')
+        // The seconds until that gate turns on (FoxLeague, 2026-11-03): a stake signed now reaches the join after it.
+        const opens = d.viewer_tournament_window_opens_in_secs
+        if (typeof opens === 'number' && opens <= BUSY_OPENS_MARGIN_S) return refuse(`FoxLeague says this team is busy with a tournament in ${Math.max(0, Math.round(opens))} s (viewer_tournament_window_opens_in_secs): it would refuse the join after the stake is paid`)
         const blind = oneVOneStateRefusal(s, ctx.now)
         if (blind) return refuse(blind)
-        const fit = s.team!.lineup.concat(s.team!.substitutes).filter(n => {
-          const p = card(s, n)
-          return p && p.condition >= cfg.min_field_condition && !p.transferLockedUntil
-        })
-        if (fit.length < 11) return refuse(`only ${fit.length} match-fit players (condition >= ${cfg.min_field_condition})`)
+        const fit = matchFit(s, cfg.min_field_condition, ctx.now)
+        if (fit < 11) return refuse(`only ${fit} match-fit players (condition >= ${cfg.min_field_condition}, no transfer cooldown, not injured)`)
       }
       if (!oneVOne) {
         const worn = scheduleRefusal(s, t, ctx.now)
@@ -1070,7 +1122,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
         }
       }
-      // A free Bronze (created before the levels) seats without a payment and earns nothing; a paid one goes on chain like Silver.
+      // A free Bronze (one FoxLeague's own team creates; the players' free ones were cancelled at the levels' switch) seats without a payment and earns nothing; a paid one goes on chain like Silver.
       if (t.tier === 'bronze' && !(t.entry_fee_foxsy > 0)) return allow(0, { free: true, tier: 'bronze', scId: t.sc_tournament_id ?? t.id, fee: 0 })
       if (t.entry_fee_foxsy <= 0) return refuse('paid tier without a fee cannot take entries')
       if (t.entry_fee_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`entry fee ${t.entry_fee_foxsy} exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
@@ -1171,7 +1223,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       }
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() }, ctx.now)
       if (worn) return refuse(worn)
-      const legal = squadLegal(s)
+      const legal = squadLegal(s, new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000), ', past the start of your tournament')
       if (legal) return refuse(legal)
       // What the organizer owes: one payment, once FoxLeague asks for it at the create; nothing on a tournament it exempts.
       let organizerFoxsy = 0
@@ -1225,8 +1277,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.stake_foxsy > ctx.settings.maxEntryFeeFoxsy) return refuse(`stake exceeds the per-action maximum ${ctx.settings.maxEntryFeeFoxsy}`)
       const blind = oneVOneStateRefusal(s, ctx.now)
       if (blind) return refuse(blind)
-      const legal = squadLegal(s)
+      const legal = squadLegal(s, ctx.now)
       if (legal) return refuse(legal)
+      // The creator's own seat goes through FoxLeague's join gate after the stake is paid (tournaments.rs: the create
+      // leaves the match-fit gate to the creator's later join): the same count as a join.
+      const fit = matchFit(s, cfg.min_field_condition, ctx.now)
+      if (fit < 11) return refuse(`only ${fit} match-fit players (condition >= ${cfg.min_field_condition}, no transfer cooldown, not injured)`)
       return needFoxsy(a.stake_foxsy, allow(a.stake_foxsy, { fee: a.stake_foxsy }))
     }
 
@@ -1288,6 +1344,32 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           facts.quantity = a.quantity
           break
         }
+        case 'medicine': {
+          // One injured card of the wallet, whole days, at FoxLeague's own quote for exactly those days (its confirm
+          // quotes again and takes that amount only; anything else comes back whole and costs the gas).
+          const n = a.player_nonces?.[0]
+          const days = a.quantity
+          const p = typeof n === 'number' ? card(s, n) : undefined
+          if (!p || typeof days !== 'number') return refuse(`#${n} is not in the wallet`)
+          if (p.listed) return refuse(`#${n} is listed for sale: only a card in the wallet takes medicine`)
+          if (!p.injuredUntil) return refuse(`#${n} is not injured`)
+          // The level's count (owner, 2026-11-10), in days over all cards, from the agent's own purchases of the last 7 days.
+          const perWeek = ctx.settings.medicineDaysPerWeek
+          if (!(perWeek > 0)) return refuse('no medicine at this level (Medicine days a week is 0)')
+          if (typeof ctx.medicineDaysThisWeek !== 'number' || !Number.isFinite(ctx.medicineDaysThisWeek)) return refuse('the medicine bought this week could not be counted: not buying blind')
+          if (ctx.medicineDaysThisWeek + days > perWeek) return refuse(`${perWeek} medicine day${perWeek === 1 ? '' : 's'} a week at this level: ${ctx.medicineDaysThisWeek} bought in the last 7 days leave room for ${Math.max(0, perWeek - ctx.medicineDaysThisWeek)}`)
+          const q = ctx.medicineQuote
+          if (!q) return refuse(`the medicine quote for #${n} could not be read: not paying blind`)
+          const whole = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0
+          if (!whole(q.max_days) || !whole(q.price_per_day) || !whole(q.cost_foxsy) || !whole(q.days_paid)) return refuse(`the medicine quote for #${n} could not be read: not paying blind`)
+          if (q.max_days < 1) return refuse(`no day of #${n}'s injury is left to save: a third of every injury is always served`)
+          if (days > q.max_days) return refuse(`medicine saves #${n} ${q.max_days} day${q.max_days === 1 ? '' : 's'} at most (a third of every injury is always served)`)
+          if (q.player_nonce !== n || q.days_paid !== days || q.price_per_day <= 0 || q.cost_foxsy !== q.price_per_day * days) return refuse(`the medicine quote does not match ${days} day${days === 1 ? '' : 's'} at ${q.price_per_day} FOXSY: not paying blind`)
+          amount = q.cost_foxsy
+          facts.player_nonces = [n]
+          facts.quantity = days
+          break
+        }
         case 'common_pack': {
           if (!cfg.common_pack_available) return refuse(`Common pack unavailable${cfg.common_pack_unavailable_reason ? `: ${cfg.common_pack_unavailable_reason}` : ''}`)
           if (s.auth?.shop?.common_pack_remaining_this_week === 0) return refuse('weekly Common pack quota used')
@@ -1320,6 +1402,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (c.listed) return refuse(`#${c.nonce} is listed for sale`)
         if (c.transferLockedUntil) return refuse(`#${c.nonce} is in a transfer cooldown until ${c.transferLockedUntil}`)
         if (c.fusionReadyAt) return refuse(`#${c.nonce} is in its fusion cooldown until ${c.fusionReadyAt}`)
+        // FoxLeague's Fusion tab refuses both; its contract sees neither, and the new card would only inherit them.
+        if (c.disciplineUnread) return refuse(`#${c.nonce}'s injury could not be read: not fusing blind`)
+        if (c.injuredUntil) return refuse(`#${c.nonce} is injured until ${c.injuredUntil}: an injured card cannot be fused`)
+        if (c.suspended) return refuse(`#${c.nonce} is suspended (a yellow card ban to serve): a suspended card cannot be fused`)
         if (inSquad(s, c.nonce)) return refuse(`#${c.nonce} is in the lineup or on the bench: set a squad without it first`)
         if (c.dirty) return refuse(`#${c.nonce} has unsynced stats: sync first (the contract reads the on-chain match count)`)
         if (c.competitiveMatches < g.floor) return refuse(`#${c.nonce} has played ${c.competitiveMatches} competitive matches; ${aRarity(rarity)} must really play ${g.floor} of its ${g.gate}`)
@@ -1366,8 +1452,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (ctx.cardLock === null) return refuse(`the details of #${a.nonce} could not be read: not bidding blind`)
       const lock = ctx.cardLock?.until
       if (lock && lock.getTime() - ctx.now.getTime() > MAX_INHERITED_LOCK_HOURS * 3600_000) return refuse(`#${a.nonce} carries a transfer lock until ${lock.toISOString()}: it could not play for weeks`)
+      // A sale keeps the card's injury. Whether an injured card is worth its price is the plan's call (owner,
+      // 2026-11-10), however long it is out; one whose injury cannot be read is not: unknown is not healthy.
+      if (ctx.cardLock?.injuryUnread) return refuse(`the injury of #${a.nonce} could not be read: not bidding blind`)
+      const hurt = ctx.cardLock?.injuredUntil
       const notes = ['refunded at once if outbid; the card arrives when the auction is settled']
       if (lock && lock > ctx.now) notes.push(`the card carries a transfer lock until ${lock.toISOString()}`)
+      if (hurt && hurt > ctx.now) notes.push(`the card is injured until ${hurt.toISOString()}: it plays no match before`)
       return needFoxsy(a.foxsy, allow(a.foxsy, { nonce: a.nonce, bid: a.foxsy }, 'play', notes))
     }
 

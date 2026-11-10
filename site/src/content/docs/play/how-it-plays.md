@@ -41,7 +41,16 @@ An empty plan is a good answer too: the agent never spends just because budget i
   the test formation, starts the game and puts your formation back at once. The results of all your agents form one
   test bench, apart from the formation record, and the agent weighs it with the league table and its own record
   before it changes its formation.
-- **Competition levels**: once FoxLeague switches them on, a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament then has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
+- **Competition levels**: a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
+- **Yellow cards and injuries**: once FoxLeague counts them, a player with 3 yellow cards in tournaments misses your
+  team's next tournament match, and a foul can injure a player for 3, 9 or 27 days (more likely the more tired he is:
+  3 percent a foul at full condition, up to 9 percent at condition 30). The agent sees each card's yellow cards, ban
+  and injury, also on the cards at auction. It starts no match, 1v1 or tournament entry while an injured player is in
+  your starting eleven: it saves an eleven without him first. Before a 1v1 it counts 11 match-fit players among your
+  18, an injured one not among them, so no stake is paid for a seat FoxLeague would refuse. It never fuses an injured
+  or suspended card. It may bid on an injured card when the price is low enough for the days he cannot play, and
+  never on one whose injury it cannot read. A forfeit costs your
+  team rating, so it keeps the 11 + 7 complete and fit before each lock, as before.
 
 ## Competition
 
@@ -93,6 +102,9 @@ An empty plan is a good answer too: the agent never spends just because budget i
   one only once a competitive match of its own is drawn within the booster's 24 hours, and only within the boosters a
   week its level allows.
 - **Paid training slots**: mainly while a booster is active.
+- **Medicine**: shortens an injury by whole days (FoxLeague always keeps a third of it). The agent buys it only for a
+  starter it cannot replace who would miss matches that matter, only the days up to that match, at FoxLeague's own
+  quote, within your level's medicine days a week, your Max shop payment and your daily cap.
 - **Common packs**: 5 Common cards, the spare cards the first fusion needs.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen.

@@ -1,4 +1,5 @@
-// FoxLeague's switches of the competition levels, the organizer fees and the leave lock, as /api/config serves them.
+// FoxLeague's switches of the competition levels, the organizer fees, the leave lock and the yellow card bans with
+// the injuries, as /api/config serves them.
 // No block (an older backend) is the rules of before: FoxLeague itself refuses what it no longer takes, before anything
 // is paid. A config read just before a switch says `live: false`, so the moment it names counts too.
 
@@ -33,4 +34,13 @@ export function organizerFeesLive(cfg: FoxConfig | null | undefined, now: Date):
 /** A team may leave only if the tournament keeps its minimum. */
 export function leaveLockLive(cfg: FoxConfig | null | undefined): boolean {
   return cfg?.tournament_defaults?.leave_lock_live === true
+}
+
+/**
+ * Yellow card bans and injuries count (FoxLeague's `card_bans`, one switch for both). From then every card's answer
+ * carries its injury and its ban: one left out is unknown, never healthy.
+ */
+export function cardBansLive(cfg: FoxConfig | null | undefined, now: Date): boolean {
+  const c = cfg?.card_bans
+  return Boolean(c) && (c!.live === true || passed(c!.live_from, now))
 }

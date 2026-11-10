@@ -56,7 +56,7 @@ test('the new actions parse and reject bad shapes', () => {
 
 function card(nonce: number, position: PlayerView['position'], rarity: PlayerView['rarity'], role: PlayerView['role'], comp = 0): PlayerView {
   const st = { speed: 20, accuracy: 20, defense: 20, power: 20, control: 20, vision: 20, stamina: 20 }
-  return { nonce, name: `P${nonce}`, position, rarity, cap: 30, role, condition: 100, ageYears: 18, synced: { ...st }, live: { ...st }, xp: {}, dirty: false, competitiveMatches: comp, fusionMatchCredit: 0, fusionReadyAt: null, listed: false, transferLockedUntil: null, syncedTotal: 140 }
+  return { nonce, name: `P${nonce}`, position, rarity, cap: 30, role, condition: 100, ageYears: 18, synced: { ...st }, live: { ...st }, xp: {}, dirty: false, competitiveMatches: comp, fusionMatchCredit: 0, fusionReadyAt: null, listed: false, transferLockedUntil: null, injuredUntil: null, suspended: false, banYellows: 0, syncedTotal: 140 }
 }
 
 function snap(extra: PlayerView[] = []): AgentSnapshot {

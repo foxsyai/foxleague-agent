@@ -1932,3 +1932,62 @@ since rc.85 (`16d9a455e`); the ones that touch the agent:
 
 No other agent behaviour changes: the ranked ticket, paid Bronze, the organizer quote and payment, the OVR range and
 the 1v1 flow read and pay as before; no hard-coded number differs from the live `/api/config`.
+
+## 25. Mainnet of 2026-11-09 (bbb1bfba7) and the rules of 13 November (cards, injuries, medicine, forfeits)
+
+Read on 2026-11-10 through git only: FoxLeague's `origin/main` from `01290ebaf` to `bbb1bfba7` (32 commits, what mainnet
+runs since the competition levels' switch of 9 November 14:00 UTC) and its release branch `2913ee7df` (8 commits
+ahead). No contract changed.
+
+**Checked, nothing to change** (the agent ran through the switch with no error: ranked tickets, paid Bronze seats and
+1v1s all paid and confirmed):
+
+- The create of a tournament stays the two-step flow (`CreateMode::TwoStep`); `standard_create_and_join` and its 780 s
+  floor concern only the one-signature create the agent does not use (`a2ca76885`).
+- A private tournament invites at most its seats less the organizer's (`private_seats_refusal`, before any payment):
+  the agent's own bound (`invites.length > max_teams - 1`).
+- `organizer_fees.private_match_fee_foxsy` is 0: the agent pays the quote's total, never the config field.
+- Every free Bronze that had not started was cancelled at the switch (`036834369`); the agent's snapshot already hides
+  free Bronze from the plan.
+- `POST /teams/lineup` drops a substitute listed for sale and fills its seat from the reserves (`0fc10806f`); the
+  agent never lists a card of its 18.
+- Gas limits: shopPay 12,864,100, join 8,400,000, claimRefund 6,500,000 unchanged.
+
+**New on main, used by the agent since this sync:**
+
+- `viewer_tournament_window_opens_in_secs` on a 1v1's detail (read with the wallet): the seconds until FoxLeague's busy
+  gate turns on for the team. A stake signed inside the last minutes reaches the join after it and is refunded with
+  the gas lost; the agent refuses a 1v1 join when it opens within 120 s (LIVE-1).
+- The five discipline fields on every card and listing, `card_bans` in `/api/config`, the medicine routes (section 6a
+  of `docs/ECONOMY-AND-RULES.md`).
+
+**What the agent does from the switch of 13 November** (`src/foxleague/levels.ts` `cardBansLive`):
+
+- Reads each card's `injured_until`, `bans_pending` and `ban_yellow_cards` (`disciplineOf` in `src/snapshot/snapshot.ts`).
+  Once the switch is live a card whose answer leaves them out is unknown, never healthy.
+- Starts no match, 1v1 or tournament entry while an injured card is in the saved eleven (`squadLegal`): every strength
+  the rules compare is the saved eleven's, and FoxLeague would put a bench card of its own choice in the shirt. A
+  tournament entry is judged at its start, a game or a 1v1 now. The plan saves an eleven without the card first.
+- Counts 11 match-fit of the 18 (condition, no transfer cooldown, not injured) before a 1v1 stake is paid, at the
+  create too (the creator's own seat goes through the same join gate).
+- Leaves a card injured past a tournament's last match out of the condition its schedule is weighed against.
+- Refuses an injured or suspended card as a fusion input, whatever FoxLeague's pre-check answers.
+- Refuses a bid on a card whose injury cannot be read; an injured card may be bid on when its price deserves it (the
+  owner, 2026-11-10), with the injury in the bid's notes; the auction lines show each card's injury, ban and yellow cards.
+- Buys medicine as the shop product `medicine` (one card, whole days): `GET /api/shop/medicine/quote` for exactly
+  those days, one `shopPay` of its `cost_foxsy` (within the level's medicine days a week, Max shop payment and the daily cap,
+  booked before the signature), then `POST /api/shop/medicine` with the hash; `tx_pending` or no answer keeps the hash, and the pending
+  retry confirms it on the same route. A wrong amount, a healed card or too many days is refunded whole by FoxLeague
+  (`refund_whole_payment`), heard by the retry as for every shop payment.
+- A suspended card needs no rule: the lock replaces it, and a 1v1 or a ranked game still takes it. The snapshot
+  marks it, and the prompt asks for the plan's own choice in its place before a tournament lock.
+
+**Not on FoxLeague's main yet on 2026-11-10** (release branch): the fusion refusal in `can-fuse` and the forfeit
+penalty. The agent's own fusion rule does not wait for it. The forfeit penalty's switch is not in `/api/config`; the
+prompt states the rule, and the agent's checks against a forfeit (a full 11 + 7, fit starters, the schedule's wear)
+are the ones it already had.
+
+**Left for 1 December 2026** (the MetaStaking discount on Shop prices): on 2026-11-10 `metastaking/discount.rs` only
+computes a percent and no payment check reads it. The agent pays list prices in exact amounts; when FoxLeague ships
+the Shop side, read how a wallet's price is quoted before that date.
+

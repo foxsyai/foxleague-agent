@@ -1,11 +1,11 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { cardBansLive, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
+import { casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
-import type { AgentSnapshot, PlayerView } from './snapshot.ts'
+import { disciplineOf, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
@@ -48,13 +48,20 @@ function statLine(p: PlayerView): string {
     .join(' ')
 }
 
-/** One card. With its rarity's match gate, the competitive matches read "played+credit of gate" and "at-gate" marks a card that can be fused or listed. */
-export function playerLine(p: PlayerView, gate?: MatchGate): string {
+/**
+ * One card. With its rarity's match gate, the competitive matches read "played+credit of gate" and "at-gate" marks a
+ * card that can be fused or listed. `perBan`: the yellow cards of a ban (FoxLeague's config), for the count toward one.
+ */
+export function playerLine(p: PlayerView, gate?: MatchGate, perBan?: number): string {
   const tags = [
     p.role === 'starter' ? `XI#${p.slot}` : p.role === 'bench' ? 'bench' : 'res',
     p.dirty ? 'dirty' : '',
     p.listed ? 'LISTED' : '',
     p.transferLockedUntil ? `locked-until ${p.transferLockedUntil.slice(0, 16)}` : '',
+    p.injuredUntil ? `INJURED-until ${p.injuredUntil.slice(0, 16)}` : '',
+    p.suspended ? 'SUSPENDED' : '',
+    p.banYellows > 0 ? `yellow ${p.banYellows}${typeof perBan === 'number' && perBan > 0 ? `/${perBan}` : ''}` : '',
+    p.disciplineUnread ? 'injury-and-ban-unknown' : '',
     p.fusionReadyAt ? `fusion-cooldown-until ${p.fusionReadyAt.slice(0, 16)}` : '',
     gate && p.competitiveMatches >= gate.floor && p.competitiveMatches + p.fusionMatchCredit >= gate.gate ? 'at-gate' : '',
   ].filter(Boolean)
@@ -175,6 +182,23 @@ const otherSplit = (s: AgentSnapshot, p: PrizeSplit | null | undefined) => {
   return p && pub && p.platform_fee_percent !== pub.platform_fee_percent ? splitText(p) : ''
 }
 
+/**
+ * What a card at auction brings with it (a sale keeps its yellow cards, its ban and its injury), from numbers and a
+ * parsed time only. Once the bans are live a listing without them is said to be unknown, never clean.
+ */
+function disciplineText(s: AgentSnapshot, l: { injured_until?: string | null; bans_pending?: number; ban_yellow_cards?: number }): string {
+  const now = new Date(s.takenAt)
+  const d = disciplineOf(l, now, cardBansLive(s.config, now))
+  if (d.disciplineUnread) return ' | injury and ban unknown'
+  const per = s.config?.card_bans?.yellow_cards_per_ban
+  const marks = [
+    d.injuredUntil ? `INJURED until ${d.injuredUntil.slice(0, 16)}` : '',
+    d.suspended ? 'suspended' : '',
+    d.banYellows > 0 ? `yellow ${d.banYellows}${typeof per === 'number' && per > 0 ? `/${per}` : ''}` : '',
+  ].filter(Boolean)
+  return marks.length ? ` | ${marks.join(', ')}` : ''
+}
+
 /** A number FoxLeague's config serves, or unknown when it does not: a missing block field never fails the plan (OPEN-3). */
 const known = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? String(v) : 'unknown')
 
@@ -191,6 +215,9 @@ function levelLines(s: AgentSnapshot): string[] {
   }
   const f = s.config?.organizer_fees
   if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${known(f.calendar_deposit_per_match_foxsy)} FOXSY a game${f.calendar_deposit_min_foxsy > 0 ? ` (at least ${f.calendar_deposit_min_foxsy})` : ''}${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
+  // Yellow card bans and injuries: one switch (FoxLeague's card_bans); the chance, the days out and medicine are in the prompt.
+  const b = s.config?.card_bans
+  if (b) out.push(`Cards and injuries: ${whenLive(cardBansLive(s.config, now), b.live_from)}: ${known(b.yellow_cards_per_ban)} yellow cards in tournaments of more than 2 teams = out of the team's next tournament match; an injured card plays no match until its injury ends`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   return out
@@ -255,7 +282,13 @@ export function renderDigest(s: AgentSnapshot): string {
     if (s.config) out.push(`Match gates (fusion input or listing; ${levelsLive(s.config, new Date(s.takenAt)) ? 'a ranked game you started and paid for and a paid Bronze match count too, casual and free Bronze never' : 'ranked, casual and Bronze never count'}): ${gateLine(s.config)}`)
     const order = { starter: 0, bench: 1, reserve: 2 }
     const cfg = s.config
-    for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p, cfg ? matchGate(cfg, p.rarity) : undefined)}`)
+    for (const p of [...s.players].sort((a, b) => order[a.role] - order[b.role] || (a.slot ?? 99) - (b.slot ?? 99))) out.push(`  ${playerLine(p, cfg ? matchGate(cfg, p.rarity) : undefined, cfg?.card_bans?.yellow_cards_per_ban)}`)
+    // What the executor's squad check refuses on (squadLegal), said before the plan sends a match into it.
+    const at = new Date(s.takenAt)
+    const hurt = s.players.filter(p => p.role === 'starter' && outInjured(p, at))
+    if (hurt.length) out.push(`INJURED IN YOUR ELEVEN: ${hurt.map(p => (p.injuredUntil ? `#${p.nonce} until ${p.injuredUntil.slice(0, 16)}` : `#${p.nonce} (its injury could not be read)`)).join(', ')}: no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an eleven without ${hurt.length === 1 ? 'it' : 'them'}`)
+    const banned = s.players.filter(p => p.suspended && p.role !== 'reserve')
+    if (banned.length) out.push(`Suspended in your 18: ${banned.map(p => `#${p.nonce}`).join(', ')}: out of your next tournament match of more than 2 teams (a 1v1 or a ranked game never serves a ban and still takes the card)`)
   }
 
   const fr = s.formationRecord
@@ -363,7 +396,7 @@ export function renderDigest(s: AgentSnapshot): string {
       const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
       // Own keys only: a rarity named like an inherited property (toString) has no market price (review of PR #21).
       const market = m.prices && Object.hasOwn(m.prices, l.rarity) ? m.prices[l.rarity] : undefined
-      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}`)
+      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}${disciplineText(s, l)}`)
     }
   }
   // The threshold every level's 1v1s against a known team are held to, next to the chances below.

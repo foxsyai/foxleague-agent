@@ -28,6 +28,7 @@ import type {
   CanList,
   FloorPrice,
   MarketListing,
+  MedicineQuote,
   MatchFormations,
   MatchHistoryRow,
 } from './types.ts'
@@ -332,6 +333,19 @@ export class FoxLeague {
 
   shopConfirm(w: AgentWallet, body: { tx_hash: string; product: string; player_nonce?: number; player_nonces?: number[]; quantity?: number }): Promise<{ purchase_id: number; message: string }> {
     return this.call('/shop/confirm', { method: 'POST', wallet: w, body: { wallet_address: w.address, ...body }, timeoutMs: 60_000 })
+  }
+
+  /** What `days` whole days of medicine cost for the wallet's own injured card, and the most days it sells. */
+  medicineQuote(w: AgentWallet, nonce: number, days: number): Promise<MedicineQuote> {
+    return this.call<MedicineQuote>(`/shop/medicine/quote?player_nonce=${nonce}&days=${days}`, { wallet: w })
+  }
+
+  /**
+   * Confirms a settled shopPay of exactly the quote's cost as medicine (FoxLeague quotes again; any other amount, a
+   * healed card or too many days comes back whole). tx_pending: send the same hash again, never pay twice.
+   */
+  buyMedicine(w: AgentWallet, body: { player_nonce: number; days: number; tx_hash: string }): Promise<{ player_nonce: number; cost_foxsy: number; days_paid: number; injured_until: string }> {
+    return this.call('/shop/medicine', { method: 'POST', wallet: w, body: { wallet_address: w.address, ...body }, timeoutMs: 60_000 })
   }
 
   /** The sync of every dirty card, or of one card (`nonce`), as FoxLeague's player profile offers it. */

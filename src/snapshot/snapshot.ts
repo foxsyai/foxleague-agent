@@ -8,6 +8,7 @@ import type { Chain } from '../chain/gateway.ts'
 import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
+import { cardBansLive } from '../foxleague/levels.ts'
 import { winChance } from './winchance.ts'
 import { LEAGUE_DAYS, LEAGUE_READS_PER_TICK, LEAGUE_TEAMS, LEAGUE_TEAMS_PER_TICK, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueTable } from './formations.ts'
 import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache } from './market.ts'
@@ -83,6 +84,14 @@ export interface PlayerView {
   fusionReadyAt: string | null
   listed: boolean
   transferLockedUntil: string | null
+  /** While the card is injured (FoxLeague's injured_until, still ahead): out of every match until then. */
+  injuredUntil: string | null
+  /** A yellow card ban to serve (bans_pending above 0): out of the team's next tournament match of more than 2 teams. */
+  suspended: boolean
+  /** Yellow cards toward the next ban. */
+  banYellows: number
+  /** Once the bans are live: FoxLeague's answer left the card's injury or ban out, so neither is known. */
+  disciplineUnread?: boolean
   /** Synced total over the 7 stats, as a quick strength figure. */
   syncedTotal: number
 }
@@ -200,7 +209,25 @@ export function gameDay(now: Date, resetHourUtc = 14): AgentSnapshot['gameDay'] 
   return { resetHourUtc, nextResetAt: next.toISOString(), hoursToReset: Math.round(((next.getTime() - now.getTime()) / 3600_000) * 10) / 10 }
 }
 
-export function playerView(p: PlayerCard, team: Team | null, now: Date): PlayerView {
+/**
+ * A card's injury and ban as FoxLeague's card record carries them (its own cards, a rival's, one at auction: a sale
+ * keeps both). `bansLive`: the yellow card bans and injuries count (cardBansLive). From then a card without a readable
+ * injury and ban is unknown (disciplineUnread), never healthy; before, an older answer is the rules of before.
+ */
+export function disciplineOf(p: Pick<PlayerCard, 'injured_until' | 'bans_pending' | 'ban_yellow_cards'>, now: Date, bansLive: boolean): Pick<PlayerView, 'injuredUntil' | 'suspended' | 'banYellows' | 'disciplineUnread'> {
+  // null or a past time: not injured (card_injuries.rs). Anything else that is no time is unread.
+  const until = p.injured_until === null || p.injured_until === undefined ? null : Date.parse(String(p.injured_until))
+  const injuryRead = p.injured_until === null || (typeof p.injured_until === 'string' && Number.isFinite(until))
+  const bansRead = typeof p.bans_pending === 'number' && Number.isFinite(p.bans_pending)
+  return {
+    injuredUntil: typeof until === 'number' && Number.isFinite(until) && until > now.getTime() ? new Date(until).toISOString() : null,
+    suspended: bansRead && (p.bans_pending as number) > 0,
+    banYellows: typeof p.ban_yellow_cards === 'number' && Number.isFinite(p.ban_yellow_cards) ? p.ban_yellow_cards : 0,
+    ...(bansLive && !(injuryRead && bansRead) ? { disciplineUnread: true } : {}),
+  }
+}
+
+export function playerView(p: PlayerCard, team: Team | null, now: Date, bansLive = false): PlayerView {
   const slot = team?.lineup.indexOf(p.nft_nonce) ?? -1
   const role: PlayerView['role'] = slot >= 0 ? 'starter' : team?.substitutes.includes(p.nft_nonce) ? 'bench' : 'reserve'
   const minted = new Date(p.minted_at ?? p.created_at)
@@ -236,6 +263,7 @@ export function playerView(p: PlayerCard, team: Team | null, now: Date): PlayerV
     fusionReadyAt: p.fusion_ready_at && new Date(p.fusion_ready_at) > now ? p.fusion_ready_at : null,
     listed: p.listed_for_sale,
     transferLockedUntil,
+    ...disciplineOf(p, now, bansLive),
     syncedTotal: Object.values(synced).reduce((a, b) => a + b, 0),
   }
 }
@@ -580,8 +608,9 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // fox.user() answers null for "not found" and the attempt wrapper answers null for a failure: only the latter leaves a warning.
   const profileUnreadable = warnings.some(w => w.startsWith('profile: '))
 
+  const bansLive = cardBansLive(config, now)
   const players = registered
-    ? ((await attempt(warnings, 'players', () => fox.players(address, wallet ?? undefined))) ?? []).map(p => playerView(p, team, now))
+    ? ((await attempt(warnings, 'players', () => fox.players(address, wallet ?? undefined))) ?? []).map(p => playerView(p, team, now, bansLive))
     : []
 
   // Registration readiness only matters before the team exists.

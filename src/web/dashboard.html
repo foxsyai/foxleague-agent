@@ -374,6 +374,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div><label for="sTraining">Paid training a day<i class="info" data-tip="paidTraining">i</i></label><input id="sTraining" type="number" min="0" max="10" step="1"></div>
           <div><label for="sBoosters">Boosters a week<i class="info" data-tip="boosters">i</i></label><input id="sBoosters" type="number" min="0" max="7" step="1"></div>
           <div><label for="sPacks">Packs a week<i class="info" data-tip="packs">i</i></label><input id="sPacks" type="number" min="0" max="2" step="1"></div>
+          <div><label for="sMedicine">Medicine days a week<i class="info" data-tip="medicine">i</i></label><input id="sMedicine" type="number" min="0" max="60" step="1"></div>
           <div class="sep">Timing</div>
           <div><label for="sTick">Tick (minutes)<i class="info" data-tip="tick">i</i></label><input id="sTick" type="number" min="10" max="240" step="1"></div>
           <div><label for="sJitter">Random window (± min)<i class="info" data-tip="jitter">i</i></label><input id="sJitter" type="number" min="0" max="60" step="1"></div>
@@ -640,7 +641,7 @@ function fillForm(st) {
   $('sBidRare').value = st.maxBidRareFoxsy; $('sBidEpic').value = st.maxBidEpicFoxsy; $('sBidLegendary').value = st.maxBidLegendaryFoxsy
   renderLimitHints()
   $('sBronze').value = st.entryFeesBronze.join(', '); $('sSilver').value = st.entryFeesSilver.join(', '); $('sGold').value = st.entryFeesGold.join(', ')
-  $('sTraining').value = st.paidTrainingPerDay; $('sBoosters').value = st.boostersPerWeek; $('sPacks').value = st.packsPerWeek
+  $('sTraining').value = st.paidTrainingPerDay; $('sBoosters').value = st.boostersPerWeek; $('sPacks').value = st.packsPerWeek; $('sMedicine').value = st.medicineDaysPerWeek
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
   formDirty = false
@@ -688,7 +689,7 @@ function readForm() {
     egldGasReserve: $('sReserve').value.trim(), topUpWarningUsd: n('sTopUp'), maxEntryFeeFoxsy: n('sEntry'), maxShopPaymentFoxsy: n('sShop'), maxSwapFoxsy: n('sSwap'), maxBidFoxsy: n('sBid'),
     maxBidCommonFoxsy: n('sBidCommon'), maxBidUncommonFoxsy: n('sBidUncommon'), maxBidRareFoxsy: n('sBidRare'), maxBidEpicFoxsy: n('sBidEpic'), maxBidLegendaryFoxsy: n('sBidLegendary'),
     entryFeesBronze: list('sBronze'), entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
-    paidTrainingPerDay: n('sTraining'), boostersPerWeek: n('sBoosters'), packsPerWeek: n('sPacks'),
+    paidTrainingPerDay: n('sTraining'), boostersPerWeek: n('sBoosters'), packsPerWeek: n('sPacks'), medicineDaysPerWeek: n('sMedicine'),
     activeHoursUtc: [n('sFrom'), n('sTo')],
   }
 }
@@ -979,7 +980,7 @@ const TIPS = {
     <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Six levels, one brain: every level plays by the same rules (the ones Zeus had): it weighs a win chance for every team, plays a 1v1 against a known team only from 55 percent, enters a tournament only with a real chance of the top three, may post open challenges and create private tournaments, sells a spare card when its price beats its use, and spends only when it pays. What grows from one level to the next is the money: the daily cap and monthly budget, the largest entry, shop payment and bid (any rarity, within its limit), and the counts of paid training a day, boosters and packs a week. <b>Steady</b> has the smallest budget, <b>Zeus</b> the largest and plans every hour. The manual's Strategy levels page has the full table. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that do not fit it yet (moving up, those under its values; moving down, those above them), each with a tick, and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
+    <p>Six levels, one brain: every level plays by the same rules (the ones Zeus had): it weighs a win chance for every team, plays a 1v1 against a known team only from 55 percent, enters a tournament only with a real chance of the top three, may post open challenges and create private tournaments, sells a spare card when its price beats its use, and spends only when it pays. What grows from one level to the next is the money: the daily cap and monthly budget, the largest entry, shop payment and bid (any rarity, within its limit), and the counts of paid training a day, boosters and packs a week and medicine days a week. <b>Steady</b> has the smallest budget, <b>Zeus</b> the largest and plans every hour. The manual's Strategy levels page has the full table. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that do not fit it yet (moving up, those under its values; moving down, those above them), each with a tick, and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
@@ -993,8 +994,8 @@ const TIPS = {
   entry: ['Max entry fee or stake (FOXSY)', `<p>The largest single tournament entry fee or 1v1 stake the agent may pay, when it joins or creates one.</p>
     <p>Silver entries run from 1,000 to 4,999 FOXSY and Gold starts at 5,000. Below 5,000 the agent never enters Gold.</p>`],
   shop: ['Max shop payment (FOXSY)', `<p>The largest single shop payment. Prices: condition recovery up to 100 per player (pro-rated), a training slot 20, the XP booster 2,000 and a common pack 2,500.</p>
-    <p>At 2,500 the agent can buy anything in the shop. The two fusion waivers use the same maximum: a shorter fusion cooldown (75 per day, at most 825 per card) and bought match credit (priced by rarity: an Uncommon 20 per match, at most 200 per card; a Rare or an Epic 100 per match, a Rare's 30 credits 3,000; none for a Common). It holds a fusion fee (100 to 800) too, so at 500 the fees up to 400 are in reach. Marketplace bids have their own limits.</p>
-    <p>Once FoxLeague's competition levels are live it also caps the ranked ticket, and once its organizer fees are live the calendar deposit a tournament the agent creates owes (per scheduled game, counted on its maximum number of teams: a knockout of 16 owes 15 games, a round robin of 8 owes 28). A tournament that owes more than this is not created.</p>`],
+    <p>At 2,500 the agent can buy anything in the shop. The two fusion waivers use the same maximum: a shorter fusion cooldown (75 per day, at most 825 per card) and bought match credit (priced by rarity: an Uncommon 20 per match, at most 200 per card; a Rare or an Epic 100 per match, a Rare's 30 credits 3,000; none for a Common). It holds a fusion fee (100 to 800) too, so at 500 the fees up to 400 are in reach. Medicine for an injured player is one payment for the days it saves (100 FOXSY a day for a Common up to 500 for a Legendary), so at 500 it buys up to 5 days for a Common and 1 for a Legendary. Marketplace bids have their own limits.</p>
+    <p>It also caps the ranked ticket of a ranked game the agent starts and the calendar deposit a tournament the agent creates owes (per scheduled game, counted on its maximum number of teams: a knockout of 16 owes 15 games, a round robin of 8 owes 28). A tournament that owes more than this is not created.</p>`],
   swap: ['Max swap (FOXSY)', `<p>The largest single swap to FOXSY on xExchange, counted in FOXSY received. The agent pays with the wallet's WEGLD when it covers the swap, otherwise with EGLD above the gas reserve, and swaps only what its next actions need.</p>`],
   bid: ['Max bid (FOXSY)', `<p>The largest single bid the agent may place on a marketplace auction. Every sale is a 24-hour auction: a bid must reach the reserve or beat the top bid by 5 percent. An outbid bidder gets the FOXSY back at once.</p>
     <p>Whatever this says, a bid never goes above what the card would cost to build yourself and bring to its match gate: the Common packs, the fusion fees and the time, each match and each day of waiting at FoxLeague's own price for skipping it. At today's prices that is about 14,450 FOXSY for a Rare, 60,400 for an Epic and 225,650 for a Legendary. The limits per rarity below (by default 500 for a Common, 1,500 for an Uncommon, 7,000 for a Rare, 14,000 for an Epic and 38,000 for a Legendary) usually bind first.</p>
@@ -1017,6 +1018,8 @@ const TIPS = {
     <p>It still buys one only once a competitive match of its own is drawn within the 24 hours, and weighs whether the day's matches make it pay (about 3 sure ones). The defaults: none for Steady, then 1, 2, 3, and every day for Beast and Zeus. Raising it asks for your password.</p>`],
   packs: ['Packs a week', `<p>How many Common packs (2,500 FOXSY for 5 Common cards) the agent may buy in any 7 days, counted from its own purchases: FoxLeague allows 2 a wallet a week. 0 turns packs off.</p>
     <p>The defaults: none for Steady and Climber, 1 for Hunter, 2 from Predator up. Raising it asks for your password.</p>`],
+  medicine: ['Medicine days a week', `<p>How many days of medicine the agent may buy in any 7 days, over all its players, counted from its own purchases. Medicine shortens an injury by whole days (100 FOXSY a day for a Common up to 500 for a Legendary) and FoxLeague always keeps a third of the injury, so the most it sells is 2 days of a 3-day injury, 6 of 9 and 18 of 27. 0 buys none.</p>
+    <p>The agent buys it only for a starter it cannot replace who would miss matches that matter, and each payment also stays within Max shop payment. The defaults: none for Steady, then 2, 4 and 6 (the whole of a light and of a medium injury), 12 for Beast and 18 for Zeus. An agent saved before this field existed has 0 until you set it. Raising it asks for your password.</p>`],
   bronze: ['Bronze amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Bronze tournament, between 100 and 999 FOXSY. Leave it empty and it creates none; it can still join one, within Max entry or stake.</p><p>A Bronze costs an entry and earns only once FoxLeague's competition levels are live. Before that the agent creates none.</p>`],
   silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
     <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
@@ -1246,7 +1249,7 @@ function fillLevel(l) {
   $('sDaily').value = l.dailyCapUsd; $('sMonthly').value = l.monthlyBudgetUsd; $('sTopUp').value = l.topUpWarningUsd
   $('sEntry').value = l.maxEntryFeeFoxsy; $('sShop').value = l.maxShopPaymentFoxsy; $('sSwap').value = l.maxSwapFoxsy; $('sBid').value = l.maxBidFoxsy
   $('sSilver').value = l.entryFeesSilver.join(', '); $('sGold').value = l.entryFeesGold.join(', '); $('sTick').value = l.tickMinutes
-  $('sTraining').value = l.paidTrainingPerDay; $('sBoosters').value = l.boostersPerWeek; $('sPacks').value = l.packsPerWeek
+  $('sTraining').value = l.paidTrainingPerDay; $('sBoosters').value = l.boostersPerWeek; $('sPacks').value = l.packsPerWeek; $('sMedicine').value = l.medicineDaysPerWeek
   // Set from code, so no input event: the market lines follow the new Max bid here (review of PR #22).
   renderLimitHints()
 }
@@ -1271,7 +1274,7 @@ function openLevel(k) {
   const fields = [['Daily cap', 'dailyCapUsd', usdv, below], ['Monthly budget', 'monthlyBudgetUsd', usdv, below], ['Top-up warning', 'topUpWarningUsd', usdv, below],
     ['Max entry or stake', 'maxEntryFeeFoxsy', fox, below], ['Max shop payment', 'maxShopPaymentFoxsy', fox, below], ['Max swap', 'maxSwapFoxsy', fox, below], ['Max bid', 'maxBidFoxsy', fox, below],
     ['Silver amounts', 'entryFeesSilver', list, missing], ['Gold amounts', 'entryFeesGold', list, missing],
-    ['Paid training a day', 'paidTrainingPerDay', v => String(v), below], ['Boosters a week', 'boostersPerWeek', v => String(v), below], ['Packs a week', 'packsPerWeek', v => String(v), below],
+    ['Paid training a day', 'paidTrainingPerDay', v => String(v), below], ['Boosters a week', 'boostersPerWeek', v => String(v), below], ['Packs a week', 'packsPerWeek', v => String(v), below], ['Medicine days a week', 'medicineDaysPerWeek', v => String(v), below],
     ['Tick', 'tickMinutes', v => v + ' min', longer]]
   const short = fields.filter(([, f, , isShort]) => isShort(f))
   $('lvlTitle').textContent = 'Use the ' + name + ' values for agent ' + (b.index + 1) + '?'
@@ -1326,7 +1329,7 @@ $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('settingsForm').addEventListener('input', e => { if (/^sBid(Common|Uncommon|Rare|Epic|Legendary)?$/.test(e.target.id)) renderLimitHints() })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
 // Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
-const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek']
+const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek', 'medicineDaysPerWeek']
 const RAISE_TEXT = 'A higher cap, budget, per-action maximum or count, a smaller gas reserve, Gold turned on, a shorter tick or longer active hours lets the agent spend more. Your password confirms it.'
 function raisesForm(form, cur) {
   const hours = h => (h[1] - h[0] + 24) % 24 || 24

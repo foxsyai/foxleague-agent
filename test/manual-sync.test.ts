@@ -130,7 +130,7 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
     assert.match(text, /with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once \(once a day per agent\)/i, `B5 ${name}`)
   }
   assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password, and so do a higher count \(paid training, boosters or packs\), a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
-  assert.match(settings, /the Silver and Gold amounts, the paid training a day, the boosters and packs a week or the tick; your limits per rarity stay as they are\)/, 'B7 (the counts since the audit of 2026-11-06, DOCS-2)')
+  assert.match(settings, /the Silver and Gold amounts, the paid training a day, the boosters and packs a week, the medicine days a week or the tick; your limits per rarity stay as they are\)/, 'B7 (the counts since the audit of 2026-11-06, DOCS-2; the medicine days since 2026-11-10)')
   assert.match(tip('strategy'), /the settings that do not fit it yet \(moving up, those under its values; moving down, those above them\), each with a tick, and its recommended AI/, 'B8')
   assert.match(settings, /Each level up to the predator adds two Silver steps; the beast and Zeus add the 4,999 ceiling\./, 'B9')
   assert.match(settings, /every planned action is carried out \(a match that its cooldown pushes past the plan's window waits for the next plan; a plan keeps at most 12 actions\)/, 'B10')

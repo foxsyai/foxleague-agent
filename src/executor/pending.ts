@@ -13,7 +13,7 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 
 export interface PendingDeps {
   store: Store
-  fox: Pick<FoxLeague, 'shopConfirm' | 'joinTournament'> & Partial<Pick<FoxLeague, 'buyRankedTicket'>>
+  fox: Pick<FoxLeague, 'shopConfirm' | 'joinTournament'> & Partial<Pick<FoxLeague, 'buyRankedTicket' | 'buyMedicine'>>
   /** Routine news (a payment confirmed after all). */
   notify: (text: string) => void
   /** A payment given up on: said at once (defaults to notify). */
@@ -41,6 +41,24 @@ export const SHOP_FINAL = /already processed|refunded|cannot be used/i
 /** A final answer for a seat's hash: seated, used, refunded, or the tournament closed (a paid entry is refunded). */
 // "Do NOT pay again" is not final: the entry is verified but the seat not recorded yet (tournaments.rs; OPEN-6).
 const JOIN_FINAL = /already|refunded|not open for registration/i
+
+/** A shop purchase as the executor keeps it with its payment (the pending row's payload). */
+export interface ShopOrder { product: string; player_nonces?: number[]; quantity?: number }
+
+/**
+ * Confirms a settled shop payment with FoxLeague and answers its words. Medicine has a route of its own
+ * (POST /api/shop/medicine; /shop/confirm refuses the product): one card, `quantity` days.
+ */
+export async function confirmShop(fox: PendingDeps['fox'], wallet: AgentWallet, order: ShopOrder & { tx_hash: string }): Promise<string> {
+  if (order.product !== 'medicine') return (await fox.shopConfirm(wallet, order)).message
+  if (!fox.buyMedicine) throw new Error('no medicine confirm in this client')
+  const nonce = order.player_nonces?.[0]
+  if (typeof nonce !== 'number' || typeof order.quantity !== 'number') throw new Error('a medicine payment without its card or its days')
+  const r = await fox.buyMedicine(wallet, { player_nonce: nonce, days: order.quantity, tx_hash: order.tx_hash })
+  // Numbers and a parsed time only: no raw server text in the activity log.
+  const end = Date.parse(String(r?.injured_until))
+  return `${order.quantity} day${order.quantity === 1 ? '' : 's'} of medicine for #${nonce}: ${Number.isFinite(end) ? `injured until ${new Date(end).toISOString().slice(0, 16)} UTC now` : 'its new end could not be read'}`
+}
 
 /** Credits the FOXSY row (shop:<product>) booked for this payment; true when one was still counting. */
 export function creditShopPayment(store: Store, agentIndex: number, hash: string): boolean {
@@ -86,9 +104,9 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
         d.notify(`${agentName(agentIndex)}: pending ranked ticket confirmed`)
       } else if (p.kind === 'shop') {
         // The row's hash is the payment's; rows kept before 2026-11-04 carry it in the payload too.
-        const r = await d.fox.shopConfirm(wallet, { ...(p.payload as { product: string }), tx_hash: p.hash })
+        const message = await confirmShop(d.fox, wallet, { ...(p.payload as ShopOrder), tx_hash: p.hash })
         d.store.resolvePending(p.hash, 'done')
-        d.notify(`${agentName(agentIndex)}: pending shop payment confirmed: ${r.message}`)
+        d.notify(`${agentName(agentIndex)}: pending shop payment confirmed: ${message}`)
       } else {
         const { tournamentId } = p.payload as { tournamentId: number }
         try {

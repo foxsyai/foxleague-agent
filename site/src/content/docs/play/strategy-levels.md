@@ -53,13 +53,15 @@ back into the budget. The shop, the waivers and the bids are real spending.
 | Paid training sessions a day (20 FOXSY each) | 2 | 4 | 6 | 8 | 10 | 10 |
 | XP boosters a week (2,000 FOXSY) | none | 1 | 2 | 3 | every day | every day |
 | Common packs a week (2,500 FOXSY) | none | none | 1 | 2 | 2 | 2 |
+| Days of injury medicine a week (100 to 500 FOXSY a day, by rarity) | none | 2 | 4 | 6 | 12 | 18 |
 | Bids at auction | any rarity, up to 500 | up to 1,500 | up to 7,000 | up to 14,000 | up to 14,000 | up to 38,000 |
 | Fusion fees (100 to 800) | up to 400 | all | all | all | all | all |
 | Fusion waivers, one payment | up to 500 | up to 2,000 | up to 2,500 | up to 3,000 (a Rare's) | up to 9,000 (an Epic's) | up to 9,000 |
 | Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 The counts are upper limits, not targets: the agent buys a boost only when it pays. The largest single shop payment
-grades the waivers by itself: a fusion match waiver buys every missing match in one payment, so a level reaches only the rarities its limit covers. A fusion fee is held to the same limit: Steady's 500 reaches the fees up to 400.
+grades the waivers by itself: a fusion match waiver buys every missing match in one payment, so a level reaches only the rarities its limit covers. A fusion fee is held to the same limit: Steady's 500 reaches the fees up to 400. Medicine for an injured player is one
+payment held to it too (Zeus's 9,000 covers the 18 days a Legendary's longest injury can save), and to the level's medicine days a week: 2 days are the whole of a light injury, 6 of a medium one and 18 of a serious one, since FoxLeague always keeps a third.
 
 **Bids.** Every level bids at auction, on any rarity. A bid is limited by money, not by rarity: it stays at or under
 the lowest of three numbers, the level's **Max bid**, your limit for the card's rarity and the cost of building the
@@ -121,6 +123,7 @@ afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a
 | Paid training a day | 2 | 4 | 6 | 8 | 10 | 10 |
 | Boosters a week | 0 | 1 | 2 | 3 | 7 | 7 |
 | Packs a week | 0 | 0 | 1 | 2 | 2 | 2 |
+| Medicine days a week | 0 | 2 | 4 | 6 | 12 | 18 |
 | Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 | as beast |
 | Gold amounts (FOXSY) | none (no Gold) | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 | up to 25,000 |
 | Tick | 120 min | 120 min | 90 min | 90 min | 75 min | 60 min |
@@ -142,7 +145,7 @@ is about $38 of its $50, Zeus's 38,000 about $103 of its $150.
 
 - An agent keeps the text and limits it has. Changing a preset here or in a later version does not change an agent's
   strategy until you pick the preset again. An agent saved before the counts existed plays on at FoxLeague's own
-  maximum (10 paid sessions a day, a booster every day, 2 packs a week) until you pick a level or lower them.
+  maximum (10 paid sessions a day, a booster every day, 2 packs a week) until you pick a level or lower them. Medicine is the other way round: an agent saved before its count existed buys none until you pick a level again or set Medicine days a week.
 - The levels describe what the AI aims for; the code still checks every action: the game's rules, your limits and
   counts, a 1v1 against a named team or one it joins only when that team is of similar strength, an open challenge
   only to teams no stronger by OVR, a waiver only when a fusion with that card can really happen.

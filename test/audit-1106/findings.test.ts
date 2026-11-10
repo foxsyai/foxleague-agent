@@ -198,7 +198,7 @@ test('DOCS-1: a fusion fee is held to the largest shop payment, as the levels pa
 })
 
 test('DOCS-2: the settings page lists the three counts among what a level proposes', () => {
-  assert.match(read('site/src/content/docs/use/settings.md'), /the Silver and Gold amounts, the paid training a day, the boosters and packs a week or the tick/)
+  assert.match(read('site/src/content/docs/use/settings.md'), /the Silver and Gold amounts, the paid training a day, the boosters and packs a week, the medicine days a week or the tick/)
 })
 
 test('DOCS-3: how-it-plays makes a higher private platform fee conditional, as FoxLeague serves one split today', () => {

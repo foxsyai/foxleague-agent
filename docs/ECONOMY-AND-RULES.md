@@ -149,6 +149,31 @@ stays sustainable against 48 regenerated (EM paths (a) and (g)).
 
 ---
 
+## 6a. Yellow card bans, injuries and the forfeit penalty (from Friday 13 November 2026, 14:00 UTC)
+
+One switch for the bans and the injuries: `/api/config` `card_bans` (`live`, `live_from`, `yellow_cards_per_ban`). Every
+card's record carries `yellow_cards`, `fouls_suffered`, `ban_yellow_cards`, `bans_pending` and `injured_until` (own
+roster, any team's roster, `/players/nonce/{n}` and marketplace listings); the last three move only once the switch is
+live.
+
+| Rule | Value | Sources |
+|---|---|---|
+| Ban | **3** yellow cards (`yellow_cards_per_ban`) in tournaments of more than 2 teams (Champions FoxLeague included) = the card misses its team's next tournament match, the first whose lineup locks after the third card; the count restarts at 0. `bans_pending` above 0 = suspended | `card_bans.rs`; Manual `getting-started/players.md` "Yellow card bans" |
+| What serves a ban | only a tournament match of more than 2 teams (also when the card is not in the 18; a forfeit serves it too). A 1v1 or a ranked game never does, and still takes the card | same |
+| Injury chance | per foul the referee calls on the card: **3%** at condition 100 rising evenly to **9%** at condition 30 (`300 + (100 - clamp(c, 30, 100)) x 600 / 70` basis points) | `card_injuries.rs:41-56` |
+| Where | tournament matches and 1v1s that count, for both teams; a ranked game only for the team that started it; never a casual game, a free Bronze, a forfeit or the team drawn into a ranked game | `routes/matches.rs:5489-5497` |
+| Days out | 1 injury in a match **3 days**, 2 **9**, 3 or more **27**, from the end of the match; a later injury keeps the later end. `injured_until` in the future = out of every match | `card_injuries.rs` |
+| At a lock | a suspended or injured starter is replaced by a fit bench card of its line, then the nearest line; the bench plays one short. Fewer than 11 fit of the saved 18 (condition 30, no transfer cooldown, not held out) forfeits | `tournament_simulator.rs` `take_match_lock` |
+| Ranked and casual | an injured starter is replaced the same way; with fewer than 11 available of the 18 (not injured, condition above 0) the game does not start, before any ticket is taken | `routes/matches.rs:2254-2323` |
+| 1v1 | joining (the creator's own seat too) needs 11 match-fit of the 18, an injured card not among them; refused after the stake is paid, which is refunded (the gas is lost) | `routes/tournaments.rs:6181-6200`, `squad_would_forfeit` |
+| Fusion | an injured or suspended card is refused by `GET /api/fusion/can-fuse` (codes `card_injured`, `card_suspended`); the contract sees neither, and a fusion sent anyway gives a card injured until the latest end of its inputs | `routes/marketplace.rs` (FoxLeague's release branch on 2026-11-10) |
+| A sale or a transfer | keeps the yellow cards, the ban and the injury | Manual "Injuries" |
+| Forfeit penalty | each team that forfeits a match of a level loses the full K of that level (Bronze 9, Silver 13, Gold 17), in tournaments and 1v1s; the other team gains none; never for a match the server could not play. Its switch (`rules.forfeit_penalty_live_from`) is not in `/api/config` | `forfeit_penalty.rs` (FoxLeague's release branch on 2026-11-10) |
+
+What the agent does with it: section 25 of `docs/FOXLEAGUE-INTEGRATION.md`.
+
+---
+
 ## 7. Training
 
 | Rule | Mainnet value | Sources | Live value from |
@@ -186,6 +211,7 @@ Every product is paid with `shopPay` into the players contract treasury and conf
 | Training slot | **20 FOXSY** each | 10 used per day | section 7 | section 7 |
 | Condition recovery | up to **100 FOXSY** per card, pro-rated | none beyond ownership | section 6 | section 6 |
 | Reduce Cooldown (transfer waiver) | per day above a **72 h floor**, by rarity: **Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY**; whole days rounded up; all remaining days or nothing. The rate is the 10 percent marketplace fee on the rarity reference price (5,000 / 15,000 / 40,000 / 100,000 / 250,000) spread over 20 days | per card | EM:47; Manual `mechanics/shop.mdx:99-113`; `shop.cooldown_waiver_fee_multiple_pct` 100 (CR:702-703), `shop.cooldown_waiver_floor_hours` 72 (CR:758-759), both SEED:96-97; reference prices CR:1996-2005; `shop.rs:554-612` (SEED:93 `shop.cooldown_waiver_price_per_day 15000` is only the unused flat fallback) | `GET /api/shop/waive-cooldown/quote` (auth) |
+| Medicine (from the injuries' switch, section 6a) | per day saved, by rarity: **Common 100, Uncommon 200, Rare 300, Epic 400, Legendary 500 FOXSY**; whole days only | a third of every injury is always served (1 day of 3, 3 of 9, 9 of 27), so at most 2, 6 or 18 days; only the wallet that holds the card; confirmed on `POST /api/shop/medicine` (not `/shop/confirm`), which quotes again and takes the exact amount | Manual `mechanics/shop.mdx` "Medicine"; `injury_medicine.rs`; `routes/shop.rs` `buy_injury_medicine` | `GET /api/shop/medicine/quote?player_nonce=&days=` (the prices are not in `/api/config`) |
 | Badge re-roll | **1,000 FOXSY** after 3 free | | section 2 | |
 | Fusion waivers | 75 FOXSY per day (every day or some); per match Uncommon 20, Rare to Legendary 100, none for Common | | section 10 | section 10 |
 | Automatic refunds | a payment that cannot be delivered is refunded automatically; an unconfirmed settled payment is refunded after **30 min**; at most **10 automatic refunds per wallet per hour** (then by hand); contract cap 1,000,000 FOXSY per day for all refunds | | Manual `legal/terms.md:47`, `mechanics/shop.mdx:142`; `shop.unconfirmed_refund_grace_secs` 1800 (CR:3039-3042); `shop.refund_max_per_wallet_window` 10, `shop.refund_window_secs` 3600 (CR:3051-3057); CC:46-49 `TREASURY_REFUND_DAILY_CAP_FOXSY=1000000` | |
