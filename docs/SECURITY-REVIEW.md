@@ -1418,10 +1418,14 @@ Stays open:
 
 ## The agent review on GitHub runs Claude Fable 5.2 at high effort (2026-11-10)
 
-The owner's choice, for the agent review of every pull request and for the adversarial reviews and audits run from the
-maintainer's machine: Claude Fable 5.2 at high effort. Until now the review on GitHub ran Claude Opus 5.5 at extra-high
-effort and the audits ran Claude Fable 5.1 at max effort. Nothing else of the review changes: the prompt, the tools it
-may use, the workspace gate, the verdict script and the backup token are the same.
+The owner's choice: the agent review of every pull request runs Claude Fable 5.2 at high effort. Until now it ran
+Claude Opus 5.5 at extra-high effort. Nothing else of the review changes: the prompt, the tools it may use, the
+workspace gate, the verdict script and the backup token are the same.
+
+The audits run from the maintainer's machine change with it: the reviewers are Claude Fable 5.2 at extra-high effort
+(they were Claude Fable 5.1 at max effort) and the fixes are made by Claude Fable 5.2 at high effort (they were made
+by Claude Opus 5.5 at extra-high effort). The method stays: a finding counts only with a test that fails before its
+fix and passes after it.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
