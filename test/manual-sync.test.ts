@@ -160,3 +160,14 @@ test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.m
   assert.match(keys, /an API key that can only read your account and withdraw EGLD to your agent wallets/, 'C7')
   assert.match(keys, /`\/topup 482193 10` withdraws 10 EGLD instead, less than proposed \(Binance's fee comes off that\)/, 'C8')
 })
+
+// ---- the agent review on GitHub ----
+
+test('REV-1 the agent review on GitHub runs Claude Fable 5.2 at high effort, on both tokens, and AGENTS.md says so', () => {
+  const wf = read('.github/workflows/claude-review.yml') // read() folds every run of white space into one space
+  assert.match(wf, /claude_args: &review_args \| --model claude-fable-5-2 --effort high --max-turns/, 'the model and the effort are pinned')
+  assert.equal((wf.match(/--model /g) ?? []).length, 1, 'one place sets the model')
+  assert.match(wf, /claude_args: \*review_args/, 'the backup token reviews with the same model and effort')
+  assert.doesNotMatch(wf, /claude-opus-5-5|xhigh/, 'nothing of the earlier choice is left')
+  assert.match(read('AGENTS.md'), /the agent review \(Claude Fable 5\.2 at high effort\)/)
+})

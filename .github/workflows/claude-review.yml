@@ -8,8 +8,9 @@
 # (crash, timeout, interruption), red when no credential is set and red when merge-check is not on the pull
 # request. A commit pushed after the review has no result: remove merge-check and add it again.
 #
-# Taken from foxsyai/next-foxleague's claude-review (verdict script, workspace gate, backup token; same model and
-# effort), with these differences:
+# Taken from foxsyai/next-foxleague's claude-review (verdict script, workspace gate, backup token), with these
+# differences:
+#   - the model and the effort: Claude Fable 5.2 at high effort (the owner's choice of 2026-11-10);
 #   - pull_request_target, so a pull request from a fork (a community contributor) is reviewed too: the workflow
 #     and the secrets come from main, the pull request's code is only READ (never built or run here; CI builds it
 #     without secrets), and everything that steers Claude Code comes from main: every .claude/, .claude-plugin/,
@@ -266,10 +267,11 @@ jobs:
             only as the VERY LAST action of the review, after every file is read and every comment is
             posted. Never record pass before the review is complete. Once you have recorded block, never
             call pass afterwards (the script refuses the downgrade).
-          # The same model, effort and tools as next-foxleague's reviewer (Opus 5.5, effort xhigh pinned).
+          # The model and the effort are the owner's choice of 2026-11-10: Claude Fable 5.2 at high effort, both
+          # pinned (next-foxleague's reviewer, where the tools come from, keeps its own).
           claude_args: &review_args |
-            --model claude-opus-5-5
-            --effort xhigh
+            --model claude-fable-5-2
+            --effort high
             --max-turns 100
             --settings "${{ runner.temp }}/review-settings.json"
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(${{ runner.temp }}/review-verdict.sh:*),Read(./**),Grep,Glob"
