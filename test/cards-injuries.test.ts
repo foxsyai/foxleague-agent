@@ -246,6 +246,18 @@ test('CI-13: the game manual copy holds the page that states the yellow card ban
   assert.deepEqual(undecidedPages([...pages, 'getting-started/transfers.md']), ['getting-started/transfers.md'])
 })
 
+test('CI-15: the game manual copy says a fusion clears no injury and no ban, and what a forfeit costs (FoxLeague promotion #715)', async () => {
+  const { readFileSync } = await import('node:fs')
+  const manual = readFileSync(new URL('../src/strategist/manual.md', import.meta.url), 'utf8')
+  // The copy of 9 November still said a fused card starts healthy and with no ban: the model read that next to a
+  // prompt that says an injured or suspended card cannot be fused.
+  assert.doesNotMatch(manual, /A fused card is a new card: it starts healthy/)
+  assert.doesNotMatch(manual, /The new card starts clean/)
+  assert.match(manual, /Fusing clears neither: the Fusion tab refuses an injured or suspended card/)
+  assert.match(manual, /A forfeit costs ELO from Friday 13 November 2026, 14:00 UTC/)
+  assert.match(manual, /9 in Bronze, 13 in Silver, 17 in Gold/)
+})
+
 test('CI-14: a bid on an injured card is the plan\'s call, with the injury said; one whose injury cannot be read takes no bid', async () => {
   // Owner, 2026-11-10: an injured card may be bought, however long it is out, when its price deserves it.
   const auction: Auction = { seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }

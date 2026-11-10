@@ -1982,8 +1982,9 @@ ahead). No contract changed.
 - A suspended card needs no rule: the lock replaces it, and a 1v1 or a ranked game still takes it. The snapshot
   marks it, and the prompt asks for the plan's own choice in its place before a tournament lock.
 
-**Not on FoxLeague's main yet on 2026-11-10** (release branch): the fusion refusal in `can-fuse` and the forfeit
-penalty. The agent's own fusion rule does not wait for it. The forfeit penalty's switch is not in `/api/config`; the
+**On FoxLeague's main since 2026-11-10 08:39 UTC** (its promotion #715 of the release branch at `2913ee7df`, the
+commit read above): the fusion refusal in `can-fuse` and the forfeit penalty. The agent's manual copy is synced to it
+(CI-15). The agent's own fusion rule did not wait for it. The forfeit penalty's switch is not in `/api/config`; the
 prompt states the rule, and the agent's checks against a forfeit (a full 11 + 7, fit starters, the schedule's wear)
 are the ones it already had.
 
