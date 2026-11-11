@@ -10,7 +10,8 @@ Status: in internal testing (the newest version is on the releases page). Everyt
 
 ## Install
 
-Linux, macOS or Windows through WSL2. Open a terminal and paste one line:
+Linux, macOS or Windows through WSL2. Open a terminal and paste one line (on Ubuntu, first
+`sudo apt install curl`):
 
 ```
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
@@ -18,7 +19,8 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 
 A guided installer sets up a new wallet, your dashboard login, your keys, PEM files to watch your team in the
 FoxLeague app and a background service. The dashboard's **Getting started** guide then explains each key step
-by step. Everything else is in [INSTALL.md](INSTALL.md).
+by step. Everything else is in [INSTALL.md](INSTALL.md). On Windows the agent runs while Ubuntu (WSL) runs, and
+on macOS it starts when you log in.
 
 You need about 5 EGLD to start (2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
 Anthropic API key for the AI. Telegram and Binance are optional.

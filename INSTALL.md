@@ -12,6 +12,10 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 - A computer that stays on: Linux with systemd or macOS. On Windows, use WSL2 with systemd turned on.
   A small cloud server works too. Install as a user of your own, not as root: as root the installer stops and
   tells you to create a user first (for a server set up by hand, see [docs/SERVER.md](docs/SERVER.md)).
+  On Linux the agent keeps running after you log out and after a restart. On macOS the agent starts when you log
+  in, and a sleeping Mac plays nothing. On Windows the agent runs while Ubuntu (WSL) runs: closing the last Ubuntu
+  window may stop it after a short while, and it does not start with Windows, so after every restart of Windows
+  open Ubuntu again and leave its window open for as long as the agent should play.
 - About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
@@ -26,8 +30,11 @@ Open a terminal and paste this one line:
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 ```
 
-It downloads the newest release into `~/foxleague-agent` and starts the guided installer. To install a
-given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
+On Ubuntu, install curl first, because Ubuntu Desktop comes without it: `sudo apt install curl`. Use this one, not
+the snap that Ubuntu's hint offers: the installer cannot download with the snap's curl.
+
+The line downloads the newest release into `~/foxleague-agent`, checks the download against the release's checksum
+and starts the guided installer. To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
 put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway (the settings and
 limits the newer version added are then not applied). Another folder is named with `FOXAGENT_DIR`; it must be
 empty or hold an install of foxleague-agent. On Windows, first install WSL2
@@ -45,10 +52,11 @@ The installer walks you through seven steps and explains each one:
 | 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |
 | 5. Settings | A new install starts in dry run. You choose whether this computer may sign real transactions once you press Go LIVE. |
 | 6. PEM files | Writes `pem/agent1.pem`, so you can log into FoxLeague as your agent's team and watch it play. |
-| 7. Background service | Starts the agent in the background and keeps it running after a restart. |
+| 7. Background service | Starts the agent in the background. On Linux it keeps running after you log out and after a restart. On macOS it starts when you log in. On Windows it runs while Ubuntu (WSL) runs. |
 
 Run `./install.sh` again at any time: it keeps your wallet, login and keys. It asks again for the port, the keys
 and the live permission, each with your earlier answer as the default, so pressing Enter keeps things as they are.
+Pressing Enter at the live permission keeps it as `.env` has it: on only when it already says 1 or true.
 The dashboard's **Getting started** guide repeats the key steps below, shows which keys are set and has a
 "Don't show this again" box.
 
@@ -174,6 +182,9 @@ only when the agent wallets are empty and your recovery words are safe.
 - **"systemd user services are not available" on Windows:** turn on systemd in WSL2 (`/etc/wsl.conf`, section
   `[boot]`, `systemd=true`), restart WSL, run the installer again.
 - **The agent stops when I log out (Linux):** run `sudo loginctl enable-linger $USER` once.
+- **The agent stops on Windows when I close Ubuntu, or after Windows restarts:** on Windows the agent runs while
+  Ubuntu (WSL) runs. Open Ubuntu again and leave its window open: the agent starts with it.
+- **"Command 'curl' not found" on Ubuntu:** run `sudo apt install curl`, then paste the install line again.
 - **The agent does not start after I changed the recovery words:** its history and limits belong to the wallets
   of the words it was made with. Put the original words back in `.env` and restart. To play another wallet's
   team, keep the original words and use **Import team** in the dashboard. To start over with the new words, stop
