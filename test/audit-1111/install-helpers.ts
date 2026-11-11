@@ -165,8 +165,13 @@ export function freshInstall(version = '3.1.0', o: { service?: boolean } = {}): 
   return { home, root, code, s, env, shownLog, wordsShown: () => (existsSync(shownLog) ? readFileSync(shownLog, 'utf8').trim().split('\n').length : 0) }
 }
 
-/** A dashboard login already in .env, so the installer keeps it and does not ask for a password on a terminal. */
-export const LOGIN_LINES = 'WEB_UI_USER="owner"\nWEB_UI_PASSWORD_HASH="scrypt$c2FsdA==$aGFzaA=="\n'
+/**
+ * A dashboard login already in .env, so the installer keeps it and does not ask for a password on a terminal, and a
+ * dashboard port of the tests' own: the installer refuses a port that another program holds (FRESH-10), and the
+ * default 8870 is taken on any machine where an agent runs, a developer's own included.
+ */
+export const TEST_PORT = '18870'
+export const LOGIN_LINES = `WEB_UI_USER="owner"\nWEB_UI_PASSWORD_HASH="scrypt$c2FsdA==$aGFzaA=="\nWEB_UI_PORT="${TEST_PORT}"\n`
 
 /**
  * The guided installer (no background service) with the given answers. The questions, in order: the typed yes

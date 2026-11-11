@@ -39,6 +39,21 @@ RUN_DIR=${FOXAGENT_RUN:-/run}
 
 say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
+# A web address on the screen: blue and underlined and, where the terminal knows hyperlinks (most do), a link it
+# opens with Ctrl and a click (Cmd on a Mac). Plain text with no control bytes when the output is no terminal.
+LINKS=0
+[ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && LINKS=1
+link() { if [ "$LINKS" = 1 ]; then printf '\033]8;;%s\033\\\033[4;34m%s\033[0m\033]8;;\033\\' "$1" "$1"; else printf '%s' "$1"; fi; }
+# The program that opens a web address in the owner's browser on this machine, or nothing where there is none
+# (a server reached over SSH, a terminal with no desktop).
+browser_opener() {
+  local o=''
+  if [ "${PLATFORM:-}" = darwin ]; then o=$(command -v open 2>/dev/null || true)
+  elif grep -qi microsoft /proc/version 2>/dev/null; then o=$(command -v explorer.exe 2>/dev/null || true)
+  elif [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then o=$(command -v xdg-open 2>/dev/null || true)
+  fi
+  printf '%s' "$o"
+}
 die() { printf '\n\033[1;31mError: %s\033[0m\n' "$*" >&2; exit 1; }
 ask() { local a; read -r -p "  $1${2:+ [$2]}: " a < "$TTY"; printf '%s' "${a:-${2:-}}"; }
 yes_no() { local a; a=$(ask "$1 (y/n)" "$2"); [[ $a =~ ^[Yy] ]]; }
@@ -624,7 +639,8 @@ fi
 say "Done"
 cat <<EOF
 
-  Dashboard     http://localhost:$port   (user: $(get_env WEB_UI_USER))
+  Dashboard     $(link "http://localhost:$port")   (user: $(get_env WEB_UI_USER))
+                Open that address in your browser (in most terminals: hold Ctrl and click it; on a Mac, Cmd).
   Agent 1       $address
   PEM files     $PEM_DIR
 
@@ -648,3 +664,12 @@ cat <<EOF
 
   Keep your recovery words safe. Anyone with them controls the agent wallets.
 EOF
+
+# On a machine with a desktop and the dashboard answering: one Enter opens it. Never on a server or in a pipe.
+opener=$(browser_opener)
+if [ "$NO_SERVICE" = 0 ] && [ -n "$opener" ] && [ "$LINKS" = 1 ] && curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; then
+  if yes_no "Open the dashboard in your browser now?" y; then
+    "$opener" "http://localhost:$port" >/dev/null 2>&1 &
+  fi
+fi
+exit 0
