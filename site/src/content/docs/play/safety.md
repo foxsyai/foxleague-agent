@@ -34,9 +34,38 @@ it. Text written by other players (team names, tournament titles) reaches it onl
   reserve), switching to a dearer AI, releasing the kill switch and changing a key all ask for your password again.
   Telegram obeys your own chat only (`/kill off` releases the switch there).
 - Your recovery words and keys stay on your computer. The dashboard is not on the internet.
+- **Updates** install only when you ask, with **Update now** in the dashboard or `/upgrade` on Telegram. They need
+  no password, because only a release that is signed by the foxleague-agent maintainers and newer than yours can be
+  installed, whoever asks ([Signed updates](#signed-updates)).
 - **Top-ups from Binance** move only with a one-time code you send on Telegram, only to an agent's own wallet,
   with a key that can only read and withdraw from one IP. A withdrawal whose answer was lost is never sent again
   by itself: you check Binance first.
+
+## What leaves your computer
+
+The agent talks only to the services it needs:
+
+- **FoxLeague and the MultiversX network**: what the player app sends too. It reads public data, logs in as your
+  team and sends the transactions it signs.
+- **Anthropic**: what the AI needs to plan and to answer you. That is the snapshot of the game, your strategy, the
+  budget that is left, the recent activity and your conversation with the manager. Never your recovery words or keys.
+- **Telegram and Binance**, only when you set their keys: your messages and the agent's answers, and the top-ups
+  you approve.
+- **GitHub**, about every 10 minutes: one request for the newest release of foxleague-agent, so the agent can tell
+  you when an update is out. It says nothing about your install: no version, no wallet and no name. As with any
+  download, GitHub sees the address your computer has on the internet. `AGENT_UPDATE_CHECK=0` in `.env` switches
+  the request off.
+
+## Signed updates
+
+Releases are signed with a key that never leaves the maintainers' own computers: it is not on GitHub. Your agent
+checks every update with the public half of that key, which came with the version it already runs. It takes a
+release only when the signature is good, the version is newer than yours and the download is exactly the one that
+was signed, so a stolen GitHub account or a changed download cannot put other code on your computer.
+
+That is why an update needs no password: the button and `/upgrade` can start only that one thing. Nothing installs
+by itself, the running version is not touched while the new one is prepared, and a new version that does not start
+is undone by itself ([Update](/help/update/)).
 
 ## A wallet only for the game
 

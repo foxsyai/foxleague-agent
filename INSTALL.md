@@ -129,8 +129,8 @@ A saved key is used at once. Showing or changing a key needs your password; ever
 ## Talking to your agents
 
 - **Telegram:** write in plain words ("this week focus on Silver tournaments, no boosters"). The agent answers
-  questions and turns advice into a new strategy you confirm with Apply. `/status`, `/plan`, `/pause 1`,
-  `/mode dry`, `/mode live confirm` and `/help` work too.
+  questions and turns advice into a new strategy you confirm with Apply. `/status` (it shows the version too),
+  `/plan`, `/pause 1`, `/mode dry`, `/mode live confirm`, `/upgrade` and `/help` work too.
 - **Dashboard:** each agent's page has a Talk to the manager box that works the same way. Its Speak button lets
   you talk instead of typing.
 
@@ -164,9 +164,22 @@ results, not meeting). What they share is a pooled formation record with no team
 |---|---|---|
 | Logs | `journalctl --user -u foxleague-agent -f` | `tail -f data/service.log` |
 | Restart | `systemctl --user restart foxleague-agent` | `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent` |
-| Update | `./install.sh --update` | `./install.sh --update` |
+| Update | **Update now** in the dashboard, `/upgrade` on Telegram or `./install.sh --update` | the same |
 | Command line | `./cli.sh` (alone it lists the commands) | `./cli.sh` |
 | Uninstall | `./install.sh --uninstall` | `./install.sh --uninstall` |
+
+## Updates
+
+About every 10 minutes the agent asks GitHub whether a newer release is out. When one is, the dashboard shows a
+notice with what is new and Telegram tells you once. Press **Update now** in the dashboard or send `/upgrade` on
+Telegram: nothing is ever installed by itself, and no password is asked, because only a release that is signed by
+the foxleague-agent maintainers and newer than yours can be installed. The agent checks the signature, prepares the
+new version next to the running one and restarts into it; the waiting actions of a running plan are dropped and the
+next plan takes them up. A new version that does not start is undone by itself, and you are told. Your wallet,
+keys, settings and history are kept.
+
+`./install.sh --update` does the same from a terminal. A git checkout and a server set up by hand show the notice
+with what to do instead of the button. `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 
 An update restarts the background service; when the restart fails it says so and names the command to run. An
 install made with `./install.sh --no-service` has no background service and an update does not add one: start the

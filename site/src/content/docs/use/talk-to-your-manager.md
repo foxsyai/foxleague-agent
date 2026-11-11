@@ -60,7 +60,7 @@ for one agent, a payment whose outcome is unclear, top-up codes and a League + K
 
 | Command | What it does |
 |---|---|
-| `/status` | This install and every agent at a glance (retired agents in one line) |
+| `/status` | This install, its version and every agent at a glance (retired agents in one line); it names a newer version when one is out |
 | `/agents` | Balances and today's spend |
 | `/plan [N]` | The latest plan |
 | `/tick N` | Plan and run now, inside the agent's active hours (outside them it says so; `/do N request` runs anyway) |
@@ -68,12 +68,16 @@ for one agent, a payment whose outcome is unclear, top-up codes and a League + K
 | `/mode dry`, `/mode live confirm` | One mode for all agents |
 | `/budget [N]` | Spend against the limits |
 | `/ask [N] question` | A question to the manager about the team |
+| `/do N request` | One action now, in plain words, through the same checks and limits as a planned one |
+| `/log [N]` | The recent activity |
+| `/keys [test]` | Which keys are set, masked; `test` checks them. Keys are changed in the dashboard only |
 | `/strategy [N\|all]` | Show the strategy |
 | `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, beast, zeus). The limits stay as they are: set the level's limits in the dashboard |
 | `/clear` | Start a new conversation with the manager |
 | `/kill on\|off` | Stop every agent at once, or release |
 | `/summary [today]` | Yesterday per agent, or today so far |
 | `/updates [daily\|all]` | Daily: plans and action results wait for the morning summary; all: every update as it happens |
+| `/upgrade` | Install the newest version of foxleague-agent when one is out, as **Update now** does in the dashboard: the agent restarts and says when it is back ([Update](/help/update/)) |
 | `/topup N` | Propose an EGLD top-up from Binance for agent N, with a one-time code |
 | `/topup <code> [EGLD]` | Approve it (with a smaller amount after the code, that much instead; more than proposed is refused) |
 | `/help` | The full list |

@@ -74,8 +74,13 @@ the dashboard or by chatting with it on Telegram.
   the AI's model and effort; the Keys panel.
 - **Telegram** (optional): a summary of every agent each morning, every update as it happens if you want it
   (`/updates all`). Write in plain words ("focus on Silver tournaments this
-  week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`,
-  `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/help`.
+  week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`
+  (it shows the version too), `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/upgrade`, `/help`.
+- **Updates:** about every 10 minutes the agent asks GitHub for the newest release and tells you, in the dashboard
+  and on Telegram, when one is out. **Update now** in the dashboard or `/upgrade` on Telegram installs it; nothing
+  installs by itself. Only a release signed by the maintainers and newer than yours is taken, it is prepared next
+  to the running version, and a version that does not start is undone by itself. `./install.sh --update` does the
+  same from a terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
@@ -134,4 +139,5 @@ harvesting bonuses. Every agent must stay inside them. You are responsible for y
 Pull requests are welcome. Read [AGENTS.md](AGENTS.md) first: it holds the rules that keep money safe, how to run
 the tests and how a change reaches `main`. Opening a pull request runs nothing; when a maintainer decides to merge
 it, the label `merge-check` runs the tests and an agent review, and `main` takes the change once both pass and a
-maintainer approved it. New versions reach users as releases: the installer always takes the newest one.
+maintainer approved it. New versions reach users as signed releases ([docs/RELEASING.md](docs/RELEASING.md)): the
+installer takes the newest one, and an installed agent offers each new one to its owner.
