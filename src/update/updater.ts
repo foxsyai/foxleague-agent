@@ -218,6 +218,10 @@ export class Updater {
   async begin(by: string): Promise<string> {
     if (!this.d.enabled) throw new UpdateError('updates are switched off on this machine (AGENT_UPDATE_CHECK=0)')
     if (this.state !== 'idle') throw new UpdateError('an update is already being installed')
+    // The release that runs was itself just installed and has not yet stayed up long enough to count as started
+    // (versions/pending still names it): the launcher may still undo it. A new update now would take its note
+    // and make an unproven release the one to go back to.
+    if (startNote(this.d.layout).updatedFrom !== undefined) throw new UpdateError('the last update is still being confirmed, try again in a minute')
     // Where nothing restarts the agent, a release that is already in place is told again and nothing more is done.
     const waiting = this.waiting()
     if (waiting) return waiting.message
