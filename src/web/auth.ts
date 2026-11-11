@@ -105,15 +105,45 @@ export function credentialsFromEnv(): Credentials | null {
   return username && passwordHash && secretKey && secretKey.length >= 32 ? { username, passwordHash, secretKey } : null
 }
 
+/** Where the marks of logged-out sessions are kept between two runs of the service (the store's kv). */
+export interface RevokedKeep {
+  load(): string | undefined
+  save(value: string): void
+}
+
 export class Sessions {
   private readonly key: Buffer
+  private readonly keep: RevokedKeep | undefined
+  /**
+   * Logged-out sessions until they would have expired anyway (a copied cookie dies with the logout), each as a
+   * keyed hash with its expiry: the session itself is a working cookie and is never kept. With `keep` the list is
+   * written at every logout and read back here, so a logout outlives a restart (ATTACK-6).
+   */
+  private readonly revoked = new Map<string, number>()
+
   /** Keyed by the secret and the password hash: a new password ends every session issued before it. */
-  constructor(secretKey: string, passwordHash = '') {
+  constructor(secretKey: string, passwordHash = '', keep?: RevokedKeep) {
     this.key = passwordHash ? createHmac('sha256', secretKey).update(`sessions:${passwordHash}`).digest() : Buffer.from(secretKey)
+    this.keep = keep
+    if (!keep) return
+    let saved: unknown = null
+    try {
+      saved = JSON.parse(keep.load() ?? '{}')
+    } catch {
+      saved = null // an unreadable list starts empty; the next logout writes a good one
+    }
+    if (!saved || typeof saved !== 'object' || Array.isArray(saved)) return
+    const now = Date.now() / 1000
+    for (const [mark, exp] of Object.entries(saved)) if (typeof exp === 'number' && exp > now) this.revoked.set(mark, exp)
   }
 
   private sign(body: string): string {
     return createHmac('sha256', this.key).update(body).digest('hex').slice(0, 32)
+  }
+
+  /** What stands for a logged-out session in the list: nothing that could be turned back into the cookie. */
+  private mark(token: string): string {
+    return createHmac('sha256', this.key).update(`revoked:${token}`).digest('hex')
   }
 
   issue(username: string, now = Date.now()): string {
@@ -122,18 +152,16 @@ export class Sessions {
     return `${body}.${this.sign(body)}`
   }
 
-  /** Logged-out sessions until they would have expired anyway (a copied cookie dies with the logout). */
-  private readonly revoked = new Map<string, number>()
-
   revoke(token: string | undefined, now = Date.now()): void {
     if (!token || this.verify(token, now) === null) return
     for (const [t, exp] of this.revoked) if (exp < now / 1000) this.revoked.delete(t)
-    this.revoked.set(token, now / 1000 + SESSION_TTL_S)
+    this.revoked.set(this.mark(token), now / 1000 + SESSION_TTL_S)
+    this.keep?.save(JSON.stringify(Object.fromEntries(this.revoked)))
   }
 
   /** The username of a valid, unexpired, not logged-out session, else null. */
   verify(token: string | undefined, now = Date.now()): string | null {
-    if (!token || !token.includes('.') || this.revoked.has(token)) return null
+    if (!token || !token.includes('.') || this.revoked.has(this.mark(token))) return null
     const cut = token.lastIndexOf('.')
     const body = token.slice(0, cut)
     const sig = token.slice(cut + 1)

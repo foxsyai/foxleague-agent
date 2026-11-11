@@ -490,7 +490,7 @@ test('A10 team names never imitate FoxLeague or its staff', () => {
 async function webServer() {
   const { startWeb } = await import('../src/web/server.ts')
   const creds = { username: 'admin', passwordHash: hashPassword('correct-horse-battery'), secretKey: 'k'.repeat(64) }
-  const server = startWeb({} as never, creds, 0)
+  const server = startWeb({ store: new Store('', ':memory:') } as never, creds, 0) // the web keeps logged-out sessions in the store (ATTACK-6)
   if (!server.listening) await once(server, 'listening')
   return { server, creds, url: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }
 }

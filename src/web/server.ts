@@ -191,8 +191,15 @@ export function raisesAiSpend(current: { model: string; effort: string }, next: 
   return EFFORTS.indexOf(next.effort) > (EFFORTS as readonly string[]).indexOf(current.effort)
 }
 
+const REVOKED_SESSIONS_KEY = 'revoked_sessions'
+
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {
-  const sessions = new Sessions(creds.secretKey, creds.passwordHash)
+  // The marks of logged-out sessions live in the store, so a restart (an update restarts the service) does not
+  // bring a logged-out cookie back (ATTACK-6).
+  const sessions = new Sessions(creds.secretKey, creds.passwordHash, {
+    load: () => service.store.getKv(REVOKED_SESSIONS_KEY),
+    save: value => service.store.setKv(REVOKED_SESSIONS_KEY, value),
+  })
   const throttle = new LoginThrottle()
   const loginWork = new BoundedQueue()
   const secureCookie = process.env.WEB_UI_INSECURE_COOKIE !== '1'
