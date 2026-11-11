@@ -592,8 +592,10 @@ cat <<'KEYS'
   Nothing you paste is shown on screen. Press Enter at any key to skip it.
 
 KEYS
-# Keys already set: pressing Enter skips this step (they stay as they are).
-if yes_no "Enter keys now?" "$([ -n "$(get_env ANTHROPIC_API_KEY)" ] && echo n || echo y)"; then
+# Enter means yes only on a first install without an AI key (the agents cannot play without one). On every later
+# run it means no: the keys stay as they are, and an owner who chose to add them later is not walked through the
+# four prompts again.
+if yes_no "Enter keys now?" "$([ "$FIRST_INSTALL" = 1 ] && [ -z "$(get_env ANTHROPIC_API_KEY)" ] && echo y || echo n)"; then
   # Whatever the key step answers, the install goes on: every key can be added in the dashboard. Only Ctrl-C
   # at a key (status 130) ends it.
   rc=0
