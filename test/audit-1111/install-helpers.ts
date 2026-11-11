@@ -3,8 +3,8 @@
 // installer's questions are answered through FOXAGENT_TTY. Nothing here reaches the network or the real HOME.
 import { execFileSync, spawn } from 'node:child_process'
 import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync, writeSync } from 'node:fs'
-import { join } from 'node:path'
-import { REPO, testKey, tmp } from '../update-fixtures.ts'
+import { basename, dirname, join } from 'node:path'
+import { REPO, codeTree, testKey, tmp } from '../update-fixtures.ts'
 
 export const KEY = testKey()
 export const NPM_CI = 'npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error'
@@ -192,6 +192,63 @@ export function shellFunction(script: string, name: string): string {
   const multi = new RegExp(`^${name}\\(\\) \\{[^\\n]*\\n[\\s\\S]*?^\\}$`, 'm').exec(text)
   if (multi) return multi[0]
   throw new Error(`no function ${name} in ${script}`)
+}
+
+/** A small release folder that get.sh takes for foxleague-agent: package.json, src/service.ts, install.sh and run.sh. */
+export function smallTree(dir: string, version: string, extra: Record<string, string> = {}): string {
+  return codeTree(dir, version, { extra: { 'run.sh': '#!/usr/bin/env bash\n', ...extra } })
+}
+
+/** Packs a folder as `<top>/…` the way a release is packed, with no manifest: for FOXAGENT_SOURCE. */
+export function pack(tree: string, top = 'foxleague-agent-vX'): string {
+  const archive = join(tmp('fox-archive-'), 'release.tar.gz')
+  // A folder that already has the top name is packed where it is: a copy would turn a hard link into two files.
+  if (basename(tree) === top) {
+    execFileSync('tar', ['-czf', archive, '-C', dirname(tree), top])
+    return archive
+  }
+  const stage = tmp('fox-pack-')
+  cpSync(tree, join(stage, top), { recursive: true, verbatimSymlinks: true })
+  execFileSync('tar', ['-czf', archive, '-C', stage, top])
+  return archive
+}
+
+/** An install made by get.sh at one version, with the owner's files beside it, and a check that those never changed. */
+export function ownedInstall(version: string): { home: string; dir: string; mine: Record<string, string>; untouched: () => void } {
+  const home = tmp('fox-home-')
+  const dir = join(home, 'foxleague-agent')
+  smallTree(join(dir, 'versions', `v${version}`), version)
+  writeFileSync(join(dir, 'versions', 'active'), `v${version}\n`)
+  const mine: Record<string, string> = { '.env': 'AGENT_MNEMONIC="the owner words"\n', 'data/agent.db': 'the ledger', 'pem/agent1.pem': 'the key', '.node/bin/node': 'node' }
+  for (const [f, text] of Object.entries(mine)) {
+    mkdirSync(join(dir, f, '..'), { recursive: true })
+    writeFileSync(join(dir, f), text)
+  }
+  return {
+    home,
+    dir,
+    mine,
+    untouched: () => {
+      for (const [f, text] of Object.entries(mine)) if (readFileSync(join(dir, f), 'utf8') !== text) throw new Error(`${f} of the owner was changed`)
+    },
+  }
+}
+
+/** Every file under a folder with its text, for "nothing was changed". */
+export function snapshotOf(dir: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  const walk = (d: string, rel: string): void => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const r = rel ? `${rel}/${e.name}` : e.name
+      if (e.isDirectory()) {
+        out[`${r}/`] = ''
+        walk(join(d, e.name), r)
+      } else if (e.isFile()) out[r] = readFileSync(join(d, e.name), 'utf8')
+      else out[r] = '(not a plain file)'
+    }
+  }
+  if (existsSync(dir)) walk(dir, '')
+  return out
 }
 
 export { REPO, tmp }
