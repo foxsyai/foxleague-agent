@@ -141,12 +141,16 @@ test('top-up review fixes: a request left sending by a restart is settled on Bin
   const r = rig()
   const code = /\/topup (\d{6})\b/.exec(await r.t.offer(r.agent(), 8, 4.5, 'owner'))![1]!
   // The process ends while the approval talks to Binance: the request stays 'sending' in the database.
-  const list = JSON.parse(r.store.getKv('topups')!) as { status: string; id: string }[]
+  // The approval wrote the time of its attempt with the claim (ATTACK-3 of 2026-11-11: the 30 minutes run from it).
+  const list = JSON.parse(r.store.getKv('topups')!) as { status: string; id: string; attemptedAt?: string }[]
   list[0]!.status = 'sending'
+  list[0]!.attemptedAt = '2026-10-09T10:00:00.000Z'
   r.store.setKv('topups', JSON.stringify(list))
   void code
   assert.match(await r.t.offer(r.agent(), 8, 4.5, 'owner'), /outcome is not known yet/)
-  r.tick(31 * 60_000)
+  r.tick(29 * 60_000)
+  assert.deepEqual(await r.t.settleUnclear(), [], 'not known yet')
+  r.tick(2 * 60_000)
   assert.match((await r.t.settleUnclear()).join('\n'), /Binance has no withdrawal for order fla1-.*never went out/)
   assert.match(await r.t.offer(r.agent(), 8, 4.5, 'owner'), /top-up, as you asked/, 'top-ups work again')
 

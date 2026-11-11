@@ -14,6 +14,8 @@ const REOFFER_HOURS = 24
 const KEPT = 50
 /** A withdrawal Binance sent counts as on its way to the wallet for this long. */
 const SENT_LANDS_WITHIN_MS = 3600_000
+/** A withdrawal with no clear answer that Binance does not list this long after it was asked never went out. */
+const UNKNOWN_FOR_MS = 30 * 60_000
 
 export interface TopUpRequest {
   /** Also Binance's withdrawOrderId, to find the withdrawal again. */
@@ -32,6 +34,11 @@ export interface TopUpRequest {
   createdAt: string
   expiresAt: string
   status: 'open' | 'sending' | 'sent' | 'failed' | 'expired' | 'unknown'
+  /**
+   * When the withdrawal was attempted: set when an approval claims the request, and again right before Binance is
+   * asked. A request kept by an earlier version has none; its code hour's end is the latest it can have been asked.
+   */
+  attemptedAt?: string
   /** When Binance took the withdrawal (or this process learnt that it had). */
   sentAt?: string
   binanceId?: string
@@ -121,7 +128,9 @@ export class TopUps {
   /**
    * Requests whose withdrawal outcome is not known yet ('sending' after a restart, 'unknown' after a lost answer):
    * looked up on Binance by their order id. Found: sent, or failed when Binance cancelled, rejected or failed it.
-   * Not found 30 minutes on: it never went out. Answers one line per request settled.
+   * Not found 30 minutes after the withdrawal was attempted: it never went out. The clock starts at the attempt,
+   * not at the offer: a code works for an hour, and "Binance has no such order" seconds after a timed-out
+   * withdrawal is no proof (ATTACK-3). Answers one line per request settled.
    */
   async settleUnclear(agentIndex?: number): Promise<string[]> {
     const k = this.d.key()
@@ -140,7 +149,7 @@ export class TopUps {
         this.update(r.id, { status: 'failed', binanceId: found.id, note: `Binance status ${found.status}` })
         this.d.store.log({ agentIndex: r.agentIndex, kind: 'topup', status: 'failed', summary: `top-up order ${r.id}: Binance ${found.status === 1 ? 'cancelled' : found.status === 3 ? 'rejected' : 'failed'} it` })
         out.push(`${agentName(r.agentIndex)}: Binance ${found.status === 1 ? 'cancelled' : found.status === 3 ? 'rejected' : 'failed'} the top-up of order ${r.id}; nothing arrives. Ask again with /topup ${r.agentIndex + 1}.`)
-      } else if (this.now() - new Date(r.createdAt).getTime() > 30 * 60_000) {
+      } else if (this.now() - new Date(r.attemptedAt ?? r.expiresAt).getTime() > UNKNOWN_FOR_MS) {
         this.update(r.id, { status: 'failed', note: 'Binance has no withdrawal with this order id' })
         this.d.store.log({ agentIndex: r.agentIndex, kind: 'topup', status: 'failed', summary: `top-up order ${r.id}: Binance has no such withdrawal, so it never went out` })
         out.push(`${agentName(r.agentIndex)}: Binance has no withdrawal for order ${r.id}, so it never went out. Ask again with /topup ${r.agentIndex + 1}.`)
@@ -254,7 +263,7 @@ export class TopUps {
       if (v > r.withdrawEgld) return `${egld(v)} is more than the ${egld(r.withdrawEgld)} proposed. The code still works for that much or less.`
       amount = v
     }
-    this.update(r.id, { status: 'sending' })
+    this.update(r.id, { status: 'sending', attemptedAt: new Date(this.now()).toISOString() })
     this.claimed.add(r.id)
     this.inflight++
     try {
@@ -302,6 +311,8 @@ export class TopUps {
       return fail(`Binance could not be read (${err instanceof Error ? err.message : String(err)})`)
     }
     try {
+      // The reads above took their time: the 30 minutes of "not known" run from this moment.
+      this.update(r.id, { attemptedAt: new Date(this.now()).toISOString() })
       const id = await this.d.binance.withdrawEgld(k, { address: r.address, amount: egldText(amount), orderId: r.id, network: net.network, questionnaire })
       return this.sent(r, amount, id)
     } catch (err) {

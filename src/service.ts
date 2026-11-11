@@ -14,6 +14,7 @@ import { Store, type AgentRow } from './store/db.ts'
 import { MIN_TICK_MINUTES, STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
 import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
@@ -165,6 +166,61 @@ export function serviceRunning(dataDir: string): number | null {
     return pid
   } catch (err) {
     return (err as NodeJS.ErrnoException).code === 'EPERM' ? pid : null // EPERM: alive, another user's process
+  }
+}
+
+/** The command line of a live process (Linux: /proc; elsewhere: ps), '' when it has none, null when it cannot be read. */
+function commandOf(pid: number): string | null {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').join(' ').trim()
+  } catch {
+    // no /proc on this system (macOS), or the process is hidden from this user
+  }
+  try {
+    return execFileSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a live process is to be taken for the service. With a command line: it runs this file (`.../src/service.ts`
+ * under node, as run.sh, the systemd unit and `npm start` launch it). Without one (it could not be read):
+ * - a process of this same user (`ownUser`: it can be signalled) counts as the service: unknown refuses, never guesses;
+ * - a process of another user that cannot even be looked at does not. That is what a pid file left by a power cut
+ *   names after the reboot (a system program's pid), and the server's unit hides other users' processes from the
+ *   service (ProtectProc=invisible). Refusing there would end the unit after three tries and keep the agent down
+ *   until someone deletes the file; the service starts as it did before this check existed.
+ */
+export function looksLikeService(command: string | null, ownUser: boolean): boolean {
+  return command === null ? ownUser : /(^|[\s/\\])service\.ts(\s|$)/.test(command)
+}
+
+/**
+ * The pid of another live copy of the service on this data folder, or null. The pid file alone is not enough: a
+ * crash or a power cut leaves it behind, and after a reboot its number may belong to any program. Refusing to start
+ * on that would keep the agent down until someone deletes the file, so the process must also look like the service.
+ */
+export function otherServiceRunning(dataDir: string): number | null {
+  const pid = serviceRunning(dataDir)
+  if (pid === null || pid === process.pid) return null
+  let ownUser = false
+  try {
+    process.kill(pid, 0)
+    ownUser = true
+  } catch {
+    ownUser = false // EPERM: another user's process; ESRCH: it ended meanwhile
+  }
+  return looksLikeService(commandOf(pid), ownUser) ? pid : null
+}
+
+/** A second copy was started on a data folder whose service runs: said in one line, without a stack trace. */
+export class AlreadyRunningError extends Error {
+  constructor(pid: number, pidFile: string) {
+    super(
+      `foxleague-agent already runs on this data folder (process ${pid}): this second copy does not start, because two copies would plan and pay for every agent twice. ` +
+        `Use the one that runs (its dashboard or Telegram) or stop it first. If you are sure no other copy runs, delete ${pidFile} and start again.`,
+    )
   }
 }
 
@@ -754,7 +810,7 @@ export class Service {
   }
 
   /** A pending "Link my Telegram" from the dashboard: the owner sends this code to their Telegram bot from their own account. */
-  private telegramLink: { code: string; until: number } | null = null
+  private telegramLink: { code: string; since: number; until: number } | null = null
 
   /** Starts linking the owner's Telegram chat: needs the bot token saved and no chat linked yet. */
   async startTelegramLink(): Promise<{ code: string; username: string }> {
@@ -763,7 +819,9 @@ export class Service {
     if (this.cfg.telegramChatId) throw new Error('a chat is already linked; to link another one, clear the Telegram chat id in Keys first')
     const username = await telegramMe(token)
     const code = String(randomInt(100_000, 1_000_000))
-    this.telegramLink = { code, until: Date.now() + 10 * 60_000 }
+    // `since`: only a message sent after this moment can carry the code (ATTACK-8).
+    const since = Date.now()
+    this.telegramLink = { code, since, until: since + 10 * 60_000 }
     return { code, username }
   }
 
@@ -772,7 +830,7 @@ export class Service {
     const link = this.telegramLink
     const token = this.cfg.telegramToken
     if (!link || link.until < Date.now() || !token) throw new Error('the code expired: press Link my Telegram again')
-    const id = pickOwnerChat(await telegramRecentChats(token), link.code)
+    const id = pickOwnerChat(await telegramRecentChats(token, link.since), link.code)
     if (!id) throw new Error('the code was not found yet: send exactly those 6 digits to your Telegram bot from your own Telegram account, then press I sent it again')
     this.telegramLink = null
     return this.updateKeys({ TELEGRAM_CHAT_ID: id }, by)
@@ -1128,6 +1186,10 @@ export class Service {
   }
 
   async start(): Promise<void> {
+    // Before the pid file is written: a second copy on this data folder would plan and pay for every agent a second
+    // time (the per-agent lock, the busy set and the schedule live in one process) and take the file (EDGE-8).
+    const other = otherServiceRunning(this.cfg.dataDir)
+    if (other !== null) throw new AlreadyRunningError(other, join(this.cfg.dataDir, SERVICE_PID_FILE))
     writeFileSync(join(this.cfg.dataDir, SERVICE_PID_FILE), String(process.pid), { mode: 0o600 })
     const agents = this.ensureAgents()
     const local = await loadExtensions().catch(err => [`local extension failed to load: ${err instanceof Error ? err.message : String(err)}`])
@@ -1765,7 +1827,7 @@ if (import.meta.main) {
   const service = new Service(loadConfig())
   service.start().catch(err => {
     // Changed recovery words: what to do, without a stack trace around it.
-    console.error(err instanceof ChangedWordsError ? err.message : err)
+    console.error(err instanceof ChangedWordsError || err instanceof AlreadyRunningError ? err.message : err)
     process.exit(1)
   })
   let exiting = false

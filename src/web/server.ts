@@ -8,7 +8,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Service } from '../service.ts'
-import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
+import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, clientKey, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
 import { EFFORTS, MODELS, isKnownModel, type Effort } from '../strategist/strategist.ts'
@@ -38,10 +38,10 @@ const SECURITY_HEADERS: Record<string, string> = {
  * An HTML page with its own script allowed by a fresh nonce: an injected <script> (without the nonce)
  * cannot run even if some text ever slipped into the page unescaped.
  */
-function sendPage(res: ServerResponse, status: number, html: string): void {
+function sendPage(res: ServerResponse, status: number, html: string, extra: Record<string, string> = {}): void {
   const nonce = randomBytes(16).toString('base64')
   const csp = `default-src 'none'; script-src 'nonce-${nonce}'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'`
-  send(res, status, html.replaceAll('<script>', `<script nonce="${nonce}">`), 'text/html; charset=utf-8', { 'content-security-policy': csp })
+  send(res, status, html.replaceAll('<script>', `<script nonce="${nonce}">`), 'text/html; charset=utf-8', { 'content-security-policy': csp, ...extra })
 }
 
 class HttpFail extends Error {
@@ -82,6 +82,49 @@ function clientIp(req: IncomingMessage): string {
   const real = req.headers['x-real-ip']
   if (process.env.WEB_UI_TRUST_PROXY === '1' && loopback && typeof real === 'string' && real.trim()) return real.trim()
   return socket
+}
+
+/** The host an Origin header names; null for "null" or something unreadable; undefined without the header. */
+function originHost(req: IncomingMessage): string | null | undefined {
+  const origin = req.headers.origin
+  if (!origin) return undefined
+  try {
+    return new URL(origin).host || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The same-origin rule of every POST the dashboard's script sends: an Origin header whose host is not the request's
+ * Host is another website (or "null": a sandboxed frame, garbage). A request without the header is not judged here.
+ * Behind nginx the Host is the public name (`proxy_set_header Host $host`), the one the browser's Origin carries.
+ */
+function crossOrigin(req: IncomingMessage): boolean {
+  const host = originHost(req)
+  return host !== undefined && host !== req.headers.host
+}
+
+/** The sign-in page's mark: a SameSite=Strict cookie, which a browser sends only with requests from the dashboard's own site. */
+const LOGIN_MARK = 'foxagent_login'
+
+/**
+ * Whether a POST /login comes from another website (ATTACK-2). The sign-in is a plain form, and the dashboard's pages
+ * ask for no referrer, so a browser sends the dashboard's own form with `Origin: null` (measured with Chrome): the
+ * Origin alone cannot tell it from another site's form that hides its origin. In this order:
+ * 1. Sec-Fetch-Site, where the browser sends it (every current browser, over https or to this machine itself): only
+ *    `same-origin` (the page's own form) and `none` (the person's own action) are the dashboard. A page cannot set it.
+ * 2. No Origin header at all: a script or an old browser, judged by its password as before.
+ * 3. An Origin that names a host: it must be the request's Host.
+ * 4. `Origin: null` without Sec-Fetch-Site (plain http to a name on the local network): the sign-in page's mark.
+ */
+function foreignLogin(req: IncomingMessage): boolean {
+  const site = req.headers['sec-fetch-site']
+  if (typeof site === 'string' && site.trim()) return !['same-origin', 'none'].includes(site.trim().toLowerCase())
+  const host = originHost(req)
+  if (host === undefined) return false
+  if (host === null) return cookies(req)[LOGIN_MARK] !== '1'
+  return host !== req.headers.host
 }
 
 async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
@@ -174,8 +217,15 @@ export function raisesAiSpend(current: { model: string; effort: string }, next: 
   return EFFORTS.indexOf(next.effort) > (EFFORTS as readonly string[]).indexOf(current.effort)
 }
 
+const REVOKED_SESSIONS_KEY = 'revoked_sessions'
+
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {
-  const sessions = new Sessions(creds.secretKey, creds.passwordHash)
+  // The marks of logged-out sessions live in the store, so a restart (an update restarts the service) does not
+  // bring a logged-out cookie back (ATTACK-6).
+  const sessions = new Sessions(creds.secretKey, creds.passwordHash, {
+    load: () => service.store.getKv(REVOKED_SESSIONS_KEY),
+    save: value => service.store.setKv(REVOKED_SESSIONS_KEY, value),
+  })
   const throttle = new LoginThrottle()
   const loginWork = new BoundedQueue()
   const secureCookie = process.env.WEB_UI_INSECURE_COOKIE !== '1'
@@ -272,7 +322,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
     return n
   }
 
-  const loginPage = (res: ServerResponse, status: number, error: string) => sendPage(res, status, PAGES.login.replace('{{ERROR}}', escapeHtml(error)))
+  // Every showing of the sign-in page renews its mark (see foreignLogin); it holds nothing and opens nothing.
+  const loginMark = `${LOGIN_MARK}=1; Max-Age=${30 * 86_400}; HttpOnly; SameSite=Strict; Path=/login${secureCookie ? '; Secure' : ''}`
+  const loginPage = (res: ServerResponse, status: number, error: string) => sendPage(res, status, PAGES.login.replace('{{ERROR}}', escapeHtml(error)), { 'set-cookie': loginMark })
 
   const server = createServer(async (req, res) => {
     try {
@@ -286,6 +338,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
 
       if (path === '/login' && method === 'GET') return user ? send(res, 303, '', 'text/plain', { location: '/' }) : loginPage(res, 200, '')
       if (path === '/login' && method === 'POST') {
+        // Before the throttle is read or anything is counted: a form posted from another website in the owner's
+        // browser must not count wrong passwords against the owner's own address (ATTACK-2).
+        if (foreignLogin(req)) return loginPage(res, 403, 'That sign-in did not come from this page. Try again here.')
         const ip = clientIp(req)
         const gate = throttle.check(ip)
         if (!gate.ok) return loginPage(res, 429, `Too many attempts. Try again in ${gate.waitS} s.`)
@@ -294,7 +349,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         const password = form.get('password') ?? ''
         // Both checks always run, so the timing does not reveal which one failed.
         // Off the event loop and one at a time: a flood of attempts must not stall the executor or the kill switch.
-        const passOk = await loginWork.run(() => verifyPasswordAsync(password, creds.passwordHash), ip)
+        const passOk = await loginWork.run(() => verifyPasswordAsync(password, creds.passwordHash), clientKey(ip))
         if (passOk === null) return loginPage(res, 429, 'Busy: too many sign-in attempts at once. Try again in a few seconds.')
         const userOk = username.length === creds.username.length && username === creds.username
         if (!(passOk && userOk)) {
@@ -316,16 +371,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
 
       // Every state-changing request: same-origin and the session's CSRF token.
       if (method === 'POST') {
-        const origin = req.headers.origin
-        if (origin) {
-          let host: string | null = null
-          try {
-            host = new URL(origin).host
-          } catch {
-            host = null // "null" (sandboxed frames, some redirects) or garbage
-          }
-          if (!host || host !== req.headers.host) throw new HttpFail(403, 'cross-origin request refused')
-        }
+        if (crossOrigin(req)) throw new HttpFail(403, 'cross-origin request refused')
         const sent = req.headers['x-csrf-token']
         if (!sessions.checkCsrf(session, typeof sent === 'string' ? sent : undefined)) throw new HttpFail(403, 'missing or wrong CSRF token')
       }

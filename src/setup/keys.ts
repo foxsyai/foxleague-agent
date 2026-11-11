@@ -178,18 +178,49 @@ export async function telegramMe(token: string): Promise<string> {
   return r.result!.username
 }
 
-/** Chats that recently wrote to the Telegram bot (the owner sends it any message first). */
-export async function telegramRecentChats(token: string): Promise<{ id: string; who: string; text: string }[]> {
-  const r = (await (await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=20`, { signal: AbortSignal.timeout(15_000) })).json()) as {
-    ok: boolean
-    result?: { message?: { chat: { id: number; type: string; username?: string; first_name?: string }; text?: string } }[]
+/** Telegram hands out at most this many waiting updates in one answer. */
+const TELEGRAM_PAGE = 100
+/** The most pages one look reads (6,000 waiting updates); the next look goes on from there. */
+const TELEGRAM_MAX_PAGES = 60
+/** Telegram dates a message by its own clock: this much difference from ours is allowed for. */
+const TELEGRAM_CLOCK_SLACK_S = 60
+/** The service's own reader, started once the chat is linked, still acts on messages this old (telegram.ts, startPolling). */
+const READER_LOOKS_BACK_S = 300
+
+/**
+ * The private chats that wrote to the Telegram bot since the link was started (`sinceMs`), every waiting message
+ * read, not only the first few: Telegram lists the earliest waiting updates first, so 20 earlier lines from anyone
+ * used to hide the owner's code for a day, and an old line could match a code that did not exist when it was written
+ * (ATTACK-8). A message counts only when Telegram dated it after the link was started.
+ *
+ * Reading past a full page means asking with an offset, and Telegram forgets what lies before an offset. So the
+ * offset moves only when more updates wait behind a full page, and then only as far as the first message the
+ * service's own reader could still act on (a full page of such messages, a flood, is passed whole). The end of the
+ * queue is never confirmed: the owner's code and the commands sent after it wait for that reader.
+ */
+export async function telegramRecentChats(token: string, sinceMs: number): Promise<{ id: string; who: string; text: string }[]> {
+  const startedS = Math.floor(sinceMs / 1000)
+  const seen = new Map<number, { id: string; who: string; text: string }>()
+  let offset: number | undefined
+  for (let page = 0; page < TELEGRAM_MAX_PAGES; page++) {
+    const r = (await (await fetch(`https://api.telegram.org/bot${token}/getUpdates?limit=${TELEGRAM_PAGE}${offset === undefined ? '' : `&offset=${offset}`}`, { signal: AbortSignal.timeout(15_000) })).json()) as {
+      ok: boolean
+      description?: string
+      result?: { update_id: number; message?: { chat: { id: number; type: string; username?: string; first_name?: string }; date?: number; text?: string } }[]
+    }
+    // A refusal (a webhook or another program reads this token's messages) is said, never taken for "no message yet".
+    if (!r.ok) throw new Error(`Telegram did not list the messages sent to your Telegram bot: ${r.description ?? 'unknown'}`)
+    const list = r.result ?? []
+    for (const u of list) {
+      const m = u.message
+      if (!m || m.chat.type !== 'private' || typeof m.date !== 'number' || m.date < startedS - TELEGRAM_CLOCK_SLACK_S) continue
+      seen.set(u.update_id, { id: String(m.chat.id), who: m.chat.username ? `@${m.chat.username}` : m.chat.first_name ?? '?', text: (m.text ?? '').trim().slice(0, 30) })
+    }
+    if (list.length < TELEGRAM_PAGE) return [...seen.values()]
+    const keep = list.find(u => typeof u.message?.date === 'number' && u.message.date >= startedS - READER_LOOKS_BACK_S)
+    offset = keep && keep !== list[0] ? keep.update_id : list.at(-1)!.update_id + 1
   }
-  const out: { id: string; who: string; text: string }[] = []
-  for (const u of r.result ?? []) {
-    const c = u.message?.chat
-    if (c && c.type === 'private') out.push({ id: String(c.id), who: c.username ? `@${c.username}` : c.first_name ?? '?', text: (u.message?.text ?? '').trim().slice(0, 30) })
-  }
-  return out
+  throw new Error('too many messages wait at your Telegram bot to read them in one go: send the 6 digits again, then try once more')
 }
 
 /**
