@@ -1412,19 +1412,23 @@ export class Service {
     const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) }
     // Rendered once and kept: a shadow plan, when one is switched on, is asked with these very words.
     const request = renderPlanRequest(input)
+    // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the
+    // strategist while the request is on its way, and this plan is still the earlier model's (agent review of PR #63,
+    // R63A-2).
+    const playing = { model: String(this.strategist!.model), effort: String(this.strategist!.effort ?? '') }
     const plan = await this.strategist!.plan(input, request)
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +
       (plan.rejected.length ? `\nrejected proposals: ${plan.rejected.map(r => r.error).join('; ')}` : '') +
-      `\nmodel cost $${plan.usage.usd.toFixed(4)} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== this.strategist!.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
+      `\nmodel cost $${plan.usage.usd.toFixed(4)} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
     // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
     this.addModelUsd(plan.usage.usd)
     this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
     if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
     else this.report(text)
-    this.prepareShadow(plan, request)
+    this.prepareShadow(plan, request, playing)
     return plan
   }
 
@@ -1432,12 +1436,13 @@ export class Service {
    * Leaves what a shadow plan of this real plan needs, when shadow plans are switched on: the request's own words and
    * the real plan as plain data (as the model proposed it, before the tick drops anything). Off, which is the default,
    * it keeps nothing; the reason a setting does not count is said once in the log. It never throws: the real plan
-   * must not depend on it.
+   * must not depend on it. `playing`: the model and effort the real plan was asked from, as they were when its request
+   * went out; the shadow is compared with that model, whatever plays by now.
    */
-  private prepareShadow(plan: Plan, request: string): void {
+  private prepareShadow(plan: Plan, request: string, playing: { model: string; effort: string }): void {
     try {
       if (!this.strategist || !this.cfg.anthropicApiKey) return
-      const choice = shadowChoice(this.store, this.strategist.model)
+      const choice = shadowChoice(this.store, playing.model)
       if (!choice.on) {
         if (choice.why && choice.why !== this.shadowOffSaid) console.log(`[${new Date().toISOString()}] ${choice.why}`)
         this.shadowOffSaid = choice.why
@@ -1445,7 +1450,7 @@ export class Service {
       }
       this.shadowOffSaid = null
       this.shadowJobs.set(plan, {
-        request, model: choice.model, effort: choice.effort, realModel: String(this.strategist.model), realEffort: String(this.strategist.effort ?? ''),
+        request, model: choice.model, effort: choice.effort, realModel: playing.model, realEffort: playing.effort,
         real: { ...recordPlan(plan), usd: plan.usage.usd, servedBy: plan.usage.servedBy },
       })
     } catch (err) {

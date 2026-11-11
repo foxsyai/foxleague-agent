@@ -317,7 +317,7 @@ test('SHADOW-15 the guides: the server guide\'s own command switches shadow plan
   const section = review.slice(review.lastIndexOf('\n## '))
   assert.match(section, /^\n## Shadow plans, Claude Haiku 5\.5 and the model list of four \(2026-11-11\)\n/, 'the last section of the file')
   assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| SHADOW-1 \| design \(the owner, 2026-11-11\) \|/)
-  for (const id of ['SHADOW-2', 'SHADOW-3', 'SHADOW-4', 'SHADOW-5', 'SHADOW-6', 'SHADOW-7', 'SHADOW-12', 'HAIKU-1', 'LIST-4', 'R63A-1']) assert.match(section, new RegExp(`\\n\\| ${id}[ ,]`), id)
+  for (const id of ['SHADOW-2', 'SHADOW-3', 'SHADOW-4', 'SHADOW-5', 'SHADOW-6', 'SHADOW-7', 'SHADOW-12', 'HAIKU-1', 'LIST-4', 'R63A-1', 'R63A-2']) assert.match(section, new RegExp(`\\n\\| ${id}[ ,]`), id)
   for (const open of [/Haiku 5\.5's two rate cards comes from Anthropic's wording, not from an invoice/, /judged by people or by `shadow-report`, not by the rules/, /doubles the requests of a plan/]) assert.match(section.slice(section.indexOf('Stays open:')), open)
   assert.doesNotMatch(section, /—/)
 })

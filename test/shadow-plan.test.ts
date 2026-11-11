@@ -342,3 +342,33 @@ test('SHADOW-6 (f) rule 1: no path from a shadow plan\'s actions to the executor
   assert.match(tick, /const running = this\.runPlan\(agent, plan\.actions, !ownerRequest\)\n\s*(\/\/[^\n]*\n\s*)*this\.startShadow\(index, plan\)\n\s*await running\n/)
   assert.doesNotMatch(tick, /await this\.(startShadow|shadowPlan)/)
 })
+
+// Agent review of pull request #63 (low): the playing model and effort were read after the plan's answer came, so a
+// switch made while the request was on its way put the new model's name on a plan the old one had made.
+test('R63A-2 a model switch while the plan request is on its way: the record names the model that made the plan', async () => {
+  let asked: () => void = () => undefined
+  const onItsWay = new Promise<void>(r => { asked = r })
+  let release: (v: unknown) => void = () => undefined
+  const m = await service({ shadow: SHADOW, real: () => { asked(); return new Promise(r => { release = r }) } })
+  const ticking = m.svc.tick(0)
+  await onItsWay
+  assert.equal(m.of(PLAYING).length, 1, 'the request went to Sonnet 5.5 at medium')
+  assert.deepEqual(m.of(PLAYING)[0]!.output_config, { effort: 'medium' })
+  // The owner switches the strategist in the dashboard before the answer is in.
+  m.svc.setStrategist('claude-opus-5-5', 'high', 'test')
+  release(realAnswer())
+  await ticking
+  await m.settled()
+  const [kept] = m.shadowPlans() as unknown as { realModel: string; realEffort: string; shadowModel: string }[]
+  assert.deepEqual([kept!.realModel, kept!.realEffort, kept!.shadowModel], [PLAYING, 'medium', SHADOW], 'the real plan was made by Sonnet 5.5 at medium')
+  const { shadowReport } = await import('../src/strategist/shadow.ts')
+  assert.match(shadowReport(m.svc.store.shadowPlans(null)), /^Models: Haiku 5\.5 \(medium\) next to Sonnet 5\.5 \(medium\)$/m)
+  // Nor is the plan called a fallback because another model plays by now.
+  assert.doesNotMatch(m.rows('plan')[0]!.summary, /fallback|served by/)
+  // The switch holds from the next plan on, and its shadow plan is recorded next to Opus 5.5 at high.
+  ;(m.svc.strategist as unknown as { client: unknown }).client = { beta: { messages: { stream: (p: Request) => ({ finalMessage: async () => (m.requests.push(p), p.model === 'claude-opus-5-5' ? planned('claude-opus-5-5', 'OPUS plan', REAL_ACTIONS) : shadowAnswer()) }) } } }
+  await m.svc.tick(0)
+  await m.settled()
+  const [newest] = m.shadowPlans() as unknown as { realModel: string; realEffort: string }[]
+  assert.deepEqual([newest!.realModel, newest!.realEffort], ['claude-opus-5-5', 'high'])
+})
