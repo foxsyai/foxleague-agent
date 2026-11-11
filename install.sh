@@ -164,12 +164,14 @@ ensure_node() {
 cli() { AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 deps() { (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
 
-# ---- the launcher: what the service starts. On an install made by get.sh it sits in ROOT with an install.sh
-# that hands over to the active release; in a git checkout both are the checkout's own files. ----
+# ---- the launcher (run.sh: what the service starts) and the command line (cli.sh). On an install made by get.sh
+# they sit in ROOT with an install.sh that hands over to the active release; in a git checkout all three are the
+# checkout's own files. ----
 install_launcher() {
   [ "$MANAGED" = 1 ] || return 0
   put_file "$ROOT/run.sh" 755 < "$APP_DIR/run.sh"
-  [ -f "$APP_DIR/get.sh" ] && put_file "$ROOT/get.sh" 755 < "$APP_DIR/get.sh"
+  if [ -f "$APP_DIR/cli.sh" ]; then put_file "$ROOT/cli.sh" 755 < "$APP_DIR/cli.sh"; fi
+  if [ -f "$APP_DIR/get.sh" ]; then put_file "$ROOT/get.sh" 755 < "$APP_DIR/get.sh"; fi
   put_file "$ROOT/install.sh" 755 <<'SHIM'
 #!/usr/bin/env bash
 # foxleague-agent: runs the installer of the release that is active (./install.sh --update, --uninstall, --help).
@@ -460,6 +462,7 @@ cat <<EOF
   Restart     $([ "$PLATFORM" = linux ] && echo "systemctl --user restart $SERVICE" || echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL")
   Update      ./install.sh --update
   Uninstall   ./install.sh --uninstall
+  Command line  ./cli.sh   (alone it lists the commands; ./cli.sh backup-words shows the recovery words)
 
   Keep your recovery words safe. Anyone with them controls the agent wallets.
 EOF

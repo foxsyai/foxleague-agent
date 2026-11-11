@@ -149,6 +149,7 @@ results, not meeting). What they share is a pooled formation record with no team
 | Logs | `journalctl --user -u foxleague-agent -f` | `tail -f data/service.log` |
 | Restart | `systemctl --user restart foxleague-agent` | `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent` |
 | Update | `./install.sh --update` | `./install.sh --update` |
+| Command line | `./cli.sh` (alone it lists the commands) | `./cli.sh` |
 | Uninstall | `./install.sh --uninstall` | `./install.sh --uninstall` |
 
 Uninstall stops the background service and leaves your folder, wallet and PEM files in place. Delete the folder

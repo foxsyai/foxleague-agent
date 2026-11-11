@@ -246,8 +246,8 @@ FOXAGENT_ROOT="$ROOT" exec bash "$ROOT/versions/$active/install.sh" "$@"
 `
 
 /**
- * Once a new release is confirmed: its launcher and its installer's entry replace the ones in the install's
- * folder. By rename, never in place, so a script that is running keeps reading the file it started from.
+ * Once a new release is confirmed: its launcher, its command line (cli.sh) and its installer's entry replace the
+ * ones in the install's folder. By rename, never in place, so a script that is running keeps reading the file it started from.
  * Returns the names it replaced.
  */
 export function refreshLauncher(layout: Layout): string[] {
@@ -268,7 +268,7 @@ export function refreshLauncher(layout: Layout): string[] {
     renameSync(tmp, dest)
     changed.push(name)
   }
-  for (const name of ['run.sh', 'get.sh']) {
+  for (const name of ['run.sh', 'cli.sh', 'get.sh']) {
     try {
       put(name, readFileSync(join(layout.code, name), 'utf8'))
     } catch {
