@@ -48,6 +48,7 @@ import { RELEASE_KEYS } from './update/keys.ts'
 import { detectLayout } from './update/install.ts'
 import { UpdateError } from './update/release.ts'
 import { RESTART_EXIT_CODE, Updater } from './update/updater.ts'
+import { keepServiceLogBounded } from './service-log.ts'
 
 /** The installed version (package.json), shown when the service starts. */
 export const VERSION = (() => {
@@ -1762,6 +1763,7 @@ function retiredLine(retired: AgentRow[]): string {
 }
 
 if (import.meta.main) {
+  keepServiceLogBounded(loadConfig().dataDir)
   const service = new Service(loadConfig())
   service.start().catch(err => {
     // Changed recovery words: what to do, without a stack trace around it.
