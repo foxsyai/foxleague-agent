@@ -1,5 +1,5 @@
 // The running service's side of an update: look for a newer release every ten minutes, tell the owner once per
-// version (dashboard and Telegram), install it when the owner asks (one click or /update), restart into it and
+// version (dashboard and Telegram), install it when the owner asks (one click or /upgrade), restart into it and
 // say how it went. It never installs by itself. The checks that decide what may be installed are in release.ts
 // (signature, version, archive) and install.ts (disk); this file only orders them.
 
@@ -169,7 +169,7 @@ export class Updater {
     return [
       `foxleague-agent ${m.version} is out (you run ${this.d.installed}).`,
       ...(m.notes.trim() ? [m.notes.trim()] : []),
-      how === null ? 'To install it: send /update here, or press Update now in the dashboard. The agent restarts and tells you when it is back.' : `To install it: ${how}.`,
+      how === null ? 'To install it: send /upgrade here, or press Update now in the dashboard. The agent restarts and tells you when it is back.' : `To install it: ${how}.`,
     ].join('\n')
   }
 
