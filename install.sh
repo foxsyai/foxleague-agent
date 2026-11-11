@@ -579,7 +579,12 @@ cat <<'KEYS'
 KEYS
 # Keys already set: pressing Enter skips this step (they stay as they are).
 if yes_no "Enter keys now?" "$([ -n "$(get_env ANTHROPIC_API_KEY)" ] && echo n || echo y)"; then
-  cli configure < "$TTY"
+  # Whatever the key step answers, the install goes on: every key can be added in the dashboard. Only Ctrl-C
+  # at a key (status 130) ends it.
+  rc=0
+  cli configure < "$TTY" || rc=$?
+  [ "$rc" != 130 ] || exit 130
+  [ "$rc" = 0 ] || info "The keys were not all saved (see the line above). The install goes on. Add or change your keys any time in the dashboard: Keys."
 else
   info "Skipped. Add them any time in the dashboard: Keys."
 fi
