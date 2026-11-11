@@ -66,6 +66,8 @@ The dashboard's **Getting started** guide repeats the key steps below, shows whi
   controls every agent wallet. They give each agent its wallet: agent 1 uses account 0 of the words, agent 2
   account 1 and so on (in mxpy, `--address-index` is N-1 for agent N).
 - The words are also stored in the `.env` file in the `foxleague-agent` folder, readable only by your user.
+  To see them again, run `./cli.sh backup-words` in that folder, in your own terminal. Until you have typed `yes`
+  at "Type yes when the words are written down", every run of the installer shows them and asks again.
 - `pem/` holds one PEM file per agent (`agent1.pem`, `agent2.pem`...). Use them to log into FoxLeague. Never send
   them to anyone and never upload them anywhere.
 

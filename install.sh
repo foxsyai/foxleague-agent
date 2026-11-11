@@ -68,14 +68,58 @@ esac
 [ -f "$APP_DIR/package.json" ] && grep -q '"name": "foxleague-agent"' "$APP_DIR/package.json" || die "run install.sh from inside the foxleague-agent folder"
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
+# The recovery words live in this file, so set_env never loses a line of it: every line but the key's own is
+# copied to a new file, the lines are counted another way (wc, not grep) and only then the new file takes the
+# place of .env. grep -a and LC_ALL=C: a NUL byte or a byte outside the locale (a line appended from Windows)
+# must not make grep treat the file as binary and print nothing.
+count_lines() { # lines of a file; a last line without its line end is a line too
+  local n
+  n=$(wc -l < "$1")
+  if [ -s "$1" ] && [ "$(tail -c 1 "$1" | wc -l)" -eq 0 ]; then n=$((n + 1)); fi
+  printf '%s' "$((n))"
+}
 set_env() {
-  local tmp
+  local tmp rc=0 had=0 gone=0 kept
   tmp=$(mktemp "$ROOT/.env.XXXXXX")
-  { grep -v "^$1=" "$ENV_FILE" 2>/dev/null || true; printf '%s="%s"\n' "$1" "$2"; } > "$tmp"
   chmod 600 "$tmp"
+  if [ -e "$ENV_FILE" ]; then
+    # grep ends with 0 (lines copied), 1 (none to copy: an empty file, or only this key) or 2 (an error).
+    LC_ALL=C grep -a -v "^$1=" "$ENV_FILE" > "$tmp" || rc=$?
+    if [ "$rc" -gt 1 ]; then rm -f "$tmp"; die "$ENV_FILE could not be read line by line: it was left as it is. Check the file, then run the installer again."; fi
+    had=$(count_lines "$ENV_FILE")
+    gone=$(LC_ALL=C grep -a -c "^$1=" "$ENV_FILE") || true
+  fi
+  kept=$(count_lines "$tmp")
+  case "$gone" in '' | *[!0-9]*) gone=-1 ;; esac
+  if [ "$kept" -ne $((had - gone)) ]; then rm -f "$tmp"; die "lines of $ENV_FILE would be lost: it was left as it is (it holds your recovery words). Check the file, then run the installer again."; fi
+  printf '%s="%s"\n' "$1" "$2" >> "$tmp"
   mv "$tmp" "$ENV_FILE"
 }
-get_env() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
+get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
+
+# ---- the live permission: what Enter means at "Allow this machine to sign real transactions" ----
+# A first install: no database yet and AGENT_LIVE_ENABLED nowhere in .env (not even commented out). A .env that
+# cannot be searched counts as naming it: unknown is not absent.
+first_install() {
+  local rc=0
+  if [ -e "$DATA_DIR/agent.db" ]; then echo 0; return 0; fi
+  if [ -e "$ENV_FILE" ]; then
+    LC_ALL=C grep -a -q 'AGENT_LIVE_ENABLED' "$ENV_FILE" || rc=$?
+    if [ "$rc" != 1 ]; then echo 0; return 0; fi
+  fi
+  echo 1
+}
+# Yes only when .env already allows it (1 or true, what the agent itself accepts), or on a first install. Every
+# other state (commented out, removed, false, off, no, 0) is off, and Enter keeps it off.
+live_default() {
+  local v
+  v=$(get_env AGENT_LIVE_ENABLED | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  case "$v" in
+    1 | true) echo y ;;
+    '') if [ "${FIRST_INSTALL:-0}" = 1 ]; then echo y; else echo n; fi ;;
+    *) echo n ;;
+  esac
+}
 
 # ---- Node.js: a recent one on the system or a private copy in .node/ ----
 node_ok() { [ -x "$1" ] && "$1" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
@@ -267,6 +311,9 @@ if [ "$MODE" = update ]; then
   exit 0
 fi
 
+# Read before anything is written: later steps create the .env and may create the database.
+FIRST_INSTALL=$(first_install)
+
 say "foxleague-agent installer"
 info "It sets up local agents that manage FoxLeague teams for you, with a dashboard on this machine."
 info "Nothing is shared with anyone: your wallet words and keys stay in this folder."
@@ -280,17 +327,30 @@ mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 
 say "2/7 Your wallet"
 had_words=$(get_env AGENT_MNEMONIC)
-cli setup | grep -v 'backup-words' || true
-if [ -z "$had_words" ]; then
+# The typed yes below is noted here. Until it exists every run shows the words and asks: a first run that ended
+# before the yes (a closed terminal) must not leave an owner who never saw them again.
+WORDS_CONFIRMED="$DATA_DIR/words-confirmed"
+setup_rc=0
+setup_out=$(cli setup 2>&1) || setup_rc=$?
+printf '%s\n' "$setup_out" | grep -v 'backup-words' || true
+[ "$setup_rc" = 0 ] || die "the wallet could not be set up (see the lines above). Nothing was created. Check AGENT_MNEMONIC in $ENV_FILE, then run the installer again."
+if [ ! -f "$WORDS_CONFIRMED" ]; then
   info ""
-  info "A new wallet was created. Its recovery words are the ONLY way to get your funds back."
+  if [ -z "$had_words" ]; then
+    info "A new wallet was created. Its recovery words are the ONLY way to get your funds back."
+  else
+    info "You have not confirmed yet that the recovery words of this wallet are written down."
+    info "They are the ONLY way to get your funds back, so here they are again."
+  fi
   info "Write them down on paper now. Never type them into a website, a chat or a screenshot."
   info ""
   cli backup-words
   info ""
   until [ "$(ask 'Type yes when the words are written down')" = yes ]; do :; done
+  printf 'The owner typed yes at "Type yes when the words are written down" on %s.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | put_file "$WORDS_CONFIRMED" 600
   clear 2>/dev/null || true
   info "Good. The words stay in $ENV_FILE (readable only by you)."
+  info "To see them again later, in this folder: ./cli.sh backup-words"
 else
   info "Your existing wallet is kept."
 fi
@@ -354,8 +414,8 @@ say "5/7 Settings"
 set_env AGENT_PEM_DIR "$PEM_DIR"
 info "A new install starts in DRY RUN: the agents plan and simulate, nothing is signed."
 info "When you are happy, press Go LIVE in the dashboard. This machine still has to allow it:"
-# A re-run offers the earlier answer, so pressing Enter never turns live signing on by surprise.
-if yes_no "Allow this machine to sign real transactions once you press Go LIVE?" "$([ "$(get_env AGENT_LIVE_ENABLED)" = 0 ] && echo n || echo y)"; then
+# A re-run offers what .env says now, so pressing Enter never turns live signing on by surprise.
+if yes_no "Allow this machine to sign real transactions once you press Go LIVE?" "$(live_default)"; then
   set_env AGENT_LIVE_ENABLED 1
 else
   set_env AGENT_LIVE_ENABLED 0
