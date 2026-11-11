@@ -129,6 +129,8 @@ Already playing FoxLeague? **Import team** gives an agent the team you have ([Im
 
 ## Uninstall
 
+In the `foxleague-agent` folder:
+
 ```sh
 ./install.sh --uninstall
 ```
@@ -140,3 +142,26 @@ wallets are empty and your recovery words are safe.
 On Linux the installer turned on linger, which lets background services of your user start without a login. The
 uninstall leaves it on, because other services of yours may count on it: `loginctl disable-linger $USER` turns it
 off.
+
+### On Windows
+
+The uninstall has two parts. Inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell), go to the
+`foxleague-agent` folder and run `./install.sh --uninstall` as above. In PowerShell, remove the scheduled task
+that keeps Ubuntu running:
+
+```powershell
+Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false
+```
+
+This line does the same: it removes that task and nothing else, then names the step inside Ubuntu.
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall
+```
+
+The task is all the installer added to Windows. WSL, Ubuntu and the line `systemd=true` in Ubuntu's
+`/etc/wsl.conf` stay, because other programs may use them. If the installer changed a file that was already
+there, the file as it was is in `/etc/wsl.conf.before-foxleague`.
+
+Your folder with the wallet words stays inside Ubuntu. Do not remove Ubuntu itself while the agent wallets hold
+funds or the recovery words are not on paper: `wsl --unregister Ubuntu` deletes everything in it.
