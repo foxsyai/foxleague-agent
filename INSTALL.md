@@ -57,9 +57,10 @@ The dashboard's **Getting started** guide repeats the key steps below, shows whi
 1. **Fund your agent.** Send EGLD on the MultiversX network to agent 1's wallet, which the installer printed.
    It is also in the dashboard.
 2. **Open the dashboard** at `http://localhost:8870` (or the port you chose) and log in.
-3. **Watch the dry run.** Once the EGLD arrives, the agent plans its first steps: buy FOXSY, register a team, train,
-   play. In dry run everything is simulated and logged, nothing is paid. Read a few plans in Last plan and
-   Activity.
+3. **Watch the dry run.** Once the EGLD arrives, the agent plans its first steps. In dry run nothing is paid and
+   nothing is bought, so a new wallet shows only the simulated FOXSY swap: the registration line then says it
+   needs 5,000 FOXSY for the fee, because nothing was really bought. That is expected. The team is registered once
+   you go live, and training and matches follow. Read a plan or two in Last plan and Activity.
 4. **Set your limits and strategy** in Settings: daily cap, monthly budget, the largest entry fee, shop payment
    and bid. Write your strategy in plain words too. Every field has an "i" that explains it.
 5. **Go live.** Press Go LIVE in the header, type `GO LIVE` and your password. Back to dry run is one click.
