@@ -312,7 +312,8 @@ StartLimitBurst=5
 
 [Service]
 WorkingDirectory=$ROOT
-Environment="AGENT_ENV_FILE=$ENV_FILE" "AGENT_DATA_DIR=$DATA_DIR"
+# FOXAGENT_SUPERVISED=1 tells the agent that this unit starts it again when it ends: an update may then end it.
+Environment="AGENT_ENV_FILE=$ENV_FILE" "AGENT_DATA_DIR=$DATA_DIR" "FOXAGENT_SUPERVISED=1"
 ExecStart="$bash_bin" "$ROOT/run.sh"
 Restart=on-failure
 RestartSec=30
@@ -349,7 +350,7 @@ EOF
   <key>Label</key><string>$PLIST_LABEL</string>
   <key>ProgramArguments</key><array><string>$bash_bin</string><string>$ROOT/run.sh</string></array>
   <key>WorkingDirectory</key><string>$ROOT</string>
-  <key>EnvironmentVariables</key><dict><key>AGENT_ENV_FILE</key><string>$ENV_FILE</string><key>AGENT_DATA_DIR</key><string>$DATA_DIR</string></dict>
+  <key>EnvironmentVariables</key><dict><key>AGENT_ENV_FILE</key><string>$ENV_FILE</string><key>AGENT_DATA_DIR</key><string>$DATA_DIR</string><key>FOXAGENT_SUPERVISED</key><string>1</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
   <key>ExitTimeOut</key><integer>180</integer>

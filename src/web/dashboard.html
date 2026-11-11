@@ -478,7 +478,10 @@ function renderUpdate() {
   const recent = u.last && Date.now() - Date.parse(u.last.at) < 86400000 ? u.last : null
   const busy = u.state !== 'idle' || Boolean(updating)
   let text = '', notes = '', tone = '', button = false
-  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + '. The agent restarts in a minute or two and this page comes back by itself.'
+  // u.restarts is false where no background service starts the agent again: the release is put in place and
+  // u.waiting then holds what the owner does to start it.
+  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + (u.restarts === false ? '. This takes a minute or two. The agent keeps playing: it does not restart by itself here, and this notice then says how to start the new version.' : '. The agent restarts in a minute or two and this page comes back by itself.')
+  else if (u.waiting) text = u.waiting.message
   else if (u.available) {
     text = 'Version ' + u.available.version + ' is out. You run ' + u.installed + '.' + (u.canInstall ? '' : ' To install it: ' + u.how + '.')
     notes = u.available.notes; button = u.canInstall
@@ -496,8 +499,10 @@ async function startUpdate() {
   $('upBtn').disabled = true
   try {
     const r = await api('POST', '/api/update')
-    updating = { to: u.available.version, since: Date.now() }
     toast(r.message)
+    // Where nothing restarts the agent it never goes away: its own state says how far the update is.
+    if (u.restarts === false) { await loadState(); const w = setInterval(() => { loadState(); if (S.instance.update.state === 'idle') clearInterval(w) }, 4000); return }
+    updating = { to: u.available.version, since: Date.now() }
     renderUpdate()
     // Look often while it installs and restarts; the page is quiet about the minute the agent is away.
     const h = setInterval(() => { if (!updating || Date.now() - updating.since > 20 * 60000) { updating = null; clearInterval(h); loadState() } else loadState() }, 4000)
@@ -958,6 +963,7 @@ const TIPS = {
   update: ['Version and updates', `<p>The version this agent runs. About every 10 minutes it asks GitHub whether a newer release of foxleague-agent is out. When one is, a notice appears here and on Telegram, with what is new.</p>
     <p><b>Update now</b> installs it in one click: the agent downloads the release, checks that it is signed by the foxleague-agent maintainers, prepares it next to the running version and restarts into it. That takes a minute or two. An action that is being signed finishes first; the other waiting actions of a running plan are dropped and the next plan takes them up. Your wallet, keys, settings and history are not touched. On Telegram, <b>/upgrade</b> does the same.</p>
     <p>Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password. If the new version does not start, the agent goes back to the one it ran before and tells you.</p>
+    <p>An agent that you start yourself with ./run.sh (an install without the background service) does not restart by itself: the new version is put in place, the agent keeps playing and the notice says how to start the new version.</p>
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
   guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],

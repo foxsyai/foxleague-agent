@@ -223,6 +223,18 @@ export function activate(layout: Layout, to: string): void {
   writeAtomic(join(versions, 'active'), `${to}\n`)
 }
 
+/**
+ * A release that is in place and is not the one running: versions/active names it and its code is there. It runs
+ * from the agent's next start. Null when the running release is the active one, or when the file cannot be read.
+ */
+export function waitingRelease(layout: Layout): string | null {
+  if (!layout.managed) return null
+  const versions = join(layout.root, 'versions')
+  const active = readLine(join(versions, 'active'))
+  if (!active || active === basename(layout.code) || !NAME_RE.test(active)) return null
+  return existsSync(join(versions, active, 'src', 'service.ts')) ? active : null
+}
+
 export interface StartNote {
   /** This start is the first of a new release: the release that ran before. */
   updatedFrom?: string

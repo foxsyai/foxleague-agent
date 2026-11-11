@@ -49,6 +49,7 @@ import { RELEASE_KEYS } from './update/keys.ts'
 import { detectLayout } from './update/install.ts'
 import { UpdateError } from './update/release.ts'
 import { RESTART_EXIT_CODE, Updater } from './update/updater.ts'
+import { supervised } from './update/supervised.ts'
 import { keepServiceLogBounded } from './service-log.ts'
 
 /** The installed version (package.json), shown when the service starts. */
@@ -349,7 +350,7 @@ export class Service {
       // Only a real start looks for releases (loadConfig sets it): a Service built by a test or a CLI command asks nobody.
       enabled: cfg.updateCheck === true,
       dataDir: cfg.dataDir, kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
-      notify: text => this.notify(text), restart: () => this.restartForUpdate(),
+      notify: text => this.notify(text), restart: () => this.restartForUpdate(), supervised: supervised(),
     })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')

@@ -6,7 +6,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_SOURCE, UpdateError, archiveName, downloadArchive, fetchRelease, isNewer, type FetchLike, type Manifest } from './release.ts'
-import { activate, confirmStart, refreshLauncher, selfUpdateRefusal, stage, startNote, type Layout, type Runner } from './install.ts'
+import { activate, confirmStart, refreshLauncher, selfUpdateRefusal, stage, startNote, waitingRelease, type Layout, type Runner } from './install.ts'
 
 export const CHECK_EVERY_MS = 10 * 60_000
 /** A new release counts as started once the service has been up this long. */
@@ -30,6 +30,11 @@ export interface UpdaterDeps {
   notify(text: string): void
   /** Stops the service gracefully (running actions finish and are booked), then exits with RESTART_EXIT_CODE. */
   restart(): Promise<void>
+  /**
+   * False when no service manager started the agent (supervised.ts): nothing would start it again, so an update
+   * is put in place and the agent plays on until its owner starts it again. Left out: true.
+   */
+  supervised?: boolean
   fetch?: FetchLike
   run?: Runner
   confirmAfterMs?: number
@@ -49,8 +54,14 @@ export interface UpdateView {
   /** How the last update went, kept until the next one. */
   last: { kind: 'updated' | 'undone' | 'failed'; version: string; at: string; message: string } | null
   enabled: boolean
+  /** True when a service manager starts the agent again after an update; false when the owner has to. */
+  restarts: boolean
+  /** Where nothing restarts the agent: the release that is in place and runs from the next start, with what to do. */
+  waiting: { version: string; message: string } | null
 }
 
+/** Said wherever an update cannot end in a restart (an install made with --no-service, started with ./run.sh). */
+const NO_SERVICE = 'No background service runs this agent, so nothing starts it again by itself'
 const KV_NOTIFIED = 'update_notified'
 const KV_LAST = 'update_last'
 
@@ -85,6 +96,27 @@ export class Updater {
     this.d.kv.set(KV_LAST, JSON.stringify({ kind, version, at: new Date().toISOString(), message }))
   }
 
+  private get restarts(): boolean {
+    return this.d.supervised !== false
+  }
+
+  /**
+   * Where nothing restarts the agent: the release that an update put in place, read from the disk (so it is also
+   * true after `./install.sh --update` in a terminal), with the sentence for the owner.
+   */
+  private waiting(): UpdateView['waiting'] {
+    if (this.restarts) return null
+    const name = waitingRelease(this.d.layout)
+    if (name === null) return null
+    const version = name.replace(/^v/, '')
+    return { version, message: `Version ${version} is in place and runs from the next start. ${NO_SERVICE}: ${this.byHand()}. Until then it runs ${this.d.installed}.` }
+  }
+
+  /** What starts the new version where nothing restarts the agent: the owner, with the launcher of the install. */
+  private byHand(): string {
+    return `stop the agent (Ctrl-C in its terminal), then run ./run.sh again in ${this.d.layout.root}`
+  }
+
   view(): UpdateView {
     const how = selfUpdateRefusal(this.d.layout, { isServer: this.d.isServer })
     return {
@@ -97,6 +129,8 @@ export class Updater {
       state: this.state,
       last: this.last(),
       enabled: this.d.enabled,
+      restarts: this.restarts,
+      waiting: this.waiting(),
     }
   }
 
@@ -169,7 +203,11 @@ export class Updater {
     return [
       `foxleague-agent ${m.version} is out (you run ${this.d.installed}).`,
       ...(m.notes.trim() ? [m.notes.trim()] : []),
-      how === null ? 'To install it: send /upgrade here, or press Update now in the dashboard. The agent restarts and tells you when it is back.' : `To install it: ${how}.`,
+      how !== null
+        ? `To install it: ${how}.`
+        : this.restarts
+          ? 'To install it: send /upgrade here, or press Update now in the dashboard. The agent restarts and tells you when it is back.'
+          : 'To install it: send /upgrade here, or press Update now in the dashboard. The new version then runs from the next start of the agent: nothing restarts it by itself here.',
     ].join('\n')
   }
 
@@ -180,6 +218,9 @@ export class Updater {
   async begin(by: string): Promise<string> {
     if (!this.d.enabled) throw new UpdateError('updates are switched off on this machine (AGENT_UPDATE_CHECK=0)')
     if (this.state !== 'idle') throw new UpdateError('an update is already being installed')
+    // Where nothing restarts the agent, a release that is already in place is told again and nothing more is done.
+    const waiting = this.waiting()
+    if (waiting) return waiting.message
     const how = selfUpdateRefusal(this.d.layout, { isServer: this.d.isServer })
     if (!this.available) await this.check()
     if (!this.available) throw new UpdateError(this.checkError ? `the release server could not be asked: ${this.checkError}` : `you run ${this.d.installed}, the newest version`)
@@ -187,6 +228,7 @@ export class Updater {
     const version = this.available.version
     this.state = 'downloading'
     void this.install(version, by)
+    if (!this.restarts) return `Installing ${version}. This takes a minute or two. ${NO_SERVICE}: the new version runs from the next start. Once it is in place, ${this.byHand()}.`
     return `Installing ${version}. This takes a minute or two; the agent then restarts and tells you when it is back.`
   }
 
@@ -202,6 +244,12 @@ export class Updater {
       this.state = 'preparing'
       const name = await stage(this.d.layout, rel.manifest, archive, { run: this.d.run })
       activate(this.d.layout, name)
+      if (!this.restarts) {
+        // Nothing would start the agent again: it plays on with the release it runs, and its owner starts the new one.
+        this.state = 'idle'
+        this.d.notify(`foxleague-agent: ${this.waiting()?.message ?? `Version ${version} is in place and runs from the next start.`} (Asked by ${by}.)`)
+        return
+      }
       this.state = 'restarting'
       this.d.notify(`foxleague-agent: version ${version} is in place (asked by ${by}). Restarting into it now.`)
       await this.d.restart()
