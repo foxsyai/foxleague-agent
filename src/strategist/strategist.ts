@@ -29,14 +29,16 @@ export interface Plan {
  * Models the owner can pick in the web UI, with list prices per million tokens (input, output,
  * cache read); 1-hour cache writes cost 2x input. All take adaptive thinking and every effort level.
  * Listed from the least to the most capable, like the efforts (Opus 5.5 is newer, stronger and cheaper than Opus 5;
- * Sonnet 5.5 is the newer Sonnet at Sonnet 5's price).
+ * Sonnet 5.5 is the newer Sonnet at Sonnet 5's price with cheaper cache reads; Fable 5.2 is newer, stronger and
+ * cheaper than Fable 5.1).
  */
 export const MODELS: Record<string, { label: string; price: [number, number, number] }> = {
   'claude-sonnet-5': { label: 'Sonnet 5', price: [2, 10, 0.2] },
-  'claude-sonnet-5-5': { label: 'Sonnet 5.5', price: [2, 10, 0.2] },
+  'claude-sonnet-5-5': { label: 'Sonnet 5.5', price: [2, 10, 0.1] },
   'claude-opus-5': { label: 'Opus 5', price: [5, 25, 0.5] },
   'claude-opus-5-5': { label: 'Opus 5.5', price: [4, 20, 0.2] },
   'claude-fable-5-1': { label: 'Fable 5.1', price: [10, 50, 0.25] },
+  'claude-fable-5-2': { label: 'Fable 5.2', price: [8, 40, 0.2] },
 }
 /** MODELS is a plain object: "constructor" or "toString" would pass a bare lookup, so ask for an own key. */
 export const isKnownModel = (id: string): boolean => Object.hasOwn(MODELS, id)
@@ -45,7 +47,7 @@ export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 
 /** Models behind safety classifiers: a declined request is re-run server-side on Anthropic's recommended fallback. */
-const WITH_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1'])
+const WITH_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-fable-5-2'])
 
 /** The web UI's choice (kv), else AGENT_MODEL / AGENT_MODEL_EFFORT from the env. */
 export function strategistChoice(store: Store, cfg: Config): { model: string; effort: Effort } {

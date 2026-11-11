@@ -66,7 +66,16 @@ test('server-side fallback only for classifier models, dropped for good if the A
   s.configure('claude-sonnet-5-5', 'high')
   await create({ max_tokens: 10, messages: [] })
   assert.equal(calls.at(-1)!.fallbacks, 'default', 'Sonnet 5.5 takes the default fallback form')
-  assert.deepEqual(Object.keys(MODELS), ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1'], 'least to most capable')
+  assert.deepEqual(Object.keys(MODELS), ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-fable-5-2'], 'least to most capable')
+  // Fable 5.2 (Anthropic, 9 November 2026): $8 in, $40 out and $0.20 for cache reads per million tokens, under the
+  // same safety classifiers as Fable 5.1, so a declined plan is re-run on Anthropic's fallback.
+  assert.deepEqual(MODELS['claude-fable-5-2'], { label: 'Fable 5.2', price: [8, 40, 0.2] })
+  s.configure('claude-fable-5-2', 'high')
+  await create({ max_tokens: 10, messages: [] })
+  assert.equal(calls.at(-1)!.model, 'claude-fable-5-2')
+  assert.equal(calls.at(-1)!.fallbacks, 'default', 'Fable 5.2 takes the default fallback form')
+  // Sonnet 5.5 reads from the cache at $0.10 per million tokens, half of Sonnet 5's price.
+  assert.deepEqual(MODELS['claude-sonnet-5-5']!.price, [2, 10, 0.1])
 
   s.configure('claude-opus-5-5', 'high')
   await create({ max_tokens: 10, messages: [] })
