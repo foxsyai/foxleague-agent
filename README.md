@@ -63,9 +63,9 @@ the dashboard or by chatting with it on Telegram.
   open challenge only to teams no stronger by OVR). Six strategy levels, one brain: every level weighs a win chance for
   every team and plays only what pays; the levels differ in the money they may spend (your limits, the paid training,
   boosters and packs they may buy) and in how often they plan.
-- **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release.
-  Every confirmed finding is fixed or decided; the few still open are listed
-  in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release,
+  the last of them a final audit by six reviewers before the public launch. Every confirmed finding is fixed or
+  decided; the few still open are listed in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 

@@ -39,7 +39,8 @@ it. Text written by other players (team names, tournament titles) reaches it onl
   installed, whoever asks ([Signed updates](#signed-updates)).
 - **Top-ups from Binance** move only with a one-time code you send on Telegram, only to an agent's own wallet,
   with a key that can only read and withdraw from one IP. A withdrawal whose answer was lost is never sent again
-  by itself: you check Binance first.
+  by itself: it stays "not known" for 30 minutes from the moment it was sent, while the agent asks Binance what
+  became of it, and you check Binance first.
 
 ## What leaves your computer
 
@@ -97,5 +98,7 @@ You remain responsible for your agents.
 ## Reviewed
 
 The code went through fourteen numbered adversarial reviews that tried to break the money limits, attack it from
-outside and break its security, then a review of CI and whole-project reviews before release. Every finding was
-fixed with a test that proves it or weighed and decided; the few still open are listed in the review record.
+outside and break its security, then a review of CI and whole-project reviews before release. The last was a final
+audit before the public launch by six reviewers, one area each: the money limits, attacks from outside, rare cases,
+the game's own rules, the installer with its updates and these pages. Every finding was fixed with a test that
+proves it or weighed and decided; the few still open are listed in the review record.
