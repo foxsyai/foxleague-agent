@@ -42,6 +42,9 @@ main() {
   case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
   [ ! -e "$DIR/.git" ] || die "$DIR is a git checkout. Update it there with: git pull && ./install.sh --update"
 
+  # A download into a file. curl writes to its output and the shell puts that into the file: a curl that may not
+  # write where it is told (the one of a snap has a /tmp of its own) still works that way.
+  fetch() { curl -fsSL "$1" > "$2"; }
   sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
   # One "key": "value" (or number) of the manifest, which is written one key per line.
   field() { sed -n "s/^ *\"$1\": *\"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\} *\$/\1/p" "$2" | head -1; }
@@ -90,23 +93,23 @@ main() {
 
   if [ -n "${FOXAGENT_SOURCE:-}" ]; then
     say "Installing foxleague-agent from $FOXAGENT_SOURCE into $DIR"
-    if [ -f "$FOXAGENT_SOURCE" ]; then cp "$FOXAGENT_SOURCE" "$archive"; else curl -fsSL -o "$archive" "$FOXAGENT_SOURCE" || die "could not download $FOXAGENT_SOURCE"; fi
+    if [ -f "$FOXAGENT_SOURCE" ]; then cp "$FOXAGENT_SOURCE" "$archive"; else fetch "$FOXAGENT_SOURCE" "$archive" || die "could not download $FOXAGENT_SOURCE"; fi
   elif [ "$VERSION" = main ]; then
     say "Downloading the untested main branch of foxleague-agent into $DIR"
-    curl -fsSL -o "$archive" "https://github.com/$REPO/archive/refs/heads/main.tar.gz" || die "could not download the main branch"
+    fetch "https://github.com/$REPO/archive/refs/heads/main.tar.gz" "$archive" || die "could not download the main branch"
   else
     if [ "$VERSION" = latest ]; then manifest_url="$RELEASES/latest/download/release.json"; else
       case "$VERSION" in v[0-9]*.[0-9]*.[0-9]*) ;; *) die "FOXAGENT_VERSION must look like v1.2.3" ;; esac
       manifest_url="$RELEASES/download/$VERSION/release.json"
     fi
-    curl -fsSL -o "$tmp/release.json" "$manifest_url" || die "could not find the release at $manifest_url"
+    fetch "$manifest_url" "$tmp/release.json" || die "could not find the release at $manifest_url"
     ver=$(field version "$tmp/release.json")
     sum=$(field sha256 "$tmp/release.json")
     printf '%s' "$ver" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || die "the release manifest names no version"
     printf '%s' "$sum" | grep -Eq '^[0-9a-f]{64}$' || die "the release manifest names no checksum"
     [ "$VERSION" = latest ] || [ "$VERSION" = "v$ver" ] || die "asked for $VERSION, the server answered with v$ver"
     say "Downloading foxleague-agent $ver into $DIR"
-    curl -fsSL -o "$archive" "$RELEASES/download/v$ver/foxleague-agent-v$ver.tar.gz" || die "could not download release $ver"
+    fetch "$RELEASES/download/v$ver/foxleague-agent-v$ver.tar.gz" "$archive" || die "could not download release $ver"
     [ "$(sha256_of "$archive")" = "$sum" ] || die "the download does not match the checksum of release $ver: nothing was installed. Try again; if it happens again, tell the maintainers."
     echo "  The download matches the release's checksum."
   fi

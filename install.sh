@@ -192,7 +192,9 @@ ensure_node() {
     command -v curl >/dev/null 2>&1 || die "curl is needed and is not installed. Install it (on Ubuntu or Debian: sudo apt install curl), then run this again."
     tmp=$(mktemp -d)
     tarball="node-$NODE_VERSION-$PLATFORM-$NODE_ARCH.tar.gz"
-    curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball" || { rm -rf "$tmp"; die "Node.js could not be downloaded from nodejs.org. Check the connection and run this again."; }
+    # curl writes to its output and the shell puts that into the file: a curl that may not write where it is told
+    # (the one of a snap has a /tmp of its own) still works that way.
+    curl -fsSL --proto '=https' --proto-redir '=https' "https://nodejs.org/dist/$NODE_VERSION/$tarball" > "$tmp/$tarball" || { rm -rf "$tmp"; die "Node.js could not be downloaded from nodejs.org. Check the connection and run this again."; }
     got=$(sha256_of "$tmp/$tarball")
     if [ "$got" != "$want" ]; then
       rm -rf "$tmp"
