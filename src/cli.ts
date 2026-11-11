@@ -1,4 +1,5 @@
-// Operator CLI. `npm run cli -- <command>`.
+// Operator CLI. On an installed agent: `./cli.sh <command>` (on a server: deploy/agentctl.sh). In a checkout with
+// your own Node.js, `npm run cli -- <command>` runs the same file.
 
 import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -69,9 +70,10 @@ function usage(): never {
 }
 
 function mnemonicOrExit(): string {
-  const m = loadConfig().mnemonic
+  const cfg = loadConfig()
+  const m = cfg.mnemonic
   if (!m) {
-    console.error(`No AGENT_MNEMONIC in ${envFilePath()}: run \`npm run cli -- setup\` first.`)
+    console.error(`No AGENT_MNEMONIC in ${envFilePath()}: run \`${cfg.isServer ? 'agentctl.sh' : './cli.sh'} setup\` first.`)
     process.exit(1)
   }
   return m
