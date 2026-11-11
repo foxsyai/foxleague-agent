@@ -58,6 +58,13 @@ test('INSTALL-4: Enter keeps signing on only where .env allows it, and offers it
     assert.equal(agentAllows(env), true, `the agent itself reads "${line}" as on`)
     assert.equal(await offered(env, true), 'y', `"${line}": Enter keeps it on`)
   }
+  // A second line in a form the agent reads and this script does not (export, spaces around the name) decides
+  // what the agent sees: the installer cannot tell, so Enter means no.
+  for (const two of ['AGENT_LIVE_ENABLED=1\nexport AGENT_LIVE_ENABLED=0', 'AGENT_LIVE_ENABLED=1\n  AGENT_LIVE_ENABLED = 0', 'AGENT_LIVE_ENABLED="true"\nexport AGENT_LIVE_ENABLED=off']) {
+    const env = `${LOGIN_LINES}${two}\n`
+    assert.equal(agentAllows(env), false, `the agent reads ${JSON.stringify(two)} as off`)
+    assert.equal(await offered(env, true), 'n', `${JSON.stringify(two)}: Enter means no`)
+  }
   assert.equal(await offered(LOGIN_LINES, false), 'y', 'a first install: no line in .env and no database')
   assert.equal(await offered(null, false), 'y', 'a first install: no .env at all')
   assert.equal(await offered(LOGIN_LINES, true), 'n', 'the line was removed from an install that has a database')

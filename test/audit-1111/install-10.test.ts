@@ -12,7 +12,7 @@ import { REPO, pack, sh, smallTree, snapshotOf, tmp } from './install-helpers.ts
 const GET = readFileSync(join(REPO, 'get.sh'))
 const NEW = pack(smallTree(tmp(), '3.1.0', { 'src/service.ts': '// the new copy of 3.1.0\n' }))
 
-/** The cut points: the end of every line, a spread of bytes inside lines, and every byte of the last 80. */
+/** The cut points: the end of every line, a spread of bytes inside lines and every byte of the last 80. */
 function cuts(): number[] {
   const at = new Set<number>()
   for (let i = 0; i < GET.length; i++) if (GET[i] === 0x0a) at.add(i + 1)

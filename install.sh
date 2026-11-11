@@ -135,6 +135,9 @@ first_install() {
 # other state (commented out, removed, false, off, no, 0) is off, and Enter keeps it off.
 live_default() {
   local v
+  # A line in another form (export, spaces around the name) is read by the agent and not by this script: with
+  # one in the file, what the agent sees is not known here, so the answer is no.
+  if LC_ALL=C grep -a -E '^[[:space:]]*(export[[:space:]]+)?AGENT_LIVE_ENABLED[[:space:]]*=' "$ENV_FILE" 2>/dev/null | LC_ALL=C grep -a -q -v '^AGENT_LIVE_ENABLED='; then echo n; return 0; fi
   v=$(get_env AGENT_LIVE_ENABLED | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
   case "$v" in
     1 | true) echo y ;;
@@ -379,7 +382,6 @@ mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 secure_modes
 
 say "2/7 Your wallet"
-had_words=$(get_env AGENT_MNEMONIC)
 # The typed yes below is noted here. Until it exists every run shows the words and asks: a first run that ended
 # before the yes (a closed terminal) must not leave an owner who never saw them again.
 WORDS_CONFIRMED="$DATA_DIR/words-confirmed"
@@ -389,7 +391,8 @@ printf '%s\n' "$setup_out" | grep -v 'backup-words' || true
 [ "$setup_rc" = 0 ] || die "the wallet could not be set up (see the lines above). Nothing was created. Check AGENT_MNEMONIC in $ENV_FILE, then run the installer again."
 if [ ! -f "$WORDS_CONFIRMED" ]; then
   info ""
-  if [ -z "$had_words" ]; then
+  # What the setup itself said, not what this script could read from .env.
+  if printf '%s\n' "$setup_out" | grep -q '^New recovery words written'; then
     info "A new wallet was created. Its recovery words are the ONLY way to get your funds back."
   else
     info "You have not confirmed yet that the recovery words of this wallet are written down."
