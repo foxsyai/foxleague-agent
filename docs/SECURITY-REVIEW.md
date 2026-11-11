@@ -1471,7 +1471,8 @@ fourteen more findings (FRESH-1 to FRESH-14, two medium and twelve low) and four
 (UPD-21 to UPD-24, two medium and two low). The agent review of pull request #61, which was merged into this
 branch, gave R61A-1. They are not in the counts above and are the last rows. FRESH and UPD-21 to UPD-24 were fixed
 test-first, with their tests under `test/audit-1111/` (`fresh-<n>`, `upd-<n>`); the test of R61A-1 is in
-`test/review-web.test.ts`.
+`test/review-web.test.ts`. The replay was then given a scenario for each of UPD-21 to UPD-24 under its real systemd
+and run on the fixes on 2026-11-11: 88 checks, none failed.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|

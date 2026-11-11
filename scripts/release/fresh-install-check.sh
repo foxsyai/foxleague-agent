@@ -9,12 +9,14 @@
 # and then does what the guide tells a newcomer, typing the answers on a terminal:
 #   the pasted line without curl, with curl, with mistakes (Yes, a short password); the checks after "Done";
 #   a reboot with nobody logged in; the line pasted again; ./install.sh again, six times in a row; the line as
-#   root; a second user reached with su; a machine without systemd; an update from the dashboard, one from a
-#   terminal, one that does not start (undone by the launcher) and one whose archive was changed after signing;
+#   root; a second user reached with su; a machine without systemd; an update from the dashboard (and a second
+#   click before it is confirmed), one from a terminal, one that does not start and one that ends at once with
+#   status 0 (both undone by the launcher), one whose archive was changed after signing and one where no
+#   background service runs the agent (put in place; the agent plays on until its owner starts it again);
 #   the uninstall.
 # Every check prints ok or FAILED; the script ends with status 1 when one failed. --keep leaves the containers,
 # the image and the work folder (with what was on screen at every step) for a look; without it they are removed
-# when every check passed. A run takes about ten minutes.
+# when every check passed. A run takes about twelve minutes.
 #
 # Needs: docker (the user in the docker group), node 22.18 or later with `npm ci` done in this folder, python3, git.
 # Nothing here signs a transaction or needs a key: the wallet is a new one inside the container and the agent
@@ -118,7 +120,8 @@ def main():
     deadline = time.time() + step_timeout
 
     def mask(text):
-        text = re.sub(r"\x1b\][^\x07]*\x07", "", text.replace("\r", ""))
+        # A terminal's own sequences (the window title, a link) end with BEL or with ESC \: taken out, their text kept.
+        text = re.sub(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)", "", text.replace("\r", ""))
         text = re.sub(r"\x1b\[[0-9;?]*[A-Za-z]", "", text)
         return re.sub(r"(?m)^(\s*\d{1,2}\. )[a-z]+[ \t]*$", r"\1****", text)
 
@@ -177,7 +180,7 @@ cat > "$TOOLS/mkrel.ts" <<'EOF'
 // Builds throwaway releases of the working tree the way the maintainers build real ones (scripts/release/release.ts),
 // signed with a key made here.
 //   mkrel.ts init <work>                         a scratch git repository of the tree, with a new key pinned
-//   mkrel.ts release <work> <version> [--notes <text>] [--break-start] [--tamper]
+//   mkrel.ts release <work> <version> [--notes <text>] [--break-start] [--end-at-once] [--tamper]
 import { execFileSync } from 'node:child_process'
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -214,8 +217,10 @@ if (cmd === 'init') {
   // --break-start: a release whose service ends at once, for the launcher to undo.
   const service = join(repo, 'src', 'service.ts')
   const mark = "throw new Error('fresh-install-check: this release does not start')\n"
-  const text = readFileSync(service, 'utf8').replace(mark, '')
-  writeFileSync(service, rest.includes('--break-start') ? mark + text : text)
+  // --end-at-once: a release whose service ends at once with status 0, the way Node.js 23 ends this code.
+  const clean = "console.log('fresh-install-check: this release ends at once with status 0')\nprocess.exit(0)\n"
+  const text = readFileSync(service, 'utf8').replace(mark, '').replace(clean, '')
+  writeFileSync(service, rest.includes('--break-start') ? mark + text : rest.includes('--end-at-once') ? clean + text : text)
   git('add', '-A')
   git('commit', '-q', '-m', `release ${version}`)
   git('tag', `v${version}`)
@@ -375,18 +380,19 @@ say "7. The line pasted again, then ./install.sh six times in a row (more starts
 type_in "$C" fox 07-paste-again 300 "$PROMPT=>$LINE" \
   'A login is already set. Change it\? \(y/n\) \[n\]: =>' \
   'Dashboard port on this machine \[8870\]: =>' \
-  'Enter keys now\? \(y/n\) \[y\]: =>n' \
+  'Enter keys now\? \(y/n\) \[n\]: =>' \
   'Allow this machine to sign real transactions once you press Go LIVE\? \(y/n\) \[y\]: =>' \
   "$PROMPT=>echo \"installer status \$?\"; exit"
 F=$LOGS/07-paste-again.txt
-check "the earlier answers are offered: login kept, port 8870, live permission y" hasnt "$F.times" 'TIMEOUT|before step'
+check "the earlier answers are offered: login kept, port 8870, no at the keys, live permission y" hasnt "$F.times" 'TIMEOUT|before step'
+check "Enter at the keys question of a later run skips the keys" has "$F" 'Skipped\. Add them any time in the dashboard: Keys\.'
 check "the wallet is kept and its words are not shown again" sh -c "grep -q 'Your existing wallet is kept' '$F' && ! grep -q '^24\. ' '$F'"
 check "it ends with Running. and status 0" sh -c "grep -q '^  Running\.\$' '$F' && grep -q '^installer status 0' '$F'"
 for n in 1 2 3 4 5 6; do
   type_in "$C" fox "07-again-$n" 300 "$PROMPT=>cd ~/foxleague-agent && ./install.sh" \
     'A login is already set. Change it\? \(y/n\) \[n\]: =>' \
     'Dashboard port on this machine \[8870\]: =>' \
-    'Enter keys now\? \(y/n\) \[y\]: =>n' \
+    'Enter keys now\? \(y/n\) \[n\]: =>' \
     'Allow this machine to sign real transactions once you press Go LIVE\? \(y/n\) \[y\]: =>' \
     "$PROMPT_IN=>echo \"installer status \$?\"; exit"
 done
@@ -451,6 +457,8 @@ fx fox-dash update > "$LOGS/11a-update.txt" 2>&1
 check "Update now is accepted" has "$LOGS/11a-update.txt" 'Installing 1\.0\.1'
 check "the new release was prepared (npm ci under the unit's hardening) and switched to" until_ok 120 active_is v1.0.1
 check "the agent is back on 1.0.1 after its restart through exit code 75" until_ok 120 state_has '"installed":"1.0.1"'
+fx fox-dash update > "$LOGS/11a-second.txt" 2>&1
+check "a second Update now before 1.0.1 has stayed up for 45 seconds is refused (409: try again in a minute)" sh -c "grep -q 'the last update is still being confirmed, try again in a minute' '$LOGS/11a-second.txt' && grep -q 'http 409' '$LOGS/11a-second.txt'"
 check "it says so once it has stayed up: Updated from 1.0.0 to 1.0.1." until_ok 120 journal_has 'Updated from 1.0.0 to 1.0.1.'
 check "the release that ran before is kept for an undo" docker exec "$C" test -d /home/fox/foxleague-agent/versions/v1.0.0
 check "the wallet, its PEM file and the login are untouched by the update" [ "$(wallet_mark)" = "$MARK" ]
@@ -463,10 +471,17 @@ check "signature checked, notes shown, prepared, in place, Restarted., status 0"
 check "the agent runs 1.0.2 and confirms it: Updated from 1.0.1 to 1.0.2." until_ok 120 journal_has 'Updated from 1.0.1 to 1.0.2.'
 
 say "11c. An update that does not start: 1.0.3 ends at once, the launcher puts 1.0.2 back"
+# First the unit as an install from before 2026-11-11 has it, without FOXAGENT_SUPERVISED=1: the agent must still
+# know that systemd starts it again (its output is the journal), or Update now would only put the release in place.
+check "the unit the installer wrote says that the agent is started again, and restarts it after every exit" fx sh -c 'grep -q "\"FOXAGENT_SUPERVISED=1\"" ~/.config/systemd/user/foxleague-agent.service && grep -qx "Restart=always" ~/.config/systemd/user/foxleague-agent.service'
+fx sh -c 'sed -i "s/ \"FOXAGENT_SUPERVISED=1\"//" ~/.config/systemd/user/foxleague-agent.service && systemctl --user daemon-reload && systemctl --user reset-failed foxleague-agent; systemctl --user restart foxleague-agent'
+until_ok 30 healthz
+check "the line is gone from the unit" fx sh -c '! grep -q "\"FOXAGENT_SUPERVISED=1\"" ~/.config/systemd/user/foxleague-agent.service'
+check "under such a unit the agent still knows that systemd restarts it" until_ok 30 state_has '"restarts":true'
 publish 1.0.3 --break-start --notes "New in 1.0.3: a release that does not start."
 fx fox-dash check >/dev/null 2>&1
 fx fox-dash update > "$LOGS/11c-update.txt" 2>&1
-check "Update now is accepted for 1.0.3" has "$LOGS/11c-update.txt" 'Installing 1\.0\.3'
+check "Update now is accepted for 1.0.3, with a restart" has "$LOGS/11c-update.txt" 'Installing 1\.0\.3\. This takes a minute or two; the agent then restarts'
 check "after two starts that failed the launcher is back on 1.0.2 (within the unit's start limit)" until_ok 240 journal_has 'foxleague-agent: the update to v1.0.3 did not start twice, back on v1.0.2'
 check "the agent says so: The update to 1.0.3 did not start and was undone" until_ok 60 journal_has 'The update to 1.0.3 did not start and was undone: you run 1.0.2 as before.'
 check "1.0.2 is active and answers; the dashboard shows the undo" sh -c "[ \"\$(docker exec $C cat /home/fox/foxleague-agent/versions/active)\" = v1.0.2 ] && docker exec $C curl -fsS -m 3 http://127.0.0.1:8870/healthz >/dev/null"
@@ -483,6 +498,61 @@ type_in "$C" fox 11d-paste 120 "$PROMPT=>$LINE" "$PROMPT=>exit"
 check "the pasted line refuses it by its checksum" has "$LOGS/11d-paste.txt" 'does not match the checksum of release 1\.0\.4: nothing was installed'
 check "1.0.2 keeps running" sh -c "[ \"\$(docker exec $C cat /home/fox/foxleague-agent/versions/active)\" = v1.0.2 ] && docker exec $C curl -fsS -m 3 http://127.0.0.1:8870/healthz >/dev/null"
 check "no restart failed along the way (the unit is active, never start-limit-hit)" sh -c "docker exec -u fox -e XDG_RUNTIME_DIR=/run/user/1000 $C systemctl --user is-active foxleague-agent >/dev/null && ! docker exec -u fox -e XDG_RUNTIME_DIR=/run/user/1000 $C journalctl --user -u foxleague-agent --no-pager | grep -q start-limit-hit"
+
+say "11e. An update that ends at once with status 0 (as Node.js 23 ends this code): started again by the unit, undone by the launcher"
+# The undo of 11c used four of the five starts the unit allows in ten minutes, and this one needs three more. On an
+# owner's machine two such updates are not minutes apart: the count is cleared the way the installer clears it.
+fx systemctl --user reset-failed foxleague-agent
+publish 1.0.5 --end-at-once --notes "New in 1.0.5: a release that ends at once with status 0."
+fx fox-dash check >/dev/null 2>&1
+fx fox-dash update > "$LOGS/11e-update.txt" 2>&1
+check "Update now is accepted for 1.0.5" has "$LOGS/11e-update.txt" 'Installing 1\.0\.5'
+check "1.0.5 ran and ended with status 0" until_ok 180 journal_has 'fresh-install-check: this release ends at once with status 0'
+check "the unit started it again after each clean exit, and after two starts the launcher is back on 1.0.2" until_ok 240 journal_has 'foxleague-agent: the update to v1.0.5 did not start twice, back on v1.0.2'
+check "the agent says so: The update to 1.0.5 did not start and was undone" until_ok 60 journal_has 'The update to 1.0.5 did not start and was undone: you run 1.0.2 as before.'
+check "1.0.2 is active and answers" sh -c "[ \"\$(docker exec $C cat /home/fox/foxleague-agent/versions/active)\" = v1.0.2 ] && docker exec $C curl -fsS -m 3 http://127.0.0.1:8870/healthz >/dev/null"
+check "the unit is active, never start-limit-hit" sh -c "docker exec -u fox -e XDG_RUNTIME_DIR=/run/user/1000 $C systemctl --user is-active foxleague-agent >/dev/null && ! docker exec -u fox -e XDG_RUNTIME_DIR=/run/user/1000 $C journalctl --user -u foxleague-agent --no-pager | grep -q start-limit-hit"
+
+say "11f. Update now where no background service runs the agent (the machine of step 10, started with ./run.sh)"
+# Only this machine gets 1.0.6: the first one keeps 1.0.5 as its newest.
+mkrel release "$WORK/rel" 1.0.6 --notes "New in 1.0.6: installed where nothing restarts the agent." || bad "release 1.0.6 could not be built"
+fx2() { docker exec -u fox -e HOME=/home/fox -e USER=fox -e LOGNAME=fox -w /home/fox/foxleague-agent "$C2" "$@"; }
+run2() { docker exec -d -u fox -e HOME=/home/fox -e USER=fox -e LOGNAME=fox -w /home/fox/foxleague-agent "$C2" sh -c './run.sh >> /home/fox/agent.log 2>&1'; }
+down2() { ! docker exec "$C2" curl -fsS -m 3 http://127.0.0.1:8870/healthz >/dev/null 2>&1; }
+stop2() { fx2 sh -c 'kill "$(cat data/service.pid)"'; until_ok 60 down2; }
+state2_has() { fx2 fox-dash state 2>/dev/null | tr -d ' \n' | grep -Fq -- "$1"; }
+active2_is() { [ "$(fx2 cat versions/active 2>/dev/null)" = "$1" ]; }
+log2_has() { fx2 grep -Fq -- "$1" /home/fox/agent.log; }
+same_process2() { [ -n "$PID2" ] && [ "$(fx2 cat data/service.pid 2>/dev/null)" = "$PID2" ] && healthz 8870 "$C2"; }
+docker cp -q "$TOOLS/fox-dash" "$C2":/usr/local/bin/fox-dash
+docker cp -q "$TOOLS/serve.mjs" "$C2":/usr/local/bin/fox-serve.mjs
+docker exec "$C2" chmod 755 /usr/local/bin/fox-dash
+docker cp -q "$WORK/rel/site" "$C2":/srv/fox-releases && docker exec "$C2" chmod -R a+rX /srv/fox-releases
+docker exec -d -u fox "$C2" /home/fox/foxleague-agent/.node/bin/node /usr/local/bin/fox-serve.mjs /srv/fox-releases 127.0.0.1 8899
+# The agent of step 10 is stopped, told where its releases are and started by hand again, the way its owner starts it.
+stop2
+fx2 sh -c 'printf "AGENT_UPDATE_URL=\"http://127.0.0.1:8899\"\n" >> .env'
+run2
+until_ok 60 healthz 8870 "$C2"
+fx2 fox-dash login admin "$PASSWORD" >/dev/null 2>&1
+fx2 fox-dash check >/dev/null 2>&1
+check "the agent knows that nothing starts it again (no service manager started it)" state2_has '"restarts":false'
+PID2=$(fx2 cat data/service.pid 2>/dev/null)
+fx2 fox-dash update > "$LOGS/11f-update.txt" 2>&1
+check "Update now is accepted and says that the new version runs from the next start" has "$LOGS/11f-update.txt" 'Installing 1\.0\.6\. This takes a minute or two\. No background service runs this agent'
+check "the new release was prepared and put in place" until_ok 240 active2_is v1.0.6
+check "the dashboard says that 1.0.6 waits for the next start" until_ok 60 state2_has '"waiting":{"version":"1.0.6","message":"Version1.0.6isinplaceandrunsfromthenextstart.'
+check "the log names the command: stop the agent, then run ./run.sh again in its folder" log2_has 'then run ./run.sh again in /home/fox/foxleague-agent'
+sleep 5
+check "the agent was not ended: the same process still answers" same_process2
+check "it still runs 1.0.0" state2_has '"installed":"1.0.0"'
+fx2 fox-dash update > "$LOGS/11f-second.txt" 2>&1
+check "a second Update now says the same and starts nothing" has "$LOGS/11f-second.txt" 'Version 1\.0\.6 is in place and runs from the next start'
+# The owner does what the notice says.
+stop2
+run2
+check "started again by hand, the agent runs 1.0.6" until_ok 120 state2_has '"installed":"1.0.6"'
+check "and confirms it: Updated from 1.0.0 to 1.0.6." until_ok 120 log2_has 'Updated from 1.0.0 to 1.0.6.'
 
 say "12. Uninstall as the guide says"
 type_in "$C" fox 12-uninstall 120 "$PROMPT=>cd ~/foxleague-agent && ./install.sh --uninstall" "$PROMPT_IN=>echo \"uninstall status \$?\"; exit"

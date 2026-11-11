@@ -7,7 +7,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { existsSync, fstatSync, mkdtempSync, readFileSync } from 'node:fs'
+import { existsSync, fstatSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { AddressInfo } from 'node:net'
@@ -76,6 +76,28 @@ test('UPD-21: both service files the installer writes tell the agent that a serv
   assert.match(installer, /^PLIST_LABEL=ai\.foxleague\.agent$/m)
   assert.match(raw('src/update/supervised.ts'), /'ai\.foxleague\.agent'/)
   assert.match(raw('src/service.ts'), /supervised: supervised\(\)/)
+})
+
+test('UPD-21: an owner who keeps the agent running another way says so in .env, and a value the unit set is not changed by .env', () => {
+  // What the Update page and .env.example promise: the env file is read before the service asks (config.ts).
+  assert.match(raw('src/config.ts'), /if \(existsSync\(envFile\)\) process\.loadEnvFile\(envFile\)/)
+  assert.match(raw('src/service.ts'), /const service = new Service\(loadConfig\(\)\)/)
+  const file = join(tmp(), '.env')
+  const had = process.env.FOXAGENT_SUPERVISED
+  try {
+    delete process.env.FOXAGENT_SUPERVISED
+    writeFileSync(file, 'FOXAGENT_SUPERVISED="1"\n')
+    process.loadEnvFile(file)
+    assert.equal(supervised(process.env, () => []), true, 'the line in .env counts')
+    // Under the installer's unit the variable is already set: a line in .env does not replace it.
+    process.env.FOXAGENT_SUPERVISED = '1'
+    writeFileSync(file, 'FOXAGENT_SUPERVISED="0"\n')
+    process.loadEnvFile(file)
+    assert.equal(supervised(process.env, () => []), true)
+  } finally {
+    if (had === undefined) delete process.env.FOXAGENT_SUPERVISED
+    else process.env.FOXAGENT_SUPERVISED = had
+  }
 })
 
 test('UPD-21: without a service manager the release is put in place, the agent does not end and the owner is told how to start the new version', async () => {
