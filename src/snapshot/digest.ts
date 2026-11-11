@@ -215,9 +215,19 @@ function levelLines(s: AgentSnapshot): string[] {
   }
   const f = s.config?.organizer_fees
   if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${known(f.calendar_deposit_per_match_foxsy)} FOXSY a game${f.calendar_deposit_min_foxsy > 0 ? ` (at least ${f.calendar_deposit_min_foxsy})` : ''}${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
-  // Yellow card bans and injuries: one switch (FoxLeague's card_bans); the chance, the days out and medicine are in the prompt.
+  // Yellow card bans and injuries: one switch (FoxLeague's card_bans). The injury chance and the days out are FoxLeague's
+  // Admin settings, served in card_bans: the line gives the ones in force and the prompt points here (audit 2026-11-11,
+  // INTEG-2). Numbers it does not serve are said to be unread, never given a value. Medicine is in the prompt.
   const b = s.config?.card_bans
-  if (b) out.push(`Cards and injuries: ${whenLive(cardBansLive(s.config, now), b.live_from)}: ${known(b.yellow_cards_per_ban)} yellow cards in tournaments of more than 2 teams = out of the team's next tournament match; an injured card plays no match until its injury ends`)
+  if (b) {
+    const percent = (bp: unknown) => (typeof bp === 'number' && Number.isFinite(bp) && bp >= 0 && bp <= 10_000 ? String(Math.round(bp) / 100) : null)
+    const full = percent(b.injury_chance_bp_full_condition)
+    const floor = percent(b.injury_chance_bp_condition_floor)
+    const chance = full !== null && floor !== null ? `a foul the referee calls injures the player fouled at ${full} percent at condition 100, moving evenly to ${floor} percent at condition 30 and below` : 'the injury chance could not be read'
+    const d = b.injury_days_out
+    const days = Array.isArray(d) && d.length === 3 && d.every(n => typeof n === 'number' && Number.isFinite(n) && n > 0) ? `one injury in a match keeps a card out ${d[0]} days, two ${d[1]}, three or more ${d[2]}` : 'the days an injury keeps a card out could not be read'
+    out.push(`Cards and injuries: ${whenLive(cardBansLive(s.config, now), b.live_from)}: ${known(b.yellow_cards_per_ban)} yellow cards in tournaments of more than 2 teams = out of the team's next tournament match; an injured card plays no match until its injury ends; ${chance}; ${days}`)
+  }
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   return out

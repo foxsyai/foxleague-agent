@@ -42,9 +42,11 @@ An empty plan is a good answer too: the agent never spends just because budget i
   test bench, apart from the formation record, and the agent weighs it with the league table and its own record
   before it changes its formation.
 - **Competition levels**: a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
-- **Yellow cards and injuries**: once FoxLeague counts them, a player with 3 yellow cards in tournaments misses your
-  team's next tournament match, and a foul can injure a player for 3, 9 or 27 days (more likely the more tired he is:
-  3 percent a foul at full condition, up to 9 percent at condition 30). The agent sees each card's yellow cards, ban
+- **Yellow cards and injuries**: once FoxLeague counts them, a player with enough yellow cards in tournaments (for
+  example 3) misses your team's next tournament match, and a foul can injure a player for days (for example 3, 9 or
+  27, by how many injuries he takes in one match), more likely the more tired he is (for example 1 percent a foul at
+  full condition, up to 3 percent at condition 30). FoxLeague sets these numbers and may change them: the agent reads
+  the ones in force before every plan. The agent sees each card's yellow cards, ban
   and injury, also on the cards at auction. It starts no match, 1v1 or tournament entry while an injured player is in
   your starting eleven: it saves an eleven without him first. Before a 1v1 it counts 11 match-fit players among your
   18 the way FoxLeague does, an injured one not among them and a tired outfield player relieved only by an outfield

@@ -151,7 +151,11 @@ stays sustainable against 48 regenerated (EM paths (a) and (g)).
 
 ## 6a. Yellow card bans, injuries and the forfeit penalty (from Friday 13 November 2026, 14:00 UTC)
 
-One switch for the bans and the injuries: `/api/config` `card_bans` (`live`, `live_from`, `yellow_cards_per_ban`). Every
+One switch for the bans and the injuries: `/api/config` `card_bans` (`live`, `live_from`, `yellow_cards_per_ban`, and the
+injury numbers in force: `injury_chance_bp_full_condition`, `injury_chance_bp_condition_floor`, `injury_days_out`). The
+yellow cards per ban, the injury chance and the days out are FoxLeague's Admin settings: the numbers below are its
+defaults, the agent reads the ones in force from `card_bans` and its plan is told them on the snapshot's "Cards and
+injuries" line (never from a number written in the prompt). Every
 card's record carries `yellow_cards`, `fouls_suffered`, `ban_yellow_cards`, `bans_pending` and `injured_until` (own
 roster, any team's roster, `/players/nonce/{n}` and marketplace listings); the last three move only once the switch is
 live.
@@ -160,9 +164,9 @@ live.
 |---|---|---|
 | Ban | **3** yellow cards (`yellow_cards_per_ban`) in tournaments of more than 2 teams (Champions FoxLeague included) = the card misses its team's next tournament match, the first whose lineup locks after the third card; the count restarts at 0. `bans_pending` above 0 = suspended | `card_bans.rs`; Manual `getting-started/players.md` "Yellow card bans" |
 | What serves a ban | only a tournament match of more than 2 teams (also when the card is not in the 18; a forfeit serves it too). A 1v1 or a ranked game never does, and still takes the card | same |
-| Injury chance | per foul the referee calls on the card: **3%** at condition 100 rising evenly to **9%** at condition 30 (`300 + (100 - clamp(c, 30, 100)) x 600 / 70` basis points) | `card_injuries.rs:41-56` |
+| Injury chance | per foul the referee calls on the card: `injury_chance_bp_full_condition` at condition 100 moving evenly to `injury_chance_bp_condition_floor` at condition 30 and below, in basis points (`full + (100 - clamp(c, 30, 100)) x (floor - full) / 70`; each an Admin setting from 0 to 2000). By default **1%** at condition 100 and **3%** at condition 30 (100 and 300 basis points; 3% and 9% before FoxLeague lowered them) | `card_injuries.rs:49-52`, `InjuryRules::chance_bp`; `routes/config.rs` `CardBansConfig` |
 | Where | tournament matches and 1v1s that count, for both teams; a ranked game only for the team that started it; never a casual game, a free Bronze, a forfeit or the team drawn into a ranked game | `routes/matches.rs:5489-5497` |
-| Days out | 1 injury in a match **3 days**, 2 **9**, 3 or more **27**, from the end of the match; a later injury keeps the later end. `injured_until` in the future = out of every match | `card_injuries.rs` |
+| Days out | `injury_days_out`, three Admin settings (1 to 60 days each, in rising order): by default 1 injury in a match **3 days**, 2 **9**, 3 or more **27**, from the end of the match; a later injury keeps the later end, and a card already injured keeps its end when the settings change. `injured_until` in the future = out of every match | `card_injuries.rs` `DAYS_OUT`, `InjuryRules::try_days` |
 | At a lock | a suspended or injured starter is replaced by a fit bench card of its line, then the nearest line; the bench plays one short. Fewer than 11 fit of the saved 18 (condition 30, no transfer cooldown, not held out) forfeits | `tournament_simulator.rs` `take_match_lock` |
 | Ranked and casual | an injured starter is replaced the same way; with fewer than 11 available of the 18 (not injured, condition above 0) the game does not start, before any ticket is taken | `routes/matches.rs:2254-2323` |
 | 1v1 | joining (the creator's own seat too) needs the eleven shirts filled with match-fit cards of the 18, an injured card not among them: a starter who is not fit is relieved from the bench by the lock's line rule (an outfield shirt only by a fit outfield bench card, never the bench keeper; the keeper's shirt by a fit bench keeper, else by a fit outfield bench card as the last resort); refused after the stake is paid, which is refunded (the gas is lost) | `routes/tournaments.rs:6181-6200`, `squad_would_forfeit`; `tournament_simulator.rs` `auto_substitute`, `line_distance`, `find_best_sub`, `last_resort_keeper` |

@@ -1992,6 +1992,15 @@ commit read above): the fusion refusal in `can-fuse` and the forfeit penalty. Th
 prompt states the rule, and the agent's checks against a forfeit (a full 11 + 7, fit starters, the schedule's wear)
 are the ones it already had.
 
+**The injury numbers are Admin settings since 2026-11-10** (FoxLeague's main `9f65786f3`, read through its code
+only for the audit of 2026-11-11, INTEG-2): the chance per called foul is 1% at condition 100 to 3% at condition 30 by
+default (`card_injuries.rs:49-52`; 3% to 9% before), and `/api/config` `card_bans` serves the numbers in force:
+`injury_chance_bp_full_condition`, `injury_chance_bp_condition_floor` (basis points) and `injury_days_out` (three
+numbers of days; `routes/config.rs` `CardBansConfig`), next to `yellow_cards_per_ban`. The agent's plan reads them on
+the snapshot's "Cards and injuries" line (`levelLines` in `src/snapshot/digest.ts`); the prompt names no chance and no
+days of its own, and numbers the config leaves out are said to be unread. The manual copy is synced to FoxLeague's
+manual at `89a1955d7`, which states the same.
+
 **Left for 1 December 2026** (the MetaStaking discount on Shop prices): on 2026-11-10 `metastaking/discount.rs` only
 computes a percent and no payment check reads it. The agent pays list prices in exact amounts; when FoxLeague ships
 the Shop side, read how a wallet's price is quoted before that date.

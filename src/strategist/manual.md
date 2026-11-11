@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 2913ee7df 2026-11-10.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 89a1955d7 2026-11-10.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -1315,6 +1315,7 @@ From the moment the injuries start (the same moment as the yellow card bans; a p
 - Pick an injured player in the picker, then the **days to save**. The Shop shows the exact cost before you pay.
 - The price is **per day saved** and depends on the player's **rarity**: Common **100**, Uncommon **200**, Rare **300**, Epic **400**, Legendary **500** FOXSY.
 - **A third of every injury is always served**, rounded up to whole days, counted from the moment of the injury: 1 day of 3, 3 days of 9, 9 days of 27. Medicine saves at most the other two thirds: **2**, **6** or **18** days. A player with two injuries at once serves the later of their thirds.
+- The Medicine card states how injuries happen with the numbers in force: the chance per called foul and the days out. Both are game settings (see [Injuries](/getting-started/players/#injuries)). The third is counted on each injury's own days, the ones it was given when it happened.
 - Only **whole days** are sold: an injury with less than a day left above its third cannot be shortened.
 - Each day bought ends the injury one day earlier. A tournament match or a 1v1 challenge whose lineup is already locked keeps the lineup it locked.
 - Only the wallet that holds the card buys medicine for it. A card sold or sent keeps the injury that is left.
@@ -1336,7 +1337,7 @@ Two items for the [Fusion](/mechanics/fusion/) flow. You buy them per card from 
 - **Fusion Cooldown Waiver**: every fused card carries its own 14-day fusion cooldown before it can be fused again. Pay **75 FOXSY per day** to bring it down to the **3-day floor**; buy only some of the days and its ready time moves that many days earlier. The last 3 days can never be waived. A fresh output waived all the way costs 11 days, 825 FOXSY. The card must be in your wallet, not listed and not in an auction.
 - **Fusion Match Waiver**: fusion needs the match gate of the card's rarity. Pay per missing match: **20 FOXSY** for an Uncommon (up to **10** of its 15), **100 FOXSY** for a Rare (up to **30** of 45), an Epic (up to **90** of 135) or a Legendary (up to **270** of 405). A Common has no match waiver. The rest must be played for real. The credit stays on the card, also when it is sold. On a card moved before its gate each waived match takes 6 hours off its transfer lock.
 
-The per-card details, quotes and the exact floors are on the [Fusion](/mechanics/fusion/) page.
+The per-card details, quotes and the exact floors are on the [Fusion](/mechanics/fusion/) page. The [MetaStaking discount](#from-1-december-2026-the-metastaking-discount) does not apply to these two waivers or to the fusion cost: they stay at full price.
 
 ---
 
@@ -1346,8 +1347,10 @@ From **Tuesday 1 December 2026, 14:00 UTC** the FOXSY you hold in MultiversX Met
 
 - **1% for every full 100,000 FOXSY** of your 30-day average, up to **10%** from 1,000,000 FOXSY. Under 100,000 there is no discount. 150,000 gives 1%; 999,999 gives 9%.
 - **Your 30-day average counts.** It is the total of the daily snapshots of the last 30 days, always divided by 30: the number your Dashboard card shows. A day without a stake counts 0, so a team that exists for fewer days does not get a shorter average. Staking in November counts.
-- **Included:** Common packs, condition recovery, XP boosters, training slots, the fusion waivers, Reduce Cooldown, medicine and ranked tickets.
-- **Not included:** tournament entries, organizer payments or deposits, the marketplace and badge re-rolls (sold from **Settings**).
+- **Included:** Common packs, condition recovery, XP boosters, training slots, Reduce Cooldown, medicine and ranked tickets.
+- **Not included:** the fusion cost, the **Fusion Cooldown Waiver**, the **Fusion Match Waiver**, tournament entries, organizer payments or deposits, the marketplace and badge re-rolls (sold from **Settings**).
+
+The fusion cost and the two fusion waivers stay at full price: the players contract sets their price, so the app cannot charge less for them.
 
 | 30-day average | Discount |
 |----------------|----------|
@@ -1517,6 +1520,15 @@ If you leave a draft unsaved, your saved formation and lineup stay in effect.
 **SAVE** commits the formation and its lineup together in one save. If the lineup is refused (a player listed for sale in the meantime, for example) neither changes: your saved formation keeps its **Saved** badge and its lineup. A new formation is always saved together with a lineup that fits it.
 
 **A starter not in your squad.** When a card of your saved eleven is not in your squad when you open Tactics (listed for sale, sold or away for a few seconds during a stats sync), a notice reads **1 starter is not in your squad right now** (or **N starters**) and says your lineup was not changed. Opening the page never saves anything. **Fill from the bench** puts a substitute of the same line in each empty slot and saves; when a line has no substitute, Best XI picks a full eleven. A card away for a stats sync you started in the last 15 minutes stays in your squad, unless the chain shows another wallet holding it, so a sync alone does not show the notice. When the chain shows no holder at all, the card stays only if it is one of the cards that sync carries: a card burned in a fusion has no holder either. In a tournament the lock does it for you: a starter sold to another wallet or listed for sale is replaced by a fit substitute (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)).
+
+## Injured and suspended players
+
+From the moment yellow card bans and injuries start (see [Players](/getting-started/players/#yellow-card-bans)) Tactics shows who cannot play:
+
+- **The marks.** Every row of the Starting XI, the Substitutes and the Reserves plus every player on the Position Preview shows the red cross with the time left for an injured player (for example **3d**, hours on his last day) and a red card for a suspended one. Hover or long-press the mark for the exact end and the rule. The count of yellow cards toward a ban is on the Squad page and the card's profile, not here.
+- **The notice.** Above the lineup a notice names each player of the 18 on screen who is out and says what happens to him when the lineup locks: an injured or suspended starter is replaced by a bench player of the same position; an injured or suspended substitute sits out and your bench plays one short. A suspended player misses only your next tournament match: he still plays in a 1v1 challenge or a ranked game. The notice follows the lineup as you change it.
+- **You can still save.** A lineup with an injured or suspended player saves as usual: the lock makes the changes for you (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). When fewer than 11 of your 18 are left the notice warns that the match would be forfeited 3-0.
+- **Best XI.** The **BEST XI** button, the preview of another formation and the **Fill** repair pick players who can play first. A suspended player is picked only when his line has no fit player. An injured player is picked only when no other card can take the shirt or the bench seat, because a lineup saves only as 11 starters plus 7 substitutes: with a small squad he takes the last bench seat and the notice names him. The repair of a saved eleven never proposes an injured substitute.
 
 ## Rotating reserves in
 
@@ -1904,7 +1916,7 @@ FoxLeague expects you to own a full 18 (11 starters + 7 substitutes) when your n
 - An outfield player goes in goal only when no fit keeper is left on your bench, so your team is not forfeited for want of a keeper
 - A starter **listed for sale** is replaced the same way by a fit substitute. When no fit one is on your bench he plays: a listing alone never forfeits a match. He is replaced last, after every starter who is not match-fit or sits the match out, so he never takes the substitute one of them needs. A listed card is never on your bench for the match (a replaced listed starter does not go to the bench; a listed substitute is left out), so he can never come on during it. Your bench plays one short for each
 - A starter saved in a slot of another line (lineups saved before 28 October 2026 could hold one) is replaced the same way when your bench has a fit player nearer that slot's line. Otherwise he plays there: this alone never forfeits a match
-- The match report shows which auto-subs were applied for each side
+- Once the match has ended, its card on the tournament page lists the auto-subs of each side under **Lineup changes before kickoff**: who was relieved, who took his place and why (injured, suspended, below the condition floor, listed for sale or saved outside his line). Nothing of it shows before the match has ended
 - A suspended player (3 yellow cards, see [Yellow card bans](/getting-started/players/#yellow-card-bans)) or an injured one (see [Injuries](/getting-started/players/#injuries)) sits the match out. He is replaced the same way. An outfield shirt takes your bench keeper only when no other fit player is left. Your bench plays one short
 - If fewer than 11 match-fit players can be assembled from your 18 (or you no longer own all 18), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
 - If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero. In a knockout match, where one side must go through, the home side of the fixture advances (in round 1 of a Knockout, the higher seed)
@@ -2109,6 +2121,7 @@ The bans start at the moment the game announces (a popup in the app gives the da
 
 - **3 yellow cards in tournaments = miss the team's next tournament match.** Every card starts at **0/3** at that moment. Yellow cards from before never count toward a ban.
 - The third yellow card counts when its match ends. The card then shows **Suspended** and its count starts again at 0/3.
+- The number of yellow cards (3) is a game setting. The app always shows the one in force: the count on the squad card (**1/3**), the card's profile and the rule's text. If it changes, the new number counts for matches that end after the change. A card whose count is already at or above a lower number is not suspended by the change itself: its next yellow card suspends it and its count starts again at 0.
 - It misses its team's **next tournament match**: the first one whose lineup locks after the third yellow card (30 minutes before kickoff by default, see [Match-Day Strategy](/mechanics/match-day-strategy/)). A match whose lineup was already locked is played as saved.
 - That match serves the ban even when the card is not in your 18. A forfeit or a walkover serves it too. The card shows **Suspended** until that match has ended.
 - A 1v1 challenge or a ranked game never serves a ban. A suspended card can still play them.
@@ -2120,9 +2133,10 @@ The bans start at the moment the game announces (a popup in the app gives the da
 
 The injuries start at the same moment as the bans. From then:
 
-- **Each foul the referee calls can injure the player fouled.** The chance is **3%** at condition 100 and grows evenly to **9%** at condition 30 (below 30 it stays 9%). The condition is the card's at kickoff: at the lineup lock for a tournament match or a 1v1 challenge, when the game starts for a ranked game.
+- **Each foul the referee calls can injure the player fouled.** The chance is **1%** at condition 100 and grows evenly to **3%** at condition 30 (below 30 it stays 3%). The condition is the card's at kickoff: at the lineup lock for a tournament match or a 1v1 challenge, when the game starts for a ranked game.
 - **Every called foul is its own chance.** Fouls suffered never add up to an injury. Fouls from before the start never count.
 - **Days out:** 1 injury in a match = **3 days**, 2 = **9 days**, 3 or more = **27 days**, calendar days counted from the end of the match (for a tournament match or a 1v1 challenge, the end of its broadcast). A card injured again while out keeps the later end.
+- The chance (1% to 3%) and the days out (3, 9 and 27) are game settings. The app shows the ones in force: on the squad card's fouls mark until the injuries start and on the Medicine card in the Shop. If they change, the new numbers count for matches that end after the change. A card already injured keeps its end.
 - **Where:** tournaments and 1v1 challenges for both teams; ranked games only for the team that started them. A team drawn into someone else's ranked game gets no injury. A foul the referee does not call never injures.
 - An injury counts when the match ends, never earlier. The card then shows the red cross with the time it is still out (for example **3d**; hours on its last day). Its profile shows the end of the injury.
 - An injury erases nothing: the card keeps its count toward a ban plus any ban to serve, which its team's next tournament match serves as usual. Its squad card then shows both marks, the red cross first.
@@ -2133,8 +2147,12 @@ The injuries start at the same moment as the bans. From then:
 ### Where you see them
 
 - **Your own cards:** the squad card (tile and list) shows the yellow cards (their total until the bans start, from then the count toward the next ban), **Suspended** or the red cross of an injury with its time left (for example **3d**). An injured card with yellow cards or a ban shows both marks. Until the bans start the fouls suffered follow the yellow cards (the grey boot, for example **9**); from then they show only in the profile. On the tile these marks have their own line, under the player's name, as on every card of another team's player list (below). The card's profile shows the **Discipline** block: yellow cards, the count toward a ban plus fouls suffered, with a ban to serve or an injury under them.
+- **Tactics:** every row of the Starting XI, the Substitutes and the Reserves plus every player on the Position Preview shows the red cross with the time left for an injured player and a red card for a suspended one. A notice above the lineup names each player of your 18 who is out and says what happens to him at the lineup lock, for example "Romero is injured until 16 Nov, 14:05: a bench player of the same position will take his place". You can still save that lineup. See [Tactics](/mechanics/tactics/#injured-and-suspended-players).
+- **Notifications:** the bell tells you when a player of yours is injured (for how many days, with the way to Medicine in the Shop) and when one is suspended (he misses your team's next tournament match). Both arrive when the match that caused them has ended, never earlier. They are muted with the **Matches** notifications.
+- **Dashboard and Play Match:** the Dashboard says how many players of your saved 18 are out ("2 players out") with their names and the way to Tactics. On Play Match, Squad Readiness counts an injured player as not ready.
 - **Another team's cards:** open a team from the Leaderboard, from a seat in a tournament lobby, from the opponent's seat of a 1v1 challenge or from an upcoming match in Upcoming. Each of its cards shows the same: the yellow cards (plus the fouls suffered until the bans start), **Suspended** or the red cross of an injury with its time left. You see an opponent's suspended players before the match.
 - **The Marketplace:** every listing card shows the same. The listing's detail shows the **Discipline** block, so you know before you bid. A sale keeps the count, any ban plus any injury.
+- **A match's card on the tournament page:** once the match has ended, **Lineup changes before kickoff** lists what the lineup lock changed for each team, with the reason, for example "Romero was injured: Petrescu took his place". See [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit).
 - **A match's statistics** (Match History, Upcoming, a tournament's matches, the end of a ranked game): a small yellow card on the row of each player booked in that match, two for a second yellow card. They show once the match's statistics do: for a tournament match when it ends, never earlier. A yellow card in a 1v1 challenge or a ranked game shows there too but never counts toward a ban.
 
 ## OVR explained
