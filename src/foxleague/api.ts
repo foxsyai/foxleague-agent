@@ -94,7 +94,13 @@ export class FoxLeague {
       res = await doCall()
     }
     if (res.status === 401) throw new ApiRefusal('session rejected (401)')
-    if (opts.raw) return res.json as T
+    if (opts.raw) {
+      // A route answered without the envelope has only its HTTP status to say it failed: an error status with a JSON
+      // body (FoxLeague's own, or an edge in front of it) is no answer of the route (audit 2026-11-11, EDGE-6). The
+      // body is not repeated: it may be text of a server that is not FoxLeague.
+      if (res.status < 200 || res.status > 299) throw new ApiRefusal(`unexpected answer from ${path} (HTTP ${res.status})`)
+      return res.json as T
+    }
     const env = res.json as Envelope<T> | null
     if (!env || typeof env !== 'object' || !('success' in env)) {
       throw new ApiRefusal(`unexpected answer from ${path} (HTTP ${res.status})`)
@@ -142,8 +148,17 @@ export class FoxLeague {
 
   // ---- public reads ----
 
-  config(): Promise<FoxConfig> {
-    return this.call<FoxConfig>('/config', { raw: true })
+  /**
+   * The game settings (GET /api/config, the one route FoxLeague answers without its envelope). Only an answer that is
+   * the settings is returned: an object with the registration fee in atomic units, a field every answer carries and the
+   * registration pays by. Anything else throws, so the snapshot keeps `config` null with a warning and the rules refuse
+   * ("live config unavailable"), never run on an object with none of the fields (audit 2026-11-11, EDGE-6).
+   */
+  async config(): Promise<FoxConfig> {
+    const c = await this.call<unknown>('/config', { raw: true })
+    const fee = c !== null && typeof c === 'object' && !Array.isArray(c) ? (c as { registration_fee_wei?: unknown }).registration_fee_wei : undefined
+    if (typeof fee !== 'string' || !/^\d+$/.test(fee)) throw new ApiRefusal('unexpected answer from /config (not the game settings: no registration fee in it)')
+    return c as FoxConfig
   }
 
   /** Marketplace sales, newest first (public; at most 100 a page). */

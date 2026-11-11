@@ -115,7 +115,11 @@ not listed here on purpose.
   - a malformed body fails JSON extraction before the handler runs (axum rejection, normally 4xx).
 - **Raw JSON routes (no envelope):** `GET /api/config` (`backend/src/routes/config.rs:421`), the health
   routes (`backend/src/routes/health.rs`), `GET /api/public/match/{id}`
-  (`backend/src/routes/matches.rs:612-791`).
+  (`backend/src/routes/matches.rs:612-791`). With no envelope only the HTTP status says such a route failed: the
+  agent's client takes `/api/config` as the game settings only from a 2xx answer that carries `registration_fee_wei`
+  as an amount, and throws for anything else (an error status with a JSON body, FoxLeague's own or an edge's), so the
+  snapshot keeps `config` null with a warning and every rule refuses on "live config unavailable"
+  (`src/foxleague/api.ts`, audit 2026-11-11, EDGE-6).
 - **`code: "tx_pending"`** (`backend/src/models.rs:670-685`): the payment was NOT refused, it could not
   be verified yet (chain read timed out, throttled or chain not ready). Keep the transaction hash and
   confirm THAT hash again later. Never sign a second payment on a `tx_pending` answer.
