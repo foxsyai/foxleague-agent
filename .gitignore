@@ -8,3 +8,4 @@ pem/
 .node/
 *.local.md
 deploy/.host
+dist/
