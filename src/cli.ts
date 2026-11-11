@@ -61,6 +61,9 @@ function usage(): never {
   configure                     enter the API keys with hidden input; they go straight into the env file
   check-keys                    verify the Anthropic, Telegram and Binance keys (Binance: withdraw-only, IP-locked)
   set-web-password              web UI username and password (stored as a scrypt hash) and the session key
+  update-check                  say whether a newer signed release of foxleague-agent is out
+  update                        put the newest signed release in place (./install.sh --update runs it, then
+                                restarts the agent); exit code 3 when this version is the newest
 `)
   process.exit(1)
 }
@@ -119,6 +122,31 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       console.log(m.split(/\s+/).map((w, i) => `${String(i + 1).padStart(2)}. ${w}`).join('\n'))
+      return
+    }
+    case 'update-check':
+    case 'update': {
+      const { RELEASE_KEYS } = await import('./update/keys.ts')
+      const { detectLayout, installedVersion } = await import('./update/install.ts')
+      const { UpdateError, fetchRelease, isNewer, DEFAULT_SOURCE } = await import('./update/release.ts')
+      const { terminalUpdate } = await import('./update/updater.ts')
+      const installed = installedVersion()
+      try {
+        if (cmd === 'update-check') {
+          const rel = await fetchRelease(cfg.updateUrl ?? DEFAULT_SOURCE, RELEASE_KEYS)
+          console.log(isNewer(rel.manifest.version, installed) ? `Version ${rel.manifest.version} is out (you run ${installed}).\n${rel.manifest.notes.trim()}` : `You run ${installed}, the newest version.`)
+          return
+        }
+        const to = await terminalUpdate({ layout: detectLayout(), installed, keys: RELEASE_KEYS, source: cfg.updateUrl, dataDir: cfg.dataDir, isServer: cfg.isServer, say: line => console.log(`  ${line}`) })
+        if (to === null) {
+          console.log(`  You run ${installed}, the newest version.`)
+          process.exitCode = 3
+        } else console.log(`  Version ${to} is in place. It runs from the next start of the agent.`)
+      } catch (err) {
+        if (!(err instanceof UpdateError)) throw err
+        console.error(`No update: ${err.message}.`)
+        process.exitCode = 1
+      }
       return
     }
     case 'check-words': {

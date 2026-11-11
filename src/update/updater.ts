@@ -6,7 +6,7 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { DEFAULT_SOURCE, UpdateError, archiveName, downloadArchive, fetchRelease, isNewer, type FetchLike, type Manifest } from './release.ts'
-import { activate, confirmStart, selfUpdateRefusal, stage, startNote, type Layout, type Runner } from './install.ts'
+import { activate, confirmStart, refreshLauncher, selfUpdateRefusal, stage, startNote, type Layout, type Runner } from './install.ts'
 
 export const CHECK_EVERY_MS = 10 * 60_000
 /** A new release counts as started once the service has been up this long. */
@@ -116,6 +116,11 @@ export class Updater {
       const from = note.updatedFrom.replace(/^v/, '')
       this.confirmTimer = setTimeout(() => {
         confirmStart(this.d.layout)
+        try {
+          refreshLauncher(this.d.layout)
+        } catch (err) {
+          console.error('the launcher could not be refreshed (the one in place keeps working):', err)
+        }
         const message = `Updated from ${from} to ${this.d.installed}.`
         this.setLast('updated', this.d.installed, message)
         this.d.notify(`foxleague-agent: ${message}`)
@@ -210,4 +215,30 @@ export class Updater {
       rmSync(archive, { force: true })
     }
   }
+}
+
+/**
+ * The same update from a terminal (`./install.sh --update`): look, verify, download, prepare and switch. The
+ * caller restarts the agent. Returns the version put in place, or null when the running one is the newest.
+ */
+export async function terminalUpdate(o: { layout: Layout; installed: string; keys: readonly string[]; source?: string; dataDir: string; isServer?: boolean; say: (line: string) => void; fetch?: FetchLike; run?: Runner }): Promise<string | null> {
+  const how = selfUpdateRefusal(o.layout, { isServer: o.isServer })
+  if (how !== null) throw new UpdateError(how)
+  const source = o.source ?? DEFAULT_SOURCE
+  const rel = await fetchRelease(source, o.keys, { fetch: o.fetch })
+  if (!isNewer(rel.manifest.version, o.installed)) return null
+  o.say(`Version ${rel.manifest.version} is out (you run ${o.installed}); its signature is good.`)
+  if (rel.manifest.notes.trim()) o.say(rel.manifest.notes.trim())
+  const dir = join(o.dataDir, 'update')
+  const archive = join(dir, archiveName(rel.manifest.version))
+  mkdirSync(dir, { recursive: true, mode: 0o700 })
+  try {
+    o.say('Downloading it')
+    await downloadArchive(source, rel.manifest, archive, { fetch: o.fetch })
+    o.say('Preparing it next to the running version (Node.js and dependencies)')
+    activate(o.layout, await stage(o.layout, rel.manifest, archive, { run: o.run }))
+  } finally {
+    rmSync(archive, { force: true })
+  }
+  return rel.manifest.version
 }

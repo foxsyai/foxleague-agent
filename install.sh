@@ -5,18 +5,32 @@
 #   (or: git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh)
 #
 # Re-run it any time: it keeps your wallet, login and keys, and offers your earlier answers as the defaults.
-#   ./install.sh --update      get the latest version, update dependencies, restart
+#   ./install.sh --update      get the newest signed release, prepare it, restart into it
 #   ./install.sh --uninstall   stop and remove the background service (your files and wallet stay)
 #   ./install.sh --no-service  set everything up but do not install the background service
+# (The dashboard's Update now and Telegram's /upgrade do what --update does, without a terminal.)
 set -euo pipefail
 
 NODE_VERSION=v22.22.0
 SERVICE=foxleague-agent
 PLIST_LABEL=ai.foxleague.agent
+# APP_DIR: the code of this release. ROOT: the install's folder, with what is yours (.env, data/, pem/) and Node.
+# An install made by get.sh keeps each release in ROOT/versions/<name> and names the running one in
+# ROOT/versions/active (run.sh tells the whole layout); a git checkout is its own root.
 APP_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-ENV_FILE="$APP_DIR/.env"
-DATA_DIR="$APP_DIR/data"
-PEM_DIR="$APP_DIR/pem"
+if [ -n "${FOXAGENT_ROOT:-}" ]; then
+  [ -d "$FOXAGENT_ROOT" ] || { printf 'Error: FOXAGENT_ROOT is not a folder\n' >&2; exit 1; }
+  ROOT=$(cd "$FOXAGENT_ROOT" && pwd)
+elif [ "$(basename "$(dirname "$APP_DIR")")" = versions ] && [ -f "$(dirname "$APP_DIR")/active" ]; then
+  ROOT=$(cd "$APP_DIR/../.." && pwd)
+else
+  ROOT=$APP_DIR
+fi
+MANAGED=0
+[ "$ROOT" != "$APP_DIR" ] && MANAGED=1
+ENV_FILE="$ROOT/.env"
+DATA_DIR="$ROOT/data"
+PEM_DIR="$ROOT/pem"
 TTY=${FOXAGENT_TTY:-/dev/tty}
 
 say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
@@ -27,7 +41,7 @@ yes_no() { local a; a=$(ask "$1 (y/n)" "$2"); [[ $a =~ ^[Yy] ]]; }
 # Paths go into the systemd unit (% is a specifier, " and \ are quoting) and the launchd plist (XML).
 safe_path() { case "$1" in *[%\&\<\>\"\\]*) die "the path $1 holds one of % & < > \" \\; move the agent to a plain folder and run ./install.sh again";; esac; }
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
 MODE=install
 NO_SERVICE=0
 for arg in "$@"; do
@@ -35,6 +49,7 @@ for arg in "$@"; do
     --update) MODE=update ;;
     --uninstall) MODE=uninstall ;;
     --no-service) NO_SERVICE=1 ;;
+    --prepare) MODE=prepare ;; # run by an update, inside the new release, before the switch
     -h | --help) usage ;;
     *) die "unknown option $arg (see --help)" ;;
   esac
@@ -55,7 +70,7 @@ esac
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
 set_env() {
   local tmp
-  tmp=$(mktemp "$APP_DIR/.env.XXXXXX")
+  tmp=$(mktemp "$ROOT/.env.XXXXXX")
   { grep -v "^$1=" "$ENV_FILE" 2>/dev/null || true; printf '%s="%s"\n' "$1" "$2"; } > "$tmp"
   chmod 600 "$tmp"
   mv "$tmp" "$ENV_FILE"
@@ -64,9 +79,16 @@ get_env() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | se
 
 # ---- Node.js: a recent one on the system or a private copy in .node/ ----
 node_ok() { [ -x "$1" ] && "$1" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
+# Writes a file by rename, never in place: a script or a service that is reading the old one keeps it.
+put_file() { # put_file <dest> <mode> ; content on stdin
+  local tmp="$1.new.$$"
+  cat > "$tmp"
+  chmod "$2" "$tmp"
+  mv -f "$tmp" "$1"
+}
 ensure_node() {
-  if node_ok "$APP_DIR/.node/bin/node"; then
-    NODE="$APP_DIR/.node/bin/node"
+  if node_ok "$ROOT/.node/bin/node"; then
+    NODE="$ROOT/.node/bin/node"
   elif command -v node >/dev/null 2>&1 && node_ok "$(command -v node)"; then
     NODE=$(command -v node)
   else
@@ -81,15 +103,38 @@ ensure_node() {
     else
       (cd "$tmp" && grep " $tarball\$" SHASUMS256.txt | shasum -a 256 -c - >/dev/null)
     fi || die "the Node.js download failed its checksum"
-    rm -rf "$APP_DIR/.node" && mkdir -p "$APP_DIR/.node"
-    tar -xzf "$tmp/$tarball" -C "$APP_DIR/.node" --strip-components=1
-    rm -rf "$tmp"
-    NODE="$APP_DIR/.node/bin/node"
+    # Unpacked aside and moved in: a running agent keeps the Node it started with until its next start.
+    rm -rf "$ROOT/.node.new" && mkdir -p "$ROOT/.node.new"
+    tar -xzf "$tmp/$tarball" -C "$ROOT/.node.new" --strip-components=1
+    rm -rf "$tmp" "$ROOT/.node.old"
+    [ -d "$ROOT/.node" ] && mv "$ROOT/.node" "$ROOT/.node.old"
+    mv "$ROOT/.node.new" "$ROOT/.node"
+    rm -rf "$ROOT/.node.old"
+    NODE="$ROOT/.node/bin/node"
   fi
+  # The launcher (run.sh) reads which Node to start the agent with.
+  printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
   export PATH="$(dirname "$NODE"):$PATH"
   info "Node.js $("$NODE" --version) at $NODE"
 }
 cli() { AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
+deps() { (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+
+# ---- the launcher: what the service starts. On an install made by get.sh it sits in ROOT with an install.sh
+# that hands over to the active release; in a git checkout both are the checkout's own files. ----
+install_launcher() {
+  [ "$MANAGED" = 1 ] || return 0
+  put_file "$ROOT/run.sh" 755 < "$APP_DIR/run.sh"
+  [ -f "$APP_DIR/get.sh" ] && put_file "$ROOT/get.sh" 755 < "$APP_DIR/get.sh"
+  put_file "$ROOT/install.sh" 755 <<'SHIM'
+#!/usr/bin/env bash
+# foxleague-agent: runs the installer of the release that is active (./install.sh --update, --uninstall, --help).
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+active=$(head -n 1 "$ROOT/versions/active" 2>/dev/null || true)
+case "$active" in '' | .* | *[!A-Za-z0-9._-]*) echo "foxleague-agent: versions/active does not name a release; paste the install line again" >&2; exit 1 ;; esac
+FOXAGENT_ROOT="$ROOT" exec bash "$ROOT/versions/$active/install.sh" "$@"
+SHIM
+}
 
 # ---- background service: systemd user service on Linux, launchd agent on macOS ----
 UNIT="$HOME/.config/systemd/user/$SERVICE.service"
@@ -99,23 +144,30 @@ service_restart() {
   if [ "$PLATFORM" = linux ]; then systemctl --user restart "$SERVICE"; else launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL"; fi
 }
 install_service() {
-  safe_path "$APP_DIR"; safe_path "$NODE"
+  safe_path "$ROOT"; safe_path "$NODE"
+  local bash_bin
+  bash_bin=$(command -v bash)
+  safe_path "$bash_bin"
+  install_launcher
   if [ "$PLATFORM" = linux ]; then
-    systemctl --user show-environment >/dev/null 2>&1 || die "systemd user services are not available here. On WSL2, enable systemd in /etc/wsl.conf; or run ./install.sh --no-service and start the agent with: npm start"
+    systemctl --user show-environment >/dev/null 2>&1 || die "systemd user services are not available here. On WSL2, enable systemd in /etc/wsl.conf; or run ./install.sh --no-service and start the agent with: ./run.sh"
     mkdir -p "$(dirname "$UNIT")"
     cat > "$UNIT" <<EOF
 [Unit]
 Description=foxleague-agent: AI team manager for FoxLeague
 After=network-online.target
 StartLimitIntervalSec=600
-StartLimitBurst=3
+StartLimitBurst=5
 
 [Service]
-WorkingDirectory=$APP_DIR
+WorkingDirectory=$ROOT
 Environment="AGENT_ENV_FILE=$ENV_FILE" "AGENT_DATA_DIR=$DATA_DIR"
-ExecStart="$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/service.ts"
+ExecStart="$bash_bin" "$ROOT/run.sh"
 Restart=on-failure
 RestartSec=30
+# 75: the agent put an update in place and asks to be started again (run.sh then starts the new release).
+SuccessExitStatus=75
+RestartForceExitStatus=75
 TimeoutStopSec=180
 UMask=0077
 NoNewPrivileges=true
@@ -144,8 +196,8 @@ EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$PLIST_LABEL</string>
-  <key>ProgramArguments</key><array><string>$NODE</string><string>--disable-warning=ExperimentalWarning</string><string>$APP_DIR/src/service.ts</string></array>
-  <key>WorkingDirectory</key><string>$APP_DIR</string>
+  <key>ProgramArguments</key><array><string>$bash_bin</string><string>$ROOT/run.sh</string></array>
+  <key>WorkingDirectory</key><string>$ROOT</string>
   <key>EnvironmentVariables</key><dict><key>AGENT_ENV_FILE</key><string>$ENV_FILE</string><key>AGENT_DATA_DIR</key><string>$DATA_DIR</string></dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
@@ -179,19 +231,38 @@ if [ "$MODE" = uninstall ]; then
   exit 0
 fi
 
+if [ "$MODE" = prepare ]; then
+  # An update unpacked this release next to the running one and runs this before it switches. Only this
+  # release's own folder and Node are touched: the running release, the database and the service are not.
+  [ -n "${FOXAGENT_ROOT:-}" ] || die "--prepare is run by an update, not by hand"
+  ensure_node
+  deps
+  exit 0
+fi
+
 if [ "$MODE" = update ]; then
   say "Updating foxleague-agent"
   if [ -d "$APP_DIR/.git" ]; then
+    # A git checkout: git replaces files by new ones, so this script keeps reading the one it started from.
     git -C "$APP_DIR" pull --ff-only
+    ensure_node
+    deps
+    cli check-words || die "The agent was not restarted. Fix the recovery words as above, then run the update again."
+  elif [ "$MANAGED" = 1 ]; then
+    # The newest release is fetched, its signature and checksum are checked and it is prepared next to the
+    # running one (by its own install.sh --prepare). Nothing of the running release is written to.
+    ensure_node
+    rc=0
+    cli update || rc=$?
+    if [ "$rc" = 3 ]; then exit 0; fi
+    [ "$rc" = 0 ] || die "The update was not installed. The agent runs as before."
   else
-    # Installed with get.sh: download the latest code over it (wallet, keys and data are kept).
-    FOXAGENT_DIR="$APP_DIR" FOXAGENT_NO_RUN=1 bash "$APP_DIR/get.sh"
+    die "this folder was installed by an older installer. Paste the install line again once (your wallet, keys and data are kept); later updates are one click in the dashboard."
   fi
-  ensure_node
-  (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error)
-  cli check-words || die "The agent was not restarted. Fix the recovery words as above, then run the update again."
   if [ "$NO_SERVICE" = 0 ]; then
     if service_installed; then service_restart && info "Restarted."; else install_service && info "Installed and started."; fi
+  else
+    info "Start the agent again to run the new version."
   fi
   exit 0
 fi
@@ -202,7 +273,8 @@ info "Nothing is shared with anyone: your wallet words and keys stay in this fol
 
 say "1/7 Node.js and dependencies"
 ensure_node
-(cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error)
+deps
+install_launcher
 mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 [ -f "$ENV_FILE" ] || install -m 600 /dev/null "$ENV_FILE"
 
@@ -298,7 +370,7 @@ info "Each new agent you add in the dashboard gets its own pem/agentN.pem automa
 address=$(cli address 1 | sed -E 's/^agent 1: ([^ ]+).*/\1/')
 if [ "$NO_SERVICE" = 1 ]; then
   say "7/7 Background service: skipped (--no-service)"
-  info "Start the agent yourself with: npm start"
+  info "Start the agent yourself with: $ROOT/run.sh"
 else
   say "7/7 Background service"
   install_service

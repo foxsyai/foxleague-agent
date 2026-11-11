@@ -7,7 +7,7 @@
 // --prepare), so the way an update is installed can itself be changed by an update.
 
 import { spawn } from 'node:child_process'
-import { accessSync, constants, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, chmodSync, closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RELEASE_NAME, UpdateError, parseVersion, type Manifest } from './release.ts'
@@ -64,6 +64,9 @@ export function selfUpdateRefusal(layout: Layout, o: { isServer?: boolean } = {}
   }
   return null
 }
+
+/** A lock older than this was left by an update that was killed (preparing takes at most 15 minutes). */
+const LOCK_STALE_MS = 30 * 60_000
 
 export interface RunResult {
   code: number | null
@@ -133,9 +136,24 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
   const target = join(versions, name)
   const staging = join(versions, `.staging-${name}`)
   if (resolve(target) === resolve(layout.code)) throw new UpdateError('that release is the one already running')
+  // One update at a time on an install: the dashboard, Telegram and a terminal may all ask.
+  const lock = join(versions, 'update.lock')
+  try {
+    closeSync(openSync(lock, 'wx', 0o600))
+  } catch {
+    let age = Infinity
+    try {
+      age = Date.now() - statSync(lock).mtimeMs
+    } catch {
+      // gone again: the other update just ended
+    }
+    if (age < LOCK_STALE_MS) throw new UpdateError('another update is being installed right now')
+    writeFileSync(lock, '', { mode: 0o600 }) // left by an update that was killed: taken over
+  }
   const clean = (): void => rmSync(staging, { recursive: true, force: true })
   const fail = (why: string): never => {
     clean()
+    rmSync(lock, { force: true })
     throw new UpdateError(why)
   }
   clean()
@@ -157,6 +175,7 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
   if (prepared.code !== 0) return fail(`the new version could not be prepared, nothing was changed${prepared.tail ? `: ${prepared.tail.split('\n').slice(-3).join(' | ')}` : ''}`)
   rmSync(target, { recursive: true, force: true }) // what an earlier attempt that was undone left there
   renameSync(staging, target)
+  rmSync(lock, { force: true })
   return name
 }
 
@@ -215,4 +234,47 @@ export function confirmStart(layout: Layout): void {
     if (!entry.isDirectory() || entry.name === me || entry.name === previous) continue
     if (entry.name.startsWith('v') || entry.name.startsWith('.staging-')) rmSync(join(versions, entry.name), { recursive: true, force: true })
   }
+}
+
+/** What <root>/install.sh is on an install made by get.sh: it hands over to the installer of the release that runs. */
+export const INSTALL_SHIM = `#!/usr/bin/env bash
+# foxleague-agent: runs the installer of the release that is active (./install.sh --update, --uninstall, --help).
+ROOT=$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd)
+active=$(head -n 1 "$ROOT/versions/active" 2>/dev/null || true)
+case "$active" in '' | .* | *[!A-Za-z0-9._-]*) echo "foxleague-agent: versions/active does not name a release; paste the install line again" >&2; exit 1 ;; esac
+FOXAGENT_ROOT="$ROOT" exec bash "$ROOT/versions/$active/install.sh" "$@"
+`
+
+/**
+ * Once a new release is confirmed: its launcher and its installer's entry replace the ones in the install's
+ * folder. By rename, never in place, so a script that is running keeps reading the file it started from.
+ * Returns the names it replaced.
+ */
+export function refreshLauncher(layout: Layout): string[] {
+  if (!layout.managed) return []
+  const changed: string[] = []
+  const put = (name: string, text: string): void => {
+    const dest = join(layout.root, name)
+    let now: string | null = null
+    try {
+      now = readFileSync(dest, 'utf8')
+    } catch {
+      // not there yet
+    }
+    if (now === text) return
+    const tmp = `${dest}.new`
+    writeFileSync(tmp, text, { mode: 0o755 })
+    chmodSync(tmp, 0o755)
+    renameSync(tmp, dest)
+    changed.push(name)
+  }
+  for (const name of ['run.sh', 'get.sh']) {
+    try {
+      put(name, readFileSync(join(layout.code, name), 'utf8'))
+    } catch {
+      // a release without that file keeps the one in place
+    }
+  }
+  put('install.sh', INSTALL_SHIM)
+  return changed
 }
