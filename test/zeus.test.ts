@@ -34,7 +34,8 @@ test('a 1v1 against a known team: refused under a 55 percent win chance (Zeus\'s
   const tough = { userId: 55, elo: 1250, strength: 1600 } // within A2's gates (ELO under +100, squad under 10 percent stronger)
   const z = checkAction(challenge, s, ctx({ opponent: tough }))
   assert.equal(z.ok, false)
-  assert.match((z as { refusal: string }).refusal, /win chance against user 55 is about 43 percent; a 1v1 against a known team is played from 55 percent/)
+  // 42 percent: the squads alone (the average with its ELO was 43 until audit 2026-11-11, MONEY-2).
+  assert.match((z as { refusal: string }).refusal, /win chance against user 55 is about 42 percent; a 1v1 against a known team is played from 55 percent/)
   assert.equal(checkAction(challenge, s, ctx({ opponent: { userId: 55, elo: 1150, strength: 1400 } })).ok, true, 'about 63 percent: played')
 })
 

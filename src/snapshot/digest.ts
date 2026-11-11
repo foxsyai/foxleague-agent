@@ -417,7 +417,7 @@ export function renderDigest(s: AgentSnapshot): string {
     }
   }
   // The threshold every level's 1v1s against a known team are held to, next to the chances below.
-  if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: ELO expectation and lineup strength averaged, ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
+  if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: the ELO expectation and the lineup strength averaged, and never above what the lineups alone give (a rival's low ELO lifts no chance), ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
   if (s.leaderboardNeighbours.length) {
     out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged; a targeted 1v1 played within 2 minutes of its creation counts as arranged): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged` : ', took no 1v1 in 7 days it had not arranged'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }

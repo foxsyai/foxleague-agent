@@ -468,7 +468,11 @@ among the called-up players by contribution. Nothing of it exists in the code on
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
-  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. One brain for every level
+  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. The win chance
+  (`src/snapshot/winchance.ts`) is the ELO expectation and the squad chance averaged, and since the owner's decision of
+  2026-11-11 (audit MONEY-2) never above the squad chance: a rival's lower ELO may lower the estimate, never lift it
+  over what the two elevens alone give, so an eleven weaker than the rival's is never a favourite because the rival's
+  ELO is low; with only one of the two numbers read, the estimate is that number's. One brain for every level
   (owner, 2026-11-06): what was Zeus's code holds at every level (the win chances in the plan, 55 percent against a
   known team, the field rules, the booster only for its own fixtures), and each level's money adds three counts the
   code holds: paid training sessions a game day (2, 4, 6, 8, 10, 10), XP boosters in any 7 days (0, 1, 2, 3, 7, 7) and

@@ -284,7 +284,7 @@ test('AA1 a 1v1 against a stronger squad is refused even at the same ELO', async
   assert.equal(hidden.status, 'refused')
   assert.match(hidden.summary, /could not be read/)
   // A squad within 10 percent passes A2, and since 2026-11-06 every level also needs 55 percent against a known team:
-  // 5 percent stronger at the same ELO is about 45 percent, 10 percent weaker about 60.
+  // 5 percent stronger at the same ELO is about 40 percent (the squads alone, MONEY-2 of 2026-11-11), 10 percent weaker about 60.
   assert.match((await join(oneVOne(rivalSquad(21)))).summary, /a 1v1 against a known team is played from 55 percent/)
   assert.equal((await join(oneVOne(rivalSquad(18)))).status, 'dry_run', 'a weaker squad is played')
   // A targeted challenge reads the rival's wallet from the leaderboard.

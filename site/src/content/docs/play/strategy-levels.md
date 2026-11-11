@@ -96,7 +96,10 @@ for a Legendary, so your limits per rarity (above) usually bind first. The fusio
 says: one fusion per wallet every 20 hours and two Common packs a week. An auction at a fair price under that cost often wins.
 
 **Every level decides from numbers.** For each team on its challenge list (up to 10) it reads the ELO and the lineup
-strength, ours at today's condition and theirs at full condition, and turns them into a win chance (the ELO expectation and the squad ratio, averaged). The code holds it to
+strength, ours at today's condition and theirs at full condition, and turns them into a win chance: the ELO expectation and the squad ratio, averaged, and never more than the two
+starting elevens alone give. An eleven that is weaker than the rival's never reads as a favourite because the
+rival's ELO is low (a new team starts low, and a team can lose on purpose), while a rival's higher ELO still lowers
+the chance. The code holds it to
 its rules whatever the AI decides: no 1v1 against a named team under 55 percent (an open challenge is topped at its own best XI OVR instead, so no stronger team can take it), no Champions FoxLeague where 24 of the invited teams are clearly stronger and no tournament where three seated teams are clearly
 stronger. Each 1v1 records the chance it was taken at, so
 the estimate can be checked against real results.
