@@ -114,7 +114,7 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
       }
       throw err
     }
-    const text = await res.text()
+    const text = await readCapped(res, url)
     if ((res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504) && attempt < retries) {
       const wait = retryWaitMs(res.headers.get('retry-after'), attempt)
       if (wait !== null) {
@@ -132,6 +132,39 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
     }
     return { status: res.status, json: json as T }
   }
+}
+
+/** The most one answer may hold: far above the largest real one (a few hundred KB), far below what fills the memory. */
+export const MAX_ANSWER_BYTES = 8 * 1024 * 1024
+
+/**
+ * The body as text, read as it streams and refused past MAX_ANSWER_BYTES: `res.text()` buffers whatever the upstream
+ * sends, hundreds of megabytes included (ATTACK-5). A declared content-length over the cap is refused unread; a
+ * compressed answer is counted by what it unpacks to. The refusal is a plain error (a failed read, like a timeout),
+ * with the host and never the path.
+ */
+async function readCapped(res: Response, url: string): Promise<string> {
+  const tooLarge = () => new Error(`answer from ${hostOf(url)} is too large (over ${MAX_ANSWER_BYTES / (1024 * 1024)} MB): not read`)
+  if (Number(res.headers.get('content-length')) > MAX_ANSWER_BYTES) {
+    await res.body?.cancel().catch(() => undefined)
+    throw tooLarge()
+  }
+  if (!res.body) return ''
+  const reader = res.body.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > MAX_ANSWER_BYTES) {
+      await reader.cancel().catch(() => undefined)
+      throw tooLarge()
+    }
+    chunks.push(value)
+  }
+  // Decoded once, whole: a character cut between two chunks stays one character, a byte order mark is dropped.
+  return new TextDecoder().decode(Buffer.concat(chunks))
 }
 
 /** The longest pause an upstream's Retry-After is given, like the Telegram sender's. */
