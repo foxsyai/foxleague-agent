@@ -227,7 +227,24 @@ export function disciplineOf(p: Pick<PlayerCard, 'injured_until' | 'bans_pending
   }
 }
 
-export function playerView(p: PlayerCard, team: Team | null, now: Date, bansLive = false): PlayerView {
+/** FoxLeague's default lock of a moved card, in hours (its key match.transfer_cooldown_hours), when /api/config was not read. */
+export const DEFAULT_TRANSFER_LOCK_HOURS = 504
+
+/**
+ * When a moved card may play again, as FoxLeague reads it (models.rs, effective_transfer_cooldown_hours): the hours
+ * stamped on the card, and for a card that carries none (null) the live default /api/config serves, 504 when that was
+ * not read. Null: the card was never moved. Hours left out are the default lock, never "no lock" (audit 2026-11-11,
+ * EDGE-1). A time that cannot be parsed gives an invalid Date: the caller decides what unread means for it.
+ */
+export function transferLockEnd(transferredAt: string | null | undefined, cardHours: number | null | undefined, config?: Pick<FoxConfig, 'transfer_cooldown_hours'> | null): Date | null {
+  if (!transferredAt) return null
+  const served = config?.transfer_cooldown_hours
+  const byDefault = typeof served === 'number' && Number.isFinite(served) && served >= 0 ? served : DEFAULT_TRANSFER_LOCK_HOURS
+  const hours = typeof cardHours === 'number' && Number.isFinite(cardHours) ? cardHours : byDefault
+  return new Date(new Date(transferredAt).getTime() + hours * 3600_000)
+}
+
+export function playerView(p: PlayerCard, team: Team | null, now: Date, bansLive = false, config: Pick<FoxConfig, 'transfer_cooldown_hours'> | null = null): PlayerView {
   const slot = team?.lineup.indexOf(p.nft_nonce) ?? -1
   const role: PlayerView['role'] = slot >= 0 ? 'starter' : team?.substitutes.includes(p.nft_nonce) ? 'bench' : 'reserve'
   const minted = new Date(p.minted_at ?? p.created_at)
@@ -240,10 +257,8 @@ export function playerView(p: PlayerCard, team: Team | null, now: Date, bansLive
     xp[s] = p[`${s}_xp`]
   }
   let transferLockedUntil: string | null = null
-  if (p.transferred_at) {
-    const until = new Date(new Date(p.transferred_at).getTime() + (p.transfer_cooldown_hours ?? 504) * 3600_000)
-    if (until > now) transferLockedUntil = until.toISOString()
-  }
+  const until = transferLockEnd(p.transferred_at, p.transfer_cooldown_hours, config)
+  if (until && until > now) transferLockedUntil = until.toISOString()
   return {
     nonce: p.nft_nonce,
     name: p.name,
@@ -610,7 +625,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
 
   const bansLive = cardBansLive(config, now)
   const players = registered
-    ? ((await attempt(warnings, 'players', () => fox.players(address, wallet ?? undefined))) ?? []).map(p => playerView(p, team, now, bansLive))
+    ? ((await attempt(warnings, 'players', () => fox.players(address, wallet ?? undefined))) ?? []).map(p => playerView(p, team, now, bansLive, config))
     : []
 
   // Registration readiness only matters before the team exists.

@@ -14,7 +14,7 @@ import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { Tournament, TournamentDetail } from '../foxleague/types.ts'
 import { cardBansLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
-import { disciplineOf, type AgentSnapshot } from '../snapshot/snapshot.ts'
+import { disciplineOf, transferLockEnd, type AgentSnapshot } from '../snapshot/snapshot.ts'
 import type { AgentRow, Store } from '../store/db.ts'
 import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, wholeToAtomic } from '../util/encoding.ts'
 import { sleep } from '../util/http.ts'
@@ -449,9 +449,13 @@ export class Executor {
         const c = await fox.player(a.nonce)
         const hours = (c as { transfer_cooldown_hours?: number | null }).transfer_cooldown_hours
         const at = (c as { transferred_at?: string | null }).transferred_at
+        // A moved card whose hours FoxLeague leaves null carries its default lock, as the snapshot reads the agent's
+        // own cards (audit 2026-11-11, EDGE-1). A move whose time is no time is unread: no bid on it.
+        const until = transferLockEnd(at, hours, snap.config)
+        if (until && Number.isNaN(until.getTime())) throw new Error('transfer time unreadable')
         // The card's injury, read as the snapshot reads its own cards: a sale keeps it.
         const view = disciplineOf(c, now, cardBansLive(snap.config, now))
-        market.cardLock = { until: at && hours ? new Date(new Date(at).getTime() + hours * 3600_000) : null, injuredUntil: view.injuredUntil ? new Date(view.injuredUntil) : null, ...(view.disciplineUnread ? { injuryUnread: true } : {}) }
+        market.cardLock = { until, injuredUntil: view.injuredUntil ? new Date(view.injuredUntil) : null, ...(view.disciplineUnread ? { injuryUnread: true } : {}) }
         if (typeof c.rarity === 'string') market.cardRarity = c.rarity
       } catch {
         market.cardLock = null

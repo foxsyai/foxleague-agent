@@ -5,7 +5,7 @@ import { freeGaps } from '../executor/slots.ts'
 import { casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
-import { disciplineOf, type AgentSnapshot, type PlayerView } from './snapshot.ts'
+import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
@@ -393,7 +393,8 @@ export function renderDigest(s: AgentSnapshot): string {
     for (const l of m.auctions) {
       const ovr = Math.round((l.speed + l.accuracy + l.defense + l.power + l.control + l.vision + l.stamina) / 7)
       const price = l.highest_bid ? `top bid ${l.highest_bid}` : `reserve ${l.min_price ?? '?'}`
-      const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
+      // Hours left out are FoxLeague's default lock, as on the agent's own cards (audit 2026-11-11, EDGE-1).
+      const lock = transferLockEnd(l.transferred_at, l.transfer_cooldown_hours, s.config)
       // Own keys only: a rarity named like an inherited property (toString) has no market price (review of PR #21).
       const market = m.prices && Object.hasOwn(m.prices, l.rarity) ? m.prices[l.rarity] : undefined
       out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}${disciplineText(s, l)}`)
