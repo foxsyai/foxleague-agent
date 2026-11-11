@@ -51,14 +51,19 @@ export interface BudgetView {
 
 /**
  * `registered`: whether the team exists, which sets the swap allowances as the executor does (its own swap check
- * reads the same ledger rows; this view only tells the plan what is left).
+ * reads the same ledger rows; this view only tells the plan what is left). For a team that does not exist yet the
+ * view also leaves out a registration fee still booked: with no team that booking is a registration simulated in a
+ * dry run, or one whose relay gave no answer, and the next registration is not paid on top of it (the contract takes
+ * the fee once; the executor counts it once, see `withoutRegistrationFees`). The executor's own check reads the
+ * ledger whole (`registered` left true) and decides by the chain's answer (audit 2026-11-11, EDGE-3).
  */
 export function budgetView(store: Store, agentIndex: number, settings: AgentSettings, dryRun: boolean, now: Date, resetHourUtc = 14, registered = true): BudgetView {
   const gameDay = gameDayKey(now, resetHourUtc)
   const month = now.toISOString().slice(0, 7)
   const spentTodayUsd = store.spentUsd(agentIndex, { gameDay, category: 'play', dryRun })
   const spentMonthUsd = store.spentUsd(agentIndex, { month, category: 'play', dryRun })
-  const spentSetupUsd = store.spentUsd(agentIndex, { category: 'setup', dryRun })
+  const openFeesUsd = registered ? 0 : store.openRegistrationFees(agentIndex, dryRun).reduce((sum, r) => sum + r.usd, 0)
+  const spentSetupUsd = Math.max(0, store.spentUsd(agentIndex, { category: 'setup', dryRun }) - openFeesUsd)
   const swappedTodayUsd = store.spentUsd(agentIndex, { gameDay, category: 'swap', dryRun })
   const swappedMonthUsd = store.spentUsd(agentIndex, { month, category: 'swap', dryRun })
   const swapAllowanceTodayUsd = registered ? settings.dailyCapUsd : Math.max(settings.dailyCapUsd, settings.setupBudgetUsd)
@@ -83,6 +88,16 @@ export function budgetView(store: Store, agentIndex: number, settings: AgentSett
     remainingSwapMonthUsd: Math.max(0, swapAllowanceMonthUsd - swappedMonthUsd),
     dryRun,
   }
+}
+
+/**
+ * The view a new registration's fee is checked against: the setup budget without the registration fees still booked
+ * (`usd`, their sum). The fee is counted once, as the contract takes it once: the new booking stands for it, and the
+ * earlier ones are let go only once the new one is kept.
+ */
+export function withoutRegistrationFees(view: BudgetView, usd: number): BudgetView {
+  const spentSetupUsd = Math.max(0, view.spentSetupUsd - usd)
+  return { ...view, spentSetupUsd, remainingSetupUsd: Math.max(0, view.setupBudgetUsd - spentSetupUsd) }
 }
 
 /** null when the spend fits every cap, else the refusal. */

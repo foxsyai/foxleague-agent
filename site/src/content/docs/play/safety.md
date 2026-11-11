@@ -12,7 +12,10 @@ game rules and your limits right before it runs, and refuses what does not fit:
 - a maximum per **entry fee or stake**, **shop payment**, **bid** and **swap**;
 - an **EGLD gas reserve** (1 EGLD by default) that a swap can never touch.
 
-Every payment is booked before it is signed, so even a crash can never let it go past a limit.
+Every payment is booked before it is signed, so even a crash can never let it go past a limit. When an answer is
+lost on the way, the payment stays counted until the agent can read what became of it: it may count too much for a
+while, never too little. The registration fee is counted once, as FoxLeague takes it once: a registration that did
+not go through does not use up the setup budget for the next try.
 
 ## The AI never holds your keys
 

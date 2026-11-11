@@ -560,6 +560,23 @@ A G9 slot is used as soon as a call reaches G9, even when a later guard refuses 
 given back on every error (`onboarding.rs:2140-2144`, `:2181-2195`). Validate everything locally
 before calling the relay.
 
+**What the agent keeps booked after the relay** (audit 2026-11-11, INTEG-4, MONEY-3 and EDGE-3; `src/executor/executor.ts`,
+the `register` case). The fee is booked in the one-time setup budget before the signature. After the relay's answer:
+
+- FoxLeague's own refusal (its envelope) with HTTP 403, 429 or 503 is a guard that runs before the broadcast
+  (`routes/onboarding.rs` `relay_registration`): nothing was sent and the booking is released. The client carries the
+  status on the refusal (`ApiRefusal.httpStatus`).
+- Its HTTP 500 is also what a failed broadcast answers (`The registration could not be sent to the network...`), and a
+  broadcast that failed for FoxLeague may still have reached the network. That, an answer that is not its envelope and
+  no answer at all keep the fee booked.
+- The contract takes the fee once per wallet (`Already paid registration`). So a later registration whose snapshot
+  reads `isRegistrationPaid` false counts the fee once: the earlier booking is left out of its setup-budget check, and
+  it is let go only when the new registration's own booking is kept (signed, and not released by a guard or a revert).
+  From the first signature on, one booking always stands for the fee: an earlier payment that lands late is never
+  left uncounted, and a registration that never happened no longer refuses the next one for good. The same holds in
+  the dry-run ledger, where every simulated registration replaces the one before. The plan of a team that does not
+  exist yet reads its setup budget without that booking (`budgetView` with `registered` false).
+
 **Contract** (`registerAndPay`, `contracts/foxleague-players/src/player_nft.rs:1217-1259`):
 `Contract is paused`, `Registration fee not set`, `Payment must be FOXSY`,
 `FOXSY is a fungible token (nonce must be 0)`, `Payment must match registration fee exactly`,

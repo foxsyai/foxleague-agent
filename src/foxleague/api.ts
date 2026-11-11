@@ -38,10 +38,17 @@ import type { MarketSale } from '../snapshot/market.ts'
 export class ApiRefusal extends Error {
   readonly code: string | undefined
   readonly data: unknown
-  constructor(message: string, code?: string, data?: unknown) {
+  /**
+   * The HTTP status of a refusal FoxLeague gave in its own envelope (success false), where the status says which gate
+   * refused. Not set on an answer that is not its envelope ("unexpected answer", which counts as no answer) nor on a
+   * refusal made here: a rule that needs the status then takes the careful side.
+   */
+  readonly httpStatus: number | undefined
+  constructor(message: string, code?: string, data?: unknown, httpStatus?: number) {
     super(message)
     this.code = code
     this.data = data
+    this.httpStatus = httpStatus
   }
   /** The payment was not refused, only not verifiable yet: keep the hash, confirm it again later. */
   get isTxPending(): boolean {
@@ -105,7 +112,7 @@ export class FoxLeague {
     if (!env || typeof env !== 'object' || !('success' in env)) {
       throw new ApiRefusal(`unexpected answer from ${path} (HTTP ${res.status})`)
     }
-    if (!env.success) throw new ApiRefusal(env.error ?? 'refused', env.code, env.data)
+    if (!env.success) throw new ApiRefusal(env.error ?? 'refused', env.code, env.data, res.status)
     return env.data as T
   }
 

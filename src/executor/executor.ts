@@ -21,7 +21,7 @@ import { sleep } from '../util/http.ts'
 import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
-import { budgetView, capRefusal, costUsd, gameDayKey, type Prices } from './budget.ts'
+import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
@@ -93,6 +93,15 @@ interface Booking {
   /** What a tournament's organizer pays apart from its seat: its own rows and its own transaction. */
   organizer?: Booking
 }
+
+/**
+ * The HTTP statuses of the relay's own refusals that prove it did not broadcast (FoxLeague, routes/onboarding.rs
+ * relay_registration): every guard before the broadcast answers 403 (G2 to G13, already paid, not whitelisted, too
+ * little FOXSY), 429 (the rate limit) or 503 (the daily cap, no relayer, a fee it cannot read). Its 500 is not among
+ * them: it is also what a failed broadcast answers ("could not be sent to the network"), and a broadcast that failed
+ * for FoxLeague may still have reached the network.
+ */
+const RELAY_REFUSED_BEFORE_BROADCAST = new Set([403, 429, 503])
 
 /** The actions whose rows say `untouched` when they end in an error before FoxLeague was asked or anything was signed. */
 const REACH_TRACKED = new Set<Action['type']>(['create_tournament', 'create_challenge', 'join_tournament'])
@@ -173,6 +182,21 @@ export class Executor {
     const dry = agent.dryRun || !this.liveEnabled
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
+    // The registration fees booked before this registration, which stand for the same one fee (see the cap check).
+    let earlierFees: { id: number; usd: number }[] = []
+    /** Lets the earlier bookings go once this registration's own is kept (`kept`): never before, so one always stands. */
+    const replaceEarlierFees = (kept: boolean): void => {
+      if (kept) {
+        for (const r of earlierFees) {
+          try {
+            store.replaceRegistrationFee(r.id)
+          } catch {
+            // conservative: a booking that cannot be let go only over-counts
+          }
+        }
+      }
+      earlierFees = []
+    }
     const finish = (status: ResultStatus, summary: string, costUsdValue = 0, txHash?: string, detail?: unknown): ExecutionResult => {
       // An error before FoxLeague was asked to create or seat and before any signature (the kill switch, a pause or a
       // stop before the signature, a booking that failed) left nothing on FoxLeague, as a refusal (audit A1, 2026-10-23).
@@ -228,7 +252,17 @@ export class Executor {
       const usd = prices ? costUsd(verdict.foxsy, fees, prices) + built.extraUsd : 0
 
       const view = budgetView(store, agent.index, agent.settings, dry, now, snap.gameDay.resetHourUtc)
-      const cap = capRefusal(view, verdict.category, usd)
+      // A registration fee booked earlier in this ledger while the chain says the fee is NOT paid (a dry run's simulated
+      // registration; a relay that gave no answer, or its 500) is the same one fee as this one, not a second: the
+      // contract takes the fee once per wallet ("Already paid registration", player_nft.rs register_and_pay), so no two
+      // can ever leave. It is left out of this check, or the one-time setup budget would refuse every later
+      // registration for good (audit 2026-11-11, EDGE-3). It is not released here: the earlier transaction may still
+      // execute after this snapshot was read, so its booking goes only once this registration's own booking is kept
+      // (replaceEarlierFees). Refused, unsigned, turned away by a relay guard or reverted, this one's booking goes and
+      // the earlier one stays: from the first signature on, one booking always stands for the fee.
+      if (a.type === 'register' && verdict.foxsy > 0n && snap.registration.feePaidOnChain === false) earlierFees = store.openRegistrationFees(agent.index, dry)
+      const earlierUsd = earlierFees.reduce((sum, r) => sum + r.usd, 0)
+      const cap = capRefusal(earlierUsd > 0 ? withoutRegistrationFees(view, earlierUsd) : view, verdict.category, usd)
       if (cap) return finish('refused', `${desc}: ${cap}`)
       if (built.swapUsd) {
         // EGLD swapped away per game day is bounded like spending: the daily cap (the setup budget before registration).
@@ -268,6 +302,8 @@ export class Executor {
         const summary = [`would ${desc}, ${costText}`, ...sims, ...(api ? [`then ${api}`] : []), ...notes].join('; ')
         if (!simOk) return finish('failed', `DRY RUN ${summary}`, 0, undefined, { simulated: true })
         this.book(agent, verdict, usd, fees, built.swapUsd, true, now, snap, a, prices)
+        // The simulated registration just booked stands for the one fee: an earlier simulation's booking goes.
+        replaceEarlierFees(true)
         applyEffect(a, verdict, snap, built)
         if (a.type === 'leave_tournament' || a.type === 'claim_refund') this.creditEntry(agent.index, a.tournament_id, true)
         return finish('dry_run', `DRY RUN ${summary}`, usd)
@@ -280,11 +316,15 @@ export class Executor {
       // A free action gets one too: it says when FoxLeague was asked (`reached`).
       booking ??= { ids: [], sent: false }
       if (planned.planPlatformFeePercent !== undefined) verdict.facts.planPlatformFeePercent = planned.planPlatformFeePercent
-      return await this.live(agent, wallet, snap, a, verdict, built, usd, fees, desc, costText, finish, now, booking)
+      const result = await this.live(agent, wallet, snap, a, verdict, built, usd, fees, desc, costText, finish, now, booking)
+      // Signed and still booked (confirmed, not final yet, or an answer lost after the signature): it stands for the fee.
+      replaceEarlierFees(booking.sent && booking.ids.length > 0)
+      return result
     } catch (err) {
       // Nothing was signed: the booking goes. Signed (maybe sent): it stays, the conservative side.
       if (booking && !booking.sent) this.unbook(booking)
       if (booking?.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
+      replaceEarlierFees(Boolean(booking?.sent && booking.ids.length > 0))
       const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
       return finish('error', `${desc}: ${msg}`, 0, undefined, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
     }
@@ -869,9 +909,16 @@ export class Executor {
           try {
             relayed = await fox.relay(wallet, tx.toPlainObject())
           } catch (err) {
-            // An explicit refusal means the backend did not broadcast: nothing left the wallet.
-            if (err instanceof ApiRefusal) this.unbook(booking)
-            throw err
+            // Only a guard the relay runs before its broadcast proves that nothing left the wallet: FoxLeague's own
+            // refusal (its envelope) with one of those statuses. Its 500 after a failed broadcast, an answer that is not
+            // its envelope and no answer at all may come after the transaction went out: the fee stays booked (audit
+            // 2026-11-11, INTEG-4 and MONEY-3). The next registration reads the chain and counts the fee once (EDGE-3).
+            if (err instanceof ApiRefusal && err.httpStatus !== undefined && RELAY_REFUSED_BEFORE_BROADCAST.has(err.httpStatus)) {
+              this.unbook(booking)
+              throw err
+            }
+            const why = err instanceof ApiRefusal ? `FoxLeague's relay answered: ${err.message}` : err instanceof Error ? err.message : String(err)
+            throw new Error(`the relay did not confirm the registration payment (${why}); it may have gone out all the same, so the fee stays counted, and the next plan reads from the chain whether it was paid`)
           }
           this.settle(booking, relayed)
           const outcome = await this.outcome(relayed)
