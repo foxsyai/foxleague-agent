@@ -517,11 +517,31 @@ else
     info "Nothing was saved. Try again: 3 to 32 letters or digits for the username, at least 12 characters for the password, typed the same both times."
   done
 fi
-port=$(get_env WEB_UI_PORT)
+# A port that another program already listens on is refused here: with it the agent would end at every start
+# ("address already in use") until systemd gives up on it. bash opens the connection itself, no tool is needed.
+# The port this install's own running agent holds (the one in .env, with its process alive) is its own.
+port_taken() { (exec 3<> "/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
+own_agent_runs() {
+  local pid
+  pid=$(head -n 1 "$DATA_DIR/service.pid" 2>/dev/null || true)
+  case "$pid" in '' | *[!0-9]*) return 1 ;; esac
+  kill -0 "$pid" 2>/dev/null
+}
+had_port=$(get_env WEB_UI_PORT)
+port=$had_port
 while :; do
   port=$(ask "Dashboard port on this machine" "${port:-8870}")
-  [[ $port =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ] && break
-  info "Use a number from 1024 to 65535."
+  if ! { [[ $port =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ]; }; then
+    info "Use a number from 1024 to 65535."
+    continue
+  fi
+  if port_taken "$port" && ! { [ "$port" = "$had_port" ] && own_agent_runs; }; then
+    info "Port $port is already used by another program on this machine. Choose another one."
+    # The next one is offered as the default.
+    if [ "$port" -lt 65535 ]; then port=$((port + 1)); fi
+    continue
+  fi
+  break
 done
 set_env WEB_UI_PORT "$port"
 # The dashboard listens on this machine only, over plain http, so the cookie cannot require https.
