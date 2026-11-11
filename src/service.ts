@@ -44,6 +44,10 @@ import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
 import { sleep } from './util/http.ts'
 import { numberToIndex, agentName, pemName, whichAgents } from './names.ts'
+import { RELEASE_KEYS } from './update/keys.ts'
+import { detectLayout } from './update/install.ts'
+import { UpdateError } from './update/release.ts'
+import { RESTART_EXIT_CODE, Updater } from './update/updater.ts'
 
 /** The installed version (package.json), shown when the service starts. */
 export const VERSION = (() => {
@@ -183,6 +187,7 @@ const TELEGRAM_MENU = [
   { command: 'topup', description: 'EGLD from Binance: /topup 2 asks, /topup code approves' },
   { command: 'summary', description: "Yesterday per agent (/summary today: so far today)" },
   { command: 'updates', description: 'Telegram: daily (summary only) or all (every update)' },
+  { command: 'upgrade', description: 'Install the newest version when one is out' },
   { command: 'kill', description: 'Stop every agent at once: /kill on' },
   { command: 'help', description: 'Every command with its options' },
 ]
@@ -220,6 +225,8 @@ export class Service {
   readonly executor: Executor
   /** EGLD top-ups from Binance that the owner approves with a one-time code on Telegram. */
   readonly topups: TopUps
+  /** Looks for a newer signed release and installs it when the owner asks (dashboard or /upgrade). */
+  readonly updater: Updater
   /** Both replaced at run time when the admin panel changes their key or token. */
   strategist: Strategist | null
   telegram: Telegram | null
@@ -279,6 +286,13 @@ export class Service {
       binance: { egldOnBinance, travelRuleCountry, withdrawEgld, findWithdrawal, whitelisted },
       // The offer holds the code: straight to the owner's chat, never through notify (which also logs).
       send: text => this.telegram?.send(text),
+    })
+    this.updater = new Updater({
+      layout: detectLayout(), installed: VERSION, keys: RELEASE_KEYS, source: cfg.updateUrl, isServer: cfg.isServer,
+      // Only a real start looks for releases (loadConfig sets it): a Service built by a test or a CLI command asks nobody.
+      enabled: cfg.updateCheck === true,
+      dataDir: cfg.dataDir, kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
+      notify: text => this.notify(text), restart: () => this.restartForUpdate(),
     })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
@@ -1141,6 +1155,20 @@ export class Service {
       this.schedule(b.index, 5_000 + Math.random() * 20_000)
       void this.snapshot(b.index).catch(() => undefined)
     }
+    // Last: a release counts as started only once everything above has come up.
+    this.updater.start()
+  }
+
+  /** Set by a test: what ends the process after an update is in place. */
+  exit: (code: number) => void = code => process.exit(code)
+
+  /**
+   * An update is in place: stop as for any restart (no new action; one already signing finishes and is booked),
+   * then exit with the code the service manager restarts on. The launcher then starts the new release.
+   */
+  async restartForUpdate(): Promise<void> {
+    await this.stop()
+    setTimeout(() => this.exit(RESTART_EXIT_CODE), 1500)
   }
 
   private schedule(index: number, delayMs: number): void {
@@ -1169,6 +1197,7 @@ export class Service {
     for (const t of this.timers.values()) clearTimeout(t)
     clearTimeout(this.summaryTimer)
     clearTimeout(this.pendingTimer)
+    this.updater.stop()
     this.telegram?.stop()
     const until = Date.now() + 150_000
     // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
@@ -1574,11 +1603,14 @@ export class Service {
           '/keys [test]  which keys are set (masked); test checks them. Change keys in the web UI only',
           '/summary [today]  yesterday per agent (or today so far); it also comes by itself every morning',
           '/updates [daily|all]  daily: plans and action results wait for the morning summary; all: every update as it happens',
+          '/upgrade  install the newest version of foxleague-agent when one is out: the agent restarts and says when it is back',
           '/topup [N | code [EGLD]]  EGLD from Binance: /topup N proposes a top-up for agent N, /topup <code> approves it (optionally fewer EGLD); alone, what waits',
         ].join('\n')
       case 'status': {
         const agents = this.store.agents()
+        const up = this.updater.view()
         return [
+          `foxleague-agent ${VERSION}${up.available ? ` (version ${up.available.version} is out: /upgrade installs it)` : ''}`,
           `mode ${this.modeText()}; kill switch ${this.store.killSwitch ? 'ON' : 'off'}; strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'off'}; model spend $${Number(this.store.getKv('model_usd_total') ?? 0).toFixed(2)}`,
           ...agents.map(b => `${agentName(b.index)}${b.paused ? ' PAUSED' : ''} ${b.address}`),
         ].join('\n') + retiredLine(this.store.retiredAgents())
@@ -1677,6 +1709,14 @@ export class Service {
         this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `Telegram updates set to ${to} (Telegram)` })
         return to === 'daily' ? `Done: plans and action results now wait for the summary at ${String(this.summaryHour).padStart(2, '0')}:00 ${this.summaryZone}. Urgent messages and top-up codes still come at once.` : 'Done: every plan and action result comes as it happens.'
       }
+      case 'upgrade':
+        // The owner's own chat asks: only a release signed by the maintainers and newer than this one is ever installed.
+        try {
+          return await this.updater.begin('Telegram')
+        } catch (err) {
+          if (!(err instanceof UpdateError)) throw err
+          return `No update was started: ${err.message}.`
+        }
       case 'topup': {
         const [first, amount] = args
         if (!first) return this.topups.listText()

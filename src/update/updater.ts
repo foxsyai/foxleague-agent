@@ -1,0 +1,213 @@
+// The running service's side of an update: look for a newer release every ten minutes, tell the owner once per
+// version (dashboard and Telegram), install it when the owner asks (one click or /update), restart into it and
+// say how it went. It never installs by itself. The checks that decide what may be installed are in release.ts
+// (signature, version, archive) and install.ts (disk); this file only orders them.
+
+import { mkdirSync, rmSync } from 'node:fs'
+import { join } from 'node:path'
+import { DEFAULT_SOURCE, UpdateError, archiveName, downloadArchive, fetchRelease, isNewer, type FetchLike, type Manifest } from './release.ts'
+import { activate, confirmStart, selfUpdateRefusal, stage, startNote, type Layout, type Runner } from './install.ts'
+
+export const CHECK_EVERY_MS = 10 * 60_000
+/** A new release counts as started once the service has been up this long. */
+export const CONFIRM_AFTER_MS = 45_000
+/** The exit code that asks the service manager to start the agent again (the installer's unit restarts on it). */
+export const RESTART_EXIT_CODE = 75
+
+export interface UpdaterDeps {
+  layout: Layout
+  /** The running version (package.json). */
+  installed: string
+  keys: readonly string[]
+  /** Where releases are published; AGENT_UPDATE_URL for a mirror. Whatever it is, the signature decides. */
+  source?: string
+  isServer: boolean
+  /** Off with AGENT_UPDATE_CHECK=0: no request leaves the machine and no update is offered. */
+  enabled: boolean
+  dataDir: string
+  kv: { get(key: string): string | null; set(key: string, value: string): void }
+  /** To the owner: the log and Telegram. */
+  notify(text: string): void
+  /** Stops the service gracefully (running actions finish and are booked), then exits with RESTART_EXIT_CODE. */
+  restart(): Promise<void>
+  fetch?: FetchLike
+  run?: Runner
+  confirmAfterMs?: number
+}
+
+export interface UpdateView {
+  installed: string
+  /** A newer signed release, or null. */
+  available: { version: string; notes: string; published: string } | null
+  /** When the release server was last asked (ISO), and what went wrong then, if anything. */
+  checkedAt: string | null
+  checkError: string | null
+  /** True when one click installs it here; otherwise `how` says what to do instead. */
+  canInstall: boolean
+  how: string | null
+  state: 'idle' | 'downloading' | 'preparing' | 'restarting'
+  /** How the last update went, kept until the next one. */
+  last: { kind: 'updated' | 'undone' | 'failed'; version: string; at: string; message: string } | null
+  enabled: boolean
+}
+
+const KV_NOTIFIED = 'update_notified'
+const KV_LAST = 'update_last'
+
+export class Updater {
+  private readonly d: UpdaterDeps
+  private available: Manifest | null = null
+  private checkedAt: string | null = null
+  private checkError: string | null = null
+  private state: UpdateView['state'] = 'idle'
+  private timer: NodeJS.Timeout | undefined
+  private confirmTimer: NodeJS.Timeout | undefined
+  private stopped = false
+
+  constructor(deps: UpdaterDeps) {
+    this.d = deps
+  }
+
+  private get source(): string {
+    return this.d.source ?? DEFAULT_SOURCE
+  }
+
+  private last(): UpdateView['last'] {
+    try {
+      const v = JSON.parse(this.d.kv.get(KV_LAST) ?? 'null') as UpdateView['last']
+      return v && typeof v.version === 'string' && typeof v.message === 'string' && typeof v.at === 'string' && ['updated', 'undone', 'failed'].includes(v.kind) ? v : null
+    } catch {
+      return null
+    }
+  }
+
+  private setLast(kind: NonNullable<UpdateView['last']>['kind'], version: string, message: string): void {
+    this.d.kv.set(KV_LAST, JSON.stringify({ kind, version, at: new Date().toISOString(), message }))
+  }
+
+  view(): UpdateView {
+    const how = selfUpdateRefusal(this.d.layout, { isServer: this.d.isServer })
+    return {
+      installed: this.d.installed,
+      available: this.available ? { version: this.available.version, notes: this.available.notes, published: this.available.published } : null,
+      checkedAt: this.checkedAt,
+      checkError: this.checkError,
+      canInstall: how === null,
+      how,
+      state: this.state,
+      last: this.last(),
+      enabled: this.d.enabled,
+    }
+  }
+
+  /**
+   * At the end of the service's start: say how the last update went, confirm a new release once it has stayed
+   * up, and begin to look for the next one.
+   */
+  start(): void {
+    const note = startNote(this.d.layout)
+    if (note.rolledBack) {
+      const to = note.rolledBack.to.replace(/^v/, '')
+      const message = `The update to ${to} did not start and was undone: you run ${this.d.installed} as before. Your wallet, settings and history are untouched. It is safe to try again later.`
+      this.setLast('undone', to, message)
+      this.d.notify(message)
+    }
+    if (note.updatedFrom) {
+      const from = note.updatedFrom.replace(/^v/, '')
+      this.confirmTimer = setTimeout(() => {
+        confirmStart(this.d.layout)
+        const message = `Updated from ${from} to ${this.d.installed}.`
+        this.setLast('updated', this.d.installed, message)
+        this.d.notify(`foxleague-agent: ${message}`)
+      }, this.d.confirmAfterMs ?? CONFIRM_AFTER_MS)
+      this.confirmTimer.unref()
+    } else {
+      // No update in flight: clears the undo note that was just told and a note left by a switch that never happened.
+      confirmStart(this.d.layout)
+    }
+    if (!this.d.enabled) return
+    const again = (ms: number): void => {
+      if (this.stopped) return
+      this.timer = setTimeout(() => void this.check().catch(() => undefined).finally(() => again(CHECK_EVERY_MS + Math.random() * 60_000)), ms)
+      this.timer.unref()
+    }
+    again(30_000 + Math.random() * 60_000)
+  }
+
+  stop(): void {
+    this.stopped = true
+    clearTimeout(this.timer)
+    clearTimeout(this.confirmTimer)
+  }
+
+  /** Asks the release server once. A release is offered only when it is signed and newer than the running one. */
+  async check(): Promise<UpdateView> {
+    if (!this.d.enabled) return this.view()
+    try {
+      const rel = await fetchRelease(this.source, this.d.keys, { fetch: this.d.fetch })
+      this.checkError = null
+      this.available = isNewer(rel.manifest.version, this.d.installed) ? rel.manifest : null
+      if (this.available && this.d.kv.get(KV_NOTIFIED) !== this.available.version) {
+        this.d.kv.set(KV_NOTIFIED, this.available.version)
+        this.d.notify(this.notice(this.available))
+      }
+    } catch (err) {
+      // Not said on Telegram: a release server that is down or a network without a route is not the owner's problem.
+      this.checkError = err instanceof UpdateError ? err.message : 'the check failed'
+    }
+    this.checkedAt = new Date().toISOString()
+    return this.view()
+  }
+
+  private notice(m: Manifest): string {
+    const how = selfUpdateRefusal(this.d.layout, { isServer: this.d.isServer })
+    return [
+      `foxleague-agent ${m.version} is out (you run ${this.d.installed}).`,
+      ...(m.notes.trim() ? [m.notes.trim()] : []),
+      how === null ? 'To install it: send /update here, or press Update now in the dashboard. The agent restarts and tells you when it is back.' : `To install it: ${how}.`,
+    ].join('\n')
+  }
+
+  /**
+   * The owner asked for the update. Refuses with a reason (UpdateError) or starts it and returns what to tell them;
+   * the rest happens in the background and is told through notify.
+   */
+  async begin(by: string): Promise<string> {
+    if (!this.d.enabled) throw new UpdateError('updates are switched off on this machine (AGENT_UPDATE_CHECK=0)')
+    if (this.state !== 'idle') throw new UpdateError('an update is already being installed')
+    const how = selfUpdateRefusal(this.d.layout, { isServer: this.d.isServer })
+    if (!this.available) await this.check()
+    if (!this.available) throw new UpdateError(this.checkError ? `the release server could not be asked: ${this.checkError}` : `you run ${this.d.installed}, the newest version`)
+    if (how !== null) throw new UpdateError(how)
+    const version = this.available.version
+    this.state = 'downloading'
+    void this.install(version, by)
+    return `Installing ${version}. This takes a minute or two; the agent then restarts and tells you when it is back.`
+  }
+
+  private async install(version: string, by: string): Promise<void> {
+    const dir = join(this.d.dataDir, 'update')
+    const archive = join(dir, archiveName(version))
+    try {
+      // Asked again and verified again, for exactly the version the owner saw: nothing is taken from memory.
+      const rel = await fetchRelease(this.source, this.d.keys, { fetch: this.d.fetch, version })
+      if (!isNewer(rel.manifest.version, this.d.installed)) throw new UpdateError('that release is not newer than the running one')
+      mkdirSync(dir, { recursive: true, mode: 0o700 })
+      await downloadArchive(this.source, rel.manifest, archive, { fetch: this.d.fetch })
+      this.state = 'preparing'
+      const name = await stage(this.d.layout, rel.manifest, archive, { run: this.d.run })
+      activate(this.d.layout, name)
+      this.state = 'restarting'
+      this.d.notify(`foxleague-agent: version ${version} is in place (asked by ${by}). Restarting into it now.`)
+      await this.d.restart()
+    } catch (err) {
+      const message = `The update to ${version} was not installed: ${err instanceof UpdateError ? err.message : 'an unexpected error (see the log)'}. You run ${this.d.installed} as before.`
+      if (!(err instanceof UpdateError)) console.error('update failed:', err)
+      this.setLast('failed', version, message)
+      this.state = 'idle'
+      this.d.notify(message)
+    } finally {
+      rmSync(archive, { force: true })
+    }
+  }
+}

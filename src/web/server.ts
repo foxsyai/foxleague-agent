@@ -18,6 +18,7 @@ import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { agentName, pemName } from '../names.ts'
 import type { ImportInput } from '../wallet/imported.ts'
+import { UpdateError } from '../update/release.ts'
 
 const PAGES = {
   login: readFileSync(join(import.meta.dirname, 'login.html'), 'utf8'),
@@ -207,6 +208,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price })),
         efforts: EFFORTS,
         telegram: Boolean(service.telegram),
+        // The running version, a newer signed release if there is one and how the last update went.
+        update: service.updater.view(),
         // The welcome guide's checklist: which keys are set (never their values) and whether it was hidden.
         setup: {
           ai: Boolean(cfg.anthropicApiKey),
@@ -444,6 +447,17 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           return json(res, 200, { ok: true, message: service.setMode(live, `web UI, ${user}, ${clientIp(req)}`) })
         } catch (err) {
           throw new HttpFail(409, err instanceof Error ? err.message : String(err))
+        }
+      }
+      // One click, no password: nothing here can be steered. Only a release signed by the maintainers and newer
+      // than the running one is ever installed, whoever asks; the request needs the session and its CSRF token.
+      if (method === 'POST' && (path === '/api/update' || path === '/api/update/check')) {
+        try {
+          if (path === '/api/update/check') return json(res, 200, { ok: true, update: await service.updater.check() })
+          return json(res, 200, { ok: true, message: await service.updater.begin(`web UI, ${user}`) })
+        } catch (err) {
+          if (err instanceof UpdateError) throw new HttpFail(409, err.message)
+          throw err
         }
       }
       if (path === '/api/chat/clear' && method === 'POST') return json(res, 200, { ok: true, message: service.clearChat(`web UI, ${user}`), chat: service.chatLines() })

@@ -284,3 +284,198 @@ test('UPD-11: the launcher refuses a versions/active that names anything but a r
   assert.throws(() => activate(detectLayout(inst.code), '../x'), UpdateError)
   assert.throws(() => activate(detectLayout(inst.code), 'v7.7.7'), /not in place/)
 })
+
+// ---- the service's updater ----
+
+import { Updater, type UpdaterDeps } from '../src/update/updater.ts'
+
+function deps(inst: { root: string; code: string }, base: string, over: Partial<UpdaterDeps> = {}): { d: UpdaterDeps; said: string[]; restarts: { n: number }; kv: Map<string, string> } {
+  const said: string[] = []
+  const restarts = { n: 0 }
+  const kv = new Map<string, string>()
+  const d: UpdaterDeps = {
+    layout: detectLayout(inst.code), installed: '1.1.0', keys: [KEY.publicPem], source: base, isServer: false, enabled: true,
+    dataDir: join(inst.root, 'data'), kv: { get: k => kv.get(k) ?? null, set: (k, v) => void kv.set(k, v) },
+    notify: t => void said.push(t), restart: async () => void restarts.n++, confirmAfterMs: 20, ...over,
+  }
+  return { d, said, restarts, kv }
+}
+const until = async (ok: () => boolean, ms = 8000): Promise<void> => {
+  const end = Date.now() + ms
+  while (!ok() && Date.now() < end) await new Promise(r => setTimeout(r, 20))
+  assert.ok(ok(), 'waited too long')
+}
+async function released(version: string, o: { prepare?: string } = {}): Promise<{ base: string; close: () => Promise<void>; hits: Map<string, number> }> {
+  const out = tmp()
+  buildRelease(out, codeTree(tmp(), version, o), version, KEY.privatePem, { notes: `New in ${version}: medicine for injured cards.` })
+  return serve(publish(tmp(), [{ dir: out, version }], version))
+}
+
+test('UPD-12: a newer signed release is offered and told once; looking for it installs nothing', async () => {
+  const inst = managedInstall('1.1.0')
+  const web = await released('1.2.0')
+  try {
+    const { d, said, restarts } = deps(inst, web.base)
+    const up = new Updater(d)
+    assert.equal(up.view().available, null)
+    const v = await up.check()
+    assert.deepEqual(v.available, { version: '1.2.0', notes: 'New in 1.2.0: medicine for injured cards.', published: '2026-11-11T10:00:00Z' })
+    assert.equal(v.canInstall, true)
+    assert.equal(said.length, 1)
+    assert.match(said[0]!, /^foxleague-agent 1\.2\.0 is out \(you run 1\.1\.0\)\.\nNew in 1\.2\.0: medicine for injured cards\.\nTo install it: send \/update here, or press Update now in the dashboard\./)
+    await up.check()
+    await up.check()
+    assert.equal(said.length, 1, 'one notice per version, not one per check')
+    assert.equal(readFileSync(join(inst.root, 'versions', 'active'), 'utf8'), 'v1.1.0\n', 'a check never installs')
+    assert.equal(restarts.n, 0)
+    assert.equal(existsSync(join(inst.root, 'versions', 'v1.2.0')), false)
+  } finally {
+    await web.close()
+  }
+})
+
+test('UPD-13: the same version, an older one or a release signed by someone else is not offered', async () => {
+  const inst = managedInstall('1.1.0')
+  for (const [version, installed] of [['1.1.0', '1.1.0'], ['1.0.9', '1.1.0'], ['1.2.0', 'main'], ['1.2.0', '?']] as const) {
+    const web = await released(version)
+    try {
+      const { d, said } = deps(inst, web.base, { installed })
+      const v = await new Updater(d).check()
+      assert.equal(v.available, null, `${version} over ${installed}`)
+      assert.equal(v.checkError, null)
+      assert.deepEqual(said, [])
+    } finally {
+      await web.close()
+    }
+  }
+  const web = await released('1.2.0')
+  try {
+    const { d, said } = deps(inst, web.base, { keys: [OTHER.publicPem] })
+    const up = new Updater(d)
+    const v = await up.check()
+    assert.equal(v.available, null)
+    assert.match(v.checkError!, /not signed by the foxleague-agent maintainers/)
+    assert.deepEqual(said, [], 'a failed check is not sent to Telegram')
+    await assert.rejects(up.begin('test'), /could not be asked: the release is not signed/)
+    assert.equal(readFileSync(join(inst.root, 'versions', 'active'), 'utf8'), 'v1.1.0\n')
+    // Switched off: nothing is asked and nothing is offered.
+    const off = deps(inst, web.base, { enabled: false })
+    const before = [...web.hits.values()].reduce((a, b) => a + b, 0)
+    assert.equal((await new Updater(off.d).check()).available, null)
+    await assert.rejects(new Updater(off.d).begin('test'), /switched off/)
+    assert.equal([...web.hits.values()].reduce((a, b) => a + b, 0), before, 'no request left the machine')
+  } finally {
+    await web.close()
+  }
+})
+
+test('UPD-14: the owner asks, the release is verified again, put in place and the agent restarts into it', async () => {
+  const inst = managedInstall('1.1.0')
+  const web = await released('1.2.0')
+  try {
+    const { d, said, restarts } = deps(inst, web.base)
+    const up = new Updater(d)
+    await up.check()
+    assert.match(await up.begin('web UI, owner'), /^Installing 1\.2\.0\./)
+    await assert.rejects(up.begin('again'), /already being installed/)
+    await until(() => restarts.n === 1)
+    assert.equal(readFileSync(join(inst.root, 'versions', 'active'), 'utf8'), 'v1.2.0\n')
+    assert.equal(readFileSync(join(inst.root, 'versions', 'pending'), 'utf8'), 'v1.1.0 v1.2.0 0\n')
+    assert.equal(up.view().state, 'restarting')
+    assert.match(said.at(-1)!, /version 1\.2\.0 is in place \(asked by web UI, owner\)\. Restarting into it now\./)
+    assert.deepEqual(readdirSync(join(inst.root, 'data', 'update')), [], 'the downloaded archive is removed')
+    assert.equal(web.hits.get('/download/v1.2.0/release.json'), 1, 'the manifest of that version is fetched and verified again at install')
+    // The new release's first start: once it has stayed up it confirms and says so.
+    const next = deps({ root: inst.root, code: join(inst.root, 'versions', 'v1.2.0') }, web.base, { installed: '1.2.0', enabled: false })
+    const started = new Updater(next.d)
+    started.start()
+    await until(() => next.said.length === 1)
+    assert.equal(next.said[0], 'foxleague-agent: Updated from 1.1.0 to 1.2.0.')
+    assert.equal(existsSync(join(inst.root, 'versions', 'pending')), false)
+    assert.deepEqual(started.view().last && { kind: started.view().last!.kind, version: started.view().last!.version }, { kind: 'updated', version: '1.2.0' })
+    started.stop()
+  } finally {
+    await web.close()
+  }
+})
+
+test('UPD-15: an update that cannot be installed changes nothing, says why and leaves the agent running', async () => {
+  const inst = managedInstall('1.1.0')
+  const web = await released('1.2.0', { prepare: '#!/usr/bin/env bash\necho "your recovery words changed" >&2\nexit 1\n' })
+  try {
+    const { d, said, restarts } = deps(inst, web.base)
+    const up = new Updater(d)
+    await up.check()
+    await up.begin('Telegram')
+    await until(() => up.view().state === 'idle')
+    assert.equal(restarts.n, 0, 'no restart')
+    assert.equal(readFileSync(join(inst.root, 'versions', 'active'), 'utf8'), 'v1.1.0\n')
+    assert.deepEqual(readdirSync(join(inst.root, 'versions')).sort(), ['active', 'v1.1.0'])
+    assert.match(said.at(-1)!, /^The update to 1\.2\.0 was not installed: the new version could not be prepared, nothing was changed: .*your recovery words changed.*You run 1\.1\.0 as before\.$/)
+    assert.equal(up.view().last?.kind, 'failed')
+    assert.deepEqual(readdirSync(join(inst.root, 'data', 'update')), [])
+  } finally {
+    await web.close()
+  }
+  // The archive on the server is not the signed one.
+  const out = tmp()
+  buildRelease(out, codeTree(tmp(), '1.2.0'), '1.2.0', KEY.privatePem)
+  const site = publish(tmp(), [{ dir: out, version: '1.2.0' }], '1.2.0')
+  const evil = await serve(site, { rewrite: p => (p.endsWith('.tar.gz') ? { body: readFileSync(join(out, archiveName('1.2.0'))).fill(7, 100, 140) } : undefined) })
+  try {
+    const { d, said, restarts } = deps(inst, evil.base)
+    const up = new Updater(d)
+    await up.check()
+    await up.begin('test')
+    await until(() => up.view().state === 'idle')
+    assert.match(said.at(-1)!, /not the one that was signed/)
+    assert.equal(restarts.n, 0)
+    assert.equal(readFileSync(join(inst.root, 'versions', 'active'), 'utf8'), 'v1.1.0\n')
+  } finally {
+    await evil.close()
+  }
+})
+
+test('UPD-16: an install that cannot update itself is told how, and the newest version says so', async () => {
+  const flat = codeTree(tmp(), '1.1.0')
+  const web = await released('1.2.0')
+  try {
+    const { d, said } = deps({ root: flat, code: flat }, web.base)
+    const up = new Updater(d)
+    const v = await up.check()
+    assert.equal(v.available?.version, '1.2.0', 'the notice still comes')
+    assert.equal(v.canInstall, false)
+    assert.match(said[0]!, /To install it: this install was not made by the one-line installer: paste the install line again once/)
+    await assert.rejects(up.begin('test'), /paste the install line again/)
+    const server = deps(managedInstall('1.1.0'), web.base, { isServer: true })
+    await assert.rejects(new Updater(server.d).begin('test'), /server set up by hand/)
+  } finally {
+    await web.close()
+  }
+  const same = await released('1.1.0')
+  try {
+    await assert.rejects(new Updater(deps(managedInstall('1.1.0'), same.base).d).begin('test'), /you run 1\.1\.0, the newest version/)
+  } finally {
+    await same.close()
+  }
+})
+
+test('UPD-17: after an update that was undone the old release tells the owner once', async () => {
+  const inst = managedInstall('1.1.0')
+  const layout = detectLayout(inst.code)
+  const built = buildRelease(tmp(), codeTree(tmp(), '1.2.0'), '1.2.0', KEY.privatePem)
+  activate(layout, await stage(layout, built.manifest, built.archive))
+  writeFileSync(join(inst.root, '.exit'), '1')
+  launch(inst.root)
+  launch(inst.root)
+  writeFileSync(join(inst.root, '.exit'), '0')
+  launch(inst.root) // the launcher is back on 1.1.0
+  const a = deps(inst, 'http://127.0.0.1:9', { enabled: false })
+  new Updater(a.d).start()
+  assert.deepEqual(a.said, ['The update to 1.2.0 did not start and was undone: you run 1.1.0 as before. Your wallet, settings and history are untouched. It is safe to try again later.'])
+  const b = deps(inst, 'http://127.0.0.1:9', { enabled: false, kv: a.d.kv })
+  const again = new Updater(b.d)
+  again.start()
+  assert.deepEqual(b.said, [], 'told once')
+  assert.equal(again.view().last?.kind, 'undone', 'the dashboard still shows it')
+})

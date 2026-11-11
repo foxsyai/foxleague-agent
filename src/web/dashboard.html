@@ -220,6 +220,11 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
 #guidebox .gnote{font-size:12.5px;color:var(--dim);margin-top:6px}
 #guidebox .gfoot{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:12px;font-size:13px}
 .banner{background:rgba(255,80,80,.12);border:1px solid rgba(255,80,80,.5);border-radius:10px;padding:10px 12px;margin:0 0 14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:13.5px}
+.banner.up{background:rgba(70,160,255,.10);border-color:rgba(70,160,255,.5)}
+.banner.up.good{background:rgba(60,200,120,.10);border-color:rgba(60,200,120,.5)}
+.banner.up.bad{background:rgba(255,80,80,.12);border-color:rgba(255,80,80,.5)}
+.banner.up .upmain{flex:1 1 260px;min-width:0}
+.banner.up .upnotes{color:var(--dim);white-space:pre-wrap;margin-top:4px}
 #tgLink{margin-top:10px}
 #pwbox h3,#impbox h3,#retbox h3,#lvlbox h3{margin:0 0 8px;font-size:15px;color:var(--acc)}
 #lvlbox .lvlrows{display:grid;grid-template-columns:auto minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr);gap:6px 10px;font-size:13px;margin:0 0 12px;align-items:center}
@@ -254,6 +259,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
       <span id="modePill" class="pill dry">dry run</span>
       <span id="killPill" class="pill halt" hidden>kill switch on</span>
       <span id="tgPill" class="pill mute" hidden>telegram off</span>
+      <span id="verPill" class="pill mute" hidden></span><i class="info" data-tip="update">i</i>
     </div>
     <div class="actions">
       <span class="act"><a id="howBtn" class="btn" href="https://agent.foxleague.ai/" target="_blank" rel="noopener noreferrer">How it works</a><i class="info" data-tip="how">i</i></span>
@@ -268,6 +274,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
     </span>
   </header>
 
+  <div class="banner up" id="upBanner" hidden><div class="upmain"><div id="upText"></div><div class="upnotes" id="upNotes" hidden></div></div><i class="info" data-tip="update">i</i><button class="btn sm go" id="upBtn" hidden>Update now</button></div>
   <div class="banner" id="aiBanner" hidden><span>The AI key is missing, so your agents only watch and never play. It takes about 5 minutes to add.</span><button class="btn sm go" id="aiBannerBtn">Show me how</button></div>
 
   <section class="grid kpis">
@@ -460,8 +467,46 @@ function remember(i) { try { localStorage.setItem('foxagent.agent', String(i)) }
 function recalled() { try { const v = localStorage.getItem('foxagent.agent'); return v === null ? null : Number(v) } catch { return null } }
 const agent = () => S && S.agents.find(b => b.index === sel)
 
+// The update notice: a newer signed release, an update in progress or how the last one went (for a day).
+// Every text is set with textContent: the notes are the maintainers' own words, shown as plain text all the same.
+let updating = null
+function renderUpdate() {
+  const u = S.instance.update
+  if (!u) return
+  $('verPill').hidden = false; $('verPill').textContent = 'v' + u.installed
+  if (updating && u.installed === updating.to) { updating = null; toast('Updated to version ' + u.installed) }
+  const recent = u.last && Date.now() - Date.parse(u.last.at) < 86400000 ? u.last : null
+  const busy = u.state !== 'idle' || Boolean(updating)
+  let text = '', notes = '', tone = '', button = false
+  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + '. The agent restarts in a minute or two and this page comes back by itself.'
+  else if (u.available) {
+    text = 'Version ' + u.available.version + ' is out. You run ' + u.installed + '.' + (u.canInstall ? '' : ' To install it: ' + u.how + '.')
+    notes = u.available.notes; button = u.canInstall
+    if (recent && recent.kind !== 'updated') { text = recent.message + ' ' + text; tone = 'bad' }
+  } else if (recent) { text = recent.message; tone = recent.kind === 'updated' ? 'good' : 'bad' }
+  $('upBanner').hidden = !text
+  $('upBanner').className = 'banner up' + (tone ? ' ' + tone : '')
+  $('upText').textContent = text
+  $('upNotes').hidden = !notes; $('upNotes').textContent = notes
+  $('upBtn').hidden = !button
+}
+async function startUpdate() {
+  const u = S.instance.update
+  if (!u || !u.available) return
+  $('upBtn').disabled = true
+  try {
+    const r = await api('POST', '/api/update')
+    updating = { to: u.available.version, since: Date.now() }
+    toast(r.message)
+    renderUpdate()
+    // Look often while it installs and restarts; the page is quiet about the minute the agent is away.
+    const h = setInterval(() => { if (!updating || Date.now() - updating.since > 20 * 60000) { updating = null; clearInterval(h); loadState() } else loadState() }, 4000)
+  } catch (e) { toast(e.message, true) } finally { $('upBtn').disabled = false }
+}
+
 function renderHeader() {
   const i = S.instance
+  renderUpdate()
   const live = i.liveMode && i.liveEnabled
   $('modePill').textContent = live ? 'LIVE' : i.liveMode ? 'live blocked by the server' : 'dry run'
   $('modePill').className = 'pill ' + (live ? 'live' : 'dry')
@@ -721,7 +766,7 @@ async function loadState() {
     else { $('loading').textContent = S.retired && S.retired.length ? 'Every agent is retired. Restore one from Retired, or add a new one.' : 'No agents yet.'; $('loading').hidden = false; $('agentview').hidden = true }
     if ($('retwrap').classList.contains('on')) renderRetired()
     renderChat()
-  } catch (e) { if (e.message !== 'signed out') toast('Could not load state: ' + e.message, true) }
+  } catch (e) { if (e.message !== 'signed out' && !updating) toast('Could not load state: ' + e.message, true) }
 }
 async function loadActivity() {
   if (sel === null) return
@@ -910,6 +955,10 @@ $('stratApply').onclick = async (e, password) => {
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
 const TIPS = {
+  update: ['Version and updates', `<p>The version this agent runs. About every 10 minutes it asks GitHub whether a newer release of foxleague-agent is out. When one is, a notice appears here and on Telegram, with what is new.</p>
+    <p><b>Update now</b> installs it in one click: the agent downloads the release, checks that it is signed by the foxleague-agent maintainers, prepares it next to the running version and restarts into it. That takes a minute or two. An action that is being signed finishes first. Your wallet, keys, settings and history are not touched. On Telegram, <b>/upgrade</b> does the same.</p>
+    <p>Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted. If the new version does not start, the agent goes back to the one it ran before and tells you.</p>
+    <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
   guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>
@@ -1426,6 +1475,7 @@ function showGuide(on, focus) {
 }
 $('guideBtn').onclick = () => showGuide(true)
 $('aiBannerBtn').onclick = () => showGuide(true, 'ai')
+$('upBtn').onclick = startUpdate
 $('guideClose').onclick = () => showGuide(false)
 $('guidewrap').addEventListener('click', e => { if (e.target.id === 'guidewrap') showGuide(false) })
 $('guideHide').onchange = async () => {

@@ -57,6 +57,10 @@ export interface Config {
   /** Global default for new agents; each has its own dry-run flag (default ON). */
   defaultDryRun: boolean
   maxAgents: number
+  /** Another place to look for releases (AGENT_UPDATE_URL: a mirror, a test). The signature decides, wherever it is. */
+  updateUrl?: string
+  /** Looks for a newer release every ten minutes (AGENT_UPDATE_CHECK, default on). Off: nothing is asked or offered. */
+  updateCheck?: boolean
 }
 
 function num(name: string, fallback: number): number {
@@ -101,6 +105,8 @@ export function loadConfig(): Config {
     isServer: flag('AGENT_IS_SERVER', false),
     defaultDryRun: flag('AGENT_DEFAULT_DRY_RUN', true),
     maxAgents: Math.min(100, Math.floor(num('AGENT_MAX_AGENTS', 5))),
+    updateUrl: process.env.AGENT_UPDATE_URL?.trim() || undefined,
+    updateCheck: flag('AGENT_UPDATE_CHECK', true),
   }
   return loaded
 }
