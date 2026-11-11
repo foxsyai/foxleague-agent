@@ -43,7 +43,9 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
 
 `deploy/nginx-foxleague-agent.conf` is a template: replace `agent.example.com` with your domain, point its DNS at
 the server, get a certificate (for example `certbot --nginx`) and reload nginx. The dashboard listens on
-127.0.0.1:8870 only and sends its own security headers, including a per-page Content Security Policy.
+127.0.0.1:8870 only and sends its own security headers, including a per-page Content Security Policy. The template
+also holds the sign-in page to 30 requests a minute from one address (nginx answers 429 beyond that); the dashboard
+keeps its own lock on wrong passwords, per IPv4 address and per /64 for IPv6.
 
 ## Everyday
 

@@ -4,6 +4,7 @@
 // Standard library only.
 
 import { createHmac, randomBytes, scrypt, scryptSync, timingSafeEqual } from 'node:crypto'
+import { isIPv6 } from 'node:net'
 
 const SCRYPT = { N: 2 ** 15, r: 8, p: 1, maxmem: 128 * 2 ** 15 * 8 * 2 }
 export const SESSION_TTL_S = 12 * 3600
@@ -41,7 +42,7 @@ export function verifyPasswordAsync(password: string, stored: string): Promise<b
 
 /**
  * Runs jobs one at a time (a login verification holds about 32 MiB while it runs; jobs waiting hold nothing).
- * Two bounds, null = turned away (answer 429): `maxPerKey` for one client address, so a single source cannot take the
+ * Two bounds, null = turned away (answer 429): `maxPerKey` for one client (`clientKey`), so a single source cannot take the
  * queue, and `maxInSystem` overall, large enough that a flood adds seconds of latency rather than locking the owner
  * out, small enough that the wait stays short. The login throttle still counts every failed attempt per address.
  */
@@ -165,9 +166,36 @@ const GLOBAL_MAX_FAILURES = 60
 const GLOBAL_LOCKOUT_S = 60
 
 /**
- * Exponential lockout per IP (5 free attempts, then 30 s doubling up to 1 h), plus a global burst limit
+ * One client for the sign-in lockout and the password queue. An IPv4 address is its own client (also when a
+ * dual-stack socket reports it as ::ffff:a.b.c.d). An IPv6 address counts as its /64: one host or one home line
+ * owns all 2^64 addresses of it, so a count per address would never reach the lock (ATTACK-1). Anything that is
+ * no IPv6 address is returned as it came.
+ */
+export function clientKey(ip: string): string {
+  let s = ip.trim().toLowerCase().replace(/%.*$/, '') // a zone id (fe80::1%eth0) names the interface, not the client
+  if (!isIPv6(s)) return ip
+  // A dotted tail (::ffff:203.0.113.7) is the last two groups.
+  const dotted = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(s)
+  if (dotted) {
+    const [a, b, c, d] = dotted.slice(1).map(Number) as [number, number, number, number]
+    s = `${s.slice(0, dotted.index)}${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`
+  }
+  const gap = s.indexOf('::')
+  const list = (part: string) => (part ? part.split(':') : [])
+  const head = list(gap < 0 ? s : s.slice(0, gap))
+  const tail = list(gap < 0 ? '' : s.slice(gap + 2))
+  const groups = [...head, ...Array<string>(Math.max(0, 8 - head.length - tail.length)).fill('0'), ...tail].map(g => parseInt(g, 16))
+  if (groups.length !== 8 || groups.some(g => !Number.isInteger(g))) return ip
+  const [g0, g1, g2, g3, g4, g5, g6, g7] = groups as [number, number, number, number, number, number, number, number]
+  if (!g0 && !g1 && !g2 && !g3 && !g4 && g5 === 0xffff) return `${g6 >> 8}.${g6 & 255}.${g7 >> 8}.${g7 & 255}`
+  return `${[g0, g1, g2, g3].map(g => g.toString(16)).join(':')}::/64`
+}
+
+/**
+ * Exponential lockout per client (5 free attempts, then 30 s doubling up to 1 h), plus a global burst limit
  * that holds back only addresses that already failed: a dozen attackers cannot lock the owner out from
- * a clean address, and the password re-check behind a session skips it.
+ * a clean address, and the password re-check behind a session skips it. A client is `clientKey` of its address:
+ * an IPv4 address, or the /64 of an IPv6 address.
  */
 export class LoginThrottle {
   private readonly fails = new Map<string, { count: number; until: number; seen: number }>()
@@ -181,14 +209,15 @@ export class LoginThrottle {
     this.baseLockoutS = baseLockoutS
   }
 
-  check(ip: string, now = Date.now() / 1000, opts: { global?: boolean } = {}): { ok: boolean; waitS: number } {
-    const f = this.fails.get(ip)
+  check(address: string, now = Date.now() / 1000, opts: { global?: boolean } = {}): { ok: boolean; waitS: number } {
+    const f = this.fails.get(clientKey(address))
     if (opts.global !== false && f && this.globalUntil > now) return { ok: false, waitS: Math.ceil(this.globalUntil - now) }
     if (f && f.until > now) return { ok: false, waitS: Math.ceil(f.until - now) }
     return { ok: true, waitS: 0 }
   }
 
-  recordFailure(ip: string, now = Date.now() / 1000): void {
+  recordFailure(address: string, now = Date.now() / 1000): void {
+    const ip = clientKey(address)
     const count = (this.fails.get(ip)?.count ?? 0) + 1
     const until = count >= this.maxAttempts ? now + Math.min(this.baseLockoutS * 2 ** (count - this.maxAttempts), 3600) : 0
     this.fails.set(ip, { count, until, seen: now })
@@ -205,7 +234,7 @@ export class LoginThrottle {
     }
   }
 
-  recordSuccess(ip: string): void {
-    this.fails.delete(ip)
+  recordSuccess(address: string): void {
+    this.fails.delete(clientKey(address))
   }
 }
