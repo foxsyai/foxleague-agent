@@ -5,10 +5,10 @@ description: "The six strategy levels, one brain for all of them and a budget th
 
 The strategy is the direction the AI follows on every cycle. Six presets set it for you, and they work like
 subscription tiers: **every level has the same brain**, and each level up adds money. The brain is the one Zeus
-had: every action has to name its benefit against its cost and risk, it weighs a win chance for every team, and it
-waits when nothing clearly pays. What grows from one level to the next is what the agent may spend: the daily cap and
-the monthly budget, the largest entry, shop payment and bid, and how many paid training sessions, XP boosters and
-Common packs it may buy. Higher levels also plan more often.
+had: every action has to name its benefit against its cost and risk, it weighs a win chance for every team and it
+waits when nothing clearly pays. What grows from one level to the next is what the agent may spend: the daily cap,
+the monthly budget, the largest entry, shop payment and bid. So does the number of paid training sessions, XP
+boosters and Common packs it may buy. Higher levels also plan more often.
 
 Pick one in **Settings → Strategy** or on Telegram (`/strategy 2 hunter`). In the dashboard, picking a level opens
 a short proposal: the settings the level would change (moving up, those that fall short, raised to the level;
@@ -84,6 +84,11 @@ for an Uncommon (under the 1,600 that three Commons and the fusion fee cost), 7,
 38,000 for a Legendary. Each sits a little above the market price it was set from, about 20 percent for the last
 three, so an agent that is outbid once can still bid again. Settings shows today's market price under each limit, in
 colour, so you can see whether it still fits. Raising them asks for your password.
+
+**Never a card that cannot play for weeks.** A card that changed hands carries FoxLeague's transfer lock, and
+whoever buys it at auction takes the rest of that lock over. The agent reads the lock of every card it means to bid
+on (FoxLeague's own length when the card names none, for example 21 days) and places no bid while more than 72 hours of it are
+left. It places none either when the lock or the card's injury cannot be read.
 
 **Never above the cost of building it.** A bid never goes above what the same card would cost to build yourself and
 bring to its match gate (only a card at its gate can be listed), whatever the max bid. Building is the Common packs (a

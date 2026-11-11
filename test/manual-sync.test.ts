@@ -94,7 +94,7 @@ test('MS-A how it plays, strategy levels, safety and the home page say what the 
   const levels = read(`${DOCS}/play/strategy-levels.md`)
   const safety = read(`${DOCS}/play/safety.md`)
   const home = read(`${DOCS}/index.mdx`)
-  assert.match(plays, new RegExp(`For the ${FIELD_TOURNAMENTS} open Silver or Gold tournaments it could join whose deadlines come first \\(up to ${FIELD_SEATS} seated teams each\\)`), 'A1 the field read')
+  assert.match(plays, new RegExp(`For the ${FIELD_TOURNAMENTS} open Silver, Gold or paid Bronze tournaments it could join whose deadlines come first \\(up to ${FIELD_SEATS} seated teams each\\)`), 'A1 the field read')
   assert.match(levels, /a \*\*win chance\*\* for each team on its challenge list \(up to 10, first the teams that take 1v1s they had not arranged\)/, 'A2 the challenge list')
   assert.match(levels, /For each team on its challenge list \(up to 10\) it reads the ELO and the lineup strength, ours at today's condition and theirs at full condition/, 'A2')
   assert.match(levels, new RegExp(`over the last ${MARKET_WINDOWS[0]} days \\(${MARKET_WINDOWS[1]} or ${MARKET_WINDOWS[2]} days when fewer than ${MIN_TRADING_DAYS} days traded; with too few sales even then the agent sees no market price\\)`), 'A3 the market windows')

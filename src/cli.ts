@@ -108,7 +108,14 @@ async function main(): Promise<void> {
       const mnemonic = process.env.AGENT_MNEMONIC!
       console.log(created ? `New recovery words written to ${envFile} (mode 600).` : `Recovery words already exist in ${envFile}; left unchanged.`)
       console.log(`Agent 1 address: ${deriveWallet(mnemonic, 0).address}`)
-      if (created) console.log('Write the words down offline now: run `npm run cli -- backup-words` in your own terminal.')
+      // A server refuses backup-words (below): there the words are read once from the env file, as the server guide says.
+      if (created) {
+        console.log(
+          cfg.isServer
+            ? `Write the words down offline now: read them once in your own SSH session (sudo grep AGENT_MNEMONIC ${envFile}), on paper, and never paste them anywhere. They are not printed on a server.`
+            : 'Write the words down offline now: run `./cli.sh backup-words` in your own terminal.',
+        )
+      }
       return
     }
     case 'backup-words': {
