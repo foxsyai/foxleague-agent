@@ -81,7 +81,10 @@ export interface RequestOptions {
   body?: unknown
   headers?: Record<string, string>
   timeoutMs?: number
-  /** Retries on 429, 502-504 and network errors (never on a POST that may have taken effect). */
+  /**
+   * Retries on 429, 502-504 and network errors (never on a POST that may have taken effect). An upstream that asks
+   * for a pause of more than a minute (Retry-After) is not retried: its answer comes back at once.
+   */
   retries?: number
 }
 
@@ -113,10 +116,13 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
     }
     const text = await res.text()
     if ((res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504) && attempt < retries) {
-      const retryAfter = Number(res.headers.get('retry-after'))
-      await sleep(Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : backoff(attempt))
-      attempt++
-      continue
+      const wait = retryWaitMs(res.headers.get('retry-after'), attempt)
+      if (wait !== null) {
+        await sleep(wait)
+        attempt++
+        continue
+      }
+      // The upstream asked for more than a minute: not waited for and not asked again, the caller gets this answer.
     }
     let json: unknown
     try {
@@ -126,6 +132,26 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
     }
     return { status: res.status, json: json as T }
   }
+}
+
+/** The longest pause an upstream's Retry-After is given, like the Telegram sender's. */
+export const MAX_RETRY_AFTER_S = 60
+
+/**
+ * The pause before asking again after a 429 or a 502 to 504, or null when this read ends here.
+ * The upstream's Retry-After (seconds, or an HTTP date) is kept up to a minute and is never shorter than our own
+ * back-off. One that asks for more ends the read with its answer, as when the retries are used up: a read sits in a
+ * tick, under an agent's lock or behind the dashboard, and a day's sleep there parks the agent with no word to the
+ * owner (ATTACK-4). A value that is no number and no date counts as none.
+ */
+export function retryWaitMs(retryAfter: string | null, attempt: number, now = Date.now()): number | null {
+  const own = backoff(attempt)
+  const header = retryAfter?.trim() ?? ''
+  if (!header) return own
+  const askedS = /^\d+(\.\d+)?$/.test(header) ? Number(header) : (Date.parse(header) - now) / 1000
+  if (Number.isNaN(askedS)) return own
+  if (askedS > MAX_RETRY_AFTER_S) return null
+  return Math.max(own, Math.ceil(askedS * 1000))
 }
 
 function backoff(attempt: number): number {
