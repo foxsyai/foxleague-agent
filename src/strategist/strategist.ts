@@ -25,34 +25,119 @@ export interface Plan {
   stopReason: string | null
 }
 
+/** List prices per million tokens: input, output and cache read. A one-hour cache write costs twice the input. */
+export type Price = [number, number, number]
+
 /**
- * Models the owner can pick in the web UI, with list prices per million tokens (input, output,
- * cache read); 1-hour cache writes cost 2x input. All take adaptive thinking and every effort level.
- * Listed from the least to the most capable, like the efforts (Opus 5.5 is newer, stronger and cheaper than Opus 5;
- * Sonnet 5.5 is the newer Sonnet at Sonnet 5's price with cheaper cache reads; Fable 5.2 is newer, stronger and
- * cheaper than Fable 5.1).
+ * What a model costs. `long` is a second rate card for a request whose prompt is longer than `over` tokens: every
+ * price of that request then comes from it.
  */
-export const MODELS: Record<string, { label: string; price: [number, number, number] }> = {
-  'claude-sonnet-5': { label: 'Sonnet 5', price: [2, 10, 0.2] },
-  'claude-sonnet-5-5': { label: 'Sonnet 5.5', price: [2, 10, 0.1] },
-  'claude-opus-5': { label: 'Opus 5', price: [5, 25, 0.5] },
-  'claude-opus-5-5': { label: 'Opus 5.5', price: [4, 20, 0.2] },
-  'claude-fable-5-1': { label: 'Fable 5.1', price: [10, 50, 0.25] },
-  'claude-fable-5-2': { label: 'Fable 5.2', price: [8, 40, 0.2] },
+export interface Rates {
+  price: Price
+  long?: { over: number; price: Price }
+}
+
+/**
+ * The price of every model a request can be served by: the four the owner chooses from, and the models Anthropic's
+ * server-side fallback re-runs a declined request on (the response names the one that served it, see `usd`): Opus 4.8
+ * and Opus 5 for Fable and Opus, Sonnet 5 for Sonnet 5.5; Fable 5.1 for a request that still names it. A model that
+ * is not here is booked at the price of the model that was asked for, and the log says so.
+ *
+ * Claude Haiku 5.5 has two rate cards, chosen by the length of the prompt: $0.10 in and $0.50 out when the prompt is
+ * 100,000 tokens or fewer, $0.50 and $2.50 when it is longer; a cache read costs 0.1 times the input price of the
+ * card in force. "The prompt" is taken here as every input token of the request: the uncached input, the cache reads
+ * and the cache writes. That reading comes from Anthropic's wording ("when the prompt is 100K tokens or fewer"), not
+ * from an invoice: compare the first days on Haiku with the Anthropic console.
+ */
+export const PRICES: Record<string, Rates> = {
+  'claude-haiku-5-5': { price: [0.1, 0.5, 0.01], long: { over: 100_000, price: [0.5, 2.5, 0.05] } },
+  'claude-sonnet-5': { price: [2, 10, 0.2] },
+  'claude-sonnet-5-5': { price: [2, 10, 0.1] },
+  'claude-opus-4-8': { price: [5, 25, 0.5] },
+  'claude-opus-5': { price: [5, 25, 0.5] },
+  'claude-opus-5-5': { price: [4, 20, 0.2] },
+  'claude-fable-5-1': { price: [10, 50, 0.25] },
+  'claude-fable-5-2': { price: [8, 40, 0.2] },
+}
+
+/**
+ * The models the owner can pick in the web UI, from the least to the most capable, like the efforts (the owner's list
+ * of 2026-11-11). All take adaptive thinking and every effort level. Haiku 5.5 is the cheapest, for trying things
+ * out: how well it plays this game has not been measured.
+ */
+export const MODELS: Record<string, { label: string } & Rates> = {
+  'claude-haiku-5-5': { label: 'Haiku 5.5', ...PRICES['claude-haiku-5-5']! },
+  'claude-sonnet-5-5': { label: 'Sonnet 5.5', ...PRICES['claude-sonnet-5-5']! },
+  'claude-opus-5-5': { label: 'Opus 5.5', ...PRICES['claude-opus-5-5']! },
+  'claude-fable-5-2': { label: 'Fable 5.2', ...PRICES['claude-fable-5-2']! },
 }
 /** MODELS is a plain object: "constructor" or "toString" would pass a bare lookup, so ask for an own key. */
 export const isKnownModel = (id: string): boolean => Object.hasOwn(MODELS, id)
 
+/**
+ * The models that left the list on 2026-11-11, each with its successor: the newer model of the same tier, which costs
+ * the same or less on every price. An install that saved one of them (the dashboard's choice in the database, or
+ * AGENT_MODEL in the env file) runs the successor: never a dearer model and never a weaker tier.
+ */
+export const SUCCESSORS: Record<string, string> = {
+  'claude-sonnet-5': 'claude-sonnet-5-5',
+  'claude-opus-5': 'claude-opus-5-5',
+  'claude-fable-5-1': 'claude-fable-5-2',
+}
+
+/** The model that runs when this id is asked for: the successor of one that left the list, else the id itself. */
+export const currentModel = (id: string): string => (Object.hasOwn(SUCCESSORS, id) ? SUCCESSORS[id]! : id)
+
+/** Every rate card of a model with a price, the usual one first; none for a model without a price. */
+export function rateCards(id: string): Price[] {
+  if (!Object.hasOwn(PRICES, id)) return []
+  const r = PRICES[id]!
+  return r.long ? [r.price, r.long.price] : [r.price]
+}
+
+/** The lowest and the highest of each price over a model's rate cards (the password rule compares them); null without a price. */
+export function priceRange(id: string): { cheapest: Price; dearest: Price } | null {
+  const cards = rateCards(id)
+  if (!cards.length) return null
+  const each = (pick: (...n: number[]) => number): Price => [pick(...cards.map(c => c[0])), pick(...cards.map(c => c[1])), pick(...cards.map(c => c[2]))]
+  return { cheapest: each(Math.min), dearest: each(Math.max) }
+}
+
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
 
-/** Models behind safety classifiers: a declined request is re-run server-side on Anthropic's recommended fallback. */
+/**
+ * Models behind safety classifiers whose declined request is re-run server-side on Anthropic's recommended fallback.
+ * Claude Haiku 5.5 is not one of them: it has no server-side fallback, so its refusal is the answer.
+ */
 const WITH_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-fable-5-2'])
 
-/** The web UI's choice (kv), else AGENT_MODEL / AGENT_MODEL_EFFORT from the env. */
-export function strategistChoice(store: Store, cfg: Config): { model: string; effort: Effort } {
-  const picked = store.getKv('strategist_model')
-  const model = picked && isKnownModel(picked) ? picked : cfg.model
+/** The env file's model that left the list is said once per run, not at every read. */
+const movedSaid = new Set<string>()
+
+/**
+ * The web UI's choice (kv), else AGENT_MODEL / AGENT_MODEL_EFFORT from the env. A model that left the list becomes its
+ * successor here, where the choice is read. A saved choice is saved again as the successor, so it happens once and
+ * is said once, in the log and in the activity; the env file cannot be rewritten, so its one is said once per run.
+ */
+export function strategistChoice(store: Store, cfg: Config, say?: (text: string) => void): { model: string; effort: Effort } {
+  const tell = say ?? ((text: string) => console.log(`[${new Date().toISOString()}] ${text}`))
+  const moved = (old: string, where: string): string => `strategist: ${old} is no longer on the list: the strategist now runs its successor ${currentModel(old)}${where}`
+  let picked = store.getKv('strategist_model')
+  if (picked && currentModel(picked) !== picked) {
+    const text = moved(picked, ' (the choice saved in the dashboard)')
+    picked = currentModel(picked)
+    store.setKv('strategist_model', picked)
+    store.log({ agentIndex: null, kind: 'control', status: 'info', summary: text })
+    tell(text)
+  }
+  const fromEnv = currentModel(cfg.model)
+  const model = picked && isKnownModel(picked) ? picked : fromEnv
+  // A caller that listens (a test) hears it every time; the log hears it once per run.
+  if (model === fromEnv && fromEnv !== cfg.model && (say || !movedSaid.has(cfg.model))) {
+    if (!say) movedSaid.add(cfg.model)
+    tell(moved(cfg.model, ` (AGENT_MODEL in the env file still names ${cfg.model})`))
+  }
   const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? 'medium'
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
 }
@@ -83,16 +168,43 @@ const SUBMIT_PLAN: Anthropic.Tool = {
 
 type Counted = { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }
 
-function cost(model: string, u: Counted): number {
-  const [inP, outP, readP] = MODELS[model]?.price ?? [2, 10, 0.2]
-  return (u.input_tokens * inP + (u.cache_read_input_tokens ?? 0) * readP + (u.cache_creation_input_tokens ?? 0) * inP * 2 + u.output_tokens * outP) / 1e6
+/** Where `usd` says that it booked a model without a price: the service's log, unless the caller collects it. */
+type Say = (text: string) => void
+const toLog: Say = text => console.warn(`[${new Date().toISOString()}] ${text}`)
+
+/**
+ * The rates one attempt is booked at. A model without a price (a fallback this version has never heard of) is booked
+ * at the price of the model that was asked for; when that one has no price either (AGENT_MODEL names an unknown
+ * model), at the dearest price known. Never free and never an error, and the log says which. Before 2026-11-11 such
+ * a model was booked at Sonnet 5's price without a word, under its real price for an Opus 4.8 fallback.
+ */
+function ratesFor(model: string, asked: string, say: Say): Rates {
+  if (Object.hasOwn(PRICES, model)) return PRICES[model]!
+  if (Object.hasOwn(PRICES, asked)) {
+    say(`model cost: no price is known for the model ${model}: its tokens are booked at the price of ${asked}, the model that was asked for`)
+    return PRICES[asked]!
+  }
+  const dearest = Object.values(PRICES).reduce((a, b) => (b.price[0] > a.price[0] ? b : a))
+  say(`model cost: no price is known for the model ${model}: its tokens are booked at the dearest price known ($${dearest.price[0]} in and $${dearest.price[1]} out per million tokens)`)
+  return { price: dearest.price }
+}
+
+/** One attempt at its model's price; with two rate cards, on the one for the length of this attempt's prompt. */
+function cost(model: string, asked: string, u: Counted, say: Say): number {
+  const rates = ratesFor(model, asked, say)
+  const read = u.cache_read_input_tokens ?? 0
+  const written = u.cache_creation_input_tokens ?? 0
+  // The prompt: every input token of the request (PRICES says where this reading comes from).
+  const prompt = u.input_tokens + read + written
+  const [inP, outP, readP] = rates.long && prompt > rates.long.over ? rates.long.price : rates.price
+  return (u.input_tokens * inP + read * readP + written * inP * 2 + u.output_tokens * outP) / 1e6
 }
 
 /** USD of a response: per attempt when a fallback ran (each at its own model's price), else the top-level usage. */
-export function usd(model: string, u: Anthropic.Beta.BetaUsage): number {
+export function usd(model: string, u: Anthropic.Beta.BetaUsage, say: Say = toLog): number {
   const attempts = (u.iterations ?? []).filter(i => i.type === 'message' || i.type === 'fallback_message')
-  if (!attempts.length) return cost(model, u)
-  return attempts.reduce((s, i) => s + cost(('model' in i && i.model) || model, i), 0)
+  if (!attempts.length) return cost(model, model, u, say)
+  return attempts.reduce((s, i) => s + cost(('model' in i && i.model) || model, model, i, say), 0)
 }
 
 const PROPOSE_STRATEGY: Anthropic.Beta.BetaTool = {

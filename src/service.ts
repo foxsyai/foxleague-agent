@@ -29,7 +29,7 @@ import { budgetView } from './executor/budget.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
-import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { MODELS, Strategist, currentModel, describeModelError, isKnownModel, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
 import { creditRefunds } from './executor/refunds.ts'
@@ -414,11 +414,11 @@ export class Service {
   /** The strategist's model and effort for every agent, from the next cycle on (same API key). */
   setStrategist(model: string, effort: Effort, by: string): string {
     if (!this.strategist) throw new Error('the strategist is off (no ANTHROPIC_API_KEY)')
-    if (!MODELS[model]) throw new Error(`unknown model ${model}`)
+    if (!isKnownModel(model)) throw new Error(`unknown model ${model}`)
     this.store.setKv('strategist_model', model)
     this.store.setKv('strategist_effort', effort)
     this.strategist.configure(model, effort)
-    const text = `strategist ${MODELS[model].label}, effort ${effort}, from the next cycle (${by})`
+    const text = `strategist ${MODELS[model]!.label}, effort ${effort}, from the next cycle (${by})`
     this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: text })
     this.notify(text)
     return text
@@ -778,7 +778,7 @@ export class Service {
   testKeys(): Promise<KeyCheck[]> {
     return checkKeys({
       anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim(),
-      model: this.strategist?.model ?? this.cfg.model,
+      model: this.strategist?.model ?? currentModel(this.cfg.model),
       telegramToken: process.env.TELEGRAM_BOT_TOKEN?.trim(),
       telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim(),
       binanceKey: process.env.BINANCE_API_KEY?.trim(),

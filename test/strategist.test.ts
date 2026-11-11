@@ -12,11 +12,11 @@ import { setup, snapshot } from './fixtures.ts'
 
 test('strategist choice: the web UI pick wins over the env, unknown effort falls back to medium', () => {
   const store = new Store('', ':memory:')
-  const cfg = { model: 'claude-sonnet-5' } as Config
+  const cfg = { model: 'claude-sonnet-5-5' } as Config
   const prev = process.env.AGENT_MODEL_EFFORT
   try {
     process.env.AGENT_MODEL_EFFORT = 'high'
-    assert.deepEqual(strategistChoice(store, cfg), { model: 'claude-sonnet-5', effort: 'high' })
+    assert.deepEqual(strategistChoice(store, cfg), { model: 'claude-sonnet-5-5', effort: 'high' })
     store.setKv('strategist_model', 'claude-opus-5-5')
     store.setKv('strategist_effort', 'xhigh')
     assert.deepEqual(strategistChoice(store, cfg), { model: 'claude-opus-5-5', effort: 'xhigh' })
@@ -66,7 +66,8 @@ test('server-side fallback only for classifier models, dropped for good if the A
   s.configure('claude-sonnet-5-5', 'high')
   await create({ max_tokens: 10, messages: [] })
   assert.equal(calls.at(-1)!.fallbacks, 'default', 'Sonnet 5.5 takes the default fallback form')
-  assert.deepEqual(Object.keys(MODELS), ['claude-sonnet-5', 'claude-sonnet-5-5', 'claude-opus-5', 'claude-opus-5-5', 'claude-fable-5-1', 'claude-fable-5-2'], 'least to most capable')
+  // The owner's list of 2026-11-11: four models to choose from (test/model-list.test.ts has the prices of the others).
+  assert.deepEqual(Object.keys(MODELS), ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5', 'claude-fable-5-2'], 'least to most capable')
   // Fable 5.2 (Anthropic, 9 November 2026): $8 in, $40 out and $0.20 for cache reads per million tokens, under the
   // same safety classifiers as Fable 5.1, so a declined plan is re-run on Anthropic's fallback.
   assert.deepEqual(MODELS['claude-fable-5-2'], { label: 'Fable 5.2', price: [8, 40, 0.2] })

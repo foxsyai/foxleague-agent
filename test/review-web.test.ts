@@ -68,12 +68,15 @@ test('B1 cli dry-run N and plan N never add an agent: an unknown N is refused an
 
 test('B2 a dearer model or a higher effort for every agent needs the password; a cheaper one is one click', async () => {
   const { svc, server, password, post } = await webService('sk-ant-not-a-real-key-for-this-test-only')
-  svc.setStrategist('claude-sonnet-5', 'medium', 'test')
+  // The owner's list of 2026-11-11 (Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5.2): the same checks over the four.
+  const { MODELS, PRICES } = await import('../src/strategist/strategist.ts')
+  const { raisesAiSpend } = await import('../src/web/server.ts')
   try {
-    let res = await post('/api/strategist', { model: 'claude-fable-5-1', effort: 'max' })
+    svc.setStrategist('claude-sonnet-5-5', 'medium', 'test')
+    let res = await post('/api/strategist', { model: 'claude-fable-5-2', effort: 'max' })
     assert.equal(res.status, 403, 'a dearer model was switched on without the password')
-    assert.equal(svc.strategist?.model, 'claude-sonnet-5')
-    res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'high' })
+    assert.equal(svc.strategist?.model, 'claude-sonnet-5-5')
+    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'high' })
     assert.equal(res.status, 403, 'a higher effort was switched on without the password')
     assert.equal(svc.strategist?.effort, 'medium')
     res = await post('/api/strategist', { model: 'claude-opus-5-5', effort: 'medium', password: 'wrong' })
@@ -82,16 +85,27 @@ test('B2 a dearer model or a higher effort for every agent needs the password; a
     assert.equal(res.status, 200, await res.text())
     assert.equal(svc.strategist?.model, 'claude-opus-5-5')
     assert.equal(svc.strategist?.effort, 'high')
-    // Cheaper or the same price, and less effort: no password.
-    res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'low' })
+    // Cheaper on every price, and less effort: no password.
+    res = await post('/api/strategist', { model: 'claude-haiku-5-5', effort: 'low' })
     assert.equal(res.status, 200, await res.text())
-    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low' })
+    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low', password })
     assert.equal(res.status, 200, await res.text())
     assert.equal(svc.strategist?.model, 'claude-sonnet-5-5')
-    // R61A-1: every price counts for the password, the cache read too. Sonnet 5 reads from the cache at $0.20 where
-    // Sonnet 5.5 pays $0.10, so going back to it is a raise; Fable 5.2 is dearer than every Sonnet and Opus.
+    // R61A-1: every price counts for the password, the cache read too. Sonnet 5 read from the cache at $0.20 where
+    // Sonnet 5.5 pays $0.10, so going back to it was a raise. Sonnet 5 left the list (it is refused as unknown), so
+    // the rule is shown on a model with Sonnet 5's prices; Fable 5.2 is dearer than every Sonnet and Opus.
     res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'low' })
-    assert.equal(res.status, 403, 'Sonnet 5.5 to Sonnet 5 raises the cache read price')
+    assert.equal(res.status, 400, 'Sonnet 5 is no longer offered')
+    PRICES['test-dearer-cache-read'] = { price: [2, 10, 0.2] }
+    MODELS['test-dearer-cache-read'] = { label: 'Test', price: [2, 10, 0.2] }
+    try {
+      assert.equal(raisesAiSpend({ model: 'claude-sonnet-5-5', effort: 'low' }, { model: 'test-dearer-cache-read', effort: 'low' }), true, 'a dearer cache read alone raises the price')
+      res = await post('/api/strategist', { model: 'test-dearer-cache-read', effort: 'low' })
+      assert.equal(res.status, 403, 'a model that only reads the cache at a higher price was switched on without the password')
+    } finally {
+      delete PRICES['test-dearer-cache-read']
+      delete MODELS['test-dearer-cache-read']
+    }
     res = await post('/api/strategist', { model: 'claude-fable-5-2', effort: 'low' })
     assert.equal(res.status, 403, 'Fable 5.2 was switched on without the password')
     assert.equal(svc.strategist?.model, 'claude-sonnet-5-5')

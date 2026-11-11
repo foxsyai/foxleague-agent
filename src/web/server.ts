@@ -11,7 +11,7 @@ import type { Service } from '../service.ts'
 import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
-import { EFFORTS, MODELS, isKnownModel, type Effort } from '../strategist/strategist.ts'
+import { EFFORTS, MODELS, currentModel, isKnownModel, priceRange, type Effort } from '../strategist/strategist.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
 import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
@@ -163,13 +163,20 @@ export function raisesLimit(current: AgentSettings, patch: Partial<AgentSettings
 }
 
 /**
- * A dearer model (any of its list prices higher) or a higher effort: the AI spend has no cap of its own, so like a
- * shorter tick it needs the password. A model without a known price counts as dearer.
+ * A dearer model or a higher effort: the AI spend has no cap of its own, so like a shorter tick it needs the password.
+ * Another model is dearer when any of its list prices (input, output, cache read) can be higher: the highest of each
+ * over its rate cards against the lowest of the current model's (Haiku 5.5 has two cards, and two models do not count
+ * one prompt as the same number of tokens, so no card is assumed to stay in force). The same model keeps its prices:
+ * only the effort decides. A current model that left the list counts as its successor, the one that really runs; one
+ * without a known price counts as dearer.
  */
 export function raisesAiSpend(current: { model: string; effort: string }, next: { model: string; effort: Effort }): boolean {
-  const was = isKnownModel(current.model) ? MODELS[current.model]!.price : null
-  const will = MODELS[next.model]!.price
-  if (!was || will.some((p, i) => p > was[i]!)) return true
+  const running = currentModel(current.model)
+  if (running !== next.model) {
+    const was = priceRange(running)
+    const will = priceRange(next.model)
+    if (!was || !will || will.dearest.some((p, i) => p > was.cheapest[i]!)) return true
+  }
   return EFFORTS.indexOf(next.effort) > (EFFORTS as readonly string[]).indexOf(current.effort)
 }
 
@@ -204,7 +211,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         liveEnabled: service.executor.liveEnabled,
         model: service.strategist ? service.strategist.model : null,
         effort: service.strategist ? service.strategist.effort : null,
-        models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price })),
+        // Each with the lowest and the highest of its prices over its rate cards: the page asks for the password by the same rule as raisesAiSpend.
+        models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price, ...(m.long ? { long: m.long } : {}), ...priceRange(id)! })),
         efforts: EFFORTS,
         telegram: Boolean(service.telegram),
         // The welcome guide's checklist: which keys are set (never their values) and whether it was hidden.

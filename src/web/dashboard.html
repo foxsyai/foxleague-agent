@@ -484,10 +484,16 @@ function renderHeader() {
   $('kSpentS').textContent = S.agents.every(b => b.effectiveDryRun) ? 'simulated (dry-run ledger)' : 'live and dry-run ledgers'
   const sm = $('sModel'), se = $('sEffort')
   if (!sm.options.length) {
+    // Not a model yet: greyed out, with no id, so it can be neither picked nor sent (the server takes only its own list).
+    sm.append(el('option', { value: '', disabled: true, text: 'Local model (free, coming soon)' }))
     for (const m of i.models) sm.append(el('option', { value: m.id, text: m.label }))
     for (const e of i.efforts) se.append(el('option', { value: e, text: 'effort ' + e }))
   }
-  if (!stratDirty) { sm.value = i.model || ''; se.value = i.effort || 'medium' }
+  if (!stratDirty) {
+    sm.value = i.model || ''; se.value = i.effort || 'medium'
+    // No strategist, or a model the list does not have: nothing is shown as picked, never the greyed-out entry.
+    if (!i.models.some(m => m.id === i.model)) sm.selectedIndex = -1
+  }
   sm.disabled = se.disabled = !i.model
   renderStrat()
 }
@@ -497,11 +503,13 @@ function renderStrat() {
   const i = S.instance
   if (!i.model) { $('stratApply').hidden = true; $('kModelS').textContent = 'off (no ANTHROPIC_API_KEY)'; return }
   const pick = i.models.find(m => m.id === $('sModel').value), cur = i.models.find(m => m.id === i.model)
-  const changed = $('sModel').value !== i.model || $('sEffort').value !== i.effort
+  const changed = Boolean(pick) && ($('sModel').value !== i.model || $('sEffort').value !== i.effort)
   const ratio = pick && cur ? pick.price[0] / cur.price[0] : 1
   $('stratApply').hidden = !changed
-  $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' : i.model)
-    + (changed && ratio !== 1 ? ' · ' + (Math.round(ratio * 10) / 10) + 'x the current price' : '')
+  // A model with a second rate card (Haiku 5.5) shows both: which one counts depends on the length of each request.
+  const long = pick && pick.long ? ' ($' + pick.long.price[0] + ' / $' + pick.long.price[1] + ' when the prompt is over ' + pick.long.over.toLocaleString('en-US') + ' tokens)' : ''
+  $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' + long : i.model)
+    + (changed && ratio !== 1 ? ' · ' + (ratio < 0.95 ? Math.round(ratio * 100) / 100 : Math.round(ratio * 10) / 10) + 'x the current price' : '')
     + ' · spent ' + usd(i.modelUsdToday) + ' today, ' + usd(i.modelUsdYesterday) + ' yesterday, ' + usd(i.modelUsdTotal) + ' in all'
 }
 
@@ -888,17 +896,22 @@ $('modeBtn').onclick = async () => {
   if (r) act('Live', () => api('POST', '/api/mode', { live: true, confirm: 'GO LIVE', password: r.password }))
 }
 $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; renderStrat() }
-// A dearer model (any list price higher) or more effort raises the AI spend, which has no cap: the server asks for
-// the password then (raisesAiSpend in server.ts). A cheaper model or less effort is one click.
+// A dearer model or more effort raises the AI spend, which has no cap: the server asks for the password then
+// (raisesAiSpend in server.ts, the same rule). Another model is dearer when any of its prices can be higher: the
+// highest over its rate cards against the lowest of the model in use. A cheaper model or less effort is one click.
 function aiCostsMore(model, effort) {
   const i = S.instance, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
-  return !cur || !pick || pick.price.some((p, k) => p > cur.price[k]) || i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
+  if (!cur || !pick) return true
+  if (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) return true
+  return i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
 }
 const AI_RAISE_TEXT = 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
 // password: already asked for (the level dialog asks once for the settings and the AI). Answers whether the AI was
 // switched: false when the password was not given or the server refused it (a mistyped one is a 403).
 $('stratApply').onclick = async (e, password) => {
   const body = { model: $('sModel').value, effort: $('sEffort').value }
+  // Only a model of the server's list is sent: never the greyed-out local model, never an empty pick.
+  if (!S.instance.models.some(m => m.id === body.model)) { toast('Pick a model from the list', true); return false }
   if (aiCostsMore(body.model, body.effort)) {
     if (!password) password = await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
     if (!password) { toast('Strategist unchanged', true); return false }
@@ -938,7 +951,8 @@ const TIPS = {
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
-    <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well; <b>Sonnet 5.5</b> is the newer Sonnet at the same price, with cheaper reads of what it has cached. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b> costs 5x; <b>Fable 5.2</b>, the newest and most capable, about 4x.</p>
+    <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> is the cheapest, for trying things out: how well it plays this game has not been measured yet. <b>Sonnet 5.5</b> is the default and handles this game well. <b>Opus 5.5</b> is stronger and costs about 2x as much; <b>Fable 5.2</b>, the most capable, about 4x.</p>
+    <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
     <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
@@ -1360,7 +1374,7 @@ const GUIDE = [
       ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $1 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.15 a plan): the game manual the AI reads is cached for an hour only when another plan comes within that hour, so a lone agent sends it at the plain price. Agents that plan within the same hour share the cache, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more; you pick them in the Strategist box and in Settings.' },
+    note: 'About $1 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours, about $0.15 a plan): the game manual the AI reads is cached for an hour only when another plan comes within that hour, so a lone agent sends it at the plain price. Agents that plan within the same hour share the cache, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more; you pick them in the Strategist box and in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [

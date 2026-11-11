@@ -140,7 +140,7 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
 
 test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.md and README say what the code does', () => {
   // Since 2026-10-24 the manual is cached only when another call is due within the hour (test/cache-when-reused.test.ts).
-  const COST = /About \$1 a day for a single agent with the default model, effort and tick \(Sonnet 5 at medium, a plan every 2 hours, about \$0\.15 a plan\): the game manual the AI reads is cached for an hour only when another plan comes within that hour/i
+  const COST = /About \$1 a day for a single agent with the default model, effort and tick \(Sonnet 5\.5 at medium, a plan every 2 hours, about \$0\.15 a plan\): the game manual the AI reads is cached for an hour only when another plan comes within that hour/i
   for (const f of [`${DOCS}/help/costs.md`, `${DOCS}/start/keys.mdx`, 'INSTALL.md', 'README.md']) {
     assert.doesNotMatch(read(f), /\$0\.20 to \$0\.50/, `C1 ${f} keeps the old AI cost`)
     assert.match(read(f), COST, `C1 ${f}`)
