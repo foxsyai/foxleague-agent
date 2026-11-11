@@ -119,6 +119,8 @@ export interface FoxConfig {
   /** FOXSY per day of that wait bought off (75 on mainnet, down to a 3-day floor). */
   fusion_cooldown_waiver_price_per_day?: number
   auction_enabled: boolean
+  /** The percent a bid must stand over the top bid (the players contract's setting, 1 to 50; 5 when unset). */
+  auction_min_increment_percent?: number
   marketplace_min_list_price_foxsy?: number
   transfer_cooldown_hours?: number
   league_thresholds?: Record<string, number>

@@ -69,7 +69,7 @@ card. So a Steady agent can take a Legendary listed at 500 FOXSY, and Zeus can b
 Raise a level's max bid and it can take a dearer card.
 
 A bid is the whole price of the card, not an amount added to its start. The seller sets the reserve (at least 500
-FOXSY); the agent bids the reserve or 5 percent over the top bid, and if it is outbid it may bid once more (two bids
+FOXSY); the agent bids the reserve or the smallest raise FoxLeague accepts over the top bid (for example 5 percent), and if it is outbid it may bid once more (two bids
 on one auction at most). Every bid stays at or under the lowest of three numbers: the max bid, your limit for the card's
 rarity and the cost of building the card.
 

@@ -267,6 +267,18 @@ export const MAX_1V1_PER_OPPONENT_WEEK = 2
 export const MAX_BIDS_PER_AUCTION = 2
 
 /**
+ * The percent a bid must stand over the top bid, as the players contract asks it (player_nft.rs: amount >= top bid x
+ * (100 + percent) / 100; the owner sets it from 1 to 50, 5 when unset) and /api/config serves it
+ * (auction_min_increment_percent). An answer without it is the contract's own default; one that is no whole number
+ * from 1 to 50 is unread (null): a raise under the real step reverts and loses its gas (audit 2026-11-11, INTEG-3).
+ */
+export function auctionMinRaisePercent(cfg: Pick<FoxConfig, 'auction_min_increment_percent'> | null | undefined): number | null {
+  const served = cfg?.auction_min_increment_percent
+  if (served === undefined) return 5
+  return typeof served === 'number' && Number.isInteger(served) && served >= 1 && served <= 50 ? served : null
+}
+
+/**
  * What a card of a rarity costs from Common packs and fusion fees alone, at FoxLeague's live prices: 3^n Commons
  * at a fifth of a pack each plus every fusion fee on the way up (Rare 5,000, Epic 15,400, Legendary 47,000 in
  * October 2026). A bid above it pays more than building the card; null when the prices are unknown.
@@ -1458,9 +1470,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // leaves the agent a whole-FOXSY bid just under the contract's minimum.
       const ceilWhole = (x: bigint) => Number((x + 10n ** 18n - 1n) / 10n ** 18n)
       const top = Number(au.highestBid / 10n ** 18n)
-      const minAtomic = au.highestBid === 0n ? au.minPrice : [(au.highestBid * 105n + 99n) / 100n, au.highestBid + 1n].reduce((x, y) => (x > y ? x : y))
+      // The raise over a top bid is the contract's setting, served by FoxLeague: never a number of the agent's own.
+      const raise = auctionMinRaisePercent(cfg)
+      if (au.highestBid !== 0n && raise === null) return refuse('the minimum raise over a top bid could not be read: not bidding blind')
+      const minAtomic = au.highestBid === 0n ? au.minPrice : [(au.highestBid * BigInt(100 + raise!) + 99n) / 100n, au.highestBid + 1n].reduce((x, y) => (x > y ? x : y))
       const min = ceilWhole(minAtomic)
-      if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + 5 percent` : 'the reserve'})`)
+      if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + ${raise} percent` : 'the reserve'})`)
       if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
       // Its limit and the build cost both hang on the rarity: unknown, no bid (agent review of PR #21).
       if (!ctx.cardRarity || !Object.hasOwn(RARITY_LEVEL, ctx.cardRarity)) return refuse(`the rarity of #${a.nonce} could not be read: not bidding blind`)
