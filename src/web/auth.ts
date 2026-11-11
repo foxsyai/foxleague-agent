@@ -1,5 +1,5 @@
-// Web UI authentication, the same scheme as the foxsy-trading dashboard:
-// scrypt password hashes in the same "scrypt$salt$hash" format, HMAC-signed session cookies with
+// Web UI authentication:
+// scrypt password hashes in the "scrypt$salt$hash" format, HMAC-signed session cookies with
 // an expiry, constant-time comparisons, per-IP exponential lockout plus a global burst limiter.
 // Standard library only.
 

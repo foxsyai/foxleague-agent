@@ -13,7 +13,7 @@ test('scrypt hashes verify, reject wrong passwords and malformed hashes', () => 
   assert.equal(verifyPassword('x', 'garbage'), false)
 })
 
-test('hash format is interchangeable with the foxsy-trading Python scheme', () => {
+test('hash format is interchangeable with the same scheme written in Python', () => {
   let py: string
   try {
     py = execFileSync('python3', ['-c', "import hashlib,base64;s=b'0123456789abcdef';d=hashlib.scrypt(b'pw-from-python',salt=s,n=2**15,r=8,p=1,dklen=32,maxmem=128*2**15*8*2);print('scrypt$'+base64.b64encode(s).decode()+'$'+base64.b64encode(d).decode())"]).toString().trim()
