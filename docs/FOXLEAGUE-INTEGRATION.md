@@ -1347,7 +1347,9 @@ web app caps one purchase at 25 slots; the backend has no upper bound
 rolling 7 days; platform budget 500 cards (100 packs) per epoch on chain; positions drawn 2/6/6/4 like a
 starter squad (`backend/src/routes/shop_pack.rs:25-32`; `deploy/mainnet/chain-config.mainnet.env:50-52`).
 Check `/api/shop/status` `common_pack_available`, `common_pack_remaining_this_week` and
-`common_pack_epoch_remaining` before paying. Cards are delivered by the game server a minute or so later
+`common_pack_epoch_remaining` before paying (the agent buys no pack unless `common_pack_remaining_this_week` reads as a
+number above 0: a status that failed or an answer without it is unread, never "some left"; its plan is told the
+number). Cards are delivered by the game server a minute or so later
 (`distributePack`), with 0 competitive matches and no cooldown; a failed delivery is refunded
 (`shop_pack.rs:647-745`). Refusals (the settled payment is refunded):
 `The Common pack is not on sale right now.`,

@@ -267,6 +267,9 @@ export function renderDigest(s: AgentSnapshot): string {
     const t = a.shop?.training
     if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid sessions used today ${Number.isFinite(t.used_today) && Number.isFinite(t.daily_free) ? paidSessionsToday(t) : 'unknown'}, paid slots bought in 24 h ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
     out.push(boosterLine(a.shop, s.takenAt))
+    // FoxLeague's own count of the wallet's Common packs; unread, no pack is bought (audit 2026-11-11, INTEG-6).
+    const packs = a.shop?.common_pack_remaining_this_week
+    out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)

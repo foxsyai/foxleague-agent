@@ -1412,7 +1412,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         }
         case 'common_pack': {
           if (!cfg.common_pack_available) return refuse(`Common pack unavailable${cfg.common_pack_unavailable_reason ? `: ${cfg.common_pack_unavailable_reason}` : ''}`)
-          if (s.auth?.shop?.common_pack_remaining_this_week === 0) return refuse('weekly Common pack quota used')
+          // FoxLeague's own count for the wallet (GET /api/shop/status; it refuses the confirm of a pack over the quota
+          // after the payment settled). A status that failed or an answer without the number is unread, never "some
+          // left": the agent's own 7-day count below knows nothing of packs bought in the app (audit 2026-11-11, INTEG-6).
+          const left = s.auth?.shop?.common_pack_remaining_this_week
+          if (typeof left !== 'number' || !Number.isFinite(left)) return refuse('the Common packs left this week could not be read (the shop status or its weekly quota): not buying blind')
+          if (left <= 0) return refuse('weekly Common pack quota used')
           // The level's count (owner, 2026-11-06), from the agent's own purchases of the last 7 days.
           const perWeek = ctx.settings.packsPerWeek
           if (perWeek <= 0) return refuse('no Common packs at this level (Packs a week is 0)')
