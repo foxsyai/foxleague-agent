@@ -179,9 +179,12 @@ export function parseAction(raw: unknown): Action {
     }
     case 'create_tournament': {
       const format = oneOf(o, 'format', ['knockout', 'round_robin', 'swiss', 'groups_knockout'] as const)
+      const title = str(o, 'title', /^[\p{L}\p{N} .,!?'&()-]{3,60}$/u, '3-60 plain characters')
+      // Fair Play, as for a team name: every player reads the title under the owner's team (ATTACK-7).
+      if (IMPERSONATION.test(title)) throw new ParseError('title must not imitate FoxLeague, FOXSY or its staff')
       return {
         type: o.type,
-        title: str(o, 'title', /^[\p{L}\p{N} .,!?'&()-]{3,60}$/u, '3-60 plain characters'),
+        title,
         format,
         tier: oneOf(o, 'tier', ['bronze', 'silver', 'gold'] as const),
         max_teams: int(o, 'max_teams', 3, 64),
