@@ -15,7 +15,8 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 git clone -q --no-hardlinks "$REPO" "$TMP/fb"
 git -C "$TMP/fb" checkout -q "$COMMIT"
-(cd "$TMP/fb/site" && npm ci --no-audit --no-fund --loglevel=error && npm run build >/dev/null)
+# --ignore-scripts: no install script of the site's dependencies runs on this computer (CI builds the same way).
+(cd "$TMP/fb/site" && npm ci --ignore-scripts --no-audit --no-fund --loglevel=error && npm run build >/dev/null)
 DIST=$TMP/fb/site/dist
 [ -f "$DIST/index.html" ] && [ -f "$DIST/404.html" ] || { echo "The build has no index.html or 404.html: nothing shipped." >&2; exit 1; }
 if find "$DIST" \( -iname '*.pem' -o -iname '.env*' -o -iname '*.key' -o -iname 'secrets*' \) | grep -q .; then
