@@ -5,7 +5,8 @@ owner's FOXSY and EGLD**. A model proposes actions from a fixed list; plain code
 rules and the owner's caps before anything is signed. Treat every change to that code as a change to a money path.
 
 ## Run it
-- Node >= 22.18, TypeScript run directly (no build step), SQLite for state, 2 runtime dependencies (pinned).
+- Node 22 from 22.18, or 24.2 and later (23.x, 24.0 and 24.1 load the service and end at once), TypeScript run
+  directly (no build step), SQLite for state, 2 runtime dependencies (pinned).
 - `npm ci --ignore-scripts` then `npm run typecheck` and `npm test` (`node --test 'test/**/*.test.ts'`). Both must be
   clean before you say a change is done; report the real result, including a failure.
 - `test/summary.test.ts` "quiet Telegram..." is flaky on `main` too (1 failure in 5 full runs on an untouched commit).
@@ -42,15 +43,19 @@ rules and the owner's caps before anything is signed. Treat every change to that
   both are green and a maintainer approved; a commit pushed afterwards needs `merge-check` added again. A pull request
   that changes `.github/` or `scripts/ci/` fails the review on purpose: the maintainer checks it by hand and merges it
   with the bypass. Never force-push `main`. Stage files by name; never `git add -A`.
-- Releases are tags on `main` (`v1.0.0`, `v1.0.1`, ...) with a GitHub release; the one-line installer (`get.sh`)
-  installs the newest release, and users update by running it again. A release is cut from a `main` commit that
+- Releases are tags on `main` (`v1.0.0`, `v1.0.1`, ...) published with a signed manifest (`docs/RELEASING.md`); the
+  one-line installer (`get.sh`) installs the newest one and an installed agent offers each new one to its owner
+  (Update now, `/upgrade`). Installed agents take only signed releases. A database change must stay additive, because
+  an update can be undone and the older code then reads the same database. A release is cut from a `main` commit that
   passed both checks and already ran on the maintainer's own server.
 - Do not touch `src/strategist/prompt.ts` casually: it is byte-stable so that it is served from the prompt cache. Dates and
   live values go in the user message.
 - The game rules are mirrored in `docs/ECONOMY-AND-RULES.md`, `docs/FOXLEAGUE-INTEGRATION.md` and
   `src/strategist/manual.md`. Change the code and these together, or say which one you left.
 - Record an audit or a security-relevant change as a new section of `docs/SECURITY-REVIEW.md`, in the same table format
-  (`Id | Severity | Finding | Fix`), and list what stays open.
+  (`Id | Severity | Finding | Fix`), and list what stays open. An audit or adversarial review is done by Claude Fable
+  5.2 at extra-high effort (read-only reviewers, one area each), its fixes by Claude Fable 5.2 at high effort, and a
+  finding counts only with a test that fails before the fix.
 - Do not guess FoxLeague's server behaviour. If a fix depends on it (e.g. what happens after "Do NOT pay again"), say so
   and ask; the integration notes in `docs/FOXLEAGUE-INTEGRATION.md` are the source.
 
@@ -68,4 +73,6 @@ rules and the owner's caps before anything is signed. Treat every change to that
 ## Where things live
 `src/executor/rules.ts` (rules and limits), `executor.ts` (lock, booking, signing, swap allowance), `tx.ts` (transaction
 builders), `src/snapshot/` (what the agent sees), `src/strategist/` (prompt, planner, manual), `src/service.ts`
-(scheduler, Telegram commands), `src/web/` (dashboard, auth), `src/store/` (settings, secrets, SQLite).
+(scheduler, Telegram commands), `src/web/` (dashboard, auth), `src/store/` (settings, secrets, SQLite),
+`src/update/` (the updater: signed releases, a folder per version, the undo), `run.sh` (the launcher the service
+starts), `cli.sh` (the command line of an installed agent), `scripts/release/` (the maintainers' release tool).
