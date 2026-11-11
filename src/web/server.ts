@@ -84,6 +84,23 @@ function clientIp(req: IncomingMessage): string {
   return socket
 }
 
+/**
+ * The same-origin rule of every POST: an Origin header whose host is not the request's Host is another website
+ * (or "null": a sandboxed frame, a no-referrer form, garbage). A request without the header is not judged here.
+ * Behind nginx the Host is the public name (`proxy_set_header Host $host`), the one the browser's Origin carries.
+ */
+function crossOrigin(req: IncomingMessage): boolean {
+  const origin = req.headers.origin
+  if (!origin) return false
+  let host: string | null = null
+  try {
+    host = new URL(origin).host
+  } catch {
+    host = null
+  }
+  return !host || host !== req.headers.host
+}
+
 async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
   let size = 0
   const chunks: Buffer[] = []
@@ -286,6 +303,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
 
       if (path === '/login' && method === 'GET') return user ? send(res, 303, '', 'text/plain', { location: '/' }) : loginPage(res, 200, '')
       if (path === '/login' && method === 'POST') {
+        // Before the throttle is read or anything is counted: a form posted from another website in the owner's
+        // browser must not count wrong passwords against the owner's own address (ATTACK-2).
+        if (crossOrigin(req)) return loginPage(res, 403, 'Sign in from the dashboard\'s own page.')
         const ip = clientIp(req)
         const gate = throttle.check(ip)
         if (!gate.ok) return loginPage(res, 429, `Too many attempts. Try again in ${gate.waitS} s.`)
@@ -316,16 +336,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
 
       // Every state-changing request: same-origin and the session's CSRF token.
       if (method === 'POST') {
-        const origin = req.headers.origin
-        if (origin) {
-          let host: string | null = null
-          try {
-            host = new URL(origin).host
-          } catch {
-            host = null // "null" (sandboxed frames, some redirects) or garbage
-          }
-          if (!host || host !== req.headers.host) throw new HttpFail(403, 'cross-origin request refused')
-        }
+        if (crossOrigin(req)) throw new HttpFail(403, 'cross-origin request refused')
         const sent = req.headers['x-csrf-token']
         if (!sessions.checkCsrf(session, typeof sent === 'string' ? sent : undefined)) throw new HttpFail(403, 'missing or wrong CSRF token')
       }
