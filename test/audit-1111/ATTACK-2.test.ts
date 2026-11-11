@@ -107,3 +107,52 @@ test('ATTACK-2c the dashboard\'s own form keeps working behind nginx (Origin wit
     close()
   }
 })
+
+// What a real browser sends was measured with Chrome on a local stand-in of the sign-in page (2026-11-11). The
+// dashboard serves its pages with `Referrer-Policy: no-referrer`, and under that policy a form sends `Origin: null`,
+// the dashboard's own form included. So "null" alone says nothing about where a sign-in comes from:
+//   the own form, https or loopback:      Origin null, Sec-Fetch-Site same-origin, the sign-in page's cookie
+//   the own form, plain http on a name:   Origin null, no Sec-Fetch-Site,          the sign-in page's cookie
+//   another site's form:                  Origin its own or null, Sec-Fetch-Site cross-site (none on plain http), no cookie
+test('ATTACK-2d the dashboard\'s own form as a browser really sends it (Origin "null" under the no-referrer policy) signs in; another site\'s "null" does not', async () => {
+  const { url, password, close } = await webService()
+  try {
+    // The sign-in page hands the browser a mark that only travels with requests from the dashboard's own site.
+    const page = await fetch(`${url}/login`)
+    const mark = /^(foxagent_login=[^;]+);(.*)$/.exec(page.headers.get('set-cookie') ?? '')
+    assert.ok(mark, `the sign-in page sets its mark (got: ${page.headers.get('set-cookie')})`)
+    assert.match(mark[2]!, /SameSite=Strict/i, 'a browser never sends it from another site')
+    assert.match(mark[2]!, /HttpOnly/i)
+    const cookie = mark[1]!
+
+    // Another website, in a browser that says where a request comes from (every current one, over https or loopback).
+    const foreign: number[] = []
+    for (let i = 0; i < 6; i++) foreign.push((await login(url, { origin: 'null', 'sec-fetch-site': 'cross-site' }, `guess-${i}`)).status)
+    // Even with the mark (it cannot have it): what the browser says wins.
+    foreign.push((await login(url, { origin: 'null', 'sec-fetch-site': 'cross-site', cookie }, 'guess')).status)
+    foreign.push((await login(url, { origin: url, 'sec-fetch-site': 'same-site', cookie }, 'guess')).status)
+    // Another website, plain http to a name (the browser sends no Sec-Fetch-Site there): "null" and no mark.
+    for (let i = 0; i < 6; i++) foreign.push((await login(url, { origin: 'null' }, `guess-${i}`)).status)
+    assert.ok(foreign.every(s => s === 403), `every one is refused uncounted (got ${foreign.join(',')})`)
+
+    // The owner's own form, https or loopback.
+    const modern = await login(url, { origin: 'null', 'sec-fetch-site': 'same-origin', cookie }, password)
+    assert.equal(modern.status, 303, `the dashboard's own form signs in (Origin null, Sec-Fetch-Site same-origin); it answered ${modern.status}`)
+    // The same without the mark (cookies cleared while the page was open): what the browser says is enough.
+    assert.equal((await login(url, { origin: 'null', 'sec-fetch-site': 'same-origin' }, password)).status, 303)
+    // The owner's own form over plain http on a LAN name: no Sec-Fetch-Site, "null", the mark.
+    const plain = await login(url, { origin: 'null', cookie }, password)
+    assert.equal(plain.status, 303, `the dashboard's own form over plain http signs in (Origin null, the page's mark); it answered ${plain.status}`)
+    // A refusal shows the sign-in page again with a fresh mark, so trying again on it works.
+    const refused = await login(url, { origin: 'null' }, password)
+    assert.equal(refused.status, 403)
+    assert.match(refused.headers.get('set-cookie') ?? '', /^foxagent_login=/)
+    assert.doesNotMatch(await refused.text(), /—|\bbot\b/)
+    // Wrong passwords from the own form still count, as before.
+    const wrong: number[] = []
+    for (let i = 0; i < 6; i++) wrong.push((await login(url, { origin: 'null', 'sec-fetch-site': 'same-origin', cookie }, `guess-${i}`)).status)
+    assert.deepEqual(wrong, [401, 401, 401, 401, 401, 429])
+  } finally {
+    close()
+  }
+})
