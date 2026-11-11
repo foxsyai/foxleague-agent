@@ -50,7 +50,7 @@ the server, get a certificate (for example `certbot --nginx`) and reload nginx. 
 | What | Command |
 |---|---|
 | Deploy a new version | `./deploy/deploy.sh` from your computer (restarts the service; check first that no plan is running, or its waiting actions are dropped) |
-| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys` |
+| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report` |
 | Keys | the dashboard's Keys panel (saved in `/var/lib/foxleague-agent/secrets.json`, mode 600) or `agentctl.sh configure` |
 | Security score | `systemd-analyze security foxleague-agent` |
 
@@ -61,3 +61,49 @@ agent the server deleted (Delete is only for a wallet that was never used), once
 `deploy.sh` runs it at the end, and the dashboard reminds you when you add an agent. To delete never-used agents
 from the server's command line: `sudo /opt/foxleague-agent/app/deploy/agentctl.sh delete-agent 11 12` (each one is
 checked on chain and on FoxLeague first; a used one is kept and named).
+
+## Shadow plans: trying another model without letting it play
+
+Before you switch the strategist to another model, you can let that model plan in the shadow. Right after each real
+plan the service sends the very same request to the second model and only records what it would have done. A shadow
+plan is never carried out, the playing model never reads it and nothing the agents play by changes. Each one costs
+what one plan costs on the shadow model, on top of the real plan. That cost is in the dashboard's AI spend.
+
+It is off unless you switch it on here, on the server. There is no button for it in the dashboard and no Telegram
+command, because it adds AI spend.
+
+Switch it on in the database, as root. The service reads the setting before every plan, so nothing is restarted:
+
+```
+SET='const { DatabaseSync } = require("node:sqlite"); new DatabaseSync("/var/lib/foxleague-agent/agent.db", { timeout: 5000 }).prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(process.argv[1], process.argv[2])'
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model claude-haiku-5-5
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_effort medium
+```
+
+Switch it off the same way, with `off` as the model:
+
+```
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model off
+```
+
+- The model is one of the list (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-2`) and
+  not the one that plays. Anything else means off, and the log says why once (`journalctl -u foxleague-agent`).
+- The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`.
+- `AGENT_SHADOW_MODEL` and `AGENT_SHADOW_EFFORT` in `/etc/foxleague-agent/env` do the same from the next start of
+  the service. The database's setting wins, so `off` there switches it off whatever the env file says.
+
+Read what came of it at any time, also while the service runs (it only reads):
+
+```
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report      # every agent
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 3    # agent 3
+```
+
+The report says how many shadow plans there are, how many answered with a valid plan, how many of their actions the
+parser took, how often the shadow proposed the same kinds of action as the real plan of the same moment, the average
+cost and time and the last pairs side by side. Each shadow plan is also a row in the agent's Activity, marked
+"shadow plan, not carried out". The newest 2,000 are kept.
+
+What it cannot tell you: which plan was the better one. A shadow plan's actions are never checked against the game
+rules or your limits, so read the pairs yourself before you switch. A shadow request that gets no answer in 10
+minutes is given up and never asked again.

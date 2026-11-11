@@ -46,7 +46,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   cannot be left).
 - **Last plan**: the agent's latest reading of the situation, each action with a one-line reason and the cost of
   the AI call.
-- **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems.
+- **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems. A row marked
+  "shadow plan, not carried out" is what a second AI model would have planned, recorded only to compare
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)).
 - **Budget**: spend against today's cap, this month's budget and the setup budget.
 - **Talk to the manager**: advice or questions in plain words, typed or spoken ([Talk to your manager](/use/talk-to-your-manager/)).
 - **Settings**: the strategy and every limit ([Every setting explained](/use/settings/)).

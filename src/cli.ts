@@ -10,13 +10,14 @@ import type { MatchFormations } from './foxleague/types.ts'
 import type { MarketSale, MarketSalesCache } from './snapshot/market.ts'
 import { renderDigest, snapshotToJson } from './snapshot/digest.ts'
 import { assertSameWords, deriveWallet, exportPem, generateMnemonicInto, shardOf, type AgentWallet } from './wallet/wallet.ts'
-import { Store } from './store/db.ts'
+import { Store, readShadowPlans } from './store/db.ts'
 import { secretsFile, writeSecrets } from './store/secrets.ts'
 import { Executor, formatResult, liveSigningAllowed } from './executor/executor.ts'
 import { parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
 import { Strategist, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
 import { buildManual, manualStatus } from './strategist/manual.ts'
+import { shadowReport } from './strategist/shadow.ts'
 import { checkKeys, pickOwnerChat, promptHidden, setEnvValues, telegramMe, telegramRecentChats } from './setup/keys.ts'
 import { Address } from '@multiversx/sdk-core'
 import { randomBytes, randomInt } from 'node:crypto'
@@ -58,7 +59,9 @@ function usage(): never {
   pause <N> | resume <N>        pause or resume one agent
   mode [dry|live]               one mode for all agents (live also needs AGENT_LIVE_ENABLED=1 in the env)
   log [N]                       recent activity
-  configure                     enter the API keys with hidden input; they go straight into the env file
+  shadow-report [N]             what a second model would have planned next to the real plans (shadow plans, off
+                                unless shadow_model is set: docs/SERVER.md); it only reads, also while the service runs
+  configure                    enter the API keys with hidden input; they go straight into the env file
   check-keys                    verify the Anthropic, Telegram and Binance keys (Binance: withdraw-only, IP-locked)
   set-web-password              web UI username and password (stored as a scrypt hash) and the session key
 `)
@@ -270,7 +273,7 @@ async function main(): Promise<void> {
       if (isWatch) store.addAgent(index, wallet.address) // the throwaway in-memory store
       const agent = { ...store.agent(index)!, dryRun: true }
       const snap = await takeSnapshot({ chain, fox }, isWatch ? { watch: wallet.address } : { wallet }, new Date(), { matchFacts: { get: k => store.matchFacts(k), put: (k, f) => store.putMatchFacts(k, f) }, marketSales: { has: id => store.hasSale(id), put: rows => store.putSales(rows), since: iso => store.salesSince(iso), complete: () => store.salesComplete, markComplete: () => store.markSalesComplete(), markIncomplete: () => store.markSalesIncomplete() } })
-      const input = { snapshot: snap, settings: agent.settings, budget: budgetView(store, index, agent.settings, true, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered), recent: store.activity(index, 20), dryRun: true }
+      const input = { snapshot: snap, settings: agent.settings, budget: budgetView(store, index, agent.settings, true, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered), recent: store.planHistory(index, 20), dryRun: true }
       if (!cfg.anthropicApiKey) {
         console.log('(no ANTHROPIC_API_KEY: this is the request the strategist would receive)\n')
         console.log(renderPlanRequest(input))
@@ -323,6 +326,12 @@ async function main(): Promise<void> {
       } else {
         for (const r of store.activity(args[0] ? agentIndex(args[0]) : null, 30).reverse()) console.log(`${r.at.slice(0, 19)} ${r.agentIndex === null ? '-' : `a${r.agentIndex + 1}`} ${r.kind} [${r.status}] ${r.summary}`)
       }
+      return
+    }
+    case 'shadow-report': {
+      // Through a connection that cannot write: next to the running service, and nothing is created or changed.
+      const index = args[0] === undefined ? null : agentIndex(args[0])
+      console.log(shadowReport(readShadowPlans(cfg.dataDir, index), { agentIndex: index }))
       return
     }
     case 'configure': {

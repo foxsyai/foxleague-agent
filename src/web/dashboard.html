@@ -703,13 +703,28 @@ function readForm() {
 }
 
 const STATUS = { dry_run: ['dry', 'dry run'], confirmed: ['run', 'done'], refused: ['pause', 'refused'], failed: ['halt', 'failed'], error: ['halt', 'error'], unconfirmed: ['stale', 'pending'], info: ['mute', 'info'], sent: ['stale', 'sent'] }
+// A shadow plan is what a second AI model would have planned from the same request: recorded to compare, never carried out.
+const SHADOW_MARK = ['stale', 'shadow plan, not carried out']
+// What a filter of the activity shows. A shadow plan is neither a plan nor an action nor a problem of the agent:
+// only "All" and its own filter show it.
+function shownActivity(rows, f) {
+  if (!f) return rows
+  if (f === 'shadow') return rows.filter(r => r.kind === 'shadow')
+  const real = rows.filter(r => r.kind !== 'shadow')
+  if (f === 'plan') return real.filter(r => r.kind === 'plan')
+  if (f === 'act') return real.filter(r => !['plan', 'tick', 'control'].includes(r.kind))
+  return real.filter(r => ['refused', 'failed', 'error'].includes(r.status))
+}
 function renderActivity() {
-  const f = $('actFilter').value
-  const rows = activityRows.filter(r => !f || (f === 'plan' ? r.kind === 'plan' : f === 'act' ? !['plan', 'tick', 'control'].includes(r.kind) : ['refused', 'failed', 'error'].includes(r.status)))
+  // The filter for shadow plans is offered only while the list holds one (they are off unless switched on on the server).
+  const pick = $('actFilter'), has = activityRows.some(r => r.kind === 'shadow'), opt = pick.querySelector('option[value="shadow"]')
+  if (has && !opt) pick.append(el('option', { value: 'shadow', text: 'Shadow plans' }))
+  if (!has && opt) { if (pick.value === 'shadow') pick.value = ''; opt.remove() }
+  const rows = shownActivity(activityRows, pick.value)
   const body = $('activity'); body.replaceChildren()
   if (!rows.length) body.append(el('tr', {}, el('td', { colspan: '4', class: 's', text: 'Nothing yet.' })))
   for (const r of rows) {
-    const [cls, label] = STATUS[r.status] || ['mute', r.status]
+    const [cls, label] = r.kind === 'shadow' ? SHADOW_MARK : STATUS[r.status] || ['mute', r.status]
     const summary = el('td', { class: 's' }, r.summary.length > 600 ? r.summary.slice(0, 600) + '…' : r.summary)
     if (r.txHash) summary.append(' ', el('a', { href: 'https://explorer.multiversx.com/transactions/' + r.txHash, target: '_blank', rel: 'noopener noreferrer', text: 'tx' }))
     if (r.costUsd) summary.append(el('span', { class: 'note', text: '  ' + usd(r.costUsd) }))
@@ -974,7 +989,8 @@ const TIPS = {
     <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
-    <p>The filter narrows it to plans, actions or problems.</p>`],
+    <p>The filter narrows it to plans, actions or problems.</p>
+    <p>A row marked <b>shadow plan, not carried out</b> is what a second AI model would have planned from the same request. It is recorded only to compare the two models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it. Such rows appear only while shadow plans are switched on on the server.</p>`],
   budget: ['Budget', `<p>Spend against your caps: today (the game day resets at 14:00 UTC), this month and the one-time setup budget.</p>
     <p>Every paid action is valued in USD at live prices before it runs; one that would go over a cap is refused. Dry-run spend has its own ledger, so it never blocks live spending.</p>`],
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>

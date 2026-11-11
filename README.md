@@ -91,6 +91,7 @@ npm run cli -- snapshot 1            # read-only state of agent 1
 npm run cli -- plan 1                # the AI's plan for agent 1, simulated
 npm run cli -- dry-run 1 '<json>'    # run hand-written actions through the checks, simulated
 npm run cli -- kill on|off | pause N | resume N | mode [dry|live] | log [N]
+npm run cli -- shadow-report [N]     # what a second model would have planned (shadow plans, docs/SERVER.md)
 npm run cli -- configure             # keys, typed hidden
 npm run cli -- check-keys            # test the keys
 npm run cli -- set-web-password      # dashboard login
