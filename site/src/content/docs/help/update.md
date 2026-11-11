@@ -133,8 +133,9 @@ Already playing FoxLeague? **Import team** gives an agent the team you have ([Im
 ./install.sh --uninstall
 ```
 
-It stops the background service and leaves your folder (about 190 MB), wallet and PEM files in place. The agent
-wallets keep their funds. Delete the folder only when the wallets are empty and your recovery words are safe.
+It stops the background service and leaves your folder (about 190 MB), wallet and PEM files in place. The
+download cache of npm in `~/.npm` stays too. The agent wallets keep their funds. Delete the folder only when the
+wallets are empty and your recovery words are safe.
 
 On Linux the installer turned on linger, which lets background services of your user start without a login. The
 uninstall leaves it on, because other services of yours may count on it: `loginctl disable-linger $USER` turns it
