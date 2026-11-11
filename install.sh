@@ -315,7 +315,9 @@ WorkingDirectory=$ROOT
 # FOXAGENT_SUPERVISED=1 tells the agent that this unit starts it again when it ends: an update may then end it.
 Environment="AGENT_ENV_FILE=$ENV_FILE" "AGENT_DATA_DIR=$DATA_DIR" "FOXAGENT_SUPERVISED=1"
 ExecStart="$bash_bin" "$ROOT/run.sh"
-Restart=on-failure
+# After every exit, also one with status 0: a new release that ends at once must be started a second time, so that
+# the launcher (run.sh) can undo it. A stop that is asked for (systemctl --user stop, the uninstall) stays a stop.
+Restart=always
 RestartSec=30
 # 75: the agent put an update in place and asks to be started again (run.sh then starts the new release).
 SuccessExitStatus=75
@@ -352,7 +354,7 @@ EOF
   <key>WorkingDirectory</key><string>$ROOT</string>
   <key>EnvironmentVariables</key><dict><key>AGENT_ENV_FILE</key><string>$ENV_FILE</string><key>AGENT_DATA_DIR</key><string>$DATA_DIR</string><key>FOXAGENT_SUPERVISED</key><string>1</string></dict>
   <key>RunAtLoad</key><true/>
-  <key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict>
+  <key>KeepAlive</key><true/>
   <key>ExitTimeOut</key><integer>180</integer>
   <key>StandardOutPath</key><string>$DATA_DIR/service.log</string>
   <key>StandardErrorPath</key><string>$DATA_DIR/service.log</string>
