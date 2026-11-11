@@ -326,7 +326,9 @@ export class Executor {
       if (booking?.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
       replaceEarlierFees(Boolean(booking?.sent && booking.ids.length > 0))
       const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
-      return finish('error', `${desc}: ${msg}`, 0, undefined, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
+      // A payment signed and maybe sent: its row carries the hash the ledger rows are booked under.
+      const maybeSent = booking?.sent || booking?.organizer?.sent ? txHashOf(err) : undefined
+      return finish('error', `${desc}: ${msg}`, 0, maybeSent, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
     }
   }
 
@@ -809,26 +811,32 @@ export class Executor {
     const sentBefore = booking.sent
     booking.sent = true
     const plain = toPlain(tx)
-    const held = keep ? transactionHash(plain) : null
+    // The hash of what was signed, computed here as the network computes it. The booked rows carry it from the
+    // signature on, before the broadcast: whatever the broadcast answers (nothing, a 5xx, an unreadable body), the refund
+    // checks can read what became of the payment and credit a refund (a bid outbid, a shop payment FoxLeague returned).
+    // Without it such a row counted for good (audit 2026-11-11, EDGE-4). A row is credited only on the chain's or
+    // FoxLeague's own word about this hash, and a credited row is out of every later check: once, never twice.
+    const local = transactionHash(plain)
+    if (local) this.settle(booking, local)
+    const held = keep ? local : null
     if (keep && held) this.d.store.addPending(held, wallet.index, keep.kind, keep.payload)
     let hash: string
     try {
       hash = await this.d.chain.send(plain)
     } catch (err) {
-      // No answer at all (or an unclear one) may still have reached the network: the payment stays booked.
-      if (!(err instanceof BroadcastRefused)) throw err
+      // No answer at all (or an unclear one) may still have reached the network: the payment stays booked, under its
+      // hash, and the activity row of the error carries the hash too.
+      if (!(err instanceof BroadcastRefused)) throw withTxHash(err, local)
       // The gateway's refusal releases the booking (in the caller's catch) only when it names the transaction itself
       // and the gateway does not know the signed transaction. A nonce or duplicate answer, an unknown one, a known
       // transaction or a failed look-up: it may have gone out after all (the gateway retries another observer), so
       // it stays booked under its own hash, where the refund check can still read what became of it.
-      const local = transactionHash(plain)
       if (local && err.definite && (await this.lookup(local)) === 'not_found') {
         booking.sent = sentBefore
         if (held) this.d.store.resolvePending(held, 'failed')
         throw err
       }
-      if (local) this.settle(booking, local)
-      throw new Error(`${err.message}; it may have gone out all the same, so it stays counted${local ? ` (transaction ${local})` : ''}`)
+      throw withTxHash(new Error(`${err.message}; it may have gone out all the same, so it stays counted${local ? ` (transaction ${local})` : ''}`), local)
     }
     this.settle(booking, hash)
     if (keep) {
@@ -1311,9 +1319,10 @@ export class Executor {
           if (booking.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
           const why = err instanceof Stopped ? `${err.reason} before the seat was signed` : err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
           const paid = organizerHash ? ` with organizer payment ${organizerHash}` : ''
+          // A seat payment signed and maybe sent: the row carries its hash (the organizer payment's is in the text).
           return done('error', booking.sent
             ? `${desc}: created T${created.id}${paid}; the seat payment: ${why}`
-            : `${desc}: created T${created.id}${paid}, its seat not paid: ${why}; T${created.id} waits with no seat of yours${organizerHash ? ' (unfilled at its deadline it keeps the organizer\'s deposit)' : ''}`, 0, organizerHash)
+            : `${desc}: created T${created.id}${paid}, its seat not paid: ${why}; T${created.id} waits with no seat of yours${organizerHash ? ' (unfilled at its deadline it keeps the organizer\'s deposit)' : ''}`, 0, booking.sent ? (txHashOf(err) ?? organizerHash) : organizerHash)
         }
       }
     }
@@ -1384,6 +1393,18 @@ class Stopped extends Error {
 function retryable(err: unknown, wording: RegExp): boolean {
   if (err instanceof ApiRefusal) return err.isTxPending || wording.test(err.message)
   return true
+}
+
+/** An error after a signature, marked with the hash of the signed transaction for the activity row of the action. */
+function withTxHash<E>(err: E, hash: string | null): E {
+  if (hash && err !== null && typeof err === 'object') (err as { txHash?: string }).txHash = hash
+  return err
+}
+
+/** The hash a send error carries (withTxHash), when the transaction was signed and may have gone out. */
+function txHashOf(err: unknown): string | undefined {
+  const hash = err !== null && typeof err === 'object' ? (err as { txHash?: unknown }).txHash : undefined
+  return typeof hash === 'string' && hash ? hash : undefined
 }
 
 const txComputer = new TransactionComputer()

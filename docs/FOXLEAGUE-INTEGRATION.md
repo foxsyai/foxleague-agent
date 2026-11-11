@@ -196,6 +196,14 @@ What the browser wallet does implicitly and an agent must do itself:
    it (section 4.4).
 4. **Wait for the outcome** (1.6), then call the backend confirm route of that flow, if it has one.
 
+The agent books a payment before the signature and, right after the signature, puts the transaction's hash (computed
+locally as the network computes it) on its ledger rows, before the broadcast (`send` in `src/executor/executor.ts`;
+audit 2026-11-11, EDGE-4). A broadcast that gets no answer (a timeout, a 5xx, an unreadable body) may still have
+reached the network: the payment stays booked under that hash, the activity row of the error carries it, and the
+refund checks can still read what became of it (an outbid bid in `src/executor/refunds.ts`, a shop payment FoxLeague
+returned in `src/executor/pending.ts`). A row is credited only on the chain's or FoxLeague's own word about that
+hash, once; the gateway's own definite refusal of a transaction it does not know releases the booking as before.
+
 ### 1.6 Deciding whether a transaction succeeded
 
 This is load-bearing; the web app learned it through incidents (`frontend/src/lib/txFinality.ts:270-400`).
