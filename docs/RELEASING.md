@@ -24,7 +24,9 @@ install line again, which brings the code that pins a new key. Keep the backup.
 ## A release, step by step
 
 1. **The commit.** It is on `main`, it passed both checks (`foxleague-agent/ci` and `foxleague-agent/review`) and it
-   already ran on the maintainer's own server.
+   already ran on the maintainer's own server. Run `scripts/release/fresh-install-check.sh` on it: it replays the
+   install, the updates, the undo and the uninstall on a fresh Ubuntu in a throwaway container (about twelve
+   minutes, it needs Docker) and ends with status 1 when a check failed.
 2. **The version.** In a pull request, set `version` in `package.json` and in `package-lock.json` (two places at the
    top) to `X.Y.Z`: plain numbers, higher than every release before. Merge it the usual way.
 3. **The tag.** Tag that `main` commit `vX.Y.Z` and push the tag. A tag is never moved or deleted afterwards.

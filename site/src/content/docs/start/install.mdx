@@ -17,7 +17,8 @@ and **Windows through WSL2**. The computer has to stay on for the agent to play;
 - About **5 EGLD** to send to your agent later (you can install first and fund it after).
 - About 5 minutes to create your **AI key** at Anthropic ([Your keys](/start/keys/)). You can also add it after
   the install.
-- Install as a user of your own, not as root: as root the installer stops and tells you to create a user first.
+- Install as a user of your own, not as root: as root the installer stops and tells you to create a user first
+  (`adduser fox`, then `su - fox` and paste the line).
 
 ## Install
 
@@ -32,7 +33,7 @@ and **Windows through WSL2**. The computer has to stay on for the agent to play;
 		```
 
 		On Ubuntu, install curl first, because Ubuntu Desktop comes without it: `sudo apt install curl`. Use this
-		one, not the snap that Ubuntu's hint offers: the installer cannot download with the snap's curl. macOS has
+		one, not the snap that Ubuntu's hint offers: the apt one is the one the install is tested with. macOS has
 		curl already.
 
 		On Linux the agent keeps running after you log out and after a restart. On macOS the agent starts when you
@@ -78,7 +79,7 @@ It walks you through seven short steps and explains each one:
 |---|---|
 | 1. Node.js | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy and checks it against the SHA-256 written in the installer. |
 | 2. Wallet | Creates a new wallet for your first agent and shows its **recovery words once**. Write them on paper. |
-| 3. Dashboard login | You choose a user name, a password (12 characters or more) and a port (8870 by default). |
+| 3. Dashboard login | You choose a user name, a password (12 characters or more) and a port (8870 by default). A password that is too short or typed differently the second time is asked for again. A port that another program already uses is refused and the next one is offered. |
 | 4. Keys | The AI key, Telegram and the CEX top-up, each with simple steps and links. You can skip any of them. |
 | 5. Settings | Agents start in **dry run**. You choose whether this computer may sign real transactions once you press Go LIVE. |
 | 6. PEM files | Writes `pem/agent1.pem`, so you can log into the FoxLeague app as your agent's team and watch it play. |
@@ -93,11 +94,17 @@ yes when the words are written down", every run of the installer shows them and 
 
 Run the installer again at any time (`./install.sh` in the `foxleague-agent` folder): it keeps your wallet, login and keys.
 It asks again for the port, the keys and the live permission, each with your earlier answer as the default.
-Pressing Enter at the live permission keeps it as `.env` has it: on only when it already says 1 or true.
+At "Enter keys now?" Enter means no on every later run: the keys stay as they are, and you change them in the
+dashboard. Pressing Enter at the live permission keeps it as `.env` has it: on only when it already says 1 or true.
 
 ## After the install
 
-Open **http://localhost:8870** and log in. The **Getting started** guide opens by itself and shows what is left:
-your keys, funding your agent and going live. Next: [Your keys, step by step](/start/keys/).
+Open **http://localhost:8870** and log in. The installer's last screen shows that address as a link (in most
+terminals: hold Ctrl and click it; on a Mac, Cmd) and, on a computer with a desktop, offers to open it in your
+browser. The **Getting started** guide opens by itself and shows what is left: your keys, funding your agent and
+going live. Next: [Your keys, step by step](/start/keys/).
+
+The dashboard may be open in two browsers, for example a tab inside an editor and your default browser. Each has
+its own sign-in, so the page the installer opens can ask for the login although another tab is signed in.
 
 When a new version is out, the dashboard tells you and installs it with one click ([Update](/help/update/)).

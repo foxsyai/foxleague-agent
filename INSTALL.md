@@ -11,7 +11,8 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 
 - A computer that stays on: Linux with systemd or macOS. On Windows, use WSL2 with systemd turned on.
   A small cloud server works too. Install as a user of your own, not as root: as root the installer stops and
-  tells you to create a user first (for a server set up by hand, see [docs/SERVER.md](docs/SERVER.md)).
+  tells you to create a user first (`adduser fox`, then `su - fox` and paste the line; for a server set up by
+  hand, see [docs/SERVER.md](docs/SERVER.md)).
   On Linux the agent keeps running after you log out and after a restart. On macOS the agent starts when you log
   in, and a sleeping Mac plays nothing. On Windows the agent runs while Ubuntu (WSL) runs: closing the last Ubuntu
   window may stop it after a short while, and it does not start with Windows, so after every restart of Windows
@@ -31,7 +32,7 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 ```
 
 On Ubuntu, install curl first, because Ubuntu Desktop comes without it: `sudo apt install curl`. Use this one, not
-the snap that Ubuntu's hint offers: the installer cannot download with the snap's curl.
+the snap that Ubuntu's hint offers: the apt one is the one the install is tested with.
 
 The line downloads the newest release into `~/foxleague-agent`, checks the download against the release's checksum
 and starts the guided installer. To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
@@ -48,7 +49,7 @@ The installer walks you through seven steps and explains each one:
 |---|---|
 | 1. Node.js | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. |
 | 2. Wallet | Creates a new wallet and shows its recovery words once. Write them down on paper. |
-| 3. Dashboard login | You choose a username, a password (at least 12 characters) and a port (default 8870). |
+| 3. Dashboard login | You choose a username, a password (at least 12 characters) and a port (default 8870). A password that is too short or typed differently the second time is asked for again. A port that another program already uses is refused and the next one is offered. |
 | 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |
 | 5. Settings | A new install starts in dry run. You choose whether this computer may sign real transactions once you press Go LIVE. |
 | 6. PEM files | Writes `pem/agent1.pem`, so you can log into FoxLeague as your agent's team and watch it play. |
@@ -56,7 +57,8 @@ The installer walks you through seven steps and explains each one:
 
 Run `./install.sh` again at any time: it keeps your wallet, login and keys. It asks again for the port, the keys
 and the live permission, each with your earlier answer as the default, so pressing Enter keeps things as they are.
-Pressing Enter at the live permission keeps it as `.env` has it: on only when it already says 1 or true.
+At "Enter keys now?" Enter means no on every later run: the keys stay as they are, and you change them in the
+dashboard. Pressing Enter at the live permission keeps it as `.env` has it: on only when it already says 1 or true.
 The dashboard's **Getting started** guide repeats the key steps below, shows which keys are set and has a
 "Don't show this again" box.
 
@@ -64,7 +66,11 @@ The dashboard's **Getting started** guide repeats the key steps below, shows whi
 
 1. **Fund your agent.** Send EGLD on the MultiversX network to agent 1's wallet, which the installer printed.
    It is also in the dashboard.
-2. **Open the dashboard** at `http://localhost:8870` (or the port you chose) and log in.
+2. **Open the dashboard** at `http://localhost:8870` (or the port you chose) and log in. The installer's last
+   screen shows the address as a link (in most terminals: hold Ctrl and click it; on a Mac, Cmd) and, on a
+   computer with a desktop, offers to open it in your browser. The dashboard may be open in two browsers, for
+   example a tab inside an editor and your default browser: each has its own sign-in, so the page the installer
+   opens can ask for the login although another tab is signed in.
 3. **Watch the dry run.** Once the EGLD arrives, the agent plans its first steps. In dry run nothing is paid and
    nothing is bought, so a new wallet shows only the simulated FOXSY swap: the registration line then says it
    needs 5,000 FOXSY for the fee, because nothing was really bought. That is expected. The team is registered once
@@ -168,6 +174,9 @@ results, not meeting). What they share is a pooled formation record with no team
 | Command line | `./cli.sh` (alone it lists the commands) | `./cli.sh` |
 | Uninstall | `./install.sh --uninstall` | `./install.sh --uninstall` |
 
+The logs and the restart work from any folder. The other three (`./install.sh --update`, `./cli.sh` and
+`./install.sh --uninstall`) are typed in the agent's folder: go there first with `cd ~/foxleague-agent`.
+
 ## Updates
 
 About every 10 minutes the agent asks GitHub whether a newer release is out. When one is, the dashboard shows a
@@ -175,25 +184,45 @@ notice with what is new and Telegram tells you once. Press **Update now** in the
 Telegram: nothing is ever installed by itself, and no password is asked, because only a release that is signed by
 the foxleague-agent maintainers and newer than yours can be installed. The agent checks the signature, prepares the
 new version next to the running one and restarts into it; the waiting actions of a running plan are dropped and the
-next plan takes them up. A new version that does not start is undone by itself, and you are told. Your wallet,
-keys, settings and history are kept.
+next plan takes them up. The dashboard is away for about half a minute. A new version that does not start is undone
+by itself after about a minute and a half, and you are told. Your wallet, keys, settings and history are kept.
 
 `./install.sh --update` does the same from a terminal. A git checkout and a server set up by hand show the notice
 with what to do instead of the button. `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 
 An update restarts the background service; when the restart fails it says so and names the command to run. An
-install made with `./install.sh --no-service` has no background service and an update does not add one: start the
-agent with `./run.sh`, and start it again after an update.
+install made with `./install.sh --no-service` has no background service and an update does not add one: you start
+the agent with `./run.sh`. Nothing starts such an agent again, so an update does not end it: the new version is put
+in place and the agent keeps playing on the version it runs. The dashboard then says "Version ... is in place and
+runs from the next start" (Telegram too, after **Update now** or `/upgrade`). Stop the agent (Ctrl-C in its
+terminal) and run `./run.sh` again.
 
-Uninstall stops the background service and leaves your folder, wallet and PEM files in place. Delete the folder
-only when the agent wallets are empty and your recovery words are safe.
+Uninstall stops the background service and leaves your folder (about 190 MB), wallet and PEM files in place.
+On Linux it also leaves linger on, which lets background services of your user start without a login:
+`loginctl disable-linger $USER` turns it off. Delete the folder only when the agent wallets are empty and your
+recovery words are safe.
 
 ## Troubleshooting
 
 - **The dashboard does not open:** check the logs (see above). Another program may use the port: run
   `./install.sh` again and pick another one.
-- **"systemd user services are not available" on Windows:** turn on systemd in WSL2 (`/etc/wsl.conf`, section
-  `[boot]`, `systemd=true`), restart WSL, run the installer again.
+- **"The dashboard could not start: port ... is used by another program":** the agent says this once, in the logs
+  and on Telegram. Your agents keep playing without the dashboard, and the agent tries the port again every minute.
+  Close the other program or choose another port. For another port run `./install.sh` again; you can also set
+  `WEB_UI_PORT` in `.env` and restart the agent.
+- **The dashboard asks for the login although I am signed in:** the dashboard may be open in two browsers, for
+  example a tab inside an editor and your default browser. Each has its own sign-in: log in there too.
+- **"this machine does not run systemd":** systemd keeps the agent running in the background. On Windows turn it
+  on in WSL2 (`/etc/wsl.conf`, the two lines `[boot]` and `systemd=true`), run `wsl --shutdown` in PowerShell, open
+  Ubuntu again and run the installer again. Without systemd: run `./install.sh --no-service` in the agent's folder,
+  then start the agent yourself with `./run.sh`.
+- **"the background services of the user ... cannot be reached from this terminal":** the terminal was opened with
+  `su` or `sudo` and the installer could not start the user's services from it. Log in as that user itself (a new
+  terminal, or `ssh` to the machine as that user) and run the installer again.
+- **"Job for foxleague-agent.service failed" (or "Start request repeated too quickly"):** systemd allows the agent
+  five starts in ten minutes and then refuses the next one. Run
+  `systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent`. The installer and
+  `./install.sh --update` clear that count themselves before they restart the agent.
 - **The agent stops when I log out (Linux):** run `sudo loginctl enable-linger $USER` once.
 - **The agent stops on Windows when I close Ubuntu, or after Windows restarts:** on Windows the agent runs while
   Ubuntu (WSL) runs. Open Ubuntu again and leave its window open: the agent starts with it.

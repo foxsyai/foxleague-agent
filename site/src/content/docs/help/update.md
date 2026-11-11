@@ -33,7 +33,10 @@ nothing to steer. This is what happens:
    actions of a running plan that were still waiting are dropped, and the next plan takes them up from a fresh
    look at the game.
 5. It starts again as the new version and tells you so, in the dashboard and on Telegram. All of it takes a minute
-   or two, and the dashboard's page comes back by itself.
+   or two. The dashboard is away for about half a minute, and its page comes back by itself.
+
+The new version has to stay up for 45 seconds before the next update is taken. **Update now** or `/upgrade` in
+that time answers "the last update is still being confirmed, try again in a minute".
 
 Your wallet, keys, settings and history are not touched: `.env`, `data/` and `pem/` belong to your install, not to
 a version.
@@ -55,7 +58,12 @@ release's checksum.
 The agent keeps the version that ran before. A new version counts as started once the agent has been up for 45
 seconds. When it has not come that far in two starts, the agent goes back by itself to the version that ran before
 and tells you, in the dashboard and on Telegram: "The update to ... did not start and was undone: you run ... as
-before." Your wallet, settings and history are untouched, and it is safe to try again later.
+before." That takes about a minute and a half. Your wallet, settings and history are untouched, and it is safe to
+try again later.
+
+The background service starts the agent again after every exit, also when a new version ends at once without an
+error, so the undo does not wait for you. Stopping the agent yourself (`systemctl --user stop foxleague-agent`, or
+the uninstall) stays a stop.
 
 ### From a terminal
 
@@ -69,12 +77,29 @@ It does what the button does: it looks for the newest release, checks its signat
 next to the running version and restarts the agent into it. If the restart fails it says so and names the command
 to run.
 
-An install made with `--no-service` has no background service and an update does not add one. There the agent
-ends once the new version is in place, also after **Update now** or `/upgrade`: start it again with `./run.sh`.
-
 Pasting the install line again also works: it downloads the newest version, checks it against the release's
 checksum and runs the installer, which offers your earlier answers as the defaults. An older version is never put
 over a newer one unless you add `FOXAGENT_ALLOW_DOWNGRADE=1`.
+
+### Without the background service
+
+An install made with `--no-service` has no background service and an update does not add one: you start the agent
+yourself with `./run.sh`. Nothing starts such an agent again, so an update does not end it. After **Update now**,
+`/upgrade` or `./install.sh --update` the new version is put in place and the agent keeps playing on the version
+it runs. The dashboard's notice then says "Version ... is in place and runs from the next start", with what to
+do: stop the agent (Ctrl-C in its terminal) and run `./run.sh` again in the `foxleague-agent` folder. After
+**Update now** or `/upgrade` Telegram says it too. Asking for the update a second time says the same and does
+nothing more.
+
+If you keep the agent running another way that starts it again after it ends (a service of your own, a container
+that restarts), put `FOXAGENT_SUPERVISED=1` in `.env`: an update then ends the agent with exit code 75 and counts
+on that restart.
+
+### When a release changes the background service
+
+An update replaces the agent's code, not the service file that starts it (the unit on Linux, the launch agent on
+macOS). When a release changes that file, its notes say so: run `./install.sh` again once in the `foxleague-agent`
+folder and it is written anew. Your wallet, login and keys are kept.
 
 ### Installs that do not update themselves
 
@@ -108,5 +133,9 @@ Already playing FoxLeague? **Import team** gives an agent the team you have ([Im
 ./install.sh --uninstall
 ```
 
-It stops the background service and leaves your folder, wallet and PEM files in place. The agent wallets keep
-their funds. Delete the folder only when the wallets are empty and your recovery words are safe.
+It stops the background service and leaves your folder (about 190 MB), wallet and PEM files in place. The agent
+wallets keep their funds. Delete the folder only when the wallets are empty and your recovery words are safe.
+
+On Linux the installer turned on linger, which lets background services of your user start without a login. The
+uninstall leaves it on, because other services of yours may count on it: `loginctl disable-linger $USER` turns it
+off.
