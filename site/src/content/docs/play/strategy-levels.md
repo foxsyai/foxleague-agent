@@ -137,6 +137,10 @@ afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a
 The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the Bronze amounts (100, 250 and 500), the active hours (08:00 to 20:00
 UTC), a random shift of up to 10 minutes either way, actions at least 30 seconds apart.
 
+A level with no Gold amounts stays out of Gold by the amount too: it pays no entry or stake from FoxLeague's Gold
+minimum up (for example 5,000 FOXSY), whatever the tournament is called. At every level the agent joins only a
+tournament of a tier it knows (Bronze, Silver or Gold).
+
 How the limits are sized: the daily cap covers the largest entry the level allows (a climber's Gold entry of 5,000
 FOXSY is about $13.50, a beast's of 20,000 about $54) and a busy day of its buying (entries, ranked tickets, syncs,
 recovery, its paid sessions, booster and pack), the monthly budget is close to 30 days of typical play at that level,

@@ -468,7 +468,10 @@ among the called-up players by contribution. Nothing of it exists in the code on
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
-  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. The win chance
+  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. A join reads the tier
+  FoxLeague serves: one that is not bronze, silver or gold is refused as unread, and with Gold off (no Gold amounts)
+  an entry or stake from `tournament_fee_bounds.gold_min` up is refused whatever the label says, as is every paid
+  entry while that bound cannot be read (audit 2026-11-11, MONEY-4). The win chance
   (`src/snapshot/winchance.ts`) is the ELO expectation and the squad chance averaged, and since the owner's decision of
   2026-11-11 (audit MONEY-2) never above the squad chance: a rival's lower ELO may lower the estimate, never lift it
   over what the two elevens alone give, so an eleven weaker than the rival's is never a favourite because the rival's

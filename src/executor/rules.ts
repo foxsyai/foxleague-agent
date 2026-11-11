@@ -1092,7 +1092,19 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
       const unknownJoin = unsupportedFormat(t.format, 'joining')
       if (unknownJoin) return refuse(unknownJoin)
-      if (t.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
+      // A tier that is none of FoxLeague's three is unread, as an unknown format is: every tier rule below would pass it
+      // by. Its label is not repeated (audit 2026-11-11, MONEY-4).
+      if (t.tier !== 'bronze' && t.tier !== 'silver' && t.tier !== 'gold') return refuse(`T${t.id} is of a tier the agent does not know: not joining blind`)
+      if (!ctx.settings.entryFeesGold.length) {
+        if (t.tier === 'gold') return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
+        // Gold off holds by the amount too, whatever the label says: an entry from FoxLeague's Gold bound up is a Gold
+        // amount. A bound that cannot be read is no bound far away.
+        if (t.entry_fee_foxsy > 0) {
+          const goldMin: unknown = cfg.tournament_fee_bounds?.gold_min
+          if (typeof goldMin !== 'number' || !Number.isFinite(goldMin)) return refuse('Gold is off for this agent and the Gold fee bound could not be read: not joining blind')
+          if (t.entry_fee_foxsy >= goldMin) return refuse(`Gold is off for this agent: an entry of ${t.entry_fee_foxsy} FOXSY is a Gold amount (from ${goldMin}), whatever the tournament is labelled`)
+        }
+      }
       const lk = t.format === 'league_knockout'
       if (lk) {
         // By invitation only, read again right before the payment: the contract admits only invited wallets (paying
