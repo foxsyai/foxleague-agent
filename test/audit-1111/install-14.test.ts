@@ -136,10 +136,12 @@ function replacedServer(s: Stubs): { ranLog: string; sha: string } {
     [
       `out=''; url=''`,
       `while [ $# -gt 0 ]; do case "$1" in -o) out=$2; shift ;; http*) url=$1 ;; esac; shift; done`,
+      // The installer lets curl write to its output and puts that into the file itself (FRESH-11); -o still works here.
+      `[ -n "$out" ] || out=/dev/stdout`,
       `printf 'curl %s\\n' "$url" >> "$LOG"`,
       `case "$url" in`,
       `  https://nodejs.org/dist/${NODE_VERSION}/SHASUMS256.txt) printf '${sha}  %s\\n' ${JSON.stringify(TARBALL)} > "$out" ;;`,
-      `  https://nodejs.org/dist/${NODE_VERSION}/${TARBALL}) cp ${JSON.stringify(archive)} "$out" ;;`,
+      `  https://nodejs.org/dist/${NODE_VERSION}/${TARBALL}) cat ${JSON.stringify(archive)} > "$out" ;;`,
       `  *) exit 22 ;;`,
       `esac`,
     ].join('\n'),

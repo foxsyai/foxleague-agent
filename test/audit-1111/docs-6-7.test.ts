@@ -25,7 +25,9 @@ test('DOCS-6 the facts: the pasted line needs curl before anything of ours runs,
   const get = raw('get.sh')
   assert.match(get, /for tool in curl tar; do command -v "\$tool" >\/dev\/null 2>&1 \|\| die "\$tool is needed/)
   const sh = raw('install.sh')
-  assert.ok(sh.includes('tmp=$(mktemp -d)') && /curl -fsSL [^\n]*-o "\$tmp\/\$tarball"/.test(sh))
+  // Since FRESH-11 curl writes to its output and the shell puts that into the temp folder (a confined curl can do
+  // that); the pages keep the advice to take the apt one, which is the one the install was walked through with.
+  assert.ok(sh.includes('tmp=$(mktemp -d)') && /curl -fsSL [^\n]*\$tarball" > "\$tmp\/\$tarball"/.test(sh))
 })
 
 test('DOCS-6 the Install page, the home page, INSTALL.md and the README give the Ubuntu step: sudo apt install curl, the apt one', () => {
@@ -90,7 +92,8 @@ test('the install pages give the Node.js rule of the installer and of package.js
 test('the install pages say: not as root, no older version over a newer one, another folder, the words until the yes, Enter at the live permission', () => {
   const get = raw('get.sh')
   for (const name of ['FOXAGENT_ALLOW_DOWNGRADE', 'FOXAGENT_DIR', 'FOXAGENT_VERSION', 'FOXAGENT_ALLOW_ROOT']) assert.ok(get.includes(name), name)
-  assert.match(raw('install.sh'), /until \[ "\$\(ask 'Type yes when the words are written down'\)" = yes \]/)
+  // The loop that asks until the yes is typed (since FRESH-9a yes in any case counts, and another answer is told what to type).
+  assert.match(raw('install.sh'), /while :; do\n +case "\$\(ask 'Type yes when the words are written down'\)" in\n +\[Yy\]\[Ee\]\[Ss\]\) break ;;/)
   for (const f of [INSTALL_PAGE, 'INSTALL.md']) {
     const text = read(f)
     assert.match(text, /Install as a user of your own, not as root: as root the installer stops and tells you to create a user first/, f)
