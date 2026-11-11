@@ -184,12 +184,16 @@ function commandOf(pid: number): string | null {
 }
 
 /**
- * Whether a live process with this command line is to be taken for the service. It runs this file (`.../src/service.ts`
- * under node, as run.sh, the systemd unit and `npm start` launch it). A command line that cannot be read counts as
- * the service too: unknown refuses, it never decides that nobody runs.
+ * Whether a live process is to be taken for the service. With a command line: it runs this file (`.../src/service.ts`
+ * under node, as run.sh, the systemd unit and `npm start` launch it). Without one (it could not be read):
+ * - a process of this same user (`ownUser`: it can be signalled) counts as the service: unknown refuses, never guesses;
+ * - a process of another user that cannot even be looked at does not. That is what a pid file left by a power cut
+ *   names after the reboot (a system program's pid), and the server's unit hides other users' processes from the
+ *   service (ProtectProc=invisible). Refusing there would end the unit after three tries and keep the agent down
+ *   until someone deletes the file; the service starts as it did before this check existed.
  */
-export function looksLikeService(command: string | null): boolean {
-  return command === null || /(^|[\s/\\])service\.ts(\s|$)/.test(command)
+export function looksLikeService(command: string | null, ownUser: boolean): boolean {
+  return command === null ? ownUser : /(^|[\s/\\])service\.ts(\s|$)/.test(command)
 }
 
 /**
@@ -200,7 +204,14 @@ export function looksLikeService(command: string | null): boolean {
 export function otherServiceRunning(dataDir: string): number | null {
   const pid = serviceRunning(dataDir)
   if (pid === null || pid === process.pid) return null
-  return looksLikeService(commandOf(pid)) ? pid : null
+  let ownUser = false
+  try {
+    process.kill(pid, 0)
+    ownUser = true
+  } catch {
+    ownUser = false // EPERM: another user's process; ESRCH: it ended meanwhile
+  }
+  return looksLikeService(commandOf(pid), ownUser) ? pid : null
 }
 
 /** A second copy was started on a data folder whose service runs: said in one line, without a stack trace. */

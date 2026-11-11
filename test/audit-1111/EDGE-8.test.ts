@@ -129,21 +129,26 @@ test('EDGE-8b a pid file left by a crash does not keep the service from starting
   }
 })
 
-test('EDGE-8c (unit) what counts as the service: a process that runs src/service.ts; one whose command line cannot be read refuses too', async () => {
+test('EDGE-8c (unit) what counts as the service: a process that runs src/service.ts; a process of another user that cannot even be looked at does not', async () => {
   // Read at run time, so this file still loads on the tree before the fix.
-  const { looksLikeService } = (await import('../../src/service.ts')) as unknown as { looksLikeService: (command: string | null) => boolean }
+  const { looksLikeService } = (await import('../../src/service.ts')) as unknown as { looksLikeService: (command: string | null, ownUser: boolean) => boolean }
   for (const command of [
     '/opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning src/service.ts', // the systemd unit
     '/home/owner/foxleague-agent/.node/bin/node --disable-warning=ExperimentalWarning /home/owner/foxleague-agent/versions/1.2.0/src/service.ts', // run.sh
     'node --disable-warning=ExperimentalWarning src/service.ts', // npm start
     'node service.ts',
-  ]) assert.equal(looksLikeService(command), true, command)
+  ]) for (const own of [true, false]) assert.equal(looksLikeService(command, own), true, command)
   for (const command of [
     '', // a kernel thread, a process that has ended
     '/usr/sbin/nginx -g daemon off;',
     'node --disable-warning=ExperimentalWarning --test test/update-service.test.ts',
     'node --disable-warning=ExperimentalWarning src/cli.ts agents',
     '/usr/bin/python3 /srv/app/myservice.ts.py',
-  ]) assert.equal(looksLikeService(command), false, command)
-  assert.equal(looksLikeService(null), true, 'unknown is not "nobody runs"')
+  ]) for (const own of [true, false]) assert.equal(looksLikeService(command, own), false, command)
+  // The server's unit hides the processes of other users from the service (ProtectProc=invisible), and a pid file
+  // left by a power cut names, after the reboot, a system program's pid: alive, another user's, not to be looked at.
+  // Refusing on that would end the unit after three tries and keep the agent down until someone deletes the file.
+  assert.equal(looksLikeService(null, false), false, 'a hidden process of another user is not this user\'s service')
+  // A process of the same user that cannot be read is not explained by that: refuse, never guess.
+  assert.equal(looksLikeService(null, true), true, 'unknown is not "nobody runs"')
 })
