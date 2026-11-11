@@ -1072,7 +1072,15 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!d) return refuse(`tournament T${a.tournament_id} not found`)
       const t: Tournament = d.tournament
       if (t.status !== 'open') return refuse(`T${t.id} is ${t.status}`)
-      if (new Date(t.deadline) <= ctx.now) return refuse(`T${t.id} registration deadline passed`)
+      // A deadline that is no time is unread, never "still ahead".
+      const deadline = Date.parse(t.deadline)
+      if (!Number.isFinite(deadline)) return refuse(`T${t.id}'s registration deadline could not be read: not joining blind`)
+      if (deadline <= ctx.now.getTime()) return refuse(`T${t.id} registration deadline passed`)
+      // FoxLeague checks the deadline when POST /join arrives, not when the payment landed (tournaments.rs: "Registration
+      // deadline has passed", the entry refunded and the gas lost). A payment signed now settles and reaches that gate a
+      // minute or two later, the margin the 1v1 busy hour has (audit 2026-11-11, INTEG-5). A free seat signs nothing.
+      const paidEntry = !(t.tier === 'bronze' && !(t.entry_fee_foxsy > 0))
+      if (paidEntry && deadline - ctx.now.getTime() <= BUSY_OPENS_MARGIN_S * 1000) return refuse(`T${t.id}'s registration deadline is in ${Math.max(0, Math.round((deadline - ctx.now.getTime()) / 1000))} s: a payment signed now reaches FoxLeague's join after it (the entry refunded, the gas lost)`)
       if (t.is_private && d.user_can_join_private !== true) return refuse(`T${t.id} is private and this team is not invited`)
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
       const unknownJoin = unsupportedFormat(t.format, 'joining')

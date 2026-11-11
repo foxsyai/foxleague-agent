@@ -42,6 +42,16 @@ export const SHOP_FINAL = /already processed|refunded|cannot be used/i
 // "Do NOT pay again" is not final: the entry is verified but the seat not recorded yet (tournaments.rs; OPEN-6).
 const JOIN_FINAL = /already|refunded|not open for registration/i
 
+/**
+ * "Registration deadline has passed": final too, but only as the answer to the ask that carried the payment's hash.
+ * FoxLeague's deadline gate (tournaments.rs join_tournament: refund_failed_join(.., join_hash(&req), "deadline_passed")
+ * before the refusal) refunds the entry in that same request, or logs it for its orphan reconcile when the refund
+ * itself fails; without a hash it refunds nothing (refund_failed_join_with returns at once). The deadline cannot
+ * un-pass, so the seat is settled; the ledger row keeps counting until the refund checks see the entry gone
+ * (audit 2026-11-11, EDGE-5).
+ */
+const JOIN_DEADLINE_PASSED = /deadline has passed/i
+
 /** A shop purchase as the executor keeps it with its payment (the pending row's payload). */
 export interface ShopOrder { product: string; player_nonces?: number[]; quantity?: number }
 
@@ -96,6 +106,8 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
     if (p.kind !== 'shop' && p.kind !== 'join' && p.kind !== 'ranked_ticket') continue
     const ageMin = (now - new Date(p.sentAt).getTime()) / 60_000
     let last: string
+    // A seat's last ask carried the payment's hash (the second ask, after "Do NOT pay again", carries none).
+    let askedWithHash = true
     try {
       if (p.kind === 'ranked_ticket') {
         if (!d.fox.buyRankedTicket) throw new Error('no ranked ticket confirm in this client')
@@ -115,6 +127,7 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
           // The entry is verified and the seat not recorded yet: asked for without the hash, as FoxLeague's app does
           // (paidJoin.ts) and as payAndJoin does; a failure there leaves the row for the next pass (OPEN-6).
           if (!(err instanceof ApiRefusal && /Do NOT pay again/i.test(err.message))) throw err
+          askedWithHash = false
           await d.fox.joinTournament(wallet, tournamentId)
         }
         d.store.resolvePending(p.hash, 'done')
@@ -135,7 +148,8 @@ export async function retryPendingPayments(d: PendingDeps, agentIndex: number, w
         continue
       }
       // "not open for registration": the tournament closed before the seat; FoxLeague refunds a paid entry (2026-10-07).
-      if (final && p.kind === 'join' && JOIN_FINAL.test(last)) {
+      // "deadline has passed": the registration closed before the seat; refunded in the request that carried the hash.
+      if (final && p.kind === 'join' && (JOIN_FINAL.test(last) || (askedWithHash && JOIN_DEADLINE_PASSED.test(last)))) {
         d.store.resolvePending(p.hash, 'done')
         continue
       }

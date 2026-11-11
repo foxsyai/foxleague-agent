@@ -1958,6 +1958,13 @@ ahead). No contract changed.
 - `viewer_tournament_window_opens_in_secs` on a 1v1's detail (read with the wallet): the seconds until FoxLeague's busy
   gate turns on for the team. A stake signed inside the last minutes reaches the join after it and is refunded with
   the gas lost; the agent refuses a 1v1 join when it opens within 120 s (LIVE-1).
+- The registration deadline has the same margin (audit 2026-11-11, INTEG-5): FoxLeague checks it when `POST /join`
+  arrives, not when the payment landed (`routes/tournaments.rs`, "Validate deadline": `refund_failed_join(..,
+  "deadline_passed")`, then `Registration deadline has passed`), so the agent signs no paid entry and no 1v1 stake
+  within 120 s of the deadline (`BUSY_OPENS_MARGIN_S`); a free seat signs nothing and needs none, and a deadline that
+  is no time is unread. For a payment already made, the pending retry takes that answer as final when it answers the
+  ask that carried the payment's hash (the request in which FoxLeague refunds); the entry's ledger row keeps counting
+  until the refund checks see it gone.
 - The five discipline fields on every card and listing, `card_bans` in `/api/config`, the medicine routes (section 6a
   of `docs/ECONOMY-AND-RULES.md`).
 
