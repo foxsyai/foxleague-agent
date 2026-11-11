@@ -121,8 +121,26 @@ live_default() {
   esac
 }
 
-# ---- Node.js: a recent one on the system or a private copy in .node/ ----
-node_ok() { [ -x "$1" ] && "$1" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
+# ---- Node.js: one on the system that the agent runs on, or a private copy in .node/ ----
+# The agent needs Node.js 22 from 22.18, or 24.2 and later: it runs TypeScript files as they are and starts
+# through import.meta.main, which 23.x, 24.0 and 24.1 do not have (the service would load and end at once).
+# package.json "engines" names the same range.
+NODE_RULE='const [a,b]=process.versions.node.split(".").map(Number);process.exit((a===22&&b>=18)||(a===24&&b>=2)||a>24?0:1)'
+node_ok() { [ -x "$1" ] && "$1" -e "$NODE_RULE" 2>/dev/null; }
+# The SHA-256 of the four archives of NODE_VERSION, read from https://nodejs.org/dist/v22.22.0/SHASUMS256.txt on
+# 2026-11-11. They are written here and not fetched with the download: a checksum list from the server that
+# serves the archive proves nothing when that server, or the way to it, hands out another program.
+# Change them together with NODE_VERSION.
+node_sha256() {
+  case "$PLATFORM-$NODE_ARCH" in
+    linux-x64) echo c33c39ed9c80deddde77c960d00119918b9e352426fd604ba41638d6526a4744 ;;
+    linux-arm64) echo 25ba95dfb96871fa2ef977f11f95ea90818c8fa15c0f2110771db08d4ba423be ;;
+    darwin-x64) echo 5ea50c9d6dea3dfa3abb66b2656f7a4e1c8cef23432b558d45fb538c7b5dedce ;;
+    darwin-arm64) echo 5ed4db0fcf1eaf84d91ad12462631d73bf4576c1377e192d222e48026a902640 ;;
+    *) return 1 ;;
+  esac
+}
+sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 # Writes a file by rename, never in place: a script or a service that is reading the old one keeps it.
 put_file() { # put_file <dest> <mode> ; content on stdin
   local tmp="$1.new.$$"
@@ -131,22 +149,25 @@ put_file() { # put_file <dest> <mode> ; content on stdin
   mv -f "$tmp" "$1"
 }
 ensure_node() {
+  local sys
+  sys=$(command -v node 2>/dev/null || true)
   if node_ok "$ROOT/.node/bin/node"; then
     NODE="$ROOT/.node/bin/node"
-  elif command -v node >/dev/null 2>&1 && node_ok "$(command -v node)"; then
-    NODE=$(command -v node)
+  elif [ -n "$sys" ] && node_ok "$sys" && [ -x "$(dirname "$sys")/npm" ]; then
+    # Only with npm beside it: some systems package npm apart, and the dependencies are installed with it.
+    NODE=$sys
   else
     info "Downloading Node.js $NODE_VERSION (a private copy, nothing is installed system-wide)"
-    local tmp tarball
+    local tmp tarball want got
+    want=$(node_sha256) || die "no Node.js archive is known for $PLATFORM-$NODE_ARCH: install Node.js 22 (22.18 or later) with npm yourself and run this again"
     tmp=$(mktemp -d)
     tarball="node-$NODE_VERSION-$PLATFORM-$NODE_ARCH.tar.gz"
-    curl -fsSL -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball"
-    curl -fsSL -o "$tmp/SHASUMS256.txt" "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt"
-    if command -v sha256sum >/dev/null 2>&1; then
-      (cd "$tmp" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c - >/dev/null)
-    else
-      (cd "$tmp" && grep " $tarball\$" SHASUMS256.txt | shasum -a 256 -c - >/dev/null)
-    fi || die "the Node.js download failed its checksum"
+    curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball" || { rm -rf "$tmp"; die "Node.js could not be downloaded from nodejs.org. Check the connection and run this again."; }
+    got=$(sha256_of "$tmp/$tarball")
+    if [ "$got" != "$want" ]; then
+      rm -rf "$tmp"
+      die "the Node.js download is not the file this installer expects (SHA-256 $got, expected $want): nothing was unpacked. Try again; if it happens again, tell the maintainers."
+    fi
     # Unpacked aside and moved in: a running agent keeps the Node it started with until its next start.
     rm -rf "$ROOT/.node.new" && mkdir -p "$ROOT/.node.new"
     tar -xzf "$tmp/$tarball" -C "$ROOT/.node.new" --strip-components=1

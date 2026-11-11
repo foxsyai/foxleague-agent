@@ -10,7 +10,7 @@ The files are in `deploy/`.
 |---|---|
 | Service user | `foxleague-agent` (no shell) |
 | Code | `/opt/foxleague-agent/app` |
-| Node.js (private copy, checksum verified) | `/opt/foxleague-agent/node` |
+| Node.js (private copy, checked against the SHA-256 written in `deploy/bootstrap.sh`) | `/opt/foxleague-agent/node` |
 | Env file (recovery words, keys, login; mode 600) | `/etc/foxleague-agent/env` |
 | Data (database, keys saved from the dashboard) | `/var/lib/foxleague-agent` |
 | systemd unit (sandboxed) | `foxleague-agent.service` |

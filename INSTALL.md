@@ -34,7 +34,7 @@ The installer walks you through seven steps and explains each one:
 
 | Step | What happens |
 |---|---|
-| 1. Node.js | Uses the Node.js on your computer if it is recent enough, otherwise downloads a private copy into the `foxleague-agent` folder (checksum verified). |
+| 1. Node.js | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. |
 | 2. Wallet | Creates a new wallet and shows its recovery words once. Write them down on paper. |
 | 3. Dashboard login | You choose a username, a password (at least 12 characters) and a port (default 8870). |
 | 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |

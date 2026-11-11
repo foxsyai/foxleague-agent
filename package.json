@@ -5,7 +5,7 @@
   "description": "AI team manager for FoxLeague (MultiversX mainnet)",
   "type": "module",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=22.18.0 <23 || >=24.2.0"
   },
   "scripts": {
     "cli": "node --disable-warning=ExperimentalWarning src/cli.ts",

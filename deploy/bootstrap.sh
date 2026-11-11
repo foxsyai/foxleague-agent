@@ -3,6 +3,10 @@
 # only (no system-wide install), directories, systemd unit. Does not start the service.
 set -euo pipefail
 NODE_VERSION=v22.22.0
+# The SHA-256 of node-v22.22.0-linux-x64.tar.xz, read from https://nodejs.org/dist/v22.22.0/SHASUMS256.txt on
+# 2026-11-11. Written here and not fetched with the download: a checksum list from the server that serves the
+# archive proves nothing when that server hands out another program. Change it together with NODE_VERSION.
+NODE_SHA256=9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37
 BASE=/opt/foxleague-agent
 # The repository copied to the server: the unit file is read from here, before the first deploy ships the code.
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -18,9 +22,8 @@ fi
 if [ "$("$BASE/node/bin/node" --version 2>/dev/null || true)" != "$NODE_VERSION" ]; then
   tmp=$(mktemp -d)
   tarball="node-$NODE_VERSION-linux-x64.tar.xz"
-  curl -fsSL -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball"
-  curl -fsSL -o "$tmp/SHASUMS256.txt" "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt"
-  (cd "$tmp" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c -)
+  curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball"
+  printf '%s  %s\n' "$NODE_SHA256" "$tmp/$tarball" | sha256sum -c - || { rm -rf "$tmp"; echo "The Node.js download is not the file this script expects: nothing was unpacked." >&2; exit 1; }
   rm -rf "$BASE/node" && mkdir -p "$BASE/node"
   tar -xJf "$tmp/$tarball" -C "$BASE/node" --strip-components=1
   chown -R root:root "$BASE/node"
