@@ -243,13 +243,6 @@ test('LIST-9 the dashboard gets the four with their cards, and an install that s
   }
 })
 
-/** A function of the dashboard's script, by name, with the page's `S` given. */
-function pageFunction<T>(name: string, S: unknown): T {
-  const src = html.match(new RegExp(`\\nfunction ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`))?.[0]
-  assert.ok(src, `the dashboard defines ${name}()`)
-  return new Function('S', `${src}; return ${name}`)(S) as T
-}
-
 test('LIST-10 the dashboard asks for the password by the server\'s rule, two cards included', () => {
   const models = Object.entries(MODELS).map(([id, m]) => {
     const cards = [m.price, ...((m as Rates).long ? [(m as Rates).long!.price] : [])]
@@ -258,7 +251,7 @@ test('LIST-10 the dashboard asks for the password by the server\'s rule, two car
   const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
   for (const cur of [...Object.keys(MODELS), 'claude-mystery-9']) {
     for (const effort of ['low', 'high']) {
-      const costsMore = pageFunction<(model: string, effort: string) => boolean>('aiCostsMore', { instance: { model: cur, effort, models, efforts } })
+      const costsMore = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], { instance: { model: cur, effort, models, efforts } })
       for (const pick of Object.keys(MODELS)) {
         for (const to of ['low', 'high']) assert.equal(costsMore(pick, to), web.raisesAiSpend({ model: cur, effort }, { model: pick, effort: to as 'low' }), `${cur} ${effort} to ${pick} ${to}`)
       }
@@ -266,7 +259,7 @@ test('LIST-10 the dashboard asks for the password by the server\'s rule, two car
   }
   // A model whose dearer card is above the current model's price asks, although its first card is cheaper.
   const two = [{ id: 'a', label: 'A', price: [1, 5, 0.1], cheapest: [1, 5, 0.1], dearest: [3, 15, 0.3] }, { id: 'b', label: 'B', price: [2, 10, 0.2], cheapest: [2, 10, 0.2], dearest: [2, 10, 0.2] }]
-  const from = (model: string) => pageFunction<(model: string, effort: string) => boolean>('aiCostsMore', { instance: { model, effort: 'low', models: two, efforts } })
+  const from = (model: string) => pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], { instance: { model, effort: 'low', models: two, efforts } })
   assert.equal(from('b')('a', 'low'), true, 'the long prompt of A costs more than B')
   assert.equal(from('a')('b', 'low'), true, 'B costs more than the short prompt of A')
   assert.equal(from('a')('a', 'low'), false, 'the same model at the same effort raises nothing')
@@ -276,7 +269,7 @@ test('LOCAL-1 the model list opens with "Local model (free, coming soon)": greye
   const fill = html.slice(html.indexOf('if (!sm.options.length) {'), html.indexOf('if (!stratDirty)'))
   assert.match(fill, /sm\.append\(el\('option', \{ value: '', disabled: true, text: 'Local model \(free, coming soon\)' \}\)\)\s*\n\s*for \(const m of i\.models\)/, 'the first entry of the list, disabled, with no model id')
   // Apply sends a model only when it is one of the server's list.
-  const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 700)
+  const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 1000)
   assert.match(apply, /if \(!S\.instance\.models\.some\(m => m\.id === body\.model\)\) \{ toast\('Pick a model from the list', true\); return false \}/)
   assert.ok(apply.indexOf('S.instance.models.some') < apply.indexOf("api('POST', '/api/strategist'"), 'checked before anything is sent')
   const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
@@ -301,4 +294,117 @@ test('LIST-11 every page that names the default or the list follows: Sonnet 5.5 
     assert.doesNotMatch(text, /Sonnet 5 is the default/, f)
   }
   assert.match(read(`${DOCS}/use/dashboard.md`).replace(/\s+/g, ' '), /The entry "Local model \(free, coming soon\)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is not ready\./)
+})
+
+// ---- the agent review of pull request #63 ----
+
+/** Several functions of the dashboard's script together (one may call another), the last one returned. */
+function pageFunctions<T>(names: string[], S: unknown): T {
+  const src = names.map(name => {
+    const found = html.match(new RegExp(`\\nfunction ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`))?.[0]
+    assert.ok(found, `the dashboard defines ${name}()`)
+    return found
+  })
+  return new Function('S', `${src.join('\n')}; return ${names.at(-1)}`)(S) as T
+}
+
+test('R63A-1 a switch that wakes a resting shadow model asks for the password: on the server', async () => {
+  const wakes = (web as unknown as { wakesShadow?: (shadow: string | null, current: string, next: string) => boolean }).wakesShadow
+  assert.equal(typeof wakes, 'function', 'server.ts exports wakesShadow')
+  // The shadow model rests only while it is the model that plays; a switch to any other model starts it.
+  assert.equal(wakes!('claude-fable-5-2', 'claude-fable-5-2', 'claude-haiku-5-5'), true)
+  assert.equal(wakes!('claude-fable-5-2', 'claude-fable-5-2', 'claude-fable-5-2'), false, 'the effort alone never wakes it')
+  assert.equal(wakes!('claude-fable-5-2', 'claude-sonnet-5-5', 'claude-haiku-5-5'), false, 'it runs already and keeps running')
+  assert.equal(wakes!('claude-fable-5-2', 'claude-sonnet-5-5', 'claude-fable-5-2'), false, 'this switch turns it off')
+  assert.equal(wakes!(null, 'claude-fable-5-2', 'claude-haiku-5-5'), false, 'no shadow model is set')
+  assert.equal(wakes!('claude-opus-5-5', 'claude-opus-5', 'claude-haiku-5-5'), true, 'a current model that left the list counts as its successor')
+
+  const { svc, server, password, post, state } = await webService(store => store.setKv('shadow_model', 'claude-fable-5-2'))
+  const playing = () => [svc.strategist?.model, svc.strategist?.effort]
+  try {
+    // The owner moved the playing model to Fable 5.2 with the password: the shadow, set to the same model, rests.
+    svc.setStrategist('claude-fable-5-2', 'medium', 'test')
+    assert.equal(((await state()).instance as unknown as { shadowModel: string | null }).shadowModel, 'claude-fable-5-2', 'the page is told which shadow model is set')
+    // Each of these is cheaper on every price, and from then on every plan would also pay a Fable 5.2 shadow plan.
+    for (const model of ['claude-haiku-5-5', 'claude-sonnet-5-5', 'claude-opus-5-5']) {
+      const res = await post('/api/strategist', { model, effort: 'low' })
+      assert.equal(res.status, 403, `${model} was switched on with one click and woke the Fable 5.2 shadow`)
+      assert.deepEqual(playing(), ['claude-fable-5-2', 'medium'])
+    }
+    // The effort alone never wakes it: less effort on the same model stays one click.
+    let res = await post('/api/strategist', { model: 'claude-fable-5-2', effort: 'low' })
+    assert.equal(res.status, 200, await res.text())
+    res = await post('/api/strategist', { model: 'claude-haiku-5-5', effort: 'low', password: 'wrong' })
+    assert.equal(res.status, 403)
+    res = await post('/api/strategist', { model: 'claude-haiku-5-5', effort: 'low', password })
+    assert.equal(res.status, 200, await res.text())
+    // The shadow runs now and keeps running: the rule is the prices and the effort, as before.
+    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low' })
+    assert.equal(res.status, 403, 'dearer than Haiku 5.5')
+    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low', password })
+    assert.equal(res.status, 200, await res.text())
+    res = await post('/api/strategist', { model: 'claude-haiku-5-5', effort: 'low' })
+    assert.equal(res.status, 200, 'cheaper, and the shadow ran before and runs after: one click')
+    // A switch to the shadow's own model turns the shadow off: judged by the playing model's prices, here dearer.
+    res = await post('/api/strategist', { model: 'claude-fable-5-2', effort: 'low' })
+    assert.equal(res.status, 403)
+    // A cheap shadow model: the switch to it turns the shadow off and is cheaper, one click. Away from it wakes it.
+    svc.store.setKv('shadow_model', 'claude-haiku-5-5')
+    svc.setStrategist('claude-sonnet-5-5', 'low', 'test')
+    res = await post('/api/strategist', { model: 'claude-haiku-5-5', effort: 'low' })
+    assert.equal(res.status, 200, await res.text())
+    // No shadow model set (or "off", or one the list does not have): nothing to wake.
+    for (const setting of ['off', '', 'gpt-oss']) {
+      svc.store.setKv('shadow_model', setting)
+      svc.setStrategist('claude-fable-5-2', 'low', 'test')
+      assert.equal(((await state()).instance as unknown as { shadowModel: string | null }).shadowModel, null, `shadow_model "${setting}"`)
+      res = await post('/api/strategist', { model: 'claude-opus-5-5', effort: 'low' })
+      assert.equal(res.status, 200, `shadow_model "${setting}": ${await res.text()}`)
+    }
+    // The environment's shadow model counts like the database's.
+    svc.store.db.prepare("DELETE FROM kv WHERE key = 'shadow_model'").run()
+    const prev = process.env.AGENT_SHADOW_MODEL
+    process.env.AGENT_SHADOW_MODEL = 'claude-fable-5-2'
+    try {
+      svc.setStrategist('claude-fable-5-2', 'low', 'test')
+      res = await post('/api/strategist', { model: 'claude-opus-5-5', effort: 'low' })
+      assert.equal(res.status, 403, 'AGENT_SHADOW_MODEL rests and would wake')
+    } finally {
+      if (prev === undefined) delete process.env.AGENT_SHADOW_MODEL
+      else process.env.AGENT_SHADOW_MODEL = prev
+    }
+  } finally {
+    server.close()
+  }
+})
+
+test('R63A-1 the dashboard asks for the password in the same cases, so the owner never meets a bare refusal', () => {
+  const wakes = (web as unknown as { wakesShadow: (shadow: string | null, current: string, next: string) => boolean }).wakesShadow
+  const models = Object.keys(MODELS).map(id => ({ id, label: MODELS[id]!.label, price: MODELS[id]!.price, ...strategist.priceRange(id)! }))
+  const efforts = ['low', 'medium', 'high', 'xhigh', 'max']
+  let woken = 0
+  for (const shadowModel of [null, ...Object.keys(MODELS)]) {
+    for (const cur of Object.keys(MODELS)) {
+      for (const effort of ['low', 'high']) {
+        const costsMore = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], { instance: { model: cur, effort, models, efforts, shadowModel } })
+        for (const pick of Object.keys(MODELS)) {
+          for (const to of ['low', 'high']) {
+            const server = web.raisesAiSpend({ model: cur, effort }, { model: pick, effort: to as 'low' }) || wakes(shadowModel, cur, pick)
+            assert.equal(costsMore(pick, to), server, `shadow ${shadowModel}, ${cur} ${effort} to ${pick} ${to}`)
+            if (wakes(shadowModel, cur, pick) && !web.raisesAiSpend({ model: cur, effort }, { model: pick, effort: to as 'low' })) woken++
+          }
+        }
+      }
+    }
+  }
+  assert.ok(woken > 0, 'some switches ask for the password only because they wake the shadow')
+  // The password dialog says why, and the bubble names the case.
+  const text = pageFunctions<(model: string) => string>(['wakesShadow', 'aiRaiseText'], { instance: { model: 'claude-fable-5-2', effort: 'low', models, efforts, shadowModel: 'claude-fable-5-2' } })
+  assert.equal(text('claude-haiku-5-5'), 'Shadow plans are set to Fable 5.2 on this computer. They rest while Fable 5.2 plays. With another model playing, every plan of every agent also pays for a shadow plan by Fable 5.2. Your password confirms it.')
+  assert.match(text('claude-fable-5-2'), /^A model with a higher price or a higher effort costs more on every plan of every agent\./)
+  const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 900)
+  assert.match(apply, /askPassword\(wakesShadow\(body\.model\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model\)\)/)
+  const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
+  assert.match(tip, /A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays\./)
+  assert.doesNotMatch(tip, /—|, and |, or /)
 })

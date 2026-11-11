@@ -88,6 +88,8 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
 
 - The model is one of the list (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-2`) and
   not the one that plays. Anything else means off, and the log says why once (`journalctl -u foxleague-agent`).
+- A shadow model that is also the model that plays rests. When you later pick another playing model in the dashboard,
+  its shadow plans start, so that switch asks for your dashboard password even when the new model is cheaper.
 - The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`.
 - `AGENT_SHADOW_MODEL` and `AGENT_SHADOW_EFFORT` in `/etc/foxleague-agent/env` do the same from the next start of
   the service. The database's setting wins, so `off` there switches it off whatever the env file says.

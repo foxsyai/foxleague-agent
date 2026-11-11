@@ -27,8 +27,10 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   Fable 5.2. Sonnet 5.5 is the default and plays well; Haiku 5.5 is the cheapest, for trying things out: how well it
   plays this game has not been measured yet; Opus 5.5, Fable 5.2 and a higher effort think harder and cost more. A
   dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
-  one click. The entry "Local model (free, coming soon)" at the top of the list cannot be picked: a free model that
-  runs on your own computer is being tested and is not ready.
+  one click. A switch that starts shadow plans asks for the password too
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
+  soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
+  not ready.
 
 ## An agent's page
 

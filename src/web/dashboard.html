@@ -914,13 +914,26 @@ $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; render
 // A dearer model or more effort raises the AI spend, which has no cap: the server asks for the password then
 // (raisesAiSpend in server.ts, the same rule). Another model is dearer when any of its prices can be higher: the
 // highest over its rate cards against the lowest of the model in use. A cheaper model or less effort is one click.
+// A switch that starts shadow plans asks for the password too (wakesShadow in server.ts, the same rule): a shadow
+// model set on the server rests while it is the model that plays, and under any other model every plan also pays for
+// a shadow plan, however cheap the new model is.
+function wakesShadow(model) {
+  const i = S.instance
+  return Boolean(i.shadowModel) && i.shadowModel === i.model && model !== i.shadowModel
+}
 function aiCostsMore(model, effort) {
   const i = S.instance, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
   if (!cur || !pick) return true
+  if (wakesShadow(model)) return true
   if (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) return true
   return i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
 }
-const AI_RAISE_TEXT = 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+// What the password dialog says: why this switch costs more.
+function aiRaiseText(model) {
+  if (!wakesShadow(model)) return 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+  const shadow = (S.instance.models.find(m => m.id === S.instance.shadowModel) || { label: S.instance.shadowModel }).label
+  return 'Shadow plans are set to ' + shadow + ' on this computer. They rest while ' + shadow + ' plays. With another model playing, every plan of every agent also pays for a shadow plan by ' + shadow + '. Your password confirms it.'
+}
 // password: already asked for (the level dialog asks once for the settings and the AI). Answers whether the AI was
 // switched: false when the password was not given or the server refused it (a mistyped one is a 403).
 $('stratApply').onclick = async (e, password) => {
@@ -928,7 +941,7 @@ $('stratApply').onclick = async (e, password) => {
   // Only a model of the server's list is sent: never the greyed-out local model, never an empty pick.
   if (!S.instance.models.some(m => m.id === body.model)) { toast('Pick a model from the list', true); return false }
   if (aiCostsMore(body.model, body.effort)) {
-    if (!password) password = await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+    if (!password) password = await askPassword(wakesShadow(body.model) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(body.model))
     if (!password) { toast('Strategist unchanged', true); return false }
     body.password = password
   }
@@ -969,7 +982,7 @@ const TIPS = {
     <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> is the cheapest, for trying things out: how well it plays this game has not been measured yet. <b>Sonnet 5.5</b> is the default and handles this game well. <b>Opus 5.5</b> is stronger and costs about 2x as much; <b>Fable 5.2</b>, the most capable, about 4x.</p>
     <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
-    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click.</p>
+    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click. A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
@@ -1338,7 +1351,7 @@ function openLevel(k) {
     if (aiMore) {
       password = limitsMore
         ? await askPassword('Raise a limit and switch to a dearer AI', 'Some of these settings let the agent spend more and the new AI costs more on every plan of every agent. Your password confirms both.')
-        : await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+        : await askPassword(wakesShadow(ai.model) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(ai.model))
       if (!password) return toast('Nothing saved', true)
     }
     // A refused switch (a mistyped password) stops here: its error is shown once and nothing else is saved.

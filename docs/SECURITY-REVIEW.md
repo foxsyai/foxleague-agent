@@ -1515,6 +1515,13 @@ any model the same request and read a refusal before the content).
 | LIST-6, LIST-11 | design (the owner, 2026-11-11) | A new install played on Sonnet 5 | The default is Sonnet 5.5 (`src/config.ts`, `.env.example`); the pages that name the default or the list follow |
 | LIST-7, LIST-10 | medium | The password rule compared the three prices of one card. With two cards a switch to Haiku 5.5 would have been judged by its cheaper card alone | Another model asks for the password when the highest of any of its prices over its cards is above the lowest of the current model's; the same model keeps its prices and only the effort decides; a current model that left the list counts as its successor and one without a price as dearer. The dashboard applies the same rule from the same numbers |
 
+The agent review of pull request #63 (Claude Fable 5.2 at high effort, on 90270a3) passed it with two findings. Each
+was fixed test first, the test seen failing before its fix:
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R63A-1 | medium | Rule 7: a one-click switch to a cheaper playing model could wake a shadow model that rested because it was the model that plays. With `shadow_model` on Fable 5.2 and Fable 5.2 playing, a click on Haiku 5.5 made every plan cost Haiku plus a Fable 5.2 shadow plan: the AI bill rose with no password (`/api/strategist` answered 200) | `wakesShadow` in `src/web/server.ts`: a switch that starts shadow plans (a shadow model is set, it is the current playing model and the next one is another) asks for the password like a dearer model. The page is told which shadow model is set and applies the same rule, with a dialog that says why. Pinned: a shadow that runs before and after changes nothing, a switch to the shadow's own model is judged by the prices as before, the effort alone never wakes it, and `AGENT_SHADOW_MODEL` counts like the database's setting |
+
 Stays open:
 - The reading of Haiku 5.5's two rate cards comes from Anthropic's wording, not from an invoice: "the prompt" is taken
   as every input token of the request (uncached input, cache reads and cache writes). The system text and the manual

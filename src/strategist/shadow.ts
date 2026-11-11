@@ -74,6 +74,16 @@ export function shadowChoice(store: Store, playing: string): ShadowChoice {
   return { on: true, model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
 }
 
+/**
+ * The shadow model that is set, whatever model plays: null when none is set, when it is "off" or when the list does
+ * not have it. It rests while it is the model that plays and runs under any other, which is why a switch of the
+ * playing model away from it starts shadow plans and asks for the password (wakesShadow in src/web/server.ts).
+ */
+export function shadowModelSet(store: Store): string | null {
+  const model = (store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '').trim()
+  return model && isKnownModel(model) ? model : null
+}
+
 /** The most a rejected proposal may take in a record: a model can write anything there. */
 const RAW_CHARS = 400
 const MAX_REJECTED = 12
