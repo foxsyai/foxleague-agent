@@ -989,7 +989,10 @@ test('onboarding: Link my Telegram finds the chat that sent the one-time code an
     const u = String(url)
     const reply = (b: unknown) => new Response(JSON.stringify(b), { headers: { 'content-type': 'application/json' } })
     if (u.includes('/getMe')) return reply({ ok: true, result: { username: 'myfox_bot' } })
-    if (u.includes('/getUpdates?limit=20')) return reply({ ok: true, result: sent ? [{ message: { chat: { id: 777, type: 'private', username: 'owner' }, text: sent } }, { message: { chat: { id: 888, type: 'private' }, text: 'hello' } }] : [] })
+    // The link's own reading (pages of 100, messages dated after the link was started: ATTACK-8 of 2026-11-11); the
+    // reader that starts once the chat is linked asks with a timeout and gets nothing here.
+    const date = Math.floor(Date.now() / 1000)
+    if (u.includes('/getUpdates?limit=')) return reply({ ok: true, result: sent ? [{ update_id: 1, message: { chat: { id: 777, type: 'private', username: 'owner' }, date, text: sent } }, { update_id: 2, message: { chat: { id: 888, type: 'private' }, date, text: 'hello' } }] : [] })
     return reply({ ok: true, result: [] })
   }) as typeof fetch
   try {

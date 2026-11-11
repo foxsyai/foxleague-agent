@@ -368,9 +368,10 @@ async function main(): Promise<void> {
       if (token && !cfg.telegramChatId) {
         const name = await telegramMe(token)
         const code = String(randomInt(100_000, 1_000_000))
+        const since = Date.now() // only a message sent after this moment can carry the code
         console.log(`Telegram bot @${name}. From your own Telegram account, send it this code: ${code}   then press Enter here.`)
         await promptHidden('')
-        const id = pickOwnerChat(await telegramRecentChats(token), code)
+        const id = pickOwnerChat(await telegramRecentChats(token, since), code)
         if (id) {
           values.TELEGRAM_CHAT_ID = id
           console.log('Your chat was found and saved: your Telegram bot answers only you.')

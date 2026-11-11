@@ -754,7 +754,7 @@ export class Service {
   }
 
   /** A pending "Link my Telegram" from the dashboard: the owner sends this code to their Telegram bot from their own account. */
-  private telegramLink: { code: string; until: number } | null = null
+  private telegramLink: { code: string; since: number; until: number } | null = null
 
   /** Starts linking the owner's Telegram chat: needs the bot token saved and no chat linked yet. */
   async startTelegramLink(): Promise<{ code: string; username: string }> {
@@ -763,7 +763,9 @@ export class Service {
     if (this.cfg.telegramChatId) throw new Error('a chat is already linked; to link another one, clear the Telegram chat id in Keys first')
     const username = await telegramMe(token)
     const code = String(randomInt(100_000, 1_000_000))
-    this.telegramLink = { code, until: Date.now() + 10 * 60_000 }
+    // `since`: only a message sent after this moment can carry the code (ATTACK-8).
+    const since = Date.now()
+    this.telegramLink = { code, since, until: since + 10 * 60_000 }
     return { code, username }
   }
 
@@ -772,7 +774,7 @@ export class Service {
     const link = this.telegramLink
     const token = this.cfg.telegramToken
     if (!link || link.until < Date.now() || !token) throw new Error('the code expired: press Link my Telegram again')
-    const id = pickOwnerChat(await telegramRecentChats(token), link.code)
+    const id = pickOwnerChat(await telegramRecentChats(token, link.since), link.code)
     if (!id) throw new Error('the code was not found yet: send exactly those 6 digits to your Telegram bot from your own Telegram account, then press I sent it again')
     this.telegramLink = null
     return this.updateKeys({ TELEGRAM_CHAT_ID: id }, by)
