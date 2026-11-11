@@ -336,6 +336,7 @@ if [ "$MODE" = update ]; then
   secure_modes
   if [ -d "$APP_DIR/.git" ]; then
     # A git checkout: git replaces files by new ones, so this script keeps reading the one it started from.
+    info "This folder is a git checkout: it follows its branch ($(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)), which may hold code that is in no release yet."
     git -C "$APP_DIR" pull --ff-only
     ensure_node
     deps
