@@ -10,7 +10,7 @@ The files are in `deploy/`.
 |---|---|
 | Service user | `foxleague-agent` (no shell) |
 | Code | `/opt/foxleague-agent/app` |
-| Node.js (private copy, checksum verified) | `/opt/foxleague-agent/node` |
+| Node.js (private copy, checked against the SHA-256 written in `deploy/bootstrap.sh`) | `/opt/foxleague-agent/node` |
 | Env file (recovery words, keys, login; mode 600) | `/etc/foxleague-agent/env` |
 | Data (database, keys saved from the dashboard) | `/var/lib/foxleague-agent` |
 | systemd unit (sandboxed) | `foxleague-agent.service` |
@@ -41,11 +41,24 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
 
 ## Dashboard behind nginx
 
-`deploy/nginx-foxleague-agent.conf` is a template: replace `agent.example.com` with your domain, point its DNS at
-the server, get a certificate (for example `certbot --nginx`) and reload nginx. The dashboard listens on
-127.0.0.1:8870 only and sends its own security headers, including a per-page Content Security Policy. The template
-also holds the sign-in page to 30 requests a minute from one address (nginx answers 429 beyond that); the dashboard
-keeps its own lock on wrong passwords, per IPv4 address and per /64 for IPv6.
+`deploy/nginx-foxleague-agent.conf` is a template with two server blocks. Its port 80 block only answers the certificate challenge and sends everything else to https.
+Its port 443 block holds the certificate and passes the requests to the dashboard, which listens on 127.0.0.1:8870
+only and sends its own security headers, including a per-page Content Security Policy. The dashboard is never
+served on plain http, so the certificate comes first:
+
+1. Point the DNS of your domain at the server.
+2. Get the certificate, before the template is in place:
+   `sudo certbot certonly --nginx -d agent.example.com --deploy-hook "systemctl reload nginx"`
+   (certbot answers the challenge through the running nginx and changes none of your sites; the hook makes nginx
+   read each renewed certificate).
+3. Copy the template to `/etc/nginx/sites-available/foxleague-agent`, replace `agent.example.com` with your domain
+   everywhere in it and link it: `sudo ln -s /etc/nginx/sites-available/foxleague-agent /etc/nginx/sites-enabled/`.
+4. Check and reload: `sudo nginx -t && sudo systemctl reload nginx`. `http://your-domain` now redirects to https.
+
+Do not run `certbot --nginx` on the template afterwards: it has its 443 block already.
+
+The template also holds the sign-in page to 30 requests a minute from one address (nginx answers 429 beyond that);
+the dashboard keeps its own lock on wrong passwords, per IPv4 address and per /64 for IPv6.
 
 ## Everyday
 

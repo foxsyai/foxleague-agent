@@ -122,6 +122,28 @@ function archivePathsSafe(listing: string): boolean {
 }
 
 /**
+ * A release holds plain files and folders only. Read from `tar -tv`, whose lines start with the entry's kind in
+ * GNU tar and in bsdtar alike: `-` a file, `d` a folder; `l` a symbolic link, `h` a hard link, `c`, `b` and `p`
+ * a device or a pipe. A link could point out of the release folder, at the owner's .env or at a system file.
+ */
+function archiveOnlyFilesAndFolders(verbose: string): boolean {
+  const lines = verbose.split('\n').filter(Boolean)
+  return lines.length > 0 && lines.every(l => (l[0] === '-' || l[0] === 'd') && !l.includes(' -> ') && !l.includes(' link to '))
+}
+
+/**
+ * A path, inside the release folder, that belongs to an install and never to a release: the env file, the data
+ * and PEM folders, keys, installed dependencies and the private Node.js. An archive that holds one was packed
+ * from a folder in use; it is refused whole (the release's own .env.example is not such a path).
+ */
+function ownersPath(rel: string): boolean {
+  const parts = rel.split('/').filter(Boolean)
+  if (!parts.length) return false
+  if (parts[0] === 'data' || parts[0] === 'pem' || parts[0] === 'keys') return true
+  return parts.some(p => p === '.env' || p === '.node' || p === 'node_modules' || (p.startsWith('.env.') && p !== '.env.example') || p.endsWith('.pem'))
+}
+
+/**
  * Unpacks a verified archive into versions/v<version> and has the new release prepare itself (its own
  * `install.sh --prepare`: Node, dependencies, the recovery words check, the launcher). Returns the folder's name.
  * Throws UpdateError and leaves nothing behind when a step fails.
@@ -160,6 +182,10 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
   const listing = await exec('tar', ['-tzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
   if (listing.code !== 0) return fail('the archive could not be read')
   if (!archivePathsSafe(listing.out)) return fail('the archive holds a path outside its own folder')
+  if (listing.out.split('\n').some(l => ownersPath(l.split('/').slice(1).join('/')))) return fail('the archive holds files that belong to an install, not to a release (.env, data, pem, keys, node_modules or .node)')
+  const kinds = await exec('tar', ['-tvzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
+  if (kinds.code !== 0) return fail('the archive could not be read')
+  if (!archiveOnlyFilesAndFolders(kinds.out)) return fail('the archive holds something that is not a plain file or folder (a link or a special file)')
   mkdirSync(staging, { recursive: true, mode: 0o700 })
   const unpack = await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=1'], { cwd: versions, env, timeoutMs: 120_000 })
   if (unpack.code !== 0) return fail('the archive could not be unpacked')
@@ -246,8 +272,8 @@ FOXAGENT_ROOT="$ROOT" exec bash "$ROOT/versions/$active/install.sh" "$@"
 `
 
 /**
- * Once a new release is confirmed: its launcher and its installer's entry replace the ones in the install's
- * folder. By rename, never in place, so a script that is running keeps reading the file it started from.
+ * Once a new release is confirmed: its launcher, its command line (cli.sh) and its installer's entry replace the
+ * ones in the install's folder. By rename, never in place, so a script that is running keeps reading the file it started from.
  * Returns the names it replaced.
  */
 export function refreshLauncher(layout: Layout): string[] {
@@ -268,7 +294,7 @@ export function refreshLauncher(layout: Layout): string[] {
     renameSync(tmp, dest)
     changed.push(name)
   }
-  for (const name of ['run.sh', 'get.sh']) {
+  for (const name of ['run.sh', 'cli.sh', 'get.sh']) {
     try {
       put(name, readFileSync(join(layout.code, name), 'utf8'))
     } catch {

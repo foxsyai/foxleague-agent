@@ -10,7 +10,8 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 ## What you need
 
 - A computer that stays on: Linux with systemd or macOS. On Windows, use WSL2 with systemd turned on.
-  A small cloud server works too.
+  A small cloud server works too. Install as a user of your own, not as root: as root the installer stops and
+  tells you to create a user first (for a server set up by hand, see [docs/SERVER.md](docs/SERVER.md)).
 - About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
@@ -26,15 +27,19 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 ```
 
 It downloads the newest release into `~/foxleague-agent` and starts the guided installer. To install a
-given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. On Windows, first install WSL2
+given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
+put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway (the settings and
+limits the newer version added are then not applied). Another folder is named with `FOXAGENT_DIR`; it must be
+empty or hold an install of foxleague-agent. On Windows, first install WSL2
 (Ubuntu) from the Microsoft Store and paste the line in its terminal. If you prefer git:
-`git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`.
+`git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`. A git checkout
+follows its branch: `./install.sh --update` pulls it, and that may be code that is in no release yet.
 
 The installer walks you through seven steps and explains each one:
 
 | Step | What happens |
 |---|---|
-| 1. Node.js | Uses the Node.js on your computer if it is recent enough, otherwise downloads a private copy into the `foxleague-agent` folder (checksum verified). |
+| 1. Node.js | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. |
 | 2. Wallet | Creates a new wallet and shows its recovery words once. Write them down on paper. |
 | 3. Dashboard login | You choose a username, a password (at least 12 characters) and a port (default 8870). |
 | 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |
@@ -66,6 +71,8 @@ The dashboard's **Getting started** guide repeats the key steps below, shows whi
   controls every agent wallet. They give each agent its wallet: agent 1 uses account 0 of the words, agent 2
   account 1 and so on (in mxpy, `--address-index` is N-1 for agent N).
 - The words are also stored in the `.env` file in the `foxleague-agent` folder, readable only by your user.
+  To see them again, run `./cli.sh backup-words` in that folder, in your own terminal. Until you have typed `yes`
+  at "Type yes when the words are written down", every run of the installer shows them and asks again.
 - `pem/` holds one PEM file per agent (`agent1.pem`, `agent2.pem`...). Use them to log into FoxLeague. Never send
   them to anyone and never upload them anywhere.
 
@@ -147,7 +154,12 @@ results, not meeting). What they share is a pooled formation record with no team
 | Logs | `journalctl --user -u foxleague-agent -f` | `tail -f data/service.log` |
 | Restart | `systemctl --user restart foxleague-agent` | `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent` |
 | Update | `./install.sh --update` | `./install.sh --update` |
+| Command line | `./cli.sh` (alone it lists the commands) | `./cli.sh` |
 | Uninstall | `./install.sh --uninstall` | `./install.sh --uninstall` |
+
+An update restarts the background service; when the restart fails it says so and names the command to run. An
+install made with `./install.sh --no-service` has no background service and an update does not add one: start the
+agent with `./run.sh`, and start it again after an update.
 
 Uninstall stops the background service and leaves your folder, wallet and PEM files in place. Delete the folder
 only when the agent wallets are empty and your recovery words are safe.

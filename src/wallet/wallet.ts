@@ -95,17 +95,36 @@ export function shardOf(bech32: string): number {
   return addressComputer.getShardOfAddress(Address.newFromBech32(bech32))
 }
 
+/** An AGENT_MNEMONIC line of an env file, the way Node reads one: spaces around the name, an optional `export`. */
+const MNEMONIC_LINE = /^[ \t]*(export[ \t]+)?AGENT_MNEMONIC[ \t]*=([^]*)$/
+
 /**
  * Writes a new 24-word mnemonic into the env file as AGENT_MNEMONIC (mode 600). Refuses when one
- * is already there: replacing it would orphan every funded agent wallet.
+ * is already there: replacing it would orphan every funded agent wallet. A line that holds anything at all
+ * counts as "already there", also a value this code cannot read. Only a line with no value (as .env.example
+ * ships it: nothing, spaces or an empty pair of quotes) is filled, in place; with no line at all one is added.
  */
 export function generateMnemonicInto(envFile: string): { created: boolean } {
   const existing = existsSync(envFile) ? readFileSync(envFile, 'utf8') : ''
-  if (/^\s*AGENT_MNEMONIC\s*=\s*\S/m.test(existing)) return { created: false }
+  const lines = existing.split('\n')
+  let fill = -1
+  for (const [i, line] of lines.entries()) {
+    const m = MNEMONIC_LINE.exec(line)
+    if (!m) continue
+    const value = m[2]!.trim()
+    if (value !== '' && value !== '""' && value !== "''") return { created: false }
+    fill = i // the last one: that is the line Node reads
+  }
   const words = Mnemonic.generate().getWords().join(' ')
   validateMnemonic(words)
-  const line = `AGENT_MNEMONIC="${words}"\n`
-  const next = existing && !existing.endsWith('\n') ? `${existing}\n${line}` : existing + line
+  let next: string
+  if (fill >= 0) {
+    lines[fill] = `${MNEMONIC_LINE.exec(lines[fill]!)![1] ? 'export ' : ''}AGENT_MNEMONIC="${words}"`
+    next = lines.join('\n')
+  } else {
+    const line = `AGENT_MNEMONIC="${words}"\n`
+    next = existing && !existing.endsWith('\n') ? `${existing}\n${line}` : existing + line
+  }
   writeFileSync(envFile, next, { mode: 0o600 })
   chmodSync(envFile, 0o600)
   return { created: true }

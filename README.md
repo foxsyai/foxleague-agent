@@ -85,18 +85,25 @@ the dashboard or by chatting with it on Telegram.
 
 ## Command line
 
+In the `foxleague-agent` folder (`./cli.sh` uses the Node.js the installer set up, so it needs no npm; alone it
+lists every command):
+
 ```
-npm run cli -- agents               # every agent (numbered from 1) and its address
-npm run cli -- snapshot 1            # read-only state of agent 1
-npm run cli -- plan 1                # the AI's plan for agent 1, simulated
-npm run cli -- dry-run 1 '<json>'    # run hand-written actions through the checks, simulated
-npm run cli -- kill on|off | pause N | resume N | mode [dry|live] | log [N]
-npm run cli -- configure             # keys, typed hidden
-npm run cli -- check-keys            # test the keys
-npm run cli -- set-web-password      # dashboard login
-npm run cli -- export-pem N pem/agentN.pem
+./cli.sh agents               # every agent (numbered from 1) and its address
+./cli.sh snapshot 1           # read-only state of agent 1
+./cli.sh plan 1               # the AI's plan for agent 1, simulated
+./cli.sh dry-run 1 '<json>'   # run hand-written actions through the checks, simulated
+./cli.sh kill on|off | pause N | resume N | mode [dry|live] | log [N]
+./cli.sh configure            # keys, typed hidden
+./cli.sh check-keys           # test the keys
+./cli.sh set-web-password     # dashboard login
+./cli.sh backup-words         # show the recovery words again, only in your own terminal
+./cli.sh export-pem N pem/agentN.pem
+./run.sh                      # start the agent in this terminal (an install without the background service)
 ./install.sh --update | --uninstall
 ```
+
+In a git checkout with your own Node.js, `npm run cli -- <command>` and `npm start` do the same.
 
 To run it on a server behind nginx instead, see [docs/SERVER.md](docs/SERVER.md).
 
@@ -112,7 +119,7 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
-manual, rebuilt with `npm run cli -- sync-manual <path to the FoxLeague repository>`).
+manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`).
 
 ## Fair play
 

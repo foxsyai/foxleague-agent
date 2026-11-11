@@ -66,19 +66,106 @@ case "$(uname -m)" in
   *) die "unsupported processor $(uname -m)" ;;
 esac
 [ -f "$APP_DIR/package.json" ] && grep -q '"name": "foxleague-agent"' "$APP_DIR/package.json" || die "run install.sh from inside the foxleague-agent folder"
+# The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
+# so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
+if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
+  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
+fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
+# The recovery words live in this file, so set_env never loses a line of it: every line but the key's own is
+# copied to a new file, the lines are counted another way (wc, not grep) and only then the new file takes the
+# place of .env. grep -a and LC_ALL=C: a NUL byte or a byte outside the locale (a line appended from Windows)
+# must not make grep treat the file as binary and print nothing.
+count_lines() { # lines of a file; a last line without its line end is a line too
+  local n
+  n=$(wc -l < "$1")
+  if [ -s "$1" ] && [ "$(tail -c 1 "$1" | wc -l)" -eq 0 ]; then n=$((n + 1)); fi
+  printf '%s' "$((n))"
+}
 set_env() {
-  local tmp
+  local tmp rc=0 had=0 gone=0 kept
   tmp=$(mktemp "$ROOT/.env.XXXXXX")
-  { grep -v "^$1=" "$ENV_FILE" 2>/dev/null || true; printf '%s="%s"\n' "$1" "$2"; } > "$tmp"
   chmod 600 "$tmp"
+  if [ -e "$ENV_FILE" ]; then
+    # grep ends with 0 (lines copied), 1 (none to copy: an empty file, or only this key) or 2 (an error).
+    LC_ALL=C grep -a -v "^$1=" "$ENV_FILE" > "$tmp" || rc=$?
+    if [ "$rc" -gt 1 ]; then rm -f "$tmp"; die "$ENV_FILE could not be read line by line: it was left as it is. Check the file, then run the installer again."; fi
+    had=$(count_lines "$ENV_FILE")
+    gone=$(LC_ALL=C grep -a -c "^$1=" "$ENV_FILE") || true
+  fi
+  kept=$(count_lines "$tmp")
+  case "$gone" in '' | *[!0-9]*) gone=-1 ;; esac
+  if [ "$kept" -ne $((had - gone)) ]; then rm -f "$tmp"; die "lines of $ENV_FILE would be lost: it was left as it is (it holds your recovery words). Check the file, then run the installer again."; fi
+  printf '%s="%s"\n' "$1" "$2" >> "$tmp"
   mv "$tmp" "$ENV_FILE"
 }
-get_env() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
+get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
 
-# ---- Node.js: a recent one on the system or a private copy in .node/ ----
-node_ok() { [ -x "$1" ] && "$1" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=18)?0:1)' 2>/dev/null; }
+# The files that hold secrets, readable by the owner only. A folder that was copied to another machine or came
+# back from a backup may have lost its modes; every run of this script puts them back. Nothing is created.
+secure_modes() {
+  local f loose=0
+  mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1" 2>/dev/null || echo '?'; }
+  if [ -f "$ENV_FILE" ]; then [ "$(mode_of "$ENV_FILE")" = 600 ] || loose=1; chmod 600 "$ENV_FILE"; fi
+  for f in "$DATA_DIR" "$PEM_DIR"; do
+    if [ -d "$f" ]; then [ "$(mode_of "$f")" = 700 ] || loose=1; chmod 700 "$f"; fi
+  done
+  if [ -d "$PEM_DIR" ]; then
+    for f in "$PEM_DIR"/*.pem; do
+      if [ -f "$f" ]; then [ "$(mode_of "$f")" = 600 ] || loose=1; chmod 600 "$f"; fi
+    done
+  fi
+  if [ "$loose" = 1 ]; then info "Others on this machine could read your files: .env, data and pem are readable by you only again."; fi
+}
+
+# ---- the live permission: what Enter means at "Allow this machine to sign real transactions" ----
+# A first install: no database yet and AGENT_LIVE_ENABLED nowhere in .env (not even commented out). A .env that
+# cannot be searched counts as naming it: unknown is not absent.
+first_install() {
+  local rc=0
+  if [ -e "$DATA_DIR/agent.db" ]; then echo 0; return 0; fi
+  if [ -e "$ENV_FILE" ]; then
+    LC_ALL=C grep -a -q 'AGENT_LIVE_ENABLED' "$ENV_FILE" || rc=$?
+    if [ "$rc" != 1 ]; then echo 0; return 0; fi
+  fi
+  echo 1
+}
+# Yes only when .env already allows it (1 or true, what the agent itself accepts), or on a first install. Every
+# other state (commented out, removed, false, off, no, 0) is off, and Enter keeps it off.
+live_default() {
+  local v
+  # A line in another form (export, spaces around the name) is read by the agent and not by this script: with
+  # one in the file, what the agent sees is not known here, so the answer is no.
+  if LC_ALL=C grep -a -E '^[[:space:]]*(export[[:space:]]+)?AGENT_LIVE_ENABLED[[:space:]]*=' "$ENV_FILE" 2>/dev/null | LC_ALL=C grep -a -q -v '^AGENT_LIVE_ENABLED='; then echo n; return 0; fi
+  v=$(get_env AGENT_LIVE_ENABLED | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+  case "$v" in
+    1 | true) echo y ;;
+    '') if [ "${FIRST_INSTALL:-0}" = 1 ]; then echo y; else echo n; fi ;;
+    *) echo n ;;
+  esac
+}
+
+# ---- Node.js: one on the system that the agent runs on, or a private copy in .node/ ----
+# The agent needs Node.js 22 from 22.18, or 24.2 and later: it runs TypeScript files as they are and starts
+# through import.meta.main, which 23.x, 24.0 and 24.1 do not have (the service would load and end at once).
+# package.json "engines" names the same range.
+NODE_RULE='const [a,b]=process.versions.node.split(".").map(Number);process.exit((a===22&&b>=18)||(a===24&&b>=2)||a>24?0:1)'
+node_ok() { [ -x "$1" ] && "$1" -e "$NODE_RULE" 2>/dev/null; }
+# The SHA-256 of the four archives of NODE_VERSION, read from https://nodejs.org/dist/v22.22.0/SHASUMS256.txt on
+# 2026-11-11. They are written here and not fetched with the download: a checksum list from the server that
+# serves the archive proves nothing when that server, or the way to it, hands out another program.
+# Change them together with NODE_VERSION.
+node_sha256() {
+  case "$PLATFORM-$NODE_ARCH" in
+    linux-x64) echo c33c39ed9c80deddde77c960d00119918b9e352426fd604ba41638d6526a4744 ;;
+    linux-arm64) echo 25ba95dfb96871fa2ef977f11f95ea90818c8fa15c0f2110771db08d4ba423be ;;
+    darwin-x64) echo 5ea50c9d6dea3dfa3abb66b2656f7a4e1c8cef23432b558d45fb538c7b5dedce ;;
+    darwin-arm64) echo 5ed4db0fcf1eaf84d91ad12462631d73bf4576c1377e192d222e48026a902640 ;;
+    *) return 1 ;;
+  esac
+}
+sha256_of() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi; }
 # Writes a file by rename, never in place: a script or a service that is reading the old one keeps it.
 put_file() { # put_file <dest> <mode> ; content on stdin
   local tmp="$1.new.$$"
@@ -87,22 +174,25 @@ put_file() { # put_file <dest> <mode> ; content on stdin
   mv -f "$tmp" "$1"
 }
 ensure_node() {
+  local sys
+  sys=$(command -v node 2>/dev/null || true)
   if node_ok "$ROOT/.node/bin/node"; then
     NODE="$ROOT/.node/bin/node"
-  elif command -v node >/dev/null 2>&1 && node_ok "$(command -v node)"; then
-    NODE=$(command -v node)
+  elif [ -n "$sys" ] && node_ok "$sys" && [ -x "$(dirname "$sys")/npm" ]; then
+    # Only with npm beside it: some systems package npm apart, and the dependencies are installed with it.
+    NODE=$sys
   else
     info "Downloading Node.js $NODE_VERSION (a private copy, nothing is installed system-wide)"
-    local tmp tarball
+    local tmp tarball want got
+    want=$(node_sha256) || die "no Node.js archive is known for $PLATFORM-$NODE_ARCH: install Node.js 22 (22.18 or later) with npm yourself and run this again"
     tmp=$(mktemp -d)
     tarball="node-$NODE_VERSION-$PLATFORM-$NODE_ARCH.tar.gz"
-    curl -fsSL -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball"
-    curl -fsSL -o "$tmp/SHASUMS256.txt" "https://nodejs.org/dist/$NODE_VERSION/SHASUMS256.txt"
-    if command -v sha256sum >/dev/null 2>&1; then
-      (cd "$tmp" && grep " $tarball\$" SHASUMS256.txt | sha256sum -c - >/dev/null)
-    else
-      (cd "$tmp" && grep " $tarball\$" SHASUMS256.txt | shasum -a 256 -c - >/dev/null)
-    fi || die "the Node.js download failed its checksum"
+    curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball" || { rm -rf "$tmp"; die "Node.js could not be downloaded from nodejs.org. Check the connection and run this again."; }
+    got=$(sha256_of "$tmp/$tarball")
+    if [ "$got" != "$want" ]; then
+      rm -rf "$tmp"
+      die "the Node.js download is not the file this installer expects (SHA-256 $got, expected $want): nothing was unpacked. Try again; if it happens again, tell the maintainers."
+    fi
     # Unpacked aside and moved in: a running agent keeps the Node it started with until its next start.
     rm -rf "$ROOT/.node.new" && mkdir -p "$ROOT/.node.new"
     tar -xzf "$tmp/$tarball" -C "$ROOT/.node.new" --strip-components=1
@@ -120,12 +210,14 @@ ensure_node() {
 cli() { AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 deps() { (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
 
-# ---- the launcher: what the service starts. On an install made by get.sh it sits in ROOT with an install.sh
-# that hands over to the active release; in a git checkout both are the checkout's own files. ----
+# ---- the launcher (run.sh: what the service starts) and the command line (cli.sh). On an install made by get.sh
+# they sit in ROOT with an install.sh that hands over to the active release; in a git checkout all three are the
+# checkout's own files. ----
 install_launcher() {
   [ "$MANAGED" = 1 ] || return 0
   put_file "$ROOT/run.sh" 755 < "$APP_DIR/run.sh"
-  [ -f "$APP_DIR/get.sh" ] && put_file "$ROOT/get.sh" 755 < "$APP_DIR/get.sh"
+  if [ -f "$APP_DIR/cli.sh" ]; then put_file "$ROOT/cli.sh" 755 < "$APP_DIR/cli.sh"; fi
+  if [ -f "$APP_DIR/get.sh" ]; then put_file "$ROOT/get.sh" 755 < "$APP_DIR/get.sh"; fi
   put_file "$ROOT/install.sh" 755 <<'SHIM'
 #!/usr/bin/env bash
 # foxleague-agent: runs the installer of the release that is active (./install.sh --update, --uninstall, --help).
@@ -220,6 +312,7 @@ remove_service() {
     rm -f "$PLIST"
   fi
 }
+restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 logs_hint() { if [ "$PLATFORM" = linux ]; then echo "journalctl --user -u $SERVICE -f"; else echo "tail -f $DATA_DIR/service.log"; fi; }
 
 # ---- the three modes ----
@@ -235,6 +328,7 @@ if [ "$MODE" = prepare ]; then
   # An update unpacked this release next to the running one and runs this before it switches. Only this
   # release's own folder and Node are touched: the running release, the database and the service are not.
   [ -n "${FOXAGENT_ROOT:-}" ] || die "--prepare is run by an update, not by hand"
+  secure_modes
   ensure_node
   deps
   exit 0
@@ -242,8 +336,10 @@ fi
 
 if [ "$MODE" = update ]; then
   say "Updating foxleague-agent"
+  secure_modes
   if [ -d "$APP_DIR/.git" ]; then
     # A git checkout: git replaces files by new ones, so this script keeps reading the one it started from.
+    info "This folder is a git checkout: it follows its branch ($(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)), which may hold code that is in no release yet."
     git -C "$APP_DIR" pull --ff-only
     ensure_node
     deps
@@ -259,13 +355,19 @@ if [ "$MODE" = update ]; then
   else
     die "this folder was installed by an older installer. Paste the install line again once (your wallet, keys and data are kept); later updates are one click in the dashboard."
   fi
-  if [ "$NO_SERVICE" = 0 ]; then
-    if service_installed; then service_restart && info "Restarted."; else install_service && info "Installed and started."; fi
-  else
-    info "Start the agent again to run the new version."
+  # An update restarts the background service when there is one and never installs one: an install made with
+  # --no-service is started by its owner, and a second agent beside it would use the same wallets.
+  if [ "$NO_SERVICE" = 1 ] || ! service_installed; then
+    info "No background service is installed here: start the agent again to run the new version ($ROOT/run.sh)."
+    exit 0
   fi
+  service_restart || die "the new version is in place but the background service could not be restarted: the old version is still the one running. Restart it yourself: $(restart_hint)"
+  info "Restarted."
   exit 0
 fi
+
+# Read before anything is written: later steps create the .env and may create the database.
+FIRST_INSTALL=$(first_install)
 
 say "foxleague-agent installer"
 info "It sets up local agents that manage FoxLeague teams for you, with a dashboard on this machine."
@@ -277,20 +379,34 @@ deps
 install_launcher
 mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 [ -f "$ENV_FILE" ] || install -m 600 /dev/null "$ENV_FILE"
+secure_modes
 
 say "2/7 Your wallet"
-had_words=$(get_env AGENT_MNEMONIC)
-cli setup | grep -v 'backup-words' || true
-if [ -z "$had_words" ]; then
+# The typed yes below is noted here. Until it exists every run shows the words and asks: a first run that ended
+# before the yes (a closed terminal) must not leave an owner who never saw them again.
+WORDS_CONFIRMED="$DATA_DIR/words-confirmed"
+setup_rc=0
+setup_out=$(cli setup 2>&1) || setup_rc=$?
+printf '%s\n' "$setup_out" | grep -v 'backup-words' || true
+[ "$setup_rc" = 0 ] || die "the wallet could not be set up (see the lines above). Nothing was created. Check AGENT_MNEMONIC in $ENV_FILE, then run the installer again."
+if [ ! -f "$WORDS_CONFIRMED" ]; then
   info ""
-  info "A new wallet was created. Its recovery words are the ONLY way to get your funds back."
+  # What the setup itself said, not what this script could read from .env.
+  if printf '%s\n' "$setup_out" | grep -q '^New recovery words written'; then
+    info "A new wallet was created. Its recovery words are the ONLY way to get your funds back."
+  else
+    info "You have not confirmed yet that the recovery words of this wallet are written down."
+    info "They are the ONLY way to get your funds back, so here they are again."
+  fi
   info "Write them down on paper now. Never type them into a website, a chat or a screenshot."
   info ""
   cli backup-words
   info ""
   until [ "$(ask 'Type yes when the words are written down')" = yes ]; do :; done
+  printf 'The owner typed yes at "Type yes when the words are written down" on %s.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | put_file "$WORDS_CONFIRMED" 600
   clear 2>/dev/null || true
   info "Good. The words stay in $ENV_FILE (readable only by you)."
+  info "To see them again later, in this folder: ./cli.sh backup-words"
 else
   info "Your existing wallet is kept."
 fi
@@ -354,8 +470,8 @@ say "5/7 Settings"
 set_env AGENT_PEM_DIR "$PEM_DIR"
 info "A new install starts in DRY RUN: the agents plan and simulate, nothing is signed."
 info "When you are happy, press Go LIVE in the dashboard. This machine still has to allow it:"
-# A re-run offers the earlier answer, so pressing Enter never turns live signing on by surprise.
-if yes_no "Allow this machine to sign real transactions once you press Go LIVE?" "$([ "$(get_env AGENT_LIVE_ENABLED)" = 0 ] && echo n || echo y)"; then
+# A re-run offers what .env says now, so pressing Enter never turns live signing on by surprise.
+if yes_no "Allow this machine to sign real transactions once you press Go LIVE?" "$(live_default)"; then
   set_env AGENT_LIVE_ENABLED 1
 else
   set_env AGENT_LIVE_ENABLED 0
@@ -397,9 +513,10 @@ cat <<EOF
 
   Everyday commands
   Logs        $(logs_hint)
-  Restart     $([ "$PLATFORM" = linux ] && echo "systemctl --user restart $SERVICE" || echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL")
+  Restart     $(restart_hint)
   Update      ./install.sh --update
   Uninstall   ./install.sh --uninstall
+  Command line  ./cli.sh   (alone it lists the commands; ./cli.sh backup-words shows the recovery words)
 
   Keep your recovery words safe. Anyone with them controls the agent wallets.
 EOF

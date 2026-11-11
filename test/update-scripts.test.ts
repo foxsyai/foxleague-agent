@@ -97,7 +97,9 @@ test('GET-2: the pasted line over an older install replaces its code and keeps t
   for (const d of ['src', 'deploy', 'test', 'docs', 'data', 'pem', '.node/bin', 'node_modules/x']) mkdirSync(join(dir, d), { recursive: true })
   const mine: Record<string, string> = { '.env': 'AGENT_MNEMONIC="the owner words"\n', 'data/agent.db': 'database', 'pem/agent1.pem': 'pem', '.node/bin/node': 'node' }
   for (const [f, text] of Object.entries(mine)) writeFileSync(join(dir, f), text)
-  for (const f of ['src/service.ts', 'install.sh', 'get.sh', 'package.json']) writeFileSync(join(dir, f), 'old')
+  for (const f of ['src/service.ts', 'install.sh', 'get.sh']) writeFileSync(join(dir, f), 'old')
+  // What tells get.sh that the folder is an older foxleague-agent install (INSTALL-9): its package.json says so.
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'foxleague-agent', version: '0.11.0' }, null, 2))
   try {
     const r = await sh(join(REPO, 'get.sh'), [], { HOME: home, FOXAGENT_RELEASES: web.base, FOXAGENT_NO_RUN: '1' })
     assert.equal(r.status, 0, r.out)
