@@ -66,6 +66,11 @@ case "$(uname -m)" in
   *) die "unsupported processor $(uname -m)" ;;
 esac
 [ -f "$APP_DIR/package.json" ] && grep -q '"name": "foxleague-agent"' "$APP_DIR/package.json" || die "run install.sh from inside the foxleague-agent folder"
+# The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
+# so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
+if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
+  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
+fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
 # The recovery words live in this file, so set_env never loses a line of it: every line but the key's own is
@@ -96,6 +101,23 @@ set_env() {
   mv "$tmp" "$ENV_FILE"
 }
 get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
+
+# The files that hold secrets, readable by the owner only. A folder that was copied to another machine or came
+# back from a backup may have lost its modes; every run of this script puts them back. Nothing is created.
+secure_modes() {
+  local f loose=0
+  mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1" 2>/dev/null || echo '?'; }
+  if [ -f "$ENV_FILE" ]; then [ "$(mode_of "$ENV_FILE")" = 600 ] || loose=1; chmod 600 "$ENV_FILE"; fi
+  for f in "$DATA_DIR" "$PEM_DIR"; do
+    if [ -d "$f" ]; then [ "$(mode_of "$f")" = 700 ] || loose=1; chmod 700 "$f"; fi
+  done
+  if [ -d "$PEM_DIR" ]; then
+    for f in "$PEM_DIR"/*.pem; do
+      if [ -f "$f" ]; then [ "$(mode_of "$f")" = 600 ] || loose=1; chmod 600 "$f"; fi
+    done
+  fi
+  if [ "$loose" = 1 ]; then info "Others on this machine could read your files: .env, data and pem are readable by you only again."; fi
+}
 
 # ---- the live permission: what Enter means at "Allow this machine to sign real transactions" ----
 # A first install: no database yet and AGENT_LIVE_ENABLED nowhere in .env (not even commented out). A .env that
@@ -287,6 +309,7 @@ remove_service() {
     rm -f "$PLIST"
   fi
 }
+restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 logs_hint() { if [ "$PLATFORM" = linux ]; then echo "journalctl --user -u $SERVICE -f"; else echo "tail -f $DATA_DIR/service.log"; fi; }
 
 # ---- the three modes ----
@@ -302,6 +325,7 @@ if [ "$MODE" = prepare ]; then
   # An update unpacked this release next to the running one and runs this before it switches. Only this
   # release's own folder and Node are touched: the running release, the database and the service are not.
   [ -n "${FOXAGENT_ROOT:-}" ] || die "--prepare is run by an update, not by hand"
+  secure_modes
   ensure_node
   deps
   exit 0
@@ -309,6 +333,7 @@ fi
 
 if [ "$MODE" = update ]; then
   say "Updating foxleague-agent"
+  secure_modes
   if [ -d "$APP_DIR/.git" ]; then
     # A git checkout: git replaces files by new ones, so this script keeps reading the one it started from.
     git -C "$APP_DIR" pull --ff-only
@@ -326,11 +351,14 @@ if [ "$MODE" = update ]; then
   else
     die "this folder was installed by an older installer. Paste the install line again once (your wallet, keys and data are kept); later updates are one click in the dashboard."
   fi
-  if [ "$NO_SERVICE" = 0 ]; then
-    if service_installed; then service_restart && info "Restarted."; else install_service && info "Installed and started."; fi
-  else
-    info "Start the agent again to run the new version."
+  # An update restarts the background service when there is one and never installs one: an install made with
+  # --no-service is started by its owner, and a second agent beside it would use the same wallets.
+  if [ "$NO_SERVICE" = 1 ] || ! service_installed; then
+    info "No background service is installed here: start the agent again to run the new version ($ROOT/run.sh)."
+    exit 0
   fi
+  service_restart || die "the new version is in place but the background service could not be restarted: the old version is still the one running. Restart it yourself: $(restart_hint)"
+  info "Restarted."
   exit 0
 fi
 
@@ -347,6 +375,7 @@ deps
 install_launcher
 mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 [ -f "$ENV_FILE" ] || install -m 600 /dev/null "$ENV_FILE"
+secure_modes
 
 say "2/7 Your wallet"
 had_words=$(get_env AGENT_MNEMONIC)
@@ -480,7 +509,7 @@ cat <<EOF
 
   Everyday commands
   Logs        $(logs_hint)
-  Restart     $([ "$PLATFORM" = linux ] && echo "systemctl --user restart $SERVICE" || echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL")
+  Restart     $(restart_hint)
   Update      ./install.sh --update
   Uninstall   ./install.sh --uninstall
   Command line  ./cli.sh   (alone it lists the commands; ./cli.sh backup-words shows the recovery words)

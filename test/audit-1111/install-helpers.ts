@@ -4,6 +4,7 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, statSync, symlinkSync, writeFileSync, writeSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
+import { INSTALL_SHIM } from '../../src/update/install.ts'
 import { REPO, codeTree, testKey, tmp } from '../update-fixtures.ts'
 
 export const KEY = testKey()
@@ -249,6 +250,26 @@ export function snapshotOf(dir: string): Record<string, string> {
   }
   if (existsSync(dir)) walk(dir, '')
   return out
+}
+
+/** An install at 3.1.0 as the installer leaves it: the scripts in its folder, a private Node.js with npm and (unless told otherwise) a background service. */
+export function running(s: Stubs, o: { service?: boolean } = {}): { home: string; root: string; code: string; unit: string; env: (base: string) => Record<string, string> } {
+  const home = tmp('fox-home-')
+  const root = join(home, 'foxleague-agent')
+  const code = realTree(join(root, 'versions', 'v3.1.0'), '3.1.0')
+  symlinkSync(join(REPO, 'node_modules'), join(code, 'node_modules'))
+  writeFileSync(join(root, 'versions', 'active'), 'v3.1.0\n')
+  for (const f of ['run.sh', 'cli.sh', 'get.sh']) cpSync(join(code, f), join(root, f))
+  writeFileSync(join(root, 'install.sh'), INSTALL_SHIM, { mode: 0o755 })
+  mkdirSync(join(root, '.node', 'bin'), { recursive: true })
+  symlinkSync(process.execPath, join(root, '.node', 'bin', 'node'))
+  cpSync(join(s.dir, 'npm'), join(root, '.node', 'bin', 'npm'))
+  const unit = join(home, '.config', 'systemd', 'user', 'foxleague-agent.service')
+  if (o.service !== false) {
+    mkdirSync(join(home, '.config', 'systemd', 'user'), { recursive: true })
+    writeFileSync(unit, '[Unit]\n')
+  }
+  return { home, root, code, unit, env: base => ({ HOME: home, USER: 'tester', PATH: `${s.dir}:${process.env.PATH}`, AGENT_UPDATE_URL: base, FOXAGENT_TTY: '/dev/null' }) }
 }
 
 export { REPO, tmp }

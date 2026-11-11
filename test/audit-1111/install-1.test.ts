@@ -9,28 +9,11 @@
 //   was running still loads and is the one the launcher starts.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { INSTALL_SHIM, detectLayout, refreshLauncher } from '../../src/update/install.ts'
+import { detectLayout, refreshLauncher } from '../../src/update/install.ts'
 import { buildRelease, publish, serve } from '../update-fixtures.ts'
-import { KEY, NPM_CI, REPO, realTree, sh, snapshotOf, stubs, tmp, type Stubs } from './install-helpers.ts'
-
-/** An install at 3.1.0 as the installer leaves it, with a background service: the scripts in its folder, a private Node.js with npm. */
-function running(s: Stubs): { home: string; root: string; code: string; env: (base: string) => Record<string, string> } {
-  const home = tmp('fox-home-')
-  const root = join(home, 'foxleague-agent')
-  const code = realTree(join(root, 'versions', 'v3.1.0'), '3.1.0')
-  symlinkSync(join(REPO, 'node_modules'), join(code, 'node_modules'))
-  writeFileSync(join(root, 'versions', 'active'), 'v3.1.0\n')
-  for (const f of ['run.sh', 'cli.sh', 'get.sh']) cpSync(join(code, f), join(root, f))
-  writeFileSync(join(root, 'install.sh'), INSTALL_SHIM, { mode: 0o755 })
-  mkdirSync(join(root, '.node', 'bin'), { recursive: true })
-  symlinkSync(process.execPath, join(root, '.node', 'bin', 'node'))
-  cpSync(join(s.dir, 'npm'), join(root, '.node', 'bin', 'npm'))
-  mkdirSync(join(home, '.config', 'systemd', 'user'), { recursive: true })
-  writeFileSync(join(home, '.config', 'systemd', 'user', 'foxleague-agent.service'), '[Unit]\n')
-  return { home, root, code, env: base => ({ HOME: home, USER: 'tester', PATH: `${s.dir}:${process.env.PATH}`, AGENT_UPDATE_URL: base, FOXAGENT_TTY: '/dev/null' }) }
-}
+import { KEY, NPM_CI, realTree, running, sh, snapshotOf, stubs, tmp } from './install-helpers.ts'
 
 test('INSTALL-1: an update to a release whose get.sh and install.sh changed completes, prepared by the new installer', { timeout: 240_000 }, async () => {
   const s = stubs()
