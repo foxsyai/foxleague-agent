@@ -697,6 +697,8 @@ function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, l
 export const MIN_1V1_CHANCE = 0.55
 export const STRONGER_SQUAD = 1.05
 export const STRONGER_ELO = 50
+/** What "clearly stronger" counts, for a refusal: the same margins judgeField uses. */
+const STRONGER_WORDS = `a lineup more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent with an ELO more than ${STRONGER_ELO} above yours`
 /** No entry into a field with this many clearly stronger teams, or this many unread (every level since 2026-11-06). */
 export const FIELD_LIMIT = 3
 
@@ -709,12 +711,17 @@ export interface FieldSeat {
 
 /**
  * How a seated field compares with us, the one test the join rule and the plan's field line both use. Clearly
- * stronger: ELO more than 50 above ours and a lineup more than 5 percent above ours (a lineup that could not be read
- * counts when its ELO alone is clearly higher). Clearly weaker: both margins the other way, both known. Unread:
- * neither known. The rest is even (or known only in part).
+ * stronger: a lineup that was read and is more than 10 percent above ours (MAX_1V1_STRENGTH_RATIO, the margin a 1v1
+ * is refused at), whatever its ELO; or a lineup more than 5 percent above ours with an ELO more than 50 above ours; a
+ * lineup that could not be read counts when its ELO alone is clearly higher. ELO is the one number a rival controls
+ * downward (a new team starts at 1200, a team can lose on purpose), so it may add to what the lineups say and never
+ * take away from it: a field of elevens far stronger than ours at a low ELO is no even field (audit 2026-11-11,
+ * MONEY-1). Clearly weaker: both margins the other way, both known. Unread: neither known. The rest is even (or known
+ * only in part).
  */
 export function judgeField(field: FieldSeat[], ours: number, myElo: number): { stronger: number; weaker: number; even: number; unread: number; strongestElo: number | null; strongestLineup: number | null } {
-  const isStronger = (f: FieldSeat) => f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD)
+  const isStronger = (f: FieldSeat) =>
+    (f.strength !== null && f.strength > ours * MAX_1V1_STRENGTH_RATIO) || (f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD))
   const stronger = field.filter(isStronger).length
   const weaker = field.filter(f => f.elo !== null && f.elo < myElo - STRONGER_ELO && f.strength !== null && f.strength * STRONGER_SQUAD < ours).length
   // A seat known only in part (its ELO or its lineup unread) and not already clearly stronger is unread, never even
@@ -1148,7 +1155,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!atStart) return refuse('your current tournaments could not be read: no field is judged blind')
           if (!Number.isFinite(s.profile.elo_rating)) return refuse('your own ELO could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
-          if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (lineup and ELO): no real chance of the knockout`)
+          if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (${STRONGER_WORDS}): no real chance of the knockout`)
           if (field.stronger + field.unread >= LK_KNOCKOUT_PLACES) return refuse(`${field.unread} invited teams could not be read: no field is accepted blind`)
         } else {
           // Never blind: a field that could not be read is no field to pay into.
@@ -1159,7 +1166,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!Number.isFinite(s.profile.elo_rating)) return refuse('your own ELO could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
           if (field.unread >= FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: no field is entered blind`)
-          if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
+          if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (${STRONGER_WORDS}): no real chance of the top three`)
         }
       }
       // A free Bronze (one FoxLeague's own team creates; the players' free ones were cancelled at the levels' switch) seats without a payment and earns nothing; a paid one goes on chain like Silver.

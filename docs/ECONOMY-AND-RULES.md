@@ -459,7 +459,11 @@ among the called-up players by contribution. Nothing of it exists in the code on
   training status the agent cannot read refuses a 1v1, an entry or a session; a seated team known only in part is
   unread; every seated team is judged; a fusion fee is held to the Max shop payment; the level's paid sessions a day
   are the sessions past the free ones. The schedule check judges the squad at a tournament's start;
-  every level compares a seated field with our eleven at the start (Zeus only until 2026-11-06); a plan spaces its casual and ranked matches 13 minutes
+  every level compares a seated field with our eleven at the start (Zeus only until 2026-11-06): a seated team is
+  clearly stronger when its lineup is more than 10 percent above ours whatever its ELO, or more than 5 percent above
+  ours with an ELO more than 50 above ours (an unread lineup on its ELO alone), and no entry is paid into a field with
+  3 of them (24 of the invited teams for a League + Knockout) (`judgeField`; the lineup alone decides since the audit
+  of 2026-11-11, MONEY-1); a plan spaces its casual and ranked matches 13 minutes
   apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the

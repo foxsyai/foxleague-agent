@@ -23,7 +23,9 @@ afterwards or write your own. [Every setting explained](/use/settings/) covers t
 - A 1v1 against a known team only from 55 percent; an open challenge only to teams no stronger by OVR.
 - A tournament only with a real chance of the top three (fewer than three clearly stronger seated teams, our eleven
   taken at the start); a Champions FoxLeague invitation only with a real chance of the knockout (fewer than 24 of the
-  invited teams clearly stronger).
+  invited teams clearly stronger). A team is clearly stronger when its starting eleven is more than 10 percent
+  stronger than ours, whatever its rating, or more than 5 percent stronger with a rating more than 50 above ours: a
+  low rating never makes a stronger eleven look even.
 - Ranked while the squad is fit, casual formation tests when they cost nothing to a match that counts, the formation
   and eleven set against each opponent before every lock, training on the stats each role needs.
 - A sync only when it changes a match that counts, condition recovery for key starters before a match that matters,

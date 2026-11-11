@@ -145,7 +145,7 @@ test('Zeus accepts with a real chance of the knockout: fewer than 24 of the invi
   const strong = (n: number) => Array.from({ length: n }, (_, i) => ({ userId: 5000 + i, strength: 1e9, elo: 3000 }))
   const even = (n: number) => Array.from({ length: n }, (_, i) => ({ userId: 6000 + i, strength: 1, elo: 1 }))
   assert.equal(checkAction(join, s, ctx({ field: [...strong(23), ...even(12)] })).ok, true)
-  assert.match(checkAction(join, s, ctx({ field: [...strong(24), ...even(11)] })).refusal!, /24 of the invited teams are clearly stronger \(lineup and ELO\): no real chance of the knockout/)
+  assert.match(checkAction(join, s, ctx({ field: [...strong(24), ...even(11)] })).refusal!, /24 of the invited teams are clearly stronger \(a lineup more than 10 percent above yours, or more than 5 percent with an ELO more than 50 above yours\): no real chance of the knockout/)
   assert.match(checkAction(join, s, ctx({ field: undefined })).refusal!, /the invited teams could not be read/)
 })
 
@@ -320,7 +320,7 @@ test('R31A-3 Zeus refuses a field the leaderboard shows clearly stronger, and le
   const m = setup({ fox: { tournament: async () => lk(), leagueInvitations: async () => [invitation()], ...rivalSquad(60), leaderboard: async () => strongBoard, leagueInvitationsView: async () => ({ invitations: [...Array.from({ length: 30 }, (_, i) => ({ user_id: 7000 + i, state: i % 2 ? 'accepted' : 'invited' })), { user_id: 9001, state: 'expired' }, { user_id: 9002, state: 'declined' }] }) } })
   m.store.updateSettings(0, { maxEntryFeeFoxsy: 10_000, strategy: STRATEGY_PRESETS.zeus! })
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action: join, reason: '' }])
-  assert.match(r!.summary, /30 of the invited teams are clearly stronger \(lineup and ELO\): no real chance of the knockout/)
+  assert.match(r!.summary, /30 of the invited teams are clearly stronger \(a lineup more than 10 percent above yours, or more than 5 percent with an ELO more than 50 above yours\): no real chance of the knockout/)
 })
 
 // Owner, 2026-10-24: FoxLeague's tournaments contract on mainnet now carries the League + Knockout invitations
