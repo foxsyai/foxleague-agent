@@ -1474,6 +1474,9 @@ test-first, with their tests under `test/audit-1111/` (`fresh-<n>`, `upd-<n>`); 
 `test/review-web.test.ts`. The replay was then given a scenario for each of UPD-21 to UPD-24 under its real systemd
 and run on the fixes on 2026-11-11: 88 checks, none failed.
 
+The Windows one-line installer (`get.ps1`) was written after them, on the owner's decision that Windows stays on
+WSL2 with one pasted PowerShell line. It is a new feature and not a finding, and WIN-1 is the last row.
+
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | MONEY-1 | medium | A seated team counted as clearly stronger only when its ELO was more than 50 above ours and its lineup more than 5 percent above. A field of elevens twice as strong at our own ELO read "0 stronger" and the entry was paid | A lineup that was read decides alone once it is more than 10 percent above ours (`MAX_1V1_STRENGTH_RATIO`). Between 5 and 10 percent the ELO still has its say, and an unread lineup is judged on its ELO. The same count holds for Champions FoxLeague invitations. |
@@ -1556,6 +1559,7 @@ and run on the fixes on 2026-11-11: 88 checks, none failed.
 | UPD-22 | low | The systemd user unit restarted the agent only after a failure (`Restart=on-failure`) and the launchd plist only after an exit that was not 0. A new release that ends at once with status 0, as Node.js 23 ends this code, was not started a second time, so the launcher's undo waited for the owner | `Restart=always` in the user unit and `KeepAlive` true in the plist. `RestartSec`, the start limit and the lines for exit code 75 are unchanged. A stop that is asked for (`systemctl --user stop`, the uninstall) is not restarted. The server's unit in `deploy/` is not part of this. |
 | UPD-23 | medium | A dashboard port that another program holds (`EADDRINUSE` at listen) was an error nothing caught: it ended the whole agent. Under the unit it was started again until the start limit and then stayed stopped, although the agents do not need the dashboard to play | The failed listen is caught. The agent says once, in the log and on Telegram, which port it is, that the agents keep playing and how to set `WEB_UI_PORT`. It tries the port again every 60 seconds and says once when the dashboard is back. Any other error of the web server ends the process as before. |
 | UPD-24 | low | For the first 45 seconds after a new release started, `versions/pending` still names it and the launcher may still undo it. A second Update now in that time was accepted: it replaced the note, so a release that had not proven that it starts became the one to go back to | Refused with one sentence: "the last update is still being confirmed, try again in a minute". Nothing is asked, downloaded or switched. |
+| WIN-1 | new feature | On Windows the guide had the newcomer set up WSL2, Ubuntu, systemd and curl by hand in five steps, its systemd step could append a second `[boot]` to a file that already had one, and nothing kept Ubuntu running once its last window closed (DOCS-7). The owner decided: Windows stays on WSL2, with one pasted PowerShell line | `get.ps1` at the repository root, pasted with `irm` and `iex` like `get.sh` with curl and bash. It checks the PC (64-bit, build 19041 or later, virtualization where Windows tells it); when WSL 2 is missing it runs Microsoft's own `wsl --install --no-distribution` through the administrator prompt of Windows and, when Windows has to restart, says: restart, paste the same line again; it installs Ubuntu with `wsl --install -d Ubuntu`, where Ubuntu itself asks for the username and password; it turns systemd on in `/etc/wsl.conf` by the rules of WSL's own reader (the first `systemd` line counts, so the line that is there is corrected and a `[boot]` section is added only when the file has none; the old file is kept beside it and the new one is read back); it runs `get.sh` as the user's own Linux user in the same window; and it registers a scheduled task of the Windows user, "FoxLeague Agent (WSL)", that keeps one hidden `wsl.exe` attached to Ubuntu. The choices that keep it safe: nothing is downloaded and run on the Windows side except Microsoft's `wsl.exe`, started by its full path in the Windows folder; no code is built and run (no `Invoke-Expression`, no script block made from text), which the checks hold with the parser; the script is one function called on its last line, so a download cut short runs nothing, and it never ends the user's window; no password, key or recovery word passes through it (of `.env` only the digits of the dashboard port come back); the switches handed to `get.sh` are each held to their own shape and refused otherwise, and a `FOXAGENT_DIR` on the Windows disk is refused; only the distribution named Ubuntu is used and restarted (`wsl --terminate Ubuntu`, never `--shutdown`), the default distribution and version are left alone, and an Ubuntu that was already there is asked before its restart; the task runs with the user's ordinary rights, and `-Uninstall` removes that task and nothing else. Checked on Linux only: the PowerShell parser, PSScriptAnalyzer and the checks of `test/windows/get-ps1.checks.ps1` in PowerShell 7 with stand-ins for `wsl.exe` and Windows, run by `test/audit-1111/windows-1.test.ts` where Docker has the image |
 
 Decisions of the owner (2026-11-11):
 - **Signed releases.** An installed agent takes an update only when it is signed with the release key. The key is
@@ -1578,8 +1582,17 @@ Stays open:
   Ubuntu 24.04 in a container that runs systemd and done by the owner on a real Ubuntu desktop, nowhere else: not
   on an arm64 machine, not from a git clone, not with a snap's curl, not behind a slow network or on a full disk.
   The pages say what follows from how macOS and Windows work (a LaunchAgent starts at login; WSL stops with its
-  last terminal and does not start with Windows). A one-line helper that keeps the agent alive on Windows is
-  prepared apart and is not shipped.
+  last terminal and does not start with Windows). The Windows one-line installer (WIN-1) now makes a scheduled
+  task that is meant to keep Ubuntu running; the next line says what is known of it.
+- `get.ps1` has not run on a real Windows PC yet. It was written on Linux: the PowerShell parser reads it and its
+  decisions are checked in PowerShell 7 with stand-ins for `wsl.exe` and Windows. That says nothing of Windows
+  PowerShell 5.1, of what the real `wsl.exe` answers on a PC without WSL, of the administrator prompt and the
+  restart, of Ubuntu's first start, of whether an ordinary user may register the task, of whether
+  `conhost.exe --headless` shows no window and of whether Ubuntu stays up with every window closed.
+  `docs/WINDOWS-TEST.md` is the walk-through for the owner's PC. Until it is done, the guides say what the task
+  is there for and not that it works. Also open there: `install.sh` asks about the browser itself inside WSL
+  (through `explorer.exe`), so `get.ps1` asks only when the installer inside could not; a switch in `install.sh`
+  would let the Windows side, which tries the address from Windows, own that question.
 - A change of the unit or of the plist in a later release reaches an existing install only when its owner runs the
   installer again: an update replaces the code, not the service file. The release notes have to say so. An install
   made before 2026-11-11 keeps `Restart=on-failure` until then; its agent still knows that systemd restarts it,
