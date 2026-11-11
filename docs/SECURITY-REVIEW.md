@@ -1462,7 +1462,16 @@ Some are one defect seen from two areas, and share a row below: EDGE-2 is ATTACK
 INTEG-6, MONEY-3 is INTEG-4, DOCS-5 is INTEG-2, DOCS-2 is INSTALL-1 and INSTALL-15 is EDGE-8. The one-click update was
 built while the audit ran, so the installer's findings about the old way of updating (INSTALL-1, INSTALL-2,
 INSTALL-16, the first half of INSTALL-7) are closed by its design and held by regression tests; its own guarantees
-are the last rows.
+are the rows named UPD-1 to UPD-20 and REL.
+
+After the fixes the install was replayed the way a newcomer meets it, on a fresh Ubuntu 24.04 in a container that
+runs systemd (`scripts/release/fresh-install-check.sh`, kept for every release: the pasted line, the mistakes, a
+reboot, the updates, the undo and the uninstall). The owner also installed on a real Ubuntu desktop. That gave
+fourteen more findings (FRESH-1 to FRESH-14, two medium and twelve low) and four in the updater and the service
+(UPD-21 to UPD-24, two medium and two low). The agent review of pull request #61, which was merged into this
+branch, gave R61A-1. They are not in the counts above and are the last rows. FRESH and UPD-21 to UPD-24 were fixed
+test-first, with their tests under `test/audit-1111/` (`fresh-<n>`, `upd-<n>`); the test of R61A-1 is in
+`test/review-web.test.ts`.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
@@ -1527,6 +1536,25 @@ are the last rows.
 | UPD-6 to UPD-11, GET-1, GET-2, INS-1, INS-2 | new feature | An update that fails half-way, or that does not start, must leave an agent that runs | Each release has a folder of its own under `versions/`, and the running one is never written to. The new release is unpacked next to it and prepares itself (`install.sh --prepare`: its own folder and Node.js only, without the agent's keys in its environment). The switch is one small file, written by rename with a note for the launcher. A release that has not stayed up for 45 seconds in two starts is undone by the launcher (`run.sh`), and the release that ran before tells the owner once. The launcher refuses a `versions/active` that names anything but a release folder. The pasted install line puts a release in its own folder only when the download matches its manifest, and keeps the wallet, the keys, the data and Node.js. |
 | UPD-12 to UPD-20 | new feature | When an update is installed, and who may ask | The agent asks for the newest release about every 10 minutes (`AGENT_UPDATE_CHECK=0`: never) and tells the owner once per version, in the dashboard and on Telegram. Looking installs nothing. An update is installed only on the owner's ask (Update now, with the session and its CSRF token, or `/upgrade` from the owner's own chat), it is verified again at that moment, one at a time. The service then stops as for any restart and ends with exit code 75, on which the service manager starts it again. An update that cannot be installed changes nothing and says why; an install that cannot update itself (a git checkout, a server set up by hand) is told what to do instead. |
 | REL-1, REL-2 | new feature | The maintainers' side of a release | `scripts/release/release.ts` packs a tag exactly as git holds it, writes the manifest and signs it on the maintainer's own computer. It refuses a release that agents would refuse (another version in the tag, no pinned key, a key the release before does not know) and never overwrites or prints the private key. `docs/RELEASING.md` has the steps. |
+| FRESH-1 | medium | The unit's start limit (5 starts in 10 minutes, there to end a crash loop) also counted the restarts the owner asks for. After several runs of the installer, a restart and two updates in a row, systemd refused the next start ("Start request repeated too quickly"): the agent was left stopped, the update said "the old version is still the one running" and the command it named was refused the same way | The installer clears the unit's count (`systemctl --user reset-failed`) before a restart the owner asked for. A restart that still fails says what really runs and names `reset-failed` with the restart. Step 7 no longer ends the installer without a word when `daemon-reload`, `enable` or the restart fails. |
+| FRESH-2 | low | systemd was looked for at step 7 of 7, after the newcomer had written down the words and typed a login and keys | It is looked for before the first question. The message says "this machine does not run systemd", with the WSL2 steps and `./install.sh --no-service`. |
+| FRESH-3 | medium | A terminal opened with `su - user` has no bus of the user: the install ended at step 7, `--update` could not restart the agent and `--uninstall` said "Stopped." while the agent kept running | The installer finds the user's service manager itself (`loginctl enable-linger` for its own user, then `XDG_RUNTIME_DIR`). An uninstall that cannot reach or stop the service says so and removes nothing. It also says that linger stays on. |
+| FRESH-4 | low | A dashboard password that was too short, or typed differently the second time, ended the installer | It is asked for again, up to five times. Ctrl-C still ends the installer. |
+| FRESH-5 | low | The last screen listed `./install.sh --update`, `./cli.sh` and the uninstall without the folder they are typed in | It names the folder first (`cd <folder>`). |
+| FRESH-6 | low | Without curl the Node.js download failed with "could not be downloaded. Check the connection" | "curl is needed and is not installed", with `sudo apt install curl`, before the first question. |
+| FRESH-7 | low | The notice of a new release said "send /update here": DOCS-15, met again on the fresh install | `/upgrade`, by the same fix. |
+| FRESH-8 | low | npm's own notice ("new version of npm available, to update run ...") and its spinner stood between the installer's lines, and a newcomer reads the notice as something to do | Both are switched off for the installer's `npm ci`. |
+| FRESH-9 | low | "Yes" with a capital was not taken as the yes at the words question. A shell without `USER` broke the installer. The guided install printed lines written for a server ("Restart the service", `check-keys`) | yes counts in any case. The user's name is asked of the system (`id -un`). Under the installer the command line leaves the server's lines out (`FOXAGENT_GUIDED=1`). |
+| FRESH-10 | low | The installer accepted a dashboard port that another program already listens on, and the agent then ended at every start | Step 3 refuses such a port and offers the next one. The port that this install's own running agent holds counts as its own. UPD-23 is the running agent's side. |
+| FRESH-11 | low | The Node.js download was written by curl itself (`curl -o`) into a temporary folder, which a confined curl (the snap) cannot write to | curl writes to its output and the shell writes the file. By reasoning: not measured with a real snap, and the guides still name the apt one as the one the install is tested with. |
+| FRESH-12 | low | A Telegram token that was refused, or Telegram not answering, saved none of the keys: the AI key typed just before was lost and the installer ended at step 4 | The token is left out and told, the other keys are saved and the install goes on. |
+| FRESH-13 | low | From the owner's install on a real Ubuntu desktop: the dashboard address on the last screen was plain text among the other lines | It is a link where the terminal knows links (plain text when the output is no terminal) and the screen says how to open it. On a machine with a desktop the installer offers to open the dashboard in the browser, never on a server or in a pipe. |
+| FRESH-14 | low | From the owner's install: when the installer was run again, Enter at "Enter keys now?" walked through all four key prompts whenever no AI key was set | Enter means yes only on a first install without an AI key. On every later run it skips the keys, and a typed y still opens them. |
+| R61A-1 | low | The agent review of pull request #61 (Claude Fable 5.2 in the strategist's model list): the password gate with the new model prices had no test, and two pages said "at the same price" of Sonnet 5.5, whose cache reads cost less | Fixed in that pull request, with a test and the wording: every list price counts for the gate, the cache read too. Sonnet 5.5 back to Sonnet 5 asks for the password, Fable 5.2 asks for it from every Sonnet and Opus, and Fable 5.2 to Opus 5.5 is one click. No code changed. |
+| UPD-21 | medium | On an install without a background service (`./install.sh --no-service`, the agent started with `./run.sh`) Update now and `/upgrade` put the release in place and ended the agent with exit code 75. Nothing starts such an agent again, so it stayed down while the dashboard said that the page comes back by itself | The agent knows whether a service manager started it (`src/update/supervised.ts`): the installer's unit and plist say so with `FOXAGENT_SUPERVISED=1`, launchd names its job, and a unit written before is known by `INVOCATION_ID` together with a `JOURNAL_STREAM` that names the agent's own output (a desktop terminal inherits `INVOCATION_ID`, so it alone proves nothing). Without a service manager the release is still verified, prepared and switched, and the agent does not end: the answer to the click, the dashboard notice and Telegram say that the new version runs from the next start, with the command. Asking again says the same and does nothing more. Whatever is not recognised counts as started by hand, so the mistake that is left is an agent that plays on, not one that stays down. |
+| UPD-22 | low | The systemd user unit restarted the agent only after a failure (`Restart=on-failure`) and the launchd plist only after an exit that was not 0. A new release that ends at once with status 0, as Node.js 23 ends this code, was not started a second time, so the launcher's undo waited for the owner | `Restart=always` in the user unit and `KeepAlive` true in the plist. `RestartSec`, the start limit and the lines for exit code 75 are unchanged. A stop that is asked for (`systemctl --user stop`, the uninstall) is not restarted. The server's unit in `deploy/` is not part of this. |
+| UPD-23 | medium | A dashboard port that another program holds (`EADDRINUSE` at listen) was an error nothing caught: it ended the whole agent. Under the unit it was started again until the start limit and then stayed stopped, although the agents do not need the dashboard to play | The failed listen is caught. The agent says once, in the log and on Telegram, which port it is, that the agents keep playing and how to set `WEB_UI_PORT`. It tries the port again every 60 seconds and says once when the dashboard is back. Any other error of the web server ends the process as before. |
+| UPD-24 | low | For the first 45 seconds after a new release started, `versions/pending` still names it and the launcher may still undo it. A second Update now in that time was accepted: it replaced the note, so a release that had not proven that it starts became the one to go back to | Refused with one sentence: "the last update is still being confirmed, try again in a minute". Nothing is asked, downloaded or switched. |
 
 Decisions of the owner (2026-11-11):
 - **Signed releases.** An installed agent takes an update only when it is signed with the release key. The key is
@@ -1545,9 +1573,20 @@ Stays open:
   downloads, and the tag ruleset on `v*` (only maintainers, no moving or deleting) is still to be asked of GitHub.
 - `RELEASE_KEYS` in `src/update/keys.ts` is empty until the owner makes the key: until a release pins it, no agent
   offers or takes an update from its dashboard.
-- Nobody has run the installer or the update on macOS or on Windows (WSL2) yet. The pages say what follows from how
-  those systems work (a LaunchAgent starts at login; WSL stops with its last terminal and does not start with
-  Windows). A one-line helper that keeps the agent alive on Windows is prepared apart and is not shipped.
+- Nobody has run the installer or the update on macOS or on Windows (WSL2) yet. The fresh install was replayed on
+  Ubuntu 24.04 in a container that runs systemd and done by the owner on a real Ubuntu desktop, nowhere else: not
+  on an arm64 machine, not from a git clone, not with a snap's curl, not behind a slow network or on a full disk.
+  The pages say what follows from how macOS and Windows work (a LaunchAgent starts at login; WSL stops with its
+  last terminal and does not start with Windows). A one-line helper that keeps the agent alive on Windows is
+  prepared apart and is not shipped.
+- A change of the unit or of the plist in a later release reaches an existing install only when its owner runs the
+  installer again: an update replaces the code, not the service file. The release notes have to say so. An install
+  made before 2026-11-11 keeps `Restart=on-failure` until then; its agent still knows that systemd restarts it,
+  because its output is the journal.
+- Two updates that do not start, asked for within ten minutes of each other, need six starts. The unit allows
+  five in ten minutes: the sixth, which would start the old release again, is refused and the agent stays stopped
+  until `systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent` (the installer
+  runs both). Found by counting, not replayed; the start limit was left as it is.
 - The SHA-256 values of the pinned Node.js v22.22.0 archives were read from nodejs.org on 2026-11-11; only the
   linux-x64 one was compared with a second source. A person should compare the five once more.
 - The nginx template, merged from two fixers (the `/login` rate limit and the https-only layout), was not run through
@@ -1565,9 +1604,9 @@ Stays open:
   the FAQ still names Sonnet 5 as a good default while every level recommends Opus 5.5 at high effort.
 - An agent that never ran the release in which a new release key was added refuses every release signed with it:
   its owner pastes the install line once. `docs/RELEASING.md` says to leave that release the newest for weeks.
-- A new version that ends at once with a clean exit is not started again by systemd (`Restart=on-failure`), so the
-  undo waits for the owner's own restarts. Not tested on a real service. On macOS the launch agent has no limit on
-  restarts (a `ThrottleInterval` needs a Mac to try).
+- On macOS the launch agent has no limit on restarts (a `ThrottleInterval` needs a Mac to try), and `KeepAlive`
+  true (UPD-22) was written from the meaning of the key, not tried on a Mac. `After=network-online.target` in the
+  user unit does nothing there (harmless).
 - The updater's reviewer also asked for a sequence number next to the version, a warning when no check has
   succeeded for days and a copy of the database before a migration. None is built. A schema version that the code
   refuses when it is newer was not taken, because it would block the undo: database changes stay additive instead.
@@ -1596,8 +1635,5 @@ Stays open:
 - The agent buys at most 18 days of medicine a week while FoxLeague's settings may sell more (the stricter side).
 - Not covered by this audit: the bytes of xExchange's `composeTasks`, FoxLeague's `tournament_slots.rs` against
   `slots.ts`, the insides of Champions FoxLeague and the manual pages the copy leaves out.
-- Noted by the pages' reviewer without a proof: the installer ends when the dashboard password is shorter than 12
-  characters or its repeat differs, a wrong Telegram token at the keys step ends it after the AI key was typed, and
-  it checks for systemd only at its last step. Running it again keeps the wallet and what was saved.
 - `AGENTS.md` rules 7 and 8 do not name the Telegram commands that take no password (`/mode live confirm`,
   `/kill off`, `/resume`, `/upgrade`): only the owner's own chat is answered. The README and the Safety page say so.

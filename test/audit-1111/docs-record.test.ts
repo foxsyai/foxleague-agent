@@ -90,3 +90,69 @@ test('what stays open is listed, and the list is true of the tree', () => {
   assert.ok(existsSync(new URL('docs/RELEASING.md', ROOT)))
   assert.doesNotMatch(readFileSync(new URL('get.sh', ROOT), 'utf8'), /--proto/)
 })
+
+// After the audit: the install replayed on a fresh Ubuntu and done by the owner (FRESH-1 to FRESH-14), the agent
+// review of pull request #61 (R61A-1) and the four fixes in the updater and the service (UPD-21 to UPD-24).
+const row = (id: string): string[] | null => {
+  const line = section.split('\n').find(l => l.startsWith(`| ${id} |`))
+  return line ? line.split(/(?<!\\)\|/).slice(1, -1).map(c => c.trim()) : null
+}
+
+test('the fresh install has its fourteen rows: FRESH-1 and FRESH-3 medium, the rest low, each with its test', () => {
+  for (let n = 1; n <= 14; n++) {
+    const cells = row(`FRESH-${n}`)
+    assert.ok(cells, `no row FRESH-${n}`)
+    assert.equal(cells[1], n === 1 || n === 3 ? 'medium' : 'low', `FRESH-${n}`)
+    assert.ok(existsSync(new URL(`test/audit-1111/fresh-${n}.test.ts`, ROOT)), `fresh-${n}.test.ts`)
+  }
+  assert.match(row('FRESH-13')![3]!, /link/)
+  assert.match(row('FRESH-13')![3]!, /browser/)
+  assert.match(row('FRESH-14')![2]!, /Enter at "Enter keys now\?"/)
+  assert.match(flat, /`scripts\/release\/fresh-install-check\.sh`/)
+  assert.match(flat, /They are not in the counts above/)
+})
+
+test('the agent review of pull request #61 has its row', () => {
+  const cells = row('R61A-1')
+  assert.ok(cells, 'no row R61A-1')
+  assert.equal(cells[1], 'low')
+  assert.match(cells[2]!, /pull request #61/)
+  assert.match(cells[2]!, /had no test/)
+  assert.match(cells[2]!, /the same price/)
+  assert.match(cells[3]!, /Fixed in that pull request/)
+})
+
+test('the four fixes after the walk-through have their rows, with the code\'s own words and numbers', async () => {
+  const { LISTEN_RETRY_MS } = await import('../../src/web/server.ts')
+  const installer = readFileSync(new URL('install.sh', ROOT), 'utf8')
+  const ids: [string, string][] = [['UPD-21', 'medium'], ['UPD-22', 'low'], ['UPD-23', 'medium'], ['UPD-24', 'low']]
+  for (const [id, severity] of ids) {
+    const cells = row(id)
+    assert.ok(cells, `no row ${id}`)
+    assert.equal(cells[1], severity, id)
+    assert.ok(existsSync(new URL(`test/audit-1111/${id.toLowerCase()}.test.ts`, ROOT)), `${id.toLowerCase()}.test.ts`)
+  }
+  assert.match(row('UPD-21')![3]!, /`FOXAGENT_SUPERVISED=1`/)
+  assert.match(row('UPD-21')![3]!, /runs from the next start/)
+  assert.match(installer, /"FOXAGENT_SUPERVISED=1"/)
+  assert.match(row('UPD-22')![3]!, /`Restart=always`/)
+  assert.match(installer, /^Restart=always$/m)
+  assert.match(row('UPD-23')![3]!, /every 60 seconds/)
+  assert.equal(LISTEN_RETRY_MS, 60_000)
+  assert.match(row('UPD-24')![3]!, /the last update is still being confirmed, try again in a minute/)
+  assert.match(row('UPD-24')![2]!, new RegExp(`${CONFIRM_AFTER_MS / 1000} seconds`))
+})
+
+test('what the walk-through fixed is no longer open, and what it left is', () => {
+  const open = flat.slice(flat.indexOf('Stays open:'))
+  // Fixed: FRESH-4, FRESH-12, FRESH-2 and UPD-22.
+  assert.doesNotMatch(open, /the installer ends when the dashboard password is shorter/)
+  assert.doesNotMatch(open, /a wrong Telegram token at the keys step ends it/)
+  assert.doesNotMatch(open, /checks for systemd only at its last step/)
+  assert.doesNotMatch(open, /is not started again by systemd/)
+  assert.doesNotMatch(readFileSync(new URL('install.sh', ROOT), 'utf8'), /Restart=on-failure/)
+  // Left.
+  assert.match(open, /reaches an existing install only when its owner runs the installer again/)
+  assert.match(open, /replayed on Ubuntu 24\.04 in a container/)
+  assert.match(open, /by the owner on a real Ubuntu desktop/)
+})
