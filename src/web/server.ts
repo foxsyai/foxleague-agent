@@ -218,8 +218,10 @@ export function raisesAiSpend(current: { model: string; effort: string }, next: 
 }
 
 const REVOKED_SESSIONS_KEY = 'revoked_sessions'
+/** A dashboard port that could not be opened is tried again this often, until it is free. */
+export const LISTEN_RETRY_MS = 60_000
 
-export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {
+export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1', o: { retryMs?: number } = {}): Server {
   // The marks of logged-out sessions live in the store, so a restart (an update restarts the service) does not
   // bring a logged-out cookie back (ATTACK-6).
   const sessions = new Sessions(creds.secretKey, creds.passwordHash, {
@@ -631,6 +633,35 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
     }
   })
 
-  server.listen(port, host, () => console.log(`web UI on http://${host}:${port}`))
+  // A port that cannot be opened (another program holds it) must not end the agent: the agents play without the
+  // dashboard. The owner is told once, and the port is tried again until it is free.
+  let told = false
+  let closed = false
+  let retry: NodeJS.Timeout | undefined
+  const listen = (): void => {
+    if (!closed) server.listen(port, host)
+  }
+  server.on('listening', () => {
+    console.log(`web UI on http://${host}:${port}`)
+    if (told) service.notify(`The dashboard is back: it answers on port ${port}.`)
+    told = false
+  })
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    // Only a failed listen is handled here; any other error of the server ends the process, as it always did.
+    if (err.syscall !== 'listen' || server.listening) throw err
+    if (!told) {
+      told = true
+      const why = err.code === 'EADDRINUSE' ? 'is used by another program' : `could not be opened (${err.code ?? err.message})`
+      const how = service.cfg.isServer ? "set WEB_UI_PORT in the agent's env file and restart the service" : "set WEB_UI_PORT in the .env file of the agent's folder and restart the agent"
+      service.notify(`The dashboard could not start: port ${port} on this machine ${why}. Your agents keep playing without the dashboard. The agent tries the port again every minute. To use another port, ${how}.`)
+    }
+    retry = setTimeout(listen, o.retryMs ?? LISTEN_RETRY_MS)
+    retry.unref()
+  })
+  server.on('close', () => {
+    closed = true
+    clearTimeout(retry)
+  })
+  listen()
   return server
 }

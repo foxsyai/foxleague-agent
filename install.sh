@@ -537,8 +537,8 @@ else
     info "Nothing was saved. Try again: 3 to 32 letters or digits for the username, at least 12 characters for the password, typed the same both times."
   done
 fi
-# A port that another program already listens on is refused here: with it the agent would end at every start
-# ("address already in use") until systemd gives up on it. bash opens the connection itself, no tool is needed.
+# A port that another program already listens on is refused here: with it the dashboard would not come up (the
+# agent says so, plays on and tries the port again every minute). bash opens the connection itself, no tool is needed.
 # The port this install's own running agent holds (the one in .env, with its process alive) is its own.
 port_taken() { (exec 3<> "/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 own_agent_runs() {
