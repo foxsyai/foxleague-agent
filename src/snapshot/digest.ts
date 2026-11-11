@@ -402,8 +402,9 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`Market prices (median of the daily median sale prices; every trading day counts once): ${['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].map(known).join(', ')}`)
   }
   if (m.auctions.length) {
-    // The raise the contract asks over a top bid, as FoxLeague serves it (audit 2026-11-11, INTEG-3).
-    const raise = auctionMinRaisePercent(s.config)
+    // The raise the contract asks over a top bid, as FoxLeague serves it (audit 2026-11-11, INTEG-3). Game settings
+    // that were not read at all give no raise either: the default is for an answer that leaves the number out.
+    const raise = s.config ? auctionMinRaisePercent(s.config) : null
     out.push(raise === null ? 'A bid must reach the reserve; the raise over a top bid could not be read, so no raise is placed.' : `A bid must reach the reserve, or the top bid plus ${raise} percent.`)
     out.push('Open auctions: the 10 strongest, then the 3 cheapest of each rarity (nonce, card, OVR, price now, ends):')
     for (const l of m.auctions) {

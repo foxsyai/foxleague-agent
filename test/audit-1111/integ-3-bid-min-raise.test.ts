@@ -71,4 +71,10 @@ test('INTEG-3: the plan is told the raise FoxLeague serves', () => {
   assert.match(renderDigest(s), /A bid must reach the reserve, or the top bid plus 10 percent/)
   delete (s.config as Record<string, unknown>).auction_min_increment_percent
   assert.match(renderDigest(s), /A bid must reach the reserve, or the top bid plus 5 percent/)
+  // A raise that is no number, or game settings that were not read at all: said to be unread, never given as 5.
+  ;(s.config as Record<string, unknown>).auction_min_increment_percent = 'ten'
+  assert.match(renderDigest(s), /the raise over a top bid could not be read, so no raise is placed/)
+  s.config = null
+  assert.match(renderDigest(s), /the raise over a top bid could not be read, so no raise is placed/)
+  assert.doesNotMatch(renderDigest(s), /top bid plus 5 percent/)
 })
