@@ -25,6 +25,9 @@ export interface Plan {
   stopReason: string | null
 }
 
+/** What became of one plan request: a submit_plan call that was read, a refusal, a cut-off answer, or an answer without the call. */
+export type PlanOutcome = 'plan' | 'refused' | 'cut_off' | 'no_call'
+
 /** List prices per million tokens: input, output and cache read. A one-hour cache write costs twice the input. */
 export type Price = [number, number, number]
 
@@ -339,7 +342,9 @@ function buyingPower(p: PlanInput): string {
 
 export function renderPlanRequest(p: PlanInput): string {
   const b = p.budget
-  const recent = p.recent.slice(0, 20)
+  // A shadow plan (kind "shadow": another model's proposal, never carried out) is no part of this agent's past. The
+  // store's planHistory already leaves it out; here once more, so no caller can put one into a request.
+  const recent = p.recent.filter(r => r.kind !== 'shadow').slice(0, 20)
   const last = recent.find(r => r.kind === 'plan')
   const lines = [
     `## Owner's strategy direction\n${p.settings.strategy}`,
@@ -399,9 +404,13 @@ export class Strategist {
   private readonly expectsCallSoon: () => boolean
   /** When the cache last served or stored the manual, per model and effort (the cache holds per model, tools and effort). */
   private readonly cachedAt = new Map<string, number>()
+  /** How often the connection sends a failed request again by itself (rate limit, server error, lost connection). */
+  private readonly retries: number
 
-  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: () => boolean = () => true) {
-    this.client = new Anthropic({ apiKey, maxRetries: 2, timeout: 180_000 })
+  /** `retries: 0` for a request that is sent once and never again (a shadow plan). */
+  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: () => boolean = () => true, o: { retries?: number } = {}) {
+    this.retries = o.retries ?? 2
+    this.client = new Anthropic({ apiKey, maxRetries: this.retries, timeout: 180_000 })
     this.model = model
     this.effort = effort
     this.expectsCallSoon = expectsCallSoon
@@ -409,7 +418,7 @@ export class Strategist {
 
   /** A new key from the admin panel, used from the next call. */
   setApiKey(apiKey: string): void {
-    this.client = new Anthropic({ apiKey, maxRetries: 2, timeout: 180_000 })
+    this.client = new Anthropic({ apiKey, maxRetries: this.retries, timeout: 180_000 })
   }
 
   /** Takes effect from the next call (the web UI's model and effort picker). */
@@ -420,12 +429,14 @@ export class Strategist {
 
   /**
    * One request to the model, streamed and read to its end before anything is used: an answer at a high
-   * effort can take minutes, longer than one plain request may wait. The deadline covers the whole answer.
+   * effort can take minutes, longer than one plain request may wait. The deadline covers the whole answer; `cancel`
+   * ends the request earlier (the service's stop, for a shadow plan).
    */
-  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>): Promise<Anthropic.Beta.BetaMessage> {
+  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
     const model = this.model
+    const until = (maxTokens: number): AbortSignal => (cancel ? AbortSignal.any([AbortSignal.timeout(deadlineMs(maxTokens)), cancel]) : AbortSignal.timeout(deadlineMs(maxTokens)))
     const send = (body: Anthropic.Beta.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.BetaMessage> =>
-      this.client.beta.messages.stream(body, { signal: AbortSignal.timeout(deadlineMs(body.max_tokens)) }).finalMessage()
+      this.client.beta.messages.stream(body, { signal: until(body.max_tokens) }).finalMessage()
     if (!WITH_FALLBACK.has(model) || this.noFallback.has(model)) return send({ ...params, model })
     try {
       return await send({ ...params, model, betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' })
@@ -443,20 +454,33 @@ export class Strategist {
    * the last 55 minutes) or another call is due within the hour; otherwise, a single agent at the 2-hour tick for
    * one, it goes uncached at the plain input price (owner, 2026-10-24).
    */
-  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>): Promise<Anthropic.Beta.BetaMessage> {
+  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
     const key = `${this.model}:${this.effort}`
     const text = MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT
     const warm = Date.now() - (this.cachedAt.get(key) ?? Number.NEGATIVE_INFINITY) < CACHE_WARM_MS
     const cached = warm || this.expectsCallSoon()
     // The cache is written or renewed when the request is processed, at its start: a long answer must not move it on.
     const sent = Date.now()
-    const response = await this.create({ ...params, system: [{ type: 'text', text, ...(cached ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}) }] })
+    const response = await this.create({ ...params, system: [{ type: 'text', text, ...(cached ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}) }] }, cancel)
     // Warm only when the cache really served or stored it (a request below the cache minimum does neither).
     if (cached && ((response.usage?.cache_read_input_tokens ?? 0) > 0 || (response.usage?.cache_creation_input_tokens ?? 0) > 0)) this.cachedAt.set(key, sent)
     return response
   }
 
-  async plan(input: PlanInput): Promise<Plan> {
+  /**
+   * A plan for one agent. `request` is the text of the request when the caller rendered it already: the service keeps
+   * it, so that a shadow plan can be asked with the very same words.
+   */
+  async plan(input: PlanInput, request: string = renderPlanRequest(input)): Promise<Plan> {
+    return (await this.planFromRequest(request)).plan
+  }
+
+  /**
+   * The plan request as a text: the same system prompt, manual, tools and settings whoever sends it, and the same
+   * reading of the answer. `outcome` says whether a submit_plan call was read or why there is none. Nothing of one
+   * call stays in this object for the next but the cache decision and the fallback memory, each per model.
+   */
+  async planFromRequest(request: string, cancel?: AbortSignal): Promise<{ plan: Plan; outcome: PlanOutcome }> {
     const model = this.model
     const response = await this.createWithManual({
       max_tokens: roomFor(this.effort, PLAN_TOKENS),
@@ -464,8 +488,8 @@ export class Strategist {
       output_config: { effort: this.effort },
       tools: TOOLS,
       tool_choice: { type: 'auto' },
-      messages: [{ role: 'user', content: `${renderPlanRequest(input)}\n\nCall submit_plan now.` }],
-    })
+      messages: [{ role: 'user', content: `${request}\n\nCall submit_plan now.` }],
+    }, cancel)
     const usage = {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
@@ -474,16 +498,16 @@ export class Strategist {
       usd: usd(model, response.usage),
       servedBy: response.model,
     }
-    const empty = (summary: string): Plan => ({ summary, actions: [], rejected: [], usage, stopReason: response.stop_reason })
+    const empty = (outcome: PlanOutcome, summary: string): { plan: Plan; outcome: PlanOutcome } => ({ plan: { summary, actions: [], rejected: [], usage, stopReason: response.stop_reason }, outcome })
 
     // A refusal or a truncated answer can cut a tool call off mid-input: never act on that turn.
-    if (response.stop_reason === 'refusal') return empty(`model declined to plan (${response.stop_details?.category ?? 'no category'})`)
-    if (response.stop_reason === 'max_tokens') return empty('plan truncated at max_tokens; nothing executed')
+    if (response.stop_reason === 'refusal') return empty('refused', `model declined to plan (${response.stop_details?.category ?? 'no category'})`)
+    if (response.stop_reason === 'max_tokens') return empty('cut_off', 'plan truncated at max_tokens; nothing executed')
 
     const call = response.content.find((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use' && b.name === 'submit_plan')
     if (!call) {
       const text = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join(' ')
-      return empty(`no plan submitted${text ? `: ${text.slice(0, 500)}` : ''}`)
+      return empty('no_call', `no plan submitted${text ? `: ${text.slice(0, 500)}` : ''}`)
     }
     const submitted = call.input as { summary?: unknown; actions?: unknown }
     const actions: PlannedAction[] = []
@@ -497,7 +521,7 @@ export class Strategist {
         rejected.push({ raw, error: err instanceof Error ? err.message : String(err) })
       }
     }
-    return { summary: String(submitted.summary ?? '').slice(0, 2000), actions: actions.slice(0, 12), rejected, usage, stopReason: response.stop_reason }
+    return { plan: { summary: String(submitted.summary ?? '').slice(0, 2000), actions: actions.slice(0, 12), rejected, usage, stopReason: response.stop_reason }, outcome: 'plan' }
   }
 
   /** The owner's advice or question: a reply, and a strategy proposal when the message gives direction. */
