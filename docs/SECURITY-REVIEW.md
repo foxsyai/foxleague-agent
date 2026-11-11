@@ -1437,6 +1437,43 @@ Stays open:
 - This pull request changes `.github/`, so the review fails it on purpose: the maintainer checks it by hand.
 
 
+## The agent review before the repository goes public: the diff it reads and its working directory (2026-11-11)
+
+The final audit before the launch (Claude Fable 5.2 reviewers at extra-high effort, read-only) read the review workflow
+as a stranger's pull request will meet it once the repository is public. It found two gaps in the steps that prepare
+the checkout for the reviewer. The fixes were made by Claude Fable 5.2 at high effort. The workflow cannot run outside
+GitHub, so `test/review-workflow.test.ts` takes each step's own `run:` script from the YAML and runs it with bash in a
+throwaway git repository shaped like the job's checkout (HEAD is the pull request merged onto `main`, HEAD^1 is `main`).
+Each test failed on `main` (`5f88dc8`) and passes after its fix. Nothing else of the review changes: the permissions,
+the secrets, the model and the effort, the tools, the workspace gate and the verdict are the same.
+
+What was read for REV-2: Bun's and npm's documentation of where they look (Bun: the local `bunfig.toml` of the project
+root and `.env`, `.env.local`, `.env.development`, `.env.production`, `.env.test` and their `.local` forms, with the
+global `.bunfig.toml` in the home folder; npm: the `.npmrc` of the project root, not read in global mode), and the
+source of the action at the pinned commit (`1d6de8c`, v1.0.248).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| INSTALL-21 | low | The step that writes the diff the reviewer reads forced a text diff only for a list of text extensions. In any other file (`.astro`, `.mts`, `.cts`, `.service`, `.svg`, a file with no extension) one NUL byte, which is legal inside a JavaScript comment, made git print "Binary files differ": the code a pull request added there was neither in `pr.diff` nor in the file's own diff | Every file is diffed as text. Only the known binary kinds (png, jpg, jpeg, gif, webp, ico, woff, woff2, pdf, zip and gz, in any letter case) are left to git, whose diff still says that the file changed, without its bytes. Text under such a name is still shown. |
+| REV-2 | low (hardening) | The clean-up before the review removed what steers Claude Code and left what steers the programs that run it: `bunfig.toml`, `.bunfig.toml`, `.npmrc`, `.env` and `.env.*` of the pull request stayed at the root of the checkout, which is the working directory of the action (a Bun program) with the review token and GITHUB_TOKEN in reach. A `bunfig.toml` can name code that runs first (`preload`) and a `.env` can point the review token at another host. The action as pinned starts Bun with `--no-env-file` and its own `--config`, so none of them was loaded: the protection was the action's, and a later version could drop it | The same step removes them at the root before the action runs. `.env.example` stays: a template that nothing loads, and the one `.env.*` this repository tracks. Neither Bun nor npm looks below the working directory, so the same names deeper in the tree stay readable. The prompt tells the reviewer which root files it cannot open and that a change to them is read through `gh pr diff` or `.review-diff/files/`, which are made from the commits and not from the folder. |
+
+Stays open:
+- The change itself could not be run on GitHub before the merge. A pull request that changes `.github/` fails the
+  review on purpose and the maintainer checks it by hand, so the first `merge-check` after the merge is the first real
+  run of both steps. The tests ran their shell with this machine's bash and git, with a stand-in for `gh`.
+- A model's verdict is one gate beside the maintainer's own approval, never in place of it. The diff now shows every
+  added line, and whether the reviewer weighs each one is still the model's reading.
+- A file named as one of the binary kinds is left to git, so a NUL byte still hides text added under such a name.
+  Nothing runs a file with such a name by itself, and the line that would load it is in the diff.
+- A binary file of a kind that is not on the list (a font, a database, a video) now reaches `pr.diff` as raw bytes.
+  That is noise for the reviewer and no way past it. The step sets no size limit on the diff, as before.
+- `STAT.txt` still counts a text file that holds a NUL byte as "Bin": the summary is git's own and was left as it is.
+- The action's own list of what it takes from the base branch also names `.claude.json`, `.gitmodules`, `.ripgreprc`
+  and `.husky` at the root (read in its source at the pinned commit, not seen running). The workflow's clean-up does not
+  remove these and relies on the action for them.
+- Whether the Claude Code program that the action installs reads anything else from its working directory at start
+  could not be checked from here.
+
 ## Final audit before the public launch (2026-11-11): six Claude Fable 5.2 reviewers at extra-high effort, the fixes by Claude Fable 5.2 at high effort
 
 The last audit before the repository opens. Six reviewers (MONEY, ATTACK, EDGE, INTEG, INSTALL, DOCS) worked read-only,
@@ -1651,40 +1688,3 @@ Stays open:
   `slots.ts`, the insides of Champions FoxLeague and the manual pages the copy leaves out.
 - `AGENTS.md` rules 7 and 8 do not name the Telegram commands that take no password (`/mode live confirm`,
   `/kill off`, `/resume`, `/upgrade`): only the owner's own chat is answered. The README and the Safety page say so.
-
-## The agent review before the repository goes public: the diff it reads and its working directory (2026-11-11)
-
-The final audit before the launch (Claude Fable 5.2 reviewers at extra-high effort, read-only) read the review workflow
-as a stranger's pull request will meet it once the repository is public. It found two gaps in the steps that prepare
-the checkout for the reviewer. The fixes were made by Claude Fable 5.2 at high effort. The workflow cannot run outside
-GitHub, so `test/review-workflow.test.ts` takes each step's own `run:` script from the YAML and runs it with bash in a
-throwaway git repository shaped like the job's checkout (HEAD is the pull request merged onto `main`, HEAD^1 is `main`).
-Each test failed on `main` (`5f88dc8`) and passes after its fix. Nothing else of the review changes: the permissions,
-the secrets, the model and the effort, the tools, the workspace gate and the verdict are the same.
-
-What was read for REV-2: Bun's and npm's documentation of where they look (Bun: the local `bunfig.toml` of the project
-root and `.env`, `.env.local`, `.env.development`, `.env.production`, `.env.test` and their `.local` forms, with the
-global `.bunfig.toml` in the home folder; npm: the `.npmrc` of the project root, not read in global mode), and the
-source of the action at the pinned commit (`1d6de8c`, v1.0.248).
-
-| Id | Severity | Finding | Fix |
-|---|---|---|---|
-| INSTALL-21 | low | The step that writes the diff the reviewer reads forced a text diff only for a list of text extensions. In any other file (`.astro`, `.mts`, `.cts`, `.service`, `.svg`, a file with no extension) one NUL byte, which is legal inside a JavaScript comment, made git print "Binary files differ": the code a pull request added there was neither in `pr.diff` nor in the file's own diff | Every file is diffed as text. Only the known binary kinds (png, jpg, jpeg, gif, webp, ico, woff, woff2, pdf, zip and gz, in any letter case) are left to git, whose diff still says that the file changed, without its bytes. Text under such a name is still shown. |
-| REV-2 | low (hardening) | The clean-up before the review removed what steers Claude Code and left what steers the programs that run it: `bunfig.toml`, `.bunfig.toml`, `.npmrc`, `.env` and `.env.*` of the pull request stayed at the root of the checkout, which is the working directory of the action (a Bun program) with the review token and GITHUB_TOKEN in reach. A `bunfig.toml` can name code that runs first (`preload`) and a `.env` can point the review token at another host. The action as pinned starts Bun with `--no-env-file` and its own `--config`, so none of them was loaded: the protection was the action's, and a later version could drop it | The same step removes them at the root before the action runs. `.env.example` stays: a template that nothing loads, and the one `.env.*` this repository tracks. Neither Bun nor npm looks below the working directory, so the same names deeper in the tree stay readable. The prompt tells the reviewer which root files it cannot open and that a change to them is read through `gh pr diff` or `.review-diff/files/`, which are made from the commits and not from the folder. |
-
-Stays open:
-- The change itself could not be run on GitHub before the merge. A pull request that changes `.github/` fails the
-  review on purpose and the maintainer checks it by hand, so the first `merge-check` after the merge is the first real
-  run of both steps. The tests ran their shell with this machine's bash and git, with a stand-in for `gh`.
-- A model's verdict is one gate beside the maintainer's own approval, never in place of it. The diff now shows every
-  added line, and whether the reviewer weighs each one is still the model's reading.
-- A file named as one of the binary kinds is left to git, so a NUL byte still hides text added under such a name.
-  Nothing runs a file with such a name by itself, and the line that would load it is in the diff.
-- A binary file of a kind that is not on the list (a font, a database, a video) now reaches `pr.diff` as raw bytes.
-  That is noise for the reviewer and no way past it. The step sets no size limit on the diff, as before.
-- `STAT.txt` still counts a text file that holds a NUL byte as "Bin": the summary is git's own and was left as it is.
-- The action's own list of what it takes from the base branch also names `.claude.json`, `.gitmodules`, `.ripgreprc`
-  and `.husky` at the root (read in its source at the pinned commit, not seen running). The workflow's clean-up does not
-  remove these and relies on the action for them.
-- Whether the Claude Code program that the action installs reads anything else from its working directory at start
-  could not be checked from here.
