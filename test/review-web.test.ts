@@ -88,6 +88,20 @@ test('B2 a dearer model or a higher effort for every agent needs the password; a
     res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low' })
     assert.equal(res.status, 200, await res.text())
     assert.equal(svc.strategist?.model, 'claude-sonnet-5-5')
+    // R61A-1: every price counts for the password, the cache read too. Sonnet 5 reads from the cache at $0.20 where
+    // Sonnet 5.5 pays $0.10, so going back to it is a raise; Fable 5.2 is dearer than every Sonnet and Opus.
+    res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'low' })
+    assert.equal(res.status, 403, 'Sonnet 5.5 to Sonnet 5 raises the cache read price')
+    res = await post('/api/strategist', { model: 'claude-fable-5-2', effort: 'low' })
+    assert.equal(res.status, 403, 'Fable 5.2 was switched on without the password')
+    assert.equal(svc.strategist?.model, 'claude-sonnet-5-5')
+    res = await post('/api/strategist', { model: 'claude-fable-5-2', effort: 'low', password })
+    assert.equal(res.status, 200, await res.text())
+    assert.equal(svc.strategist?.model, 'claude-fable-5-2')
+    res = await post('/api/strategist', { model: 'claude-opus-5-5', effort: 'low' })
+    assert.equal(res.status, 200, 'Fable 5.2 to Opus 5.5 is cheaper on every price: one click')
+    res = await post('/api/strategist', { model: 'claude-sonnet-5-5', effort: 'low' })
+    assert.equal(res.status, 200, await res.text())
   } finally {
     server.close()
   }

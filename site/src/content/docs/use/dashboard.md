@@ -31,7 +31,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   higher of its spot price and its two-day median, so a sudden dip never makes a payment look cheaper.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
 - **Strategist**: the AI model and effort for every agent. Sonnet 5 is the default and plays well; Sonnet 5.5 is the
-  newer Sonnet at the same price; higher models or effort think harder and cost more. A dearer model or a higher
+  newer Sonnet at the same price, with cheaper reads of what it has cached; higher models or effort think harder and
+  cost more. A dearer model or a higher
   effort asks for your password, because the AI spend has no cap of its own; a cheaper one is one click.
 
 ## An agent's page
