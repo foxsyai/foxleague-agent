@@ -23,10 +23,14 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 - **EGLD** and **FOXSY**: the live prices. Every payment is valued in USD before it is checked; FOXSY counts at the
   higher of its spot price and its two-day median, so a sudden dip never makes a payment look cheaper.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
-- **Strategist**: the AI model and effort for every agent. Sonnet 5 is the default and plays well; Sonnet 5.5 is the
-  newer Sonnet at the same price, with cheaper reads of what it has cached; higher models or effort think harder and
-  cost more. A dearer model or a higher
-  effort asks for your password, because the AI spend has no cap of its own; a cheaper one is one click.
+- **Strategist**: the AI model and effort for every agent, from four models: Haiku 5.5, Sonnet 5.5, Opus 5.5 and
+  Fable 5.2. Sonnet 5.5 is the default and plays well; Haiku 5.5 is the cheapest, for trying things out: how well it
+  plays this game has not been measured yet; Opus 5.5, Fable 5.2 and a higher effort think harder and cost more. A
+  dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
+  one click. A switch that starts shadow plans asks for the password too
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
+  soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
+  not ready.
 
 ## An agent's page
 
@@ -44,7 +48,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   cannot be left).
 - **Last plan**: the agent's latest reading of the situation, each action with a one-line reason and the cost of
   the AI call.
-- **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems.
+- **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems. A row marked
+  "shadow plan, not carried out" is what a second AI model would have planned, recorded only to compare
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)).
 - **Budget**: spend against today's cap, this month's budget and the setup budget.
 - **Talk to the manager**: advice or questions in plain words, typed or spoken ([Talk to your manager](/use/talk-to-your-manager/)).
 - **Settings**: the strategy and every limit ([Every setting explained](/use/settings/)).

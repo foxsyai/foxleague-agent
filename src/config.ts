@@ -95,7 +95,9 @@ export function loadConfig(): Config {
     apiRps: num('MVX_API_RPS', 1.8),
     foxleagueRps: num('FOXLEAGUE_RPS', 5),
     anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
-    model: process.env.AGENT_MODEL?.trim() || 'claude-sonnet-5',
+    // The default of a new install (Sonnet 5.5 since the owner's list of 2026-11-11). A model that left the list is
+    // moved to its successor where the choice is read (strategistChoice), so the env file of an older install still works.
+    model: process.env.AGENT_MODEL?.trim() || 'claude-sonnet-5-5',
     telegramToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
     telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim() || undefined,
     isServer: flag('AGENT_IS_SERVER', false),
