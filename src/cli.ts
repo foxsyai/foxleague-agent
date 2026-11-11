@@ -114,7 +114,7 @@ async function main(): Promise<void> {
       if (created) {
         console.log(
           cfg.isServer
-            ? `Write the words down offline now: read them once in your own SSH session (sudo grep AGENT_MNEMONIC ${envFile}), on paper, and never paste them anywhere. They are not printed on a server.`
+            ? `Write the words down offline now: read them once in your own SSH session (sudo grep AGENT_MNEMONIC ${envFile}), write them on paper and never paste them anywhere. They are not printed on a server.`
             : 'Write the words down offline now: run `./cli.sh backup-words` in your own terminal.',
         )
       }
