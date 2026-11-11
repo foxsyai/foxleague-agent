@@ -435,8 +435,8 @@ cat <<'KEYS'
 
   1. AI key (Anthropic), needed for the agents to play. About 5 minutes:
      a. Sign up or log in:              https://platform.claude.com
-     b. Add credit ($10 is plenty):     https://platform.claude.com/settings/billing
-     c. Set a monthly limit ($20):      https://platform.claude.com/settings/limits
+     b. Add credit ($10, about a week): https://platform.claude.com/settings/billing
+     c. Set a monthly limit ($60):      https://platform.claude.com/settings/limits
      d. Create a key, name it foxleague-agent, copy it (shown once):
                                         https://platform.claude.com/settings/keys
 

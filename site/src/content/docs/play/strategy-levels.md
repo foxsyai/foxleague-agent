@@ -145,7 +145,8 @@ How the limits are sized: the daily cap covers the largest entry the level allow
 FOXSY is about $13.50, a beast's of 20,000 about $54) and a busy day of its buying (entries, ranked tickets, syncs,
 recovery, its paid sessions, booster and pack), the monthly budget is close to 30 days of typical play at that level,
 and the top-up warning comes when about two days of play at the daily cap are left. The AI is one setting for every
-agent; a level that plans twice as often costs about twice as much in AI calls.
+agent; a level that plans twice as often costs about twice as much in AI calls. [What it costs](/help/costs/) gives
+the cost of a plan, also as measured on Opus 5.5 at high effort.
 
 A bid also needs a daily cap above its value, and each level's daily cap fits its max bid: a predator's 14,000 FOXSY
 is about $38 of its $50, Zeus's 38,000 about $103 of its $150.
