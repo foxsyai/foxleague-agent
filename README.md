@@ -10,7 +10,8 @@ Status: in internal testing (the newest version is on the releases page). Everyt
 
 ## Install
 
-Linux, macOS or Windows through WSL2. Open a terminal and paste one line:
+Linux, macOS or Windows through WSL2. Open a terminal and paste one line (on Ubuntu, first
+`sudo apt install curl`):
 
 ```
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
@@ -18,7 +19,8 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 
 A guided installer sets up a new wallet, your dashboard login, your keys, PEM files to watch your team in the
 FoxLeague app and a background service. The dashboard's **Getting started** guide then explains each key step
-by step. Everything else is in [INSTALL.md](INSTALL.md).
+by step. Everything else is in [INSTALL.md](INSTALL.md). On Windows the agent runs while Ubuntu (WSL) runs, and
+on macOS it starts when you log in.
 
 You need about 5 EGLD to start (2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
 Anthropic API key for the AI. Telegram and Binance are optional.
@@ -61,9 +63,9 @@ the dashboard or by chatting with it on Telegram.
   open challenge only to teams no stronger by OVR). Six strategy levels, one brain: every level weighs a win chance for
   every team and plays only what pays; the levels differ in the money they may spend (your limits, the paid training,
   boosters and packs they may buy) and in how often they plan.
-- **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release.
-  Every confirmed finding is fixed or decided; the few still open are listed
-  in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+- **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release,
+  the last of them a final audit by six reviewers before the public launch. Every confirmed finding is fixed or
+  decided; the few still open are listed in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 
@@ -72,15 +74,20 @@ the dashboard or by chatting with it on Telegram.
   the AI's model and effort; the Keys panel.
 - **Telegram** (optional): a summary of every agent each morning, every update as it happens if you want it
   (`/updates all`). Write in plain words ("focus on Silver tournaments this
-  week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`,
-  `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/help`.
+  week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`
+  (it shows the version too), `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/upgrade`, `/help`.
+- **Updates:** about every 10 minutes the agent asks GitHub for the newest release and tells you, in the dashboard
+  and on Telegram, when one is out. **Update now** in the dashboard or `/upgrade` on Telegram installs it; nothing
+  installs by itself. Only a release signed by the maintainers and newer than yours is taken, it is prepared next
+  to the running version, and a version that does not start is undone by itself. `./install.sh --update` does the
+  same from a terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
 ## What it costs
 
 - **The game:** never more than your caps (defaults $5 a day and $150 a month, plus $20 for the registration).
-- **The AI:** about $1 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.15 a plan): the game manual the AI reads is cached for an hour only when another plan comes within that hour, so a lone agent sends it at the plain price. Agents that plan within the same hour share the cache, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more.
+- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day.
 - **Network fees:** a few cents a day.
 
 ## Command line
@@ -132,4 +139,5 @@ harvesting bonuses. Every agent must stay inside them. You are responsible for y
 Pull requests are welcome. Read [AGENTS.md](AGENTS.md) first: it holds the rules that keep money safe, how to run
 the tests and how a change reaches `main`. Opening a pull request runs nothing; when a maintainer decides to merge
 it, the label `merge-check` runs the tests and an agent review, and `main` takes the change once both pass and a
-maintainer approved it. New versions reach users as releases: the installer always takes the newest one.
+maintainer approved it. New versions reach users as signed releases ([docs/RELEASING.md](docs/RELEASING.md)): the
+installer takes the newest one, and an installed agent offers each new one to its owner.

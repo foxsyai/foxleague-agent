@@ -1435,3 +1435,169 @@ Stays open:
 - The first `merge-check` after this change is the first run of the new model in the workflow. A token that cannot
   reach it leaves no verdict, which is a red review and no merge (fail closed), never a pass.
 - This pull request changes `.github/`, so the review fails it on purpose: the maintainer checks it by hand.
+
+
+## Final audit before the public launch (2026-11-11): six Claude Fable 5.2 reviewers at extra-high effort, the fixes by Claude Fable 5.2 at high effort
+
+The last audit before the repository opens. Six reviewers (MONEY, ATTACK, EDGE, INTEG, INSTALL, DOCS) worked read-only,
+one area each, on the frozen tree `ac8833f`; INTEG also read FoxLeague's main of that day (`9f65786f3`) and its live
+`/api/config`, and INSTALL drove the real installer on a pseudo-terminal. A finding counted only with a proof that
+fails while the defect exists. Three fixers and one for the pages then worked test-first: each proof was seen failing
+before its fix, and the proofs are kept under `test/audit-1111/`.
+
+No critical and no high finding, and no way past the hard caps: every loss of track that was found counts a payment
+too much, never too little, and no path pays twice.
+
+| Area | Findings | Medium | Low |
+|---|---|---|---|
+| MONEY | 4 | 2 | 2 |
+| ATTACK | 8 | 2 | 6 |
+| EDGE | 8 | 1 | 7 |
+| INTEG | 6 | 0 | 6 |
+| INSTALL | 21 | 5 | 16 |
+| DOCS | 14 | 6 | 8 |
+| All | 61 | 16 | 45 |
+
+Some are one defect seen from two areas, and share a row below: EDGE-2 is ATTACK-3, EDGE-5 is INTEG-5, EDGE-7 is
+INTEG-6, MONEY-3 is INTEG-4, DOCS-5 is INTEG-2, DOCS-2 is INSTALL-1 and INSTALL-15 is EDGE-8. The one-click update was
+built while the audit ran, so the installer's findings about the old way of updating (INSTALL-1, INSTALL-2,
+INSTALL-16, the first half of INSTALL-7) are closed by its design and held by regression tests; its own guarantees
+are the last rows.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MONEY-1 | medium | A seated team counted as clearly stronger only when its ELO was more than 50 above ours and its lineup more than 5 percent above. A field of elevens twice as strong at our own ELO read "0 stronger" and the entry was paid | A lineup that was read decides alone once it is more than 10 percent above ours (`MAX_1V1_STRENGTH_RATIO`). Between 5 and 10 percent the ELO still has its say, and an unread lineup is judged on its ELO. The same count holds for Champions FoxLeague invitations. |
+| MONEY-2 | medium (the owner's decision, 2026-11-11) | The 1v1 win chance averaged the ELO chance and the squad chance, so a rival whose eleven is 10 percent stronger (32 percent by the squads) read 56 percent once its ELO was about 250 below ours and passed the 55 percent floor | With both numbers read, the estimate is the smaller of their average and the squad-only chance: a rival's lower ELO may lower our chance, never lift it. With one number read nothing changes. The plan reads the same number. |
+| MONEY-4 | low (not reachable today) | With Gold off, a join was refused only when the tier label read exactly `gold`. An unknown or missing tier with an entry far above the Silver ceiling passed | A tier that is not bronze, silver or gold is refused as unread, at any setting, and its label is not repeated. With Gold off, an entry or stake from the served `gold_min` up is refused whatever the label says, as is a paid entry while that bound cannot be read. |
+| EDGE-1 | medium | The bid's inherited-lock guard and the plan's auction line read a moved card whose `transfer_cooldown_hours` is null as "no lock", although null is FoxLeague's default lock (504 hours, served in `/api/config`). A bid up to the rarity limit could go to a card that cannot play for about 21 days | One helper (`transferLockEnd`) for the wallet's cards, the auction line and the bid: the card's hours, else the served default, else 504. A move whose time cannot be parsed is unread and takes no bid. |
+| INTEG-1 | low | The 1v1 match-fit count took any 11 fit cards of the 18. FoxLeague relieves a tired outfield starter only with a fit outfield bench card (the bench keeper never), holds injured bench cards out and refuses the join after the stake is paid (refunded, the gas lost) | `matchFit` counts the eleven shirts as FoxLeague fills them: an outfield shirt from the fit outfield bench cards, the keeper's from a fit bench keeper or an outfield card as the last resort. At a join and at a create. |
+| INTEG-2 (DOCS-5) | low | The prompt and the manual copy stated an injury chance of 3 to 9 percent. FoxLeague runs 1 to 3 percent, made the chance and the days out Admin settings and serves the ones in force in `/api/config` `card_bans` | The snapshot's "Cards and injuries" line gives the chance and the days as served, and says so when they are missing. The prompt points at that line and names no number. The manual copy is synced to FoxLeague's manual at `89a1955d7`. |
+| INTEG-3 | low (latent) | The bid's minimum raise was a 5 written in the agent. The contract reads a setting its owner may change from 1 to 50, served as `auction_min_increment_percent`. After a change every raise would revert and lose its gas, again at each plan | The rule reads the served percent (5 when the answer leaves it out, no raise when it is no whole number from 1 to 50 or the settings were not read). The refusal names it and the snapshot tells the plan. |
+| INTEG-5, EDGE-5 | low | A paid join was refused only once the deadline had passed. FoxLeague checks it when `POST /join` arrives, so a payment signed seconds before it was refused and refunded with the gas lost. The pending retry then asked for an hour and raised an alarm for an entry already refunded | No paid entry and no 1v1 stake within 120 seconds of the deadline (`BUSY_OPENS_MARGIN_S`). A free seat needs none. A deadline that is no time is refused. The retry takes "Registration deadline has passed" as final when it answers the ask that carried the hash. |
+| INTEG-6, EDGE-7 | low | A Common pack was refused only when the weekly quota read exactly 0. A shop status that failed, or an answer without the number, passed as "packs left", and 2,500 FOXSY were paid for a pack FoxLeague refuses at the confirm | Refused unless the number is finite and above 0. The snapshot tells the plan the packs left, or that they are unknown. |
+| EDGE-6 | low | `GET /api/config` is read without the envelope and the client did not look at the HTTP status: a 403, 429 or 500 with a JSON body came back as a config object with none of its fields, past the rules' one guard | The raw path throws on a status outside 2xx without repeating the body. `config()` returns only an object that carries `registration_fee_wei` as an amount. The snapshot keeps `config` null with a warning and every rule refuses. |
+| INTEG-4, MONEY-3 | low | Every refusal of the relay released the registration fee's booking, also FoxLeague's HTTP 500 after a failed broadcast and an answer that is not its envelope, although the signed transaction may have gone out | Only FoxLeague's own refusal with HTTP 403, 429 or 503 (its guards before the broadcast) releases it. The client carries the status on the refusal. Anything else keeps the fee booked. |
+| EDGE-3 | low | A registration fee booked for a registration that never happened (a relay with no answer, or every dry run's simulated fee) refused each later registration by the one-time setup budget for good | A registration whose snapshot reads the fee as not paid leaves the earlier booking out of its setup-budget check and lets it go only once its own booking is kept. Refused, unsigned, turned away by a guard or reverted, the earlier booking stays: one booking always stands for the one fee the contract takes. The plan of a team that does not exist reads the setup budget without it. |
+| EDGE-4 | low | A payment whose broadcast got no answer kept no hash on its ledger rows, although the hash was computed before the broadcast. Every refund check reads a row by its hash, so an outbid bid or a refunded shop payment kept counting | The rows are settled under the locally computed hash right after the signature, and the error row carries it. A row is credited only on the chain's or FoxLeague's own word about that hash, once. |
+| ATTACK-2 | medium | A cross-site `POST /login` from any website the owner visits counted wrong passwords against the owner's own address and locked the owner out of the sign-in and of every password re-prompt. The plain Origin rule could not fix it: the dashboard's pages ask for no referrer, so a browser sends the dashboard's own form with `Origin: null` | Before the throttle is read, a sign-in from another site is refused uncounted (403). `Sec-Fetch-Site` decides where the browser sends it (only `same-origin` and `none` pass). Otherwise an Origin that names a host must be the request's Host, and `Origin: null` passes only with the sign-in page's own `SameSite=Strict` mark. A request with no Origin is judged by its password as before. Checked with Chrome against the real server |
+| ATTACK-1 | medium | One IPv6 host was never locked out of the sign-in: the lock and the password queue counted the full address, and a host owns all addresses of its /64 | `LoginThrottle` and the queue count a client by `clientKey`: an IPv4 address, or the /64 of an IPv6 address. The nginx template holds `/login` to 30 requests a minute per address |
+| ATTACK-6 | low | A logged-out session came back to life after a restart: the revocation lived only in memory | A keyed hash of each logged-out session and its expiry are kept in the store and loaded when the web starts. The session itself is never stored |
+| ATTACK-3 | low | The 30 minutes of "unknown" for a top-up with a lost answer ran from the offer. An approval late in the code's hour was called "never went out" seconds later, and asking again sent a second withdrawal (also EDGE-2) | The time of the attempt is stored with the claim and again right before Binance is asked. The 30 minutes run from it; a row from an earlier version uses the end of its code hour |
+| ATTACK-4 | low | A read slept for whatever an upstream's `Retry-After` said, up to days, inside a tick or under an agent's lock | A pause of up to 60 seconds is kept and is never shorter than the usual back-off. An upstream that asks for more is not asked again in that read: its answer comes back at once. A value that is no number and no date counts as none |
+| ATTACK-5 | low | An upstream answer of any size was buffered whole before parsing: 256 MB cost about 780 MB of memory | The body is read as a stream and refused past 8 MB. A larger declared content-length is refused unread, and a compressed answer is counted by its unpacked size |
+| ATTACK-7 | low | A tournament title written by the model had no impersonation check, unlike a team name | `parseAction` refuses a title that matches the same blocklist as a team name |
+| ATTACK-8 | low | Link my Telegram read only the 20 earliest waiting messages: 20 lines from anyone hid the owner's code for a day, and an old line could match a new code | Every waiting message is read in pages of 100, and only one dated after the link was started counts. The offset moves only past a full page and only as far as the first message the service's own reader could still act on, so the owner's code and first commands stay waiting for it |
+| EDGE-8 | low | A second copy of the service on the same data folder started, took the pid file and planned every agent a second time (also INSTALL-15) | `start()` refuses before writing the pid file when the pid in it is alive, is not its own and runs the service. A stale pid that now belongs to another program does not block a start, also when the server's unit cannot look at that process |
+| INSTALL-5 | medium | `set_env` rebuilt `.env` with `grep -v ... \|\| true`. One NUL byte in the file made grep print nothing, so the new `.env` held only the line being set and the recovery words were gone. | `set_env` copies with `grep -a` under `LC_ALL=C`, treats a grep error as an error, counts the lines with `wc` before the new file replaces `.env` and stops when one would be lost. The file stays mode 600. |
+| INSTALL-4 | medium | Enter at "Allow this machine to sign real transactions" turned signing on unless `.env` said exactly `AGENT_LIVE_ENABLED=0`. A line that was commented out, removed or set to false, off or no was offered as yes while the database could still say LIVE. | Enter means yes only when `.env` says 1 or true, or on a first install (no database and the setting nowhere in `.env`). Every other state offers no, also when a second line in another form decides what the agent reads. |
+| INSTALL-8 | low | A first run that ended before the typed yes left the words in `.env`. Every later run said "Your existing wallet is kept" and never showed them again. | The typed yes is noted in `data/words-confirmed`. Until it exists every run of the installer shows the words and asks. INSTALL.md names `./cli.sh backup-words`. |
+| INSTALL-13 | low | An empty `AGENT_MNEMONIC=` line, as `.env.example` ships it, counted as "words exist", so setup failed and the installer still said "A new wallet was created". | An empty line is filled in place and a line that holds anything is never replaced, an `export` line included. The installer stops with the setup's own message when no wallet was made. |
+| INSTALL-14 | low | A system Node.js with no npm beside it was chosen and the installer stopped at `npm: command not found`. The version rule also accepted 23.x, 24.0 and 24.1, where the service loads and ends at once. | A system Node.js is used only when it is 22 from 22.18 or 24.2 and later and npm sits beside it. Otherwise the private copy is used. `engines` names the same range. |
+| INSTALL-3B | medium | The private Node.js download was checked against a SHASUMS256.txt fetched from the same server. | The SHA-256 of the four archives of v22.22.0 is written in `install.sh` and the one of `deploy/bootstrap.sh` in that script. A download that differs is refused before it is unpacked. |
+| INSTALL-6 | low | get.sh put an older version over a newer install without a word. The older code does not apply limits added since. | An older version is refused unless `FOXAGENT_ALLOW_DOWNGRADE=1`. The refusal names both versions and says that newer settings and limits would not be applied. |
+| INSTALL-9 | low | get.sh took any folder with a `src` and a `package.json` for an older install and removed its src, docs and test. It also unpacked into a folder that held the owner's own files. | A folder is an older install only when its `package.json` names foxleague-agent. A folder that is neither an install nor empty is refused untouched. |
+| INSTALL-10 | low | A download of get.sh that stopped part-way ran every complete line before the cut. On the new layout it could still move the running release away or remove a flat install's code and put nothing in place. | The body of get.sh is one function called on the last line. A cut script does not parse and nothing of it runs. |
+| INSTALL-1 | medium | The update copied the new get.sh over the one bash was reading. | Closed by the release-folder layout. A regression test updates to a release whose get.sh and install.sh changed. |
+| INSTALL-2 | medium | The update replaced the code before `npm ci` and had no way back. | Closed by the release-folder layout. A regression test fails the dependency install and checks that the running release still loads and is the one the launcher starts. |
+| INSTALL-16 | low | The old get.sh copied the archive over the install, so an archive that held a `.env` replaced the recovery words. | Closed by the release-folder layout. In addition get.sh and the updater refuse, before unpacking, an archive that holds `.env`, `data`, `pem`, `keys`, `node_modules`, `.node` or a PEM file. |
+| INSTALL-7B | low | An update whose restart failed ended with status 0 while the old version kept running. | A failed restart is an error that names the command to run. |
+| INSTALL-15B | low | The first update of an install made with `--no-service` installed and started a background service beside the agent the owner runs by hand. | An update restarts a service only when one is installed and never installs one. The owner is told to start the agent again. |
+| INSTALL-20 | low | Only the guided installer set the modes of `.env`, `data` and `pem`. An install copied to another machine was updated and started with the recovery words readable by every local account. | `--update` and `--prepare` set `.env` 600, `data` 700, `pem` 700 and `pem/*.pem` 600 when they exist. |
+| UPD-strict | low | The updater checked the paths of an archive and not the kind of each entry. A symbolic link could point out of the release folder. | The updater and get.sh refuse, before unpacking, an archive that holds anything but plain files and folders. |
+| INSTALL-17 | low | The installer ran as root without a word and set the agent up as a root user service. | As root the guided install and the pasted line stop with one sentence (create a user, or follow docs/SERVER.md) unless `FOXAGENT_ALLOW_ROOT=1`. |
+| INSTALL-18 | low | On macOS the service's output went to `data/service.log` and nothing ever cut it. | The service keeps the file bounded at its start and once an hour: over 5 MB it keeps the last 1 MB, cut in place because launchd holds the file open. |
+| INSTALL-12 | low | The site was built on the maintainer's computer with `npm ci` that ran the install scripts of its dependencies. | `npm ci --ignore-scripts` in `site/deploy-site.sh` and `site/Dockerfile`. A test holds every `npm ci` of the tracked scripts to it. |
+| INSTALL-19 | low | The nginx template proxied the dashboard on port 80 until certbot had run, so a password could travel in clear. | Port 80 only answers the certificate challenge and redirects to https. The proxy is in the 443 block and the guide gets the certificate first. |
+| INSTALL-11 | low | The update of a git checkout pulls its branch, which may hold commits that are in no release, while the guides promised the newest release. | The pull stays. The installer says before it that a checkout follows its branch and may hold code that is in no release yet, and the guides say the same. |
+| DOCS-3 | medium | The guides told every owner to type `npm run cli -- X` and `npm start`. An install with the private Node.js has no npm on the PATH, so those failed, the way back to the recovery words included. | `cli.sh` sits next to `run.sh` and runs the active release's command line with the installer's Node.js. The installer, README.md and INSTALL.md show `./cli.sh` and `./run.sh`. |
+| DOCS-1 | medium | The Go live page, INSTALL.md, the installer's last screen and the Getting started guide promised that a new wallet in dry run simulates its registration. A dry run buys nothing and every action of a plan runs against a fresh reading of the chain: the swap is simulated, the registration is refused ("needs 5000 FOXSY for the fee (swap first)") and later plans of the game day may refuse the swap too, by the daily swap allowance the simulated swap counts in | The four places say what a new wallet shows in dry run and that the team is registered after Go LIVE. A test runs the executor on a new wallet and holds the sentences to it. The code is as it was (see Stays open). |
+| DOCS-4 | medium | The pages gave the AI about $1 a day and $0.15 a plan for a single agent, measured when the game manual was 143 KB, and suggested a monthly limit of $20 at Anthropic. The manual is 245 KB, nothing tied the sentence to it, and no page gave the cost of the Opus 5.5 at high effort that every level recommends | Measured again on the maintainer's server on 2026-11-11 from real plans: the rules and the manual are about 99,000 tokens and a plan reads about 111,000 in all. The pages say about $0.25 a plan and $1.50 a day for a single agent at the defaults (derived from those counts at Sonnet 5's list price) and what ten agents on Opus 5.5 at high effort measured ($0.15 a plan with the manual from the cache, $0.60 without). The example limit is $60. A test ties each number to the size of the text every plan sends, the list prices and the default tick and hours: a manual that grows fails it. |
+| DOCS-6 | medium | Every page gives one line that starts with curl and none said that curl is needed. Ubuntu Desktop ships without it, and the snap that Ubuntu's hint names first cannot write the installer's Node.js download | The Install page, the home page, INSTALL.md, README.md and Troubleshooting give `sudo apt install curl` and say that it is the apt one. |
+| DOCS-7 | medium | On Windows the agent is a systemd user service inside WSL2, which stops some time after its last terminal closes and does not start with Windows, while the pages said "keeps it running after a restart". On macOS the service starts at login and a sleeping Mac plays nothing | The pages say when the agent runs on each system, step 7 of the installer's table names all three and Troubleshooting has a row for each. No keep-alive for Windows is shipped (see Stays open). |
+| DOCS-8 | low | The Max shop payment bubble said "At 2,500 the agent can buy anything in the shop", while medicine for a long injury and an Epic's match waiver cost up to 9,000 | The bubble says what 2,500 buys and what needs more, with the numbers of the levels and of the match gate. |
+| DOCS-9 | low | "A day in the life" gave the XP booster's 7 stat points without the rate they belong to, and said the seated teams are compared for the open Silver or Gold tournaments, while the snapshot reads a paid Bronze too | The sentence names the full rate and that a level earning a share of the XP brings that share. The field read says Silver, Gold or paid Bronze, and the test that pinned the old sentence pins the new one. |
+| DOCS-10 | low | Five lists in the dashboard, the Settings page and the Strategy levels page carried a comma before their last "and" | Reworded. |
+| DOCS-11 (c) | low | `site/README.md`, the site's nginx files and its deploy script named the maintainers' website server (its address, its deploy user and another site on it), and comments in the sign-in page and the dashboard, sent to every browser, named two other private projects | Placeholders, with a sentence that the real values are kept outside the repository (`site/.host`, which git ignores, or `SITE_HOST`). The comments are gone, also in `src/web/auth.ts` and a test's title. A test searches the tracked files. |
+| DOCS-12 | low | `setup` on a server told the owner to run `backup-words`, which a server refuses | On a server it says to read the words once from the env file in the owner's own SSH session, as the server guide does. On the owner's computer it names `./cli.sh backup-words`. |
+| DOCS-3 (the messages) | low | The agent's own messages still named `npm run cli -- setup` after the guides were corrected | The command line, the service and `.env.example` name `./cli.sh`, or `agentctl.sh` on a server. The maintainers' `sync-manual` line keeps npm. |
+| DOCS-13 | low | The manual's eleven screenshots dated from 2026-10-06 and showed a dashboard that no longer exists | Taken again with `site/scripts/screenshots.ts` on its demo agents (a throwaway wallet, demo keys, no upstream in reach). |
+| DOCS-14 | low | The home page promised an agent that plays "around the clock", while a new agent plans 12 hours a day | "every day, inside the hours you choose". |
+| DOCS-15 | low | Found while the update's pages were written: the notice of a new version said "send /update here". The command is `/upgrade`, and the agent answers `/update` with "unknown command" | The notice names `/upgrade`. A test asks the service every command the notice names. Only the words changed. |
+| UPD-1 to UPD-5 | new feature | What an installed agent may take as an update had to be decided by something an attacker of GitHub, of the download or of the network cannot forge | A release is a small manifest signed with the maintainers' Ed25519 key, whose public half is pinned in the code already installed. The manifest is read strictly (its known fields only), it counts only with a signature of exactly its bytes, only a later plain version is newer (no downgrade, not the same version, nothing unreadable), and the archive is kept only when its size and SHA-256 are the signed ones. A build that pins no key refuses every update. |
+| UPD-6 to UPD-11, GET-1, GET-2, INS-1, INS-2 | new feature | An update that fails half-way, or that does not start, must leave an agent that runs | Each release has a folder of its own under `versions/`, and the running one is never written to. The new release is unpacked next to it and prepares itself (`install.sh --prepare`: its own folder and Node.js only, without the agent's keys in its environment). The switch is one small file, written by rename with a note for the launcher. A release that has not stayed up for 45 seconds in two starts is undone by the launcher (`run.sh`), and the release that ran before tells the owner once. The launcher refuses a `versions/active` that names anything but a release folder. The pasted install line puts a release in its own folder only when the download matches its manifest, and keeps the wallet, the keys, the data and Node.js. |
+| UPD-12 to UPD-20 | new feature | When an update is installed, and who may ask | The agent asks for the newest release about every 10 minutes (`AGENT_UPDATE_CHECK=0`: never) and tells the owner once per version, in the dashboard and on Telegram. Looking installs nothing. An update is installed only on the owner's ask (Update now, with the session and its CSRF token, or `/upgrade` from the owner's own chat), it is verified again at that moment, one at a time. The service then stops as for any restart and ends with exit code 75, on which the service manager starts it again. An update that cannot be installed changes nothing and says why; an install that cannot update itself (a git checkout, a server set up by hand) is told what to do instead. |
+| REL-1, REL-2 | new feature | The maintainers' side of a release | `scripts/release/release.ts` packs a tag exactly as git holds it, writes the manifest and signs it on the maintainer's own computer. It refuses a release that agents would refuse (another version in the tag, no pinned key, a key the release before does not know) and never overwrites or prints the private key. `docs/RELEASING.md` has the steps. |
+
+Decisions of the owner (2026-11-11):
+- **Signed releases.** An installed agent takes an update only when it is signed with the release key. The key is
+  made once on the owner's own computer, with a passphrase, and its private half never reaches GitHub, CI or a
+  server (`docs/RELEASING.md`).
+- **One click, and `/upgrade` on Telegram, with no password.** The installer's reviewer disagreed: it asked for the
+  password on the click and for Telegram to announce only, because an update replaces the code that enforces the
+  caps. The owner kept one click, because only a signed release that is newer than the running one can be
+  installed, whoever asks.
+- **MONEY-2.** The 1v1 win chance never stands above what the two starting elevens alone give. It is stricter play:
+  a rival's lower ELO no longer lifts a weaker eleven over the 55 percent floor.
+
+Stays open:
+- The first install has no earlier version to check a signature with: it trusts GitHub over https and the release's
+  checksum, as the install line itself does. `get.sh` does not pass `--proto '=https'` to curl for its GitHub
+  downloads, and the tag ruleset on `v*` (only maintainers, no moving or deleting) is still to be asked of GitHub.
+- `RELEASE_KEYS` in `src/update/keys.ts` is empty until the owner makes the key: until a release pins it, no agent
+  offers or takes an update from its dashboard.
+- Nobody has run the installer or the update on macOS or on Windows (WSL2) yet. The pages say what follows from how
+  those systems work (a LaunchAgent starts at login; WSL stops with its last terminal and does not start with
+  Windows). A one-line helper that keeps the agent alive on Windows is prepared apart and is not shipped.
+- The SHA-256 values of the pinned Node.js v22.22.0 archives were read from nodejs.org on 2026-11-11; only the
+  linux-x64 one was compared with a second source. A person should compare the five once more.
+- The nginx template, merged from two fixers (the `/login` rate limit and the https-only layout), was not run through
+  `nginx -t`, and the certbot steps of the server guide were not run on a real server.
+- INSTALL-21 (the review job shows a file's added code as binary when it holds a NUL byte and has no listed
+  extension) and the review job's clean-up (it leaves `bunfig.toml`, `.env` and `.npmrc` of the pull request in the
+  working directory; `id-token: write` is not needed) change `.github/`: a separate pull request, merged by hand.
+- DOCS-11's launch-day items: the "Coming soon" banners and frames of the site, "Status: in internal testing" in the
+  README, the GitHub link of the site and the version number (`0.11.0` until the first public release). The
+  screenshots show the version label of the day they were taken: take them again after the version is set.
+- DOCS-1 was closed in the text. A dry run of a new wallet still shows a refused registration, and from the second
+  plan of a game day a refused swap: keeping a dry plan's simulated balance, and leaving an unregistered agent's
+  dry swaps out of the allowance, is a change of the executor the owner may still want.
+- The cost of Sonnet 5 at the defaults is derived from the measured token counts, not measured on a lone agent, and
+  the FAQ still names Sonnet 5 as a good default while every level recommends Opus 5.5 at high effort.
+- An agent that never ran the release in which a new release key was added refuses every release signed with it:
+  its owner pastes the install line once. `docs/RELEASING.md` says to leave that release the newest for weeks.
+- A new version that ends at once with a clean exit is not started again by systemd (`Restart=on-failure`), so the
+  undo waits for the owner's own restarts. Not tested on a real service. On macOS the launch agent has no limit on
+  restarts (a `ThrottleInterval` needs a Mac to try).
+- The updater's reviewer also asked for a sequence number next to the version, a warning when no check has
+  succeeded for days and a copy of the database before a migration. None is built. A schema version that the code
+  refuses when it is newer was not taken, because it would block the undo: database changes stay additive instead.
+- The service does not refuse an env file that others can read (the installer and every update put the modes back),
+  and the installer does not set the mode back to dry run when its answer turns the live permission on while the
+  database says LIVE.
+- The sign-in: the owner of a /48 or /56 of IPv6 still gets five guesses for each /64. A browser that sends no
+  Origin on a form post is counted as before, and over plain http a sibling subdomain passes. DNS rebinding reaches
+  only `/healthz` and `/login` (there is no list of allowed Host names).
+- A tournament title written with look-alike letters of another alphabet passes the impersonation check.
+- Link my Telegram: a flood of more than 100 new messages after the link was started is read page by page and can
+  still make the owner send the code again. After the link the reader takes the owner's 6-digit code as a chat
+  message, as before.
+- The second-copy check (EDGE-8) was not run under the server's real systemd sandbox, and `cli tick` still reads
+  only the pid file.
+- Noted by the money reviewer without a proof: a failed bid is unbooked without asking the contract whether it
+  still names the agent as the top bidder, and the guard on the EGLD price is empty after a restart until the first
+  reading.
+- A session without the password can press Plan now and Talk to the manager as often as it likes: the AI spend has
+  no cap of its own (by design; the limit is the one set at Anthropic). `cli log` prints summaries as they are, with
+  any terminal escapes a rival's text holds.
+- Check before Friday 13 November 2026, 14:00 UTC: once FoxLeague's card bans are live, a card whose answer leaves
+  `injured_until` or `bans_pending` out counts as unread. If FoxLeague leaves out fields that are null, every card
+  is unread and every match is refused (the safe side, but no play).
+- The activity, spend and pending tables are never pruned (about 1 GB a year for ten agents).
+- The agent buys at most 18 days of medicine a week while FoxLeague's settings may sell more (the stricter side).
+- Not covered by this audit: the bytes of xExchange's `composeTasks`, FoxLeague's `tournament_slots.rs` against
+  `slots.ts`, the insides of Champions FoxLeague and the manual pages the copy leaves out.
+- Noted by the pages' reviewer without a proof: the installer ends when the dashboard password is shorter than 12
+  characters or its repeat differs, a wrong Telegram token at the keys step ends it after the AI key was typed, and
+  it checks for systemd only at its last step. Running it again keeps the wallet and what was saved.
+- `AGENTS.md` rules 7 and 8 do not name the Telegram commands that take no password (`/mode live confirm`,
+  `/kill off`, `/resume`, `/upgrade`): only the owner's own chat is answered. The README and the Safety page say so.

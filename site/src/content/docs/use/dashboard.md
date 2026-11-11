@@ -15,6 +15,13 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 - **Go LIVE / Back to dry run** is one switch for all agents. Going live asks you to type `GO LIVE` and your
   password; back to dry run is one click.
 - **Kill switch** stops every agent at once. Turning it on is one click; releasing it asks for your password.
+- **The version** you run is the small label next to the mode, for example `v1.0.0`. Its **i** explains updates.
+- **The update notice** appears under the header when a newer version is out: about every 10 minutes the agent
+  asks GitHub for the newest release. It shows the new version, the one you run and what is new. **Update now**
+  installs it in one click and needs no password; on Telegram, `/upgrade` does the same. While it installs, the
+  notice says so and the page comes back by itself after the restart. For a day it then shows how the update went:
+  done, not installed and why, or undone because the new version did not start. An install that cannot update
+  itself shows what to do instead of the button ([Update](/help/update/)).
 
 ## The totals
 

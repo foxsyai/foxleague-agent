@@ -5,15 +5,94 @@ description: Keep the agent up to date, add agents or remove it.
 
 ## Update
 
+The agent tells you when a new version is out and installs it when you say so. Nothing is ever installed by itself.
+
+### The notice
+
+About every 10 minutes the agent asks GitHub whether a newer release of foxleague-agent is out. When one is:
+
+- the **dashboard** shows a notice under the header: the new version, the one you run and a few lines from the
+  maintainers on what is new, with the **Update now** button;
+- **Telegram** sends you the same lines, once for each version.
+
+The version you run is always in the dashboard's header, next to the mode (for example `v1.0.0`), and in the
+first line of `/status`, which also names a newer version when one is out.
+
+### One click
+
+Press **Update now** in the dashboard, or send `/upgrade` on Telegram. No password is asked: whoever asks, only a
+release that is signed by the foxleague-agent maintainers and newer than yours can be installed, so there is
+nothing to steer. This is what happens:
+
+1. The agent asks for that release again and checks its signature with the key that came with the version you run.
+2. It downloads the release and checks that it is, byte for byte, the one that was signed.
+3. It unpacks the new version into a folder of its own, next to the running version, and the new version prepares
+   itself there (its Node.js and its dependencies). The running version is not written to: when a step fails, the
+   agent runs on as before and tells you why.
+4. The agent stops as for any restart. An action that is being signed finishes and is booked first. The other
+   actions of a running plan that were still waiting are dropped, and the next plan takes them up from a fresh
+   look at the game.
+5. It starts again as the new version and tells you so, in the dashboard and on Telegram. All of it takes a minute
+   or two, and the dashboard's page comes back by itself.
+
+Your wallet, keys, settings and history are not touched: `.env`, `data/` and `pem/` belong to your install, not to
+a version.
+
+### What the signature protects against
+
+Every release comes with a small signed note that names its version and the exact size and checksum of its
+download. The maintainers sign it with a key that never leaves their own computers: it is not on GitHub. Your
+agent holds the public half of that key, which came with the version it already runs.
+
+So an update is taken only when the signature is good, the version is newer than yours and the download is exactly
+the one that was signed. Someone who took over the GitHub repository, the download or the network on the way
+could not make your agent install their code, and could not push it back to an older version either. The first
+install has no earlier version to check with: like the install line itself, it trusts GitHub over https and the
+release's checksum.
+
+### If the new version does not start
+
+The agent keeps the version that ran before. A new version counts as started once the agent has been up for 45
+seconds. When it has not come that far in two starts, the agent goes back by itself to the version that ran before
+and tells you, in the dashboard and on Telegram: "The update to ... did not start and was undone: you run ... as
+before." Your wallet, settings and history are untouched, and it is safe to try again later.
+
+### From a terminal
+
 In the `foxleague-agent` folder:
 
 ```sh
 ./install.sh --update
 ```
 
-It downloads the newest release (or pulls it, if you installed with git), updates the dependencies and restarts
-the agent. Your wallet, keys, settings and history are kept. Pasting the install line again also downloads the
-newest version, then runs the installer, which offers your earlier answers as the defaults.
+It does what the button does: it looks for the newest release, checks its signature, downloads it, prepares it
+next to the running version and restarts the agent into it. If the restart fails it says so and names the command
+to run.
+
+An install made with `--no-service` has no background service and an update does not add one. There the agent
+ends once the new version is in place, also after **Update now** or `/upgrade`: start it again with `./run.sh`.
+
+Pasting the install line again also works: it downloads the newest version, checks it against the release's
+checksum and runs the installer, which offers your earlier answers as the defaults. An older version is never put
+over a newer one unless you add `FOXAGENT_ALLOW_DOWNGRADE=1`.
+
+### Installs that do not update themselves
+
+These show the notice with what to do instead of the button:
+
+- **A git checkout** (you installed with `git clone`): run `./install.sh --update` in a terminal. It pulls your
+  branch: a git checkout follows its branch, which may hold code that is in no release yet.
+- **A server set up by hand** ([Run it on a server](/help/server/)): update it the way it was deployed, with
+  `deploy/deploy.sh` from your computer.
+- **An install from before versions had folders of their own**: paste the install line again once. Later updates
+  are one click.
+- **A folder the agent may not write to**: run `./install.sh --update` in a terminal.
+
+### Switching the check off
+
+Set `AGENT_UPDATE_CHECK=0` in the `.env` file and restart the agent. It then asks GitHub nothing and shows no
+notice, and `/upgrade` answers that updates are switched off. `./install.sh --update` in a
+terminal still updates.
 
 ## More agents
 

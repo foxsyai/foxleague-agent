@@ -22,15 +22,18 @@ media canvas.
 
 ## Serving it
 
-agent.foxleague.ai runs on the FOXSY website droplet (134.209.228.52, next to foxsy.ai), served by its nginx as
-static files. DNS: `A agent → 134.209.228.52` in the foxleague.ai zone.
+agent.foxleague.ai is served as static files by the nginx of the maintainers' website server. The real address
+and the deploy user are kept outside the repository: below, `<server address>` and `<deploy user>` stand for
+them. DNS: `A agent → <server address>` in the foxleague.ai zone.
 
-First time, on the droplet (with sudo):
+First time, on the server (with sudo):
 
-1. `sudo mkdir -p /var/www/agent.foxleague.ai`, `sudo touch /var/www/agent.foxleague.ai.deploys` and `sudo chown -R web:www-data` on both: the deploy runs as the deploy user `web`, which has no sudo. Then install `nginx/agent.foxleague.ai.http-only.conf` as
-   `/etc/nginx/sites-available/foxleague-agent`, link it from `sites-enabled`, `sudo nginx -t` and reload. (The
-   name sorts after `foxkeeper.foxsy.ai`, so the site that answers unknown hosts on 443 stays the same.)
-2. Once the DNS answers the droplet's address everywhere:
+1. `sudo mkdir -p /var/www/agent.foxleague.ai`, `sudo touch /var/www/agent.foxleague.ai.deploys` and
+   `sudo chown -R <deploy user>:www-data` on both: the deploy runs as a user of its own, which has no sudo. Then
+   install `nginx/agent.foxleague.ai.http-only.conf` as `/etc/nginx/sites-available/foxleague-agent`, link it from
+   `sites-enabled`, `sudo nginx -t` and reload. (On a server with other sites, give the file a name that sorts
+   after the site that should keep answering unknown hosts on 443.)
+2. Once the DNS answers the server's address everywhere:
    `sudo certbot certonly --webroot -w /var/www/html -d agent.foxleague.ai` (renewal runs from certbot's timer).
 3. Replace the file with `nginx/agent.foxleague.ai.conf` (http redirect plus the https site), `sudo nginx -t`,
    reload.
@@ -38,8 +41,11 @@ First time, on the droplet (with sudo):
 Every deploy, from your computer:
 
 ```sh
-SITE_HOST=user@134.209.228.52 ./site/deploy-site.sh     # or put user@host in site/.host
+SITE_HOST=<deploy user>@<server address> ./site/deploy-site.sh
 ```
+
+Or write `<deploy user>@<server address>` into `site/.host` once and run `./site/deploy-site.sh`: git ignores that
+file, so it never leaves your computer.
 
 It builds the current commit from a fresh clone (never from the working folder, so nothing uncommitted or
 secret can ship), refuses a build that holds a key-like file, copies `dist/` to `/var/www/agent.foxleague.ai/`

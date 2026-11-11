@@ -554,8 +554,8 @@ cat <<'KEYS'
 
   1. AI key (Anthropic), needed for the agents to play. About 5 minutes:
      a. Sign up or log in:              https://platform.claude.com
-     b. Add credit ($10 is plenty):     https://platform.claude.com/settings/billing
-     c. Set a monthly limit ($20):      https://platform.claude.com/settings/limits
+     b. Add credit ($10, about a week): https://platform.claude.com/settings/billing
+     c. Set a monthly limit ($60):      https://platform.claude.com/settings/limits
      d. Create a key, name it foxleague-agent, copy it (shown once):
                                         https://platform.claude.com/settings/keys
 
@@ -627,8 +627,10 @@ cat <<EOF
   1. Open the dashboard. Its Getting started guide walks you through the rest, step by step.
   2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start:
      2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.
-  3. Agent 1 registers its team by itself once the EGLD arrives (in dry run it only simulates).
-     Watch a few plans, set your caps and strategy, then press Go LIVE.
+  3. Watch a plan or two in dry run. A new wallet shows only the simulated FOXSY swap there: the
+     registration line then says it needs 5,000 FOXSY, because nothing was really bought.
+  4. Set your caps and strategy, then press Go LIVE. Agent 1 swaps, registers its team and plays
+     by itself: the team is registered after Go LIVE.
 
   Everyday commands
   Logs        $(logs_hint)

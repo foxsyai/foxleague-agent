@@ -12,6 +12,10 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 - A computer that stays on: Linux with systemd or macOS. On Windows, use WSL2 with systemd turned on.
   A small cloud server works too. Install as a user of your own, not as root: as root the installer stops and
   tells you to create a user first (for a server set up by hand, see [docs/SERVER.md](docs/SERVER.md)).
+  On Linux the agent keeps running after you log out and after a restart. On macOS the agent starts when you log
+  in, and a sleeping Mac plays nothing. On Windows the agent runs while Ubuntu (WSL) runs: closing the last Ubuntu
+  window may stop it after a short while, and it does not start with Windows, so after every restart of Windows
+  open Ubuntu again and leave its window open for as long as the agent should play.
 - About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
@@ -26,8 +30,11 @@ Open a terminal and paste this one line:
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 ```
 
-It downloads the newest release into `~/foxleague-agent` and starts the guided installer. To install a
-given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
+On Ubuntu, install curl first, because Ubuntu Desktop comes without it: `sudo apt install curl`. Use this one, not
+the snap that Ubuntu's hint offers: the installer cannot download with the snap's curl.
+
+The line downloads the newest release into `~/foxleague-agent`, checks the download against the release's checksum
+and starts the guided installer. To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
 put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway (the settings and
 limits the newer version added are then not applied). Another folder is named with `FOXAGENT_DIR`; it must be
 empty or hold an install of foxleague-agent. On Windows, first install WSL2
@@ -45,10 +52,11 @@ The installer walks you through seven steps and explains each one:
 | 4. Keys | The AI key, Telegram and the CEX top-up key. Every key can be skipped and added later in the dashboard. |
 | 5. Settings | A new install starts in dry run. You choose whether this computer may sign real transactions once you press Go LIVE. |
 | 6. PEM files | Writes `pem/agent1.pem`, so you can log into FoxLeague as your agent's team and watch it play. |
-| 7. Background service | Starts the agent in the background and keeps it running after a restart. |
+| 7. Background service | Starts the agent in the background. On Linux it keeps running after you log out and after a restart. On macOS it starts when you log in. On Windows it runs while Ubuntu (WSL) runs. |
 
 Run `./install.sh` again at any time: it keeps your wallet, login and keys. It asks again for the port, the keys
 and the live permission, each with your earlier answer as the default, so pressing Enter keeps things as they are.
+Pressing Enter at the live permission keeps it as `.env` has it: on only when it already says 1 or true.
 The dashboard's **Getting started** guide repeats the key steps below, shows which keys are set and has a
 "Don't show this again" box.
 
@@ -57,9 +65,10 @@ The dashboard's **Getting started** guide repeats the key steps below, shows whi
 1. **Fund your agent.** Send EGLD on the MultiversX network to agent 1's wallet, which the installer printed.
    It is also in the dashboard.
 2. **Open the dashboard** at `http://localhost:8870` (or the port you chose) and log in.
-3. **Watch the dry run.** Once the EGLD arrives, the agent plans its first steps: buy FOXSY, register a team, train,
-   play. In dry run everything is simulated and logged, nothing is paid. Read a few plans in Last plan and
-   Activity.
+3. **Watch the dry run.** Once the EGLD arrives, the agent plans its first steps. In dry run nothing is paid and
+   nothing is bought, so a new wallet shows only the simulated FOXSY swap: the registration line then says it
+   needs 5,000 FOXSY for the fee, because nothing was really bought. That is expected. The team is registered once
+   you go live, and training and matches follow. Read a plan or two in Last plan and Activity.
 4. **Set your limits and strategy** in Settings: daily cap, monthly budget, the largest entry fee, shop payment
    and bid. Write your strategy in plain words too. Every field has an "i" that explains it.
 5. **Go live.** Press Go LIVE in the header, type `GO LIVE` and your password. Back to dry run is one click.
@@ -83,8 +92,10 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
 **1. AI key (Anthropic), needed for the agents to play**
 
 1. Sign up or log in at [platform.claude.com](https://platform.claude.com).
-2. Open [Billing](https://platform.claude.com/settings/billing) and add credit. $10 is plenty to start.
-3. Open [Limits](https://platform.claude.com/settings/limits) and set a monthly spend limit, for example $20.
+2. Open [Billing](https://platform.claude.com/settings/billing) and add credit. $10 runs a single agent at the
+   defaults for about a week.
+3. Open [Limits](https://platform.claude.com/settings/limits) and set a monthly spend limit, for example $60: a
+   month of a single agent at the defaults with room to spare.
 4. Open [API keys](https://platform.claude.com/settings/keys), press Create key, name it foxleague-agent and copy it.
    It is shown only once.
 5. Paste it in the installer, or in the dashboard: Keys, Anthropic API key, your password, Save.
@@ -118,8 +129,8 @@ A saved key is used at once. Showing or changing a key needs your password; ever
 ## Talking to your agents
 
 - **Telegram:** write in plain words ("this week focus on Silver tournaments, no boosters"). The agent answers
-  questions and turns advice into a new strategy you confirm with Apply. `/status`, `/plan`, `/pause 1`,
-  `/mode dry`, `/mode live confirm` and `/help` work too.
+  questions and turns advice into a new strategy you confirm with Apply. `/status` (it shows the version too),
+  `/plan`, `/pause 1`, `/mode dry`, `/mode live confirm`, `/upgrade` and `/help` work too.
 - **Dashboard:** each agent's page has a Talk to the manager box that works the same way. Its Speak button lets
   you talk instead of typing.
 
@@ -135,7 +146,7 @@ results, not meeting). What they share is a pooled formation record with no team
 
 - **The game:** limited by your daily cap and monthly budget (defaults $5 a day and $150 a month) plus a
   one-time $20 setup budget for the registration. Your agents never go over them.
-- **The AI:** about $1 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours, about $0.15 a plan): the game manual the AI reads is cached for an hour only when another plan comes within that hour, so a lone agent sends it at the plain price. Agents that plan within the same hour share the cache, so with three or more agents each costs about $0.40 a day. Opus, Fable and a higher effort cost more. You pick the model and effort in the dashboard.
+- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the dashboard.
 - **Network fees:** a few cents a day. Each agent always keeps an EGLD reserve for them (1 EGLD by default, never swapped).
 
 ## Safety built in
@@ -153,9 +164,22 @@ results, not meeting). What they share is a pooled formation record with no team
 |---|---|---|
 | Logs | `journalctl --user -u foxleague-agent -f` | `tail -f data/service.log` |
 | Restart | `systemctl --user restart foxleague-agent` | `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent` |
-| Update | `./install.sh --update` | `./install.sh --update` |
+| Update | **Update now** in the dashboard, `/upgrade` on Telegram or `./install.sh --update` | the same |
 | Command line | `./cli.sh` (alone it lists the commands) | `./cli.sh` |
 | Uninstall | `./install.sh --uninstall` | `./install.sh --uninstall` |
+
+## Updates
+
+About every 10 minutes the agent asks GitHub whether a newer release is out. When one is, the dashboard shows a
+notice with what is new and Telegram tells you once. Press **Update now** in the dashboard or send `/upgrade` on
+Telegram: nothing is ever installed by itself, and no password is asked, because only a release that is signed by
+the foxleague-agent maintainers and newer than yours can be installed. The agent checks the signature, prepares the
+new version next to the running one and restarts into it; the waiting actions of a running plan are dropped and the
+next plan takes them up. A new version that does not start is undone by itself, and you are told. Your wallet,
+keys, settings and history are kept.
+
+`./install.sh --update` does the same from a terminal. A git checkout and a server set up by hand show the notice
+with what to do instead of the button. `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 
 An update restarts the background service; when the restart fails it says so and names the command to run. An
 install made with `./install.sh --no-service` has no background service and an update does not add one: start the
@@ -171,6 +195,9 @@ only when the agent wallets are empty and your recovery words are safe.
 - **"systemd user services are not available" on Windows:** turn on systemd in WSL2 (`/etc/wsl.conf`, section
   `[boot]`, `systemd=true`), restart WSL, run the installer again.
 - **The agent stops when I log out (Linux):** run `sudo loginctl enable-linger $USER` once.
+- **The agent stops on Windows when I close Ubuntu, or after Windows restarts:** on Windows the agent runs while
+  Ubuntu (WSL) runs. Open Ubuntu again and leave its window open: the agent starts with it.
+- **"Command 'curl' not found" on Ubuntu:** run `sudo apt install curl`, then paste the install line again.
 - **The agent does not start after I changed the recovery words:** its history and limits belong to the wallets
   of the words it was made with. Put the original words back in `.env` and restart. To play another wallet's
   team, keep the original words and use **Import team** in the dashboard. To start over with the new words, stop

@@ -314,7 +314,7 @@ export class Service {
   private retrying = false
 
   constructor(cfg: Config) {
-    if (!cfg.mnemonic) throw new Error('AGENT_MNEMONIC is not set: run `npm run cli -- setup` first')
+    if (!cfg.mnemonic) throw new Error(`AGENT_MNEMONIC is not set: run \`${cfg.isServer ? 'agentctl.sh' : './cli.sh'} setup\` first`)
     this.cfg = cfg
     this.store = new Store(cfg.dataDir)
     this.chain = new Chain(cfg)
@@ -1213,7 +1213,7 @@ export class Service {
     // 127.0.0.1 unless WEB_UI_HOST says otherwise: a container that publishes the port on the host's loopback only
     // binds 0.0.0.0 inside its own network namespace.
     if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870), process.env.WEB_UI_HOST?.trim() || '127.0.0.1')
-    else console.log('web UI off: set it up with `agentctl.sh set-web-password`')
+    else console.log(`web UI off: set it up with \`${this.cfg.isServer ? 'agentctl.sh' : './cli.sh'} set-web-password\``)
     for (const b of agents) {
       this.schedule(b.index, 5_000 + Math.random() * 20_000)
       void this.snapshot(b.index).catch(() => undefined)
