@@ -65,6 +65,7 @@ the dashboard keeps its own lock on wrong passwords, per IPv4 address and per /6
 | What | Command |
 |---|---|
 | Deploy a new version | `./deploy/deploy.sh` from your computer (restarts the service; check first that no plan is running, or its waiting actions are dropped) |
+| A new release is out | The dashboard and Telegram tell you (about every 10 minutes the agent asks GitHub; `AGENT_UPDATE_CHECK=0` in the env file switches that off). A server set up this way does not update itself: there is no Update now button, and `/upgrade` answers that it is updated the way it was deployed. Take the release's tag in your copy and run `./deploy/deploy.sh` |
 | Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys` |
 | Keys | the dashboard's Keys panel (saved in `/var/lib/foxleague-agent/secrets.json`, mode 600) or `agentctl.sh configure` |
 | Security score | `systemd-analyze security foxleague-agent` |

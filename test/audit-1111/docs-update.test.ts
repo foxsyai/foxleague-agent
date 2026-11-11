@@ -104,6 +104,18 @@ test('the Update page tells the steps as the code runs them', () => {
   assert.match(raw('src/update/install.ts'), /every\s+\* release folder but this one and the one before it/)
 })
 
+test('the env example, the server guide and the FAQ carry the update too', () => {
+  const env = raw('.env.example')
+  assert.match(env, /# AGENT_UPDATE_CHECK=1\n# AGENT_UPDATE_URL=/)
+  assert.match(raw('src/config.ts'), /updateUrl: process\.env\.AGENT_UPDATE_URL\?\.trim\(\) \|\| undefined/)
+  assert.match(env.replace(/\n# /g, ' '), new RegExp(`about every ${minutes} minutes the agent asks GitHub`))
+  const guide = read('docs/SERVER.md')
+  assert.match(guide, /does not update itself: there is no Update now button, and `\/upgrade` answers that it is updated the way it was deployed/)
+  assert.match(read(`${DOCS}/help/server.mdx`), /A server set up this way does not update itself/)
+  assert.match(read(`${DOCS}/help/faq.md`), /### How do I get a new version\?/)
+  assert.match(read(`${DOCS}/help/faq.md`), /nothing is ever installed by itself/)
+})
+
 test('the installs that show the notice and cannot update themselves are named with what they do instead', () => {
   // The three answers of the code, for a server, a git checkout and an install from before the release folders.
   const server = selfUpdateRefusal({ root: '/x', code: '/x', managed: false }, { isServer: true })

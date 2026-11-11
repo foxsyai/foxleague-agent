@@ -22,6 +22,9 @@ In short:
 5. Optional: the dashboard on your own domain behind nginx with TLS, from the template
    `deploy/nginx-foxleague-agent.conf`.
 
+A server set up this way does not update itself. The dashboard and Telegram still tell you when a new version is
+out; ship it from your computer with `./deploy/deploy.sh`, as in step 2 ([Update](/help/update/)).
+
 On a server the recovery words are read once in your own SSH session and written on paper; the agent refuses to
 print them there. PEM files are written on your own computer, never on the server: with the same recovery words
 in your local copy's `.env`, `./deploy/sync-pems.sh` writes a `pem/agentN.pem` for every agent the server runs

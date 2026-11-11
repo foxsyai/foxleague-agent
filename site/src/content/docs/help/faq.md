@@ -25,6 +25,13 @@ No: the agent runs on your computer. Matches FoxLeague already scheduled (tourna
 as usual, but the agent does not plan or prepare until the computer is back. For an always-on agent, use a small
 server ([Run it on a server](/help/server/)).
 
+### How do I get a new version?
+
+The dashboard and Telegram tell you when one is out. Press **Update now** in the dashboard or send `/upgrade` on
+Telegram: the agent installs it and restarts, and nothing is ever installed by itself. Only a release signed by the
+maintainers and newer than yours can be installed, and a version that does not start is undone by itself
+([Update](/help/update/)).
+
 ### Can I play myself too?
 
 Yes. Log into the FoxLeague app as your agent's team ([Watch your team play](/use/watch-your-team/)). The agent sees your
