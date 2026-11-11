@@ -1968,8 +1968,12 @@ ahead). No contract changed.
 - Starts no match, 1v1 or tournament entry while an injured card is in the saved eleven (`squadLegal`): every strength
   the rules compare is the saved eleven's, and FoxLeague would put a bench card of its own choice in the shirt. A
   tournament entry is judged at its start, a game or a 1v1 now. The plan saves an eleven without the card first.
-- Counts 11 match-fit of the 18 (condition, no transfer cooldown, not injured) before a 1v1 stake is paid, at the
-  create too (the creator's own seat goes through the same join gate).
+- Counts the eleven shirts FoxLeague fills with a match-fit card of the 18 (condition, no transfer cooldown, not
+  injured) before a 1v1 stake is paid, at the create too (the creator's own seat goes through the same join gate). It
+  counts as FoxLeague's `auto_substitute` does (`matchFit` in `src/executor/rules.ts`): a tired outfield starter is
+  relieved only by a fit outfield bench card, a tired keeper by a fit bench keeper or, as the last resort, by a fit
+  outfield bench card, and an injured bench card is off the bench. Eleven fit cards among the 18 are not enough when
+  the bench keeper is the one left for an outfield shirt.
 - Leaves a card injured past a tournament's last match out of the condition its schedule is weighed against.
 - Refuses an injured or suspended card as a fusion input, whatever FoxLeague's pre-check answers.
 - Refuses a bid on a card whose injury cannot be read; an injured card may be bid on when its price deserves it (the

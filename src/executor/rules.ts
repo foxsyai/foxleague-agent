@@ -819,13 +819,33 @@ export function outInjured(p: PlayerView, at: Date): boolean {
   return p.disciplineUnread === true || (p.injuredUntil !== null && Date.parse(p.injuredUntil) > at.getTime())
 }
 
-/** The saved 18 that FoxLeague's 1v1 gate counts match-fit (squad_would_forfeit): condition, no transfer cooldown, not injured. */
+/**
+ * How many of the eleven shirts FoxLeague's 1v1 gate fills with a match-fit card (squad_would_forfeit, which runs the
+ * lock's own auto_substitute; fewer than 11 is a forfeit, refused after the stake is paid). Fit: condition, no transfer
+ * cooldown, not injured. It is no count of fit cards among the 18: a shirt whose starter is not fit is filled from the
+ * bench by FoxLeague's line rule (tournament_simulator.rs line_distance, find_best_sub, last_resort_keeper): an
+ * outfield shirt only by a fit outfield bench card, never the bench keeper; the keeper's shirt by a fit bench keeper,
+ * else by a fit outfield bench card as the last resort. An injured bench card is off the bench (held out). The saved
+ * eleven fits its formation (squadLegal), so a starter's position is his shirt's line (audit 2026-11-11, INTEG-1).
+ */
 function matchFit(s: AgentSnapshot, minCondition: number, at: Date): number {
-  return [...s.team!.lineup, ...s.team!.substitutes].filter(n => {
+  const fit = (p: PlayerView | undefined): boolean => Boolean(p && p.condition >= minCondition && !p.transferLockedUntil && !outInjured(p, at))
+  const bench = s.team!.substitutes.map(n => card(s, n)).filter(fit)
+  let keepers = bench.filter(p => p?.position === 'GK').length
+  let outfield = bench.length - keepers
+  let filled = 0
+  for (const n of s.team!.lineup) {
     const p = card(s, n)
-    return p && p.condition >= minCondition && !p.transferLockedUntil && !outInjured(p, at)
-  }).length
+    if (fit(p)) filled++
+    else if (p?.position === 'GK' && keepers > 0) { keepers--; filled++ }
+    else if (outfield > 0) { outfield--; filled++ }
+  }
+  return filled
 }
+
+/** The words of the 1v1 gate's refusal: what counts as match-fit, and who may take a tired starter's shirt. */
+const matchFitRefusal = (fit: number, minCondition: number): string =>
+  `only ${fit} match-fit players for the eleven shirts (condition >= ${minCondition}, no transfer cooldown, not injured; a tired outfield starter is relieved only by a fit outfield bench card, never the bench keeper)`
 
 /**
  * `at`: when the match is played (now for a game, a 1v1 or a casual test; a tournament's start for an entry). A
@@ -1094,7 +1114,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const blind = oneVOneStateRefusal(s, ctx.now)
         if (blind) return refuse(blind)
         const fit = matchFit(s, cfg.min_field_condition, ctx.now)
-        if (fit < 11) return refuse(`only ${fit} match-fit players (condition >= ${cfg.min_field_condition}, no transfer cooldown, not injured)`)
+        if (fit < 11) return refuse(matchFitRefusal(fit, cfg.min_field_condition))
       }
       if (!oneVOne) {
         const worn = scheduleRefusal(s, t, ctx.now)
@@ -1282,7 +1302,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // The creator's own seat goes through FoxLeague's join gate after the stake is paid (tournaments.rs: the create
       // leaves the match-fit gate to the creator's later join): the same count as a join.
       const fit = matchFit(s, cfg.min_field_condition, ctx.now)
-      if (fit < 11) return refuse(`only ${fit} match-fit players (condition >= ${cfg.min_field_condition}, no transfer cooldown, not injured)`)
+      if (fit < 11) return refuse(matchFitRefusal(fit, cfg.min_field_condition))
       return needFoxsy(a.stake_foxsy, allow(a.stake_foxsy, { fee: a.stake_foxsy }))
     }
 

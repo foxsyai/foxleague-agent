@@ -47,7 +47,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
   3 percent a foul at full condition, up to 9 percent at condition 30). The agent sees each card's yellow cards, ban
   and injury, also on the cards at auction. It starts no match, 1v1 or tournament entry while an injured player is in
   your starting eleven: it saves an eleven without him first. Before a 1v1 it counts 11 match-fit players among your
-  18, an injured one not among them, so no stake is paid for a seat FoxLeague would refuse. It never fuses an injured
+  18 the way FoxLeague does, an injured one not among them and a tired outfield player relieved only by an outfield
+  player from the bench (never by the bench keeper), so no stake is paid for a seat FoxLeague would refuse. It never fuses an injured
   or suspended card. It may bid on an injured card when the price is low enough for the days he cannot play, and
   never on one whose injury it cannot read. A forfeit costs your
   team rating, so it keeps the 11 + 7 complete and fit before each lock, as before.
