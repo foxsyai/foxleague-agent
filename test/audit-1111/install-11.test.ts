@@ -39,5 +39,6 @@ test('INSTALL-11: the update of a git checkout says that it follows its branch a
   assert.ok(r.out.indexOf('This folder is a git checkout') < r.out.search(/Updating [0-9a-f]+\.\.[0-9a-f]+|Fast-forward/), 'said before the pull')
   // The pull itself is as before: the branch's newest commit, dependencies, restart.
   assert.ok(existsSync(join(checkout, 'src', 'UNRELEASED.ts')))
-  assert.deepEqual(s.calls(), [`${NPM_CI} in ${checkout}`, 'systemctl --user restart foxleague-agent'])
+  // (Before the restart the user's service manager is looked for and the unit's start counter is cleared: FRESH-1.)
+  assert.deepEqual(s.calls(), [`${NPM_CI} in ${checkout}`, 'systemctl --user show-environment', 'systemctl --user reset-failed foxleague-agent', 'systemctl --user restart foxleague-agent'])
 })

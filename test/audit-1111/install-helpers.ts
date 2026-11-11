@@ -26,7 +26,9 @@ export function stubs(o: { node?: boolean; npm?: boolean } = {}): Stubs {
     chmodSync(join(dir, name), 0o755)
   }
   if (o.npm !== false) stub('npm', `printf 'npm %s in %s\\n' "$*" "$PWD" >> "$LOG"\n[ -e node_modules ] || ln -s ${JSON.stringify(join(REPO, 'node_modules'))} node_modules`)
-  for (const name of ['systemctl', 'loginctl', 'launchctl']) stub(name, `printf '${name} %s\\n' "$*" >> "$LOG"`)
+  for (const name of ['loginctl', 'launchctl']) stub(name, `printf '${name} %s\\n' "$*" >> "$LOG"`)
+  // As the real one: `is-active` of a service that does not run ends with status 3; everything else goes through.
+  stub('systemctl', `printf 'systemctl %s\\n' "$*" >> "$LOG"\ncase "$*" in *is-active*) exit 3 ;; esac`)
   // No stand-in ever lets curl out: a test that needs a download gives its own curl.
   stub('curl', `printf 'curl %s\\n' "$*" >> "$LOG"\necho "curl stand-in: no network in a test" >&2\nexit 6`)
   // The installer puts its Node's folder first on the PATH: with Node found here, the stand-in npm is the one it runs.

@@ -41,7 +41,8 @@ test('INSTALL-1: an update to a release whose get.sh and install.sh changed comp
     assert.equal(readFileSync(join(i.root, 'versions', 'active'), 'utf8'), 'v3.2.0\n')
     assert.equal(readFileSync(join(i.root, 'which-installer.log'), 'utf8'), 'the installer of 3.2.0: --prepare\n', 'the new release was prepared by its own install.sh')
     assert.ok(s.calls().includes(`${NPM_CI} in ${join(i.root, 'versions', '.staging-v3.2.0')}`), 'its dependencies were installed before the switch')
-    assert.deepEqual(s.calls().filter(c => c.startsWith('systemctl')), ['systemctl --user restart foxleague-agent'])
+    // The owner's restart: the user's service manager is looked for, the unit's start counter is cleared (FRESH-1), then the restart.
+    assert.deepEqual(s.calls().filter(c => c.startsWith('systemctl')), ['systemctl --user show-environment', 'systemctl --user reset-failed foxleague-agent', 'systemctl --user restart foxleague-agent'])
     assert.equal(readFileSync(join(i.root, 'get.sh'), 'utf8'), oldGet, 'no script in the install folder was written over while the update ran')
     assert.equal(readFileSync(join(i.root, 'versions', 'v3.1.0', 'get.sh'), 'utf8'), oldGet, 'and the release that was running is as it was')
     // Once the new release has started and stayed up, its scripts take the place of the old ones, by rename.

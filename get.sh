@@ -30,7 +30,7 @@ main() {
   say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
   die() { printf '\n\033[1;31mError: %s\033[0m\n' "$*" >&2; exit 1; }
 
-  for tool in curl tar; do command -v "$tool" >/dev/null 2>&1 || die "$tool is needed. Install it and run this again."; done
+  for tool in curl tar; do command -v "$tool" >/dev/null 2>&1 || die "$tool is needed and is not installed. Install it (on Ubuntu or Debian: sudo apt install $tool), then paste the line again."; done
   case "$(uname -s)" in
     Linux | Darwin) ;;
     *) die "run this on Linux or macOS. On Windows, install WSL2 (Ubuntu) and run it there." ;;

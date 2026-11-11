@@ -19,7 +19,8 @@ test('DOCS-3: ./cli.sh runs the active release with the install\'s own Node.js, 
   const cli = join(i.root, 'cli.sh')
   assert.ok(existsSync(cli), 'the installer put cli.sh next to run.sh')
   assert.equal(mode(cli), '755')
-  assert.match(first.out, /To see them again later, in this folder: \.\/cli\.sh backup-words/)
+  // The line names the folder since FRESH-5: the pasted line is typed in the home folder.
+  assert.ok(first.out.includes(`To see them again later: cd ${i.root} && ./cli.sh backup-words`), first.out)
   assert.match(first.out, /Command line +\.\/cli\.sh/)
 
   // The owner's shell: the system's tools, no Node.js anywhere on the PATH.

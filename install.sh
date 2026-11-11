@@ -32,6 +32,10 @@ ENV_FILE="$ROOT/.env"
 DATA_DIR="$ROOT/data"
 PEM_DIR="$ROOT/pem"
 TTY=${FOXAGENT_TTY:-/dev/tty}
+# The user's name, asked from the system: USER is not set in every shell (one started by a tool, a small container).
+USER_NAME=$(id -un 2>/dev/null || printf '%s' "${USER:-}")
+# Where systemd keeps its runtime folders (a test names another place).
+RUN_DIR=${FOXAGENT_RUN:-/run}
 
 say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -185,6 +189,7 @@ ensure_node() {
     info "Downloading Node.js $NODE_VERSION (a private copy, nothing is installed system-wide)"
     local tmp tarball want got
     want=$(node_sha256) || die "no Node.js archive is known for $PLATFORM-$NODE_ARCH: install Node.js 22 (22.18 or later) with npm yourself and run this again"
+    command -v curl >/dev/null 2>&1 || die "curl is needed and is not installed. Install it (on Ubuntu or Debian: sudo apt install curl), then run this again."
     tmp=$(mktemp -d)
     tarball="node-$NODE_VERSION-$PLATFORM-$NODE_ARCH.tar.gz"
     curl -fsSL --proto '=https' --proto-redir '=https' -o "$tmp/$tarball" "https://nodejs.org/dist/$NODE_VERSION/$tarball" || { rm -rf "$tmp"; die "Node.js could not be downloaded from nodejs.org. Check the connection and run this again."; }
@@ -207,8 +212,11 @@ ensure_node() {
   export PATH="$(dirname "$NODE"):$PATH"
   info "Node.js $("$NODE" --version) at $NODE"
 }
-cli() { AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
-deps() { (cd "$APP_DIR" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+# FOXAGENT_GUIDED=1: the command line leaves out the lines that are written for a server set up by hand.
+cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
+# Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
+# a newcomer reads that notice as something to do.
+deps() { (cd "$APP_DIR" && npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
 
 # ---- the launcher (run.sh: what the service starts) and the command line (cli.sh). On an install made by get.sh
 # they sit in ROOT with an install.sh that hands over to the active release; in a git checkout all three are the
@@ -232,8 +240,42 @@ SHIM
 UNIT="$HOME/.config/systemd/user/$SERVICE.service"
 PLIST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 service_installed() { if [ "$PLATFORM" = linux ]; then [ -f "$UNIT" ]; else [ -f "$PLIST" ]; fi; }
+# The user's own service manager (systemd --user) on Linux. It is reached through the user's runtime folder,
+# /run/user/<uid>. A terminal opened with su or sudo has no XDG_RUNTIME_DIR, so systemctl --user finds nothing
+# there although the manager runs, or would run with linger (which the installer turns on at its last step
+# anyway, and which a user may turn on for themselves). `find_user_systemd start` may start it that way.
+user_systemd() { systemctl --user show-environment >/dev/null 2>&1; }
+find_user_systemd() {
+  [ "$PLATFORM" = linux ] || return 0
+  if user_systemd; then return 0; fi
+  local dir _
+  dir="$RUN_DIR/user/$(id -u)"
+  if [ ! -d "$dir" ] && [ "${1:-}" = start ] && loginctl enable-linger "$USER_NAME" >/dev/null 2>&1; then
+    for _ in 1 2 3 4 5 6 7 8 9 10; do if [ -d "$dir" ]; then break; fi; sleep 0.5; done
+  fi
+  [ -d "$dir" ] || return 1
+  export XDG_RUNTIME_DIR="$dir"
+  # A manager that linger has just started needs a moment before it answers.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do if user_systemd; then return 0; fi; sleep 0.5; done
+  return 1
+}
+# Why there is no service manager to use, in words for the newcomer, with commands that exist.
+no_user_systemd() {
+  if [ -d "$RUN_DIR/systemd/system" ]; then
+    die "the background services of the user $USER_NAME cannot be reached from this terminal. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself (a new terminal, or ssh $USER_NAME@this-machine) and run the installer again: cd $ROOT && ./install.sh"
+  fi
+  die "this machine does not run systemd, which keeps the agent running in the background. On Windows (WSL2): add the two lines [boot] and systemd=true to /etc/wsl.conf, run wsl --shutdown in PowerShell, open Ubuntu again and run the installer again: cd $ROOT && ./install.sh   Without systemd: cd $ROOT && ./install.sh --no-service   and start the agent yourself with ./run.sh"
+}
+# A restart that the owner asked for. The unit's start limit (5 starts in 10 minutes) is there to end a crash
+# loop; systemd counts this restart against it too and, at the limit, stops the agent and refuses to start it.
+# reset-failed clears that count first.
 service_restart() {
-  if [ "$PLATFORM" = linux ]; then systemctl --user restart "$SERVICE"; else launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL"; fi
+  if [ "$PLATFORM" = linux ]; then
+    systemctl --user reset-failed "$SERVICE" >/dev/null 2>&1 || true
+    systemctl --user restart "$SERVICE"
+  else
+    launchctl kickstart -k "gui/$(id -u)/$PLIST_LABEL"
+  fi
 }
 install_service() {
   safe_path "$ROOT"; safe_path "$NODE"
@@ -242,7 +284,7 @@ install_service() {
   safe_path "$bash_bin"
   install_launcher
   if [ "$PLATFORM" = linux ]; then
-    systemctl --user show-environment >/dev/null 2>&1 || die "systemd user services are not available here. On WSL2, enable systemd in /etc/wsl.conf; or run ./install.sh --no-service and start the agent with: ./run.sh"
+    find_user_systemd start || no_user_systemd
     mkdir -p "$(dirname "$UNIT")"
     cat > "$UNIT" <<EOF
 [Unit]
@@ -276,11 +318,11 @@ SystemCallErrorNumber=EPERM
 [Install]
 WantedBy=default.target
 EOF
-    systemctl --user daemon-reload
-    systemctl --user enable "$SERVICE" >/dev/null 2>&1
-    systemctl --user restart "$SERVICE"
+    systemctl --user daemon-reload || die "the background service could not be set up (systemctl --user daemon-reload failed, see the line above). Run the installer again: cd $ROOT && ./install.sh"
+    systemctl --user enable "$SERVICE" >/dev/null 2>&1 || die "the background service could not be set to start by itself (systemctl --user enable $SERVICE failed). Run the installer again: cd $ROOT && ./install.sh"
+    service_restart || die "the background service did not start. See why: journalctl --user -u $SERVICE -n 30   Then run the installer again: cd $ROOT && ./install.sh"
     # Keep it running after you log out (may need your password on some systems).
-    loginctl enable-linger "$USER" >/dev/null 2>&1 || info "Note: the agent runs while you are logged in. To keep it running after logout: sudo loginctl enable-linger $USER"
+    loginctl enable-linger "$USER_NAME" >/dev/null 2>&1 || info "Note: the agent runs while you are logged in. To keep it running after logout: sudo loginctl enable-linger $USER_NAME"
   else
     mkdir -p "$(dirname "$PLIST")"
     cat > "$PLIST" <<EOF
@@ -304,7 +346,14 @@ EOF
 }
 remove_service() {
   if [ "$PLATFORM" = linux ]; then
+    # Never "Stopped." for a service that could not be asked to stop: the agent would keep playing.
+    if [ -f "$UNIT" ] && ! find_user_systemd; then
+      die "the background service cannot be reached from this terminal, so it was not stopped and not removed. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself and run this again: cd $ROOT && ./install.sh --uninstall"
+    fi
     systemctl --user disable --now "$SERVICE" >/dev/null 2>&1 || true
+    if systemctl --user is-active --quiet "$SERVICE" 2>/dev/null; then
+      die "the background service is still running: it did not stop. Stop it with: systemctl --user stop $SERVICE   then run this again: cd $ROOT && ./install.sh --uninstall"
+    fi
     rm -f "$UNIT"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   else
@@ -313,6 +362,15 @@ remove_service() {
   fi
 }
 restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
+# After a restart that failed: what runs now, and a command that systemd takes even at the unit's start limit.
+after_failed_restart() {
+  # Only a service manager that answers can say that nothing runs: one that cannot be reached stopped nothing.
+  if [ "$PLATFORM" = linux ] && user_systemd && ! systemctl --user is-active --quiet "$SERVICE" 2>/dev/null; then
+    echo "the agent is not running now. Start it yourself: systemctl --user reset-failed $SERVICE && systemctl --user restart $SERVICE"
+  else
+    echo "the old version is still the one running. Restart it yourself: $(restart_hint)"
+  fi
+}
 logs_hint() { if [ "$PLATFORM" = linux ]; then echo "journalctl --user -u $SERVICE -f"; else echo "tail -f $DATA_DIR/service.log"; fi; }
 
 # ---- the three modes ----
@@ -321,6 +379,11 @@ if [ "$MODE" = uninstall ]; then
   remove_service
   info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
   info "The agent wallets still hold their funds. Keep the backup words; delete the folder only when the wallets are empty."
+  # The installer turned linger on so the agent runs with nobody logged in. Other services of this user may
+  # count on it by now, so it is told and not taken away.
+  if [ "$PLATFORM" = linux ] && loginctl show-user "$USER_NAME" -p Linger 2>/dev/null | grep -q '^Linger=yes'; then
+    info "Background services of the user $USER_NAME still start without a login (linger). To turn that off: loginctl disable-linger $USER_NAME"
+  fi
   exit 0
 fi
 
@@ -361,7 +424,9 @@ if [ "$MODE" = update ]; then
     info "No background service is installed here: start the agent again to run the new version ($ROOT/run.sh)."
     exit 0
   fi
-  service_restart || die "the new version is in place but the background service could not be restarted: the old version is still the one running. Restart it yourself: $(restart_hint)"
+  # A terminal opened with su or sudo: find the user's service manager first (see find_user_systemd).
+  find_user_systemd || true
+  service_restart || die "the new version is in place but the background service could not be restarted: $(after_failed_restart)"
   info "Restarted."
   exit 0
 fi
@@ -372,6 +437,15 @@ FIRST_INSTALL=$(first_install)
 say "foxleague-agent installer"
 info "It sets up local agents that manage FoxLeague teams for you, with a dashboard on this machine."
 info "Nothing is shared with anyone: your wallet words and keys stay in this folder."
+
+# What the install cannot do without, looked for before the first question: a newcomer who lacks it learns so
+# here, not at step 7 after writing down the words and typing a login and keys. The launcher and ./install.sh go
+# into the folder first, so that the commands these messages name exist.
+install_launcher
+for tool in curl tar; do
+  command -v "$tool" >/dev/null 2>&1 || die "$tool is needed and is not installed. Install it (on Ubuntu or Debian: sudo apt install $tool), then run the installer again: cd $ROOT && ./install.sh"
+done
+if [ "$NO_SERVICE" != 1 ]; then find_user_systemd start || no_user_systemd; fi
 
 say "1/7 Node.js and dependencies"
 ensure_node
@@ -402,11 +476,21 @@ if [ ! -f "$WORDS_CONFIRMED" ]; then
   info ""
   cli backup-words
   info ""
-  until [ "$(ask 'Type yes when the words are written down')" = yes ]; do :; done
+  # yes in any case is the yes (Yes, YES); every other answer is told what to type. Not for ever: a terminal
+  # that cannot be read from answers nothing each time.
+  asked=0
+  while :; do
+    case "$(ask 'Type yes when the words are written down')" in
+      [Yy][Ee][Ss]) break ;;
+    esac
+    asked=$((asked + 1))
+    [ "$asked" -lt 20 ] || die "no yes was typed. Run the installer again when you are ready to write the words down: cd $ROOT && ./install.sh"
+    info "Type the word yes (then Enter) once the words are on paper. They are shown above."
+  done
   printf 'The owner typed yes at "Type yes when the words are written down" on %s.\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" | put_file "$WORDS_CONFIRMED" 600
   clear 2>/dev/null || true
   info "Good. The words stay in $ENV_FILE (readable only by you)."
-  info "To see them again later, in this folder: ./cli.sh backup-words"
+  info "To see them again later: cd $ROOT && ./cli.sh backup-words"
 else
   info "Your existing wallet is kept."
 fi
@@ -418,7 +502,20 @@ if [ -n "$(get_env WEB_UI_PASSWORD_HASH)" ] && ! yes_no "A login is already set.
   info "Login kept."
 else
   info "Choose the username and password for the dashboard."
-  cli set-web-password < "$TTY"
+  # A password that is too short or typed differently the second time is asked for again: it does not end the
+  # install. Status 130 is Ctrl-C at the prompt, 2 a terminal that cannot be typed into: those end it.
+  tries=0
+  while :; do
+    rc=0
+    cli set-web-password < "$TTY" || rc=$?
+    [ "$rc" != 0 ] || break
+    [ "$rc" != 130 ] || exit 130
+    tries=$((tries + 1))
+    if [ "$rc" = 2 ] || [ "$tries" -ge 5 ]; then
+      die "no dashboard login was saved. Run the installer again (your wallet is kept): cd $ROOT && ./install.sh"
+    fi
+    info "Nothing was saved. Try again: 3 to 32 letters or digits for the username, at least 12 characters for the password, typed the same both times."
+  done
 fi
 port=$(get_env WEB_UI_PORT)
 while :; do
@@ -514,7 +611,9 @@ cat <<EOF
   Everyday commands
   Logs        $(logs_hint)
   Restart     $(restart_hint)
-  Update      ./install.sh --update
+  The next three are typed in the agent's folder. Go there first:
+              cd $ROOT
+  Update      ./install.sh --update   (or press Update now in the dashboard)
   Uninstall   ./install.sh --uninstall
   Command line  ./cli.sh   (alone it lists the commands; ./cli.sh backup-words shows the recovery words)
 

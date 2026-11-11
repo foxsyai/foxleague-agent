@@ -28,6 +28,8 @@ import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
 import { TopUps } from './topup.ts'
 
 const REPO_ROOT = resolve(import.meta.dirname, '..')
+/** Set by the guided installer for its own calls: lines that are for a server set up by hand are left out there. */
+const GUIDED = process.env.FOXAGENT_GUIDED === '1'
 
 function usage(): never {
   console.log(`foxleague-agent CLI (agents are numbered from 1)
@@ -215,7 +217,7 @@ async function main(): Promise<void> {
       if (!path) usage()
       if (new Store(cfg.dataDir).agent(agentIndex(n))?.source === 'imported') throw new Error(`${agentName(agentIndex(n))} is an imported team: its PEM file is the one you imported`)
       const out = exportPem(mnemonicOrExit(), agentIndex(n), path, { isServer: cfg.isServer, repoRoot: REPO_ROOT })
-      console.log(`Wrote ${out} (mode 600). Keep it on this machine; never copy it to the server or into git.`)
+      console.log(`Wrote ${out} (mode 600). ${GUIDED ? 'Keep it on this computer and never send it to anyone.' : 'Keep it on this machine; never copy it to the server or into git.'}`)
       return
     }
     case 'manual-status': {
@@ -386,11 +388,15 @@ async function main(): Promise<void> {
         // The env file is now the source for these keys: drop the web UI's overrides of them.
         writeSecrets(secretsFile(cfg.dataDir), Object.fromEntries(Object.keys(values).map(k => [k, ''])))
       }
-      console.log(`Saved: ${Object.keys(values).join(', ') || 'nothing'}. Now run check-keys, then restart the service.`)
+      console.log(`Saved: ${Object.keys(values).join(', ') || 'nothing'}.${GUIDED ? '' : ' Now run check-keys, then restart the service.'}`)
       return
     }
     case 'set-web-password': {
-      if (!process.stdin.isTTY) throw new Error('set-web-password needs an interactive terminal')
+      // Status 2, not 1: the installer asks again after a password that was not accepted, never after this.
+      if (!process.stdin.isTTY) {
+        console.error('set-web-password needs an interactive terminal')
+        process.exit(2)
+      }
       const rl = createInterface({ input: process.stdin, output: process.stdout })
       const username = (await rl.question(`Web UI username [${process.env.WEB_UI_USER ?? 'admin'}]: `)).trim() || process.env.WEB_UI_USER || 'admin'
       rl.close()
@@ -401,7 +407,7 @@ async function main(): Promise<void> {
       const values: Record<string, string> = { WEB_UI_USER: username, WEB_UI_PASSWORD_HASH: hashPassword(pw) }
       if (!process.env.WEB_UI_SECRET || process.env.WEB_UI_SECRET.length < 32) values.WEB_UI_SECRET = randomBytes(32).toString('hex')
       setEnvValues(envFilePath(), values, cfg.dataDir)
-      console.log(`Saved the web UI login for "${username}" in ${envFilePath()}. Restart the service to apply it.`)
+      console.log(`Saved the web UI login for "${username}" in ${envFilePath()}.${GUIDED ? '' : ' Restart the service to apply it.'}`)
       return
     }
     case 'check-keys': {
