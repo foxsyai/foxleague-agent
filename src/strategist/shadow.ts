@@ -292,13 +292,29 @@ function modelsOf(rows: ShadowPlanRow[]): string[] {
   return [...listedFirst, ...met.filter(id => !listedFirst.includes(id))]
 }
 
+/** A shadow model at one effort, as a row records it. */
+type ShadowPair = { model: string; effort: string }
+const samePair = (r: ShadowPlanRow, p: ShadowPair): boolean => r.shadowModel === p.model && r.shadowEffort === p.effort
+
+/**
+ * The shadow models and efforts of the rows (since 2026-11-13 one model can plan in the shadow at several efforts):
+ * the models in the order of modelsOf, each model's efforts from the least, then any other effort in the order met.
+ */
+function pairsOf(rows: ShadowPlanRow[]): ShadowPair[] {
+  return modelsOf(rows).flatMap(model => {
+    const met = [...new Set(rows.filter(r => r.shadowModel === model).map(r => r.shadowEffort))]
+    const known: string[] = EFFORTS.filter(e => met.includes(e))
+    return [...known, ...met.filter(e => !known.includes(e))].map(effort => ({ model, effort }))
+  })
+}
+
 /** The shadow plans of one real plan are recorded within this long of each other: each is given up after SHADOW_TIMEOUT_MS. */
 const SAME_TICK_MS = SHADOW_TIMEOUT_MS + 60_000
 
 /**
  * The rows grouped by the real plan they stand next to, newest first: the same agent, the same recorded real plan
  * (model, effort and the plan itself, with its cost), recorded within the time one tick's shadow plans can take, and
- * each shadow model once. The table has no column for it and needs none. Two rows that only look alike (the same
+ * each shadow model at each effort once. The table has no column for it and needs none. Two rows that only look alike (the same
  * agent with the very same real plan twice) are told apart by the time or by a shadow model met twice.
  */
 function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
@@ -307,7 +323,7 @@ function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
   for (const r of rows) {
     const key = JSON.stringify([r.agentIndex, r.realModel, r.realEffort, r.real])
     const group = newest.get(key)
-    if (group && !group.some(x => x.shadowModel === r.shadowModel) && Date.parse(group[0]!.at) - Date.parse(r.at) <= SAME_TICK_MS) group.push(r)
+    if (group && !group.some(x => samePair(x, { model: r.shadowModel, effort: r.shadowEffort })) && Date.parse(group[0]!.at) - Date.parse(r.at) <= SAME_TICK_MS) group.push(r)
     else {
       const next = [r]
       newest.set(key, next)
@@ -320,21 +336,25 @@ function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
 /**
  * The report of `cli shadow-report`: how many shadow plans, how many answered with a plan, how many of their actions
  * parsed, how often the shadow proposed the same action types as the real plan of the same tick and the average cost
- * and time, once per shadow model when there are several; then the last real plans, each with its shadow plans
- * below it. `rows` newest first, as the store gives them.
+ * and time, once per shadow model when there are several, and once per model and effort when a model planned at
+ * several efforts (each block then named like "Opus 5.5 (low)"); then the last real plans, each with its model and
+ * effort and its shadow plans below it. `rows` newest first, as the store gives them; rows of one agent for `N`.
  */
 export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentIndex?: number | null } = {}): string {
   const who = o.agentIndex === null || o.agentIndex === undefined ? 'all agents' : agentName(o.agentIndex)
-  if (!rows.length) return `No shadow plans recorded (${who}). Shadow plans are off unless shadow_model is set on this machine: see docs/SERVER.md.`
-  const models = modelsOf(rows)
+  if (!rows.length) return `No shadow plans recorded (${who}). Shadow plans are off unless shadow_model is set on this machine (or shadow_model_agent_N for agent N): see docs/SERVER.md.`
+  const pairs = pairsOf(rows)
+  // Named by the model alone while each model planned at one effort, as before; else by model and effort.
+  const byEffort = pairs.length > modelsOf(rows).length
+  const name = (p: ShadowPair): string => (byEffort ? `${label(p.model)} (${p.effort})` : label(p.model))
   const span = `from ${minute(rows.at(-1)!.at)} to ${minute(rows[0]!.at)} UTC`
   const lines: string[] = []
-  if (models.length === 1) lines.push(`Shadow plans (${who}): ${rows.length}, ${span}`, ...summaryOf(rows))
+  if (pairs.length === 1) lines.push(`Shadow plans (${who}): ${rows.length}, ${span}`, ...summaryOf(rows))
   else {
-    lines.push(`Shadow plans (${who}): ${rows.length} by ${models.length} shadow models, ${span}`)
-    for (const model of models) {
-      const own = rows.filter(r => r.shadowModel === model)
-      lines.push('', `${label(model)}: ${own.length} shadow plan${own.length === 1 ? '' : 's'}`, ...summaryOf(own))
+    lines.push(`Shadow plans (${who}): ${rows.length} by ${pairs.length} ${byEffort ? 'shadow pairs (model and effort)' : 'shadow models'}, ${span}`)
+    for (const p of pairs) {
+      const own = rows.filter(r => samePair(r, p))
+      lines.push('', `${name(p)}: ${own.length} shadow plan${own.length === 1 ? '' : 's'}`, ...summaryOf(own))
     }
     lines.push('')
   }
@@ -349,7 +369,8 @@ export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentInd
       `  real   ${label(first.realModel)} (${first.realEffort}): ${listed(first.real)}`,
       `         ${oneLine(first.real.summary).slice(0, 200)}`,
     )
-    for (const r of [...tick].sort((a, b) => models.indexOf(a.shadowModel) - models.indexOf(b.shadowModel))) {
+    const at = (r: ShadowPlanRow): number => pairs.findIndex(p => samePair(r, p))
+    for (const r of [...tick].sort((a, b) => at(a) - at(b))) {
       lines.push(
         `  shadow ${label(r.shadowModel)} (${r.shadowEffort}), $${r.usd.toFixed(4)}, ${Math.round(r.ms / 1000)} s: ${r.outcome === 'plan' ? listed(r.shadow) : (OTHER_OUTCOMES.find(([k]) => k === r.outcome)?.[1] ?? r.outcome)}`,
         `         ${oneLine(r.shadow.summary).slice(0, 200)}`,

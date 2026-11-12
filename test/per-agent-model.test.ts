@@ -566,3 +566,89 @@ test('PAM-11 /api/state: each agent\'s AI (the pair it plays, its own values, it
     server.close()
   }
 })
+
+// ---- shadow-report per model and effort ----
+
+type Row = Parameters<Store['addShadowPlan']>[0]
+const ok = (type: string) => ({ ok: true, type, action: { type }, reason: 'r' })
+const row = (more: Partial<Row> = {}): Row => ({
+  agentIndex: 6, realModel: OPUS, realEffort: 'high', shadowModel: OPUS, shadowEffort: 'low', outcome: 'plan',
+  real: { summary: 'REAL sync and a casual game', actions: [ok('sync'), ok('play_match')], usd: 0.2, servedBy: OPUS },
+  shadow: { summary: 'SHADOW sync', actions: [ok('sync')] },
+  inputTokens: 90_000, outputTokens: 2_000, cacheReadTokens: 0, cacheWriteTokens: 0, usd: 0.01, ms: 10_000, ...more,
+})
+
+test('PAM-12 shadow-report: the numbers once per model and effort, labelled "Opus 5.5 (low)"; each real plan with its model and effort and its shadow plans at every effort below it; per agent', async () => {
+  const { shadowReport } = await import('../src/strategist/shadow.ts')
+  const store = new Store('', ':memory:')
+  const add = (at: string, more: Partial<Row>) => {
+    const id = store.addShadowPlan(row(more))
+    store.db.prepare('UPDATE shadow_plans SET at = ? WHERE id = ?').run(`2026-11-13T${at}:07.000Z`, id)
+  }
+  // Agent 7 on Opus 5.5 at high, two plans, each with Opus 5.5 at xhigh, low and medium (recorded in the order they answered).
+  for (const [at, real] of [['10:00', 'REAL sync and a casual game'], ['11:00', 'REAL nothing to do']] as const) {
+    const r = { summary: real, actions: real.includes('sync') ? [ok('sync'), ok('play_match')] : [], usd: 0.2, servedBy: OPUS }
+    add(at, { real: r, shadowEffort: 'xhigh', usd: 0.03, ms: 40_000, shadow: { summary: 'SHADOW xhigh bids', actions: [ok('bid'), ok('sync')] } })
+    add(at, { real: r, shadowEffort: 'low', usd: 0.005, ms: 6_000 })
+    add(at, { real: r, shadowEffort: 'medium', usd: 0.01, ms: 12_000, ...(at === '11:00' ? { outcome: 'timeout' as const, shadow: { summary: '', actions: [] }, usd: 0, ms: 600_000 } : {}) })
+  }
+  // Agent 1 on Sonnet 5.5 at high with Sonnet 5.5 at low, in the same report for all agents.
+  add('11:30', { agentIndex: 0, realModel: SONNET, shadowModel: SONNET, shadowEffort: 'low', usd: 0.002 })
+  const text = shadowReport(store.shadowPlans(6), { agentIndex: 6, last: 2 })
+  assert.deepEqual(text.split('\n'), [
+    'Shadow plans (agent 7): 6 by 3 shadow pairs (model and effort), from 2026-11-13 10:00 to 2026-11-13 11:00 UTC',
+    '',
+    'Opus 5.5 (low): 2 shadow plans',
+    'Models: Opus 5.5 (low) next to Opus 5.5 (high)',
+    'With a valid tool call: 2 of 2',
+    'Actions proposed by the shadow: 2, of which 2 parsed',
+    'Same action types as the real plan of the same tick: 0 of 2',
+    'Average cost: $0.0050 a shadow plan ($0.01 in all); the real plans of the same ticks: $0.2000 each',
+    'Average time: 6 s over the 2 that answered',
+    '',
+    'Opus 5.5 (medium): 2 shadow plans',
+    'Models: Opus 5.5 (medium) next to Opus 5.5 (high)',
+    'With a valid tool call: 1 of 2 (1 no answer in time)',
+    'Actions proposed by the shadow: 1, of which 1 parsed',
+    'Same action types as the real plan of the same tick: 0 of 1',
+    'Average cost: $0.0050 a shadow plan ($0.01 in all); the real plans of the same ticks: $0.2000 each',
+    'Average time: 12 s over the 1 that answered',
+    '',
+    'Opus 5.5 (xhigh): 2 shadow plans',
+    'Models: Opus 5.5 (xhigh) next to Opus 5.5 (high)',
+    'With a valid tool call: 2 of 2',
+    'Actions proposed by the shadow: 4, of which 4 parsed',
+    'Same action types as the real plan of the same tick: 0 of 2',
+    'Average cost: $0.0300 a shadow plan ($0.06 in all); the real plans of the same ticks: $0.2000 each',
+    'Average time: 40 s over the 2 that answered',
+    '',
+    'A shadow plan is judged by reading it: nothing here says which plan was the better one.',
+    '',
+    'The last 2:',
+    '2026-11-13 11:00 agent 7',
+    '  real   Opus 5.5 (high): no actions',
+    '         REAL nothing to do',
+    '  shadow Opus 5.5 (low), $0.0050, 6 s: sync',
+    '         SHADOW sync',
+    '  shadow Opus 5.5 (medium), $0.0000, 600 s: no answer in time',
+    '         ',
+    '  shadow Opus 5.5 (xhigh), $0.0300, 40 s: bid, sync',
+    '         SHADOW xhigh bids',
+    '2026-11-13 10:00 agent 7',
+    '  real   Opus 5.5 (high): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Opus 5.5 (low), $0.0050, 6 s: sync',
+    '         SHADOW sync',
+    '  shadow Opus 5.5 (medium), $0.0100, 12 s: sync',
+    '         SHADOW sync',
+    '  shadow Opus 5.5 (xhigh), $0.0300, 40 s: bid, sync',
+    '         SHADOW xhigh bids',
+  ])
+  // All agents: one block per model and effort, the models of the list first, the efforts from the least.
+  const all = shadowReport(store.shadowPlans(null), { agentIndex: null }).split('\n')
+  assert.equal(all[0], 'Shadow plans (all agents): 7 by 4 shadow pairs (model and effort), from 2026-11-13 10:00 to 2026-11-13 11:30 UTC')
+  assert.deepEqual(all.filter(l => / shadow plans?$/.test(l)), ['Sonnet 5.5 (low): 1 shadow plan', 'Opus 5.5 (low): 2 shadow plans', 'Opus 5.5 (medium): 2 shadow plans', 'Opus 5.5 (xhigh): 2 shadow plans'])
+  assert.ok(all.includes('  real   Sonnet 5.5 (high): sync, play_match'))
+  // One model at one effort, as before: the report reads as it did.
+  assert.match(shadowReport(store.shadowPlans(0), { agentIndex: 0 }), /^Shadow plans \(agent 1\): 1, from [^\n]+ UTC\nModels: Sonnet 5\.5 \(low\) next to Sonnet 5\.5 \(high\)\n/)
+})
