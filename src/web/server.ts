@@ -242,6 +242,15 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
     throttle.recordSuccess(ip)
   }
 
+  /**
+   * The AI an agent plays with, for the page: the pair (its own where it has one, else the all-agents one), its own
+   * values in use, why an own value is not used, and the shadow entries set for it (its own list or the all-agents one).
+   */
+  const aiView = (b: { index: number; settings: AgentSettings }) => {
+    const ai = service.aiOf(b)
+    return { model: ai.model, effort: ai.effort, own: ownAi(b.settings), ignored: ai.ignored, shadows: shadowModelsSet(service.store, b.index), ownShadows: hasOwnShadowList(service.store, b.index) }
+  }
+
   // `seen`: the conversation revision the page already holds; the conversation is sent only when it changed.
   const state = (seen?: string | null) => {
     const cfg = service.cfg
@@ -305,12 +314,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           busy: service.isBusy(b.index),
           createdAt: b.createdAt,
           settings: b.settings,
-          // The AI it plays with: the pair (its own where it has one, else the all-agents one), its own values in use,
-          // why an own value is not used, and the shadow entries set for it (its own list or the all-agents one).
-          ai: (() => {
-            const ai = service.aiOf(b)
-            return { model: ai.model, effort: ai.effort, own: ownAi(b.settings), ignored: ai.ignored, shadows: shadowModelsSet(service.store, b.index), ownShadows: hasOwnShadowList(service.store, b.index) }
-          })(),
+          ai: aiView(b),
           budget: budgetView(service.store, b.index, b.settings, dry, now, snap?.gameDay.resetHourUtc ?? 14),
           snapshot: snapshotSummary(snap),
           funds: { usd: fundsUsd(snap), playable: playableUsd(snap, b.settings.egldGasReserve), low: lowOnFunds(playableUsd(snap, b.settings.egldGasReserve), b.settings.topUpWarningUsd) },
@@ -324,6 +328,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         index: b.index, address: b.address, source: b.source, ...b.retired!,
         // For the Spent today total: a retired agent may have spent earlier this game day.
         spentTodayUsd: budgetView(service.store, b.index, b.settings, b.dryRun || !service.executor.liveEnabled, now).spentTodayUsd,
+        // Restore and Resume bring it back one click each, playing this AI: the page weighs it in the all-agents switch.
+        ai: aiView(b),
       })),
     }
   }
@@ -591,9 +597,10 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         if (!EFFORTS.includes(effort)) throw new HttpFail(400, `unknown effort ${effort}`)
         // A cheaper model or less effort is one click; a dearer one needs the password again. So does a switch that
         // starts shadow plans for an agent that follows the all-agents pair: a cheaper model that wakes a resting one.
+        // The retired agents count too: Restore and Resume bring one back with one click each (agent review of PR #65).
         if (service.strategist) {
           const all = { model: service.strategist.model, effort: service.strategist.effort }
-          const agents = service.store.agents().map(b => ({ settings: b.settings, shadows: shadowModelsSet(service.store, b.index) }))
+          const agents = [...service.store.agents(), ...service.store.retiredAgents()].map(b => ({ settings: b.settings, shadows: shadowModelsSet(service.store, b.index) }))
           if (allAgentsAiNeedsPassword(all, { model, effort }, agents)) recheckPassword(req, body.password)
         }
         try {

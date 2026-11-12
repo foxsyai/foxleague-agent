@@ -919,3 +919,88 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
   assert.ok(section.includes('\nStays open:\n'))
   assert.doesNotMatch(section, /—|\bbot\b/i)
 })
+
+// ---- the agent review of pull request #65 ----
+
+test('R65A-1 the all-agents switch weighs the retired agents too: one that follows the all-agents pair would start its shadow plans after Restore and Resume, one click each', async () => {
+  const { svc, server, password, post, state } = await webService({ agents: 2 })
+  try {
+    svc.store.setKv('shadow_model', FABLE)
+    svc.setStrategist(FABLE, 'medium', 'test')
+    // Agent 1 plays its own model and effort; agent 2 follows Fable 5.2, under which its Fable 5.2 shadow rests. Agent 2 is retired.
+    svc.store.updateSettings(0, { aiModel: OPUS, aiEffort: 'high' })
+    svc.store.retireAgent(1, { at: new Date().toISOString(), by: 'test', team: null, egld: null, foxsy: null, usd: null })
+    let res = await post('/api/strategist', { model: HAIKU, effort: 'medium' })
+    assert.equal(res.status, 403, 'a retired agent that follows the all-agents pair would start the Fable 5.2 shadow once restored and resumed')
+    // The page gets the retired agent's AI, as it gets the active agents', and asks by the same rule.
+    const s = await state()
+    const retired = (s as unknown as { retired: { index: number; ai?: unknown }[] }).retired
+    assert.deepEqual(retired.map(r => [r.index, r.ai]), [[1, { model: FABLE, effort: 'medium', own: { model: null, effort: null }, ignored: [], shadows: [FABLE], ownShadows: false }]])
+    const page = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], s)
+    assert.equal(page(HAIKU, 'medium'), true, 'the page asks for the password')
+    res = await post('/api/strategist', { model: HAIKU, effort: 'medium', password })
+    assert.equal(res.status, 200, await res.text())
+    // A retired agent with its own model and effort is not moved by the switch: one click, on the page too.
+    svc.store.updateSettings(1, { aiModel: OPUS, aiEffort: 'high' })
+    svc.setStrategist(FABLE, 'medium', 'test')
+    assert.equal(pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], await state())(HAIKU, 'medium'), false)
+    res = await post('/api/strategist', { model: HAIKU, effort: 'medium' })
+    assert.equal(res.status, 200, await res.text())
+  } finally {
+    server.close()
+  }
+})
+
+test('R65A-2 the AI fields show the values the agent plays: an own model that left the list shows as its successor, so a save of any other setting writes back what it plays and asks no password', () => {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const fill = html.match(/function fillForm\(st\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+  assert.doesNotMatch(fill, /fillOptions\(\$\('sAiModel'\), aiModelOptions\(\), st\.aiModel\)/, 'the model field is filled from the saved id: an own model that left the list shows as "Same as all agents" and the next save writes an empty model')
+  assert.match(fill, /const own = aiFormValues\(agent\(\), st\)/)
+  assert.match(fill, /fillOptions\(\$\('sAiModel'\), aiModelOptions\(\), own\.aiModel\); fillOptions\(\$\('sAiEffort'\), aiEffortOptions\(\), own\.aiEffort\)/)
+  const rules = web as unknown as { agentAiNeedsPassword: (current: Pair, next: Pair, shadows: readonly string[]) => boolean }
+  const models = Object.keys(strategist.MODELS).map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
+  for (const all of [{ model: OPUS, effort: 'high' }, { model: HAIKU, effort: 'low' }]) {
+    const S = { instance: { ...all, models, efforts: [...strategist.EFFORTS], shadowModels: [], ownAi: 0 } }
+    const values = pageFunctions<(b: unknown, st: unknown) => { aiModel: string; aiEffort: string }>(['aiFormValues'], S)
+    const costsMore = pageFunctions<(b: unknown, form: unknown) => boolean>(['agentAiCostsMore'], S)
+    for (const aiModel of ['', HAIKU, SONNET, 'claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'gpt-oss']) {
+      for (const aiEffort of ['', 'low', 'xhigh', 'turbo']) {
+        const settings = { ...DEFAULT_SETTINGS, aiModel, aiEffort }
+        const before = strategist.agentChoice(settings, all)
+        const b = { settings, ai: { model: before.model, effort: before.effort, own: strategist.ownAi(settings), ignored: before.ignored, shadows: [FABLE, `${SONNET}:xhigh`] } }
+        const form = values(b, settings)
+        const what = `${JSON.stringify(all)} saved ${aiModel}/${aiEffort} shows ${form.aiModel}/${form.aiEffort}`
+        // What the fields show is a value the route takes: empty or a model of the list, empty or an effort.
+        assert.deepEqual(validateSettingsPatch(form), form, what)
+        assert.ok(form.aiModel === '' || strategist.isKnownModel(form.aiModel), what)
+        // Saved back unchanged, the agent plays the same pair; neither the server nor the page asks for the password.
+        const after = strategist.agentChoice({ ...settings, ...form }, all)
+        assert.deepEqual([after.model, after.effort], [before.model, before.effort], what)
+        assert.equal(rules.agentAiNeedsPassword(before, after, b.ai.shadows), false, what)
+        assert.equal(costsMore(b, form), false, what)
+      }
+    }
+  }
+})
+
+test('R65A-3 a new Anthropic key from the dashboard reaches the strategist of every model an agent plays by its own choice', async t => {
+  const prev = process.env.ANTHROPIC_API_KEY
+  t.after(() => {
+    if (prev === undefined) delete process.env.ANTHROPIC_API_KEY
+    else process.env.ANTHROPIC_API_KEY = prev
+  })
+  const m = await service({ agents: 3, own: { 0: { aiModel: HAIKU }, 1: { aiModel: OPUS, aiEffort: 'high' } } })
+  for (const i of [0, 1, 2]) await m.svc.tick(i)
+  const own = [m.inner.strategistFor(HAIKU), m.inner.strategistFor(OPUS)]
+  const clientOf = (s: Strategist) => (s as unknown as { client: { apiKey?: string } }).client
+  for (const s of [...own, m.svc.strategist!]) assert.equal(clientOf(s), m.client)
+  const key = `sk-ant-${'p'.repeat(40)}`
+  m.svc.updateKeys({ ANTHROPIC_API_KEY: key }, 'test')
+  for (const s of [...own, m.svc.strategist!]) {
+    assert.notEqual(clientOf(s), m.client, `${s.model}: still the connection with the old key`)
+    assert.equal(clientOf(s).apiKey, key, s.model)
+  }
+  // The same objects, each with its own model: the next plan of each agent goes out with the new key.
+  assert.deepEqual([m.inner.strategistFor(HAIKU), m.inner.strategistFor(OPUS)], own)
+  assert.deepEqual(own.map(s => s.model), [HAIKU, OPUS])
+})

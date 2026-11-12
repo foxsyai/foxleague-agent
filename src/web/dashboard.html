@@ -971,13 +971,14 @@ $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; render
 // the same rule): a shadow entry set on the server rests while its model plays (at its effort, when the entry has one)
 // and under anything else every plan also pays for a shadow plan by it, however cheap the new model is. Several can be
 // set: the one that rests wakes with any switch away from it. It is weighed for each agent the switch really moves:
-// one with its own model and effort is not moved, so its shadow plans do not count. A page that got no agents (an
-// older answer) reads the all-agents list as before.
+// one with its own model and effort is not moved, so its shadow plans do not count. The retired agents count too:
+// Restore and Resume bring one back with one click each. A page that got no agents (an older answer) reads the
+// all-agents list as before.
 function wakesShadow(model, effort) {
   const i = S.instance
   if (effort === undefined) effort = i.effort
   const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
-  const who = S.agents ? S.agents.filter(b => b.ai) : [{ ai: { own: {}, shadows: i.shadowModels || [] } }]
+  const who = S.agents ? [...S.agents, ...(S.retired || [])].filter(b => b.ai) : [{ ai: { own: {}, shadows: i.shadowModels || [] } }]
   return who.some(b => {
     const own = b.ai.own || {}
     const cm = own.model || i.model, ce = own.effort || i.effort, nm = own.model || model, ne = own.effort || effort
