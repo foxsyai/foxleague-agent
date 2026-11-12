@@ -3,7 +3,7 @@
 // "Mac install check (2026-11-12)" of docs/SECURITY-REVIEW.md.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { LOGIN_LINES, freshInstall, guided, realTree, sh, stubs } from './audit-1111/install-helpers.ts'
 import { REPO, tmp } from './update-fixtures.ts'
@@ -51,4 +51,23 @@ test('MAC-1: npm keeps its cache and its logs in the install folder, so deleting
   for (const f of ['get.sh', 'run.sh', 'cli.sh', 'get.ps1']) assert.deepEqual(runs(f), [], f)
   // And no page still says that npm's cache stays in ~/.npm after the folder is gone.
   for (const f of ['INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md']) assert.doesNotMatch(read(f), /~\/\.npm\b/, f)
+})
+
+/** Every file under a folder of the repository, as paths from the repository's root. */
+function filesUnder(dir: string): string[] {
+  return readdirSync(join(REPO, dir), { recursive: true, withFileTypes: true })
+    .filter(e => e.isFile() && !e.parentPath.includes('node_modules'))
+    .map(e => join(e.parentPath, e.name).slice(REPO.length + 1))
+}
+
+test('MAC-2: the folder size is the one measured on the Mac, said the same way in INSTALL.md and on the Update page, and nowhere 190 MB', () => {
+  // Measured: Node.js (.node) 189 MB, each release folder 42 MB, npm's cache about 6 MB (in the folder since MAC-1).
+  const size = /about (\d+) MB, and about (\d+) MB once an update has kept the release before it/
+  const said = (f: string): number[] | undefined => size.exec(flat(f))?.slice(1, 3).map(Number)
+  assert.deepEqual(said('INSTALL.md'), [240, 280], 'INSTALL.md')
+  assert.deepEqual(said('site/src/content/docs/help/update.md'), said('INSTALL.md'), 'the Update page says what INSTALL.md says')
+  // Every other place that could state a size (the record of this check names the old figure, so it is left out).
+  const places = ['README.md', 'INSTALL.md', 'install.sh', 'get.sh', 'get.ps1', 'src/web/dashboard.html', ...filesUnder('site/src'), ...filesUnder('docs').filter(f => f !== join('docs', 'SECURITY-REVIEW.md'))]
+  assert.ok(places.length > 25, `${places.length} files`)
+  for (const f of places) assert.doesNotMatch(flat(f), /\b190 ?MB\b/, f)
 })

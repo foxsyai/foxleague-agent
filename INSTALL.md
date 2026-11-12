@@ -240,10 +240,11 @@ in place and the agent keeps playing on the version it runs. The dashboard then 
 runs from the next start" (Telegram too, after **Update now** or `/upgrade`). Stop the agent (Ctrl-C in its
 terminal) and run `./run.sh` again.
 
-Uninstall stops the background service and leaves your folder (about 190 MB), wallet and PEM files in place.
-On Linux it also leaves linger on, which lets background services of your user start without a login:
-`loginctl disable-linger $USER` turns it off. Delete the folder only when the agent wallets are empty and your
-recovery words are safe.
+Uninstall stops the background service and leaves your folder, wallet and PEM files in place. The folder holds
+everything the install added, the download cache of npm included: about 240 MB, and about 280 MB once an update
+has kept the release before it (kept so that the update can be undone). On Linux the uninstall also leaves linger
+on, which lets background services of your user start without a login: `loginctl disable-linger $USER` turns it
+off. Delete the folder only when the agent wallets are empty and your recovery words are safe.
 
 On Windows the uninstall has two parts. Inside Ubuntu, `./install.sh --uninstall` as above. In PowerShell, the
 scheduled task that keeps Ubuntu running is removed with
