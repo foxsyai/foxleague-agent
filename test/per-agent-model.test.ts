@@ -5,15 +5,19 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { once } from 'node:events'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { AddressInfo } from 'node:net'
 import type { Config } from '../src/config.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
 import { Store } from '../src/store/db.ts'
 import { DEFAULT_SETTINGS, validateSettingsPatch, type AgentSettings } from '../src/store/settings.ts'
 import * as strategist from '../src/strategist/strategist.ts'
 import type { Strategist } from '../src/strategist/strategist.ts'
+import { Sessions, hashPassword } from '../src/web/auth.ts'
+import * as web from '../src/web/server.ts'
 import { snapshot } from './fixtures.ts'
 
 const OPUS = 'claude-opus-5-5'
@@ -381,5 +385,184 @@ test('PAM-7 in the service: an agent with its own list asks the same model at th
     assert.equal(m.inner.callExpectedWithinHour(now, { model: SONNET, effort: 'medium' }), false)
   } finally {
     await m.svc.stop()
+  }
+})
+
+// ---- the password rule (AGENTS.md rule 7) per agent and per model and effort ----
+
+type Pair = { model: string; effort: string }
+const webRules = web as unknown as {
+  wakesShadow: (shadows: readonly string[], current: string | Pair, next: string | Pair) => boolean
+}
+
+test('PAM-8 wakesShadow reads model and effort: an entry with an effort wakes when its pair stops playing, also on a lower effort; one without wakes only when its model stops playing', () => {
+  const wakes = webRules.wakesShadow
+  const at = (model: string, effort: string): Pair => ({ model, effort })
+  assert.equal(wakes([`${OPUS}:high`], at(OPUS, 'high'), at(OPUS, 'medium')), true, 'less effort, but the Opus 5.5 high shadow starts')
+  assert.equal(wakes([`${OPUS}:high`], at(OPUS, 'medium'), at(OPUS, 'high')), false, 'it goes to rest')
+  assert.equal(wakes([`${OPUS}:high`], at(OPUS, 'high'), at(SONNET, 'high')), true, 'another model')
+  assert.equal(wakes([`${OPUS}:low`, `${OPUS}:medium`], at(OPUS, 'high'), at(OPUS, 'xhigh')), false, 'both ran before and run after')
+  assert.equal(wakes([OPUS], at(OPUS, 'high'), at(OPUS, 'low')), false, 'an entry without an effort: the effort alone never wakes it')
+  assert.equal(wakes([OPUS], at(OPUS, 'high'), at(HAIKU, 'high')), true)
+  assert.equal(wakes([], at(OPUS, 'high'), at(HAIKU, 'low')), false)
+  assert.equal(wakes([`${OPUS}:low`], at('claude-opus-5', 'low'), at(HAIKU, 'low')), true, 'a playing model that left the list counts as its successor')
+  // The form of before: models alone.
+  assert.equal(wakes([FABLE], FABLE, HAIKU), true)
+  assert.equal(wakes([FABLE], FABLE, FABLE), false)
+})
+
+/** A service with the web UI on a free port, timers off and a signed-in session. */
+async function webService(o: { agents?: number; all?: string } = {}) {
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-pam-web-')), o.all))
+  svc.ensureAgents()
+  for (let i = 1; i < (o.agents ?? 1); i++) svc.store.addAgent(i, (svc as unknown as Inner).wallet(i).address)
+  ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
+  svc.notify = () => undefined
+  const password = 'correct-horse-battery'
+  const creds = { username: 'admin', passwordHash: hashPassword(password), secretKey: 'k'.repeat(64) }
+  const server = web.startWeb(svc, creds, 0)
+  if (!server.listening) await once(server, 'listening')
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const sessions = new Sessions(creds.secretKey, creds.passwordHash)
+  const cookie = sessions.issue('admin')
+  const post = (path: string, body: unknown) => fetch(`${url}${path}`, { method: 'POST', headers: { cookie: `foxagent_session=${cookie}`, origin: url, 'x-csrf-token': sessions.csrfFor(cookie), 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const state = async () => (await (await fetch(`${url}/api/state`, { headers: { cookie: `foxagent_session=${cookie}` } })).json()) as Record<string, unknown> & { instance: Record<string, unknown>; agents: (Record<string, unknown> & { index: number; settings: AgentSettings })[] }
+  const own = (i: number) => [svc.store.agent(i)!.settings.aiModel, svc.store.agent(i)!.settings.aiEffort]
+  return { svc, server, password, post, state, own }
+}
+
+test('PAM-9 an agent\'s own model or effort: dearer or higher needs the password, cheaper or lower is one click, back to "same as all agents" counts by the pair it lands on; a switch that starts this agent\'s shadow plans asks too', async () => {
+  const { svc, server, password, post, own } = await webService({ agents: 2 })
+  const set = (i: number, body: Record<string, unknown>) => post(`/api/agents/${i}/settings`, body)
+  try {
+    assert.deepEqual([svc.strategist!.model, svc.strategist!.effort], [SONNET, 'medium'])
+    // Dearer than the all-agents Sonnet 5.5 it plays now: the password.
+    let res = await set(0, { aiModel: OPUS })
+    assert.equal(res.status, 403, 'Opus 5.5 for one agent was switched on with one click')
+    assert.deepEqual(own(0), ['', ''])
+    res = await set(0, { aiModel: OPUS, password: 'wrong' })
+    assert.equal(res.status, 403)
+    res = await set(0, { aiModel: OPUS, password })
+    assert.equal(res.status, 200, await res.text())
+    assert.deepEqual(own(0), [OPUS, ''])
+    // Cheaper: one click. The same values again: nothing changes, no password.
+    res = await set(0, { aiModel: HAIKU })
+    assert.equal(res.status, 200, await res.text())
+    res = await set(0, { aiModel: HAIKU, aiEffort: '' })
+    assert.equal(res.status, 200, await res.text())
+    // A higher effort than the one it plays: the password; a lower one: one click.
+    res = await set(0, { aiEffort: 'high' })
+    assert.equal(res.status, 403, 'a higher effort for one agent was switched on with one click')
+    res = await set(0, { aiEffort: 'high', password })
+    assert.equal(res.status, 200, await res.text())
+    res = await set(0, { aiEffort: 'low' })
+    assert.equal(res.status, 200, await res.text())
+    assert.deepEqual(own(0), [HAIKU, 'low'])
+    // Back to the all-agents model: from Haiku 5.5 it lands on Sonnet 5.5, dearer: the password.
+    res = await set(0, { aiModel: '' })
+    assert.equal(res.status, 403, 'back to "same as all agents" landed on a dearer model with one click')
+    res = await set(0, { aiModel: '', password })
+    assert.equal(res.status, 200, await res.text())
+    // From Fable 5.2 it lands on the cheaper Sonnet 5.5: one click.
+    assert.equal((await set(0, { aiModel: FABLE, password })).status, 200)
+    res = await set(0, { aiModel: '' })
+    assert.equal(res.status, 200, await res.text())
+    // Effort back to the all-agents medium from low: higher, the password.
+    res = await set(0, { aiEffort: '' })
+    assert.equal(res.status, 403)
+    // Never a model the list does not have, nor an effort nobody knows, with or without the password.
+    for (const body of [{ aiModel: 'claude-sonnet-5' }, { aiModel: 'gpt-oss' }, { aiModel: 'constructor' }, { aiEffort: 'turbo' }, { aiModel: 'local' }]) {
+      res = await set(0, { ...body, password })
+      assert.equal(res.status, 400, JSON.stringify(body))
+    }
+    assert.deepEqual(own(0), ['', 'low'])
+    // The shadow plans of this agent (its own list, set on the machine). Sonnet 5.5 at high rests while it plays it.
+    svc.store.setKv('shadow_model_agent_2', `${SONNET}:high`)
+    assert.equal((await set(1, { aiEffort: 'high', password })).status, 200)
+    res = await set(1, { aiEffort: 'low' })
+    assert.equal(res.status, 403, 'less effort, but every plan of agent 2 would also pay for a Sonnet 5.5 shadow plan at high')
+    res = await set(1, { aiEffort: 'low', password })
+    assert.equal(res.status, 200, await res.text())
+    res = await set(1, { aiModel: HAIKU })
+    assert.equal(res.status, 200, 'the shadow ran before and runs after, and Haiku 5.5 is cheaper: one click')
+    // Another agent's list is not this agent's: agent 1 follows the all-agents list, which is off.
+    res = await set(0, { aiModel: HAIKU })
+    assert.equal(res.status, 200, await res.text())
+    // The all-agents list counts for an agent that has none of its own: Fable 5.2 rests while agent 1 plays it.
+    svc.store.setKv('shadow_model', FABLE)
+    assert.equal((await set(0, { aiModel: FABLE, aiEffort: 'low', password })).status, 200)
+    res = await set(0, { aiModel: OPUS })
+    assert.equal(res.status, 403, 'cheaper than Fable 5.2, but it wakes the Fable 5.2 shadow')
+    // Other settings saved at the same time are judged as before.
+    res = await set(0, { aiModel: FABLE, aiEffort: 'low', dailyCapUsd: 1 })
+    assert.equal(res.status, 200, await res.text())
+  } finally {
+    server.close()
+  }
+})
+
+test('PAM-10 the all-agents switch looks at what it changes: agents with their own model or effort are not moved by it, so their shadow plans do not count; a dearer all-agents pair still asks as before', async () => {
+  const { svc, server, password, post } = await webService({ agents: 2 })
+  const switchTo = (model: string, effort: string, pw?: string) => post('/api/strategist', { model, effort, ...(pw ? { password: pw } : {}) })
+  try {
+    svc.store.setKv('shadow_model', FABLE)
+    svc.setStrategist(FABLE, 'medium', 'test')
+    // Every agent plays its own model: the Fable 5.2 shadow rests for none of them and runs before and after.
+    for (const i of [0, 1]) svc.store.updateSettings(i, { aiModel: OPUS, aiEffort: 'high' })
+    let res = await switchTo(HAIKU, 'medium')
+    assert.equal(res.status, 200, `no agent follows the all-agents model, so nothing wakes: ${await res.text()}`)
+    // One agent follows it again: the switch away from Fable 5.2 wakes the shadow for that agent.
+    svc.setStrategist(FABLE, 'medium', 'test')
+    svc.store.updateSettings(1, { aiModel: '', aiEffort: '' })
+    res = await switchTo(HAIKU, 'medium')
+    assert.equal(res.status, 403, 'agent 2 follows Fable 5.2 and its Fable 5.2 shadow would wake')
+    // It follows the model only: its own effort does not keep it out of a model switch.
+    svc.store.updateSettings(1, { aiEffort: 'low' })
+    res = await switchTo(HAIKU, 'medium')
+    assert.equal(res.status, 403)
+    res = await switchTo(HAIKU, 'medium', password)
+    assert.equal(res.status, 200, await res.text())
+    // A dearer all-agents pair asks as before, even with every agent on its own model: it is also the chat's model.
+    for (const i of [0, 1]) svc.store.updateSettings(i, { aiModel: OPUS, aiEffort: 'high' })
+    res = await switchTo(FABLE, 'medium')
+    assert.equal(res.status, 403)
+    // An entry with an effort: less effort for every agent that follows, and the entry at high wakes.
+    svc.store.setKv('shadow_model', `${SONNET}:high`)
+    for (const i of [0, 1]) svc.store.updateSettings(i, { aiModel: '', aiEffort: '' })
+    svc.setStrategist(SONNET, 'high', 'test')
+    res = await switchTo(SONNET, 'medium')
+    assert.equal(res.status, 403, 'less effort, but the Sonnet 5.5 shadow at high would start on every plan')
+    res = await switchTo(SONNET, 'medium', password)
+    assert.equal(res.status, 200, await res.text())
+    // Every agent with its own effort: the all-agents effort moves nobody, one click.
+    for (const i of [0, 1]) svc.store.updateSettings(i, { aiEffort: 'medium' })
+    svc.setStrategist(SONNET, 'high', 'test')
+    res = await switchTo(SONNET, 'low')
+    assert.equal(res.status, 200, await res.text())
+  } finally {
+    server.close()
+  }
+})
+
+test('PAM-11 /api/state: each agent\'s AI (the pair it plays, its own values, its shadow entries) and how many agents have their own; shadowModels keeps what an open older page reads', async () => {
+  const { svc, server, state } = await webService({ agents: 3 })
+  try {
+    svc.store.updateSettings(0, { aiModel: HAIKU, aiEffort: 'high' })
+    svc.store.updateSettings(2, { aiModel: 'gpt-oss', aiEffort: 'low' } as Partial<AgentSettings>)
+    svc.store.setKv('shadow_model', `${OPUS}:low, ${FABLE}`)
+    svc.store.setKv('shadow_model_agent_1', `${HAIKU}:low,${HAIKU}:xhigh`)
+    const s = await state()
+    const ai = s.agents.map(b => b.ai)
+    assert.deepEqual(ai[0], { model: HAIKU, effort: 'high', own: { model: HAIKU, effort: 'high' }, ignored: [], shadows: [`${HAIKU}:low`, `${HAIKU}:xhigh`], ownShadows: true })
+    assert.deepEqual(ai[1], { model: SONNET, effort: 'medium', own: { model: null, effort: null }, ignored: [], shadows: [`${OPUS}:low`, FABLE], ownShadows: false })
+    const third = ai[2] as { model: string; effort: string; own: unknown; ignored: string[] }
+    assert.deepEqual([third.model, third.effort, third.own], [SONNET, 'low', { model: null, effort: 'low' }], 'an own model nobody knows is not shown as its own')
+    assert.match(third.ignored[0]!, /^its own model gpt-oss is not on the list/)
+    assert.equal(s.instance.ownAi, 2, 'agents 1 and 3 have an own model or effort in use')
+    // An open page of the version before reads shadowModels as model ids: the all-agents list's, each once.
+    assert.deepEqual(s.instance.shadowModels, [OPUS, FABLE])
+  } finally {
+    server.close()
   }
 })

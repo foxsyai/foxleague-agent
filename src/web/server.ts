@@ -11,8 +11,8 @@ import type { Service } from '../service.ts'
 import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
-import { EFFORTS, MODELS, currentModel, isKnownModel, priceRange, type Effort } from '../strategist/strategist.ts'
-import { shadowModelsSet } from '../strategist/shadow.ts'
+import { EFFORTS, MODELS, agentChoice, currentModel, isKnownModel, ownAi, priceRange, type Effort } from '../strategist/strategist.ts'
+import { entryOf, hasOwnShadowList, rests, shadowModelsSet } from '../strategist/shadow.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
 import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
@@ -181,18 +181,47 @@ export function raisesAiSpend(current: { model: string; effort: string }, next: 
   return EFFORTS.indexOf(next.effort) > (EFFORTS as readonly string[]).indexOf(current.effort)
 }
 
+/** A model and effort an agent plays with. */
+type AiPair = { model: string; effort: string }
+
 /**
- * Whether a switch of the playing model starts shadow plans (agent review of PR #63, R63A-1). A shadow model that is
- * set rests while it is the model that plays; under any other model every plan also pays for a shadow plan by it. So
- * a switch away from it raises the AI spend however cheap the new model is, and needs the password like a dearer
- * model. `shadows`: the shadow models that are set (shadowModelsSet), none when shadow plans are off. With several
- * set, the one that plays wakes with any switch, also with a switch to another model of the list: that one goes to
- * rest, and what the two cost is not weighed here. Shadow models that run before and after, a switch that only sends
- * one to rest and a change of effort alone start nothing.
+ * Whether a switch of the playing model or effort starts shadow plans (agent review of PR #63, R63A-1). A shadow entry
+ * that is set rests while it plays: one written with its effort (`claude-opus-5-5:low`) while that model plays at that
+ * effort, one without while its model plays at any effort (`rests` in src/strategist/shadow.ts). Under anything else
+ * every plan also pays for a shadow plan by it. So a switch that starts one raises the AI spend however cheap the new
+ * model or effort is, and needs the password like a dearer model. `shadows`: the entries that are set for the agent
+ * (shadowModelsSet), none when shadow plans are off. With several set, the one that rests wakes with any switch away
+ * from its pair, also with a switch to another entry of the list: that one goes to rest, and what the two cost is not
+ * weighed here. Entries that run before and after and a switch that only sends one to rest start nothing. Given as
+ * models alone (no effort known), only the entries without an effort can rest.
  */
-export function wakesShadow(shadows: readonly string[], current: string, next: string): boolean {
-  const playing = currentModel(current)
-  return next !== playing && shadows.includes(playing)
+export function wakesShadow(shadows: readonly string[], current: string | AiPair, next: string | AiPair): boolean {
+  const at = (p: string | AiPair) => (typeof p === 'string' ? { model: currentModel(p), effort: null } : { model: currentModel(p.model), effort: p.effort })
+  const before = at(current)
+  const after = at(next)
+  return shadows.some(entry => rests(entry, before) && !rests(entry, after))
+}
+
+/**
+ * The password rule for one agent's own model and effort (the owner, 2026-11-13): from the pair it plays now to the
+ * pair it would play (each its own where it has one, else the all-agents one, so a move back to "same as all agents"
+ * counts by the pair it lands on), a dearer model or a higher effort (raisesAiSpend) or a switch that starts one of its
+ * shadow plans (`shadows`: its own list, else the all-agents one).
+ */
+export function agentAiNeedsPassword(current: AiPair, next: AiPair, shadows: readonly string[]): boolean {
+  if (current.model === next.model && current.effort === next.effort) return false
+  return raisesAiSpend(current, next as { model: string; effort: Effort }) || wakesShadow(shadows, current, next)
+}
+
+/**
+ * The password rule for the all-agents model and effort: a dearer pair asks as before (it is also the pair of the
+ * manager chat and of /ask). A switch that starts shadow plans asks too, judged per agent by what the switch really
+ * changes for it: an agent with its own model and its own effort is not moved by it, so its shadow plans start or rest
+ * as before; one with only its own effort follows the model, and so on.
+ */
+export function allAgentsAiNeedsPassword(all: AiPair, next: AiPair, agents: readonly { settings: { aiModel?: unknown; aiEffort?: unknown }; shadows: readonly string[] }[]): boolean {
+  if (raisesAiSpend(all, next as { model: string; effort: Effort })) return true
+  return agents.some(a => wakesShadow(a.shadows, agentChoice(a.settings, all), agentChoice(a.settings, next)))
 }
 
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1'): Server {
@@ -229,8 +258,14 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         // Each with the lowest and the highest of its prices over its rate cards: the page asks for the password by the same rule as raisesAiSpend.
         models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price, ...(m.long ? { long: m.long } : {}), ...priceRange(id)! })),
         efforts: EFFORTS,
-        // The shadow models that are set on this machine, none when shadow plans are off: the page asks for the password when a switch would wake one (wakesShadow).
-        shadowModels: shadowModelsSet(service.store),
+        // The models of the all-agents shadow list, each once, none when it is off: what a page of the version before
+        // reads. The page of this version reads each agent's own entries (`ai.shadows` below).
+        shadowModels: [...new Set(shadowModelsSet(service.store).map(entry => entryOf(entry).model))],
+        // How many agents play an own model or effort (the Strategist box says so).
+        ownAi: agents.filter(b => {
+          const own = ownAi(b.settings)
+          return own.model !== null || own.effort !== null
+        }).length,
         telegram: Boolean(service.telegram),
         // The welcome guide's checklist: which keys are set (never their values) and whether it was hidden.
         setup: {
@@ -270,6 +305,12 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           busy: service.isBusy(b.index),
           createdAt: b.createdAt,
           settings: b.settings,
+          // The AI it plays with: the pair (its own where it has one, else the all-agents one), its own values in use,
+          // why an own value is not used, and the shadow entries set for it (its own list or the all-agents one).
+          ai: (() => {
+            const ai = service.aiOf(b)
+            return { model: ai.model, effort: ai.effort, own: ownAi(b.settings), ignored: ai.ignored, shadows: shadowModelsSet(service.store, b.index), ownShadows: hasOwnShadowList(service.store, b.index) }
+          })(),
           budget: budgetView(service.store, b.index, b.settings, dry, now, snap?.gameDay.resetHourUtc ?? 14),
           snapshot: snapshotSummary(snap),
           funds: { usd: fundsUsd(snap), playable: playableUsd(snap, b.settings.egldGasReserve), low: lowOnFunds(playableUsd(snap, b.settings.egldGasReserve), b.settings.topUpWarningUsd) },
@@ -442,8 +483,13 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
               } catch (err) {
                 throw new HttpFail(400, err instanceof Error ? err.message : String(err))
               }
-              // Lowering a limit is one click; raising one (or shrinking the gas reserve) needs the password again.
-              if (raisesLimit(service.store.agent(index)!.settings, patch)) recheckPassword(req, password)
+              // An own model is one of the list (the patch checks its shape only); empty is "the same as all agents".
+              if (patch.aiModel && !isKnownModel(patch.aiModel)) throw new HttpFail(400, `unknown model ${patch.aiModel}`)
+              const cur = service.store.agent(index)!.settings
+              // Lowering a limit is one click; raising one (or shrinking the gas reserve) needs the password again. So does
+              // an own model or effort that costs more or starts one of this agent's shadow plans.
+              const aiMore = (patch.aiModel !== undefined || patch.aiEffort !== undefined) && agentAiNeedsPassword(service.aiOf({ settings: cur }), service.aiOf({ settings: { ...cur, ...patch } }), shadowModelsSet(service.store, index))
+              if (raisesLimit(cur, patch) || aiMore) recheckPassword(req, password)
               const next = service.store.updateSettings(index, patch)
               service.settingsSaved(index)
               service.store.log({ agentIndex: index, kind: 'control', status: 'info', summary: `settings changed from the web UI by ${user}: ${Object.keys(patch).join(', ')}` })
@@ -543,9 +589,13 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         const effort = String(body.effort ?? '') as Effort
         if (!isKnownModel(model)) throw new HttpFail(400, `unknown model ${model}`)
         if (!EFFORTS.includes(effort)) throw new HttpFail(400, `unknown effort ${effort}`)
-        // A cheaper model or less effort is one click; a dearer one needs the password again.
-        // So does a switch that starts shadow plans: a cheaper model that wakes a resting shadow model.
-        if (service.strategist && (raisesAiSpend(service.strategist, { model, effort }) || wakesShadow(shadowModelsSet(service.store), service.strategist.model, model))) recheckPassword(req, body.password)
+        // A cheaper model or less effort is one click; a dearer one needs the password again. So does a switch that
+        // starts shadow plans for an agent that follows the all-agents pair: a cheaper model that wakes a resting one.
+        if (service.strategist) {
+          const all = { model: service.strategist.model, effort: service.strategist.effort }
+          const agents = service.store.agents().map(b => ({ settings: b.settings, shadows: shadowModelsSet(service.store, b.index) }))
+          if (allAgentsAiNeedsPassword(all, { model, effort }, agents)) recheckPassword(req, body.password)
+        }
         try {
           return json(res, 200, { ok: true, message: service.setStrategist(model, effort, `web UI, ${user}`) })
         } catch (err) {

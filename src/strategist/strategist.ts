@@ -178,6 +178,17 @@ export function agentChoice(own: { aiModel?: unknown; aiEffort?: unknown }, all:
   return { model, effort, ignored }
 }
 
+/**
+ * The own values an agent's settings hold that agentChoice uses: its own model (a model that left the list as its
+ * successor) and its own effort, each null where it has none or the value is not used.
+ */
+export function ownAi(own: { aiModel?: unknown; aiEffort?: unknown }): { model: string | null; effort: Effort | null } {
+  const id = typeof own.aiModel === 'string' ? own.aiModel : ''
+  const model = id && isKnownModel(id) ? id : id && Object.hasOwn(SUCCESSORS, id) ? currentModel(id) : null
+  const effort = typeof own.aiEffort === 'string' && (EFFORTS as readonly string[]).includes(own.aiEffort) ? (own.aiEffort as Effort) : null
+  return { model, effort }
+}
+
 const SUBMIT_PLAN: Anthropic.Tool = {
   name: 'submit_plan',
   description: SUBMIT_PLAN_TOOL_DESCRIPTION,
