@@ -2,7 +2,7 @@
 // four findings and MAC-5, the item it left open (done on the owner's go of 2026-11-13), each with its test here,
 // named after it and failing before its fix (MAC-5's route test is in test/update-service.test.ts). The record is
 // the section "Mac install check (2026-11-12)" of docs/SECURITY-REVIEW.md.
-import { test } from 'node:test'
+import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -310,6 +310,27 @@ test('MAC-5: Check for updates next to the version asks now, shows the answer at
   assert.match(flat('site/src/content/docs/play/safety.md'), /about every 10 minutes and when you press \*\*Check for updates\*\* \(the round arrow next to the version, at most once in 15 seconds\)/)
 })
 
+test('MAC-5: an unexpected error of a check is said once in the toast, not as "The check failed: the check failed."', async () => {
+  // A fetch that throws is the release server not answering: the updater's own words, as before.
+  const offline = await updaterOf('http://127.0.0.1:9', { fetch: async () => { throw new Error('ECONNRESET') } }).check()
+  assert.equal(offline.checkError, 'the release server did not answer')
+  // An error that is not the updater's own: here the database cannot keep the version it told (a full disk).
+  const web = await releaseServer()
+  const logged = mock.method(console, 'error', () => undefined)
+  try {
+    const view = await updaterOf(web.base, { kv: { get: () => null, set: () => { throw new Error('database or disk is full') } } }).check()
+    const page = updateCode({}, { api: async () => ({ ok: true, update: view }) })
+    await page.click()
+    assert.deepEqual(page.toasts, [['The check failed: an unexpected error (see the log). The agent tries again by itself in a few minutes.', true]])
+    assert.equal(view.checkError, 'an unexpected error (see the log)')
+    assert.equal(logged.mock.callCount(), 1, 'the error itself goes to the log')
+    assert.match(String(logged.mock.calls[0]!.arguments.at(-1)), /database or disk is full/)
+  } finally {
+    logged.mock.restore()
+    await web.close()
+  }
+})
+
 test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the five findings, what passed and that nothing of it stays open', () => {
   const review = read('docs/SECURITY-REVIEW.md')
   const heading = '\n## Mac install check (2026-11-12)\n'
@@ -334,7 +355,7 @@ test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by
   // changed, and nothing of the check stays open.
   const mac5 = section.split('\n').find(l => l.startsWith('| MAC-5 |')) ?? ''
   for (const item of [/no "check for updates now"/, /`\/api\/update\/check` existed, but the page never called it/, /30 to 90 seconds after a start, then every 10 to 11 minutes/, /`\.\/cli\.sh update-check`/, /the owner's call/, /the owner's go on 2026-11-13/]) assert.match(mac5.split(' | ')[2] ?? '', item, 'the finding')
-  for (const item of [/\*\*Check for updates\*\*, a round arrow between the version and its info bubble/, /no wider|narrower than before at every width/, /`POST \/api\/update\/check`/, /session and CSRF token/, /`MIN_CHECK_GAP_MS`/, /at most once in 15 seconds/, /The check every 10 to 11 minutes is unchanged/]) assert.match(mac5.split(' | ')[3] ?? '', item, 'the fix')
+  for (const item of [/\*\*Check for updates\*\*, a round arrow between the version and its info bubble/, /no wider|narrower than before at every width/, /"an unexpected error \(see the log\)"/, /`POST \/api\/update\/check`/, /session and CSRF token/, /`MIN_CHECK_GAP_MS`/, /at most once in 15 seconds/, /The check every 10 to 11 minutes is unchanged/]) assert.match(mac5.split(' | ')[3] ?? '', item, 'the fix')
   assert.ok(section.includes('\nStays open: nothing of this check. The item it left open is MAC-5 above.\n'), 'nothing of the check stays open')
   assert.doesNotMatch(section, /The dashboard has no "check for updates now"/)
   assert.doesNotMatch(section, /—|\bbot\b/i)

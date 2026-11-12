@@ -216,7 +216,9 @@ export class Updater {
       }
     } catch (err) {
       // Not said on Telegram: a release server that is down or a network without a route is not the owner's problem.
-      this.checkError = err instanceof UpdateError ? err.message : 'the check failed'
+      // An error that is not the updater's own goes to the log; the page says "The check failed: " before the text.
+      if (!(err instanceof UpdateError)) console.error('the update check failed:', err)
+      this.checkError = err instanceof UpdateError ? err.message : 'an unexpected error (see the log)'
     }
     this.checkedAt = new Date().toISOString()
     return this.view()
