@@ -16,9 +16,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   password; back to dry run is one click.
 - **Kill switch** stops every agent at once. Turning it on is one click; releasing it asks for your password.
 - **The version** you run is the small label next to the mode, for example `v1.0.0`. Its **i** explains updates.
-  **Check for updates** next to it asks GitHub now instead of at the next check, and the notice and a short message
-  give the answer. It installs nothing. It is off while an update installs and not shown where the check is
-  switched off.
+  The round arrow next to it, **Check for updates**, asks GitHub now instead of at the next check, and the notice
+  and a short message give the answer. It installs nothing. It is off while an update installs and not shown where
+  the check is switched off.
 - **The update notice** appears under the header when a newer version is out: about every 10 minutes the agent
   asks GitHub for the newest release. It shows the new version, the one you run and what is new. **Update now**
   installs it in one click and needs no password; on Telegram, `/upgrade` does the same. While it installs, the

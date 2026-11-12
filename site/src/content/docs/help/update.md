@@ -18,10 +18,11 @@ About every 10 minutes the agent asks GitHub whether a newer release of foxleagu
 The version you run is always in the dashboard's header, next to the mode (for example `v1.0.0`), and in the
 first line of `/status`, which also names a newer version when one is out.
 
-To ask now instead of at the next check, press **Check for updates** next to the version. The notice and a short
-message give the answer at once, and nothing is installed until you press **Update now**. Two checks less than 15
-seconds apart ask GitHub once: the second shows the answer of the first. In a terminal, `./cli.sh update-check` in
-the `foxleague-agent` folder asks as well. Where the check is switched off the link is not shown.
+To ask now instead of at the next check, press the round arrow next to the version, **Check for updates**. The
+notice and a short message give the answer at once, and nothing is installed until you press **Update now**. Two
+checks less than 15 seconds apart ask GitHub once: the second shows the answer of the first. In a terminal,
+`./cli.sh update-check` in the `foxleague-agent` folder asks as well. Where the check is switched off the arrow is
+not shown.
 
 ### One click
 

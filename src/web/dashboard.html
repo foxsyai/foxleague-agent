@@ -19,7 +19,7 @@ body{margin:0;background:var(--bg);color:var(--fg);
 a{color:var(--blue);text-decoration:none} a:hover{text-decoration:underline}
 .wrap{max-width:1440px;margin:0 auto;padding:12px}
 header{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 2px 14px}
-.brand{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-width:0}
+.brand{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
 .act{display:inline-flex;align-items:center}
 .iconbtn{display:inline-flex;align-items:center;justify-content:center;padding:6px 8px}
@@ -73,11 +73,17 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .btn.danger:hover{background:#4d1d2a}
 .btn.warn:hover{background:#4d3e15}
 .btn.sm{padding:4px 9px;font-size:12px}
-/* Check for updates next to the version: a button that reads as a link. */
-.upcheck{display:inline-flex;align-items:center}
-.linkbtn{background:none;border:0;padding:0;margin:0;color:var(--blue);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
-.linkbtn:hover{text-decoration:underline}
-.linkbtn:disabled{color:var(--dim);cursor:not-allowed;text-decoration:none}
+/* The version, the round arrow that checks for updates and their one info bubble, as one tight group: with the
+   brand's gap of 8px the header is no wider than with the version and its bubble alone. */
+.ver{display:inline-flex;align-items:center;gap:3px}
+.ver .info{margin-left:0}
+.upcheck{display:inline-flex;align-items:center;justify-content:center;background:none;border:0;padding:0;margin:0;color:var(--blue);cursor:pointer;line-height:0}
+.upcheck:hover{color:var(--fg)}
+.upcheck:disabled{color:var(--dim);cursor:not-allowed}
+.upcheck.spin svg{animation:upspin 1s linear infinite}
+@keyframes upspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.upcheck.spin svg{animation:none}}
+@media (max-width:640px){.upcheck{padding:4px}}
 .grid{display:grid;gap:12px}
 .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
@@ -264,8 +270,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
       <span id="modePill" class="pill dry">dry run</span>
       <span id="killPill" class="pill halt" hidden>kill switch on</span>
       <span id="tgPill" class="pill mute" hidden>telegram off</span>
-      <span id="verPill" class="pill mute" hidden></span><i class="info" data-tip="update">i</i>
-      <span id="upCheckWrap" class="upcheck" hidden><button id="upCheck" class="linkbtn" type="button">Check for updates</button><i class="info" data-tip="upcheck">i</i></span>
+      <span class="ver"><span id="verPill" class="pill mute" hidden></span><button id="upCheck" class="upcheck" type="button" title="Check for updates" aria-label="Check for updates" hidden><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button><i class="info" data-tip="update">i</i></span>
     </div>
     <div class="actions">
       <span class="act"><a id="howBtn" class="btn" href="https://agent.foxleague.ai/" target="_blank" rel="noopener noreferrer">How it works</a><i class="info" data-tip="how">i</i></span>
@@ -484,8 +489,9 @@ function renderUpdate() {
   const recent = u.last && Date.now() - Date.parse(u.last.at) < 86400000 ? u.last : null
   const busy = u.state !== 'idle' || Boolean(updating)
   // Check for updates: only where the agent checks at all, and off while it asks or an update installs.
-  $('upCheckWrap').hidden = !u.enabled
+  $('upCheck').hidden = !u.enabled
   $('upCheck').disabled = checking || busy
+  $('upCheck').className = checking ? 'upcheck spin' : 'upcheck'
   let text = '', notes = '', tone = '', button = false, again = false
   // u.restarts is false where no background service starts the agent again: the release is put in place and
   // u.waiting then holds what the owner does to start it.
@@ -1040,14 +1046,12 @@ $('stratApply').onclick = async (e, password) => {
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
 const TIPS = {
-  update: ['Version and updates', `<p>The version this agent runs. About every 10 minutes it asks GitHub whether a newer release of foxleague-agent is out. When one is, a notice appears here and on Telegram, with what is new. <b>Check for updates</b> next to the version asks at once.</p>
+  update: ['Version and updates', `<p>The version this agent runs. The agent checks by itself about every 10 minutes whether a newer release of foxleague-agent is out (it asks GitHub). When one is, a notice appears here and on Telegram, with what is new. The round arrow next to the version, <b>Check for updates</b>, asks now.</p>
+    <p>The notice and a short message then give the answer at once. Checking installs nothing. Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered. Two checks less than 15 seconds apart ask once: the second shows the answer of the first. The arrow is off while an update installs and is not shown where the check is switched off.</p>
     <p><b>Update now</b> installs it in one click: the agent downloads the release, checks that it is signed by the foxleague-agent maintainers, prepares it next to the running version and restarts into it. That takes a minute or two. An action that is being signed finishes first; the other waiting actions of a running plan are dropped and the next plan takes them up. Your wallet, keys, settings and history are not touched. On Telegram, <b>/upgrade</b> does the same.</p>
     <p>Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password. If the new version does not start, the agent goes back to the one it ran before and tells you. The notice then says that nothing has to be done and its button reads <b>Try again</b>: press it only if you want to install that version once more.</p>
     <p>An agent that you start yourself with ./run.sh (an install without the background service) does not restart by itself: the new version is put in place, the agent keeps playing and the notice says how to start the new version.</p>
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
-  upcheck: ['Check for updates', `<p>The agent checks by itself about every 10 minutes whether a newer release of foxleague-agent is out. This asks now: the notice under the header and a short message give the answer at once.</p>
-    <p>Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered. Checking installs nothing: <b>Update now</b> does, when you press it.</p>
-    <p>Two checks less than 15 seconds apart ask once: the second shows the answer of the first. The link is off while an update installs. Where the check is switched off (AGENT_UPDATE_CHECK=0 in the env file) it is not shown.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
   guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>

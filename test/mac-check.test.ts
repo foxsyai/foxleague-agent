@@ -235,12 +235,16 @@ function updateCode(update: Partial<UpdateView>, o: { updating?: { to: string; s
 
 test('MAC-5: Check for updates next to the version asks now, shows the answer at once and says it in a toast; it is off while it asks or an update installs, and hidden where the agent does not check', async () => {
   const html = flat('src/web/dashboard.html')
-  assert.match(html, /<span id="verPill" class="pill mute" hidden><\/span><i class="info" data-tip="update">i<\/i> ?<span id="upCheckWrap" class="upcheck" hidden><button id="upCheck" class="linkbtn" type="button">Check for updates<\/button><i class="info" data-tip="upcheck">i<\/i><\/span>/, 'the control and its info bubble next to the version')
+  // A round arrow between the version and its info bubble, one group, so the header is no wider than it was with the
+  // version alone (a link of its own made it wrap at 1280 px). Its name is in its title and its aria-label, and the
+  // version's bubble explains it: one bubble for the version and the check.
+  assert.match(html, /<span class="ver"><span id="verPill" class="pill mute" hidden><\/span><button id="upCheck" class="upcheck" type="button" title="Check for updates" aria-label="Check for updates" hidden><svg [^>]*aria-hidden="true">(?:(?!<\/svg>).)+<\/svg><\/button><i class="info" data-tip="update">i<\/i><\/span>/, 'the control and the info bubble next to the version')
+  assert.doesNotMatch(html, /data-tip="upcheck"|upcheck: \[/, 'no second bubble: the version\'s explains the check')
   assert.match(html, /\$\('upCheck'\)\.onclick = checkUpdate\b/)
 
   // Shown where the agent checks for updates, hidden where it does not (AGENT_UPDATE_CHECK=0, a service the CLI built).
-  assert.equal(updateCode({}).$('upCheckWrap').hidden, false)
-  assert.equal(updateCode({ enabled: false }).$('upCheckWrap').hidden, true)
+  assert.equal(updateCode({}).$('upCheck').hidden, false)
+  assert.equal(updateCode({ enabled: false }).$('upCheck').hidden, true)
   // Off while an update installs: by the agent's own state, and from the click on Update now.
   assert.equal(updateCode({}).$('upCheck').disabled, false)
   assert.equal(updateCode({ available: V103, state: 'downloading' }).$('upCheck').disabled, true)
@@ -252,11 +256,13 @@ test('MAC-5: Check for updates next to the version asks now, shows the answer at
   const p = updateCode({}, { api: (method, path) => { calls.push(`${method} ${path}`); return new Promise(r => { answer = r }) } })
   const running = p.click()
   assert.equal(p.$('upCheck').disabled, true, 'off while it asks')
+  assert.match(p.$('upCheck').className, /^upcheck spin$/, 'the arrow turns while it asks')
   await p.click()
   assert.deepEqual(calls, ['POST /api/update/check'], 'a second click while it asks sends nothing')
   answer({ ok: true, update: { ...IDLE, available: V103, checkedAt: new Date().toISOString() } })
   await running
   assert.equal(p.$('upCheck').disabled, false, 'on again once it answered')
+  assert.equal(p.$('upCheck').className, 'upcheck', 'and still')
   assert.equal(p.S.instance.update.available?.version, '1.0.3', 'the answer is the page\'s state')
   assert.equal(p.$('upBanner').hidden, false, 'the notice shows at once')
   assert.equal(p.$('upText').textContent, 'Version 1.0.3 is out. You run 1.0.2.')
@@ -287,21 +293,21 @@ test('MAC-5: Check for updates next to the version asks now, shows the answer at
   assert.deepEqual(again.toasts, [['Version 1.0.3 is still the newest. Nothing has to be done: the agent keeps running 1.0.2.', false]])
   assert.equal(again.$('upBtn').textContent, 'Try again')
 
-  // Its info bubble: the agent checks by itself about every 10 minutes, this asks now, and only a signed newer
-  // release is ever offered. The bubble of the version names it too.
-  const tip = /upcheck: \['Check for updates', `([^`]*)`\]/.exec(html)?.[1] ?? ''
-  for (const said of [/checks by itself about every 10 minutes/, /This asks now/, /Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered/, /installs nothing/]) assert.match(tip, said)
-  const version = html.slice(html.indexOf("update: ['Version and updates'"), html.indexOf("upcheck: ['Check for updates'"))
-  assert.ok(version.length > 100, 'the bubble of the version comes before the one of the link')
-  assert.match(version, /<b>Check for updates<\/b> next to the version asks at once/)
-  for (const text of [tip, version]) assert.doesNotMatch(text, /—|\bbot\b/i)
+  // The version's info bubble explains the check: the agent checks by itself about every 10 minutes, the arrow asks
+  // now, and only a signed newer release is ever offered. Its first paragraph (the hover preview) names the arrow.
+  const tip = /update: \['Version and updates', `([^`]*)`\]/.exec(html)?.[1] ?? ''
+  const preview = tip.split('</p>')[0]!
+  for (const said of [/checks by itself about every 10 minutes/, /The round arrow next to the version, <b>Check for updates<\/b>, asks now/]) assert.match(preview, said)
+  for (const said of [/Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered/, /installs nothing/, /Two checks less than 15 seconds apart ask once/, /The arrow is off while an update installs/, /not shown where the check is switched off/]) assert.match(tip, said)
+  assert.doesNotMatch(tip, /—|\bbot\b/i)
 
-  // The pages that say how often the agent checks, or how to ask at once, name the link.
+  // The pages that say how often the agent checks, or how to ask at once, name it.
   const pages = ['site/src/content/docs/help/update.md', 'site/src/content/docs/use/dashboard.md', 'site/src/content/docs/help/troubleshooting.md', 'site/src/content/docs/help/faq.md', 'site/src/content/docs/play/safety.md', 'INSTALL.md', 'README.md', 'docs/SERVER.md']
   for (const f of pages) assert.match(flat(f), /\*\*Check for updates\*\*/, f)
+  for (const f of ['site/src/content/docs/help/update.md', 'site/src/content/docs/use/dashboard.md']) assert.match(flat(f), /the round arrow next to (the version|it), \*\*Check for updates\*\*/i, f)
   const update = flat('site/src/content/docs/help/update.md')
-  for (const said of [/Two checks less than 15 seconds apart ask GitHub once/, /`\.\/cli\.sh update-check`/, /nothing is installed until you press \*\*Update now\*\*/, /Where the check is switched off the link is not shown/]) assert.match(update, said)
-  assert.match(flat('site/src/content/docs/play/safety.md'), /about every 10 minutes and when you press \*\*Check for updates\*\* \(at most once in 15 seconds\)/)
+  for (const said of [/Two checks less than 15 seconds apart ask GitHub once/, /`\.\/cli\.sh update-check`/, /nothing is installed until you press \*\*Update now\*\*/, /Where the check is switched off the arrow is not shown/]) assert.match(update, said)
+  assert.match(flat('site/src/content/docs/play/safety.md'), /about every 10 minutes and when you press \*\*Check for updates\*\* \(the round arrow next to the version, at most once in 15 seconds\)/)
 })
 
 test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the five findings, what passed and that nothing of it stays open', () => {
@@ -328,7 +334,7 @@ test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by
   // changed, and nothing of the check stays open.
   const mac5 = section.split('\n').find(l => l.startsWith('| MAC-5 |')) ?? ''
   for (const item of [/no "check for updates now"/, /`\/api\/update\/check` existed, but the page never called it/, /30 to 90 seconds after a start, then every 10 to 11 minutes/, /`\.\/cli\.sh update-check`/, /the owner's call/, /the owner's go on 2026-11-13/]) assert.match(mac5.split(' | ')[2] ?? '', item, 'the finding')
-  for (const item of [/\*\*Check for updates\*\*/, /`POST \/api\/update\/check`/, /session and CSRF token/, /`MIN_CHECK_GAP_MS`/, /at most once in 15 seconds/, /The check every 10 to 11 minutes is unchanged/]) assert.match(mac5.split(' | ')[3] ?? '', item, 'the fix')
+  for (const item of [/\*\*Check for updates\*\*, a round arrow between the version and its info bubble/, /no wider|narrower than before at every width/, /`POST \/api\/update\/check`/, /session and CSRF token/, /`MIN_CHECK_GAP_MS`/, /at most once in 15 seconds/, /The check every 10 to 11 minutes is unchanged/]) assert.match(mac5.split(' | ')[3] ?? '', item, 'the fix')
   assert.ok(section.includes('\nStays open: nothing of this check. The item it left open is MAC-5 above.\n'), 'nothing of the check stays open')
   assert.doesNotMatch(section, /The dashboard has no "check for updates now"/)
   assert.doesNotMatch(section, /—|\bbot\b/i)

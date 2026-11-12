@@ -86,11 +86,11 @@ the dashboard or by chatting with it on Telegram.
   week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`
   (it shows the version too), `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/upgrade`, `/help`.
 - **Updates:** about every 10 minutes the agent asks GitHub for the newest release and tells you, in the dashboard
-  and on Telegram, when one is out; **Check for updates** in the dashboard asks at once. **Update now** in the
-  dashboard or `/upgrade` on Telegram installs it; nothing installs by itself. Only a release signed by the
-  maintainers and newer than yours is taken, it is prepared next to the running version, and a version that does
-  not start is undone by itself. `./install.sh --update` does the same from a terminal; `AGENT_UPDATE_CHECK=0` in
-  `.env` switches the check off.
+  and on Telegram, when one is out; the round arrow next to the version in the dashboard (**Check for updates**)
+  asks at once. **Update now** in the dashboard or `/upgrade` on Telegram installs it; nothing installs by itself.
+  Only a release signed by the maintainers and newer than yours is taken, it is prepared next to the running
+  version, and a version that does not start is undone by itself. `./install.sh --update` does the same from a
+  terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
