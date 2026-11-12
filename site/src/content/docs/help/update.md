@@ -142,8 +142,8 @@ In the `foxleague-agent` folder:
 
 It stops the background service and leaves your folder, wallet and PEM files in place. Everything the install
 added is in that folder, the download cache of npm included: about 240 MB, and about 280 MB once an update has
-kept the release before it (kept so that the update can be undone). The agent wallets keep their funds. Delete the
-folder only when the wallets are empty and your recovery words are safe.
+kept the release before it (kept so that the update can be undone). The agent wallets may still hold funds. Delete
+the folder only when the wallets are empty and your recovery words are safe.
 
 On Linux the installer turned on linger, which lets background services of your user start without a login. The
 uninstall leaves it on, because other services of yours may count on it: `loginctl disable-linger $USER` turns it

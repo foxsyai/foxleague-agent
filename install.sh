@@ -399,7 +399,8 @@ if [ "$MODE" = uninstall ]; then
   say "Removing the background service"
   remove_service
   info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
-  info "The agent wallets still hold their funds. Keep the backup words; delete the folder only when the wallets are empty."
+  # The balances are not read here: what the wallets hold is not known, so it is not said.
+  info "The agent wallets may still hold funds. Keep the recovery words; delete the folder only when the wallets are empty."
   # The installer turned linger on so the agent runs with nobody logged in. Other services of this user may
   # count on it by now, so it is told and not taken away.
   if [ "$PLATFORM" = linux ] && loginctl show-user "$USER_NAME" -p Linger 2>/dev/null | grep -q '^Linger=yes'; then

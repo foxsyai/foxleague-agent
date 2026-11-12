@@ -130,3 +130,19 @@ test('MAC-3: after an update that was undone, the notice says that nothing has t
     assert.match(flat(f), /nothing has to be done/i, f)
   }
 })
+
+test('MAC-4: the uninstall does not state that the wallets hold funds, which it never checked, and names the recovery words', async () => {
+  // A git checkout's own folder (the uninstall reads no .env and no database); systemctl and loginctl are stand-ins.
+  const s = stubs()
+  const dir = tmp('fox-checkout-')
+  writeFileSync(join(dir, 'install.sh'), read('install.sh'), { mode: 0o755 })
+  writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'foxleague-agent', version: '3.1.0' }, null, 2) + '\n')
+  const r = await sh(join(dir, 'install.sh'), ['--uninstall'], { HOME: tmp('fox-home-'), USER: 'tester', PATH: `${s.dir}:${process.env.PATH}` })
+  assert.equal(r.status, 0, r.out)
+  assert.match(r.out, /The agent wallets may still hold funds\. Keep the recovery words; delete the folder only when the wallets are empty\./)
+  assert.doesNotMatch(r.out, /still hold their funds|backup words/)
+  // The Windows uninstall and the pages that tell the uninstall say it the same way.
+  for (const f of ['install.sh', 'get.ps1', 'INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md']) assert.doesNotMatch(flat(f), /wallets (still hold their|keep their|hold their) funds/, f)
+  assert.match(flat('get.ps1'), /The agent wallets may still hold funds\./)
+  assert.match(flat('site/src/content/docs/help/update.md'), /The agent wallets may still hold funds\./)
+})

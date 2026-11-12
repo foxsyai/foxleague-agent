@@ -1042,7 +1042,7 @@ function Install-FoxLeagueAgent {
         Write-FoxLine 'last Ubuntu window closes. To stop it now and remove its background service, open Ubuntu and type:'
         Write-FoxLine ('  wsl -d ' + $FoxDistro + ' --cd ~')
         Write-FoxLine ('  cd ~/' + $FoxFolder + ' && ./install.sh --uninstall')
-        Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu. The agent wallets keep their funds.'
+        Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu. The agent wallets may still hold funds.'
         Write-FoxLine 'WSL, Ubuntu and the line systemd=true in Ubuntu''s /etc/wsl.conf are left as they are: other programs may use them.'
     }
 
