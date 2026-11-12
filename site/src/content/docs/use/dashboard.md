@@ -23,8 +23,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 - **EGLD** and **FOXSY**: the live prices. Every payment is valued in USD before it is checked; FOXSY counts at the
   higher of its spot price and its two-day median, so a sudden dip never makes a payment look cheaper.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
-- **Strategist**: the AI model and effort for every agent, from four models: Haiku 5.5, Sonnet 5.5, Opus 5.5 and
-  Fable 5.2. Sonnet 5.5 is the default and plays well; Haiku 5.5 is the cheapest, for trying things out: how well it
+- **Strategist**: the AI model and effort for every agent that has no model or effort of its own, from four models:
+  Haiku 5.5, Sonnet 5.5, Opus 5.5 and Fable 5.2. Below it, how many agents use their own. Sonnet 5.5 is the default and plays well; Haiku 5.5 is the cheapest, for trying things out: how well it
   plays this game has not been measured yet; Opus 5.5, Fable 5.2 and a higher effort think harder and cost more. A
   dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
   one click. A switch that starts shadow plans asks for the password too
@@ -53,7 +53,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)).
 - **Budget**: spend against today's cap, this month's budget and the setup budget.
 - **Talk to the manager**: advice or questions in plain words, typed or spoken ([Talk to your manager](/use/talk-to-your-manager/)).
-- **Settings**: the strategy and every limit ([Every setting explained](/use/settings/)).
+- **Settings**: the strategy, the agent's own AI model and effort (or the same as all agents) and every limit
+  ([Every setting explained](/use/settings/)). An agent with its own AI shows it on its tab.
 
 Above the pages, a tab per agent shows its number and team. **+ Add agent** adds one from your recovery words;
 **Import team** adds one for a team you already play, marked **imported**, which also gets a **Remove** button on

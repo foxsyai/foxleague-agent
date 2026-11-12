@@ -1602,3 +1602,60 @@ Stays open:
 - The effort is one for every shadow model. A model that would need its own effort to be compared fairly cannot have
   it yet.
 - What stays open in the section above stays open: a shadow plan is judged by reading it, never by the rules.
+
+## Per-agent models and shadow efforts (2026-11-13)
+
+The owner's request of 2026-11-13: the ten live agents on three models (Opus 5.5, Sonnet 5.5 and Haiku 5.5, all at
+high effort); on three test agents shadow plans by the model that plays at other efforts. Until then the model and
+effort were one setting for every agent; the shadow list was one list for every agent with one effort. The AI
+spend has no cap of its own, so every path that raises it is treated as a money path (rule 7). Each finding has a test
+of the same name in `test/per-agent-model.test.ts` that failed on the branch before its fix for the reason given and
+passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| PAM-1 | design (the owner, 2026-11-13) | An agent needed its own model and effort, kept with its other settings, while an agent saved before plays exactly as before | `aiModel` and `aiEffort` in the agent settings, empty for "the same as all agents": the default and what an older row reads. The patch takes empty, a model id or one of the five efforts (one list, `AI_EFFORTS`, which the strategist's `EFFORTS` is); the web route also refuses a model the list does not have |
+| PAM-2 | design (rule 4) | An unknown value could have become a model: an own model off the list, a name every object has (`constructor`) or an effort nobody knows, written by hand into the database. A fallback of both fields to the all-agents pair could also end on a dearer model than the agent's own (Haiku 5.5 with a bad effort under a Fable 5.2 all-agents pair) | `agentChoice` reads each field by itself. An own value it does not know is never used: the all-agents value stands in for that field only. `ignored` says why. An own model that left the list runs its successor, never a dearer one. Only what an id can hold reaches the log |
+| PAM-3 | design | Planning had one strategist. A per-agent model needs its request sent to that model at that effort, with the spend booked at the price of the model that answered | One strategist per model (the all-agents one for its model, else one made with the first plan); the effort goes with each request. `usd` books each attempt at the model that served it. The plan's cost line names the model and effort where they are not the all-agents ones; the next request never reads that line |
+| PAM-4 | design (rules 4 and 5) | A bad own value written by hand had to be refused and said, never decided on | The agent plays the all-agents value in its place and the log says why once, while the value stays the same |
+| PAM-5 | low (cost) | The manual's cache decision counted any agent due within the hour. A cache belongs to one model. Anthropic's docs leave open, per model, whether a request at another effort can read the cached system prompt: an effort change is rendered with the thinking settings, which on some models come before the tools and the system prompt. Counting any agent would pay one-hour cache writes that nothing reads | Warmth and "another call due within the hour" are counted per model and effort. The strategist asks for the pair of each request; the service counts only the agents whose plan or shadow plans use that pair. Without a pair (a caller from before) it counts every agent, as before |
+| PAM-6 | design (the owner, 2026-11-13) | The shadow setting took model ids only: one list and one effort for every agent | An entry may carry its effort (`claude-opus-5-5:low`); an agent may have its own list (kv `shadow_model_agent_N`, N from 1; blank follows the all-agents list, `off` means none). An entry with an effort rests only at that very model and effort; one without rests at its model at any effort as before, so a setting of before runs byte for byte (`shadowChoices` keeps its shape). An effort nobody knows leaves the entry out with its reason; a model and effort written twice count once; at most 16 entries are read |
+| PAM-7 | design | The guard, the strategist and the record went per shadow model: three efforts of one model would have shared one guard key and been asked once | One shadow strategist per model, the effort sent with each request; the guard is per agent, model and effort; each shadow plan has its own row, record and cost at its model's price. The cache rule counts an agent's shadow pairs. Unchanged: no path from a shadow answer to the executor (SHADOW-6 reads the new code and passes) |
+| PAM-8 | design (rule 7) | `wakesShadow` compared models only. With an entry at Opus 5.5 high resting while Opus 5.5 plays at high, a lower effort would start it with one click | `wakesShadow` reads model and effort with the rest rule of PAM-6; given models alone, as before, it reads as before |
+| PAM-9 | design (rule 7) | Once the fields existed (PAM-1), the settings route judged a patch by `raisesLimit` only: on the branch before this fix the test saw 200 for Opus 5.5 on one agent without the password | `agentAiNeedsPassword`: from the pair the agent plays to the pair it would play (back to "Same as all agents" counts by the pair it lands on), a dearer model, a higher effort or a switch that starts one of its shadow plans needs the password. The route refuses a model off the list |
+| PAM-10 | design (rule 7) | The all-agents switch weighed the all-agents shadow list against the all-agents model, whatever each agent plays | `allAgentsAiNeedsPassword`: a dearer all-agents pair asks as before (it is also the pair of the manager chat and of /ask). A switch that starts shadow plans is weighed for each agent the switch moves, so an agent with its own model and effort does not count |
+| PAM-11 | pin | The page needs each agent's pair, its own values and its shadow entries to ask by the server's rule; a page of the version before must keep working | `/api/state` gives each agent `ai` (the pair, the own values in use, why a value is not used, the shadow entries and whether the list is its own) and the count `ownAi`. `shadowModels` stays the model ids of the all-agents list |
+| PAM-12 | design (the owner, 2026-11-13) | `shadow-report` summed every effort of one model into one block | The numbers once per model and effort, each block named like "Opus 5.5 (low)" when a model planned at several efforts (by the model alone otherwise, as before). Each real plan is listed with its model and effort and its shadow plans at every effort below it. Rows of before read as before |
+| PAM-13 | design | The owner needed a way to set an agent's own model and effort on the server | `cli model` (and `agentctl.sh model`): with no number every agent's pair and shadow entries, with a number one agent's, with a model and an effort (each or `same`) that agent's own from its next plan. A value off the list is refused and nothing is written; no agent is added. A setting on the machine, it asks for no password, like `shadow_model`. `cli plan N` asks the agent's own pair |
+| PAM-14 | low | Telegram /status and the start message named one model for every agent | They name an agent's model and effort where they are not the all-agents ones |
+| PAM-15 | low | An agent's own shadow list survived its deletion and would have been read by a new agent given its number | `deleteAgent` removes `shadow_model_agent_N` with the agent's other values |
+| PAM-16 | design (rule 7) | The dashboard had no field for it. A page that asks by another rule than the server leaves the owner with a bare refusal | AI model and Effort in each agent's settings: "Same as all agents (...)" first, the four models with their list price, a bubble each and a line that says what the agent plays. The page's rules for one agent and for the all-agents switch are compared with the server's over every pair. The tab names an agent's own AI and the Strategist box counts the agents with their own. The level dialog does not offer the Strategist box to an agent it would not move |
+| PAM-17 | docs | The guides spoke of one model and one shadow list | `docs/SERVER.md` (the `model` command with the owner's ten lines; per-agent shadow lists with efforts and the commands of the three-agent test, which the test runs as written), the README and the site's costs, dashboard, settings and server pages. SHADOWS-11 now finds its section by its heading, as SHADOW-15 did when its section stopped being the last |
+
+What the change could get wrong and what guards it:
+- A dearer model without the password: for one agent (PAM-9), for all agents (PAM-10), through a lower effort that
+  wakes a shadow entry (PAM-8, PAM-9, PAM-10), on the page (PAM-16). The `model` command and the per-agent shadow keys
+  ask for none on purpose: they are written on the machine, like `shadow_model`.
+- An unknown value used as one: an own model or effort written by hand is never used (PAM-2, PAM-4); the routes and
+  the CLI refuse one (PAM-1, PAM-9, PAM-13); a shadow entry with an effort nobody knows is left out (PAM-6).
+- A shadow that never rests: an entry at the very model and effort that play rests (PAM-6). An entry without an effort
+  rests at its model at any effort as before, so no setting of before starts costing more (PAM-6; SHADOW-4, SHADOWS-2
+  and R63A-1 pass unchanged).
+- Cost booked on the wrong price: each plan at the model that answered (PAM-3), each shadow plan at its own model
+  (PAM-7); the cache decision per model and effort (PAM-5).
+
+Stays open:
+- The manager chat and `/ask` use the all-agents model. A dearer all-agents model still asks for the password when no
+  agent follows it.
+- Anthropic's docs say an effort change invalidates the messages cache on every model. It invalidates the tools and
+  system caches too on the models that render the thinking settings ahead of them; the docs do not name those. The cache rule takes the
+  careful reading (one cache per model and effort). If an effort change does not touch the system cache on these
+  models, a request may pay the plain input price where a cache read would have done.
+- Each shadow entry adds its own cost to every plan of its agent: three entries make four requests a plan on that
+  agent. The AI spend has no cap of its own.
+- `shadow_plans` keeps the newest 2,000 rows of all agents together: with three agents at three shadow entries and a
+  plan an hour over 16 hours, that is about two weeks.
+- A dashboard page of the version before, still open, reads only the all-agents shadow list. With per-agent lists it
+  can meet a bare refusal where the server asks for the password; a reload gets the new page.
+- `cli plan N` asks the agent's own model and effort; no test covers it, because it reads the chain and FoxLeague.
+- What stays open in the two sections above stays open: a shadow plan is judged by reading it, never by the rules.

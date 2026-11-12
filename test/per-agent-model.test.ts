@@ -828,3 +828,93 @@ test('PAM-16 the dashboard: an agent\'s own AI model and effort with "Same as al
   assert.match(strat, /every agent without its own/)
   assert.doesNotMatch(strat, /—|, and |, or /)
 })
+
+// ---- the guides ----
+
+test('PAM-17 the guides: the owner\'s setup as the server guide writes it works as written (each agent\'s own model, the all-agents shadow list off, three agents with the same model at three other efforts); README, site and review follow', async () => {
+  const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
+  const guide = read('docs/SERVER.md')
+  const shadow = (await import('../src/strategist/shadow.ts')) as unknown as ShadowModule
+  // Each agent's own model and effort, as root on the server: the owner's ten agents on three models at high.
+  const own = [...guide.matchAll(/^sudo \/opt\/foxleague-agent\/app\/deploy\/agentctl\.sh model (\d+) (\S+) (\S+)$/gm)].map(m => [Number(m[1]), m[2], m[3]] as const)
+  const want: Record<number, string> = { 7: OPUS, 6: OPUS, 10: OPUS, 1: SONNET, 5: SONNET, 4: SONNET, 9: HAIKU, 8: HAIKU, 2: HAIKU, 3: HAIKU }
+  assert.deepEqual(Object.fromEntries(own.map(([n, model]) => [n, model])), want, 'one line per agent, the owner\'s models')
+  assert.ok(own.every(([, , effort]) => effort === 'high'))
+  // The lines run as written (the CLI is the one agentctl.sh runs), here against a database of this test.
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-pam-guide-'))
+  const store = new Store(dir)
+  for (let i = 0; i < 10; i++) store.addAgent(i, `erd1agent${i}`)
+  const env = { PATH: process.env.PATH!, HOME: dir, AGENT_ENV_FILE: join(dir, 'no-such.env'), AGENT_DATA_DIR: dir, MVX_GATEWAY_URL: 'http://127.0.0.1:9', MVX_API_URL: 'http://127.0.0.1:9', FOXLEAGUE_URL: 'http://127.0.0.1:9' }
+  for (const [n, model, effort] of own.filter(([n]) => [7, 1, 9].includes(n))) {
+    const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', join(REPO, 'src/cli.ts'), 'model', String(n), model, effort], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 })
+    assert.equal(r.status, 0, r.stderr)
+  }
+  // The shadow lists, with the guide's own one-line script.
+  const script = guide.match(/^SET='([^'\n]+)'$/m)?.[1]
+  assert.ok(script)
+  const from = guide.indexOf('### The same model at other efforts, on three agents')
+  assert.ok(from > guide.indexOf('## Shadow plans: trying another model without letting it play'), 'the example is in the shadow section')
+  const block = guide.slice(from, guide.indexOf('```\n', guide.indexOf('```', from) + 3))
+  const sets = [...block.matchAll(/-e "\$SET" (shadow_model\S*) (\S+)\n/g)].map(m => [m[1]!, m[2]!])
+  assert.deepEqual(sets, [
+    ['shadow_model', 'off'],
+    ['shadow_model_agent_7', `${OPUS}:low,${OPUS}:medium,${OPUS}:xhigh`],
+    ['shadow_model_agent_1', `${SONNET}:low,${SONNET}:medium,${SONNET}:xhigh`],
+    ['shadow_model_agent_9', `${HAIKU}:low,${HAIKU}:medium,${HAIKU}:xhigh`],
+  ])
+  store.setKv('shadow_model', `${HAIKU},${SONNET}`) // what ran before the test: the all-agents list
+  for (const [key, value] of sets) {
+    const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db')), key, value], { encoding: 'utf8', timeout: 60_000 })
+    assert.equal(r.status, 0, r.stderr)
+  }
+  const prev = process.env.AGENT_SHADOW_MODEL
+  delete process.env.AGENT_SHADOW_MODEL
+  try {
+    for (const [n, model] of [[7, OPUS], [1, SONNET], [9, HAIKU]] as const) {
+      const playing = strategist.agentChoice(store.agent(n - 1)!.settings, { model: SONNET, effort: 'medium' })
+      assert.deepEqual([playing.model, playing.effort], [model, 'high'], `agent ${n} plays its own`)
+      assert.deepEqual(shadow.shadowRuns!(shadow.shadowChoices(store, playing, n - 1)), ['low', 'medium', 'xhigh'].map(effort => ({ model, effort })), `agent ${n}`)
+    }
+    for (const n of [2, 3, 4, 5, 6, 8, 10]) assert.deepEqual(shadow.shadowChoices(store, { model: OPUS, effort: 'high' }, n - 1).models, [], `agent ${n}: none`)
+  } finally {
+    if (prev !== undefined) process.env.AGENT_SHADOW_MODEL = prev
+  }
+  const flat = guide.replace(/\s+/g, ' ')
+  for (const said of [
+    /An entry may carry its own effort after a colon/,
+    /An entry with an effort rests only while its model plays at that very effort; the same model at another effort runs/,
+    /An entry without an effort rests while its model plays, at any effort, as before/,
+    /`shadow_model_agent_N`/,
+    /`off` there means none for that agent/,
+    /agentctl\.sh shadow-report 7/,
+    /This is a setting on the machine, so it asks for no password/,
+  ]) assert.match(flat, said)
+  assert.match(guide, /`agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`, `model`/)
+  assert.doesNotMatch(guide.slice(guide.indexOf('## Shadow plans')), /—|\bbot\b/i)
+  // The README, the site.
+  assert.match(read('README.md'), /npm run cli -- model \[N\] \[model effort\] {2}# each agent's AI; agent N's own model and effort \(same: the all-agents one\)/)
+  assert.match(read('README.md').replace(/\s+/g, ' '), /the AI's model and effort for all agents or one agent/)
+  const costs = read('site/src/content/docs/help/costs.md')
+  const para = costs.slice(costs.indexOf('## Comparing a second model before you switch'), costs.indexOf('## To start')).replace(/\s+/g, ' ')
+  assert.match(para, /The model that plays can also plan in the shadow at another effort, to see what more or less thinking would change\./)
+  assert.match(para, /Shadow plans can be set for one agent only\./)
+  assert.doesNotMatch(para, /\$|\d|Haiku|Sonnet|Opus|Fable|cheaper|better|—|, and |, or /)
+  assert.match(costs.replace(/\s+/g, ' '), /each agent can also have its own model and effort/)
+  assert.match(read('site/src/content/docs/use/dashboard.md').replace(/\s+/g, ' '), /every agent that has no model or effort of its own/)
+  const settings = read('site/src/content/docs/use/settings.md')
+  assert.match(settings, /\n## AI\n/)
+  assert.match(settings.replace(/\s+/g, ' '), /\| AI model \| Same as all agents \|/)
+  assert.match(settings.replace(/\s+/g, ' '), /\| Effort \| Same as all agents \|/)
+  assert.match(read('site/src/content/docs/help/server.mdx').replace(/\s+/g, ' '), /an agent's own model and effort/)
+  for (const f of ['site/src/content/docs/help/costs.md', 'site/src/content/docs/use/dashboard.md', 'site/src/content/docs/use/settings.md', 'site/src/content/docs/help/server.mdx']) assert.doesNotMatch(read(f), /—|\bbot\b/i, f)
+  // The review: its own section, the last one, in the table format, with what stays open.
+  const review = read('docs/SECURITY-REVIEW.md')
+  const section = review.slice(review.lastIndexOf('\n## '))
+  assert.match(section, /^\n## Per-agent models and shadow efforts \(2026-11-13\)\n/)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| PAM-1 \|/)
+  for (let k = 1; k <= 17; k++) assert.match(section, new RegExp(`\\n\\| PAM-${k} \\|`), `PAM-${k}`)
+  for (const line of section.split('\n').filter(l => l.startsWith('| PAM-'))) assert.equal(line.split(' | ').length, 4, line.slice(0, 40))
+  for (const risk of [/dearer model without the password/i, /unknown value/i, /a shadow that never rests/i, /cost booked on the wrong price/i]) assert.match(section.replace(/\s+/g, ' '), risk)
+  assert.ok(section.includes('\nStays open:\n'))
+  assert.doesNotMatch(section, /—|\bbot\b/i)
+})

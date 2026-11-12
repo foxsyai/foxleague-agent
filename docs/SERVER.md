@@ -50,7 +50,7 @@ the server, get a certificate (for example `certbot --nginx`) and reload nginx. 
 | What | Command |
 |---|---|
 | Deploy a new version | `./deploy/deploy.sh` from your computer (restarts the service; check first that no plan is running, or its waiting actions are dropped) |
-| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report` |
+| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`, `model` |
 | Keys | the dashboard's Keys panel (saved in `/var/lib/foxleague-agent/secrets.json`, mode 600) or `agentctl.sh configure` |
 | Security score | `systemd-analyze security foxleague-agent` |
 
@@ -61,6 +61,42 @@ agent the server deleted (Delete is only for a wallet that was never used), once
 `deploy.sh` runs it at the end, and the dashboard reminds you when you add an agent. To delete never-used agents
 from the server's command line: `sudo /opt/foxleague-agent/app/deploy/agentctl.sh delete-agent 11 12` (each one is
 checked on chain and on FoxLeague first; a used one is kept and named).
+
+## An agent's own model and effort
+
+Every agent plays the model and effort of the dashboard's Strategist box unless it has its own. Give an agent its own
+in the dashboard (its Settings, AI) or here, as root. The service reads it at the agent's next plan, so nothing is
+restarted:
+
+```
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model                          # each agent: what it plays and its shadow plans
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 7 claude-opus-5-5 high    # agent 7 plays Opus 5.5 at high from its next plan
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 7 same high               # the all-agents model, its own effort
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 7 same same               # back to the Strategist box for both
+```
+
+For example, ten agents on three models, all at high effort:
+
+```
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 7 claude-opus-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 6 claude-opus-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 10 claude-opus-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 1 claude-sonnet-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 5 claude-sonnet-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 4 claude-sonnet-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 9 claude-haiku-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 8 claude-haiku-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 2 claude-haiku-5-5 high
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh model 3 claude-haiku-5-5 high
+```
+
+This is a setting on the machine, so it asks for no password, like the others made here. In the dashboard a dearer
+model or a higher effort for one agent asks for your password. Going back to "Same as all agents" there counts by the
+model and effort it lands on. A model or effort the list does not have is refused here and in the dashboard; one
+written into the database by hand is never used: the agent plays the all-agents one in its place and the log says why
+once. A model that left the list runs its successor. An agent with its own model and effort is not moved by a switch
+in the Strategist box, which still sets the manager chat and `/ask`. The dashboard shows an agent's own model on its
+tab, Telegram `/status` lists it next to the agent and its Last plan names it in the cost line.
 
 ## Shadow plans: trying another model without letting it play
 
@@ -102,9 +138,16 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
   setting switches all of them off.
 - A shadow model that is also the model that plays rests. When you later pick another playing model in the dashboard,
   its shadow plans start, so that switch asks for your dashboard password even when the new model is cheaper. With
-  several shadow models set, the switch asks for it also when the model you pick is another one of them.
+  several shadow models set, the switch asks for it also when the model you pick is another one of them. It is
+  weighed for each agent the switch moves: an agent with its own model and effort keeps them, so its shadow plans do
+  not count.
 - The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`. It is one effort for every
-  shadow model.
+  shadow model. An entry written with its own effort runs at that effort instead.
+- An entry may carry its own effort after a colon: `claude-opus-5-5:low`. An entry with an effort rests only while its
+  model plays at that very effort; the same model at another effort runs. An entry without an effort rests while its
+  model plays, at any effort, as before. A change of the playing effort that starts an entry asks for the password
+  like a dearer model, also when the new effort is lower. An entry with an effort nobody knows is left out with its
+  reason in the log. A model and effort written twice count once.
 - `AGENT_SHADOW_MODEL` (one model or several separated by commas) and `AGENT_SHADOW_EFFORT` in
   `/etc/foxleague-agent/env` do the same from the next start of the service. The database's setting wins, so `off`
   there switches it off whatever the env file says.
@@ -126,3 +169,36 @@ What it cannot tell you: which plan was the better one. A shadow plan's actions 
 rules or your limits, so read the plans yourself before you switch. A shadow request that gets no answer in 10
 minutes is given up and never asked again. Until then a model that is still answering an agent's earlier request skips
 that agent's next plan, while the other shadow models go on.
+
+### Shadow plans for one agent
+
+Each agent can have its own list: `shadow_model_agent_N`, with N as the agents are numbered in the dashboard and the
+CLI (agent 1 is `shadow_model_agent_1`). It is written like `shadow_model`, with the same rules. It holds for that
+agent only: an agent with its own list does not read the all-agents one. `off` there means none for that agent,
+whatever the all-agents list says. Empty, it follows the all-agents list again. Deleting an agent removes its list.
+`agentctl.sh model` shows each agent's shadow plans.
+
+### The same model at other efforts, on three agents
+
+To see what more or less thinking would change, let the model that plays also plan in the shadow at other efforts.
+Here agents 7, 1 and 9 play Opus 5.5, Sonnet 5.5 and Haiku 5.5 at high (with `agentctl.sh model` above). The
+all-agents list is switched off and each of the three gets its own model at low, medium and xhigh:
+
+```
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model off
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model_agent_7 claude-opus-5-5:low,claude-opus-5-5:medium,claude-opus-5-5:xhigh
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model_agent_1 claude-sonnet-5-5:low,claude-sonnet-5-5:medium,claude-sonnet-5-5:xhigh
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model_agent_9 claude-haiku-5-5:low,claude-haiku-5-5:medium,claude-haiku-5-5:xhigh
+```
+
+Each of the three then makes four requests a plan, the real one and three shadow ones, each at its model's price; the
+other seven make one. Read each agent's comparison:
+
+```
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 7
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 1
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 9
+```
+
+The report gives the numbers once per model and effort, each block named like "Opus 5.5 (low)". Then it lists every
+real plan with its model and effort ("real   Opus 5.5 (high)") and its shadow plans at the three efforts below it.
