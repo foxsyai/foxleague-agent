@@ -234,6 +234,110 @@ test('SHADOW-13 shadow-report: how many, how many with a valid tool call, action
   assert.match(shadowReport(store.shadowPlans(1), { agentIndex: 1 }), /^Shadow plans \(agent 2\): 1, /)
 })
 
+// The owner, 2026-11-12: several shadow models at once. Seen failing on 858d007: one summary over every model mixed
+// together, and one "real" line per shadow row.
+test('SHADOWS-10 shadow-report with several shadow models: the summary once per model, and the shadow plans of one real plan grouped under one real line', async () => {
+  const { shadowReport } = await import('../src/strategist/shadow.ts')
+  const HAIKU = 'claude-haiku-5-5', OPUS = 'claude-opus-5-5'
+  const store = new Store('', ':memory:')
+  /** One shadow plan, recorded at the given minute of 12 Nov. */
+  const add = (at: string, more: Partial<Row>) => {
+    const id = store.addShadowPlan(row(more))
+    store.db.prepare('UPDATE shadow_plans SET at = ? WHERE id = ?').run(`2026-11-12T${at}:07.000Z`, id)
+  }
+  const nothing = { summary: 'REAL nothing to do', actions: [], usd: 0.15 }
+  const failed = { shadow: { summary: '', actions: [] }, inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, usd: 0 }
+  // Tick A, agent 1: both shadow models answered with a plan.
+  add('10:00', { shadowModel: HAIKU })
+  add('10:00', { shadowModel: OPUS, shadow: { summary: 'SHADOW a bid', actions: [ok({ type: 'bid', nonce: 4242, foxsy: 777 }), ok({ type: 'sync' }), bad('fly_to_the_moon', 'unknown action type')] }, usd: 0.03, ms: 20_000 })
+  // Tick B, agent 2, the same words in its real plan: Opus 5.5 answered first, Haiku 5.5 declined.
+  add('10:01', { agentIndex: 1, shadowModel: OPUS, shadow: { summary: 'SHADOW waits', actions: [] }, usd: 0.02, ms: 8_000 })
+  add('10:01', { agentIndex: 1, shadowModel: HAIKU, outcome: 'refused', shadow: { summary: 'model declined to plan (cyber)', actions: [] }, usd: 0.002, ms: 1_000 })
+  // Tick C, agent 1: Opus 5.5 answered at once, Haiku 5.5 was given up ten minutes later.
+  add('10:20', { real: nothing, shadowModel: OPUS, shadow: { summary: 'SHADOW nothing either', actions: [] }, usd: 0.008, ms: 4_000 })
+  add('10:30', { real: nothing, shadowModel: HAIKU, outcome: 'timeout', ...failed, ms: 600_000 })
+  // Tick D, agent 1, an hour and a half after tick A with the very same real plan: only Haiku 5.5 (Opus 5.5 was still busy).
+  add('11:30', { shadowModel: HAIKU })
+  const text = shadowReport(store.shadowPlans(null), { agentIndex: null, last: 3 })
+  assert.deepEqual(text.split('\n'), [
+    'Shadow plans (all agents): 7 by 2 shadow models, from 2026-11-12 10:00 to 2026-11-12 11:30 UTC',
+    '',
+    'Haiku 5.5: 4 shadow plans',
+    'Models: Haiku 5.5 (medium) next to Sonnet 5.5 (medium)',
+    'With a valid tool call: 2 of 4 (1 declined, 1 no answer in time)',
+    'Actions proposed by the shadow: 4, of which 4 parsed',
+    'Same action types as the real plan of the same tick: 2 of 2',
+    'Average cost: $0.0055 a shadow plan ($0.02 in all); the real plans of the same ticks: $0.1500 each',
+    'Average time: 8 s over the 3 that answered',
+    '',
+    'Opus 5.5: 3 shadow plans',
+    'Models: Opus 5.5 (medium) next to Sonnet 5.5 (medium)',
+    'With a valid tool call: 3 of 3',
+    'Actions proposed by the shadow: 3, of which 2 parsed (the parser rejected 1)',
+    'Same action types as the real plan of the same tick: 1 of 3',
+    'Average cost: $0.0193 a shadow plan ($0.06 in all); the real plans of the same ticks: $0.1500 each',
+    'Average time: 11 s over the 3 that answered',
+    '',
+    'A shadow plan is judged by reading it: nothing here says which plan was the better one.',
+    '',
+    'The last 3:',
+    // Tick D: the same agent and the same real plan as tick A, but not the same tick.
+    '2026-11-12 11:30 agent 1',
+    '  real   Sonnet 5.5 (medium): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Haiku 5.5 (medium), $0.0100, 12 s: play_match, sync',
+    '         SHADOW the same',
+    // Tick C: one real line, then each shadow model in the order of the list of models.
+    '2026-11-12 10:20 agent 1',
+    '  real   Sonnet 5.5 (medium): no actions',
+    '         REAL nothing to do',
+    '  shadow Haiku 5.5 (medium), $0.0000, 600 s: no answer in time',
+    '         ',
+    '  shadow Opus 5.5 (medium), $0.0080, 4 s: no actions',
+    '         SHADOW nothing either',
+    // Tick B: another agent with the same real plan is another real plan.
+    '2026-11-12 10:01 agent 2',
+    '  real   Sonnet 5.5 (medium): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Haiku 5.5 (medium), $0.0020, 1 s: declined',
+    '         model declined to plan (cyber)',
+    '  shadow Opus 5.5 (medium), $0.0200, 8 s: no actions',
+    '         SHADOW waits',
+  ])
+  // Every tick when asked for more than there are, tick A last with its two shadow plans under one real line.
+  const all = shadowReport(store.shadowPlans(null), { agentIndex: null, last: 50 }).split('\n')
+  assert.equal(all[20], 'The last 4:')
+  assert.deepEqual(all.slice(-7), [
+    '2026-11-12 10:00 agent 1',
+    '  real   Sonnet 5.5 (medium): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Haiku 5.5 (medium), $0.0100, 12 s: play_match, sync',
+    '         SHADOW the same',
+    '  shadow Opus 5.5 (medium), $0.0300, 20 s: bid, sync (+1 rejected)',
+    '         SHADOW a bid',
+  ])
+  assert.equal(all.filter(l => l.startsWith('  real ')).length, 4, 'one real line per real plan')
+  assert.equal(all.filter(l => l.startsWith('  shadow ')).length, 7, 'one shadow line per shadow plan')
+  // One agent: its own shadow plans only, still per model.
+  const second = shadowReport(store.shadowPlans(1), { agentIndex: 1 }).split('\n')
+  assert.equal(second[0], 'Shadow plans (agent 2): 2 by 2 shadow models, from 2026-11-12 10:01 to 2026-11-12 10:01 UTC')
+  assert.deepEqual([second[2], second[10]], ['Haiku 5.5: 1 shadow plan', 'Opus 5.5: 1 shadow plan'])
+  assert.equal(second[20], 'The last 1:')
+  // The same model twice next to one real plan (it cannot be the same tick) is two real plans; a model that has
+  // left the list keeps its block, named by its id, after the models of the list.
+  const odd = new Store('', ':memory:')
+  for (const shadowModel of ['claude-old-1', HAIKU, HAIKU]) odd.addShadowPlan(row({ shadowModel }))
+  const lines = shadowReport(odd.shadowPlans(null)).split('\n')
+  assert.match(lines[0]!, /^Shadow plans \(all agents\): 3 by 2 shadow models, /)
+  assert.deepEqual([lines[2], lines[10]], ['Haiku 5.5: 2 shadow plans', 'claude-old-1: 1 shadow plan'])
+  assert.equal(lines[20], 'The last 2:')
+  assert.deepEqual(lines.filter(l => /^ {2}(real|shadow) /.test(l)).map(l => l.slice(2, 8).trim() + (l.includes('claude-old-1') ? ' old' : '')), ['real', 'shadow', 'real', 'shadow', 'shadow old'])
+  // One shadow model, as before this change: the report reads as it did (SHADOW-13 pins every line of it).
+  const one = new Store('', ':memory:')
+  one.addShadowPlan(row())
+  assert.match(shadowReport(one.shadowPlans(null)), /^Shadow plans \(all agents\): 1, from [^\n]+ UTC\nModels: Haiku 5\.5 \(medium\) next to Sonnet 5\.5 \(medium\)\nWith a valid tool call: 1 of 1\n/)
+})
+
 test('SHADOW-14 cli shadow-report reads next to an open database and writes nothing, also where the table does not exist yet', () => {
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-shadow-'))
   const env = {

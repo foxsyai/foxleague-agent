@@ -188,14 +188,11 @@ const listed = (p: RecordedPlan): string => {
   return (ok.length ? ok.join(', ') : 'no actions') + (bad ? ` (+${bad} rejected)` : '')
 }
 
-/**
- * The report of `cli shadow-report`: how many shadow plans, how many answered with a plan, how many of their actions
- * parsed, how often the shadow proposed the same action types as the real plan of the same tick, the average cost
- * and time, and the last pairs side by side. `rows` newest first, as the store gives them.
- */
-export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentIndex?: number | null } = {}): string {
-  const who = o.agentIndex === null || o.agentIndex === undefined ? 'all agents' : agentName(o.agentIndex)
-  if (!rows.length) return `No shadow plans recorded (${who}). Shadow plans are off unless shadow_model is set on this machine: see docs/SERVER.md.`
+const minute = (at: string): string => at.slice(0, 16).replace('T', ' ')
+const OTHER_OUTCOMES = [['refused', 'declined'], ['cut_off', 'cut off'], ['no_call', 'no tool call'], ['error', 'error'], ['timeout', 'no answer in time']] as const
+
+/** The numbers of one shadow model's plans (or of all, where there is one model): the lines from "Models" to "Average time". */
+function summaryOf(rows: ShadowPlanRow[]): string[] {
   const n = rows.length
   const count = (f: (r: ShadowPlanRow) => boolean) => rows.filter(f).length
   const plans = rows.filter(r => r.outcome === 'plan')
@@ -205,28 +202,87 @@ export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentInd
   const realUsd = rows.reduce((s, r) => s + (r.real.usd ?? 0), 0)
   const answered = rows.filter(r => r.outcome !== 'error' && r.outcome !== 'timeout')
   const pairs = [...new Set(rows.map(r => `${label(r.shadowModel)} (${r.shadowEffort}) next to ${label(r.realModel)} (${r.realEffort})`))]
-  const other = [['refused', 'declined'], ['cut_off', 'cut off'], ['no_call', 'no tool call'], ['error', 'error'], ['timeout', 'no answer in time']] as const
-  const rest = other.map(([k, text]) => [count(r => r.outcome === k), text] as const).filter(([c]) => c > 0).map(([c, text]) => `${c} ${text}`)
-  const lines = [
-    `Shadow plans (${who}): ${n}, from ${rows.at(-1)!.at.slice(0, 16).replace('T', ' ')} to ${rows[0]!.at.slice(0, 16).replace('T', ' ')} UTC`,
+  const rest = OTHER_OUTCOMES.map(([k, text]) => [count(r => r.outcome === k), text] as const).filter(([c]) => c > 0).map(([c, text]) => `${c} ${text}`)
+  return [
     `Models: ${pairs.join('; ')}`,
     `With a valid tool call: ${plans.length} of ${n}${rest.length ? ` (${rest.join(', ')})` : ''}`,
     `Actions proposed by the shadow: ${proposed}, of which ${parsed} parsed${proposed - parsed ? ` (the parser rejected ${proposed - parsed})` : ''}`,
     `Same action types as the real plan of the same tick: ${count(r => r.outcome === 'plan' && sameTypes(r.real, r.shadow))} of ${plans.length}`,
     `Average cost: $${(usd / n).toFixed(4)} a shadow plan ($${usd.toFixed(2)} in all); the real plans of the same ticks: $${(realUsd / n).toFixed(4)} each`,
     `Average time: ${answered.length ? Math.round(answered.reduce((s, r) => s + r.ms, 0) / answered.length / 1000) : 0} s over the ${answered.length} that answered`,
-    'A shadow plan is judged by reading it: nothing here says which plan was the better one.',
-    '',
-    `The last ${Math.min(o.last ?? 5, n)}:`,
   ]
-  for (const r of rows.slice(0, o.last ?? 5)) {
+}
+
+/** The shadow models of the rows: those of the list of models in its order, then any other in the order met. */
+function modelsOf(rows: ShadowPlanRow[]): string[] {
+  const met = [...new Set(rows.map(r => r.shadowModel))]
+  const listedFirst = Object.keys(MODELS).filter(id => met.includes(id))
+  return [...listedFirst, ...met.filter(id => !listedFirst.includes(id))]
+}
+
+/** The shadow plans of one real plan are recorded within this long of each other: each is given up after SHADOW_TIMEOUT_MS. */
+const SAME_TICK_MS = SHADOW_TIMEOUT_MS + 60_000
+
+/**
+ * The rows grouped by the real plan they stand next to, newest first: the same agent, the same recorded real plan
+ * (model, effort and the plan itself, with its cost), recorded within the time one tick's shadow plans can take, and
+ * each shadow model once. The table has no column for it and needs none. Two rows that only look alike (the same
+ * agent with the very same real plan twice) are told apart by the time or by a shadow model met twice.
+ */
+function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
+  const groups: ShadowPlanRow[][] = []
+  const newest = new Map<string, ShadowPlanRow[]>()
+  for (const r of rows) {
+    const key = JSON.stringify([r.agentIndex, r.realModel, r.realEffort, r.real])
+    const group = newest.get(key)
+    if (group && !group.some(x => x.shadowModel === r.shadowModel) && Date.parse(group[0]!.at) - Date.parse(r.at) <= SAME_TICK_MS) group.push(r)
+    else {
+      const next = [r]
+      newest.set(key, next)
+      groups.push(next)
+    }
+  }
+  return groups
+}
+
+/**
+ * The report of `cli shadow-report`: how many shadow plans, how many answered with a plan, how many of their actions
+ * parsed, how often the shadow proposed the same action types as the real plan of the same tick and the average cost
+ * and time, once per shadow model when there are several; then the last real plans, each with its shadow plans
+ * below it. `rows` newest first, as the store gives them.
+ */
+export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentIndex?: number | null } = {}): string {
+  const who = o.agentIndex === null || o.agentIndex === undefined ? 'all agents' : agentName(o.agentIndex)
+  if (!rows.length) return `No shadow plans recorded (${who}). Shadow plans are off unless shadow_model is set on this machine: see docs/SERVER.md.`
+  const models = modelsOf(rows)
+  const span = `from ${minute(rows.at(-1)!.at)} to ${minute(rows[0]!.at)} UTC`
+  const lines: string[] = []
+  if (models.length === 1) lines.push(`Shadow plans (${who}): ${rows.length}, ${span}`, ...summaryOf(rows))
+  else {
+    lines.push(`Shadow plans (${who}): ${rows.length} by ${models.length} shadow models, ${span}`)
+    for (const model of models) {
+      const own = rows.filter(r => r.shadowModel === model)
+      lines.push('', `${label(model)}: ${own.length} shadow plan${own.length === 1 ? '' : 's'}`, ...summaryOf(own))
+    }
+    lines.push('')
+  }
+  const ticks = byRealPlan(rows)
+  const last = ticks.slice(0, o.last ?? 5)
+  lines.push('A shadow plan is judged by reading it: nothing here says which plan was the better one.', '', `The last ${last.length}:`)
+  for (const tick of last) {
+    // The first recorded of the group is the nearest to the moment the real plan was made.
+    const first = tick.at(-1)!
     lines.push(
-      `${r.at.slice(0, 16).replace('T', ' ')} ${agentName(r.agentIndex)}`,
-      `  real   ${label(r.realModel)} (${r.realEffort}): ${listed(r.real)}`,
-      `         ${oneLine(r.real.summary).slice(0, 200)}`,
-      `  shadow ${label(r.shadowModel)} (${r.shadowEffort}), $${r.usd.toFixed(4)}, ${Math.round(r.ms / 1000)} s: ${r.outcome === 'plan' ? listed(r.shadow) : (other.find(([k]) => k === r.outcome)?.[1] ?? r.outcome)}`,
-      `         ${oneLine(r.shadow.summary).slice(0, 200)}`,
+      `${minute(first.at)} ${agentName(first.agentIndex)}`,
+      `  real   ${label(first.realModel)} (${first.realEffort}): ${listed(first.real)}`,
+      `         ${oneLine(first.real.summary).slice(0, 200)}`,
     )
+    for (const r of [...tick].sort((a, b) => models.indexOf(a.shadowModel) - models.indexOf(b.shadowModel))) {
+      lines.push(
+        `  shadow ${label(r.shadowModel)} (${r.shadowEffort}), $${r.usd.toFixed(4)}, ${Math.round(r.ms / 1000)} s: ${r.outcome === 'plan' ? listed(r.shadow) : (OTHER_OUTCOMES.find(([k]) => k === r.outcome)?.[1] ?? r.outcome)}`,
+        `         ${oneLine(r.shadow.summary).slice(0, 200)}`,
+      )
+    }
   }
   return lines.join('\n')
 }
