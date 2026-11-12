@@ -5,6 +5,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { UpdateView } from '../src/update/updater.ts'
 import { LOGIN_LINES, freshInstall, guided, realTree, sh, stubs } from './audit-1111/install-helpers.ts'
 import { REPO, tmp } from './update-fixtures.ts'
 
@@ -70,4 +71,62 @@ test('MAC-2: the folder size is the one measured on the Mac, said the same way i
   const places = ['README.md', 'INSTALL.md', 'install.sh', 'get.sh', 'get.ps1', 'src/web/dashboard.html', ...filesUnder('site/src'), ...filesUnder('docs').filter(f => f !== join('docs', 'SECURITY-REVIEW.md'))]
   assert.ok(places.length > 25, `${places.length} files`)
   for (const f of places) assert.doesNotMatch(flat(f), /\b190 ?MB\b/, f)
+})
+
+type Element = { hidden: boolean; textContent: string; className: string }
+/** The dashboard's elements of the update notice, as the page starts them (the button reads Update now). */
+function noticeElements(): Record<string, Element> {
+  return { upBtn: { hidden: true, textContent: 'Update now', className: 'btn sm go' } }
+}
+/** The dashboard's own renderUpdate, run on stand-in elements: what the notice says and what its button reads. */
+function notice(update: Partial<UpdateView>, els = noticeElements()): { text: string; button: boolean; label: string; tone: string } {
+  const html = read('src/web/dashboard.html')
+  const fn = html.slice(html.indexOf('function renderUpdate() {'), html.indexOf('async function startUpdate() {'))
+  assert.ok(fn.startsWith('function renderUpdate()'), 'renderUpdate was not found in the dashboard')
+  const $ = (id: string): Element => (els[id] ??= { hidden: false, textContent: '', className: '' })
+  const view: UpdateView = { installed: '1.0.2', available: null, checkedAt: null, checkError: null, canInstall: true, how: null, state: 'idle', last: null, enabled: true, restarts: true, waiting: null, ...update }
+  new Function('S', '$', 'toast', 'updating', `${fn}\nrenderUpdate()`)({ instance: { update: view } }, $, () => undefined, null)
+  return { text: $('upText').textContent, button: !$('upBtn').hidden, label: $('upBtn').textContent, tone: $('upBanner').className }
+}
+
+test('MAC-3: after an update that was undone, the notice says that nothing has to be done and offers the same version as Try again', () => {
+  // The updater's own message, as the Mac showed it (src/update/updater.ts, unchanged: Telegram sends it too).
+  const message = 'The update to 1.0.3 did not start and was undone: you run 1.0.2 as before. Your wallet, settings and history are untouched. It is safe to try again later.'
+  const undone = { kind: 'undone' as const, version: '1.0.3', at: new Date().toISOString(), message }
+  const v103 = { version: '1.0.3', notes: 'Medicine for injured cards.', published: '2026-11-12T20:00:00Z' }
+  const els = noticeElements()
+  const same = notice({ available: v103, last: undone }, els)
+  assert.ok(same.text.startsWith(message), same.text)
+  assert.match(same.text, /Nothing has to be done: the agent keeps running 1\.0\.2\./)
+  assert.doesNotMatch(same.text, /Version 1\.0\.3 is out/, 'the line the owner read as "press Update now to get 1.0.2 back"')
+  assert.equal(same.button, true)
+  assert.equal(same.label, 'Try again')
+  // Where the button cannot install, the notice still says that nothing has to be done, and what would try again.
+  const byHand = notice({ available: v103, last: undone, canInstall: false, how: 'this install is a git checkout: update it in a terminal with ./install.sh --update' })
+  assert.equal(byHand.button, false)
+  assert.match(byHand.text, /Nothing has to be done: the agent keeps running 1\.0\.2\. To try 1\.0\.3 again: this install is a git checkout/)
+
+  // A newer release than the one that was undone is a new offer: the usual words and Update now, on the same page.
+  const newer = notice({ available: { ...v103, version: '1.0.4' }, last: undone }, els)
+  assert.match(newer.text, /Version 1\.0\.4 is out\. You run 1\.0\.2\.$/)
+  assert.doesNotMatch(newer.text, /Nothing has to be done/)
+  assert.equal(newer.label, 'Update now')
+  // Without an undo, nothing changes.
+  const plain = notice({ available: v103 })
+  assert.equal(plain.text, 'Version 1.0.3 is out. You run 1.0.2.')
+  assert.equal(plain.label, 'Update now')
+  // An undo of a day ago is no longer shown: the offer is the usual one.
+  const old = notice({ available: v103, last: { ...undone, at: new Date(Date.now() - 2 * 86_400_000).toISOString() } })
+  assert.equal(old.text, 'Version 1.0.3 is out. You run 1.0.2.')
+  assert.equal(old.label, 'Update now')
+
+  // The info bubble and the pages tell the same.
+  const html = flat('src/web/dashboard.html')
+  const bubble = html.slice(html.indexOf("update: ['Version and updates'"), html.indexOf("how: ['How it works'"))
+  assert.match(bubble, /says that nothing has to be done/)
+  assert.match(bubble, /<b>Try again<\/b>/)
+  for (const f of ['site/src/content/docs/help/update.md', 'site/src/content/docs/use/dashboard.md', 'site/src/content/docs/help/troubleshooting.md']) {
+    assert.match(flat(f), /\*\*Try again\*\*/, f)
+    assert.match(flat(f), /nothing has to be done/i, f)
+  }
 })

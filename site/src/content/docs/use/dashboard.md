@@ -22,8 +22,10 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   notice says so and the page comes back by itself after the restart. An agent started by hand with `./run.sh`
   does not restart by itself: there the notice says that the new version is in place and how to start it. For a
   day it then shows how the update went:
-  done, not installed and why, or undone because the new version did not start. An install that cannot update
-  itself shows what to do instead of the button ([Update](/help/update/)).
+  done, not installed and why, or undone because the new version did not start. After an undo nothing has to be
+  done: the notice says so. While that same version is on offer its button reads **Try again**, to install it once
+  more only if you want to. An install that cannot update itself shows what to do instead of the button
+  ([Update](/help/update/)).
 
 ## The totals
 

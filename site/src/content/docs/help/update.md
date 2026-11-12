@@ -61,6 +61,11 @@ and tells you, in the dashboard and on Telegram: "The update to ... did not star
 before." That takes about a minute and a half. Your wallet, settings and history are untouched, and it is safe to
 try again later.
 
+Nothing has to be done then: the agent keeps running the version it ran before. While the same new version is on
+offer, the dashboard's notice says so and its button reads **Try again** instead of **Update now**: press it only
+if you want to install that version once more. A version newer than the one that was undone is offered as usual,
+with **Update now**.
+
 The background service starts the agent again after every exit, also when a new version ends at once without an
 error, so the undo does not wait for you. Stopping the agent yourself (`systemctl --user stop foxleague-agent`, or
 the uninstall) stays a stop.
