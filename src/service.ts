@@ -1321,9 +1321,14 @@ export class Service {
    * is one. `own`: whether it differs from the all-agents pair.
    */
   aiOf(agent: Pick<AgentRow, 'settings'>): { model: string; effort: Effort; ignored: string[]; own: boolean } {
-    const all = this.strategist ? { model: this.strategist.model, effort: this.strategist.effort } : strategistChoice(this.store, this.cfg, () => undefined)
+    const all = this.allAi()
     const ai = agentChoice(agent.settings, all)
     return { ...ai, own: ai.model !== all.model || ai.effort !== all.effort }
+  }
+
+  /** The all-agents model and effort: the strategist's, or without one (no AI key yet) the pair saved for when there is one. */
+  allAi(): { model: string; effort: Effort } {
+    return this.strategist ? { model: this.strategist.model, effort: this.strategist.effort } : strategistChoice(this.store, this.cfg, () => undefined)
   }
 
   /** " · Haiku 5.5 at high" for an agent that plays another model or effort than the all-agents ones, else nothing. */

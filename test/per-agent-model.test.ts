@@ -413,9 +413,9 @@ test('PAM-8 wakesShadow reads model and effort: an entry with an effort wakes wh
 })
 
 /** A service with the web UI on a free port, timers off and a signed-in session. */
-async function webService(o: { agents?: number; all?: string } = {}) {
+async function webService(o: { agents?: number; all?: string; noKey?: boolean } = {}) {
   const { Service } = await import('../src/service.ts')
-  const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-pam-web-')), o.all))
+  const svc = new Service({ ...testConfig(mkdtempSync(join(tmpdir(), 'foxagent-pam-web-')), o.all), ...(o.noKey ? { anthropicApiKey: undefined } : {}) })
   svc.ensureAgents()
   for (let i = 1; i < (o.agents ?? 1); i++) svc.store.addAgent(i, (svc as unknown as Inner).wallet(i).address)
   ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
@@ -1008,4 +1008,60 @@ test('R65A-3 a new Anthropic key from the dashboard reaches the strategist of ev
   // The same objects, each with its own model: the next plan of each agent goes out with the new key.
   assert.deepEqual([m.inner.strategistFor(HAIKU), m.inner.strategistFor(OPUS)], own)
   assert.deepEqual(own.map(s => s.model), [HAIKU, OPUS])
+})
+
+test('R65A-4 with the strategist off (no AI key yet) the page resolves "Same as all agents" to the pair the server lands on: an unchanged save and a lowered cap are one click, the line under the fields names a model, the Strategist box still says off', async () => {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const rules = web as unknown as { agentAiNeedsPassword: (current: Pair, next: Pair, shadows: readonly string[]) => boolean }
+  const models = Object.keys(strategist.MODELS).map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
+  const efforts = [...strategist.EFFORTS]
+  const ids = Object.keys(strategist.MODELS)
+  // What the server sends with no key: model and effort null (the Strategist box says off), and the saved all-agents pair.
+  const all = { model: SONNET, effort: 'medium' }
+  const S = { instance: { model: null, effort: null, aiAll: all, models, efforts, shadowModels: [], ownAi: 0 } }
+  const costsMore = pageFunctions<(b: unknown, form: unknown) => boolean>(['agentAiCostsMore'], S)
+  const values = pageFunctions<(b: unknown, st: unknown) => { aiModel: string; aiEffort: string }>(['aiFormValues'], S)
+  const hint = pageFunctions<(b: unknown, form: unknown) => string>(['ownAiHint'], S)
+  for (const ownModel of ['', ...ids]) {
+    for (const ownEffort of ['', 'low', 'high']) {
+      const settings = { ...DEFAULT_SETTINGS, aiModel: ownModel, aiEffort: ownEffort }
+      const cur = strategist.agentChoice(settings, all)
+      const b = { settings, ai: { model: cur.model, effort: cur.effort, own: strategist.ownAi(settings), ignored: cur.ignored, shadows: [`${SONNET}:low`] } }
+      // An unchanged save (a lowered cap, say) asks nothing; the line under the fields names what it plays.
+      const same = values(b, settings)
+      assert.equal(costsMore(b, same), false, `no key, ${ownModel}/${ownEffort}: an unchanged save asked for the password`)
+      assert.doesNotMatch(hint(b, same), /null|undefined/, `${ownModel}/${ownEffort}: ${hint(b, same)}`)
+      // Every other choice: the page asks exactly when the server does.
+      for (const aiModel of ['', ...ids]) {
+        for (const aiEffort of ['', ...efforts]) {
+          const next = strategist.agentChoice({ aiModel, aiEffort }, all)
+          assert.equal(costsMore(b, { aiModel, aiEffort }), rules.agentAiNeedsPassword(cur, next, b.ai.shadows), `no key, ${ownModel}/${ownEffort} to ${aiModel}/${aiEffort}`)
+          assert.doesNotMatch(hint(b, { aiModel, aiEffort }), /null|undefined/)
+        }
+      }
+    }
+  }
+  const follows = { ai: { model: SONNET, effort: 'medium', own: { model: null, effort: null }, ignored: [], shadows: [] } }
+  assert.equal(hint(follows, { aiModel: '', aiEffort: '' }), 'Plays Sonnet 5.5 at medium effort, the same as all agents.')
+  assert.equal(hint(follows, { aiModel: HAIKU, aiEffort: '' }), 'Plays Sonnet 5.5 at medium effort, the same as all agents. After saving: Haiku 5.5 at medium effort.')
+  assert.deepEqual(pageFunctions<() => string[][]>(['aiModelOptions'], S)()[0], ['', 'Same as all agents (Sonnet 5.5)'])
+  assert.deepEqual(pageFunctions<() => string[][]>(['aiEffortOptions'], S)()[0], ['', 'Same as all agents (medium)'])
+  // With a key the pair is the strategist's, the same as instance.model and effort: everything as before (PAM-16).
+  // The server: no key, model and effort stay null (the Strategist box and the last plan say off), aiAll is the saved pair.
+  const { svc, server, post, state } = await webService({ noKey: true })
+  try {
+    assert.equal(svc.strategist, null)
+    const st = await state()
+    assert.deepEqual([st.instance.model, st.instance.effort, st.instance.aiAll], [null, null, { model: SONNET, effort: 'medium' }])
+    const res = await post('/api/agents/0/settings', { dailyCapUsd: 1, aiModel: '', aiEffort: '' })
+    assert.equal(res.status, 200, `a lowered cap with no key is one click on the server: ${await res.text()}`)
+    const page = pageFunctions<(b: unknown, form: unknown) => boolean>(['agentAiCostsMore'], st)
+    const b = st.agents[0]!
+    assert.equal(page(b, pageFunctions<(b: unknown, st: unknown) => { aiModel: string; aiEffort: string }>(['aiFormValues'], st)(b, b.settings)), false, 'and on the page')
+  } finally {
+    server.close()
+  }
+  const strat = html.match(/function renderStrat\(\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+  assert.match(strat, /if \(!i\.model\) \{ \$\('stratApply'\)\.hidden = true; \$\('kModelS'\)\.textContent = 'off \(no ANTHROPIC_API_KEY\)'; return \}/, 'the Strategist box says off')
+  assert.match(html, /\$\('lastPlan'\)\.textContent = b\.lastPlan \|\| 'No plan yet\.' \+ \(S\.instance\.model \? '' : ' The strategist is off \(no ANTHROPIC_API_KEY\)\.'\)/)
 })

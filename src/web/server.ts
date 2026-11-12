@@ -264,6 +264,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         liveEnabled: service.executor.liveEnabled,
         model: service.strategist ? service.strategist.model : null,
         effort: service.strategist ? service.strategist.effort : null,
+        // The all-agents pair an agent's "Same as all agents" lands on, also while the strategist is off (model and
+        // effort above are null then, which the page reads as off): the page resolves an agent's AI against it.
+        aiAll: service.allAi(),
         // Each with the lowest and the highest of its prices over its rate cards: the page asks for the password by the same rule as raisesAiSpend.
         models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price, ...(m.long ? { long: m.long } : {}), ...priceRange(id)! })),
         efforts: EFFORTS,

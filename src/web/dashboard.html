@@ -691,12 +691,12 @@ function fillOptions(sel, options, value) {
 // The choices of an agent's own AI: "Same as all agents" first (the Strategist box), then the four models with their
 // list price, or the five efforts.
 function aiModelOptions() {
-  const i = S.instance, cur = i.models.find(m => m.id === i.model)
+  const i = S.instance, all = i.aiAll || { model: i.model, effort: i.effort }, cur = i.models.find(m => m.id === all.model)
   return [['', 'Same as all agents' + (cur ? ' (' + cur.label + ')' : '')], ...i.models.map(m => [m.id, m.label + ' · $' + m.price[0] + ' / $' + m.price[1] + ' per M tokens'])]
 }
 function aiEffortOptions() {
-  const i = S.instance
-  return [['', 'Same as all agents' + (i.effort ? ' (' + i.effort + ')' : '')], ...i.efforts.map(e => [e, e])]
+  const i = S.instance, all = i.aiAll || { model: i.model, effort: i.effort }
+  return [['', 'Same as all agents' + (all.effort ? ' (' + all.effort + ')' : '')], ...i.efforts.map(e => [e, e])]
 }
 // The line under the AI fields: what the agent plays, what it would play after saving, its shadow plans set on the
 // server and a value saved on the server that is not used.
@@ -705,7 +705,8 @@ function ownAiHint(b, form) {
   const name = id => (i.models.find(m => m.id === id) || { label: id }).label
   const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
   const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a.join('')
-  const next = { model: form.aiModel || i.model, effort: form.aiEffort || i.effort }
+  const all = i.aiAll || { model: i.model, effort: i.effort }
+  const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
   const parts = ['Plays ' + name(ai.model) + ' at ' + ai.effort + ' effort, ' + (own.model || own.effort ? 'its own.' : 'the same as all agents.')]
   if (next.model !== ai.model || next.effort !== ai.effort) parts.push('After saving: ' + name(next.model) + ' at ' + next.effort + ' effort.')
   if ((ai.shadows || []).length) parts.push('Shadow plans set on the server for ' + (ai.ownShadows ? 'this agent' : 'every agent') + ': ' + list(ai.shadows.map(entry)) + '.')
@@ -1013,10 +1014,11 @@ function aiRaiseText(model) {
 }
 // One agent's own model and effort (agentAiNeedsPassword in server.ts, the same rule): from the pair it plays to the
 // pair it would play after saving (its own where the form gives one, else the all-agents one), a dearer model, a higher
-// effort or a switch that starts one of its shadow plans asks for the password.
+// effort or a switch that starts one of its shadow plans asks for the password. "Same as all agents" is the pair the
+// server sends as aiAll: the Strategist box's, also while it is off (no AI key yet; agent review of PR #65).
 function agentAiCostsMore(b, form) {
-  const i = S.instance, ai = b.ai || {}
-  const next = { model: form.aiModel || i.model, effort: form.aiEffort || i.effort }
+  const i = S.instance, ai = b.ai || {}, all = i.aiAll || { model: i.model, effort: i.effort }
+  const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
   if (next.model === ai.model && next.effort === ai.effort) return false
   const was = i.models.find(m => m.id === ai.model), will = i.models.find(m => m.id === next.model)
   if (!was || !will) return true
@@ -1029,7 +1031,8 @@ function agentAiCostsMore(b, form) {
 function agentAiText(b, form) {
   const i = S.instance, ai = b.ai || {}
   const name = id => (i.models.find(m => m.id === id) || { label: id }).label
-  const next = { model: form.aiModel || i.model, effort: form.aiEffort || i.effort }
+  const all = i.aiAll || { model: i.model, effort: i.effort }
+  const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
   const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
   const woken = (ai.shadows || []).filter(e => rests(e, ai.model, ai.effort) && !rests(e, next.model, next.effort))
   if (!woken.length) return 'A model with a higher price or a higher effort costs more on every plan of this agent. The AI spend has no cap of its own. Your password confirms it.'
