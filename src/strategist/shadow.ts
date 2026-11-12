@@ -2,8 +2,11 @@
 // second model and only records what that model would have done, so an owner can compare a cheaper model with the one
 // that plays before switching. A shadow plan is never carried out, never shown to the playing model and changes
 // nothing the agents play by. Since 2026-11-12 several shadow models can be set at once: each gets the request and is
-// recorded by itself. This module holds what is plain data about a shadow plan: the setting, the copy that is kept
-// and the report. It knows nothing of wallets, the chain or the code that carries actions out.
+// recorded by itself. Since 2026-11-13 each entry may carry its own effort (`claude-opus-5-5:low`) and each agent may
+// have its own list (kv shadow_model_agent_N, N as agents are numbered from 1), so the same model can plan in the
+// shadow at other efforts next to the one that plays. This module holds what is plain data about a shadow plan: the
+// setting, the copy that is kept and the report. It knows nothing of wallets, the chain or the code that carries
+// actions out.
 
 import type { Store } from '../store/db.ts'
 import { agentName } from '../names.ts'
@@ -56,11 +59,15 @@ export interface ShadowPlanRow {
   ms: number
 }
 
-/** The shadow models that run next to one real plan, their one effort and why an entry of the setting does not run. */
+/** The shadow models that run next to one real plan, their efforts and why an entry of the setting does not run. */
 export interface ShadowChoices {
-  /** The models that get this plan's request, in the order they were written, each once. Empty: no shadow plans. */
+  /**
+   * The entries that get this plan's request, in the order they were written, each (model and effort) once: a model
+   * id, or a model id and its effort after a colon (`claude-opus-5-5:low`). Empty: no shadow plans. shadowRuns reads
+   * them as models and efforts.
+   */
   readonly models: string[]
-  /** One effort for every shadow model. */
+  /** The effort of an entry written without its own (shadow_effort, else medium). */
   readonly effort: Effort
   /** For the log: one reason per entry that was left out (not on the list or the model that plays). */
   readonly leftOut: string[]
@@ -69,39 +76,102 @@ export interface ShadowChoices {
 /** The entries of a setting that are read: the list of models has four, and a setting typed by hand must not fill the log. */
 const MAX_ENTRIES = 16
 
+/** The kv key of one agent's own list of shadow models: N as agents are numbered in the CLI and the dashboard, from 1. */
+export const agentShadowKey = (index: number): string => `shadow_model_agent_${index + 1}`
+
 /**
- * The setting as written: the database's (kv shadow_model), else AGENT_SHADOW_MODEL from the environment. One model
- * id or several separated by commas, each once. Not set, empty or "off" means none; "off" anywhere among several
- * switches all of them off, so a half-typed setting never costs anything.
+ * The list that holds for an agent: its own (kv shadow_model_agent_N) when that holds anything but blanks, else the
+ * all-agents one (kv shadow_model, else AGENT_SHADOW_MODEL from the environment). Without an agent, the all-agents one.
  */
-function entriesSet(store: Store): { read: string[]; unread: number } {
-  const ids = [...new Set((store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '').split(',').map(id => id.trim()).filter(Boolean))]
+function listOf(store: Store, agentIndex?: number | null): { text: string; own: boolean } {
+  if (agentIndex !== undefined && agentIndex !== null) {
+    const own = store.getKv(agentShadowKey(agentIndex))
+    if (own !== undefined && own.trim()) return { text: own, own: true }
+  }
+  return { text: store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '', own: false }
+}
+
+/** Whether an agent has a list of its own, set on the machine (else it follows the all-agents list). */
+export function hasOwnShadowList(store: Store, agentIndex: number): boolean {
+  return listOf(store, agentIndex).own
+}
+
+/**
+ * The setting as written: entries separated by commas, each once. Not set, empty or "off" means none; "off" anywhere
+ * among several switches all of them off, so a half-typed setting never costs anything.
+ */
+function entriesSet(store: Store, agentIndex?: number | null): { read: string[]; unread: number } {
+  const ids = [...new Set(listOf(store, agentIndex).text.split(',').map(id => id.trim()).filter(Boolean))]
   if (ids.some(id => id.toLowerCase() === 'off')) return { read: [], unread: 0 }
   return { read: ids.slice(0, MAX_ENTRIES), unread: Math.max(0, ids.length - MAX_ENTRIES) }
 }
 
+/** One entry of the setting: its model and its own effort, null when it has none (`claude-opus-5-5:low`, `claude-haiku-5-5`). */
+export function entryOf(entry: string): { model: string; effort: string | null } {
+  const at = entry.indexOf(':')
+  return at < 0 ? { model: entry, effort: null } : { model: entry.slice(0, at), effort: entry.slice(at + 1) }
+}
+
+const isEffort = (effort: string): effort is Effort => (EFFORTS as readonly string[]).includes(effort)
+
+/** An entry that can run: a model of the list, and no effort or one of the five. */
+const runnable = (entry: string): boolean => {
+  const e = entryOf(entry)
+  return isKnownModel(e.model) && (e.effort === null || isEffort(e.effort))
+}
+
 /**
- * The shadow models of a plan and their effort: the database's setting (kv shadow_model, shadow_effort), else
- * AGENT_SHADOW_MODEL and AGENT_SHADOW_EFFORT from the environment. shadow_model holds one model id or several
- * separated by commas. Not set, empty or "off" means no shadow plans, which is the default. An entry the list of
- * models does not have and the model that plays are left out, each with its reason for the log; a repeated entry
- * counts once. The effort is one for every shadow model. There is no dashboard control and no Telegram command for
- * any of it: it adds AI spend, so it is switched on only on the machine itself.
+ * Whether an entry rests while this model and effort play: one with its own effort only at that very model and effort,
+ * one without at its model whatever the effort, as before entries had efforts. `playing` given as a model alone (no
+ * effort known) rests only the entries without an effort.
  */
-export function shadowChoices(store: Store, playing: string): ShadowChoices {
-  const { read, unread } = entriesSet(store)
+export function rests(entry: string, playing: string | { model: string; effort: string | null }): boolean {
+  const e = entryOf(entry)
+  const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
+  return e.model === p.model && (e.effort === null || e.effort === p.effort)
+}
+
+/**
+ * The shadow models of a plan and their efforts. The list is the agent's own (kv shadow_model_agent_N) when it has
+ * one, else the all-agents one: the database's setting (kv shadow_model), else AGENT_SHADOW_MODEL from the
+ * environment. It holds one entry or several separated by commas, each a model id with or without its effort after a
+ * colon. Not set, empty or "off" means no shadow plans, which is the default. An entry without an effort takes
+ * shadow_effort (else AGENT_SHADOW_EFFORT, else medium; one nobody knows is medium). An entry the list of models does
+ * not have, an effort that is not one of the five and an entry that rests (see `rests`) are left out, each with its
+ * reason for the log; a repeated model and effort counts once. There is no dashboard control and no Telegram command
+ * for any of it: it adds AI spend, so it is switched on only on the machine itself.
+ */
+export function shadowChoices(store: Store, playing: string | { model: string; effort: string | null }, agentIndex?: number | null): ShadowChoices {
+  const { read, unread } = entriesSet(store, agentIndex)
+  const fallback = (store.getKv('shadow_effort') ?? process.env.AGENT_SHADOW_EFFORT ?? 'medium').trim()
+  const effort: Effort = isEffort(fallback) ? fallback : 'medium'
   const models: string[] = []
   const leftOut: string[] = []
+  const pairs = new Set<string>()
   for (const id of read) {
-    // A setting typed by hand: only what a model id can hold reaches the log.
+    // A setting typed by hand: only what a model id and an effort can hold reaches the log.
     const named = id.slice(0, 60).replace(/[^\w.:-]/g, '?')
-    if (!isKnownModel(id)) leftOut.push(`${named} is not a model on the list (${Object.keys(MODELS).join(', ')})`)
-    else if (id === playing) leftOut.push(`${named} is the model that plays, and a shadow plan needs another one`)
-    else models.push(id)
+    const e = entryOf(id)
+    if (!isKnownModel(e.model)) leftOut.push(`${named} is not a model on the list (${Object.keys(MODELS).join(', ')})`)
+    else if (e.effort !== null && !isEffort(e.effort)) leftOut.push(`${named} has an effort that is not one of ${EFFORTS.join(', ')}`)
+    else if (rests(id, playing)) {
+      leftOut.push(e.effort === null ? `${named} is the model that plays, and a shadow plan needs another one` : `${named} is the model and effort that play, and a shadow plan needs another model or effort`)
+    } else {
+      const pair = `${e.model}:${e.effort ?? effort}`
+      if (!pairs.has(pair)) models.push(id)
+      pairs.add(pair)
+    }
   }
   if (unread) leftOut.push(`${unread} more entries are not read (${MAX_ENTRIES} at most)`)
-  const effort = (store.getKv('shadow_effort') ?? process.env.AGENT_SHADOW_EFFORT ?? 'medium').trim()
-  return { models, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium', leftOut }
+  return { models, effort, leftOut }
+}
+
+/** The models and efforts that get a plan's request, from its choices: each entry with its own effort or the shared one. */
+export function shadowRuns(choices: ShadowChoices): { model: string; effort: Effort }[] {
+  return choices.models.map(id => {
+    const e = entryOf(id)
+    return { model: e.model, effort: e.effort !== null && isEffort(e.effort) ? e.effort : choices.effort }
+  })
 }
 
 /**
@@ -114,13 +184,14 @@ export function shadowNote(choices: ShadowChoices): string | null {
 }
 
 /**
- * The shadow models that are set, whatever model plays: the entries of the setting that the list of models has, each
- * once; none when nothing is set or it is "off". One of them rests while it is the model that plays and runs under
- * any other, which is why a switch of the playing model away from it starts its shadow plans and asks for the
- * password (wakesShadow in src/web/server.ts).
+ * The shadow entries that are set for an agent (its own list, else the all-agents one) or, without an agent, the
+ * all-agents ones, whatever model plays: the entries that can run (a model of the list, no effort or one of the five),
+ * each once; none when nothing is set or it is "off". One of them rests while its model (and its effort, when it has
+ * one) plays and runs under any other, which is why a switch of the playing model or effort away from it starts its
+ * shadow plans and asks for the password (wakesShadow in src/web/server.ts).
  */
-export function shadowModelsSet(store: Store): string[] {
-  return entriesSet(store).read.filter(id => isKnownModel(id))
+export function shadowModelsSet(store: Store, agentIndex?: number | null): string[] {
+  return entriesSet(store, agentIndex).read.filter(runnable)
 }
 
 /** The most a rejected proposal may take in a record: a model can write anything there. */

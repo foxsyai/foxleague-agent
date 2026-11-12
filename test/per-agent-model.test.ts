@@ -112,7 +112,7 @@ type Inner = {
  * A service with `agents` agents whose strategists, playing and shadow, all talk to one fake Anthropic client that
  * keeps every request; the executor is replaced by a recorder. `own` gives agents their own model and effort.
  */
-async function service(o: { agents?: number; all?: string; own?: Record<number, { aiModel?: string; aiEffort?: string }>; answer?: Answer; shadowAnswer?: Answer } = {}) {
+async function service(o: { agents?: number; all?: string; own?: Record<number, { aiModel?: string; aiEffort?: string }>; answer?: Answer } = {}) {
   const { Service } = await import('../src/service.ts')
   const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-pam-')), o.all))
   svc.ensureAgents()
@@ -123,8 +123,7 @@ async function service(o: { agents?: number; all?: string; own?: Record<number, 
   const client = {
     beta: { messages: { stream: (p: Request) => ({ finalMessage: async () => {
       requests.push(p)
-      const shadow = p.messages[0]!.content.includes('SHADOWTEST') // never: every request is a real plan's words
-      return (shadow ? o.shadowAnswer : undefined)?.(p) ?? (o.answer ?? planned)(p)
+      return (o.answer ?? planned)(p)
     } }) } },
   }
   ;(svc.strategist as unknown as { client: unknown }).client = client
@@ -240,4 +239,147 @@ test('PAM-5 the game manual\'s cache belongs to one model and effort: warmth and
   assert.equal(ask(m.svc.strategist!, SONNET, 'medium'), true)
   m.inner.nextAt.set(0, now + 120 * 60_000)
   assert.equal(ask(m.inner.strategistFor(HAIKU), HAIKU, 'high'), false)
+})
+
+// ---- shadow plans per agent, each entry with its own effort ----
+
+type Choices = { models: string[]; effort: string; leftOut: string[] }
+type ShadowModule = {
+  shadowChoices: (store: Store, playing: string | { model: string; effort: string }, agentIndex?: number | null) => Choices
+  shadowModelsSet: (store: Store, agentIndex?: number | null) => string[]
+  shadowRuns?: (choices: Choices) => { model: string; effort: string }[]
+}
+
+test('PAM-6 the setting: an entry may carry its effort (model:effort); each agent may have its own list (shadow_model_agent_N); an entry with an effort rests only at that model and effort, one without rests at its model as before', async () => {
+  const shadow = (await import('../src/strategist/shadow.ts')) as unknown as ShadowModule
+  assert.equal(typeof shadow.shadowRuns, 'function', 'shadow.ts exports shadowRuns')
+  const prev = [process.env.AGENT_SHADOW_MODEL, process.env.AGENT_SHADOW_EFFORT]
+  delete process.env.AGENT_SHADOW_MODEL
+  delete process.env.AGENT_SHADOW_EFFORT
+  try {
+    const store = new Store('', ':memory:')
+    const runs = (playing: { model: string; effort: string }, index: number | null = null) => shadow.shadowRuns!(shadow.shadowChoices(store, playing, index))
+    const opusHigh = { model: OPUS, effort: 'high' }
+    // The owner's test on agent 7 (index 6): Opus 5.5 at three other efforts next to Opus 5.5 at high.
+    store.setKv('shadow_model_agent_7', `${OPUS}:low,${OPUS}:medium,${OPUS}:xhigh`)
+    assert.deepEqual(shadow.shadowChoices(store, opusHigh, 6), { models: [`${OPUS}:low`, `${OPUS}:medium`, `${OPUS}:xhigh`], effort: 'medium', leftOut: [] })
+    assert.deepEqual(runs(opusHigh, 6), [{ model: OPUS, effort: 'low' }, { model: OPUS, effort: 'medium' }, { model: OPUS, effort: 'xhigh' }])
+    assert.deepEqual(shadow.shadowModelsSet(store, 6), [`${OPUS}:low`, `${OPUS}:medium`, `${OPUS}:xhigh`])
+    // The entry at the very model and effort that play rests; the same model at another effort runs.
+    const atMedium = shadow.shadowChoices(store, { model: OPUS, effort: 'medium' }, 6)
+    assert.deepEqual(atMedium.models, [`${OPUS}:low`, `${OPUS}:xhigh`])
+    assert.deepEqual(atMedium.leftOut, [`${OPUS}:medium is the model and effort that play, and a shadow plan needs another model or effort`])
+    // The other agents follow the all-agents list: none is set.
+    for (const i of [null, 0, 5, 7]) assert.deepEqual(shadow.shadowChoices(store, opusHigh, i), { models: [], effort: 'medium', leftOut: [] }, String(i))
+    store.setKv('shadow_model', HAIKU)
+    assert.deepEqual(runs(opusHigh, 0), [{ model: HAIKU, effort: 'medium' }], 'agent 1 follows the all-agents list')
+    assert.deepEqual(runs(opusHigh, 6).map(r => r.effort), ['low', 'medium', 'xhigh'], 'agent 7 has its own list, the all-agents one does not add to it')
+    // "off" for one agent: none for it, whatever the all-agents list says; blank: it follows the all-agents list.
+    store.setKv('shadow_model_agent_1', 'off')
+    assert.deepEqual(runs(opusHigh, 0), [])
+    assert.deepEqual(shadow.shadowModelsSet(store, 0), [])
+    for (const blank of ['', '   ']) {
+      store.setKv('shadow_model_agent_1', blank)
+      assert.deepEqual(runs(opusHigh, 0), [{ model: HAIKU, effort: 'medium' }], JSON.stringify(blank))
+    }
+    // An entry without an effort takes shadow_effort, as before; one with an effort keeps it.
+    store.setKv('shadow_effort', 'low')
+    store.setKv('shadow_model_agent_2', `${HAIKU}, ${SONNET}:max`)
+    assert.deepEqual(runs(opusHigh, 1), [{ model: HAIKU, effort: 'low' }, { model: SONNET, effort: 'max' }])
+    // An entry without an effort still rests at its model whatever the effort: the settings of before run as before.
+    assert.deepEqual(shadow.shadowChoices(store, { model: HAIKU, effort: 'xhigh' }, 1).leftOut, [`${HAIKU} is the model that plays, and a shadow plan needs another one`])
+    // An effort nobody knows: the entry is left out with its reason (never run at a guessed effort); the others run.
+    store.setKv('shadow_model_agent_3', `${OPUS}:turbo, ${OPUS}:HIGH, ${OPUS}:, gpt-oss:low, ${HAIKU}:low`)
+    const odd = shadow.shadowChoices(store, { model: SONNET, effort: 'high' }, 2)
+    assert.deepEqual(odd.models, [`${HAIKU}:low`])
+    assert.deepEqual(odd.leftOut, [
+      `${OPUS}:turbo has an effort that is not one of low, medium, high, xhigh, max`,
+      `${OPUS}:HIGH has an effort that is not one of low, medium, high, xhigh, max`,
+      `${OPUS}: has an effort that is not one of low, medium, high, xhigh, max`,
+      'gpt-oss:low is not a model on the list (claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5, claude-fable-5-2)',
+    ])
+    assert.deepEqual(shadow.shadowModelsSet(store, 2), [`${HAIKU}:low`], 'the web rule reads the entries that can run')
+    // A repeated pair counts once, said nowhere: written twice, or once with and once without the effort shadow_effort gives.
+    store.setKv('shadow_model_agent_4', `${HAIKU}:low, ${HAIKU}:low ,${HAIKU},${OPUS}:high,${OPUS}:high`)
+    assert.deepEqual(shadow.shadowChoices(store, { model: SONNET, effort: 'high' }, 3), { models: [`${HAIKU}:low`, `${OPUS}:high`], effort: 'low', leftOut: [] })
+    // "off" anywhere in an agent's list switches all of it off; at most 16 entries are read.
+    store.setKv('shadow_model_agent_5', `${HAIKU}:low, off`)
+    assert.deepEqual(runs(opusHigh, 4), [])
+    store.setKv('shadow_model_agent_6', [...Array.from({ length: 20 }, (_v, i) => `nope-${i}:low`), `${HAIKU}:low`].join(','))
+    const many = shadow.shadowChoices(store, opusHigh, 5)
+    assert.deepEqual(many.models, [])
+    assert.equal(many.leftOut.at(-1), '5 more entries are not read (16 at most)')
+    // The all-agents list takes efforts too.
+    store.setKv('shadow_model', `${SONNET}:low, ${SONNET}`)
+    store.setKv('shadow_effort', 'medium')
+    assert.deepEqual(runs({ model: SONNET, effort: 'low' }, 9), [], 'Sonnet 5.5 at low plays: both entries rest')
+    assert.deepEqual(runs({ model: OPUS, effort: 'low' }, 9), [{ model: SONNET, effort: 'low' }, { model: SONNET, effort: 'medium' }])
+    // The settings of before read byte for byte as before, with the playing model given alone (no effort known).
+    store.setKv('shadow_model', `${HAIKU}, ${OPUS}`)
+    assert.deepEqual(shadow.shadowChoices(store, SONNET), { models: [HAIKU, OPUS], effort: 'medium', leftOut: [] })
+    assert.deepEqual(shadow.shadowChoices(store, OPUS), { models: [HAIKU], effort: 'medium', leftOut: [`${OPUS} is the model that plays, and a shadow plan needs another one`] })
+    assert.deepEqual(shadow.shadowModelsSet(store), [HAIKU, OPUS])
+  } finally {
+    for (const [i, k] of (['AGENT_SHADOW_MODEL', 'AGENT_SHADOW_EFFORT'] as const).entries()) {
+      if (prev[i] === undefined) delete process.env[k]
+      else process.env[k] = prev[i]
+    }
+  }
+})
+
+test('PAM-7 in the service: an agent with its own list asks the same model at three other efforts, each by itself with its own row and cost; the guard is per agent, model and effort; another agent asks nothing', async () => {
+  const hang = new Set<string>()
+  const m = await service({ agents: 3, own: { 0: { aiModel: OPUS, aiEffort: 'high' } }, answer: p => (hang.has(`${p.model}:${p.output_config.effort}`) ? new Promise(() => undefined) : planned(p)) })
+  m.inner.shadowTimeoutMs = 60_000
+  m.svc.store.setKv('shadow_model_agent_1', `${OPUS}:low,${OPUS}:medium,${OPUS}:xhigh`)
+  try {
+    await m.svc.tick(0)
+    await m.settled()
+    assert.deepEqual(m.requests.map(asked), [[OPUS, 'high', 32_000], [OPUS, 'low', 16_000], [OPUS, 'medium', 16_000], [OPUS, 'xhigh', 48_000]])
+    // The real plan's words, word for word, to each.
+    for (const r of m.requests.slice(1)) assert.deepEqual(r.messages, m.requests[0]!.messages)
+    // One shadow strategist for the model, its own connection apart from the playing one; the effort goes per request.
+    assert.equal(m.inner.shadowStrategistFor(OPUS, 'low'), m.inner.shadowStrategistFor(OPUS, 'xhigh'))
+    assert.notEqual(m.inner.shadowStrategistFor(OPUS, 'low'), m.inner.strategistFor(OPUS))
+    // Only the real plan's actions ran.
+    assert.deepEqual(m.ran, [{ index: 0, types: ['sync'] }])
+    // A row and a record per shadow plan, next to the real plan's model and effort.
+    const kept = m.shadowRows()
+    assert.deepEqual(kept.map(k => [k.agentIndex, k.realModel, k.realEffort, k.shadowModel, k.shadowEffort, k.outcome]).sort(), [
+      [0, OPUS, 'high', OPUS, 'low', 'plan'], [0, OPUS, 'high', OPUS, 'medium', 'plan'], [0, OPUS, 'high', OPUS, 'xhigh', 'plan'],
+    ])
+    assert.deepEqual(m.svc.store.activity(0, 20).filter(r => r.kind === 'shadow').map(r => r.summary.match(/^shadow plan by [^,]+, \$[\d.]+/)?.[0]).sort(), ['shadow plan by Opus 5.5 (low), $0.0080', 'shadow plan by Opus 5.5 (medium), $0.0080', 'shadow plan by Opus 5.5 (xhigh), $0.0080'])
+    // The bill: the real plan and each shadow plan at Opus 5.5's price.
+    assert.ok(Math.abs(Number(m.svc.store.getKv('model_usd_total')) - 4 * 0.008) < 1e-12, m.svc.store.getKv('model_usd_total'))
+    // Another agent follows the all-agents list, which is off: one request, no shadow.
+    const before = m.requests.length
+    await m.svc.tick(1)
+    await m.settled()
+    assert.deepEqual(m.requests.slice(before).map(asked), [[SONNET, 'medium', 16_000]])
+    // The guard: Opus 5.5 at low still on its way holds back only its own next shadow plan, not medium or xhigh.
+    hang.add(`${OPUS}:low`)
+    await m.svc.tick(0)
+    await new Promise(r => setTimeout(r, 30))
+    const second = m.requests.length
+    await m.svc.tick(0)
+    await new Promise(r => setTimeout(r, 30))
+    assert.deepEqual(m.requests.slice(second).map(asked), [[OPUS, 'high', 32_000], [OPUS, 'medium', 16_000], [OPUS, 'xhigh', 48_000]], 'low is still on its way: not asked again')
+    // Nor another agent's same pair: agent 3 with its own list asks Opus 5.5 at low too... and hangs on it by itself.
+    m.svc.store.setKv('shadow_model_agent_3', `${OPUS}:low`)
+    const third = m.requests.length
+    await m.svc.tick(2)
+    await new Promise(r => setTimeout(r, 30))
+    assert.deepEqual(m.requests.slice(third).map(asked), [[SONNET, 'medium', 16_000], [OPUS, 'low', 16_000]])
+    // The cache rule counts the shadow pairs of an agent that is due, beside its real plan.
+    const now = Date.now()
+    for (const i of [0, 1, 2]) m.svc.store.updateSettings(i, { activeHoursUtc: [0, 24], tickMinutes: 120, tickJitterMinutes: 10 })
+    m.inner.nextAt.set(0, now + 30 * 60_000)
+    m.inner.nextAt.set(1, now + 120 * 60_000)
+    m.inner.nextAt.set(2, now + 120 * 60_000)
+    for (const effort of ['high', 'low', 'medium', 'xhigh']) assert.equal(m.inner.callExpectedWithinHour(now, { model: OPUS, effort }), true, effort)
+    assert.equal(m.inner.callExpectedWithinHour(now, { model: OPUS, effort: 'max' }), false)
+    assert.equal(m.inner.callExpectedWithinHour(now, { model: SONNET, effort: 'medium' }), false)
+  } finally {
+    await m.svc.stop()
+  }
 })
