@@ -56,13 +56,13 @@ export interface ShadowPlanRow {
   ms: number
 }
 
-/** The shadow models that run next to one real plan, their one effort, and why an entry of the setting does not run. */
+/** The shadow models that run next to one real plan, their one effort and why an entry of the setting does not run. */
 export interface ShadowChoices {
   /** The models that get this plan's request, in the order they were written, each once. Empty: no shadow plans. */
   readonly models: string[]
   /** One effort for every shadow model. */
   readonly effort: Effort
-  /** For the log: one reason per entry that was left out (not on the list, or the model that plays). */
+  /** For the log: one reason per entry that was left out (not on the list or the model that plays). */
   readonly leftOut: string[]
 }
 
