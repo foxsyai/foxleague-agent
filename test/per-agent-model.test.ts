@@ -836,7 +836,7 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
   const guide = read('docs/SERVER.md')
   const shadow = (await import('../src/strategist/shadow.ts')) as unknown as ShadowModule
   // Each agent's own model and effort, as root on the server: the owner's ten agents on three models at high.
-  const own = [...guide.matchAll(/^sudo \/opt\/foxleague-agent\/app\/deploy\/agentctl\.sh model (\d+) (\S+) (\S+)$/gm)].map(m => [Number(m[1]), m[2], m[3]] as const)
+  const own = [...guide.matchAll(/^sudo \/opt\/foxleague-agent\/app\/deploy\/agentctl\.sh model (\d+) (\S+) (\S+)$/gm)].map(m => [Number(m[1]), m[2]!, m[3]!] as const)
   const want: Record<number, string> = { 7: OPUS, 6: OPUS, 10: OPUS, 1: SONNET, 5: SONNET, 4: SONNET, 9: HAIKU, 8: HAIKU, 2: HAIKU, 3: HAIKU }
   assert.deepEqual(Object.fromEntries(own.map(([n, model]) => [n, model])), want, 'one line per agent, the owner\'s models')
   assert.ok(own.every(([, , effort]) => effort === 'high'))
@@ -855,7 +855,7 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
   const from = guide.indexOf('### The same model at other efforts, on three agents')
   assert.ok(from > guide.indexOf('## Shadow plans: trying another model without letting it play'), 'the example is in the shadow section')
   const block = guide.slice(from, guide.indexOf('```\n', guide.indexOf('```', from) + 3))
-  const sets = [...block.matchAll(/-e "\$SET" (shadow_model\S*) (\S+)\n/g)].map(m => [m[1]!, m[2]!])
+  const sets = [...block.matchAll(/-e "\$SET" (shadow_model\S*) (\S+)\n/g)].map(m => [m[1]!, m[2]!] as [string, string])
   assert.deepEqual(sets, [
     ['shadow_model', 'off'],
     ['shadow_model_agent_7', `${OPUS}:low,${OPUS}:medium,${OPUS}:xhigh`],
@@ -863,8 +863,9 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
     ['shadow_model_agent_9', `${HAIKU}:low,${HAIKU}:medium,${HAIKU}:xhigh`],
   ])
   store.setKv('shadow_model', `${HAIKU},${SONNET}`) // what ran before the test: the all-agents list
+  const setScript = script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db'))
   for (const [key, value] of sets) {
-    const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db')), key, value], { encoding: 'utf8', timeout: 60_000 })
+    const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', setScript, key, value], { encoding: 'utf8', timeout: 60_000 })
     assert.equal(r.status, 0, r.stderr)
   }
   const prev = process.env.AGENT_SHADOW_MODEL

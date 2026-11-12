@@ -5,7 +5,8 @@ description: The strategy, spending limits, per-action maximums and timing of ea
 
 Each agent has its own settings, on its page under **Settings**. Lowering a limit is one click. Raising one asks
 for your password, and so do a higher count (paid training, boosters or packs), a smaller gas reserve, Gold amounts
-where there were none, a shorter tick, longer active hours and a dearer AI model or a higher effort for the agent.
+where there were none, a shorter tick and longer active hours. So do a dearer AI model and a higher effort for the
+agent.
 
 ## Strategy
 
