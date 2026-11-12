@@ -5,9 +5,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { UpdateView } from '../src/update/updater.ts'
+import * as updater from '../src/update/updater.ts'
+import { Updater, type UpdateView, type UpdaterDeps } from '../src/update/updater.ts'
+import { detectLayout } from '../src/update/install.ts'
 import { LOGIN_LINES, freshInstall, guided, realTree, sh, stubs } from './audit-1111/install-helpers.ts'
-import { REPO, tmp } from './update-fixtures.ts'
+import { REPO, buildRelease, codeTree, managedInstall, publish, serve, testKey, tmp } from './update-fixtures.ts'
 
 const read = (f: string): string => readFileSync(join(REPO, f), 'utf8')
 const flat = (f: string): string => read(f).replace(/\s+/g, ' ')
@@ -145,6 +147,67 @@ test('MAC-4: the uninstall does not state that the wallets hold funds, which it 
   for (const f of ['install.sh', 'get.ps1', 'INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md']) assert.doesNotMatch(flat(f), /wallets (still hold their|keep their|hold their) funds/, f)
   assert.match(flat('get.ps1'), /The agent wallets may still hold funds\./)
   assert.match(flat('site/src/content/docs/help/update.md'), /The agent wallets may still hold funds\./)
+})
+
+const KEY = testKey()
+const V103 = { version: '1.0.3', notes: 'Medicine for injured cards.', published: '2026-11-12T20:00:00Z' }
+
+/** A release server on this machine with 1.0.3 on it. */
+async function releaseServer(): Promise<Awaited<ReturnType<typeof serve>>> {
+  const out = tmp()
+  buildRelease(out, codeTree(tmp(), '1.0.3'), '1.0.3', KEY.privatePem, { notes: V103.notes })
+  return serve(publish(tmp(), [{ dir: out, version: '1.0.3' }], '1.0.3'))
+}
+/** The updater of an install made by the one-line installer that runs 1.0.2. */
+function updaterOf(source: string, over: Partial<UpdaterDeps> = {}): Updater {
+  const inst = managedInstall('1.0.2')
+  const kv = new Map<string, string>()
+  return new Updater({
+    layout: detectLayout(inst.code), installed: '1.0.2', keys: [KEY.publicPem], source, isServer: false, enabled: true,
+    dataDir: join(inst.root, 'data'), kv: { get: k => kv.get(k) ?? null, set: (k, v) => void kv.set(k, v) },
+    notify: () => undefined, restart: async () => undefined, ...over,
+  })
+}
+
+test('MAC-5: the release server is asked at most once in MIN_CHECK_GAP_MS: a check inside the gap or while another runs gets the last answer, and the check every 10 minutes is unchanged', async () => {
+  const web = await releaseServer()
+  const asked = (): number => web.hits.get('/latest/download/release.json') ?? 0
+  try {
+    const up = updaterOf(web.base)
+    const first = await up.check()
+    assert.equal(first.available?.version, '1.0.3')
+    assert.equal(asked(), 1)
+    const second = await up.check()
+    assert.equal(asked(), 1, 'a second check right after the first asks nothing')
+    assert.deepEqual(second, first, 'it answers with the last view')
+    // Two at once, as a stuck double click sends them: one request, one answer.
+    const twin = updaterOf(web.base)
+    const [a, b] = await Promise.all([twin.check(), twin.check()])
+    assert.equal(asked(), 2, 'two checks at once ask once')
+    assert.deepEqual(a, b)
+    // After the gap the release server is asked again (a gap of 40 ms here, the same rule).
+    const quick = updaterOf(web.base, { checkGapMs: 40 })
+    await quick.check()
+    await quick.check()
+    assert.equal(asked(), 3)
+    await new Promise(r => setTimeout(r, 120))
+    await quick.check()
+    assert.equal(asked(), 4, 'after the gap the next check asks again')
+  } finally {
+    await web.close()
+  }
+  // A check that failed counts as well: a server that does not answer is not asked again at once, and the reason stays.
+  let tries = 0
+  const down = updaterOf('http://127.0.0.1:9', { fetch: async () => { tries++; throw new Error('offline') } })
+  const failed = await down.check()
+  assert.equal(failed.checkError, 'the release server did not answer')
+  assert.deepEqual(await down.check(), failed)
+  assert.equal(tries, 1, 'one request for two quick checks of a server that is down')
+  // The gap is 15 seconds and has its name; the check 30 to 90 seconds after a start and then every 10 to 11 minutes
+  // stays as it was.
+  assert.equal(updater.MIN_CHECK_GAP_MS, 15_000)
+  assert.equal(updater.CHECK_EVERY_MS, 10 * 60_000)
+  assert.match(read('src/update/updater.ts'), /again\(CHECK_EVERY_MS \+ Math\.random\(\) \* 60_000\)[^\n]*\n[^\n]*\n[^\n]*\n\s*again\(30_000 \+ Math\.random\(\) \* 60_000\)/)
 })
 
 test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the four findings, what passed and what stays open', () => {

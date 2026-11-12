@@ -9,7 +9,7 @@ import type { AddressInfo } from 'node:net'
 import type { Config } from '../src/config.ts'
 import { Sessions, hashPassword } from '../src/web/auth.ts'
 import { detectLayout } from '../src/update/install.ts'
-import { RESTART_EXIT_CODE, Updater } from '../src/update/updater.ts'
+import { RESTART_EXIT_CODE, Updater, type UpdateView } from '../src/update/updater.ts'
 import { REPO, buildRelease, codeTree, managedInstall, publish, serve, testKey, tmp } from './update-fixtures.ts'
 
 const TEST_WORDS = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'
@@ -103,6 +103,42 @@ test('UPD-19: Update now needs the session and its CSRF token, installs only wha
   } finally {
     server.close()
     await web.close()
+    await svc.stop()
+  }
+})
+
+test('MAC-5: Check for updates in the dashboard needs the session and its CSRF token, and quick checks ask the release server once', async () => {
+  const { svc, server, url, headers, post } = await webService()
+  const said: string[] = []
+  try {
+    const { web } = await withRelease(svc as never, said)
+    const asked = (): number => web.hits.get('/latest/download/release.json') ?? 0
+    try {
+      assert.equal((await fetch(`${url}/api/update/check`, { method: 'POST', body: '{}' })).status, 401, 'not signed in')
+      const { 'x-csrf-token': _t, ...noToken } = headers
+      assert.equal((await post('/api/update/check', noToken)).status, 403, 'no CSRF token')
+      assert.equal((await post('/api/update/check', { ...headers, origin: 'https://evil.example' })).status, 403, 'another site')
+      assert.equal(asked(), 0, 'a refused request asks nothing')
+      const first = (await (await post('/api/update/check')).json()) as { ok: boolean; update: UpdateView }
+      assert.equal(first.update.available?.version, '1.2.0')
+      // A second click right after, or a page that sends it again: the last answer and no new request.
+      const second = (await (await post('/api/update/check')).json()) as { ok: boolean; update: UpdateView }
+      assert.equal(asked(), 1, 'two quick checks ask the release server once')
+      assert.deepEqual(second, first)
+    } finally {
+      await web.close()
+    }
+    // Two at once, as a stuck double click sends them, to an updater that has not asked yet: one request.
+    const again = await withRelease(svc as never, said)
+    try {
+      const both = await Promise.all([post('/api/update/check'), post('/api/update/check')])
+      assert.deepEqual(both.map(r => r.status), [200, 200])
+      assert.equal(again.web.hits.get('/latest/download/release.json'), 1, 'two checks at once ask once')
+    } finally {
+      await again.web.close()
+    }
+  } finally {
+    server.close()
     await svc.stop()
   }
 })

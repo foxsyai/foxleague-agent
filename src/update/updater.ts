@@ -9,6 +9,12 @@ import { DEFAULT_SOURCE, UpdateError, archiveName, downloadArchive, fetchRelease
 import { activate, confirmStart, refreshLauncher, selfUpdateRefusal, stage, startNote, waitingRelease, type Layout, type Runner } from './install.ts'
 
 export const CHECK_EVERY_MS = 10 * 60_000
+/**
+ * The shortest time between two checks that ask the release server. The dashboard's Check for updates asks on a
+ * click: a check sooner than this after the last one (or while one runs) gets the last answer, so a page or a stuck
+ * double click cannot hammer the server. The check every 10 to 11 minutes is far apart and never meets it.
+ */
+export const MIN_CHECK_GAP_MS = 15_000
 /** A new release counts as started once the service has been up this long. */
 export const CONFIRM_AFTER_MS = 45_000
 /** The exit code that asks the service manager to start the agent again (the installer's unit restarts on it). */
@@ -38,6 +44,8 @@ export interface UpdaterDeps {
   fetch?: FetchLike
   run?: Runner
   confirmAfterMs?: number
+  /** Left out: MIN_CHECK_GAP_MS. */
+  checkGapMs?: number
 }
 
 export interface UpdateView {
@@ -71,6 +79,9 @@ export class Updater {
   private checkedAt: string | null = null
   private checkError: string | null = null
   private state: UpdateView['state'] = 'idle'
+  /** The check that is asking the release server right now, and when the last one ended (ms, 0 for never). */
+  private asking: Promise<UpdateView> | null = null
+  private askedAt = 0
   private timer: NodeJS.Timeout | undefined
   private confirmTimer: NodeJS.Timeout | undefined
   private stopped = false
@@ -179,9 +190,22 @@ export class Updater {
     clearTimeout(this.confirmTimer)
   }
 
-  /** Asks the release server once. A release is offered only when it is signed and newer than the running one. */
+  /**
+   * Asks the release server once. A release is offered only when it is signed and newer than the running one.
+   * While a check runs, or sooner than MIN_CHECK_GAP_MS after the last one ended, it answers with that check.
+   */
   async check(): Promise<UpdateView> {
     if (!this.d.enabled) return this.view()
+    if (this.asking) return this.asking
+    if (this.askedAt > 0 && Date.now() - this.askedAt < (this.d.checkGapMs ?? MIN_CHECK_GAP_MS)) return this.view()
+    this.asking = this.ask().finally(() => {
+      this.askedAt = Date.now()
+      this.asking = null
+    })
+    return this.asking
+  }
+
+  private async ask(): Promise<UpdateView> {
     try {
       const rel = await fetchRelease(this.source, this.d.keys, { fetch: this.d.fetch })
       this.checkError = null
