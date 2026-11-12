@@ -146,3 +146,28 @@ test('MAC-4: the uninstall does not state that the wallets hold funds, which it 
   assert.match(flat('get.ps1'), /The agent wallets may still hold funds\./)
   assert.match(flat('site/src/content/docs/help/update.md'), /The agent wallets may still hold funds\./)
 })
+
+test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the four findings, what passed and what stays open', () => {
+  const review = read('docs/SECURITY-REVIEW.md')
+  const heading = '\n## Mac install check (2026-11-12)\n'
+  const start = review.indexOf(heading)
+  assert.ok(start >= 0, 'the section is in the record')
+  assert.equal(review.split(heading).length, 2, 'once')
+  // The final audit before the public launch stays the last section (test/audit-1111/docs-record.test.ts).
+  assert.ok(start < review.indexOf('\n## Final audit before the public launch (2026-11-11)'), 'before the final audit')
+  const next = review.indexOf('\n## ', start + heading.length)
+  const section = review.slice(start, next < 0 ? undefined : next)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| MAC-1 \| low \|/)
+  for (const id of ['MAC-1', 'MAC-2', 'MAC-3', 'MAC-4']) {
+    const rows = section.split('\n').filter(l => l.startsWith(`| ${id} |`))
+    assert.equal(rows.length, 1, id)
+    assert.equal(rows[0]!.split(' | ').length, 4, `${id} has its four cells`)
+    assert.match(rows[0]!, new RegExp(`^\\| ${id} \\| low \\|`), id)
+  }
+  const text = section.replace(/\s+/g, ' ')
+  for (const passed of [/macOS 15\.7\.3 on arm64/, /bash 3\.2/, /without Xcode's command line tools/, /launchd/, /after the Mac had slept/, /oldest release folder removed/, /undone in about 20 seconds/, /no service, no process and no port/]) assert.match(text, passed)
+  assert.ok(section.includes('\nStays open:\n'), 'the section lists what stays open')
+  const open = section.slice(section.indexOf('Stays open:')).replace(/\s+/g, ' ')
+  for (const item of [/no "check for updates now"/, /`\/api\/update\/check` exists, but the page never calls it/, /30 to 90 seconds after a start, then every 10 to 11 minutes/, /`\.\/cli\.sh update-check`/, /the owner's call/]) assert.match(open, item)
+  assert.doesNotMatch(section, /—|\bbot\b/i)
+})
