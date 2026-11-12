@@ -1606,9 +1606,11 @@ Stays open:
 ## Mac install check (2026-11-12)
 
 The owner installed the release candidate on his MacBook Air (macOS 15.7.3 on arm64, no Node.js before) with the
-pasted line, then updated and uninstalled it. Four findings, all low, none about money, keys or signing. They
-were fixed test first by Claude Opus 5.5. The tests are in `test/mac-check.test.ts`, named after the ids below; each
-was seen failing before its fix. The final audit below stays the last section of this file.
+pasted line, then updated and uninstalled it. Five findings, all low, none about money, keys or signing: MAC-1 to
+MAC-4 from the check and MAC-5, the one item it left open, done on the owner's go of 2026-11-13. They were fixed test
+first by Claude Opus 5.5. The tests are in `test/mac-check.test.ts` (and the route test of MAC-5 in
+`test/update-service.test.ts`), named after the ids below; each was seen failing before its fix. The final audit
+below stays the last section of this file.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
@@ -1616,6 +1618,7 @@ was seen failing before its fix. The final audit below stays the last section of
 | MAC-2 | low | INSTALL.md and the Update page said that the folder takes about 190 MB. Measured on the Mac: Node.js (`.node`) 189 MB and 42 MB for each release folder, so about 231 MB after the install and 273 MB after an update (the running release and the one before it are kept for the undo) | Both say "about 240 MB, and about 280 MB once an update has kept the release before it", which counts npm's cache (about 6 MB) that MAC-1 moved into the folder. No other page, script or the dashboard states a size, and none says 190 MB |
 | MAC-3 | low | After an update that did not start and was undone, the dashboard's notice gave the updater's message and then "Version 1.0.3 is out. You run 1.0.2." with the button **Update now**. The owner asked twice whether he had to press it to get back to 1.0.2 | When the release on offer is the very one that was just undone here, the notice says "Nothing has to be done: the agent keeps running 1.0.2." and the button reads **Try again**. A newer release keeps the usual words and **Update now**. The updater's message is unchanged (Telegram sends it). The info bubble and the Update, Dashboard and Troubleshooting pages say the same |
 | MAC-4 | low | `./install.sh --uninstall` printed "The agent wallets still hold their funds. Keep the backup words" without reading a balance, so also for empty wallets | It prints "The agent wallets may still hold funds. Keep the recovery words; delete the folder only when the wallets are empty." The Windows uninstall (`get.ps1 -Uninstall`) and the Update page said "keep their funds" and now say "may still hold funds". No balance check was added |
+| MAC-5 | low | The dashboard had no "check for updates now". The route `/api/update/check` existed, but the page never called it. A check comes 30 to 90 seconds after a start, then every 10 to 11 minutes; only a terminal asked at once (`./cli.sh update-check`). The check left it open as the owner's call; done on the owner's go on 2026-11-13 | **Check for updates**, a link next to the version with its own info bubble, shown only where the agent checks for updates. It calls `POST /api/update/check` through the page's `api()` (session and CSRF token, no password: it installs nothing), puts the answer in the page's state, shows the notice at once and says the answer in a short message; for the release that was just undone here it says that nothing has to be done (MAC-3). It is off while it asks and while an update installs. The updater asks the release server at most once in 15 seconds (`MIN_CHECK_GAP_MS`): a check sooner than that after the last one, or while one runs, gets that check's answer, so a page or a stuck double click cannot hammer the server. The check every 10 to 11 minutes is unchanged. Tried in headless Chrome against a test service, at desktop and phone width. The Update, Dashboard, Troubleshooting, FAQ and Safety pages, INSTALL.md, the README and docs/SERVER.md name it |
 
 What passed on the Mac:
 - The install on macOS 15.7.3 on arm64 with the system's bash 3.2 and without Xcode's command line tools, and the
@@ -1625,10 +1628,7 @@ What passed on the Mac:
 - A release that does not start, undone in about 20 seconds under launchd.
 - The uninstall, which left no service, no process and no port of the agent.
 
-Stays open:
-- The dashboard has no "check for updates now". The route `/api/update/check` exists, but the page never calls it.
-  A check comes 30 to 90 seconds after a start, then every 10 to 11 minutes; in a terminal `./cli.sh update-check`
-  asks at once. Whether the dashboard gets such a button is the owner's call.
+Stays open: nothing of this check. The item it left open is MAC-5 above.
 
 ## Final audit before the public launch (2026-11-11): six Claude Fable 5.2 reviewers at extra-high effort, the fixes by Claude Fable 5.2 at high effort
 

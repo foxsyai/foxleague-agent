@@ -1,6 +1,7 @@
 // The Mac install check of 2026-11-12 (the owner's MacBook Air, macOS 15.7.3 on arm64, with no Node.js before):
-// four findings, each with its test here, named after it and failing before its fix. The record is the section
-// "Mac install check (2026-11-12)" of docs/SECURITY-REVIEW.md.
+// four findings and MAC-5, the item it left open (done on the owner's go of 2026-11-13), each with its test here,
+// named after it and failing before its fix (MAC-5's route test is in test/update-service.test.ts). The record is
+// the section "Mac install check (2026-11-12)" of docs/SECURITY-REVIEW.md.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
@@ -303,7 +304,7 @@ test('MAC-5: Check for updates next to the version asks now, shows the answer at
   assert.match(flat('site/src/content/docs/play/safety.md'), /about every 10 minutes and when you press \*\*Check for updates\*\* \(at most once in 15 seconds\)/)
 })
 
-test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the four findings, what passed and what stays open', () => {
+test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the five findings, what passed and that nothing of it stays open', () => {
   const review = read('docs/SECURITY-REVIEW.md')
   const heading = '\n## Mac install check (2026-11-12)\n'
   const start = review.indexOf(heading)
@@ -314,7 +315,7 @@ test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by
   const next = review.indexOf('\n## ', start + heading.length)
   const section = review.slice(start, next < 0 ? undefined : next)
   assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| MAC-1 \| low \|/)
-  for (const id of ['MAC-1', 'MAC-2', 'MAC-3', 'MAC-4']) {
+  for (const id of ['MAC-1', 'MAC-2', 'MAC-3', 'MAC-4', 'MAC-5']) {
     const rows = section.split('\n').filter(l => l.startsWith(`| ${id} |`))
     assert.equal(rows.length, 1, id)
     assert.equal(rows[0]!.split(' | ').length, 4, `${id} has its four cells`)
@@ -322,8 +323,13 @@ test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by
   }
   const text = section.replace(/\s+/g, ' ')
   for (const passed of [/macOS 15\.7\.3 on arm64/, /bash 3\.2/, /without Xcode's command line tools/, /launchd/, /after the Mac had slept/, /oldest release folder removed/, /undone in about 20 seconds/, /no service, no process and no port/]) assert.match(text, passed)
-  assert.ok(section.includes('\nStays open:\n'), 'the section lists what stays open')
-  const open = section.slice(section.indexOf('Stays open:')).replace(/\s+/g, ' ')
-  for (const item of [/no "check for updates now"/, /`\/api\/update\/check` exists, but the page never calls it/, /30 to 90 seconds after a start, then every 10 to 11 minutes/, /`\.\/cli\.sh update-check`/, /the owner's call/]) assert.match(open, item)
+  assert.match(text, /Five findings, all low, none about money, keys or signing/)
+  // The one item the check left open (the owner's call) is the row MAC-5 since the owner's go: what it was, what
+  // changed, and nothing of the check stays open.
+  const mac5 = section.split('\n').find(l => l.startsWith('| MAC-5 |')) ?? ''
+  for (const item of [/no "check for updates now"/, /`\/api\/update\/check` existed, but the page never called it/, /30 to 90 seconds after a start, then every 10 to 11 minutes/, /`\.\/cli\.sh update-check`/, /the owner's call/, /the owner's go on 2026-11-13/]) assert.match(mac5.split(' | ')[2] ?? '', item, 'the finding')
+  for (const item of [/\*\*Check for updates\*\*/, /`POST \/api\/update\/check`/, /session and CSRF token/, /`MIN_CHECK_GAP_MS`/, /at most once in 15 seconds/, /The check every 10 to 11 minutes is unchanged/]) assert.match(mac5.split(' | ')[3] ?? '', item, 'the fix')
+  assert.ok(section.includes('\nStays open: nothing of this check. The item it left open is MAC-5 above.\n'), 'nothing of the check stays open')
+  assert.doesNotMatch(section, /The dashboard has no "check for updates now"/)
   assert.doesNotMatch(section, /—|\bbot\b/i)
 })
