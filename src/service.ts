@@ -1164,7 +1164,7 @@ export class Service {
     this.notify(
       (local.length ? `local: ${local.join(', ')}\n` : '') +
       `foxleague-agent ${VERSION} started: ${agents.length} agent(s), strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'OFF (no ANTHROPIC_API_KEY)'}, mode ${this.modeText()}${this.store.killSwitch ? ', KILL SWITCH ON' : ''}\n` +
-        agents.map(b => `${agentName(b.index)} ${b.address}${b.paused ? ' paused' : ''}`).join('\n') +
+        agents.map(b => `${agentName(b.index)} ${b.address}${b.paused ? ' paused' : ''}${this.aiNote(b)}`).join('\n') +
         retiredLine(this.store.retiredAgents()),
     )
     this.startTelegram()
@@ -1324,6 +1324,13 @@ export class Service {
     const all = this.strategist ? { model: this.strategist.model, effort: this.strategist.effort } : strategistChoice(this.store, this.cfg, () => undefined)
     const ai = agentChoice(agent.settings, all)
     return { ...ai, own: ai.model !== all.model || ai.effort !== all.effort }
+  }
+
+  /** " · Haiku 5.5 at high" for an agent that plays another model or effort than the all-agents ones, else nothing. */
+  aiNote(agent: Pick<AgentRow, 'settings'>): string {
+    if (!this.strategist) return ''
+    const ai = this.aiOf(agent)
+    return ai.own ? ` · ${MODELS[ai.model]?.label ?? ai.model} at ${ai.effort}` : ''
   }
 
   /**
@@ -1836,7 +1843,7 @@ export class Service {
         const agents = this.store.agents()
         return [
           `mode ${this.modeText()}; kill switch ${this.store.killSwitch ? 'ON' : 'off'}; strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'off'}; model spend $${Number(this.store.getKv('model_usd_total') ?? 0).toFixed(2)}`,
-          ...agents.map(b => `${agentName(b.index)}${b.paused ? ' PAUSED' : ''} ${b.address}`),
+          ...agents.map(b => `${agentName(b.index)}${b.paused ? ' PAUSED' : ''} ${b.address}${this.aiNote(b)}`),
         ].join('\n') + retiredLine(this.store.retiredAgents())
       }
       case 'agents': {

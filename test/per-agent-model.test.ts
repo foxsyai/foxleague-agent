@@ -6,9 +6,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { once } from 'node:events'
-import { mkdtempSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import type { Config } from '../src/config.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
@@ -651,4 +652,73 @@ test('PAM-12 shadow-report: the numbers once per model and effort, labelled "Opu
   assert.ok(all.includes('  real   Sonnet 5.5 (high): sync, play_match'))
   // One model at one effort, as before: the report reads as it did.
   assert.match(shadowReport(store.shadowPlans(0), { agentIndex: 0 }), /^Shadow plans \(agent 1\): 1, from [^\n]+ UTC\nModels: Sonnet 5\.5 \(low\) next to Sonnet 5\.5 \(high\)\n/)
+})
+
+// ---- where the model is shown and set: the CLI, Telegram ----
+
+const REPO = resolve(import.meta.dirname, '..')
+
+test('PAM-13 cli model: shows each agent\'s AI and shadow entries, and sets an agent\'s own model and effort on the machine (no password, like every server-side setting); never a value the list does not have', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-pam-cli-'))
+  const env = { PATH: process.env.PATH!, HOME: dir, AGENT_ENV_FILE: join(dir, 'no-such.env'), AGENT_DATA_DIR: dir, MVX_GATEWAY_URL: 'http://127.0.0.1:9', MVX_API_URL: 'http://127.0.0.1:9', FOXLEAGUE_URL: 'http://127.0.0.1:9' }
+  const cli = (...args: string[]) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', join(REPO, 'src/cli.ts'), 'model', ...args], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 })
+  const store = new Store(dir) // the running service's connection
+  for (const i of [0, 1, 2]) store.addAgent(i, `erd1agent${i}`)
+  store.setKv('shadow_model_agent_3', `${SONNET}:low,${SONNET}:xhigh`)
+  let r = cli('2', HAIKU, 'high')
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(r.stdout.trim(), 'agent 2 plays Haiku 5.5 at high effort from its next plan (its own model and its own effort)')
+  assert.deepEqual([store.agent(1)!.settings.aiModel, store.agent(1)!.settings.aiEffort], [HAIKU, 'high'])
+  assert.match(store.activity(1, 5)[0]!.summary, /^AI model and effort Haiku 5\.5 at high effort \(CLI\)$/)
+  r = cli('3', 'same', 'xhigh')
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual([store.agent(2)!.settings.aiModel, store.agent(2)!.settings.aiEffort], ['', 'xhigh'])
+  r = cli()
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(r.stdout.trim().split('\n'), [
+    'all agents: Sonnet 5.5 at medium effort (the Strategist box)',
+    'agent 1: Sonnet 5.5 at medium effort (same as all agents)',
+    'agent 2: Haiku 5.5 at high effort (its own model and its own effort)',
+    `agent 3: Sonnet 5.5 at xhigh effort (its own effort); shadow plans by ${SONNET}:low, ${SONNET}:xhigh (its own list)`,
+  ])
+  r = cli('2')
+  assert.equal(r.stdout.trim(), 'agent 2: Haiku 5.5 at high effort (its own model and its own effort)')
+  // Back to the all-agents pair.
+  r = cli('2', 'same', 'same')
+  assert.equal(r.status, 0, r.stderr)
+  assert.equal(r.stdout.trim(), 'agent 2 plays Sonnet 5.5 at medium effort from its next plan (same as all agents)')
+  assert.deepEqual([store.agent(1)!.settings.aiModel, store.agent(1)!.settings.aiEffort], ['', ''])
+  // Refused, and nothing written.
+  for (const [args, why] of [[['2', 'gpt-oss', 'high'], /unknown model gpt-oss/], [['2', 'claude-sonnet-5', 'high'], /unknown model claude-sonnet-5/], [['2', HAIKU, 'turbo'], /unknown effort turbo/], [['2', HAIKU], /usage|model <N>/], [['9', HAIKU, 'high'], /no agent 9/]] as const) {
+    r = cli(...args)
+    assert.notEqual(r.status, 0, args.join(' '))
+    assert.match(r.stderr + r.stdout, why, args.join(' '))
+  }
+  assert.deepEqual([store.agent(1)!.settings.aiModel, store.agent(1)!.settings.aiEffort], ['', ''])
+  assert.equal(store.agent(8), undefined, 'no agent was added')
+  const usage = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', join(REPO, 'src/cli.ts')], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 })
+  assert.match(usage.stdout, /model \[N\] \[<model>\|same <effort>\|same\]\s+each agent's AI model and effort/)
+})
+
+test('PAM-14 Telegram /status and the start message show an agent\'s model and effort where they are not the all-agents ones', async () => {
+  const m = await service({ agents: 3, own: { 1: { aiModel: HAIKU, aiEffort: 'high' }, 2: { aiEffort: 'low' } } })
+  const lines = (await m.svc.command('status', [], '')).split('\n')
+  assert.match(lines[0]!, /strategist claude-sonnet-5-5 \(medium\)/)
+  assert.match(lines[1]!, /^agent 1 erd1\w+$/, 'the all-agents pair: nothing added')
+  assert.match(lines[2]!, /^agent 2 erd1\w+ · Haiku 5\.5 at high$/)
+  assert.match(lines[3]!, /^agent 3 erd1\w+ · Sonnet 5\.5 at low$/)
+  // The start message lists the agents with the same words.
+  const src = readFileSync(join(REPO, 'src/service.ts'), 'utf8')
+  const start = src.slice(src.indexOf('  async start(): Promise<void> {'), src.indexOf('  private schedule('))
+  assert.match(start, /agents\.map\(b => `\$\{agentName\(b\.index\)\} \$\{b\.address\}\$\{b\.paused \? ' paused' : ''\}\$\{this\.aiNote\(b\)\}`\)/)
+})
+
+test('PAM-15 an agent deleted for good takes its own shadow list with it: a new agent with its number starts without one', () => {
+  const store = new Store('', ':memory:')
+  for (const i of [0, 1]) store.addAgent(i, `erd1agent${i}`)
+  store.setKv('shadow_model_agent_2', `${OPUS}:low`)
+  store.setKv('shadow_model_agent_1', `${HAIKU}:low`)
+  store.deleteAgent(1, 'test')
+  assert.equal(store.getKv('shadow_model_agent_2'), undefined)
+  assert.equal(store.getKv('shadow_model_agent_1'), `${HAIKU}:low`, 'another agent keeps its own')
 })
