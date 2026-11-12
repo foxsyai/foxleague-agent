@@ -232,8 +232,9 @@ ensure_node() {
 # FOXAGENT_GUIDED=1: the command line leaves out the lines that are written for a server set up by hand.
 cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 # Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
-# a newcomer reads that notice as something to do.
-deps() { (cd "$APP_DIR" && npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+# a newcomer reads that notice as something to do. npm's download cache and its logs stay in the install's own
+# folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind.
+deps() { (cd "$APP_DIR" && npm_config_cache="$ROOT/.npm-cache" npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
 
 # ---- the launcher (run.sh: what the service starts) and the command line (cli.sh). On an install made by get.sh
 # they sit in ROOT with an install.sh that hands over to the active release; in a git checkout all three are the
