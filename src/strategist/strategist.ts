@@ -9,7 +9,7 @@ import { parseAction, type PlannedAction } from '../executor/actions.ts'
 import type { BudgetView } from '../executor/budget.ts'
 import type { Config } from '../config.ts'
 import type { ActivityRow, Store } from '../store/db.ts'
-import type { AgentSettings } from '../store/settings.ts'
+import { AI_EFFORTS, type AgentSettings } from '../store/settings.ts'
 import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
@@ -106,7 +106,8 @@ export function priceRange(id: string): { cheapest: Price; dearest: Price } | nu
   return { cheapest: each(Math.min), dearest: each(Math.max) }
 }
 
-export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+/** The five efforts, from the least to the most thinking: one list, kept with the agent settings that also take one. */
+export const EFFORTS = AI_EFFORTS
 export type Effort = (typeof EFFORTS)[number]
 
 /**
@@ -143,6 +144,38 @@ export function strategistChoice(store: Store, cfg: Config, say?: (text: string)
   }
   const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? 'medium'
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
+}
+
+/** A value typed by hand reaches the log only as what a model id can hold, and no more than 60 characters of it. */
+const named = (v: unknown): string => String(v).slice(0, 60).replace(/[^\w.:-]/g, '?')
+
+/**
+ * The model and effort one agent plays with (the owner, 2026-11-13): its own (the settings aiModel and aiEffort) where
+ * it has them, else the all-agents ones (the Strategist box, `all`). Each is read by itself. Unknown is not a value: an
+ * own model the list does not have and an own effort that is not one of the five are never used. The agent plays the
+ * all-agents one in its place, and `ignored` says why, for the log. An own model that left the list runs its successor,
+ * as the all-agents choice does: the same tier at the same price or less, so the agent never ends on a dearer model
+ * than its own choice, nor on the all-agents one when that is dearer.
+ */
+export function agentChoice(own: { aiModel?: unknown; aiEffort?: unknown }, all: { model: string; effort: string }): { model: string; effort: Effort; ignored: string[] } {
+  const ignored: string[] = []
+  let model = all.model
+  const ownModel = own.aiModel
+  if (ownModel !== undefined && ownModel !== '') {
+    const id = typeof ownModel === 'string' ? ownModel : ''
+    if (id && isKnownModel(id)) model = id
+    else if (id && Object.hasOwn(SUCCESSORS, id)) {
+      model = currentModel(id)
+      ignored.push(`its own model ${id} is no longer on the list: it plays its successor ${model}`)
+    } else ignored.push(`its own model ${named(ownModel)} is not on the list (${Object.keys(MODELS).join(', ')}): it plays the all-agents model ${all.model}`)
+  }
+  let effort = all.effort as Effort
+  const ownEffort = own.aiEffort
+  if (ownEffort !== undefined && ownEffort !== '') {
+    if (typeof ownEffort === 'string' && (EFFORTS as readonly string[]).includes(ownEffort)) effort = ownEffort as Effort
+    else ignored.push(`its own effort ${named(ownEffort)} is not one of ${EFFORTS.join(', ')}: it plays the all-agents effort ${all.effort}`)
+  }
+  return { model, effort, ignored }
 }
 
 const SUBMIT_PLAN: Anthropic.Tool = {
@@ -400,15 +433,20 @@ export class Strategist {
   effort: Effort
   /** Models whose API refused the fallbacks parameter: asked without it from then on. */
   private readonly noFallback = new Set<string>()
-  /** Whether another call is due within the hour (the service reads its schedule); without one, always yes. */
-  private readonly expectsCallSoon: () => boolean
+  /**
+   * Whether another call of this model at this effort is due within the hour (the service reads its schedule);
+   * without one, always yes. A cache belongs to one model, and Anthropic's docs leave open, per model, whether a
+   * request at another effort can read it (an effort change is rendered with the thinking settings, which on some
+   * models come before the tools and the system prompt), so the pair is what counts.
+   */
+  private readonly expectsCallSoon: (model: string, effort: Effort) => boolean
   /** When the cache last served or stored the manual, per model and effort (the cache holds per model, tools and effort). */
   private readonly cachedAt = new Map<string, number>()
   /** How often the connection sends a failed request again by itself (rate limit, server error, lost connection). */
   private readonly retries: number
 
   /** `retries: 0` for a request that is sent once and never again (a shadow plan). */
-  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: () => boolean = () => true, o: { retries?: number } = {}) {
+  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: (model: string, effort: Effort) => boolean = () => true, o: { retries?: number } = {}) {
     this.retries = o.retries ?? 2
     this.client = new Anthropic({ apiKey, maxRetries: this.retries, timeout: 180_000 })
     this.model = model
@@ -454,11 +492,11 @@ export class Strategist {
    * the last 55 minutes) or another call is due within the hour; otherwise, a single agent at the 2-hour tick for
    * one, it goes uncached at the plain input price (owner, 2026-10-24).
    */
-  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
-    const key = `${this.model}:${this.effort}`
+  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>, cancel?: AbortSignal, effort: Effort = this.effort): Promise<Anthropic.Beta.BetaMessage> {
+    const key = `${this.model}:${effort}`
     const text = MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT
     const warm = Date.now() - (this.cachedAt.get(key) ?? Number.NEGATIVE_INFINITY) < CACHE_WARM_MS
-    const cached = warm || this.expectsCallSoon()
+    const cached = warm || this.expectsCallSoon(this.model, effort)
     // The cache is written or renewed when the request is processed, at its start: a long answer must not move it on.
     const sent = Date.now()
     const response = await this.create({ ...params, system: [{ type: 'text', text, ...(cached ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}) }] }, cancel)
@@ -469,27 +507,30 @@ export class Strategist {
 
   /**
    * A plan for one agent. `request` is the text of the request when the caller rendered it already: the service keeps
-   * it, so that a shadow plan can be asked with the very same words.
+   * it, so that a shadow plan can be asked with the very same words. `effort`: the agent's own, when it has one; this
+   * strategist's effort otherwise.
    */
-  async plan(input: PlanInput, request: string = renderPlanRequest(input)): Promise<Plan> {
-    return (await this.planFromRequest(request)).plan
+  async plan(input: PlanInput, request: string = renderPlanRequest(input), effort: Effort = this.effort): Promise<Plan> {
+    return (await this.planFromRequest(request, undefined, effort)).plan
   }
 
   /**
    * The plan request as a text: the same system prompt, manual, tools and settings whoever sends it, and the same
    * reading of the answer. `outcome` says whether a submit_plan call was read or why there is none. Nothing of one
-   * call stays in this object for the next but the cache decision and the fallback memory, each per model.
+   * call stays in this object for the next but the cache decision (per model and effort) and the fallback memory (per
+   * model). `effort` is this request's: one strategist serves its model at every effort, so requests at two efforts
+   * can be on their way at once (an agent's own effort, shadow plans at several efforts).
    */
-  async planFromRequest(request: string, cancel?: AbortSignal): Promise<{ plan: Plan; outcome: PlanOutcome }> {
+  async planFromRequest(request: string, cancel?: AbortSignal, effort: Effort = this.effort): Promise<{ plan: Plan; outcome: PlanOutcome }> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(this.effort, PLAN_TOKENS),
+      max_tokens: roomFor(effort, PLAN_TOKENS),
       thinking: { type: 'adaptive' },
-      output_config: { effort: this.effort },
+      output_config: { effort },
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: `${request}\n\nCall submit_plan now.` }],
-    }, cancel)
+    }, cancel, effort)
     const usage = {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,

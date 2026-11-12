@@ -29,7 +29,7 @@ import { budgetView } from './executor/budget.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
-import { MODELS, Strategist, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { MODELS, Strategist, agentChoice, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
@@ -236,9 +236,19 @@ export class Service {
   readonly executor: Executor
   /** EGLD top-ups from Binance that the owner approves with a one-time code on Telegram. */
   readonly topups: TopUps
-  /** Both replaced at run time when the admin panel changes their key or token. */
+  /**
+   * Both replaced at run time when the admin panel changes their key or token. The strategist is the all-agents one
+   * (the Strategist box): the model and effort of every agent without its own, of the manager chat and of /ask.
+   */
   strategist: Strategist | null
   telegram: Telegram | null
+  /**
+   * The strategists of the models agents play by their own choice (aiModel) when it is not the all-agents model, one
+   * per model and made with its first plan: the effort goes with each request. And what the log was told, per agent,
+   * of an own model or effort it does not know (said once while it stays the same).
+   */
+  private readonly agentStrategists = new Map<string, Strategist>()
+  private readonly aiSaid = new Map<number, string>()
   private readonly wallets = new Map<number, AgentWallet>()
   private readonly timers = new Map<number, NodeJS.Timeout>()
   /** When each agent's next tick is due (ms), for a settings save that shortens the cycle. */
@@ -285,7 +295,7 @@ export class Service {
     this.fox = new FoxLeague(cfg.foxleagueUrl, cfg.foxleagueRps)
     this.telegram = this.makeTelegram()
     const choice = strategistChoice(this.store, cfg)
-    this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort, () => this.callExpectedWithinHour()) : null
+    this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort, this.cacheRule()) : null
     this.executor = new Executor({
       cfg, chain: this.chain, fox: this.fox, store: this.store,
       notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)),
@@ -747,10 +757,11 @@ export class Service {
     if (names.includes('ANTHROPIC_API_KEY')) {
       this.cfg.anthropicApiKey = values.ANTHROPIC_API_KEY
       for (const shadow of this.shadowStrategists.values()) shadow.setApiKey(values.ANTHROPIC_API_KEY!)
+      for (const own of this.agentStrategists.values()) own.setApiKey(values.ANTHROPIC_API_KEY!)
       if (this.strategist) this.strategist.setApiKey(values.ANTHROPIC_API_KEY!)
       else {
         const choice = strategistChoice(this.store, this.cfg)
-        this.strategist = new Strategist(values.ANTHROPIC_API_KEY!, choice.model, choice.effort, () => this.callExpectedWithinHour())
+        this.strategist = new Strategist(values.ANTHROPIC_API_KEY!, choice.model, choice.effort, this.cacheRule())
       }
     }
     const labels = changed.map(([k]) => KEY_FIELDS.find(f => f.key === k)!.label).join(', ')
@@ -1278,16 +1289,58 @@ export class Service {
    * so it comes that window plus one shortest cycle on (agent review of PR #29). Only then is the game manual worth a one-hour
    * cache write (twice the input price); erring towards no costs at most the plain price twice (owner, 2026-10-24).
    */
-  private callExpectedWithinHour(now = Date.now()): boolean {
+  private callExpectedWithinHour(now = Date.now(), pair?: { model: string; effort: string }): boolean {
     if (this.store.killSwitch) return false
     const horizon = now + CACHE_HORIZON_MS
     for (const a of this.store.agents()) {
       if (a.paused || this.store.getKv(`waiting_funds:${a.index}`) === '1') continue
+      // A cache belongs to one model and effort (Strategist.expectsCallSoon): only the calls of that pair count.
+      if (pair && !this.callsOf(a).some(c => c.model === pair.model && c.effort === pair.effort)) continue
       const at = this.nextAt.get(a.index)
       const next = at !== undefined && at > now ? at : now + (Math.max(MIN_TICK_MINUTES, a.settings.tickMinutes - a.settings.tickJitterMinutes) + a.settings.tickMinutes * 0.8) * 60_000
       if (next <= horizon && this.inActiveHours(a, new Date(next))) return true
     }
     return false
+  }
+
+  /** The cache rule every strategist of the service is made with: another call of its model at that effort within the hour. */
+  private cacheRule(): (model: string, effort: Effort) => boolean {
+    return (model, effort) => this.callExpectedWithinHour(Date.now(), { model, effort })
+  }
+
+  /** The model and effort of each call one plan of this agent makes: its real plan. */
+  private callsOf(agent: AgentRow): { model: string; effort: string }[] {
+    const ai = this.aiOf(agent)
+    return [{ model: ai.model, effort: ai.effort }]
+  }
+
+  /**
+   * The model and effort an agent plays with: its own where it has them, else the all-agents ones (agentChoice), with
+   * why an own value is not used. Without a strategist (no AI key) the all-agents pair is the one saved for when there
+   * is one. `own`: whether it differs from the all-agents pair.
+   */
+  aiOf(agent: Pick<AgentRow, 'settings'>): { model: string; effort: Effort; ignored: string[]; own: boolean } {
+    const all = this.strategist ? { model: this.strategist.model, effort: this.strategist.effort } : strategistChoice(this.store, this.cfg, () => undefined)
+    const ai = agentChoice(agent.settings, all)
+    return { ...ai, own: ai.model !== all.model || ai.effort !== all.effort }
+  }
+
+  /**
+   * The strategist of a model: the all-agents one for its model, else one per model, made with its first plan (only a
+   * model of the list gets one). Each serves its model at every effort, so the agents of one model share its memory
+   * of the cache.
+   */
+  private strategistFor(model: string): Strategist {
+    const all = this.strategist
+    if (!all) throw new Error('the strategist is off (no ANTHROPIC_API_KEY)')
+    if (model === all.model) return all
+    if (!isKnownModel(model) || !this.cfg.anthropicApiKey) throw new Error(`no strategist for the model ${model}`)
+    let own = this.agentStrategists.get(model)
+    if (!own) {
+      own = new Strategist(this.cfg.anthropicApiKey, model, 'medium', this.cacheRule())
+      this.agentStrategists.set(model, own)
+    }
+    return own
   }
 
   private inActiveHours(agent: AgentRow, now = new Date()): boolean {
@@ -1420,14 +1473,21 @@ export class Service {
     const request = renderPlanRequest(input)
     // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the
     // strategist while the request is on its way, and this plan is still the earlier model's (agent review of PR #63,
-    // R63A-2).
-    const playing = { model: String(this.strategist!.model), effort: String(this.strategist!.effort ?? '') }
-    const plan = await this.strategist!.plan(input, request)
+    // R63A-2). The agent's own where it has them (the owner, 2026-11-13); an own value nobody knows is never used, and
+    // the log says why once.
+    const all = { model: this.strategist!.model, effort: this.strategist!.effort }
+    const ai = agentChoice(agent.settings, all)
+    const why = ai.ignored.length ? `${agentName(agent.index)}: ${ai.ignored.join('; ')}` : ''
+    if (why && this.aiSaid.get(agent.index) !== why) console.log(`[${new Date().toISOString()}] ${why}`)
+    this.aiSaid.set(agent.index, why)
+    const playing = { model: String(ai.model), effort: String(ai.effort ?? '') }
+    const own = ai.model !== all.model || ai.effort !== all.effort
+    const plan = await this.strategistFor(ai.model).plan(input, request, ai.effort)
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +
       (plan.rejected.length ? `\nrejected proposals: ${plan.rejected.map(r => r.error).join('; ')}` : '') +
-      `\nmodel cost $${plan.usage.usd.toFixed(4)} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
+      `\nmodel cost $${plan.usage.usd.toFixed(4)}${own ? `, ${MODELS[playing.model]?.label ?? playing.model} at ${playing.effort} effort` : ''} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
     // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
     this.addModelUsd(plan.usage.usd)
     this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
