@@ -16,9 +16,10 @@ The agent itself is free. Three things cost money, and you control each one:
 Before you move the strategist to another AI model, you can let that model plan in the shadow: after each real plan
 the same request goes to the second model too. What it would have done is only recorded, next to the real plan.
 A shadow plan never plays: nothing of it is carried out and the playing model never reads it. Each one costs what
-one plan costs on the second model, on top of the real plan. It shows in the dashboard's AI spend. It is off unless
-you switch it on yourself on the computer that runs the agent: the server guide in the repository (`docs/SERVER.md`)
-says how to do it and how to read the comparison (`shadow-report`).
+one plan costs on the second model, on top of the real plan. It shows in the dashboard's AI spend. You can try
+several models this way at the same time: each one plans by itself and each adds its own cost per plan. It is off
+unless you switch it on yourself on the computer that runs the agent: the server guide in the repository
+(`docs/SERVER.md`) says how to do it and how to read the comparison (`shadow-report`).
 
 ## To start
 

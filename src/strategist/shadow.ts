@@ -1,8 +1,9 @@
 // Shadow plans (the owner, 2026-11-11): right after an agent's real plan the service sends the very same request to a
 // second model and only records what that model would have done, so an owner can compare a cheaper model with the one
 // that plays before switching. A shadow plan is never carried out, never shown to the playing model and changes
-// nothing the agents play by. This module holds what is plain data about one: the setting, the copy that is kept and
-// the report. It knows nothing of wallets, the chain or the code that carries actions out.
+// nothing the agents play by. Since 2026-11-12 several shadow models can be set at once: each gets the request and is
+// recorded by itself. This module holds what is plain data about a shadow plan: the setting, the copy that is kept
+// and the report. It knows nothing of wallets, the chain or the code that carries actions out.
 
 import type { Store } from '../store/db.ts'
 import { agentName } from '../names.ts'

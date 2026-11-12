@@ -69,6 +69,9 @@ plan the service sends the very same request to the second model and only record
 plan is never carried out, the playing model never reads it and nothing the agents play by changes. Each one costs
 what one plan costs on the shadow model, on top of the real plan. That cost is in the dashboard's AI spend.
 
+You can set several shadow models at once. Each gets the same request at the same moment and is recorded by itself.
+Each adds its own cost to every plan.
+
 It is off unless you switch it on here, on the server. There is no button for it in the dashboard and no Telegram
 command, because it adds AI spend.
 
@@ -80,19 +83,31 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
 sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_effort medium
 ```
 
+Several models go into the one setting, separated by commas. Put the value in quotes if you write spaces after the
+commas:
+
+```
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model claude-haiku-5-5,claude-sonnet-5-5
+```
+
 Switch it off the same way, with `off` as the model:
 
 ```
 sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model off
 ```
 
-- The model is one of the list (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-2`) and
-  not the one that plays. Anything else means off, and the log says why once (`journalctl -u foxleague-agent`).
+- Each model is one of the list (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-2`) and
+  not the one that plays. An entry that is anything else is left out and the log says why once
+  (`journalctl -u foxleague-agent`); the others still run. A model written twice counts once. `off` anywhere in the
+  setting switches all of them off.
 - A shadow model that is also the model that plays rests. When you later pick another playing model in the dashboard,
-  its shadow plans start, so that switch asks for your dashboard password even when the new model is cheaper.
-- The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`.
-- `AGENT_SHADOW_MODEL` and `AGENT_SHADOW_EFFORT` in `/etc/foxleague-agent/env` do the same from the next start of
-  the service. The database's setting wins, so `off` there switches it off whatever the env file says.
+  its shadow plans start, so that switch asks for your dashboard password even when the new model is cheaper. With
+  several shadow models set, the switch asks for it also when the model you pick is another one of them.
+- The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`. It is one effort for every
+  shadow model.
+- `AGENT_SHADOW_MODEL` (one model or several separated by commas) and `AGENT_SHADOW_EFFORT` in
+  `/etc/foxleague-agent/env` do the same from the next start of the service. The database's setting wins, so `off`
+  there switches it off whatever the env file says.
 
 Read what came of it at any time, also while the service runs (it only reads):
 
@@ -101,11 +116,13 @@ sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report      # every agen
 sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 3    # agent 3
 ```
 
-The report says how many shadow plans there are, how many answered with a valid plan, how many of their actions the
-parser took, how often the shadow proposed the same kinds of action as the real plan of the same moment, the average
-cost and time and the last pairs side by side. Each shadow plan is also a row in the agent's Activity, marked
-"shadow plan, not carried out". The newest 2,000 are kept.
+The report gives, for each shadow model, how many shadow plans there are, how many answered with a valid plan, how
+many of their actions the parser took, how often the shadow proposed the same kinds of action as the real plan of the
+same moment and the average cost and time. Then it lists the last real plans, each with the shadow plans made from
+the same request below it. Each shadow plan is also a row in the agent's Activity, marked "shadow plan, not carried
+out". The newest 2,000 are kept, those of all shadow models together.
 
 What it cannot tell you: which plan was the better one. A shadow plan's actions are never checked against the game
-rules or your limits, so read the pairs yourself before you switch. A shadow request that gets no answer in 10
-minutes is given up and never asked again.
+rules or your limits, so read the plans yourself before you switch. A shadow request that gets no answer in 10
+minutes is given up and never asked again. Until then a model that is still answering an agent's earlier request skips
+that agent's next plan, while the other shadow models go on.

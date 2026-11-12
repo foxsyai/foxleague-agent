@@ -703,7 +703,7 @@ function readForm() {
 }
 
 const STATUS = { dry_run: ['dry', 'dry run'], confirmed: ['run', 'done'], refused: ['pause', 'refused'], failed: ['halt', 'failed'], error: ['halt', 'error'], unconfirmed: ['stale', 'pending'], info: ['mute', 'info'], sent: ['stale', 'sent'] }
-// A shadow plan is what a second AI model would have planned from the same request: recorded to compare, never carried out.
+// A shadow plan is what another AI model would have planned from the same request: recorded to compare, never carried out.
 const SHADOW_MARK = ['stale', 'shadow plan, not carried out']
 // What a filter of the activity shows. A shadow plan is neither a plan nor an action nor a problem of the agent:
 // only "All" and its own filter show it.
@@ -1007,7 +1007,7 @@ const TIPS = {
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
     <p>The filter narrows it to plans, actions or problems.</p>
-    <p>A row marked <b>shadow plan, not carried out</b> is what a second AI model would have planned from the same request. It is recorded only to compare the two models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it. Such rows appear only while shadow plans are switched on on the server.</p>`],
+    <p>A row marked <b>shadow plan, not carried out</b> is what another AI model would have planned from the same request. It is recorded only to compare the models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it. Such rows appear only while shadow plans are switched on on the server.</p>`],
   budget: ['Budget', `<p>Spend against your caps: today (the game day resets at 14:00 UTC), this month and the one-time setup budget.</p>
     <p>Every paid action is valued in USD at live prices before it runs; one that would go over a cap is refused. Dry-run spend has its own ledger, so it never blocks live spending.</p>`],
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>

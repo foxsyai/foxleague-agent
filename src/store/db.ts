@@ -14,7 +14,11 @@ import type { ShadowPlanRow } from '../strategist/shadow.ts'
 /** The kind of a shadow plan's row in the activity (src/strategist/shadow.ts, SHADOW_KIND; named here so the store imports no code from it). */
 const SHADOW_ROW_KIND = 'shadow'
 
-/** The shadow plans kept for the report: the newest 2,000 (about 12 days of ten agents planning every hour, 16 hours a day; a few megabytes at most). */
+/**
+ * The shadow plans kept for the report: the newest 2,000 of all shadow models together (about 12 days of ten agents
+ * planning every hour, 16 hours a day, with one shadow model, and that divided by their number with several; a few
+ * megabytes at most).
+ */
 export const SHADOW_PLANS_KEPT = 2000
 
 export interface AgentRow {
