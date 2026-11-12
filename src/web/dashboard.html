@@ -135,6 +135,7 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .vmode.paused{background:rgba(245,165,36,.15);color:var(--acc)}
 .vmode.imported{background:rgba(94,164,255,.14);color:#8fc1ff}
 .vmode.low{background:rgba(255,140,60,.18);color:#ffa45c}
+.vmode.ai{background:rgba(46,204,113,.12);color:var(--up);text-transform:none;letter-spacing:.02em}
 #walletRows .v.low{color:#ffa45c;font-weight:650}
 #impbox{max-width:520px}
 #impbox input,#impbox textarea{margin-bottom:12px}
@@ -351,6 +352,10 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
           <div class="full"><label for="sPreset">Strategy<i class="info" data-tip="strategy">i</i></label>
             <select id="sPreset"><option value="">Custom</option></select><div class="hint">Picking a level shows what it changes, for you to accept or cancel.</div><div class="hint" id="sAiHint" hidden></div></div>
           <div class="full"><textarea id="sStrategy" maxlength="3000"></textarea></div>
+          <div class="sep">AI</div>
+          <div><label for="sAiModel">AI model<i class="info" data-tip="aiModel">i</i></label><select id="sAiModel"></select></div>
+          <div><label for="sAiEffort">Effort<i class="info" data-tip="aiEffort">i</i></label><select id="sAiEffort"></select></div>
+          <div class="full"><div class="hint" id="hAi"></div></div>
           <div class="sep">Spending (USD)</div>
           <div><label for="sDaily">Daily cap<i class="info" data-tip="daily">i</i></label><input id="sDaily" type="number" min="0" max="1000" step="0.5"></div>
           <div><label for="sMonthly">Monthly budget<i class="info" data-tip="monthly">i</i></label><input id="sMonthly" type="number" min="0" max="10000" step="1"></div>
@@ -510,7 +515,18 @@ function renderStrat() {
   const long = pick && pick.long ? ' ($' + pick.long.price[0] + ' / $' + pick.long.price[1] + ' when the prompt is over ' + pick.long.over.toLocaleString('en-US') + ' tokens)' : ''
   $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' + long : i.model)
     + (changed && ratio !== 1 ? ' · ' + (ratio < 0.95 ? Math.round(ratio * 100) / 100 : Math.round(ratio * 10) / 10) + 'x the current price' : '')
-    + ' · spent ' + usd(i.modelUsdToday) + ' today, ' + usd(i.modelUsdYesterday) + ' yesterday, ' + usd(i.modelUsdTotal) + ' in all'
+    + ' · spent ' + usd(i.modelUsdToday) + ' today, ' + usd(i.modelUsdYesterday) + ' yesterday, ' + usd(i.modelUsdTotal) + ' in all' + ownAiText()
+}
+// How many agents play an own model or effort (the Strategist box moves the others only).
+function ownAiText() {
+  const n = S.instance.ownAi || 0
+  return n ? ' · ' + n + (n === 1 ? ' agent uses its own' : ' agents use their own') + ' model or effort' : ''
+}
+// The AI an agent plays when it is not the all-agents one ("Haiku 5.5, high"), shown on its tab; else nothing.
+function aiTag(b) {
+  const i = S.instance, ai = b.ai
+  if (!ai || !i.model || (ai.model === i.model && ai.effort === i.effort)) return ''
+  return (i.models.find(m => m.id === ai.model) || { label: ai.model }).label + ', ' + ai.effort
 }
 
 const NARROW = matchMedia('(max-width:700px)')
@@ -528,6 +544,7 @@ function renderAgentbar() {
     bar.append(el('button', { class: 'vtab' + (b.index === sel ? ' on' : ''), onclick: () => select(b.index) },
       el('span', { class: 'vdot ' + dot }), 'Agent ' + (b.index + 1) + (name ? ' · ' + name : ''),
       b.source === 'imported' ? el('span', { class: 'vmode imported', text: 'imported', title: 'An imported team: it plays with its own key, not one from your recovery words' }) : '',
+      aiTag(b) ? el('span', { class: 'vmode ai', text: aiTag(b), title: 'Its own AI model or effort (Settings, AI). The Strategist box sets the other agents.' }) : '',
       b.paused ? el('span', { class: 'vmode paused', text: 'paused' }) : '',
       b.funds && b.funds.low ? el('span', { class: 'vmode low', text: 'low funds', title: 'Its wallet is worth less than its top-up warning: send EGLD, WEGLD or FOXSY to this agent' }) : ''))
   }
@@ -544,7 +561,7 @@ function renderAgentPicker(bar) {
   const cur = S.agents.find(b => b.index === sel) || S.agents[0]
   const label = b => {
     const name = b.snapshot && b.snapshot.team && b.snapshot.team.name
-    return 'Agent ' + (b.index + 1) + (name ? ' · ' + name : '') + (b.paused ? ' · paused' : '') + (b.source === 'imported' ? ' · imported' : '') + (b.funds && b.funds.low ? ' · low funds' : '')
+    return 'Agent ' + (b.index + 1) + (name ? ' · ' + name : '') + (aiTag(b) ? ' · ' + aiTag(b) : '') + (b.paused ? ' · paused' : '') + (b.source === 'imported' ? ' · imported' : '') + (b.funds && b.funds.low ? ' · low funds' : '')
   }
   const pick = el('select', { 'aria-label': 'Agent', onchange: e => select(Number(e.target.value)) })
   for (const b of S.agents) pick.append(el('option', { value: String(b.index), selected: b.index === cur.index }, label(b)))
@@ -652,8 +669,43 @@ function fillForm(st) {
   $('sTraining').value = st.paidTrainingPerDay; $('sBoosters').value = st.boostersPerWeek; $('sPacks').value = st.packsPerWeek; $('sMedicine').value = st.medicineDaysPerWeek
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
+  fillOptions($('sAiModel'), aiModelOptions(), st.aiModel); fillOptions($('sAiEffort'), aiEffortOptions(), st.aiEffort)
+  renderOwnAi()
   formDirty = false
 }
+
+/** Puts the choices into a select and picks the value, or the first choice when the value is none of them. */
+function fillOptions(sel, options, value) {
+  sel.replaceChildren(...options.map(([v, text]) => el('option', { value: v, text })))
+  sel.value = options.some(([v]) => v === value) ? value : options[0][0]
+}
+// The choices of an agent's own AI: "Same as all agents" first (the Strategist box), then the four models with their
+// list price, or the five efforts.
+function aiModelOptions() {
+  const i = S.instance, cur = i.models.find(m => m.id === i.model)
+  return [['', 'Same as all agents' + (cur ? ' (' + cur.label + ')' : '')], ...i.models.map(m => [m.id, m.label + ' · $' + m.price[0] + ' / $' + m.price[1] + ' per M tokens'])]
+}
+function aiEffortOptions() {
+  const i = S.instance
+  return [['', 'Same as all agents' + (i.effort ? ' (' + i.effort + ')' : '')], ...i.efforts.map(e => [e, e])]
+}
+// The line under the AI fields: what the agent plays, what it would play after saving, its shadow plans set on the
+// server and a value saved on the server that is not used.
+function ownAiHint(b, form) {
+  const i = S.instance, ai = b.ai || {}, own = ai.own || {}
+  const name = id => (i.models.find(m => m.id === id) || { label: id }).label
+  const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
+  const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a.join('')
+  const next = { model: form.aiModel || i.model, effort: form.aiEffort || i.effort }
+  const parts = ['Plays ' + name(ai.model) + ' at ' + ai.effort + ' effort, ' + (own.model || own.effort ? 'its own.' : 'the same as all agents.')]
+  if (next.model !== ai.model || next.effort !== ai.effort) parts.push('After saving: ' + name(next.model) + ' at ' + next.effort + ' effort.')
+  if ((ai.shadows || []).length) parts.push('Shadow plans set on the server for ' + (ai.ownShadows ? 'this agent' : 'every agent') + ': ' + list(ai.shadows.map(entry)) + '.')
+  const ignored = ai.ignored || []
+  if (ignored.some(w => w.startsWith('its own model'))) parts.push('A model saved on the server is not on the list, so the agent plays the all-agents one.')
+  if (ignored.some(w => w.startsWith('its own effort'))) parts.push('An effort saved on the server is not one of the five, so the agent plays the all-agents one.')
+  return parts.join(' ')
+}
+function renderOwnAi() { const b = agent(); if (b) $('hAi').textContent = ownAiHint(b, readForm()) }
 
 // Owner, 2026-10-23: one look says whether a limit per rarity still fits today's market. Within 90 to 150 percent
 // of the market price it is in range; under it the agent may miss most sales; far over it the agent may pay too much.
@@ -699,6 +751,7 @@ function readForm() {
     entryFeesBronze: list('sBronze'), entryFeesSilver: list('sSilver'), entryFeesGold: list('sGold'), tickMinutes: n('sTick'), tickJitterMinutes: n('sJitter'),
     paidTrainingPerDay: n('sTraining'), boostersPerWeek: n('sBoosters'), packsPerWeek: n('sPacks'), medicineDaysPerWeek: n('sMedicine'),
     activeHoursUtc: [n('sFrom'), n('sTo')],
+    aiModel: $('sAiModel').value, aiEffort: $('sAiEffort').value,
   }
 }
 
@@ -914,18 +967,27 @@ $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; render
 // A dearer model or more effort raises the AI spend, which has no cap: the server asks for the password then
 // (raisesAiSpend in server.ts, the same rule). Another model is dearer when any of its prices can be higher: the
 // highest over its rate cards against the lowest of the model in use. A cheaper model or less effort is one click.
-// A switch that starts shadow plans asks for the password too (wakesShadow in server.ts, the same rule): a shadow
-// model set on the server rests while it is the model that plays, and under any other model every plan also pays for
-// a shadow plan by it, however cheap the new model is. Several shadow models can be set: the one that plays wakes
-// with any switch, also with a switch to another of them.
-function wakesShadow(model) {
+// A switch that starts shadow plans asks for the password too (wakesShadow and allAgentsAiNeedsPassword in server.ts,
+// the same rule): a shadow entry set on the server rests while its model plays (at its effort, when the entry has one)
+// and under anything else every plan also pays for a shadow plan by it, however cheap the new model is. Several can be
+// set: the one that rests wakes with any switch away from it. It is weighed for each agent the switch really moves:
+// one with its own model and effort is not moved, so its shadow plans do not count. A page that got no agents (an
+// older answer) reads the all-agents list as before.
+function wakesShadow(model, effort) {
   const i = S.instance
-  return (i.shadowModels || []).includes(i.model) && model !== i.model
+  if (effort === undefined) effort = i.effort
+  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const who = S.agents ? S.agents.filter(b => b.ai) : [{ ai: { own: {}, shadows: i.shadowModels || [] } }]
+  return who.some(b => {
+    const own = b.ai.own || {}
+    const cm = own.model || i.model, ce = own.effort || i.effort, nm = own.model || model, ne = own.effort || effort
+    return (b.ai.shadows || []).some(e => rests(e, cm, ce) && !rests(e, nm, ne))
+  })
 }
 function aiCostsMore(model, effort) {
   const i = S.instance, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
   if (!cur || !pick) return true
-  if (wakesShadow(model)) return true
+  if (wakesShadow(model, effort)) return true
   if (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) return true
   return i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
 }
@@ -937,6 +999,32 @@ function aiRaiseText(model) {
   const shadow = name(i.model), all = i.shadowModels.map(name)
   const set = all.length > 1 ? all.slice(0, -1).join(', ') + ' and ' + all[all.length - 1] : shadow
   return 'Shadow plans are set to ' + set + ' on this computer. ' + (all.length > 1 ? 'Those by ' + shadow : 'They') + ' rest while ' + shadow + ' plays. With another model playing, every plan of every agent also pays for a shadow plan by ' + shadow + '. Your password confirms it.'
+}
+// One agent's own model and effort (agentAiNeedsPassword in server.ts, the same rule): from the pair it plays to the
+// pair it would play after saving (its own where the form gives one, else the all-agents one), a dearer model, a higher
+// effort or a switch that starts one of its shadow plans asks for the password.
+function agentAiCostsMore(b, form) {
+  const i = S.instance, ai = b.ai || {}
+  const next = { model: form.aiModel || i.model, effort: form.aiEffort || i.effort }
+  if (next.model === ai.model && next.effort === ai.effort) return false
+  const was = i.models.find(m => m.id === ai.model), will = i.models.find(m => m.id === next.model)
+  if (!was || !will) return true
+  if (will.id !== was.id && will.dearest.some((p, k) => p > was.cheapest[k])) return true
+  if (i.efforts.indexOf(next.effort) > i.efforts.indexOf(ai.effort)) return true
+  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  return (ai.shadows || []).some(e => rests(e, ai.model, ai.effort) && !rests(e, next.model, next.effort))
+}
+// What the password dialog says for one agent's AI: why this change costs more.
+function agentAiText(b, form) {
+  const i = S.instance, ai = b.ai || {}
+  const name = id => (i.models.find(m => m.id === id) || { label: id }).label
+  const next = { model: form.aiModel || i.model, effort: form.aiEffort || i.effort }
+  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const woken = (ai.shadows || []).filter(e => rests(e, ai.model, ai.effort) && !rests(e, next.model, next.effort))
+  if (!woken.length) return 'A model with a higher price or a higher effort costs more on every plan of this agent. The AI spend has no cap of its own. Your password confirms it.'
+  const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
+  const names = woken.map(entry), list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]
+  return 'Shadow plans by ' + list + ' are set on the server for this agent. They rest while it plays ' + name(ai.model) + ' at ' + ai.effort + ' effort. With this change every plan of this agent also pays for them. Your password confirms it.'
 }
 // password: already asked for (the level dialog asks once for the settings and the AI). Answers whether the AI was
 // switched: false when the password was not given or the server refused it (a mistyped one is a 403).
@@ -982,7 +1070,7 @@ const TIPS = {
   k_foxsy: ['FOXSY price', `<p>FOXSY in USD at the xExchange FOXSY/WEGLD spot price. Entry fees, stakes, shop items and the registration fee are paid in FOXSY; the caps count them in USD at the higher of this price and its two-day median, so a sudden dip never makes a payment look cheaper.</p>`],
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
-  k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
+  k_strat: ['Strategist', `<p>The Claude model that plans for every agent without its own and how hard it thinks (effort). An agent can have its own model and effort in its Settings (AI); the line below says how many do. The manager chat and /ask use this one.</p>
     <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> is the cheapest, for trying things out: how well it plays this game has not been measured yet. <b>Sonnet 5.5</b> is the default and handles this game well. <b>Opus 5.5</b> is stronger and costs about 2x as much; <b>Fable 5.2</b>, the most capable, about 4x.</p>
     <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
@@ -996,6 +1084,11 @@ const TIPS = {
     <p>The key must allow reading and withdrawals only, be restricted to the server's IP and send only to the whitelisted agent addresses. Test keys checks the withdrawal and IP settings, that trading and transfers are off and which agent wallets are on your withdrawal whitelist: a top-up goes only to a whitelisted wallet. Switch the whitelist itself on in Binance (Account, Withdrawal): that switch cannot be read through the API.</p>`],
   key_BINANCE_API_SECRET: ['Binance API secret', `<p>The secret that belongs to the Binance API key. Binance shows it only once, when you create the key.</p>`],
   keys_test: ['Test keys', `<p>Checks every key against its service: Anthropic model access, a test message to your Telegram chat and the Binance key's permissions. Nothing is changed.</p>`],
+  aiModel: ['AI model', `<p>The Claude model that plans for this agent. <b>Same as all agents</b>, the default, follows the Strategist box at the top. Pick a model to give this agent its own: the other agents keep theirs. A later switch in the Strategist box does not move this one.</p>
+    <p>The price next to each model is its list price per million tokens in and out. A dearer model asks for your password, because the AI spend has no cap of its own; a cheaper one is one click. Going back to Same as all agents counts by the model it lands on. A change that starts shadow plans set on the server for this agent asks for it too.</p>
+    <p>The line below the fields says what the agent plays now. The manager chat and /ask use the model of the Strategist box.</p>`],
+  aiEffort: ['Effort', `<p>How hard the AI thinks on each plan of this agent. <b>Same as all agents</b>, the default, follows the effort of the Strategist box. More effort means more thinking per plan: better on hard decisions but slower and dearer.</p>
+    <p>A higher effort asks for your password; a lower one is one click. Going back to Same as all agents counts by the effort it lands on. A shadow plan set on the server at the effort this agent plays rests: leaving that effort starts it, so that asks for the password too.</p>`],
   plan_now: ['Plan now', `<p>Runs a planning cycle for this agent now instead of waiting for the next one. The strategist reads a fresh snapshot and proposes actions; they run at random moments over the next minutes, checked like any other action. Only inside the agent's active hours: outside them, and while it is paused or still running a plan, it says why and starts nothing.</p>
     <p>It works only inside the active hours. It does nothing while the agent is paused or busy or while the kill switch is on.</p>`],
   pause: ['Pause and resume', `<p>Stops this agent only: no planning and no actions. The other agents carry on. Resume picks up at the next cycle.</p>
@@ -1283,8 +1376,11 @@ function renderAiHint(k) {
   if (!rec) return
   const label = id => (S.instance.models.find(m => m.id === id) || { label: id }).label
   if (!S.instance.model) { box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort, once the AI key is set.'); return }
+  // An agent with its own model or effort plays that one: the Strategist box would not move it.
+  const b = agent(), own = b && b.ai && b.ai.own && (b.ai.own.model || b.ai.own.effort)
+  if (own) { box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort. This agent plays its own: ' + label(b.ai.model) + ' at ' + b.ai.effort + ' effort (AI, below).'); return }
   const same = S.instance.model === rec.model && S.instance.effort === rec.effort
-  box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort' + (same ? ' (in use).' : ' (now ' + label(S.instance.model) + ', ' + S.instance.effort + '). It is one setting for every agent. '))
+  box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort' + (same ? ' (in use).' : ' (now ' + label(S.instance.model) + ', ' + S.instance.effort + '). The Strategist box sets it for every agent without its own. '))
   if (!same) box.append(el('button', { class: 'btn sm', type: 'button', onclick: () => { $('sModel').value = rec.model; $('sEffort').value = rec.effort; stratDirty = true; renderStrat(); $('sModel').scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('Press Apply in the Strategist box to use it') } }, 'Use it'))
 }
 /** The level a strategy text belongs to, by the name it starts with ("Zeus (level 6 of 6): ..."), or null. */
@@ -1339,9 +1435,11 @@ function openLevel(k) {
   } else box.append(el('div', { style: 'grid-column:1 / -1', text: 'Its settings already fit the ' + name + ' level.' }))
   const ai = S.instance.levelAi && S.instance.levelAi[k]
   const mlabel = id => (S.instance.models.find(m => m.id === id) || { label: id }).label
-  const aiDiffers = ai && S.instance.model && (ai.model !== S.instance.model || ai.effort !== S.instance.effort)
+  // Offered only for an agent that follows the Strategist box: one with its own model or effort would not be moved by it.
+  const ownAiSet = b.ai && b.ai.own && (b.ai.own.model || b.ai.own.effort)
+  const aiDiffers = ai && S.instance.model && !ownAiSet && (ai.model !== S.instance.model || ai.effort !== S.instance.effort)
   $('lvlAiRow').hidden = !aiDiffers; $('lvlAi').checked = false
-  if (aiDiffers) $('lvlAiText').textContent = 'Also switch the AI to ' + mlabel(ai.model) + ' at ' + ai.effort + ' effort, recommended for this level. It is one setting for every agent (now ' + mlabel(S.instance.model) + ', ' + S.instance.effort + ').'
+  if (aiDiffers) $('lvlAiText').textContent = 'Also switch the AI to ' + mlabel(ai.model) + ' at ' + ai.effort + ' effort, recommended for this level. The Strategist box sets it for every agent without its own (now ' + mlabel(S.instance.model) + ', ' + S.instance.effort + ').'
   $('lvlOk').onclick = async () => {
     $('lvlwrap').classList.remove('on')
     // Only the settings that fall short take the level's value; the rest keep the agent's own.
@@ -1374,6 +1472,7 @@ $('sPreset').onchange = () => {
 }
 $('settingsForm').addEventListener('input', () => { formDirty = true })
 $('settingsForm').addEventListener('input', e => { if (/^sBid(Common|Uncommon|Rare|Epic|Legendary)?$/.test(e.target.id)) renderLimitHints() })
+$('settingsForm').addEventListener('input', e => { if (/^sAi(Model|Effort)$/.test(e.target.id)) renderOwnAi() })
 $('resetBtn').onclick = () => { formDirty = false; fillForm(agent().settings) }
 // Settings that let the agent spend more; the server asks for the password when one goes up (raisesLimit in server.ts).
 const LIMITS = ['dailyCapUsd', 'monthlyBudgetUsd', 'setupBudgetUsd', 'maxEntryFeeFoxsy', 'maxShopPaymentFoxsy', 'maxSwapFoxsy', 'maxBidFoxsy', 'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy', 'maxBidEpicFoxsy', 'maxBidLegendaryFoxsy', 'paidTrainingPerDay', 'boostersPerWeek', 'packsPerWeek', 'medicineDaysPerWeek']
@@ -1385,9 +1484,11 @@ function raisesForm(form, cur) {
 }
 // password: already asked for (the level dialog asks once for the settings and the AI).
 async function saveSettings(password) {
-  const form = readForm()
-  if (raisesForm(form, agent().settings)) {
-    if (!password) password = await askPassword('Raise a limit', RAISE_TEXT)
+  const form = readForm(), b = agent()
+  const limits = raisesForm(form, b.settings), ai = agentAiCostsMore(b, form)
+  if (limits || ai) {
+    if (!password) password = limits && ai ? await askPassword('Raise a limit and switch to a dearer AI', RAISE_TEXT + ' ' + agentAiText(b, form))
+      : ai ? await askPassword('Change this agent\'s AI', agentAiText(b, form)) : await askPassword('Raise a limit', RAISE_TEXT)
     if (!password) return toast('Nothing saved', true)
     form.password = password
   }

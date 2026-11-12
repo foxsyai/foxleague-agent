@@ -722,3 +722,109 @@ test('PAM-15 an agent deleted for good takes its own shadow list with it: a new 
   assert.equal(store.getKv('shadow_model_agent_2'), undefined)
   assert.equal(store.getKv('shadow_model_agent_1'), `${HAIKU}:low`, 'another agent keeps its own')
 })
+
+// ---- the dashboard ----
+
+/** Several functions of the dashboard's script together (one may call another), the last one returned. */
+function pageFunctions<T>(names: string[], S: unknown): T {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const src = names.map(name => {
+    const found = html.match(new RegExp(`\\nfunction ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`))?.[0]
+    assert.ok(found, `the dashboard defines ${name}()`)
+    return found
+  })
+  return new Function('S', `${src.join('\n')}; return ${names.at(-1)}`)(S) as T
+}
+
+test('PAM-16 the dashboard: an agent\'s own AI model and effort with "Same as all agents" first, the prices and a bubble each; the page asks for the password by the server\'s rules; the tab and the Strategist box say who plays what', () => {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const rules = web as unknown as {
+    agentAiNeedsPassword: (current: Pair, next: Pair, shadows: readonly string[]) => boolean
+    allAgentsAiNeedsPassword: (all: Pair, next: Pair, agents: { settings: { aiModel: string; aiEffort: string }; shadows: string[] }[]) => boolean
+  }
+  assert.equal(typeof rules.agentAiNeedsPassword, 'function')
+  // The fields, each with its bubble, in the agent's settings; the form sends them.
+  assert.match(html, /<label for="sAiModel">AI model<i class="info" data-tip="aiModel">i<\/i><\/label><select id="sAiModel"><\/select>/)
+  assert.match(html, /<label for="sAiEffort">Effort<i class="info" data-tip="aiEffort">i<\/i><\/label><select id="sAiEffort"><\/select>/)
+  const read = html.match(/function readForm\(\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+  assert.match(read, /aiModel: \$\('sAiModel'\)\.value, aiEffort: \$\('sAiEffort'\)\.value/)
+  const save = html.match(/async function saveSettings\(password\) \{[\s\S]*?\n\}/)?.[0] ?? ''
+  assert.match(save, /agentAiCostsMore\(b, form\)/, 'the save asks for the password when the AI gets dearer')
+  for (const tip of ['aiModel', 'aiEffort']) {
+    const text = html.match(new RegExp(`\\n  ${tip}: \\['[^']+', \`([^\`]*)\`\\]`))?.[1] ?? ''
+    assert.ok(text.length > 100, `the bubble ${tip}`)
+    assert.match(text, /Same as all agents/)
+    assert.match(text, /password/)
+    assert.doesNotMatch(text, /—|, and |, or |\bbot\b/i, tip)
+  }
+
+  const models = Object.keys(strategist.MODELS).map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
+  const efforts = [...strategist.EFFORTS]
+  const ids = Object.keys(strategist.MODELS)
+  // The choices: "Same as all agents (<the all-agents one>)" first, then the four models with their price, or the five efforts.
+  const instance = { model: OPUS, effort: 'high', models, efforts, shadowModels: [] as string[], ownAi: 0 }
+  assert.deepEqual(pageFunctions<() => string[][]>(['aiModelOptions'], { instance })(), [
+    ['', 'Same as all agents (Opus 5.5)'], [HAIKU, 'Haiku 5.5 · $0.1 / $0.5 per M tokens'], [SONNET, 'Sonnet 5.5 · $2 / $10 per M tokens'], [OPUS, 'Opus 5.5 · $4 / $20 per M tokens'], [FABLE, 'Fable 5.2 · $8 / $40 per M tokens'],
+  ])
+  assert.deepEqual(pageFunctions<() => string[][]>(['aiEffortOptions'], { instance })(), [['', 'Same as all agents (high)'], ['low', 'low'], ['medium', 'medium'], ['high', 'high'], ['xhigh', 'xhigh'], ['max', 'max']])
+
+  // The page's rule for one agent is the server's, over every pair it plays and every pair the form can give.
+  const shadowSets: string[][] = [[], [`${OPUS}:low`, `${OPUS}:high`], [SONNET], [`${HAIKU}:xhigh`, FABLE]]
+  let asked = 0, wokenOnly = 0
+  for (const all of [{ model: SONNET, effort: 'medium' }, { model: OPUS, effort: 'high' }]) {
+    for (const shadows of shadowSets) {
+      for (const ownModel of ['', ...ids]) {
+        for (const ownEffort of ['', 'low', 'high']) {
+          const cur = strategist.agentChoice({ aiModel: ownModel, aiEffort: ownEffort }, all)
+          const b = { ai: { model: cur.model, effort: cur.effort, own: strategist.ownAi({ aiModel: ownModel, aiEffort: ownEffort }), shadows } }
+          const costsMore = pageFunctions<(b: unknown, form: unknown) => boolean>(['agentAiCostsMore'], { instance: { ...instance, ...all } })
+          for (const aiModel of ['', ...ids]) {
+            for (const aiEffort of ['', ...efforts]) {
+              const next = strategist.agentChoice({ aiModel, aiEffort }, all)
+              const server = rules.agentAiNeedsPassword(cur, next, shadows)
+              assert.equal(costsMore(b, { aiModel, aiEffort }), server, `${JSON.stringify(all)} ${ownModel}/${ownEffort} to ${aiModel}/${aiEffort} with ${shadows.join('+')}`)
+              if (server) asked++
+              if (server && !web.raisesAiSpend(cur, next)) wokenOnly++
+            }
+          }
+        }
+      }
+    }
+  }
+  assert.ok(asked > 0 && wokenOnly > 0, 'some saves ask only because they wake a shadow')
+  // And the all-agents switch: the agents it moves, each with its shadow entries.
+  const agents = [
+    { settings: { aiModel: '', aiEffort: '' }, shadows: [FABLE] },
+    { settings: { aiModel: OPUS, aiEffort: 'high' }, shadows: [`${OPUS}:low`] },
+    { settings: { aiModel: '', aiEffort: 'low' }, shadows: [`${SONNET}:low`] },
+  ]
+  for (const subset of [[0], [1], [2], [0, 1, 2], []]) {
+    const these = subset.map(k => agents[k]!)
+    for (const all of [{ model: FABLE, effort: 'medium' }, { model: SONNET, effort: 'low' }, { model: SONNET, effort: 'high' }]) {
+      const S = { instance: { ...instance, ...all, shadowModels: [] }, agents: these.map(a => ({ ai: { own: strategist.ownAi(a.settings), shadows: a.shadows } })) }
+      const costsMore = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], S)
+      for (const model of ids) for (const effort of efforts) assert.equal(costsMore(model, effort), rules.allAgentsAiNeedsPassword(all, { model, effort }, these), `${subset} ${JSON.stringify(all)} to ${model} ${effort}`)
+    }
+  }
+  // The tab of an agent that plays another AI says which; the Strategist box counts the agents with their own.
+  const tag = pageFunctions<(b: unknown) => string>(['aiTag'], { instance })
+  assert.equal(tag({ ai: { model: OPUS, effort: 'high' } }), '')
+  assert.equal(tag({ ai: { model: HAIKU, effort: 'high' } }), 'Haiku 5.5, high')
+  assert.equal(tag({ ai: { model: OPUS, effort: 'low' } }), 'Opus 5.5, low')
+  assert.match(html, /b\.source === 'imported' \? el\('span', \{ class: 'vmode imported'[\s\S]{0,400}aiTag\(b\)/, 'the tab shows it')
+  const count = (n: number) => pageFunctions<() => string>(['ownAiText'], { instance: { ...instance, ownAi: n } })()
+  assert.deepEqual([count(0), count(1), count(7)], ['', ' · 1 agent uses its own model or effort', ' · 7 agents use their own model or effort'])
+  assert.match(html, /\+ ownAiText\(\)/)
+  // The hint under the fields: what the agent plays, its shadow plans set on the server.
+  const hint = pageFunctions<(b: unknown, form: unknown) => string>(['ownAiHint'], { instance })
+  assert.equal(hint({ ai: { model: OPUS, effort: 'high', own: { model: null, effort: null }, ignored: [], shadows: [] } }, { aiModel: '', aiEffort: '' }), 'Plays Opus 5.5 at high effort, the same as all agents.')
+  assert.equal(hint({ ai: { model: SONNET, effort: 'high', own: { model: SONNET, effort: 'high' }, ignored: [], shadows: [`${SONNET}:low`, `${SONNET}:medium`, `${SONNET}:xhigh`], ownShadows: true } }, { aiModel: SONNET, aiEffort: 'high' }),
+    'Plays Sonnet 5.5 at high effort, its own. Shadow plans set on the server for this agent: Sonnet 5.5 (low), Sonnet 5.5 (medium) and Sonnet 5.5 (xhigh).')
+  assert.equal(hint({ ai: { model: OPUS, effort: 'low', own: { model: null, effort: 'low' }, ignored: ['its own model gpt-oss is not on the list'], shadows: [HAIKU], ownShadows: false } }, { aiModel: '', aiEffort: 'low' }),
+    'Plays Opus 5.5 at low effort, its own. Shadow plans set on the server for every agent: Haiku 5.5. A model saved on the server is not on the list, so the agent plays the all-agents one.')
+  assert.equal(hint({ ai: { model: OPUS, effort: 'high', own: { model: null, effort: null }, ignored: [], shadows: [] } }, { aiModel: HAIKU, aiEffort: 'low' }), 'Plays Opus 5.5 at high effort, the same as all agents. After saving: Haiku 5.5 at low effort.')
+  // The Strategist bubble says what it is now: the AI of every agent without its own.
+  const strat = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
+  assert.match(strat, /every agent without its own/)
+  assert.doesNotMatch(strat, /—|, and |, or /)
+})
