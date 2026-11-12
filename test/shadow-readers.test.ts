@@ -142,7 +142,7 @@ test('SHADOW-11 the dashboard shows a shadow row marked as not carried out, and 
   assert.match(html, /const \[cls, label\] = r\.kind === 'shadow' \? SHADOW_MARK : STATUS\[r\.status\]/, 'the row carries the mark in place of its status')
   assert.match(html, /const rows = shownActivity\(activityRows, pick\.value\)/, 'the list is filtered by that function')
   const tip = html.match(/activity: \['Activity', `([^`]*)`/)?.[1] ?? ''
-  assert.match(tip, /A row marked <b>shadow plan, not carried out<\/b> is what a second AI model would have planned from the same request\. It is recorded only to compare the two models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it\./)
+  assert.match(tip, /A row marked <b>shadow plan, not carried out<\/b> is what another AI model would have planned from the same request\. It is recorded only to compare the models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it\./)
   assert.doesNotMatch(tip, /—|, and |, or /)
 
   // The list the page loads holds the row, for the owner to read.
@@ -234,6 +234,110 @@ test('SHADOW-13 shadow-report: how many, how many with a valid tool call, action
   assert.match(shadowReport(store.shadowPlans(1), { agentIndex: 1 }), /^Shadow plans \(agent 2\): 1, /)
 })
 
+// The owner, 2026-11-12: several shadow models at once. Seen failing on 858d007: one summary over every model mixed
+// together, and one "real" line per shadow row.
+test('SHADOWS-10 shadow-report with several shadow models: the summary once per model, and the shadow plans of one real plan grouped under one real line', async () => {
+  const { shadowReport } = await import('../src/strategist/shadow.ts')
+  const HAIKU = 'claude-haiku-5-5', OPUS = 'claude-opus-5-5'
+  const store = new Store('', ':memory:')
+  /** One shadow plan, recorded at the given minute of 12 Nov. */
+  const add = (at: string, more: Partial<Row>) => {
+    const id = store.addShadowPlan(row(more))
+    store.db.prepare('UPDATE shadow_plans SET at = ? WHERE id = ?').run(`2026-11-12T${at}:07.000Z`, id)
+  }
+  const nothing = { summary: 'REAL nothing to do', actions: [], usd: 0.15 }
+  const failed = { shadow: { summary: '', actions: [] }, inputTokens: null, outputTokens: null, cacheReadTokens: null, cacheWriteTokens: null, usd: 0 }
+  // Tick A, agent 1: both shadow models answered with a plan.
+  add('10:00', { shadowModel: HAIKU })
+  add('10:00', { shadowModel: OPUS, shadow: { summary: 'SHADOW a bid', actions: [ok({ type: 'bid', nonce: 4242, foxsy: 777 }), ok({ type: 'sync' }), bad('fly_to_the_moon', 'unknown action type')] }, usd: 0.03, ms: 20_000 })
+  // Tick B, agent 2, the same words in its real plan: Opus 5.5 answered first, Haiku 5.5 declined.
+  add('10:01', { agentIndex: 1, shadowModel: OPUS, shadow: { summary: 'SHADOW waits', actions: [] }, usd: 0.02, ms: 8_000 })
+  add('10:01', { agentIndex: 1, shadowModel: HAIKU, outcome: 'refused', shadow: { summary: 'model declined to plan (cyber)', actions: [] }, usd: 0.002, ms: 1_000 })
+  // Tick C, agent 1: Opus 5.5 answered at once, Haiku 5.5 was given up ten minutes later.
+  add('10:20', { real: nothing, shadowModel: OPUS, shadow: { summary: 'SHADOW nothing either', actions: [] }, usd: 0.008, ms: 4_000 })
+  add('10:30', { real: nothing, shadowModel: HAIKU, outcome: 'timeout', ...failed, ms: 600_000 })
+  // Tick D, agent 1, an hour and a half after tick A with the very same real plan: only Haiku 5.5 (Opus 5.5 was still busy).
+  add('11:30', { shadowModel: HAIKU })
+  const text = shadowReport(store.shadowPlans(null), { agentIndex: null, last: 3 })
+  assert.deepEqual(text.split('\n'), [
+    'Shadow plans (all agents): 7 by 2 shadow models, from 2026-11-12 10:00 to 2026-11-12 11:30 UTC',
+    '',
+    'Haiku 5.5: 4 shadow plans',
+    'Models: Haiku 5.5 (medium) next to Sonnet 5.5 (medium)',
+    'With a valid tool call: 2 of 4 (1 declined, 1 no answer in time)',
+    'Actions proposed by the shadow: 4, of which 4 parsed',
+    'Same action types as the real plan of the same tick: 2 of 2',
+    'Average cost: $0.0055 a shadow plan ($0.02 in all); the real plans of the same ticks: $0.1500 each',
+    'Average time: 8 s over the 3 that answered',
+    '',
+    'Opus 5.5: 3 shadow plans',
+    'Models: Opus 5.5 (medium) next to Sonnet 5.5 (medium)',
+    'With a valid tool call: 3 of 3',
+    'Actions proposed by the shadow: 3, of which 2 parsed (the parser rejected 1)',
+    'Same action types as the real plan of the same tick: 1 of 3',
+    'Average cost: $0.0193 a shadow plan ($0.06 in all); the real plans of the same ticks: $0.1500 each',
+    'Average time: 11 s over the 3 that answered',
+    '',
+    'A shadow plan is judged by reading it: nothing here says which plan was the better one.',
+    '',
+    'The last 3:',
+    // Tick D: the same agent and the same real plan as tick A, but not the same tick.
+    '2026-11-12 11:30 agent 1',
+    '  real   Sonnet 5.5 (medium): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Haiku 5.5 (medium), $0.0100, 12 s: play_match, sync',
+    '         SHADOW the same',
+    // Tick C: one real line, then each shadow model in the order of the list of models.
+    '2026-11-12 10:20 agent 1',
+    '  real   Sonnet 5.5 (medium): no actions',
+    '         REAL nothing to do',
+    '  shadow Haiku 5.5 (medium), $0.0000, 600 s: no answer in time',
+    '         ',
+    '  shadow Opus 5.5 (medium), $0.0080, 4 s: no actions',
+    '         SHADOW nothing either',
+    // Tick B: another agent with the same real plan is another real plan.
+    '2026-11-12 10:01 agent 2',
+    '  real   Sonnet 5.5 (medium): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Haiku 5.5 (medium), $0.0020, 1 s: declined',
+    '         model declined to plan (cyber)',
+    '  shadow Opus 5.5 (medium), $0.0200, 8 s: no actions',
+    '         SHADOW waits',
+  ])
+  // Every tick when asked for more than there are, tick A last with its two shadow plans under one real line.
+  const all = shadowReport(store.shadowPlans(null), { agentIndex: null, last: 50 }).split('\n')
+  assert.equal(all[20], 'The last 4:')
+  assert.deepEqual(all.slice(-7), [
+    '2026-11-12 10:00 agent 1',
+    '  real   Sonnet 5.5 (medium): sync, play_match',
+    '         REAL sync and a casual game',
+    '  shadow Haiku 5.5 (medium), $0.0100, 12 s: play_match, sync',
+    '         SHADOW the same',
+    '  shadow Opus 5.5 (medium), $0.0300, 20 s: bid, sync (+1 rejected)',
+    '         SHADOW a bid',
+  ])
+  assert.equal(all.filter(l => l.startsWith('  real ')).length, 4, 'one real line per real plan')
+  assert.equal(all.filter(l => l.startsWith('  shadow ')).length, 7, 'one shadow line per shadow plan')
+  // One agent: its own shadow plans only, still per model.
+  const second = shadowReport(store.shadowPlans(1), { agentIndex: 1 }).split('\n')
+  assert.equal(second[0], 'Shadow plans (agent 2): 2 by 2 shadow models, from 2026-11-12 10:01 to 2026-11-12 10:01 UTC')
+  assert.deepEqual([second[2], second[10]], ['Haiku 5.5: 1 shadow plan', 'Opus 5.5: 1 shadow plan'])
+  assert.equal(second[20], 'The last 1:')
+  // The same model twice next to one real plan (it cannot be the same tick) is two real plans; a model that has
+  // left the list keeps its block, named by its id, after the models of the list.
+  const odd = new Store('', ':memory:')
+  for (const shadowModel of ['claude-old-1', HAIKU, HAIKU]) odd.addShadowPlan(row({ shadowModel }))
+  const lines = shadowReport(odd.shadowPlans(null)).split('\n')
+  assert.match(lines[0]!, /^Shadow plans \(all agents\): 3 by 2 shadow models, /)
+  assert.deepEqual([lines[2], lines[10]], ['Haiku 5.5: 2 shadow plans', 'claude-old-1: 1 shadow plan'])
+  assert.equal(lines[20], 'The last 2:')
+  assert.deepEqual(lines.filter(l => /^ {2}(real|shadow) /.test(l)).map(l => l.slice(2, 8).trim() + (l.includes('claude-old-1') ? ' old' : '')), ['real', 'shadow', 'real', 'shadow', 'shadow old'])
+  // One shadow model, as before this change: the report reads as it did (SHADOW-13 pins every line of it).
+  const one = new Store('', ':memory:')
+  one.addShadowPlan(row())
+  assert.match(shadowReport(one.shadowPlans(null)), /^Shadow plans \(all agents\): 1, from [^\n]+ UTC\nModels: Haiku 5\.5 \(medium\) next to Sonnet 5\.5 \(medium\)\nWith a valid tool call: 1 of 1\n/)
+})
+
 test('SHADOW-14 cli shadow-report reads next to an open database and writes nothing, also where the table does not exist yet', () => {
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-shadow-'))
   const env = {
@@ -272,11 +376,11 @@ test('SHADOW-14 cli shadow-report reads next to an open database and writes noth
   assert.match(r.stdout, /^No shadow plans recorded/)
   assert.equal(store.db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'shadow_plans'").get(), undefined)
   const usage = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', join(REPO, 'src/cli.ts')], { env, cwd: dir, encoding: 'utf8', timeout: 90_000 })
-  assert.match(usage.stdout, /shadow-report \[N\]\s+what a second model would have planned next to the real plans/)
+  assert.match(usage.stdout, /shadow-report \[N\]\s+what each shadow model would have planned next to the real plans/)
 })
 
 test('SHADOW-15 the guides: the server guide\'s own command switches shadow plans on and off, the costs page promises no number, the review has its section', async () => {
-  const { shadowChoice } = await import('../src/strategist/shadow.ts')
+  const { shadowChoices } = await import('../src/strategist/shadow.ts')
   const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
   const guide = read('docs/SERVER.md')
   // The one-line script of the guide, as written, against a database of this test.
@@ -288,16 +392,16 @@ test('SHADOW-15 the guides: the server guide\'s own command switches shadow plan
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-shadow-'))
   const store = new Store(dir) // the running service's connection
   const set = (key: string, value: string) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db')), key, value], { encoding: 'utf8', timeout: 60_000 })
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: false, why: null }, 'off before anything is set')
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: [], effort: 'medium', leftOut: [] }, 'off before anything is set')
   let r = set('shadow_model', 'claude-haiku-5-5')
   assert.equal(r.status, 0, r.stderr)
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: true, model: 'claude-haiku-5-5', effort: 'medium' })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: ['claude-haiku-5-5'], effort: 'medium', leftOut: [] })
   r = set('shadow_effort', 'low')
   assert.equal(r.status, 0, r.stderr)
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: true, model: 'claude-haiku-5-5', effort: 'low' })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: ['claude-haiku-5-5'], effort: 'low', leftOut: [] })
   r = set('shadow_model', 'off')
   assert.equal(r.status, 0, r.stderr)
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: false, why: null })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: [], effort: 'low', leftOut: [] })
   assert.match(guide, /`agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`/, 'among the operator commands')
   assert.match(guide, /agentctl\.sh shadow-report 3 {4}# agent 3/)
   assert.match(read('README.md'), /npm run cli -- shadow-report \[N\]/)
@@ -310,14 +414,81 @@ test('SHADOW-15 the guides: the server guide\'s own command switches shadow plan
   assert.match(para, /A shadow plan never plays: nothing of it is carried out and the playing model never reads it\./)
   assert.match(para, /Each one costs what one plan costs on the second model, on top of the real plan\./)
   assert.doesNotMatch(para, /\$|\d|Haiku|Sonnet|Opus|Fable|cheaper|better|—|, and |, or /, 'no number, no model and no promise')
-  assert.match(read('site/src/content/docs/use/dashboard.md').replace(/\s+/g, ' '), /A row marked "shadow plan, not carried out" is what a second AI model would have planned, recorded only to compare/)
+  assert.match(read('site/src/content/docs/use/dashboard.md').replace(/\s+/g, ' '), /A row marked "shadow plan, not carried out" is what another AI model would have planned, recorded only to compare/)
   assert.match(read('site/src/content/docs/help/server.mdx').replace(/\s+/g, ' '), /how to read the comparison with `agentctl\.sh shadow-report`/)
 
+  // Its section of the review, whole and in its place: a later change adds its own section after it.
   const review = read('docs/SECURITY-REVIEW.md')
-  const section = review.slice(review.lastIndexOf('\n## '))
-  assert.match(section, /^\n## Shadow plans, Claude Haiku 5\.5 and the model list of four \(2026-11-11\)\n/, 'the last section of the file')
+  const from = review.indexOf('\n## Shadow plans, Claude Haiku 5.5 and the model list of four (2026-11-11)\n')
+  assert.ok(from > 0, 'the section of 2026-11-11 is in the review')
+  assert.ok(from > review.indexOf('\n## The agent review before the repository goes public'), 'after the section before it')
+  const next = review.indexOf('\n## ', from + 1)
+  const section = review.slice(from, next < 0 ? undefined : next)
   assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| SHADOW-1 \| design \(the owner, 2026-11-11\) \|/)
   for (const id of ['SHADOW-2', 'SHADOW-3', 'SHADOW-4', 'SHADOW-5', 'SHADOW-6', 'SHADOW-7', 'SHADOW-12', 'HAIKU-1', 'LIST-4', 'R63A-1', 'R63A-2']) assert.match(section, new RegExp(`\\n\\| ${id}[ ,]`), id)
   for (const open of [/Haiku 5\.5's two rate cards comes from Anthropic's wording, not from an invoice/, /judged by people or by `shadow-report`, not by the rules/, /doubles the requests of a plan/]) assert.match(section.slice(section.indexOf('Stays open:')), open)
   assert.doesNotMatch(section, /—/)
+})
+
+test('SHADOWS-11 the guides say how to set several shadow models, what each costs and how the password rule reads a list; the review has its section, the last one', async () => {
+  const { shadowChoices } = await import('../src/strategist/shadow.ts')
+  const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
+  const guide = read('docs/SERVER.md')
+  const part = guide.slice(guide.indexOf('## Shadow plans: trying another model without letting it play'))
+  const flat = part.replace(/\s+/g, ' ')
+  // The guide's own command with two models, as written, sets two.
+  const script = guide.match(/^SET='([^'\n]+)'$/m)?.[1]
+  assert.ok(script)
+  const two = part.match(/-e "\$SET" shadow_model (\S+,\S+)\n/)?.[1]
+  assert.equal(two, 'claude-haiku-5-5,claude-sonnet-5-5', 'docs/SERVER.md gives the command for two shadow models')
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-shadow-'))
+  const store = new Store(dir)
+  const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db')), 'shadow_model', two], { encoding: 'utf8', timeout: 60_000 })
+  assert.equal(r.status, 0, r.stderr)
+  assert.deepEqual(shadowChoices(store, 'claude-opus-5-5'), { models: ['claude-haiku-5-5', 'claude-sonnet-5-5'], effort: 'medium', leftOut: [] })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5').models, ['claude-haiku-5-5'], 'the one that plays rests')
+  for (const said of [
+    /You can set several shadow models at once\. Each gets the same request at the same moment and is recorded by itself\. Each adds its own cost to every plan\./,
+    /Several models go into the one setting, separated by commas\./,
+    /An entry that is anything else is left out and the log says why once \(`journalctl -u foxleague-agent`\); the others still run\./,
+    /A model written twice counts once\./,
+    /`off` anywhere in the setting switches all of them off\./,
+    /With several shadow models set, the switch asks for it also when the model you pick is another one of them\./,
+    /It is one effort for every shadow model\./,
+    /`AGENT_SHADOW_MODEL` \(one model or several separated by commas\) and `AGENT_SHADOW_EFFORT`/,
+    /The report gives, for each shadow model, how many shadow plans there are/,
+    /Then it lists the last real plans, each with the shadow plans made from the same request below it\./,
+    /a model that is still answering an agent's earlier request skips that agent's next plan, while the other shadow models go on/,
+  ]) assert.match(flat, said)
+  assert.doesNotMatch(part, /—|\bbot\b/i)
+  assert.match(read('.env.example'), /^# Several models, separated by commas \(claude-haiku-5-5,claude-sonnet-5-5\), each get the request and each cost their own\n# price\. /m)
+  assert.match(read('README.md'), /npm run cli -- shadow-report \[N\] {5}# what each shadow model would have planned \(shadow plans, docs\/SERVER\.md\)/)
+
+  // The public pages: several at once, each at its own cost; still no number, no model named and no promise.
+  const costs = read('site/src/content/docs/help/costs.md')
+  const para = costs.slice(costs.indexOf('## Comparing a second model before you switch'), costs.indexOf('## To start')).replace(/\s+/g, ' ')
+  assert.match(para, /You can try several models this way at the same time: each one plans by itself and each adds its own cost per plan\./)
+  assert.doesNotMatch(para, /\$|\d|Haiku|Sonnet|Opus|Fable|cheaper|better|—|, and |, or /, 'no number, no model and no promise')
+  assert.match(read('site/src/content/docs/help/server.mdx').replace(/\s+/g, ' '), /how to let one or more other AI models plan in the shadow, to compare them with the one that plays before you switch/)
+  // The dashboard's own words: a row is by another model, not by "the second" one.
+  assert.doesNotMatch(html, /a second AI model|compare the two models/)
+
+  const review = read('docs/SECURITY-REVIEW.md')
+  const section = review.slice(review.lastIndexOf('\n## '))
+  assert.match(section, /^\n## Several shadow models at once \(2026-11-12\)\n/, 'the last section of the file')
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| SHADOWS-1 \| design \(the owner, 2026-11-12\) \|/)
+  for (const id of ['SHADOWS-2', 'SHADOWS-3', 'SHADOWS-4', 'SHADOWS-5', 'SHADOWS-6', 'SHADOWS-7', 'SHADOWS-8', 'SHADOWS-9', 'SHADOWS-10', 'SHADOWS-11']) assert.match(section, new RegExp(`\\n\\| ${id}[ ,]`), id)
+  // Every row of the table has its four cells.
+  for (const line of section.split('\n').filter(l => l.startsWith('| SHADOWS-'))) assert.equal(line.split(' | ').length, 4, line.slice(0, 40))
+  // What was checked, in the section's own words.
+  for (const checked of [/no path from a shadow answer to a signature/i, /the password rule with a list/i, /the cost of each shadow plan is booked/i]) assert.match(section.replace(/\s+/g, ' '), checked)
+  const open = section.slice(section.indexOf('Stays open:')).replace(/\s+/g, ' ')
+  assert.ok(section.includes('\nStays open:\n'), 'the section lists what stays open')
+  for (const item of [
+    /Each shadow model adds its own cost to every plan of every agent/,
+    /A shadow request that was cancelled .* may be billed by Anthropic .* and is not in the AI spend figure/,
+    /A switch between two models of the list asks for the password/,
+    /not by an id/,
+  ]) assert.match(open, item)
+  assert.doesNotMatch(section, /—|\bbot\b/i)
 })

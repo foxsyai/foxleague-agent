@@ -59,7 +59,7 @@ function usage(): never {
   pause <N> | resume <N>        pause or resume one agent
   mode [dry|live]               one mode for all agents (live also needs AGENT_LIVE_ENABLED=1 in the env)
   log [N]                       recent activity
-  shadow-report [N]             what a second model would have planned next to the real plans (shadow plans, off
+  shadow-report [N]             what each shadow model would have planned next to the real plans (shadow plans, off
                                 unless shadow_model is set: docs/SERVER.md); it only reads, also while the service runs
   configure                    enter the API keys with hidden input; they go straight into the env file
   check-keys                    verify the Anthropic, Telegram and Binance keys (Binance: withdraw-only, IP-locked)
