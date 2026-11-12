@@ -1631,6 +1631,9 @@ passes now.
 | PAM-15 | low | An agent's own shadow list survived its deletion and would have been read by a new agent given its number | `deleteAgent` removes `shadow_model_agent_N` with the agent's other values |
 | PAM-16 | design (rule 7) | The dashboard had no field for it. A page that asks by another rule than the server leaves the owner with a bare refusal | AI model and Effort in each agent's settings: "Same as all agents (...)" first, the four models with their list price, a bubble each and a line that says what the agent plays. The page's rules for one agent and for the all-agents switch are compared with the server's over every pair. The tab names an agent's own AI and the Strategist box counts the agents with their own. The level dialog does not offer the Strategist box to an agent it would not move |
 | PAM-17 | docs | The guides spoke of one model and one shadow list | `docs/SERVER.md` (the `model` command with the owner's ten lines; per-agent shadow lists with efforts and the commands of the three-agent test, which the test runs as written), the README and the site's costs, dashboard, settings and server pages. SHADOWS-11 now finds its section by its heading, as SHADOW-15 did when its section stopped being the last |
+| R65A-1 | low (rule 7, agent review of PR #65) | The all-agents switch weighed the active agents only. With every active agent on its own model and effort, a switch away from a resting shadow model asked for no password, while a retired agent that follows the all-agents pair would start that shadow plan after Restore and Resume, one click each. The test saw 200 where 403 belongs | The switch weighs the retired agents too, by the same rule. `/api/state` gives each retired agent its `ai`, which the page's own check reads, so the page asks where the server does |
+| R65A-2 | low (correctness, agent review of PR #65) | The AI model field was filled from the saved id. An own model that left the list (it plays its successor) showed as "Same as all agents", so the next save of any setting wrote an empty model and moved the agent to the all-agents model: with the password asked for an unrelated save when that one is dearer, without a word when it is cheaper. The line under the fields also said the all-agents model played in its place | The fields show `ai.own`, the values in use: the successor for a model that left the list, "Same as all agents" for one nobody knows. Saved back unchanged, the agent plays the same pair and neither the server nor the page asks (checked over every saved value against the server's rule). The line says the model left the list and its successor plays |
+| R65A-3 | missing test (agent review of PR #65) | No test showed a new Anthropic key reaching the strategists of the models agents play by their own choice; only the shadow strategists' were tested | The test, written and run: it passed on 17ef4e2 as it stood (`updateKeys` already hands the key to every per-model strategist), so this was a missing test, not a bug |
 
 What the change could get wrong and what guards it:
 - A dearer model without the password: for one agent (PAM-9), for all agents (PAM-10), through a lower effort that
@@ -1648,14 +1651,17 @@ Stays open:
 - The manager chat and `/ask` use the all-agents model. A dearer all-agents model still asks for the password when no
   agent follows it.
 - Anthropic's docs say an effort change invalidates the messages cache on every model. It invalidates the tools and
-  system caches too on the models that render the thinking settings ahead of them; the docs do not name those. The cache rule takes the
-  careful reading (one cache per model and effort). If an effort change does not touch the system cache on these
-  models, a request may pay the plain input price where a cache read would have done.
+  system caches too on the models that render the thinking settings ahead of them; the docs do not name those. The
+  cache rule takes the careful reading (one cache per model and effort). If an effort change does not touch the system
+  cache on these models, a request may pay the plain input price where a cache read would have done.
 - Each shadow entry adds its own cost to every plan of its agent: three entries make four requests a plan on that
   agent. The AI spend has no cap of its own.
 - `shadow_plans` keeps the newest 2,000 rows of all agents together: with three agents at three shadow entries and a
   plan an hour over 16 hours, that is about two weeks.
-- A dashboard page of the version before, still open, reads only the all-agents shadow list. With per-agent lists it
-  can meet a bare refusal where the server asks for the password; a reload gets the new page.
+- The all-agents switch weighs the retired agents too (R65A-1), so it can ask for the password because of an agent
+  that is retired and may never be restored. The rule is the careful one: it does not guess which agent comes back.
+- A dashboard page of the version before, still open, reads only the all-agents shadow list and knows nothing of the
+  retired agents' AI. With per-agent lists it can meet a bare refusal where the server asks for the password; a reload
+  gets the new page.
 - `cli plan N` asks the agent's own model and effort; no test covers it, because it reads the chain and FoxLeague.
 - What stays open in the two sections above stays open: a shadow plan is judged by reading it, never by the rules.

@@ -140,7 +140,7 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
   its shadow plans start, so that switch asks for your dashboard password even when the new model is cheaper. With
   several shadow models set, the switch asks for it also when the model you pick is another one of them. It is
   weighed for each agent the switch moves: an agent with its own model and effort keeps them, so its shadow plans do
-  not count.
+  not count. A retired agent counts like an active one, since Restore and Resume bring it back.
 - The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`. It is one effort for every
   shadow model. An entry written with its own effort runs at that effort instead.
 - An entry may carry its own effort after a colon: `claude-opus-5-5:low`. An entry with an effort rests only while its
