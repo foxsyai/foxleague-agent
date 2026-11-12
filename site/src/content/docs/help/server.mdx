@@ -29,3 +29,7 @@ On a server the recovery words are read once in your own SSH session and written
 print them there. PEM files are written on your own computer, never on the server: with the same recovery words
 in your local copy's `.env`, `./deploy/sync-pems.sh` writes a `pem/agentN.pem` for every agent the server runs
 (it checks the addresses first). The dashboard reminds you each time you add an agent.
+
+The full guide also says how to let one or more other AI models plan in the shadow, to compare them with the one
+that plays before you switch ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). It shows how
+to read the comparison with `agentctl.sh shadow-report` too.

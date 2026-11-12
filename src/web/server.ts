@@ -11,7 +11,8 @@ import type { Service } from '../service.ts'
 import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, clientKey, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
-import { EFFORTS, MODELS, isKnownModel, type Effort } from '../strategist/strategist.ts'
+import { EFFORTS, MODELS, currentModel, isKnownModel, priceRange, type Effort } from '../strategist/strategist.ts'
+import { shadowModelsSet } from '../strategist/shadow.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
 import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
@@ -207,19 +208,40 @@ export function raisesLimit(current: AgentSettings, patch: Partial<AgentSettings
 }
 
 /**
- * A dearer model (any of its list prices higher) or a higher effort: the AI spend has no cap of its own, so like a
- * shorter tick it needs the password. A model without a known price counts as dearer.
+ * A dearer model or a higher effort: the AI spend has no cap of its own, so like a shorter tick it needs the password.
+ * Another model is dearer when any of its list prices (input, output, cache read) can be higher: the highest of each
+ * over its rate cards against the lowest of the current model's (Haiku 5.5 has two cards, and two models do not count
+ * one prompt as the same number of tokens, so no card is assumed to stay in force). The same model keeps its prices:
+ * only the effort decides. A current model that left the list counts as its successor, the one that really runs; one
+ * without a known price counts as dearer.
  */
 export function raisesAiSpend(current: { model: string; effort: string }, next: { model: string; effort: Effort }): boolean {
-  const was = isKnownModel(current.model) ? MODELS[current.model]!.price : null
-  const will = MODELS[next.model]!.price
-  if (!was || will.some((p, i) => p > was[i]!)) return true
+  const running = currentModel(current.model)
+  if (running !== next.model) {
+    const was = priceRange(running)
+    const will = priceRange(next.model)
+    if (!was || !will || will.dearest.some((p, i) => p > was.cheapest[i]!)) return true
+  }
   return EFFORTS.indexOf(next.effort) > (EFFORTS as readonly string[]).indexOf(current.effort)
 }
 
 const REVOKED_SESSIONS_KEY = 'revoked_sessions'
 /** A dashboard port that could not be opened is tried again this often, until it is free. */
 export const LISTEN_RETRY_MS = 60_000
+
+/**
+ * Whether a switch of the playing model starts shadow plans (agent review of PR #63, R63A-1). A shadow model that is
+ * set rests while it is the model that plays; under any other model every plan also pays for a shadow plan by it. So
+ * a switch away from it raises the AI spend however cheap the new model is, and needs the password like a dearer
+ * model. `shadows`: the shadow models that are set (shadowModelsSet), none when shadow plans are off. With several
+ * set, the one that plays wakes with any switch, also with a switch to another model of the list: that one goes to
+ * rest, and what the two cost is not weighed here. Shadow models that run before and after, a switch that only sends
+ * one to rest and a change of effort alone start nothing.
+ */
+export function wakesShadow(shadows: readonly string[], current: string, next: string): boolean {
+  const playing = currentModel(current)
+  return next !== playing && shadows.includes(playing)
+}
 
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1', o: { retryMs?: number } = {}): Server {
   // The marks of logged-out sessions live in the store, so a restart (an update restarts the service) does not
@@ -257,8 +279,11 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         liveEnabled: service.executor.liveEnabled,
         model: service.strategist ? service.strategist.model : null,
         effort: service.strategist ? service.strategist.effort : null,
-        models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price })),
+        // Each with the lowest and the highest of its prices over its rate cards: the page asks for the password by the same rule as raisesAiSpend.
+        models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price, ...(m.long ? { long: m.long } : {}), ...priceRange(id)! })),
         efforts: EFFORTS,
+        // The shadow models that are set on this machine, none when shadow plans are off: the page asks for the password when a switch would wake one (wakesShadow).
+        shadowModels: shadowModelsSet(service.store),
         telegram: Boolean(service.telegram),
         // The running version, a newer signed release if there is one and how the last update went.
         update: service.updater.view(),
@@ -581,7 +606,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         if (!isKnownModel(model)) throw new HttpFail(400, `unknown model ${model}`)
         if (!EFFORTS.includes(effort)) throw new HttpFail(400, `unknown effort ${effort}`)
         // A cheaper model or less effort is one click; a dearer one needs the password again.
-        if (service.strategist && raisesAiSpend(service.strategist, { model, effort })) recheckPassword(req, body.password)
+        // So does a switch that starts shadow plans: a cheaper model that wakes a resting shadow model.
+        if (service.strategist && (raisesAiSpend(service.strategist, { model, effort }) || wakesShadow(shadowModelsSet(service.store), service.strategist.model, model))) recheckPassword(req, body.password)
         try {
           return json(res, 200, { ok: true, message: service.setStrategist(model, effort, `web UI, ${user}`) })
         } catch (err) {

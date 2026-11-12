@@ -8,7 +8,7 @@
 //
 // This file ties every stated number to the code: the size of the text every plan sends (so a manual that grows
 // fails here until the numbers are looked at again), the list prices in MODELS, the default tick and active hours.
-// The cost of the default (Sonnet 5 at medium) is derived from the measured token counts; no cost of a model is
+// The cost of the default (Sonnet 5.5 at medium) is derived from the measured token counts; no cost of a model is
 // stated that was neither measured nor derived this way.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -61,13 +61,13 @@ const stated = (f: string) => {
   return out
 }
 
-test('DOCS-4 the default the sentence names is the default of the code: Sonnet 5 at medium, a plan every 2 hours inside 12 active hours', () => {
-  assert.match(raw('src/config.ts'), /model: process\.env\.AGENT_MODEL\?\.trim\(\) \|\| 'claude-sonnet-5'/)
+test('DOCS-4 the default the sentence names is the default of the code: Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours', () => {
+  assert.match(raw('src/config.ts'), /model: process\.env\.AGENT_MODEL\?\.trim\(\) \|\| 'claude-sonnet-5-5'/)
   assert.match(raw('src/strategist/strategist.ts'), /process\.env\.AGENT_MODEL_EFFORT \?\? 'medium'/)
-  assert.equal(MODELS['claude-sonnet-5']!.label, 'Sonnet 5')
+  assert.equal(MODELS['claude-sonnet-5-5']!.label, 'Sonnet 5.5')
   for (const f of PLACES) {
     const s = stated(f)
-    assert.match(read(f), /Sonnet 5 at medium/, f)
+    assert.match(read(f), /Sonnet 5\.5 at medium/, f)
     assert.equal(s.tickHours * 60, DEFAULT_SETTINGS.tickMinutes, f)
     assert.equal(s.hours, activeHours, f)
   }
@@ -82,10 +82,10 @@ test('DOCS-4 the stated size of the rules and the manual is the size of the text
 })
 
 test('DOCS-4 the stated cost of a plan at the defaults is what its input costs at the list price, plus a short answer', () => {
-  const input = (planInputTokens * MODELS['claude-sonnet-5']!.price[0]) / 1e6
+  const input = (planInputTokens * MODELS['claude-sonnet-5-5']!.price[0]) / 1e6
   for (const f of PLACES) {
     const { perPlan } = stated(f)
-    assert.ok(input <= perPlan, `${f}: a lone plan reads about ${planInputTokens} tokens, $${input.toFixed(3)} on Sonnet 5 before the answer; the page says about $${perPlan}`)
+    assert.ok(input <= perPlan, `${f}: a lone plan reads about ${planInputTokens} tokens, $${input.toFixed(3)} on Sonnet 5.5 before the answer; the page says about $${perPlan}`)
     assert.ok(perPlan - input <= 0.05, `${f}: $${perPlan} a plan is more than the input ($${input.toFixed(3)}) and a short answer`)
   }
 })

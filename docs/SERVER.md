@@ -66,7 +66,7 @@ the dashboard keeps its own lock on wrong passwords, per IPv4 address and per /6
 |---|---|
 | Deploy a new version | `./deploy/deploy.sh` from your computer (restarts the service; check first that no plan is running, or its waiting actions are dropped) |
 | A new release is out | The dashboard and Telegram tell you (about every 10 minutes the agent asks GitHub; `AGENT_UPDATE_CHECK=0` in the env file switches that off). A server set up this way does not update itself: there is no Update now button, and `/upgrade` answers that it is updated the way it was deployed. Take the release's tag in your copy and run `./deploy/deploy.sh` |
-| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys` |
+| Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report` |
 | Keys | the dashboard's Keys panel (saved in `/var/lib/foxleague-agent/secrets.json`, mode 600) or `agentctl.sh configure` |
 | Security score | `systemd-analyze security foxleague-agent` |
 
@@ -77,3 +77,68 @@ agent the server deleted (Delete is only for a wallet that was never used), once
 `deploy.sh` runs it at the end, and the dashboard reminds you when you add an agent. To delete never-used agents
 from the server's command line: `sudo /opt/foxleague-agent/app/deploy/agentctl.sh delete-agent 11 12` (each one is
 checked on chain and on FoxLeague first; a used one is kept and named).
+
+## Shadow plans: trying another model without letting it play
+
+Before you switch the strategist to another model, you can let that model plan in the shadow. Right after each real
+plan the service sends the very same request to the second model and only records what it would have done. A shadow
+plan is never carried out, the playing model never reads it and nothing the agents play by changes. Each one costs
+what one plan costs on the shadow model, on top of the real plan. That cost is in the dashboard's AI spend.
+
+You can set several shadow models at once. Each gets the same request at the same moment and is recorded by itself.
+Each adds its own cost to every plan.
+
+It is off unless you switch it on here, on the server. There is no button for it in the dashboard and no Telegram
+command, because it adds AI spend.
+
+Switch it on in the database, as root. The service reads the setting before every plan, so nothing is restarted:
+
+```
+SET='const { DatabaseSync } = require("node:sqlite"); new DatabaseSync("/var/lib/foxleague-agent/agent.db", { timeout: 5000 }).prepare("INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(process.argv[1], process.argv[2])'
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model claude-haiku-5-5
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_effort medium
+```
+
+Several models go into the one setting, separated by commas. Put the value in quotes if you write spaces after the
+commas:
+
+```
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model claude-haiku-5-5,claude-sonnet-5-5
+```
+
+Switch it off the same way, with `off` as the model:
+
+```
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model off
+```
+
+- Each model is one of the list (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-2`) and
+  not the one that plays. An entry that is anything else is left out and the log says why once
+  (`journalctl -u foxleague-agent`); the others still run. A model written twice counts once. `off` anywhere in the
+  setting switches all of them off.
+- A shadow model that is also the model that plays rests. When you later pick another playing model in the dashboard,
+  its shadow plans start, so that switch asks for your dashboard password even when the new model is cheaper. With
+  several shadow models set, the switch asks for it also when the model you pick is another one of them.
+- The effort is `low`, `medium`, `high`, `xhigh` or `max`; without one it is `medium`. It is one effort for every
+  shadow model.
+- `AGENT_SHADOW_MODEL` (one model or several separated by commas) and `AGENT_SHADOW_EFFORT` in
+  `/etc/foxleague-agent/env` do the same from the next start of the service. The database's setting wins, so `off`
+  there switches it off whatever the env file says.
+
+Read what came of it at any time, also while the service runs (it only reads):
+
+```
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report      # every agent
+sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 3    # agent 3
+```
+
+The report gives, for each shadow model, how many shadow plans there are, how many answered with a valid plan, how
+many of their actions the parser took, how often the shadow proposed the same kinds of action as the real plan of the
+same moment and the average cost and time. Then it lists the last real plans, each with the shadow plans made from
+the same request below it. Each shadow plan is also a row in the agent's Activity, marked "shadow plan, not carried
+out". The newest 2,000 are kept, those of all shadow models together.
+
+What it cannot tell you: which plan was the better one. A shadow plan's actions are never checked against the game
+rules or your limits, so read the plans yourself before you switch. A shadow request that gets no answer in 10
+minutes is given up and never asked again. Until then a model that is still answering an agent's earlier request skips
+that agent's next plan, while the other shadow models go on.

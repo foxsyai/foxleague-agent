@@ -534,10 +534,16 @@ function renderHeader() {
   $('kSpentS').textContent = S.agents.every(b => b.effectiveDryRun) ? 'simulated (dry-run ledger)' : 'live and dry-run ledgers'
   const sm = $('sModel'), se = $('sEffort')
   if (!sm.options.length) {
+    // Not a model yet: greyed out, with no id, so it can be neither picked nor sent (the server takes only its own list).
+    sm.append(el('option', { value: '', disabled: true, text: 'Local model (free, coming soon)' }))
     for (const m of i.models) sm.append(el('option', { value: m.id, text: m.label }))
     for (const e of i.efforts) se.append(el('option', { value: e, text: 'effort ' + e }))
   }
-  if (!stratDirty) { sm.value = i.model || ''; se.value = i.effort || 'medium' }
+  if (!stratDirty) {
+    sm.value = i.model || ''; se.value = i.effort || 'medium'
+    // No strategist, or a model the list does not have: nothing is shown as picked, never the greyed-out entry.
+    if (!i.models.some(m => m.id === i.model)) sm.selectedIndex = -1
+  }
   sm.disabled = se.disabled = !i.model
   renderStrat()
 }
@@ -547,11 +553,13 @@ function renderStrat() {
   const i = S.instance
   if (!i.model) { $('stratApply').hidden = true; $('kModelS').textContent = 'off (no ANTHROPIC_API_KEY)'; return }
   const pick = i.models.find(m => m.id === $('sModel').value), cur = i.models.find(m => m.id === i.model)
-  const changed = $('sModel').value !== i.model || $('sEffort').value !== i.effort
+  const changed = Boolean(pick) && ($('sModel').value !== i.model || $('sEffort').value !== i.effort)
   const ratio = pick && cur ? pick.price[0] / cur.price[0] : 1
   $('stratApply').hidden = !changed
-  $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' : i.model)
-    + (changed && ratio !== 1 ? ' · ' + (Math.round(ratio * 10) / 10) + 'x the current price' : '')
+  // A model with a second rate card (Haiku 5.5) shows both: which one counts depends on the length of each request.
+  const long = pick && pick.long ? ' ($' + pick.long.price[0] + ' / $' + pick.long.price[1] + ' when the prompt is over ' + pick.long.over.toLocaleString('en-US') + ' tokens)' : ''
+  $('kModelS').textContent = (pick ? '$' + pick.price[0] + ' / $' + pick.price[1] + ' per M tokens' + long : i.model)
+    + (changed && ratio !== 1 ? ' · ' + (ratio < 0.95 ? Math.round(ratio * 100) / 100 : Math.round(ratio * 10) / 10) + 'x the current price' : '')
     + ' · spent ' + usd(i.modelUsdToday) + ' today, ' + usd(i.modelUsdYesterday) + ' yesterday, ' + usd(i.modelUsdTotal) + ' in all'
 }
 
@@ -745,13 +753,28 @@ function readForm() {
 }
 
 const STATUS = { dry_run: ['dry', 'dry run'], confirmed: ['run', 'done'], refused: ['pause', 'refused'], failed: ['halt', 'failed'], error: ['halt', 'error'], unconfirmed: ['stale', 'pending'], info: ['mute', 'info'], sent: ['stale', 'sent'] }
+// A shadow plan is what another AI model would have planned from the same request: recorded to compare, never carried out.
+const SHADOW_MARK = ['stale', 'shadow plan, not carried out']
+// What a filter of the activity shows. A shadow plan is neither a plan nor an action nor a problem of the agent:
+// only "All" and its own filter show it.
+function shownActivity(rows, f) {
+  if (!f) return rows
+  if (f === 'shadow') return rows.filter(r => r.kind === 'shadow')
+  const real = rows.filter(r => r.kind !== 'shadow')
+  if (f === 'plan') return real.filter(r => r.kind === 'plan')
+  if (f === 'act') return real.filter(r => !['plan', 'tick', 'control'].includes(r.kind))
+  return real.filter(r => ['refused', 'failed', 'error'].includes(r.status))
+}
 function renderActivity() {
-  const f = $('actFilter').value
-  const rows = activityRows.filter(r => !f || (f === 'plan' ? r.kind === 'plan' : f === 'act' ? !['plan', 'tick', 'control'].includes(r.kind) : ['refused', 'failed', 'error'].includes(r.status)))
+  // The filter for shadow plans is offered only while the list holds one (they are off unless switched on on the server).
+  const pick = $('actFilter'), has = activityRows.some(r => r.kind === 'shadow'), opt = pick.querySelector('option[value="shadow"]')
+  if (has && !opt) pick.append(el('option', { value: 'shadow', text: 'Shadow plans' }))
+  if (!has && opt) { if (pick.value === 'shadow') pick.value = ''; opt.remove() }
+  const rows = shownActivity(activityRows, pick.value)
   const body = $('activity'); body.replaceChildren()
   if (!rows.length) body.append(el('tr', {}, el('td', { colspan: '4', class: 's', text: 'Nothing yet.' })))
   for (const r of rows) {
-    const [cls, label] = STATUS[r.status] || ['mute', r.status]
+    const [cls, label] = r.kind === 'shadow' ? SHADOW_MARK : STATUS[r.status] || ['mute', r.status]
     const summary = el('td', { class: 's' }, r.summary.length > 600 ? r.summary.slice(0, 600) + '…' : r.summary)
     if (r.txHash) summary.append(' ', el('a', { href: 'https://explorer.multiversx.com/transactions/' + r.txHash, target: '_blank', rel: 'noopener noreferrer', text: 'tx' }))
     if (r.costUsd) summary.append(el('span', { class: 'note', text: '  ' + usd(r.costUsd) }))
@@ -938,19 +961,41 @@ $('modeBtn').onclick = async () => {
   if (r) act('Live', () => api('POST', '/api/mode', { live: true, confirm: 'GO LIVE', password: r.password }))
 }
 $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; renderStrat() }
-// A dearer model (any list price higher) or more effort raises the AI spend, which has no cap: the server asks for
-// the password then (raisesAiSpend in server.ts). A cheaper model or less effort is one click.
+// A dearer model or more effort raises the AI spend, which has no cap: the server asks for the password then
+// (raisesAiSpend in server.ts, the same rule). Another model is dearer when any of its prices can be higher: the
+// highest over its rate cards against the lowest of the model in use. A cheaper model or less effort is one click.
+// A switch that starts shadow plans asks for the password too (wakesShadow in server.ts, the same rule): a shadow
+// model set on the server rests while it is the model that plays, and under any other model every plan also pays for
+// a shadow plan by it, however cheap the new model is. Several shadow models can be set: the one that plays wakes
+// with any switch, also with a switch to another of them.
+function wakesShadow(model) {
+  const i = S.instance
+  return (i.shadowModels || []).includes(i.model) && model !== i.model
+}
 function aiCostsMore(model, effort) {
   const i = S.instance, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
-  return !cur || !pick || pick.price.some((p, k) => p > cur.price[k]) || i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
+  if (!cur || !pick) return true
+  if (wakesShadow(model)) return true
+  if (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) return true
+  return i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
 }
-const AI_RAISE_TEXT = 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+// What the password dialog says: why this switch costs more.
+function aiRaiseText(model) {
+  if (!wakesShadow(model)) return 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+  const i = S.instance, name = id => (i.models.find(m => m.id === id) || { label: id }).label
+  // The shadow model that wakes is the one that plays now; with several set, all are named and that one is pointed out.
+  const shadow = name(i.model), all = i.shadowModels.map(name)
+  const set = all.length > 1 ? all.slice(0, -1).join(', ') + ' and ' + all[all.length - 1] : shadow
+  return 'Shadow plans are set to ' + set + ' on this computer. ' + (all.length > 1 ? 'Those by ' + shadow : 'They') + ' rest while ' + shadow + ' plays. With another model playing, every plan of every agent also pays for a shadow plan by ' + shadow + '. Your password confirms it.'
+}
 // password: already asked for (the level dialog asks once for the settings and the AI). Answers whether the AI was
 // switched: false when the password was not given or the server refused it (a mistyped one is a 403).
 $('stratApply').onclick = async (e, password) => {
   const body = { model: $('sModel').value, effort: $('sEffort').value }
+  // Only a model of the server's list is sent: never the greyed-out local model, never an empty pick.
+  if (!S.instance.models.some(m => m.id === body.model)) { toast('Pick a model from the list', true); return false }
   if (aiCostsMore(body.model, body.effort)) {
-    if (!password) password = await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+    if (!password) password = await askPassword(wakesShadow(body.model) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(body.model))
     if (!password) { toast('Strategist unchanged', true); return false }
     body.password = password
   }
@@ -993,9 +1038,10 @@ const TIPS = {
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent and how hard it thinks (effort).</p>
-    <p>The list runs from the least to the most capable model. <b>Sonnet 5</b> is the default and handles this game well; <b>Sonnet 5.5</b> is the newer Sonnet at the same price, with cheaper reads of what it has cached. <b>Opus 5</b> costs about 2.5x as much; <b>Opus 5.5</b> is newer and stronger yet costs about 2x; <b>Fable 5.1</b> costs 5x; <b>Fable 5.2</b>, the newest and most capable, about 4x.</p>
+    <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> is the cheapest, for trying things out: how well it plays this game has not been measured yet. <b>Sonnet 5.5</b> is the default and handles this game well. <b>Opus 5.5</b> is stronger and costs about 2x as much; <b>Fable 5.2</b>, the most capable, about 4x.</p>
+    <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
-    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click.</p>
+    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click. A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
@@ -1015,7 +1061,8 @@ const TIPS = {
     <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
-    <p>The filter narrows it to plans, actions or problems.</p>`],
+    <p>The filter narrows it to plans, actions or problems.</p>
+    <p>A row marked <b>shadow plan, not carried out</b> is what another AI model would have planned from the same request. It is recorded only to compare the models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it. Such rows appear only while shadow plans are switched on on the server.</p>`],
   budget: ['Budget', `<p>Spend against your caps: today (the game day resets at 14:00 UTC), this month and the one-time setup budget.</p>
     <p>Every paid action is valued in USD at live prices before it runs; one that would go over a cap is refused. Dry-run spend has its own ledger, so it never blocks live spending.</p>`],
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
@@ -1363,7 +1410,7 @@ function openLevel(k) {
     if (aiMore) {
       password = limitsMore
         ? await askPassword('Raise a limit and switch to a dearer AI', 'Some of these settings let the agent spend more and the new AI costs more on every plan of every agent. Your password confirms both.')
-        : await askPassword('Switch to a dearer AI', AI_RAISE_TEXT)
+        : await askPassword(wakesShadow(ai.model) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(ai.model))
       if (!password) return toast('Nothing saved', true)
     }
     // A refused switch (a mistyped password) stops here: its error is shown once and nothing else is saved.
@@ -1415,7 +1462,7 @@ const GUIDE = [
       ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
+    note: 'About $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [

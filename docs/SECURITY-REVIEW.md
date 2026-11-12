@@ -1474,6 +1474,135 @@ Stays open:
 - Whether the Claude Code program that the action installs reads anything else from its working directory at start
   could not be checked from here.
 
+
+## Shadow plans, Claude Haiku 5.5 and the model list of four (2026-11-11)
+
+The owner wants to know how a cheaper model would manage the teams without letting it play and without disturbing
+the model that plays. A **shadow plan** answers that: right after the service has made an agent's real plan, it sends
+the very same request (the same system text and manual, the same user request word for word, the same tools) to a
+second model and only records what that model would have done. A shadow plan is never carried out, never shown to the
+playing model and changes nothing the agents play by. It is off by default and has no dashboard control and no
+Telegram command: it adds AI spend, so it is switched on only on the machine itself (`docs/SERVER.md`).
+
+On the same day the owner fixed the list of models to four (Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5.2). The work was
+done by Claude Fable 5.2 at high effort, test first: the tests are `test/model-list.test.ts`,
+`test/shadow-plan.test.ts` and `test/shadow-readers.test.ts`. Each failed on `7f5d434` (the models) or before the
+shadow code existed; where a test was written next to its guard, it was seen failing with the guard taken out again.
+SHADOW-8 and SHADOW-9 passed from the start (a row of kind `shadow` matches no query by kind and has no transaction
+hash): they pin that. The half of HAIKU-1 about the request passed from the start too (the strategist already sent
+any model the same request and read a refusal before the content).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SHADOW-1 | design (the owner, 2026-11-11) | No way to see what another model would plan on the agents' real situations without letting it play | After the real plan's actions are handed to `runPlan` as before, the tick starts the shadow request and does not wait for it. It goes through a second `Strategist` object made for the shadow model (its own connection, cache decision and fallback memory; sent once, the connection's own retries off). What comes back is turned into plain frozen data (`recordPlan`): one activity row of kind `shadow`, status `info`, and one row of the new table `shadow_plans`. The executor gets exactly the real plan's actions; a bid only the shadow proposed is never run, booked or simulated (test (a)) |
+| SHADOW-2 | design (the owner, 2026-11-11) | A second request per plan could fail, hang or answer nonsense and take the tick with it; a rejection nobody catches turns the kill switch on (`panic`) | Every failure stays inside the shadow code: an error, a refusal, a cut-off answer, an answer without the tool call and no answer within 10 minutes are each recorded in one line and never asked again. The tick's answer, the actions run, the rows written and the next tick are the same as without a shadow, and nothing reaches the panic handler (test (b), eight ways to fail). One shadow request per agent at a time |
+| SHADOW-3 | design (the owner, 2026-11-11) | The next plan reads the agent's recent activity and its previous plan in full: a shadow row there would be another model's words passed off as the agent's own past | The plan request reads `Store.planHistory` (the activity without kind `shadow`, so it keeps its 20 real rows), and `renderPlanRequest` leaves such a row out once more whatever a caller passes. A shadow plan writes no `last_plan_N`, no chat and no kv. Seen failing first: the next request held the shadow's summary (test (c)) |
+| SHADOW-4 | design (the owner, 2026-11-11) | A feature that doubles the requests must cost nothing while it is off | `shadow_model` and `shadow_effort` in kv, else `AGENT_SHADOW_MODEL` and `AGENT_SHADOW_EFFORT`; not set, empty or `off` means off. A model that is not on the list, or the model that plays, means off and is said once in the log. Off: one request per plan and nothing written (test (d)) |
+| SHADOW-5 | design (the owner, 2026-11-11) | A deploy must not wait for a shadow request, and an answer that arrives during the stop must not write | The shadow is not among what `stop()` waits for; the stop cancels the open request, and the shadow code writes nothing once the service is stopping (test (e)) |
+| SHADOW-6 | design (the owner, 2026-11-11) | Rule 1: no path from model text to a signature may be added | `src/strategist/shadow.ts` imports nothing of the executor, the wallets or the chain; the service's shadow code names no executor, wallet, `runPlan` or booking; a recorded action is a frozen copy with a type the compiler refuses where a planned action is asked for (test (f), with a `@ts-expect-error` line that the type check holds) |
+| SHADOW-7 | low | The daily summary counted every kind outside a short list as an action: a shadow row with a status other than `info` would have counted as done, refused or failed | `shadow` is in the summary's list of kinds that are not actions, and it is not a plan either. Seen failing first with rows of every status |
+| SHADOW-8 | pin | The executor's counts (1v1s per rival, own creations, match starts, boosters, packs, medicine, bids, own seats) read the activity by kind | No change needed: none asks for kind `shadow`. A test logs shadow rows whose detail looks like a purchase, a 1v1 and a bid, shows every count unchanged and shows that a real purchase does count |
+| SHADOW-9 | pin | `everUsed` (may this agent be deleted) reads the activity for a transaction hash | A shadow row has none |
+| SHADOW-10 | design (the owner, 2026-11-11) | See SHADOW-3 | `planHistory` and the filter in `renderPlanRequest`, each seen failing alone |
+| SHADOW-11 | low | The dashboard's Actions filter showed every kind but plan, tick and control: a shadow row would have been listed as an action | A shadow row carries the mark "shadow plan, not carried out" in place of its status; the Plans, Actions and problems filters leave it out; a filter of its own appears while the list holds one; the Activity bubble says what it is |
+| SHADOW-12 | design (the owner, 2026-11-11) | A record for later analysis must not grow without bound, and a database change must stay additive | The table `shadow_plans` is new and only the report reads it: an earlier version never looks at it. Each insert drops what is older than the newest 2,000. Deleting a never-used agent deletes its rows |
+| SHADOW-13, SHADOW-14 | design (the owner, 2026-11-11) | The owner needs the numbers without reading the database | `cli shadow-report [N]`: how many, how many with a valid tool call, actions parsed, how often the same action types as the real plan of the same tick, average cost and time, the last pairs side by side. It opens the database read-only, so it runs next to the service and creates nothing |
+| HAIKU-1 | design (the owner, 2026-11-11) | Claude Haiku 5.5 was not on the list. Its price has two rate cards chosen by the length of the prompt, which one price per model could not hold | `claude-haiku-5-5`, first on the list: $0.10 in and $0.50 out per million tokens when the prompt is 100,000 tokens or fewer, $0.50 and $2.50 when it is longer; cache reads 0.1 times and one-hour cache writes 2 times the input price of the card in force; the card is chosen per attempt. It takes the strategist's usual request (adaptive thinking, the model chooses the tool, the effort said, a refusal read before the content) and has no server-side fallback |
+| LIST-1, LIST-8 | design (the owner, 2026-11-11) | The list offered six models, three of them replaced by a newer one of the same tier at the same price or less | The owner chooses among four: Haiku 5.5, Sonnet 5.5, Opus 5.5, Fable 5.2. `/api/strategist` accepts only these; the dashboard shows a greyed-out "Local model (free, coming soon)" above them that has no id and cannot be picked or sent (LOCAL-1) |
+| LIST-2, LIST-3 | medium | One table served as the list and as the prices. With Sonnet 5, Opus 5 and Fable 5.1 off the list, a declined request that Anthropic re-runs on Opus 5, Opus 4.8 or Sonnet 5 would have been booked at the wrong price | `PRICES` holds every model a request can be served by (the four, Sonnet 5, Opus 5, Opus 4.8, Fable 5.1); `MODELS` is what can be chosen |
+| LIST-4 | medium | `cost()` booked a model it had no price for at Sonnet 5's price without a word: an Opus 4.8 fallback at $2 in where it costs $5 (so on `main` too) | Such a model is booked at the price of the model that was asked for, or at the dearest price known when that one has none either, and the log says so. Never free, never an error |
+| LIST-5, LIST-9 | design (the owner, 2026-11-11) | An install that saved Sonnet 5, Opus 5 or Fable 5.1 must keep working | Where the choice is read, a model that left the list becomes its successor (Sonnet 5.5, Opus 5.5, Fable 5.2: the same or less on every price). The dashboard's saved choice is saved again as the successor and said once, in the log and in the activity; `AGENT_MODEL` is said once per run |
+| LIST-6, LIST-11 | design (the owner, 2026-11-11) | A new install played on Sonnet 5 | The default is Sonnet 5.5 (`src/config.ts`, `.env.example`); the pages that name the default or the list follow |
+| LIST-7, LIST-10 | medium | The password rule compared the three prices of one card. With two cards a switch to Haiku 5.5 would have been judged by its cheaper card alone | Another model asks for the password when the highest of any of its prices over its cards is above the lowest of the current model's; the same model keeps its prices and only the effort decides; a current model that left the list counts as its successor and one without a price as dearer. The dashboard applies the same rule from the same numbers |
+
+The agent review of pull request #63 (Claude Fable 5.2 at high effort, on 90270a3) passed it with two findings. Each
+was fixed test first, the test seen failing before its fix:
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R63A-1 | medium | Rule 7: a one-click switch to a cheaper playing model could wake a shadow model that rested because it was the model that plays. With `shadow_model` on Fable 5.2 and Fable 5.2 playing, a click on Haiku 5.5 made every plan cost Haiku plus a Fable 5.2 shadow plan: the AI bill rose with no password (`/api/strategist` answered 200) | `wakesShadow` in `src/web/server.ts`: a switch that starts shadow plans (a shadow model is set, it is the current playing model and the next one is another) asks for the password like a dearer model. The page is told which shadow model is set and applies the same rule, with a dialog that says why. Pinned: a shadow that runs before and after changes nothing, a switch to the shadow's own model is judged by the prices as before, the effort alone never wakes it, and `AGENT_SHADOW_MODEL` counts like the database's setting |
+| R63A-2 | low | `prepareShadow` read the playing model and effort after the plan's answer had come. A switch of the strategist while the request was on its way put the new model and effort on the earlier model's plan, in `shadow_plans` and in `shadow-report`; the plan's own row called it a fallback for the same reason | `makePlan` reads the model and effort before it awaits the answer and carries them with the plan: the record, the choice whether a shadow runs and the "served by" note all use them. Tested with a switch made while the plan request was in flight |
+
+Stays open:
+- The reading of Haiku 5.5's two rate cards comes from Anthropic's wording, not from an invoice: "the prompt" is taken
+  as every input token of the request (uncached input, cache reads and cache writes). The system text and the manual
+  are about 276,000 characters, so a plan's prompt on Haiku's tokenizer can fall on either side of 100,000 tokens.
+  Compare the first days with the Anthropic console.
+- A shadow plan is judged by people or by `shadow-report`, not by the rules: its actions are parsed, never checked
+  against the game rules, the caps or a fresh snapshot. "The same action types" says nothing about which plan was
+  the better one.
+- A shadow plan doubles the requests of a plan, at the shadow model's price, and the AI spend has no cap of its own.
+  Its cost is in the dashboard's AI spend. A request that was cancelled (a stop, or no answer in 10 minutes) or that
+  failed is billed by Anthropic for what it had produced and is not in that figure, as for a real plan that fails.
+- The shadow answers the same words, not at the same moment: it starts when the real plan is made and may finish up
+  to 10 minutes later. An owner's one-off request (Telegram `/do`) gets a shadow plan like any other plan.
+- `AGENT_MODEL` may still name a model that is neither on the list nor has a successor (one newer than this version):
+  it is asked as before and booked from `PRICES` or as LIST-4 says.
+- How well Haiku 5.5 plays this game has not been measured: that is what the shadow plans are for.
+
+## Several shadow models at once (2026-11-12)
+
+Since the section above the service could send each real plan's request to one second model, the shadow model, and
+record its answer. The owner wants to compare several cheaper models with the playing one on the same situations, at
+the same moment. `shadow_model` (else `AGENT_SHADOW_MODEL`) now holds one model id or several separated by commas.
+Each real plan gets one shadow request per shadow model that runs. Nothing else of a shadow plan changed: it is never
+carried out and never shown to the playing model. It is still switched on only on the machine itself.
+
+The work was done by Claude Fable 5.2 at high effort, test first. The tests are in `test/shadow-plan.test.ts`,
+`test/shadow-readers.test.ts` and `test/model-list.test.ts`, named after the ids below. Each was seen failing
+before the code it tests changed. Where a test of the section above pinned the single-model shape (the function
+`shadowChoice`, the state field `shadowModel`, `wakesShadow` taking one model, "the last section of this file") or
+the words "a second model", it was moved to the list shape and still proves what it proved.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SHADOWS-1 | design (the owner, 2026-11-12) | One shadow model at a time: to compare two cheaper models with the playing one, the owner had to run them on different days, so on different situations | Each real plan leaves one job for every shadow model that runs. After the real plan's actions are handed to `runPlan`, as before, the tick starts all the shadow requests together and waits for none. Each goes through its own `Strategist` object, one per shadow model and kept by its model id (own connection, cache decision and fallback memory; sent once, the connection's own retries off). Each answer is one activity row of kind `shadow` and one row of `shadow_plans`, both next to the same recorded real plan. Its cost is added to the AI spend. The executor still gets exactly the real plan's actions |
+| SHADOWS-2 | design (the owner, 2026-11-12) | The setting is typed by hand on the machine. A list invites a typing mistake, the same id twice and the playing model among the entries. One bad entry must not decide for the others | `shadowChoices` reads the entries: an id the list of models does not have is left out with its reason, the model that plays is left out (it rests), a repeated id counts once and the others run. Empty or `off` means none, as before. `off` anywhere among several switches all of them off, so a half-typed setting never costs anything. Only what a model id can hold reaches the log, at most 60 characters of an entry. No more than 16 entries are read. A single saved id behaves exactly as before. `shadow_effort` stays one effort for every shadow model |
+| SHADOWS-3 | pin | The reason an entry does not run must be said once, not at every plan of every agent. The setting is read before every plan | The service keeps the line it said last: "shadow plans run by A, B only: ..." when some run and "shadow plans are off: ..." when none does (the words of the section above for a single id). A corrected setting takes effect at the next plan without a restart and without a word |
+| SHADOWS-4 | design (the owner, 2026-11-12) | With several requests per plan, one that throws, is refused or never answers must not take the others, the tick or the kill switch with it (a rejection nobody catches reaches `panic`) | Each shadow request is started inside its own `try` and carries its own `catch`. One shadow model that throws, rejects or hangs past its 10 minutes is recorded as such in one line and the other's plan is recorded in full. The tick's answer, the actions run and the rows written are the same as without shadow plans. Nothing reaches the panic handler. Tested with either model written first |
+| SHADOWS-5 | low | The guard "the earlier shadow request is still on its way, skip" was per agent. With two shadow models, one slow model would have held back the other model's next shadow plan too | The guard is per agent and per shadow model. A model that is still answering skips only its own next shadow plan of that agent; another model and another agent are not held back |
+| SHADOWS-6 | pin | A stop must wait for no shadow request, however many are on their way. Nothing may be written after it | Unchanged code, tested with two requests in flight: each is cancelled with the stop and the stop does not wait. Answers that still arrive write no row, no cost and nothing else |
+| SHADOWS-7 | pin | Two shadow rows per plan in the activity: the next plan's history must still hold none of them | Unchanged code (`Store.planHistory` and the filter in `renderPlanRequest`), tested with two shadow models: the next request holds nothing of either shadow plan; each shadow model is asked that next request word for word |
+| SHADOWS-8 | low | A new Anthropic key from the dashboard was handed to the one shadow strategist. With one object per shadow model, any that was missed would keep asking with the old key until the next restart | `updateKeys` hands the new key to every shadow strategist |
+| SHADOWS-9 | design (rule 7) | The password rule had to follow the setting. `wakesShadow` compared one shadow model with the playing one. Left as it was, no entry of a list would have counted: with `shadow_model` on Haiku 5.5 and Fable 5.2 while Fable 5.2 plays, a click on Sonnet 5.5 would wake the Fable 5.2 shadow with no password asked. From then on every plan would pay for a Fable 5.2 shadow plan. No version ran that way | `wakesShadow` takes the list (`shadowModelsSet`: the entries of the setting that the list of models has, each once, whatever model plays). It is true when the current playing model is one of them and the next model is another model. That holds when the next model is itself a shadow model: it goes to rest, but the one that played wakes. The rule does not weigh the two costs. `/api/state` sends `shadowModels` in place of `shadowModel`; the page applies the same rule (compared with the server's over every pair of models, with none, one, two, three and four shadow models set) and its dialog names the models. There is still no dashboard, Telegram or web path that writes `shadow_model` or `shadow_effort`: a test posts both to `/api/strategist` and reads every source file for such a write |
+| SHADOWS-10 | design (the owner, 2026-11-12) | `shadow-report` summed every shadow plan into one block. That would mix the models it is meant to compare. It also printed the real plan once per shadow row | With several shadow models the numbers (count, valid tool calls, actions proposed and parsed, same action types as the real plan, average cost and time) are given once per model. "The last N" lists real plans, each with one line per shadow model below it. The rows of one real plan are found by what they hold: the same agent, the same recorded real plan, recorded within the time one tick's shadow plans can take, each model once. The database is not changed. With one shadow model the report reads as before |
+| SHADOWS-11 | docs | The guides spoke of one second model | `docs/SERVER.md` (the command for several, what an entry that does not run means, the password rule with a list, the one effort, the report), `.env.example`, the CLI's help, the README, the costs, dashboard and server pages of the site and the dashboard's Activity bubble follow |
+
+What was checked on the finished change:
+- No path from a shadow answer to a signature. `src/strategist/shadow.ts` still imports nothing of the executor, the
+  wallets or the chain. The service's shadow code (from `startShadow` to the end of `shadowPlan`) names no
+  executor, wallet, `runPlan`, booking or plan's actions: SHADOW-6 of the section above reads the new code and
+  passes. What is kept of an answer is still the frozen copy of `recordPlan`. With two shadow models that both
+  propose a bid, the executor ran the real plan's two actions and nothing was booked (SHADOWS-1).
+- The password rule with a list, on the route (403 without the password, 200 with it) and on the page, for every
+  pair of models (SHADOWS-9). While the service runs, the playing model is switched only through `/api/strategist`.
+- The cost of each shadow plan is booked: every shadow answer adds its own cost to the AI spend before its row is
+  written and a shadow that failed adds nothing. The total of a plan with two shadow plans is the sum of the three
+  (SHADOWS-1, SHADOWS-4).
+- R63A-2 of the section above holds: the playing model and effort are read before the plan's answer is awaited;
+  every shadow row of that plan carries them.
+
+Stays open:
+- Each shadow model adds its own cost to every plan of every agent, at that model's price. The AI spend has no
+  cap of its own. Two shadow models make three requests of every plan. Each shadow model also keeps its own prompt
+  cache of the manual.
+- A shadow request that was cancelled (by a stop or after 10 minutes without an answer) or that failed may be billed
+  by Anthropic for what it had produced and is not in the AI spend figure, as before. It can now happen once per
+  shadow model.
+- A switch between two models of the list asks for the password although one shadow model goes to rest as the other
+  wakes. The rule is the careful one: it does not weigh what the two cost.
+- All shadow requests of a plan start at the same moment and count against the same Anthropic rate limits as the
+  real plans. A shadow request that is refused for the rate is recorded as an error and not asked again. Whether many
+  shadow requests can slow the real plans of other agents was not measured.
+- The report groups the shadow plans of one real plan by what the rows hold, not by an id. Two plans of one agent with
+  the very same words, actions and cost, made within 11 minutes of each other, can stand under one real line. The
+  numbers per model are not touched by it.
+- `shadow_plans` keeps the newest 2,000 rows of all shadow models together, so with two models it reaches half as far
+  back.
+- The effort is one for every shadow model. A model that would need its own effort to be compared fairly cannot have
+  it yet.
+- What stays open in the section above stays open: a shadow plan is judged by reading it, never by the rules.
+
 ## Final audit before the public launch (2026-11-11): six Claude Fable 5.2 reviewers at extra-high effort, the fixes by Claude Fable 5.2 at high effort
 
 The last audit before the repository opens. Six reviewers (MONEY, ATTACK, EDGE, INTEG, INSTALL, DOCS) worked read-only,

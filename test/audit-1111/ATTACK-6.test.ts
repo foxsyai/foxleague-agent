@@ -81,7 +81,8 @@ test('ATTACK-6 a session the owner logged out of does not come back to life when
 test('ATTACK-6b (unit) the kept list forgets a logout once the session would have expired, and an unreadable list starts empty', () => {
   const store = new Store('', ':memory:')
   const keep = { load: () => store.getKv('revoked_sessions'), save: (v: string) => store.setKv('revoked_sessions', v) }
-  const t0 = Date.UTC(2026, 10, 11, 12)
+  // From the real clock: loading the kept list drops entries by the real time (an expired logout is not kept).
+  const t0 = Date.now()
   const a = new Sessions('k'.repeat(64), 'hash', keep)
   const early = a.issue('admin', t0)
   a.revoke(early, t0)

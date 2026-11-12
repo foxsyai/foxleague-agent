@@ -30,7 +30,8 @@ import { budgetView } from './executor/budget.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
-import { MODELS, Strategist, describeModelError, isModelAccountError, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { MODELS, Strategist, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
 import { Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
 import { creditRefunds } from './executor/refunds.ts'
@@ -275,6 +276,21 @@ const CHAT_KEPT = 100
 const CHAT_CONTEXT = 50
 const CHAT_PAUSE_MS = 3600_000
 
+/**
+ * What a real plan leaves for its shadow plans: the request word for word, the shadow models that get it with their
+ * one effort, the model that played and the real plan as plain data.
+ */
+interface ShadowJobs {
+  request: string
+  models: string[]
+  effort: Effort
+  realModel: string
+  realEffort: string
+  real: ShadowPlanRow['real']
+}
+/** One shadow plan of a real plan: the same, for one shadow model. */
+type ShadowJob = Omit<ShadowJobs, 'models'> & { model: string }
+
 export class Service {
   readonly cfg: Config
   readonly store: Store
@@ -313,6 +329,18 @@ export class Service {
   private pendingRetryMs = PENDING_RETRY_MS
   private pendingTimer: NodeJS.Timeout | undefined
   private retrying = false
+  /**
+   * Shadow plans (src/strategist/shadow.ts; off unless shadow_model is set on the machine). Each shadow model's own
+   * strategist, by its model id and made with its first shadow plan; what each real plan left for its shadow plans
+   * (the request's own words and the real plan as plain data), found by the plan object and gone with it; the shadow
+   * requests on their way, one per agent and shadow model; how long one may take (a test shortens it); and what the
+   * log was told of a setting of which an entry does not run, once it was said.
+   */
+  private readonly shadowStrategists = new Map<string, Strategist>()
+  private readonly shadowJobs = new WeakMap<object, ShadowJobs>()
+  private readonly shadows = new Map<string, Promise<void>>()
+  private shadowTimeoutMs = SHADOW_TIMEOUT_MS
+  private shadowSaid: string | null = null
 
   constructor(cfg: Config) {
     if (!cfg.mnemonic) throw new Error(`AGENT_MNEMONIC is not set: run \`${cfg.isServer ? 'agentctl.sh' : './cli.sh'} setup\` first`)
@@ -486,11 +514,11 @@ export class Service {
   /** The strategist's model and effort for every agent, from the next cycle on (same API key). */
   setStrategist(model: string, effort: Effort, by: string): string {
     if (!this.strategist) throw new Error('the strategist is off (no ANTHROPIC_API_KEY)')
-    if (!MODELS[model]) throw new Error(`unknown model ${model}`)
+    if (!isKnownModel(model)) throw new Error(`unknown model ${model}`)
     this.store.setKv('strategist_model', model)
     this.store.setKv('strategist_effort', effort)
     this.strategist.configure(model, effort)
-    const text = `strategist ${MODELS[model].label}, effort ${effort}, from the next cycle (${by})`
+    const text = `strategist ${MODELS[model]!.label}, effort ${effort}, from the next cycle (${by})`
     this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: text })
     this.notify(text)
     return text
@@ -644,8 +672,11 @@ export class Service {
     return Number.isInteger(h) && h >= 0 && h <= 23 ? h : 9
   })()
 
-  /** Kinds in the activity that are not actions (plans, ticks, controls, top-ups). */
-  private static readonly NOT_ACTIONS = new Set(['plan', 'tick', 'control', 'topup', 'badge'])
+  /**
+   * Kinds in the activity that are not actions (plans, ticks, controls, top-ups). A shadow plan is neither an action
+   * nor a plan: the summary counts it nowhere.
+   */
+  private static readonly NOT_ACTIONS = new Set(['plan', 'tick', 'control', 'topup', 'badge', SHADOW_KIND])
 
   /**
    * The summary of one day (YYYY-MM-DD in the summary's zone), or of today so far. `scheduled`: the morning one,
@@ -787,6 +818,7 @@ export class Service {
     const names = changed.map(([k]) => k)
     if (names.includes('ANTHROPIC_API_KEY')) {
       this.cfg.anthropicApiKey = values.ANTHROPIC_API_KEY
+      for (const shadow of this.shadowStrategists.values()) shadow.setApiKey(values.ANTHROPIC_API_KEY!)
       if (this.strategist) this.strategist.setApiKey(values.ANTHROPIC_API_KEY!)
       else {
         const choice = strategistChoice(this.store, this.cfg)
@@ -852,7 +884,7 @@ export class Service {
   testKeys(): Promise<KeyCheck[]> {
     return checkKeys({
       anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim(),
-      model: this.strategist?.model ?? this.cfg.model,
+      model: this.strategist?.model ?? currentModel(this.cfg.model),
       telegramToken: process.env.TELEGRAM_BOT_TOKEN?.trim(),
       telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim(),
       binanceKey: process.env.BINANCE_API_KEY?.trim(),
@@ -1422,7 +1454,11 @@ export class Service {
         this.store.log({ agentIndex: index, kind: p.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(p.action)}: it could not read FoxLeague's settings, so it did not know the platform fee` })
         return false
       })
-      await this.runPlan(agent, plan.actions, !ownerRequest)
+      const running = this.runPlan(agent, plan.actions, !ownerRequest)
+      // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
+      // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
+      this.startShadow(index, plan)
+      await running
       return plan.summary
     } catch (err) {
       const msg = describeModelError(err)
@@ -1472,19 +1508,174 @@ export class Service {
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered)
-    const plan = await this.strategist!.plan({ snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.activity(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) })
+    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) }
+    // Rendered once and kept: a shadow plan, when one is switched on, is asked with these very words.
+    const request = renderPlanRequest(input)
+    // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the
+    // strategist while the request is on its way, and this plan is still the earlier model's (agent review of PR #63,
+    // R63A-2).
+    const playing = { model: String(this.strategist!.model), effort: String(this.strategist!.effort ?? '') }
+    const plan = await this.strategist!.plan(input, request)
     const text =
       `${agentName(agent.index)} plan${ownerRequest ? ' (owner request)' : ''}: ${plan.summary}\n` +
       (plan.actions.length ? plan.actions.map((a, i) => `${i + 1}. ${describeAction(a.action)} (${a.reason})`).join('\n') : '(no actions)') +
       (plan.rejected.length ? `\nrejected proposals: ${plan.rejected.map(r => r.error).join('; ')}` : '') +
-      `\nmodel cost $${plan.usage.usd.toFixed(4)} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== this.strategist!.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
+      `\nmodel cost $${plan.usage.usd.toFixed(4)} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
     // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
     this.addModelUsd(plan.usage.usd)
     this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
     if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
     else this.report(text)
+    this.prepareShadow(plan, request, playing)
     return plan
+  }
+
+  /**
+   * Leaves what the shadow plans of this real plan need, when shadow plans are switched on: the request's own words,
+   * the shadow models that get it and the real plan as plain data (as the model proposed it, before the tick drops
+   * anything). Off, which is the default, it keeps nothing; the reason an entry of the setting does not run is said
+   * once in the log. It never throws: the real plan must not depend on it. `playing`: the model and effort the real
+   * plan was asked from, as they were when its request went out; each shadow is compared with that model, whatever
+   * plays by now.
+   */
+  private prepareShadow(plan: Plan, request: string, playing: { model: string; effort: string }): void {
+    try {
+      if (!this.strategist || !this.cfg.anthropicApiKey) return
+      const choices = shadowChoices(this.store, playing.model)
+      const note = shadowNote(choices)
+      if (note && note !== this.shadowSaid) console.log(`[${new Date().toISOString()}] ${note}`)
+      this.shadowSaid = note
+      if (!choices.models.length) return
+      this.shadowJobs.set(plan, {
+        request, models: choices.models, effort: choices.effort, realModel: playing.model, realEffort: playing.effort,
+        real: { ...recordPlan(plan), usd: plan.usage.usd, servedBy: plan.usage.servedBy },
+      })
+    } catch (err) {
+      console.error('shadow plan not prepared:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  /**
+   * A shadow model's own strategist, one object per shadow model: its own connection, cache decision and fallback
+   * memory, which sends a request once and never again by itself. Nothing of the playing strategist or of another
+   * shadow model's is shared with it. Only a model of the list gets one, so there are never more than the list is long.
+   */
+  private shadowStrategistFor(model: string, effort: Effort): Strategist {
+    if (!this.cfg.anthropicApiKey) throw new Error('no ANTHROPIC_API_KEY')
+    if (!isKnownModel(model)) throw new Error('not a model on the list')
+    let strategist = this.shadowStrategists.get(model)
+    if (!strategist) {
+      strategist = new Strategist(this.cfg.anthropicApiKey, model, effort, () => this.callExpectedWithinHour(), { retries: 0 })
+      this.shadowStrategists.set(model, strategist)
+    } else if (strategist.effort !== effort) strategist.configure(model, effort)
+    return strategist
+  }
+
+  /**
+   * Starts the shadow plans of a real plan, when any were prepared for it: one request per shadow model, all at once.
+   * The tick never waits for them and this never throws. One at a time per agent and shadow model, so a model that
+   * is slow to answer holds back only its own next shadow plan. None once the service is stopping, and the stop does
+   * not wait for them either.
+   */
+  private startShadow(index: number, plan: object): void {
+    try {
+      const jobs = this.shadowJobs.get(plan)
+      if (!jobs || this.stopping) return
+      this.shadowJobs.delete(plan)
+      const { models, ...one } = jobs
+      for (const model of models) {
+        // Each by itself: one shadow model that cannot start or that fails keeps none of the others back.
+        try {
+          const key = `${index}:${model}`
+          if (this.shadows.has(key)) continue
+          const run: Promise<void> = this.shadowPlan(index, { ...one, model })
+            .catch(err => console.error(`${agentName(index)}: shadow plan by ${model} failed:`, err instanceof Error ? err.message : err))
+            .finally(() => {
+              if (this.shadows.get(key) === run) this.shadows.delete(key)
+            })
+          this.shadows.set(key, run)
+        } catch (err) {
+          console.error(`${agentName(index)}: shadow plan by ${model} not started:`, err instanceof Error ? err.message : err)
+        }
+      }
+    } catch (err) {
+      console.error(`${agentName(index)}: shadow plans not started:`, err instanceof Error ? err.message : err)
+    }
+  }
+
+  /**
+   * One shadow plan: the request of the real plan, word for word, to one shadow model through its own strategist,
+   * and a record of what came back. It returns nothing and hands nothing on. The answer becomes plain data
+   * (recordPlan) for one activity row and for the report's table, and its cost is added to the AI spend so the bill
+   * the owner sees stays true. It is asked once: a refusal, a cut-off answer, an error or no answer in time is
+   * recorded as such in one line and never asked again. It writes no last plan, no chat and nothing else the playing
+   * model or the next plan reads, and after a stop it writes nothing at all.
+   */
+  private async shadowPlan(index: number, job: ShadowJob): Promise<void> {
+    if (this.stopping) return
+    const started = Date.now()
+    const cancel = new AbortController()
+    let stopped: () => void = () => undefined
+    const onStop = (): void => {
+      cancel.abort()
+      stopped()
+    }
+    this.stopSignal.signal.addEventListener('abort', onStop, { once: true })
+    let timer: NodeJS.Timeout | undefined
+    let outcome: ShadowOutcome
+    let text: string
+    let shadow: RecordedPlan = { summary: '', actions: [] }
+    let usage: Plan['usage'] | null = null
+    try {
+      const strategist = this.shadowStrategistFor(job.model, job.effort)
+      const gaveUp = new Promise<'gave up'>(resolve => {
+        timer = setTimeout(() => resolve('gave up'), this.shadowTimeoutMs)
+      })
+      const stop = new Promise<'stopped'>(resolve => {
+        stopped = () => resolve('stopped')
+      })
+      const answer = await Promise.race([strategist.planFromRequest(job.request, cancel.signal), gaveUp, stop])
+      if (answer === 'stopped') return
+      if (answer === 'gave up') {
+        outcome = 'timeout'
+        text = `no answer within ${Math.round(this.shadowTimeoutMs / 1000)} s; given up`
+      } else {
+        outcome = answer.outcome
+        shadow = recordPlan(answer.plan)
+        text = shadow.summary
+        usage = answer.plan.usage
+      }
+    } catch (err) {
+      outcome = 'error'
+      text = `error: ${describeModelError(err)}`
+    } finally {
+      clearTimeout(timer)
+      this.stopSignal.signal.removeEventListener('abort', onStop)
+      // Ends a request that is still open (given up, or the service stops); an answer already read is not touched.
+      cancel.abort()
+    }
+    // Nothing is written after a stop.
+    if (this.stopping) return
+    const ms = Date.now() - started
+    const usd = usage?.usd ?? 0
+    try {
+      // Counted like a plan's cost, before its row is written.
+      if (usd > 0) this.addModelUsd(usd)
+      // An agent deleted meanwhile gets no row: its number may be given to a new agent.
+      if (!this.store.agent(index)) return
+      this.store.log({
+        agentIndex: index, kind: SHADOW_KIND, status: 'info',
+        summary: shadowLine({ model: job.model, effort: job.effort, usd, ms, text, ...(outcome === 'plan' ? { plan: shadow } : {}) }),
+        detail: { shadow: { model: job.model, effort: job.effort, outcome, usd, ms }, carriedOut: false },
+      })
+      this.store.addShadowPlan({
+        agentIndex: index, realModel: job.realModel, realEffort: job.realEffort, shadowModel: job.model, shadowEffort: job.effort, outcome, real: job.real, shadow,
+        inputTokens: usage?.inputTokens ?? null, outputTokens: usage?.outputTokens ?? null, cacheReadTokens: usage?.cacheReadTokens ?? null, cacheWriteTokens: usage?.cacheWriteTokens ?? null, usd, ms,
+      })
+    } catch (err) {
+      console.error(`${agentName(index)}: shadow plan not recorded:`, err instanceof Error ? err.message : err)
+    }
   }
 
   /**

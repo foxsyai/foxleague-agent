@@ -9,6 +9,17 @@ import { DEFAULT_SETTINGS, FOXLEAGUE_MAX_COUNTS, type AgentSettings } from './se
 import type { MatchFormations } from '../foxleague/types.ts'
 import { CASUAL_AI_FULL_FROM, CASUAL_DAYS, LEAGUE_DAYS, leagueTable, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueMatch, type LeagueTable } from '../snapshot/formations.ts'
 import type { MarketSale } from '../snapshot/market.ts'
+import type { ShadowPlanRow } from '../strategist/shadow.ts'
+
+/** The kind of a shadow plan's row in the activity (src/strategist/shadow.ts, SHADOW_KIND; named here so the store imports no code from it). */
+const SHADOW_ROW_KIND = 'shadow'
+
+/**
+ * The shadow plans kept for the report: the newest 2,000 of all shadow models together (about 12 days of ten agents
+ * planning every hour, 16 hours a day, with one shadow model; with several, that divided by their number; a few
+ * megabytes at most).
+ */
+export const SHADOW_PLANS_KEPT = 2000
 
 export interface AgentRow {
   index: number
@@ -177,6 +188,26 @@ export class Store {
         edge REAL,
         PRIMARY KEY (agent_idx, match_key)
       );
+      -- Shadow plans (2026-11-11): what a second model would have planned, next to the real plan of the same tick.
+      -- A table of its own that only the report reads; an earlier version never looks at it.
+      CREATE TABLE IF NOT EXISTS shadow_plans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at TEXT NOT NULL,
+        agent_idx INTEGER NOT NULL,
+        real_model TEXT NOT NULL,
+        real_effort TEXT NOT NULL,
+        shadow_model TEXT NOT NULL,
+        shadow_effort TEXT NOT NULL,
+        outcome TEXT NOT NULL,
+        real_plan TEXT NOT NULL,
+        shadow_plan TEXT NOT NULL,
+        input_tokens INTEGER,
+        output_tokens INTEGER,
+        cache_read_tokens INTEGER,
+        cache_write_tokens INTEGER,
+        usd REAL NOT NULL,
+        ms INTEGER NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS league_matches (
         key TEXT PRIMARY KEY,
         at TEXT NOT NULL,
@@ -300,7 +331,7 @@ export class Store {
     const gone: DeletedAgent = { index, address: row.address, at: new Date().toISOString(), by }
     this.db.exec('BEGIN')
     try {
-      for (const table of ['activity', 'spend', 'pending_tx']) this.db.prepare(`DELETE FROM ${table} WHERE agent_idx = ?`).run(index)
+      for (const table of ['activity', 'spend', 'pending_tx', 'shadow_plans']) this.db.prepare(`DELETE FROM ${table} WHERE agent_idx = ?`).run(index)
       const keys = PER_AGENT_KV.map(p => `${p}${index}`)
       this.db.prepare(`DELETE FROM kv WHERE key IN (${keys.map(() => '?').join(', ')})`).run(...keys)
       this.db.prepare('DELETE FROM agents WHERE idx = ?').run(index)
@@ -538,6 +569,33 @@ export class Store {
     return rows.map(rowToActivity)
   }
 
+  /**
+   * What an agent's next plan reads of its own history, newest first: the activity without the shadow plans. A shadow
+   * plan is another model's proposal that was never carried out, and the playing model must never read it as its own
+   * past. Left out here, in the query, so the plan still gets its full number of real rows.
+   */
+  planHistory(agentIndex: number, limit = 20): ActivityRow[] {
+    const rows = this.db.prepare('SELECT * FROM activity WHERE agent_idx = ? AND kind != ? ORDER BY id DESC LIMIT ?').all(agentIndex, SHADOW_ROW_KIND, limit) as Record<string, unknown>[]
+    return rows.map(rowToActivity)
+  }
+
+  // ---- shadow plans (the structured copy, for `cli shadow-report`) ----
+
+  /** Keeps one shadow plan and drops the oldest beyond SHADOW_PLANS_KEPT, so the table cannot grow without bound. */
+  addShadowPlan(p: Omit<ShadowPlanRow, 'id' | 'at'>): number {
+    const json = (v: unknown) => JSON.stringify(v, (_k, x: unknown) => (typeof x === 'bigint' ? x.toString() : x))
+    const r = this.db
+      .prepare('INSERT INTO shadow_plans (at, agent_idx, real_model, real_effort, shadow_model, shadow_effort, outcome, real_plan, shadow_plan, input_tokens, output_tokens, cache_read_tokens, cache_write_tokens, usd, ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(new Date().toISOString(), p.agentIndex, p.realModel, p.realEffort, p.shadowModel, p.shadowEffort, p.outcome, json(p.real), json(p.shadow), p.inputTokens, p.outputTokens, p.cacheReadTokens, p.cacheWriteTokens, p.usd, Math.round(p.ms))
+    this.db.prepare('DELETE FROM shadow_plans WHERE id NOT IN (SELECT id FROM shadow_plans ORDER BY id DESC LIMIT ?)').run(SHADOW_PLANS_KEPT)
+    return Number(r.lastInsertRowid)
+  }
+
+  /** The shadow plans kept, newest first: of one agent, or of all with null. */
+  shadowPlans(agentIndex: number | null, limit = SHADOW_PLANS_KEPT): ShadowPlanRow[] {
+    return selectShadowPlans(this.db, agentIndex, limit)
+  }
+
   /** Every row of these kinds since a moment, newest first: limits over days never depend on how busy the log is. */
   /** Every agent's plans since a moment, oldest first (for the AI's cost per day). */
   plansSince(since: Date): { at: string; detail: string | null }[] {
@@ -682,6 +740,44 @@ export class Store {
 
   resolvePending(hash: string, state: 'done' | 'failed' | 'abandoned'): void {
     this.db.prepare('UPDATE pending_tx SET state = ? WHERE hash = ?').run(state, hash)
+  }
+}
+
+function selectShadowPlans(db: DatabaseSync, agentIndex: number | null, limit: number): ShadowPlanRow[] {
+  const rows = (agentIndex === null
+    ? db.prepare('SELECT * FROM shadow_plans ORDER BY id DESC LIMIT ?').all(limit)
+    : db.prepare('SELECT * FROM shadow_plans WHERE agent_idx = ? ORDER BY id DESC LIMIT ?').all(agentIndex, limit)) as Record<string, unknown>[]
+  const plan = (v: unknown): ShadowPlanRow['real'] => {
+    try {
+      const p = JSON.parse(String(v)) as Partial<ShadowPlanRow['real']> | null
+      return { ...p, summary: String(p?.summary ?? ''), actions: Array.isArray(p?.actions) ? p.actions : [] }
+    } catch {
+      return { summary: '(not readable)', actions: [] }
+    }
+  }
+  const count = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v))
+  return rows.map(r => ({
+    id: Number(r.id), at: String(r.at), agentIndex: Number(r.agent_idx),
+    realModel: String(r.real_model), realEffort: String(r.real_effort), shadowModel: String(r.shadow_model), shadowEffort: String(r.shadow_effort),
+    outcome: String(r.outcome) as ShadowPlanRow['outcome'], real: plan(r.real_plan), shadow: plan(r.shadow_plan),
+    inputTokens: count(r.input_tokens), outputTokens: count(r.output_tokens), cacheReadTokens: count(r.cache_read_tokens), cacheWriteTokens: count(r.cache_write_tokens),
+    usd: Number(r.usd), ms: Number(r.ms),
+  }))
+}
+
+/**
+ * The shadow plans for a report, through a connection that cannot write: `cli shadow-report` reads next to a running
+ * service and changes nothing, not even the tables a new version adds. No database or no such table yet: none.
+ */
+export function readShadowPlans(dataDir: string, agentIndex: number | null, limit = SHADOW_PLANS_KEPT, file = 'agent.db'): ShadowPlanRow[] {
+  const path = join(dataDir, file)
+  if (!existsSync(path)) return []
+  const db = new DatabaseSync(path, { readOnly: true, timeout: 5000 })
+  try {
+    if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'shadow_plans'").get()) return []
+    return selectShadowPlans(db, agentIndex, limit)
+  } finally {
+    db.close()
   }
 }
 

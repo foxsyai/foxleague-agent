@@ -33,7 +33,7 @@ delete process.env.BINANCE_API_SECRET
 process.env.AGENT_LIVE_ENABLED = '1'
 const cfg = {
   mnemonic: Mnemonic.generate().toString(), dataDir: dir, gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9',
-  gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: process.env.ANTHROPIC_API_KEY, model: 'claude-sonnet-5',
+  gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: process.env.ANTHROPIC_API_KEY, model: 'claude-sonnet-5-5',
   telegramToken: process.env.TELEGRAM_BOT_TOKEN, telegramChatId: process.env.TELEGRAM_CHAT_ID, isServer: false, defaultDryRun: true, maxAgents: 5,
 } as Config
 const svc = new Service(cfg)
