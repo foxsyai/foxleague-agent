@@ -222,10 +222,11 @@ On Windows all of them are the Linux ones, typed inside Ubuntu: open it with `ws
 
 ## Updates
 
-About every 10 minutes the agent asks GitHub whether a newer release is out. When one is, the dashboard shows a
-notice with what is new and Telegram tells you once. Press **Update now** in the dashboard or send `/upgrade` on
-Telegram: nothing is ever installed by itself, and no password is asked, because only a release that is signed by
-the foxleague-agent maintainers and newer than yours can be installed. The agent checks the signature, prepares the
+About every 10 minutes the agent asks GitHub whether a newer release is out; **Check for updates** next to the
+version in the dashboard asks at once. When one is out, the dashboard shows a notice with what is new and Telegram
+tells you once. Press **Update now** in the dashboard or send `/upgrade` on Telegram: nothing is ever installed by
+itself, and no password is asked, because only a release that is signed by the foxleague-agent maintainers and
+newer than yours can be installed. The agent checks the signature, prepares the
 new version next to the running one and restarts into it; the waiting actions of a running plan are dropped and the
 next plan takes them up. The dashboard is away for about half a minute. A new version that does not start is undone
 by itself after about a minute and a half, and you are told. Your wallet, keys, settings and history are kept.

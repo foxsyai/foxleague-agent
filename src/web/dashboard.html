@@ -73,6 +73,11 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .btn.danger:hover{background:#4d1d2a}
 .btn.warn:hover{background:#4d3e15}
 .btn.sm{padding:4px 9px;font-size:12px}
+/* Check for updates next to the version: a button that reads as a link. */
+.upcheck{display:inline-flex;align-items:center}
+.linkbtn{background:none;border:0;padding:0;margin:0;color:var(--blue);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.linkbtn:hover{text-decoration:underline}
+.linkbtn:disabled{color:var(--dim);cursor:not-allowed;text-decoration:none}
 .grid{display:grid;gap:12px}
 .kpis{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px;min-width:0}
@@ -260,6 +265,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
       <span id="killPill" class="pill halt" hidden>kill switch on</span>
       <span id="tgPill" class="pill mute" hidden>telegram off</span>
       <span id="verPill" class="pill mute" hidden></span><i class="info" data-tip="update">i</i>
+      <span id="upCheckWrap" class="upcheck" hidden><button id="upCheck" class="linkbtn" type="button">Check for updates</button><i class="info" data-tip="upcheck">i</i></span>
     </div>
     <div class="actions">
       <span class="act"><a id="howBtn" class="btn" href="https://agent.foxleague.ai/" target="_blank" rel="noopener noreferrer">How it works</a><i class="info" data-tip="how">i</i></span>
@@ -477,6 +483,9 @@ function renderUpdate() {
   if (updating && u.installed === updating.to) { updating = null; toast('Updated to version ' + u.installed) }
   const recent = u.last && Date.now() - Date.parse(u.last.at) < 86400000 ? u.last : null
   const busy = u.state !== 'idle' || Boolean(updating)
+  // Check for updates: only where the agent checks at all, and off while it asks or an update installs.
+  $('upCheckWrap').hidden = !u.enabled
+  $('upCheck').disabled = checking || busy
   let text = '', notes = '', tone = '', button = false, again = false
   // u.restarts is false where no background service starts the agent again: the release is put in place and
   // u.waiting then holds what the owner does to start it.
@@ -497,6 +506,27 @@ function renderUpdate() {
   $('upNotes').hidden = !notes; $('upNotes').textContent = notes
   $('upBtn').hidden = !button
   $('upBtn').textContent = again ? 'Try again' : 'Update now'
+}
+// Check for updates asks the release server now instead of at the next check (about every 10 minutes). The agent
+// answers a check that comes less than 15 seconds after the last one with that one, so a double click asks once.
+// Declared here, after renderUpdate, which reads it only once the page runs.
+let checking = false
+async function checkUpdate() {
+  const u = S.instance.update
+  if (checking || !u || !u.enabled) return
+  checking = true; renderUpdate()
+  const failed = why => toast('The check failed: ' + why + '. The agent tries again by itself in a few minutes.', true)
+  try {
+    const v = (await api('POST', '/api/update/check')).update
+    if (!v) throw new Error('the agent gave no answer')
+    S.instance.update = v
+    if (v.checkError) failed(v.checkError)
+    else if (v.available) {
+      // The very release that was just undone here (the notice reads Try again): nothing to do, as the notice says.
+      const undone = v.last && v.last.kind === 'undone' && v.last.version === v.available.version && Date.now() - Date.parse(v.last.at) < 86400000
+      toast(undone ? 'Version ' + v.available.version + ' is still the newest. Nothing has to be done: the agent keeps running ' + v.installed + '.' : 'Version ' + v.available.version + ' is out.')
+    } else toast('You run ' + v.installed + ', the newest version.')
+  } catch (e) { if (e.message !== 'signed out') failed(e.message) } finally { checking = false; renderUpdate() }
 }
 async function startUpdate() {
   const u = S.instance.update
@@ -1010,11 +1040,14 @@ $('stratApply').onclick = async (e, password) => {
 }
 // Info bubbles: [title, html]. Plain and short; no em dashes, no comma before the last "and" or "or" of a list.
 const TIPS = {
-  update: ['Version and updates', `<p>The version this agent runs. About every 10 minutes it asks GitHub whether a newer release of foxleague-agent is out. When one is, a notice appears here and on Telegram, with what is new.</p>
+  update: ['Version and updates', `<p>The version this agent runs. About every 10 minutes it asks GitHub whether a newer release of foxleague-agent is out. When one is, a notice appears here and on Telegram, with what is new. <b>Check for updates</b> next to the version asks at once.</p>
     <p><b>Update now</b> installs it in one click: the agent downloads the release, checks that it is signed by the foxleague-agent maintainers, prepares it next to the running version and restarts into it. That takes a minute or two. An action that is being signed finishes first; the other waiting actions of a running plan are dropped and the next plan takes them up. Your wallet, keys, settings and history are not touched. On Telegram, <b>/upgrade</b> does the same.</p>
     <p>Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password. If the new version does not start, the agent goes back to the one it ran before and tells you. The notice then says that nothing has to be done and its button reads <b>Try again</b>: press it only if you want to install that version once more.</p>
     <p>An agent that you start yourself with ./run.sh (an install without the background service) does not restart by itself: the new version is put in place, the agent keeps playing and the notice says how to start the new version.</p>
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
+  upcheck: ['Check for updates', `<p>The agent checks by itself about every 10 minutes whether a newer release of foxleague-agent is out. This asks now: the notice under the header and a short message give the answer at once.</p>
+    <p>Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered. Checking installs nothing: <b>Update now</b> does, when you press it.</p>
+    <p>Two checks less than 15 seconds apart ask once: the second shows the answer of the first. The link is off while an update installs. Where the check is switched off (AGENT_UPDATE_CHECK=0 in the env file) it is not shown.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
   guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>
@@ -1534,6 +1567,7 @@ function showGuide(on, focus) {
 $('guideBtn').onclick = () => showGuide(true)
 $('aiBannerBtn').onclick = () => showGuide(true, 'ai')
 $('upBtn').onclick = startUpdate
+$('upCheck').onclick = checkUpdate
 $('guideClose').onclick = () => showGuide(false)
 $('guidewrap').addEventListener('click', e => { if (e.target.id === 'guidewrap') showGuide(false) })
 $('guideHide').onchange = async () => {

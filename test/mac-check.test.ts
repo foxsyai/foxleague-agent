@@ -151,6 +151,8 @@ test('MAC-4: the uninstall does not state that the wallets hold funds, which it 
 
 const KEY = testKey()
 const V103 = { version: '1.0.3', notes: 'Medicine for injured cards.', published: '2026-11-12T20:00:00Z' }
+/** What the dashboard holds for an install that runs 1.0.2, checks for updates and has nothing on offer. */
+const IDLE: UpdateView = { installed: '1.0.2', available: null, checkedAt: null, checkError: null, canInstall: true, how: null, state: 'idle', last: null, enabled: true, restarts: true, waiting: null }
 
 /** A release server on this machine with 1.0.3 on it. */
 async function releaseServer(): Promise<Awaited<ReturnType<typeof serve>>> {
@@ -208,6 +210,97 @@ test('MAC-5: the release server is asked at most once in MIN_CHECK_GAP_MS: a che
   assert.equal(updater.MIN_CHECK_GAP_MS, 15_000)
   assert.equal(updater.CHECK_EVERY_MS, 10 * 60_000)
   assert.match(read('src/update/updater.ts'), /again\(CHECK_EVERY_MS \+ Math\.random\(\) \* 60_000\)[^\n]*\n[^\n]*\n[^\n]*\n\s*again\(30_000 \+ Math\.random\(\) \* 60_000\)/)
+})
+
+type Control = Element & { disabled: boolean }
+type Api = (method: string, path: string) => Promise<unknown>
+/**
+ * The dashboard's update code from renderUpdate up to startUpdate (Check for updates sits between them), run on
+ * stand-in elements with a stand-in api (the page's own carries the CSRF token) and toast.
+ */
+function updateCode(update: Partial<UpdateView>, o: { updating?: { to: string; since: number }; api?: Api } = {}): { S: { instance: { update: UpdateView } }; $: (id: string) => Control; toasts: [string, boolean][]; click: () => Promise<void> } {
+  const html = read('src/web/dashboard.html')
+  const code = html.slice(html.indexOf('function renderUpdate() {'), html.indexOf('async function startUpdate() {'))
+  assert.ok(code.startsWith('function renderUpdate()'), 'renderUpdate was not found in the dashboard')
+  assert.ok(code.includes('async function checkUpdate() {'), 'Check for updates (checkUpdate) was not found next to renderUpdate')
+  const els: Record<string, Control> = {}
+  const $ = (id: string): Control => (els[id] ??= { hidden: false, textContent: '', className: '', disabled: false })
+  const S = { instance: { update: { ...IDLE, ...update } } }
+  const toasts: [string, boolean][] = []
+  const api: Api = o.api ?? (() => Promise.reject(new Error('no request was expected')))
+  const page = new Function('S', '$', 'toast', 'updating', 'api', `${code}\nrenderUpdate()\nreturn { checkUpdate }`)(S, $, (m: string, bad?: boolean) => void toasts.push([m, Boolean(bad)]), o.updating ?? null, api) as { checkUpdate: () => Promise<void> }
+  return { S, $, toasts, click: () => page.checkUpdate() }
+}
+
+test('MAC-5: Check for updates next to the version asks now, shows the answer at once and says it in a toast; it is off while it asks or an update installs, and hidden where the agent does not check', async () => {
+  const html = flat('src/web/dashboard.html')
+  assert.match(html, /<span id="verPill" class="pill mute" hidden><\/span><i class="info" data-tip="update">i<\/i> ?<span id="upCheckWrap" class="upcheck" hidden><button id="upCheck" class="linkbtn" type="button">Check for updates<\/button><i class="info" data-tip="upcheck">i<\/i><\/span>/, 'the control and its info bubble next to the version')
+  assert.match(html, /\$\('upCheck'\)\.onclick = checkUpdate\b/)
+
+  // Shown where the agent checks for updates, hidden where it does not (AGENT_UPDATE_CHECK=0, a service the CLI built).
+  assert.equal(updateCode({}).$('upCheckWrap').hidden, false)
+  assert.equal(updateCode({ enabled: false }).$('upCheckWrap').hidden, true)
+  // Off while an update installs: by the agent's own state, and from the click on Update now.
+  assert.equal(updateCode({}).$('upCheck').disabled, false)
+  assert.equal(updateCode({ available: V103, state: 'downloading' }).$('upCheck').disabled, true)
+  assert.equal(updateCode({ available: V103 }, { updating: { to: '1.0.3', since: Date.now() } }).$('upCheck').disabled, true)
+
+  // The click: one request through the page's api, the control off while it runs.
+  const calls: string[] = []
+  let answer: (body: unknown) => void = () => undefined
+  const p = updateCode({}, { api: (method, path) => { calls.push(`${method} ${path}`); return new Promise(r => { answer = r }) } })
+  const running = p.click()
+  assert.equal(p.$('upCheck').disabled, true, 'off while it asks')
+  await p.click()
+  assert.deepEqual(calls, ['POST /api/update/check'], 'a second click while it asks sends nothing')
+  answer({ ok: true, update: { ...IDLE, available: V103, checkedAt: new Date().toISOString() } })
+  await running
+  assert.equal(p.$('upCheck').disabled, false, 'on again once it answered')
+  assert.equal(p.S.instance.update.available?.version, '1.0.3', 'the answer is the page\'s state')
+  assert.equal(p.$('upBanner').hidden, false, 'the notice shows at once')
+  assert.equal(p.$('upText').textContent, 'Version 1.0.3 is out. You run 1.0.2.')
+  assert.equal(p.$('upBtn').hidden, false)
+  assert.deepEqual(p.toasts, [['Version 1.0.3 is out.', false]])
+
+  const answered = async (body: unknown): Promise<ReturnType<typeof updateCode>> => {
+    const q = updateCode({}, { api: async () => body })
+    await q.click()
+    return q
+  }
+  const newest = await answered({ ok: true, update: { ...IDLE, checkedAt: new Date().toISOString() } })
+  assert.deepEqual(newest.toasts, [['You run 1.0.2, the newest version.', false]])
+  assert.equal(newest.$('upBanner').hidden, true)
+  const failed = await answered({ ok: true, update: { ...IDLE, checkedAt: new Date().toISOString(), checkError: 'the release server did not answer' } })
+  assert.deepEqual(failed.toasts, [['The check failed: the release server did not answer. The agent tries again by itself in a few minutes.', true]])
+  const refused = updateCode({}, { api: async () => { throw new Error('missing or wrong CSRF token') } })
+  await refused.click()
+  assert.deepEqual(refused.toasts, [['The check failed: missing or wrong CSRF token. The agent tries again by itself in a few minutes.', true]])
+  assert.equal(refused.$('upCheck').disabled, false, 'on again after a failure')
+  // A page whose session ended goes to the sign-in page (the page's api does that) and says nothing more.
+  const out = updateCode({}, { api: async () => { throw new Error('signed out') } })
+  await out.click()
+  assert.deepEqual(out.toasts, [])
+  // The release on offer is the one that was just undone here (MAC-3): the message does not read as "install it".
+  const undone = { kind: 'undone' as const, version: '1.0.3', at: new Date().toISOString(), message: 'The update to 1.0.3 did not start and was undone: you run 1.0.2 as before. Your wallet, settings and history are untouched. It is safe to try again later.' }
+  const again = await answered({ ok: true, update: { ...IDLE, available: V103, last: undone, checkedAt: new Date().toISOString() } })
+  assert.deepEqual(again.toasts, [['Version 1.0.3 is still the newest. Nothing has to be done: the agent keeps running 1.0.2.', false]])
+  assert.equal(again.$('upBtn').textContent, 'Try again')
+
+  // Its info bubble: the agent checks by itself about every 10 minutes, this asks now, and only a signed newer
+  // release is ever offered. The bubble of the version names it too.
+  const tip = /upcheck: \['Check for updates', `([^`]*)`\]/.exec(html)?.[1] ?? ''
+  for (const said of [/checks by itself about every 10 minutes/, /This asks now/, /Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered/, /installs nothing/]) assert.match(tip, said)
+  const version = html.slice(html.indexOf("update: ['Version and updates'"), html.indexOf("upcheck: ['Check for updates'"))
+  assert.ok(version.length > 100, 'the bubble of the version comes before the one of the link')
+  assert.match(version, /<b>Check for updates<\/b> next to the version asks at once/)
+  for (const text of [tip, version]) assert.doesNotMatch(text, /—|\bbot\b/i)
+
+  // The pages that say how often the agent checks, or how to ask at once, name the link.
+  const pages = ['site/src/content/docs/help/update.md', 'site/src/content/docs/use/dashboard.md', 'site/src/content/docs/help/troubleshooting.md', 'site/src/content/docs/help/faq.md', 'site/src/content/docs/play/safety.md', 'INSTALL.md', 'README.md', 'docs/SERVER.md']
+  for (const f of pages) assert.match(flat(f), /\*\*Check for updates\*\*/, f)
+  const update = flat('site/src/content/docs/help/update.md')
+  for (const said of [/Two checks less than 15 seconds apart ask GitHub once/, /`\.\/cli\.sh update-check`/, /nothing is installed until you press \*\*Update now\*\*/, /Where the check is switched off the link is not shown/]) assert.match(update, said)
+  assert.match(flat('site/src/content/docs/play/safety.md'), /about every 10 minutes and when you press \*\*Check for updates\*\* \(at most once in 15 seconds\)/)
 })
 
 test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by its heading, with the four findings, what passed and what stays open', () => {

@@ -27,10 +27,10 @@ server ([Run it on a server](/help/server/)).
 
 ### How do I get a new version?
 
-The dashboard and Telegram tell you when one is out. Press **Update now** in the dashboard or send `/upgrade` on
-Telegram: the agent installs it and restarts, and nothing is ever installed by itself. Only a release signed by the
-maintainers and newer than yours can be installed, and a version that does not start is undone by itself
-([Update](/help/update/)).
+The dashboard and Telegram tell you when one is out, and **Check for updates** next to the version in the dashboard
+asks at once. Press **Update now** in the dashboard or send `/upgrade` on Telegram: the agent installs it and
+restarts, and nothing is ever installed by itself. Only a release signed by the maintainers and newer than yours
+can be installed, and a version that does not start is undone by itself ([Update](/help/update/)).
 
 ### Can I play myself too?
 

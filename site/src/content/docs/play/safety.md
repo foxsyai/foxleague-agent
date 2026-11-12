@@ -52,10 +52,10 @@ The agent talks only to the services it needs:
   budget that is left, the recent activity and your conversation with the manager. Never your recovery words or keys.
 - **Telegram and Binance**, only when you set their keys: your messages and the agent's answers, and the top-ups
   you approve.
-- **GitHub**, about every 10 minutes: one request for the newest release of foxleague-agent, so the agent can tell
-  you when an update is out. It says nothing about your install: no version, no wallet and no name. As with any
-  download, GitHub sees the address your computer has on the internet. `AGENT_UPDATE_CHECK=0` in `.env` switches
-  the request off.
+- **GitHub**, about every 10 minutes and when you press **Check for updates** (at most once in 15 seconds): one
+  request for the newest release of foxleague-agent, so the agent can tell you when an update is out. It says
+  nothing about your install: no version, no wallet and no name. As with any download, GitHub sees the address
+  your computer has on the internet. `AGENT_UPDATE_CHECK=0` in `.env` switches the request off.
 
 ## Signed updates
 
