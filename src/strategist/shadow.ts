@@ -55,33 +55,71 @@ export interface ShadowPlanRow {
   ms: number
 }
 
-export type ShadowChoice = { on: true; model: string; effort: Effort } | { on: false; why: string | null }
+/** The shadow models that run next to one real plan, their one effort, and why an entry of the setting does not run. */
+export interface ShadowChoices {
+  /** The models that get this plan's request, in the order they were written, each once. Empty: no shadow plans. */
+  readonly models: string[]
+  /** One effort for every shadow model. */
+  readonly effort: Effort
+  /** For the log: one reason per entry that was left out (not on the list, or the model that plays). */
+  readonly leftOut: string[]
+}
+
+/** The entries of a setting that are read: the list of models has four, and a setting typed by hand must not fill the log. */
+const MAX_ENTRIES = 16
 
 /**
- * The shadow model and its effort: the database's setting (kv shadow_model, shadow_effort), else AGENT_SHADOW_MODEL and
- * AGENT_SHADOW_EFFORT from the environment. Not set, empty or "off" means no shadow plans, which is the default. A
- * model the list does not have, or the model that plays, means off as well, with the reason for the log. There is no
- * dashboard control and no Telegram command for it: it adds AI spend, so it is switched on only on the machine itself.
+ * The setting as written: the database's (kv shadow_model), else AGENT_SHADOW_MODEL from the environment. One model
+ * id or several separated by commas, each once. Not set, empty or "off" means none; "off" anywhere among several
+ * switches all of them off, so a half-typed setting never costs anything.
  */
-export function shadowChoice(store: Store, playing: string): ShadowChoice {
-  const model = (store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '').trim()
-  if (!model || model.toLowerCase() === 'off') return { on: false, why: null }
-  // A setting typed by hand: only what a model id can hold reaches the log.
-  const named = model.slice(0, 60).replace(/[^\w.:-]/g, '?')
-  if (!isKnownModel(model)) return { on: false, why: `shadow plans are off: ${named} is not a model on the list (${Object.keys(MODELS).join(', ')})` }
-  if (model === playing) return { on: false, why: `shadow plans are off: ${named} is the model that plays, and a shadow plan needs another one` }
-  const effort = (store.getKv('shadow_effort') ?? process.env.AGENT_SHADOW_EFFORT ?? 'medium').trim()
-  return { on: true, model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
+function entriesSet(store: Store): { read: string[]; unread: number } {
+  const ids = [...new Set((store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '').split(',').map(id => id.trim()).filter(Boolean))]
+  if (ids.some(id => id.toLowerCase() === 'off')) return { read: [], unread: 0 }
+  return { read: ids.slice(0, MAX_ENTRIES), unread: Math.max(0, ids.length - MAX_ENTRIES) }
 }
 
 /**
- * The shadow model that is set, whatever model plays: null when none is set, when it is "off" or when the list does
- * not have it. It rests while it is the model that plays and runs under any other, which is why a switch of the
- * playing model away from it starts shadow plans and asks for the password (wakesShadow in src/web/server.ts).
+ * The shadow models of a plan and their effort: the database's setting (kv shadow_model, shadow_effort), else
+ * AGENT_SHADOW_MODEL and AGENT_SHADOW_EFFORT from the environment. shadow_model holds one model id or several
+ * separated by commas. Not set, empty or "off" means no shadow plans, which is the default. An entry the list of
+ * models does not have and the model that plays are left out, each with its reason for the log; a repeated entry
+ * counts once. The effort is one for every shadow model. There is no dashboard control and no Telegram command for
+ * any of it: it adds AI spend, so it is switched on only on the machine itself.
  */
-export function shadowModelSet(store: Store): string | null {
-  const model = (store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '').trim()
-  return model && isKnownModel(model) ? model : null
+export function shadowChoices(store: Store, playing: string): ShadowChoices {
+  const { read, unread } = entriesSet(store)
+  const models: string[] = []
+  const leftOut: string[] = []
+  for (const id of read) {
+    // A setting typed by hand: only what a model id can hold reaches the log.
+    const named = id.slice(0, 60).replace(/[^\w.:-]/g, '?')
+    if (!isKnownModel(id)) leftOut.push(`${named} is not a model on the list (${Object.keys(MODELS).join(', ')})`)
+    else if (id === playing) leftOut.push(`${named} is the model that plays, and a shadow plan needs another one`)
+    else models.push(id)
+  }
+  if (unread) leftOut.push(`${unread} more entries are not read (${MAX_ENTRIES} at most)`)
+  const effort = (store.getKv('shadow_effort') ?? process.env.AGENT_SHADOW_EFFORT ?? 'medium').trim()
+  return { models, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium', leftOut }
+}
+
+/**
+ * What the log says of a setting of which an entry does not run, or null when every entry runs (or none is set). The
+ * service says it once, not at every plan.
+ */
+export function shadowNote(choices: ShadowChoices): string | null {
+  if (!choices.leftOut.length) return null
+  return `${choices.models.length ? `shadow plans run by ${choices.models.join(', ')} only` : 'shadow plans are off'}: ${choices.leftOut.join('; ')}`
+}
+
+/**
+ * The shadow models that are set, whatever model plays: the entries of the setting that the list of models has, each
+ * once; none when nothing is set or it is "off". One of them rests while it is the model that plays and runs under
+ * any other, which is why a switch of the playing model away from it starts its shadow plans and asks for the
+ * password (wakesShadow in src/web/server.ts).
+ */
+export function shadowModelsSet(store: Store): string[] {
+  return entriesSet(store).read.filter(id => isKnownModel(id))
 }
 
 /** The most a rejected proposal may take in a record: a model can write anything there. */

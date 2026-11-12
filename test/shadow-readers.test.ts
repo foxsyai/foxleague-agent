@@ -276,8 +276,8 @@ test('SHADOW-14 cli shadow-report reads next to an open database and writes noth
 })
 
 test('SHADOW-15 the guides: the server guide\'s own command switches shadow plans on and off, the costs page promises no number, the review has its section', async () => {
-  const { shadowChoice } = await import('../src/strategist/shadow.ts')
-  const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
+  const { shadowChoices } = await import('../src/strategist/shadow.ts')
+  const read =(f: string) => readFileSync(join(REPO, f), 'utf8')
   const guide = read('docs/SERVER.md')
   // The one-line script of the guide, as written, against a database of this test.
   const script = guide.match(/^SET='([^'\n]+)'$/m)?.[1]
@@ -288,16 +288,16 @@ test('SHADOW-15 the guides: the server guide\'s own command switches shadow plan
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-shadow-'))
   const store = new Store(dir) // the running service's connection
   const set = (key: string, value: string) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db')), key, value], { encoding: 'utf8', timeout: 60_000 })
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: false, why: null }, 'off before anything is set')
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: [], effort: 'medium', leftOut: [] }, 'off before anything is set')
   let r = set('shadow_model', 'claude-haiku-5-5')
   assert.equal(r.status, 0, r.stderr)
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: true, model: 'claude-haiku-5-5', effort: 'medium' })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: ['claude-haiku-5-5'], effort: 'medium', leftOut: [] })
   r = set('shadow_effort', 'low')
   assert.equal(r.status, 0, r.stderr)
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: true, model: 'claude-haiku-5-5', effort: 'low' })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: ['claude-haiku-5-5'], effort: 'low', leftOut: [] })
   r = set('shadow_model', 'off')
   assert.equal(r.status, 0, r.stderr)
-  assert.deepEqual(shadowChoice(store, 'claude-sonnet-5-5'), { on: false, why: null })
+  assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: [], effort: 'low', leftOut: [] })
   assert.match(guide, /`agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`/, 'among the operator commands')
   assert.match(guide, /agentctl\.sh shadow-report 3 {4}# agent 3/)
   assert.match(read('README.md'), /npm run cli -- shadow-report \[N\]/)
