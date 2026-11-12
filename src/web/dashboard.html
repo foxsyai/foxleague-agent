@@ -669,11 +669,20 @@ function fillForm(st) {
   $('sTraining').value = st.paidTrainingPerDay; $('sBoosters').value = st.boostersPerWeek; $('sPacks').value = st.packsPerWeek; $('sMedicine').value = st.medicineDaysPerWeek
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
-  fillOptions($('sAiModel'), aiModelOptions(), st.aiModel); fillOptions($('sAiEffort'), aiEffortOptions(), st.aiEffort)
+  const own = aiFormValues(agent(), st)
+  fillOptions($('sAiModel'), aiModelOptions(), own.aiModel); fillOptions($('sAiEffort'), aiEffortOptions(), own.aiEffort)
   renderOwnAi()
   formDirty = false
 }
 
+// What the AI fields show: the agent's own values in use (ai.own), so a save of any other setting writes back what it
+// plays. An own model that left the list shows as the successor it plays, one nobody knows as "Same as all agents"
+// (agent review of PR #65: from the saved id, the first showed as "Same as all agents" and a save wrote an empty model).
+function aiFormValues(b, st) {
+  const own = b && b.ai && b.ai.own
+  if (!own) return { aiModel: st.aiModel || '', aiEffort: st.aiEffort || '' }
+  return { aiModel: own.model || '', aiEffort: own.effort || '' }
+}
 /** Puts the choices into a select and picks the value, or the first choice when the value is none of them. */
 function fillOptions(sel, options, value) {
   sel.replaceChildren(...options.map(([v, text]) => el('option', { value: v, text })))
@@ -701,7 +710,8 @@ function ownAiHint(b, form) {
   if (next.model !== ai.model || next.effort !== ai.effort) parts.push('After saving: ' + name(next.model) + ' at ' + next.effort + ' effort.')
   if ((ai.shadows || []).length) parts.push('Shadow plans set on the server for ' + (ai.ownShadows ? 'this agent' : 'every agent') + ': ' + list(ai.shadows.map(entry)) + '.')
   const ignored = ai.ignored || []
-  if (ignored.some(w => w.startsWith('its own model'))) parts.push('A model saved on the server is not on the list, so the agent plays the all-agents one.')
+  if (ignored.some(w => w.startsWith('its own model') && w.includes(' is no longer on the list'))) parts.push('The model saved on the server has left the list: the agent plays its successor, shown here.')
+  if (ignored.some(w => w.startsWith('its own model') && w.includes(' is not on the list'))) parts.push('A model saved on the server is not on the list, so the agent plays the all-agents one.')
   if (ignored.some(w => w.startsWith('its own effort'))) parts.push('An effort saved on the server is not one of the five, so the agent plays the all-agents one.')
   return parts.join(' ')
 }

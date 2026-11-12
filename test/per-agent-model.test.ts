@@ -980,6 +980,11 @@ test('R65A-2 the AI fields show the values the agent plays: an own model that le
         assert.equal(costsMore(b, form), false, what)
       }
     }
+    // The line under the fields says what became of a saved model that left the list: it plays the successor shown.
+    const hint = pageFunctions<(b: unknown, form: unknown) => string>(['ownAiHint'], S)
+    const moved = strategist.agentChoice({ aiModel: 'claude-sonnet-5', aiEffort: 'high' }, all)
+    const b = { ai: { model: moved.model, effort: moved.effort, own: { model: SONNET, effort: 'high' }, ignored: moved.ignored, shadows: [] } }
+    assert.equal(hint(b, { aiModel: SONNET, aiEffort: 'high' }), 'Plays Sonnet 5.5 at high effort, its own. The model saved on the server has left the list: the agent plays its successor, shown here.')
   }
 })
 
