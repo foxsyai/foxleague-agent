@@ -62,8 +62,8 @@ and **Windows through WSL2**. The computer has to stay on for the agent to play;
 		   "Welcome to WSL" may open by itself: close it. Ubuntu then asks you to choose a Linux
 		   username and password, in the same window or in a window of its own. They are new and yours to choose:
 		   they are not your Windows login and the installer never sees them. Nothing shows while you type the
-		   password. When Ubuntu then shows its own prompt (a line that ends with `$`), type `exit` to come back
-		   to the installer.
+		   password. Ubuntu may also ask "Help improve Ubuntu!" (Y/n/e): either answer is fine for the agent. When
+		   Ubuntu then shows its own prompt (a line that ends with `$`), type `exit` to come back to the installer.
 		3. **systemd and curl.** The installer turns on systemd in Ubuntu's `/etc/wsl.conf`, restarts Ubuntu once
 		   and installs curl when it is missing. If you already use this Ubuntu, it asks before the restart.
 		4. **The agent's installer.** The same seven steps as on Linux, in the same window

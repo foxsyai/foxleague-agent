@@ -704,6 +704,14 @@ Check 'W-3 before the Ubuntu download: a click pauses the window (press Enter on
     True ($before -match 'press Enter once and it goes on') $before
     True ($before -match 'A window "Welcome to WSL" may open by itself: close it') $before
 }
+Check 'W-4 Ubuntu''s question "Help improve Ubuntu!" is told before Ubuntu asks it, with what to answer' {
+    New-World
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    Equal (Run-Install) 'done' (Screen)
+    $screen = Screen
+    $before = $screen.Substring(0, $screen.IndexOf('Ubuntu is installed and has a user of its own'))
+    True ($before -match '- Ubuntu may also ask "Help improve Ubuntu!" \(Y/n/e\): either answer is fine for the agent\.') $before
+}
 Check 'Ubuntu that was there, with systemd=false and things running: asked before it is restarted; no means stop' {
     New-World -Distros "* Debian    Running         2`n  Ubuntu    Running         2`n" -HasUser $true -Conf "[automount]`nenabled=true`n`n[boot]`nsystemd=false`n"
     $World['Answers'] = @('n')

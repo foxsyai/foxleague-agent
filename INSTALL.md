@@ -63,8 +63,9 @@ time: each run finds what is already done and goes on from there.
    PowerShell window pauses it (Windows then selects text), and Enter once lets it go on. A window "Welcome to WSL"
    may open by itself: close it. Ubuntu then asks you to choose a Linux username and
    password, in the same window or in a window of its own. They are new and yours to choose: they are not your
-   Windows login and the installer never sees them. Nothing shows while you type the password. When Ubuntu shows
-   its own prompt (a line that ends with `$`), type `exit` to come back to the installer.
+   Windows login and the installer never sees them. Nothing shows while you type the password. Ubuntu may also ask
+   "Help improve Ubuntu!" (Y/n/e): either answer is fine for the agent. When Ubuntu shows its own prompt (a line
+   that ends with `$`), type `exit` to come back to the installer.
 3. **systemd and curl.** It turns on systemd in Ubuntu's `/etc/wsl.conf` (it corrects the line that is there and
    never adds a second `[boot]`), restarts Ubuntu once and installs curl when it is missing. If you already use
    this Ubuntu, it asks before the restart. The file as it was is kept in `/etc/wsl.conf.before-foxleague`.

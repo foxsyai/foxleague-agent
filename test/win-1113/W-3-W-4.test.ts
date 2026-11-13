@@ -17,3 +17,7 @@ test('W-3 the guides say that the Ubuntu download can look stuck, why, and the w
     assert.match(flat(f), /The download can look stuck at 0%: a click into the PowerShell window pauses it \(Windows then selects text\), and Enter once lets it go on\. A window "Welcome to WSL" may open by itself: close it\./, f)
   }
 })
+
+test('W-4 the guides say that Ubuntu may ask "Help improve Ubuntu!" and that either answer is fine', () => {
+  for (const f of GUIDES) assert.match(flat(f), /Ubuntu may also ask "Help improve Ubuntu!" \(Y\/n\/e\): either answer is fine for the agent\./, f)
+})

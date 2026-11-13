@@ -833,6 +833,7 @@ function Install-FoxLeagueAgent {
             Write-FoxLine '- They are new and yours to choose: they are not your Windows login.'
             Write-FoxLine '- Nothing shows while you type the password. That is normal. Type it, press Enter, type it again.'
             Write-FoxLine '- Remember it: Ubuntu asks for it when a command starts with sudo. This installer never sees it.'
+            Write-FoxLine '- Ubuntu may also ask "Help improve Ubuntu!" (Y/n/e): either answer is fine for the agent.'
             Write-FoxLine '- When Ubuntu then shows its own prompt (a line that ends with $), type  exit  and press Enter'
             Write-FoxLine '  to come back to this installer.'
             if ($Wsl['DefaultVersion'] -eq 1) {
