@@ -682,6 +682,16 @@ Check 'pasted again on a finished install: nothing is installed, changed or rest
     Equal @($World['Opened']).Count 0 'n keeps the browser closed'
     Equal $World['TaskRegistered'] 2 'the task is made again (replaced), not doubled'
 }
+Check 'W-2 a PC with no distribution at all names none (it printed "You have System.Object[]"); other Ubuntus are named with and' {
+    New-World
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    Equal (Run-Install) 'done' (Screen)
+    True ((Screen) -notmatch 'You have|System\.Object') (Screen)
+    New-World -Distros "  Ubuntu-24.04    Stopped         2`n  Ubuntu-22.04    Stopped         2`n"
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    Equal (Run-Install) 'done' (Screen)
+    True ((Screen) -match '(?m)^You have Ubuntu-24\.04 and Ubuntu-22\.04\. The agent gets a distribution of its own') (Screen)
+}
 Check 'Ubuntu that was there, with systemd=false and things running: asked before it is restarted; no means stop' {
     New-World -Distros "* Debian    Running         2`n  Ubuntu    Running         2`n" -HasUser $true -Conf "[automount]`nenabled=true`n`n[boot]`nsystemd=false`n"
     $World['Answers'] = @('n')

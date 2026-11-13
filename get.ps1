@@ -817,8 +817,10 @@ function Install-FoxLeagueAgent {
 
         if ($now['Readiness'] -eq 'not-registered') {
             $fresh = $true
-            $others = @(Get-FoxOtherUbuntus $now['Distros'])
-            if ($others.Count -gt 0) {
+            # Not wrapped in @( ): the function returns its list as one value (return , $names), and @( ) around
+            # that made a list of one list, which was counted as one name and printed as System.Object[] (W-2).
+            $others = Get-FoxOtherUbuntus $now['Distros']
+            if (@($others).Count -gt 0) {
                 Write-FoxLine ('You have ' + ($others -join ' and ') + '. The agent gets a distribution of its own, called Ubuntu: yours is not touched.')
             }
             Write-FoxLine 'Ubuntu is not installed yet. It is downloaded now with Microsoft''s own command: wsl --install -d Ubuntu'
