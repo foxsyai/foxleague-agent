@@ -154,8 +154,8 @@ function ownersPath(rel: string): boolean {
  * log (W-10: the first lines name the path and the reason, the many after them repeat it for every file).
  * Ubuntu 26.04's tar resolves each path with openat2, which a service started with RestrictSUIDSGID=true is refused
  * with ENOSYS ("Function not implemented"); the 24.04 one falls back to openat. The installers of 2026-11-14 and
- * later write no such line and an update's prepare takes it out of an older unit, but the update that meets it
- * runs from that older unit: a terminal is not inside it (W-9).
+ * later write no such line and `./install.sh --update` takes it out of an older unit: an update from the dashboard
+ * runs inside that unit, one from a terminal does not (W-9).
  */
 function unpackFailure(r: RunResult): string {
   const lines = (r.err ?? r.tail).split('\n').map(l => l.trim()).filter(Boolean)

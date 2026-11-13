@@ -386,13 +386,13 @@ remove_service() {
 # The unit of an install made before 2026-11-14 holds RestrictSUIDSGID=true. Its seccomp filter answers openat2
 # with ENOSYS (it cannot look inside the call), and Ubuntu 26.04's tar resolves every path it unpacks with openat2:
 # the one-click update did not install there (W-9). Only that line is taken out, by rename, and the rest of the file
-# stays as it is. Says nothing; status 0 when it changed the file (systemd then has to read it again), 1 when not.
+# stays as it is. Run by ./install.sh --update in a terminal (the guided install writes the whole unit anew). Says
+# nothing; status 0 when it changed the file (systemd then has to read it again), 1 when not.
 renew_unit() {
   [ "$PLATFORM" = linux ] && [ -f "$UNIT" ] || return 1
   LC_ALL=C grep -a -q -x 'RestrictSUIDSGID=true' "$UNIT" || return 1
   LC_ALL=C grep -a -v -x 'RestrictSUIDSGID=true' "$UNIT" | put_file "$UNIT" 644
 }
-unit_text() { if [ "$PLATFORM" = linux ]; then cat "$UNIT" 2>/dev/null || true; fi; }
 restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 # After a restart that failed: what runs now, and a command that systemd takes even at the unit's start limit.
 after_failed_restart() {
@@ -427,16 +427,12 @@ if [ "$MODE" = prepare ]; then
   secure_modes
   ensure_node
   deps
-  # The service of an older install: this release's unit has no RestrictSUIDSGID. systemd reads it again, so the
-  # agent's next start (the one into this release) runs without it.
-  if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
   exit 0
 fi
 
 if [ "$MODE" = update ]; then
   say "Updating foxleague-agent"
   secure_modes
-  unit_was=$(unit_text)
   if [ -d "$APP_DIR/.git" ]; then
     # A git checkout: git replaces files by new ones, so this script keeps reading the one it started from.
     info "This folder is a git checkout: it follows its branch ($(git -C "$APP_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)), which may hold code that is in no release yet."
@@ -463,10 +459,9 @@ if [ "$MODE" = update ]; then
   fi
   # A terminal opened with su or sudo: find the user's service manager first (see find_user_systemd).
   find_user_systemd || true
-  # The unit of an older install is renewed (the new release's prepare may have done it already, maybe from a
-  # terminal where systemd could not be asked): when this update changed it, systemd reads it before the restart.
-  renew_unit || true
-  if [ "$(unit_text)" != "$unit_was" ]; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
+  # The unit of an older install is renewed here, in a terminal, where an update from the dashboard cannot (it
+  # runs inside that unit, and --prepare never writes to the service): systemd reads it before the restart.
+  if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
   service_restart || die "the new version is in place but the background service could not be restarted: $(after_failed_restart)"
   info "Restarted."
   exit 0

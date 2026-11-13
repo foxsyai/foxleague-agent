@@ -8,13 +8,12 @@
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { childEnv, detectLayout, stage } from '../../src/update/install.ts'
-import { REPO, buildRelease, codeTree, managedInstall, testKey, tmp } from '../update-fixtures.ts'
+import { REPO, buildRelease, codeTree, managedInstall, publish, serve, testKey, tmp } from '../update-fixtures.ts'
 import { failingTar } from './helpers.ts'
 import { KEY as INSTALL_KEY, LOGIN_LINES, freshInstall, guided, realTree, running, sh, stubs } from '../audit-1111/install-helpers.ts'
-import { publish, serve } from '../update-fixtures.ts'
 
 const read = (f: string): string => readFileSync(join(REPO, f), 'utf8')
 
@@ -111,34 +110,6 @@ test('W-9 the unit the installer writes has no RestrictSUIDSGID and keeps the re
   assert.ok(!lines.some(l => /^\s*RestrictSUIDSGID\s*=/.test(l)), unit)
   for (const line of SANDBOX) assert.ok(lines.includes(line), `${line} is kept`)
   assert.match(unit, /^# No RestrictSUIDSGID: its filter refuses openat2, which the tar of Ubuntu 26\.04 needs to unpack an update\.$/m, 'the unit says why, so that nobody puts it back')
-})
-
-test("W-9 an update's prepare takes RestrictSUIDSGID=true out of an older install's unit and nothing else, then has systemd read it again", async () => {
-  const s = stubs()
-  const home = tmp('fox-home-')
-  const root = tmp('fox-root-')
-  const staged = realTree(join(root, 'versions', '.staging-v3.2.0'), '3.2.0')
-  writeFileSync(join(root, 'versions', 'active'), 'v3.1.0\n')
-  mkdirSync(join(home, '.config', 'systemd', 'user'), { recursive: true })
-  const unit = join(home, '.config', 'systemd', 'user', 'foxleague-agent.service')
-  writeFileSync(unit, oldUnit(root), { mode: 0o644 })
-  const prepare = () => sh(join(staged, 'install.sh'), ['--prepare'], { HOME: home, PATH: `${s.dir}:${process.env.PATH}`, FOXAGENT_ROOT: root })
-  const r = await prepare()
-  assert.equal(r.status, 0, r.out)
-  assert.equal(readFileSync(unit, 'utf8'), oldUnit(root).replace('RestrictSUIDSGID=true\n', ''), 'only that line went')
-  assert.ok(s.calls().includes('systemctl --user daemon-reload'), s.calls().join('\n'))
-  assert.deepEqual(r.out.trim().split('\n').filter(l => !/^Node\.js v/.test(l)), [], 'the renewal says nothing: an update prints its own lines')
-  // A second prepare finds nothing to do: the file is not written again and systemd is not asked.
-  const before = s.calls().length
-  const again = await prepare()
-  assert.equal(again.status, 0, again.out)
-  assert.equal(readFileSync(unit, 'utf8'), oldUnit(root).replace('RestrictSUIDSGID=true\n', ''))
-  assert.ok(!s.calls().slice(before).includes('systemctl --user daemon-reload'), 'no reload when nothing changed')
-  // Where there is no unit (an install made with --no-service, or a Mac), none is made.
-  const bare = tmp('fox-home-')
-  const r3 = await sh(join(staged, 'install.sh'), ['--prepare'], { HOME: bare, PATH: `${s.dir}:${process.env.PATH}`, FOXAGENT_ROOT: root })
-  assert.equal(r3.status, 0, r3.out)
-  assert.deepEqual(readdirSync(bare), [])
 })
 
 test('W-9 ./install.sh --update in a terminal installs the update and renews the unit of an older install before it restarts the agent', { timeout: 240_000 }, async () => {
