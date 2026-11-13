@@ -315,7 +315,7 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
   has refused the request". The task's 5-minute trigger found the task still running and did not start a second
   copy: normal while the agent runs.
 - **"The update to ... was not installed: this system's tar cannot unpack inside the agent's background service":**
-  the background service of an install made before 14 November 2026 refuses a call that the tar of Ubuntu 26.04
+  the background service of an install made by an older installer refuses a call that the tar of Ubuntu 26.04
   needs to unpack an update. Run `./install.sh --update` once in a terminal, in the agent's folder: it installs the
   update outside the service and takes that one line out of the service's file, so later updates are one click
   again. Pasting the install line again does the same.
