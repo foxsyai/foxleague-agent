@@ -692,6 +692,18 @@ Check 'W-2 a PC with no distribution at all names none (it printed "You have Sys
     Equal (Run-Install) 'done' (Screen)
     True ((Screen) -match '(?m)^You have Ubuntu-24\.04 and Ubuntu-22\.04\. The agent gets a distribution of its own') (Screen)
 }
+Check 'W-3 before the Ubuntu download: a click pauses the window (press Enter once), and a Welcome to WSL window may open (close it)' {
+    New-World
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    Equal (Run-Install) 'done' (Screen)
+    $screen = Screen
+    $ready = $screen.IndexOf('Then Ubuntu itself asks you to choose')
+    True ($ready -gt 0) $screen
+    $before = $screen.Substring(0, $screen.IndexOf('They are new and yours to choose'))
+    True ($before -match 'The download can look stuck at 0%\. A click into this window pauses it') $before
+    True ($before -match 'press Enter once and it goes on') $before
+    True ($before -match 'A window "Welcome to WSL" may open by itself: close it') $before
+}
 Check 'Ubuntu that was there, with systemd=false and things running: asked before it is restarted; no means stop' {
     New-World -Distros "* Debian    Running         2`n  Ubuntu    Running         2`n" -HasUser $true -Conf "[automount]`nenabled=true`n`n[boot]`nsystemd=false`n"
     $World['Answers'] = @('n')

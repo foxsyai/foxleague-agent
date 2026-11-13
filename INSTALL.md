@@ -59,7 +59,9 @@ time: each run finds what is already done and goes on from there.
 1. **WSL.** When Windows does not have it yet, the line runs Microsoft's own `wsl --install --no-distribution`.
    That needs an administrator, so Windows shows its own prompt: answer Yes. When Windows then needs a restart,
    the installer says so: restart, open PowerShell again and paste the same line.
-2. **Ubuntu.** When it is not installed yet, it is downloaded. Ubuntu then asks you to choose a Linux username and
+2. **Ubuntu.** When it is not installed yet, it is downloaded. The download can look stuck at 0%: a click into the
+   PowerShell window pauses it (Windows then selects text), and Enter once lets it go on. A window "Welcome to WSL"
+   may open by itself: close it. Ubuntu then asks you to choose a Linux username and
    password, in the same window or in a window of its own. They are new and yours to choose: they are not your
    Windows login and the installer never sees them. Nothing shows while you type the password. When Ubuntu shows
    its own prompt (a line that ends with `$`), type `exit` to come back to the installer.

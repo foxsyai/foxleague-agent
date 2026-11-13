@@ -824,6 +824,11 @@ function Install-FoxLeagueAgent {
                 Write-FoxLine ('You have ' + ($others -join ' and ') + '. The agent gets a distribution of its own, called Ubuntu: yours is not touched.')
             }
             Write-FoxLine 'Ubuntu is not installed yet. It is downloaded now with Microsoft''s own command: wsl --install -d Ubuntu'
+            # Seen on a real PC (W-3): the bar stood at 0% because a click into the console window starts Windows'
+            # text selection, which pauses the program until Enter; and WSL opened its own welcome window.
+            Write-FoxLine '- The download can look stuck at 0%. A click into this window pauses it (Windows then selects text):'
+            Write-FoxLine '  press Enter once and it goes on.'
+            Write-FoxLine '- A window "Welcome to WSL" may open by itself: close it, the agent does not need it.'
             Write-FoxLine 'Then Ubuntu itself asks you to choose a Linux username and a password (here or in a window of its own).'
             Write-FoxLine '- They are new and yours to choose: they are not your Windows login.'
             Write-FoxLine '- Nothing shows while you type the password. That is normal. Type it, press Enter, type it again.'
