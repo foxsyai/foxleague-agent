@@ -587,12 +587,20 @@ function renderHeader() {
     for (const e of i.efforts) se.append(el('option', { value: e, text: 'effort ' + e }))
   }
   if (!stratDirty) {
-    sm.value = i.model || ''; se.value = i.effort || 'medium'
-    // No strategist, or a model the list does not have: nothing is shown as picked, never the greyed-out entry.
-    if (!i.models.some(m => m.id === i.model)) sm.selectedIndex = -1
+    const shown = stratShown(i)
+    sm.value = shown.model; se.value = shown.effort
+    // A model the list does not have: nothing is shown as picked, never the greyed-out entry. Nor an effort.
+    if (!i.models.some(m => m.id === shown.model)) sm.selectedIndex = -1
+    if (!i.efforts.includes(shown.effort)) se.selectedIndex = -1
   }
   sm.disabled = se.disabled = !i.model
   renderStrat()
+}
+// The pair the Strategist box shows: the strategist's; without one (no AI key yet) the pair the agents start on once
+// the key is set (aiAll), greyed out. Never an effort of the page's own (W-8: it showed "medium" whatever was saved).
+function stratShown(i) {
+  if (i.model) return { model: i.model, effort: i.effort || '' }
+  return i.aiAll ? { model: i.aiAll.model, effort: i.aiAll.effort } : { model: '', effort: '' }
 }
 
 // One model and effort for every agent; the price hint compares the pick with the model in use.
@@ -1214,6 +1222,7 @@ const TIPS = {
     <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> is the cheapest, for trying things out: how well it plays this game has not been measured yet. <b>Sonnet 5.5</b> is the default and handles this game well. <b>Opus 5.5</b> is stronger and costs about 2x as much; <b>Fable 5.2</b>, the most capable, about 4x.</p>
     <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
+    <p>Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set, and you can change them from then on.</p>
     <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click. A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
@@ -1576,7 +1585,15 @@ function renderAiHint(k) {
   box.hidden = !rec
   if (!rec) return
   const label = id => (S.instance.models.find(m => m.id === id) || { label: id }).label
-  if (!S.instance.model) { box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort, once the AI key is set.'); return }
+  if (!S.instance.model) {
+    // No key yet: which pair the agents start on once it is set (the Strategist box shows it greyed out, W-8).
+    const all = S.instance.aiAll
+    const rec1 = 'Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort'
+    if (!all) box.append(rec1 + ', once the AI key is set.')
+    else if (all.model === rec.model && all.effort === rec.effort) box.append(rec1 + '. The agents play it once the AI key is set.')
+    else box.append(rec1 + '. Once the AI key is set the agents play ' + label(all.model) + ' at ' + all.effort + ' effort (the Strategist box) until you switch there.')
+    return
+  }
   // An agent with its own model or effort plays that one: the Strategist box would not move it.
   const b = agent(), own = b && b.ai && b.ai.own && (b.ai.own.model || b.ai.own.effort)
   if (own) { box.append('Recommended AI for this level: ' + label(rec.model) + ' at ' + rec.effort + ' effort. This agent plays its own: ' + label(b.ai.model) + ' at ' + b.ai.effort + ' effort (AI, below).'); return }

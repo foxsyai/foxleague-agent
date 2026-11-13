@@ -44,7 +44,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   one click. A switch that starts shadow plans asks for the password too
   ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
   soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
-  not ready.
+  not ready. Without the AI key the box is greyed out: it shows the model and effort the agents start on once the
+  key is set (Sonnet 5.5 at medium on a new install), and the level's recommended AI is shown next to the level.
 
 ## An agent's page
 
