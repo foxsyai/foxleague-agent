@@ -412,11 +412,14 @@ if [ "$MODE" = uninstall ]; then
   remove_service
   info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
   # The balances are not read here: what the wallets hold is not known, so it is not said.
-  info "The agent wallets may still hold funds. Keep the recovery words; delete the folder only when the wallets are empty."
+  # Each line fits in 100 columns, also with a user name of 32 characters: a window of 120 broke words (W-12).
+  info "The agent wallets may still hold funds. Keep the recovery words; delete the folder"
+  info "only when the wallets are empty."
   # The installer turned linger on so the agent runs with nobody logged in. Other services of this user may
   # count on it by now, so it is told and not taken away.
   if [ "$PLATFORM" = linux ] && loginctl show-user "$USER_NAME" -p Linger 2>/dev/null | grep -q '^Linger=yes'; then
-    info "Background services of the user $USER_NAME still start without a login (linger). To turn that off: loginctl disable-linger $USER_NAME"
+    info "Background services of $USER_NAME still start without a login (linger)."
+    info "To turn that off: loginctl disable-linger $USER_NAME"
   fi
   exit 0
 fi

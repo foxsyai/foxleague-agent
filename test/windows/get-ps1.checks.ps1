@@ -841,10 +841,26 @@ Check '-Uninstall leaves a task of the same name that is not ours, and says so w
     $World['Task'] = @{ Execute = 'C:\Tools\other.exe'; Arguments = '--mine'; State = 'Ready' }
     Invoke-FoxUninstall
     True ($null -ne $World['Task']) 'a task that is not ours was removed'
-    True ((Screen) -match 'it is not the one this installer makes, so it was left alone') (Screen)
+    True ((Screen) -match 'it is not the one\nthis installer makes, so it was left alone') (Screen)
     New-World
     Invoke-FoxUninstall
     True ((Screen) -match 'nothing to remove on the Windows side') (Screen)
+}
+Check 'W-12 every line of -Uninstall fits in 100 columns (the PC''s window had 120 and broke words at its edge)' {
+    $screens = @()
+    $a = Get-FoxKeepAliveAction 'C:\WINDOWS'
+    foreach ($case in @('ours', 'none', 'unknown', 'other')) {
+        New-World -Distros $UbuntuThere -HasUser $true
+        if ($case -eq 'ours' -or $case -eq 'unknown') { $World['Task'] = @{ Execute = $a['Execute']; Arguments = $a['Arguments']; State = 'Running' } }
+        if ($case -eq 'ours') { $World['Processes'] = @(@{ Id = 7; CommandLine = 'C:\WINDOWS\System32\wsl.exe ' + $FoxKeepAliveArgs }) }
+        if ($case -eq 'unknown') { $World['ProcessesUnknown'] = $true }
+        if ($case -eq 'other') { $World['Task'] = @{ Execute = 'C:\x.exe'; Arguments = ''; State = 'Ready' } }
+        Invoke-FoxUninstall
+        $screens += @($World['Lines'])
+    }
+    # Write-FoxLine puts two spaces in front. The one line that repeats a command of another program is left out.
+    $long = @($screens | Where-Object { $_ -notlike 'It starts: *' -and ('  ' + $_).Length -gt 100 })
+    Equal $long.Count 0 ($long -join ' | ')
 }
 Check 'every sentence on the screen: plain ASCII, no long dash, no comma before the last "and" or "or", never the word bot' {
     # (all the screens of the runs above are gone with their worlds; this one run prints every step once more)

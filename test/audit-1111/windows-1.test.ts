@@ -251,7 +251,8 @@ test('WIN-1 the Update page says how to uninstall on Windows: the agent inside U
   assert.match(part, /`wsl --unregister Ubuntu` deletes everything in it/)
   // What the uninstall of get.ps1 prints.
   assert.match(code, /cd ~\/' \+ \$FoxFolder \+ ' && \.\/install\.sh --uninstall'/)
-  assert.match(code, /'WSL, Ubuntu and the line systemd=true in Ubuntu''s \/etc\/wsl\.conf are left as they are: other programs may use them\.'/)
+  // (Two lines since W-12 of 2026-11-14: one line of 116 columns broke a word at the edge of the window.)
+  assert.match(code, /'WSL, Ubuntu and the line systemd=true in Ubuntu''s \/etc\/wsl\.conf are left as they are:'\n\s+Write-FoxLine 'other programs may use them\.'/)
 })
 
 test('WIN-1 no page promises as seen what nobody has seen on a real Windows PC', () => {

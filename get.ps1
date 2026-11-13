@@ -1062,7 +1062,8 @@ function Install-FoxLeagueAgent {
             Write-FoxLine ('There is no scheduled task "' + $FoxTaskName + '": nothing to remove on the Windows side.')
         } elseif (-not (Test-FoxOwnTask $task['Execute'] $task['Arguments'])) {
             $ours = $false
-            Write-FoxLine ('A scheduled task "' + $FoxTaskName + '" exists, but it is not the one this installer makes, so it was left alone.')
+            Write-FoxLine ('A scheduled task "' + $FoxTaskName + '" exists, but it is not the one')
+            Write-FoxLine 'this installer makes, so it was left alone.'
             Write-FoxLine ('It starts: ' + $task['Execute'] + ' ' + $task['Arguments'])
         } else {
             Remove-FoxKeepAlive
@@ -1072,8 +1073,8 @@ function Install-FoxLeagueAgent {
             $stopped = Stop-FoxKeepAliveProcesses
             if ($stopped -gt 0) { Write-FoxLine 'Stopped the hidden wsl.exe that the task had started: it kept Ubuntu running.' }
             elseif ($stopped -lt 0) {
-                Write-FoxLine 'Windows did not say which programs run: the hidden wsl.exe of the task may still keep Ubuntu running.'
-                Write-FoxLine ('To stop Ubuntu now, type:  wsl --terminate ' + $FoxDistro)
+                Write-FoxLine 'Windows did not say which programs run: the hidden wsl.exe of the task may still keep'
+                Write-FoxLine ('Ubuntu running. To stop Ubuntu now, type:  wsl --terminate ' + $FoxDistro)
             }
         }
         Write-FoxLine 'The agent itself is inside Ubuntu and was not touched.'
@@ -1081,8 +1082,10 @@ function Install-FoxLeagueAgent {
         Write-FoxLine 'its background service, open Ubuntu and type:'
         Write-FoxLine ('  wsl -d ' + $FoxDistro + ' --cd ~')
         Write-FoxLine ('  cd ~/' + $FoxFolder + ' && ./install.sh --uninstall')
-        Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu. The agent wallets may still hold funds.'
-        Write-FoxLine 'WSL, Ubuntu and the line systemd=true in Ubuntu''s /etc/wsl.conf are left as they are: other programs may use them.'
+        Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu.'
+        Write-FoxLine 'The agent wallets may still hold funds.'
+        Write-FoxLine 'WSL, Ubuntu and the line systemd=true in Ubuntu''s /etc/wsl.conf are left as they are:'
+        Write-FoxLine 'other programs may use them.'
     }
 
     function Invoke-FoxInstall {

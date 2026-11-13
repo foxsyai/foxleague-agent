@@ -143,7 +143,8 @@ test('MAC-4: the uninstall does not state that the wallets hold funds, which it 
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ name: 'foxleague-agent', version: '3.1.0' }, null, 2) + '\n')
   const r = await sh(join(dir, 'install.sh'), ['--uninstall'], { HOME: tmp('fox-home-'), USER: 'tester', PATH: `${s.dir}:${process.env.PATH}` })
   assert.equal(r.status, 0, r.out)
-  assert.match(r.out, /The agent wallets may still hold funds\. Keep the recovery words; delete the folder only when the wallets are empty\./)
+  // (Two lines since W-12 of 2026-11-14, so that each fits in 100 columns.)
+  assert.match(r.out, /The agent wallets may still hold funds\. Keep the recovery words; delete the folder\n {2}only when the wallets are empty\./)
   assert.doesNotMatch(r.out, /still hold their funds|backup words/)
   // The Windows uninstall and the pages that tell the uninstall say it the same way.
   for (const f of ['install.sh', 'get.ps1', 'INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md']) assert.doesNotMatch(flat(f), /wallets (still hold their|keep their|hold their) funds/, f)
