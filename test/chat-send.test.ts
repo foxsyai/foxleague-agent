@@ -138,3 +138,28 @@ test('SEND-1 Send stays off while an answer is on its way: after a failed POST t
   assert.match(said, /While the manager is answering a message \(sent from here, another tab or Telegram\), Send waits: the answer is written and paid for even when this page loses the connection, so a second Send would pay twice\./)
   assert.doesNotMatch(said, /—|, and |, or |\bbot\b/i)
 })
+
+test('R67A-2 after a failed Send the page keeps the message only when the server holds this very message as pending: another one still being answered (Telegram, another tab) does not swallow it, it comes back with its error and Send stays off meanwhile', async () => {
+  // The owner wrote on Telegram; within the 15 s before the next refresh he presses Send here. The web message's
+  // model call fails (529): the server drops that line and answers the error, while the Telegram line is still pending.
+  const telegram = waiting('how much did we spend today?', 'Telegram')
+  const p = page({ post: async () => { throw new Error('Anthropic API error 529: overloaded') }, state: async () => ({ chat: [telegram] }) })
+  await p.click('skip boosters this week')
+  assert.equal(p.els.adviceText!.value, 'skip boosters this week', 'given back: the server does not hold it')
+  assert.deepEqual(p.toasts, [['Anthropic API error 529: overloaded', true]], 'with its own error')
+  assert.equal(p.els.adviceBtn!.disabled, true, 'Send stays off while the Telegram message is answered')
+  assert.match(p.els.adviceBusy!.textContent!, /^The manager is still answering\. Send comes back when its answer is here\.$/)
+  // The very same words still pending, but written on Telegram: not this page's message either.
+  const same = page({ post: async () => { throw new Error('Anthropic API error 529: overloaded') }, state: async () => ({ chat: [waiting('skip boosters this week', 'Telegram')] }) })
+  await same.click('skip boosters this week')
+  assert.equal(same.els.adviceText!.value, 'skip boosters this week')
+  assert.deepEqual(same.toasts, [['Anthropic API error 529: overloaded', true]])
+  // This page's own message still pending on the server (behind a timeout): kept, as SEND-1 pins.
+  const mine = page({ post: async m => { throw Object.assign(new Error('HTTP 504'), { m }) }, state: async () => ({ chat: [telegram, waiting('skip boosters this week')] }) })
+  await mine.click('skip boosters this week')
+  assert.equal(mine.els.adviceText!.value, '')
+  assert.deepEqual(mine.toasts, [['The manager is still answering. Its answer shows here when it is ready.', false]])
+  // The review has its row.
+  const review = readFileSync(join(REPO, 'docs/SECURITY-REVIEW.md'), 'utf8')
+  assert.match(review.slice(review.indexOf('\n## Repeat shadow, chat Send and model output limits (2026-11-13)\n')), /\n\| R67A-2 \| low \(cost; agent review of PR #67\) \| [^\n]+ \| [^\n]+ \|\n/)
+})
