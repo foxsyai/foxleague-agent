@@ -55,7 +55,17 @@ export interface AgentSettings {
    * could buy no medicine before, and a count above 0 is the owner's to set.
    */
   medicineDaysPerWeek: number
+  /**
+   * The AI this agent plays with (the owner, 2026-11-13): its own model id and its own effort, each empty for "the
+   * same as all agents" (the Strategist box), which is the default and what an agent saved before them reads. The
+   * strategist reads them through agentChoice (src/strategist/strategist.ts): a value it does not know is never used.
+   */
+  aiModel: string
+  aiEffort: string
 }
+
+/** The efforts an AI request takes, from the least to the most thinking (the strategist's EFFORTS is this list). */
+export const AI_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
 /** The most medicine days a week a setting takes (three of the longest injuries' 18 days and some). */
 export const MAX_MEDICINE_DAYS_PER_WEEK = 60
@@ -143,6 +153,8 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   activeHoursUtc: [8, 20],
   minGapSeconds: 30,
   actionProbability: 1,
+  aiModel: '',
+  aiEffort: '',
 }
 
 /**
@@ -208,6 +220,17 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   num('boostersPerWeek', 0, FOXLEAGUE_MAX_COUNTS.boostersPerWeek, true)
   num('packsPerWeek', 0, FOXLEAGUE_MAX_COUNTS.packsPerWeek, true)
   num('medicineDaysPerWeek', 0, MAX_MEDICINE_DAYS_PER_WEEK, true)
+  // Empty is "the same as all agents". The shape of a model id only: whether the list has it is the web route's check.
+  if ('aiModel' in raw) {
+    const v = raw.aiModel
+    if (typeof v !== 'string' || (v !== '' && !/^[a-z0-9][a-z0-9.-]{0,59}$/.test(v))) throw new Error('aiModel must be empty (same as all agents) or a model id')
+    out.aiModel = v
+  }
+  if ('aiEffort' in raw) {
+    const v = raw.aiEffort
+    if (typeof v !== 'string' || (v !== '' && !(AI_EFFORTS as readonly string[]).includes(v))) throw new Error(`aiEffort must be empty (same as all agents) or one of ${AI_EFFORTS.join(', ')}`)
+    out.aiEffort = v
+  }
   return out
 }
 

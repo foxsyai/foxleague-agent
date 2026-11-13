@@ -473,9 +473,15 @@ test('SHADOWS-11 the guides say how to set several shadow models, what each cost
   // The dashboard's own words: a row is by another model, not by "the second" one.
   assert.doesNotMatch(html, /a second AI model|compare the two models/)
 
+  // Its section of the review, whole and in its place: a later change adds its own section after it (SHADOW-15 reads
+  // the section of 2026-11-11 the same way).
   const review = read('docs/SECURITY-REVIEW.md')
-  const section = review.slice(review.lastIndexOf('\n## '))
-  assert.match(section, /^\n## Several shadow models at once \(2026-11-12\)\n/, 'the last section of the file')
+  const start = review.indexOf('\n## Several shadow models at once (2026-11-12)\n')
+  assert.ok(start > 0, 'the section of 2026-11-12 is in the review')
+  assert.ok(start > review.indexOf('\n## Shadow plans, Claude Haiku 5.5 and the model list of four (2026-11-11)\n'), 'after the section before it')
+  const end = review.indexOf('\n## ', start + 1)
+  const section = review.slice(start, end < 0 ? undefined : end)
+  assert.match(section, /^\n## Several shadow models at once \(2026-11-12\)\n/)
   assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| SHADOWS-1 \| design \(the owner, 2026-11-12\) \|/)
   for (const id of ['SHADOWS-2', 'SHADOWS-3', 'SHADOWS-4', 'SHADOWS-5', 'SHADOWS-6', 'SHADOWS-7', 'SHADOWS-8', 'SHADOWS-9', 'SHADOWS-10', 'SHADOWS-11']) assert.match(section, new RegExp(`\\n\\| ${id}[ ,]`), id)
   // Every row of the table has its four cells.
