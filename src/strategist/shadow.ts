@@ -22,8 +22,8 @@ export const SHADOW_TIMEOUT_MS = 10 * 60_000
 
 /**
  * The entry of a shadow list that asks the real plan's own model and effort again: a repeat. It is written exactly so,
- * takes no effort after a colon and never rests: it follows the model and effort the real plan of that tick was asked
- * with, whatever they are.
+ * takes no effort after a colon and follows the model and effort the real plan of that tick was asked with. It rests
+ * only where it cannot run: under a playing model the list does not have (repeatRuns).
  */
 export const SAME = 'same'
 
@@ -131,6 +131,16 @@ export function entryOf(entry: string): { model: string; effort: string | null }
 
 const isEffort = (effort: string): effort is Effort => (EFFORTS as readonly string[]).includes(effort)
 
+/**
+ * Whether `same` can run under this playing pair: a model of the list with one of the five efforts. Under any other
+ * (a model the list does not have, AGENT_MODEL naming one; no effort known) it is left out, so it rests there, and a
+ * switch from there to a pair of the list starts it (wakesShadow in src/web/server.ts; agent review of PR #67, R67A-1).
+ */
+export function repeatRuns(playing: string | { model: string; effort: string | null }): boolean {
+  const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
+  return isKnownModel(p.model) && p.effort !== null && isEffort(p.effort)
+}
+
 /** An entry that can run: `same`, or a model of the list with no effort or one of the five. */
 const runnable = (entry: string): boolean => {
   if (entry === SAME) return true
@@ -141,7 +151,8 @@ const runnable = (entry: string): boolean => {
 /**
  * Whether an entry rests while this model and effort play: one with its own effort only at that very model and effort,
  * one without at its model whatever the effort, as before entries had efforts. `playing` given as a model alone (no
- * effort known) rests only the entries without an effort. `same` never rests: it is the pair that plays.
+ * effort known) rests only the entries without an effort. `same` is not an entry at a pair: it is the pair that plays,
+ * so it is never at rest here; where it cannot run is repeatRuns.
  */
 export function rests(entry: string, playing: string | { model: string; effort: string | null }): boolean {
   if (entry === SAME) return false
@@ -178,6 +189,7 @@ export function shadowChoices(store: Store, playing: string | { model: string; e
     if (id === SAME) {
       const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
       if (!isKnownModel(p.model)) leftOut.push(`${SAME} needs a model of the list, and the one that plays (${String(p.model).slice(0, 60).replace(/[^\w.:-]/g, '?')}) is not`)
+      // These two checks together are repeatRuns, with a reason each.
       else if (p.effort === null || !isEffort(p.effort)) leftOut.push(`${SAME} needs the effort that plays, which is not known here`)
       else {
         const pair = `${p.model}:${p.effort}`
@@ -227,8 +239,9 @@ export function shadowNote(choices: ShadowChoices): string | null {
  * all-agents ones, whatever model plays: the entries that can run (`same`, or a model of the list with no effort or one
  * of the five), each once; none when nothing is set or it is "off". One of them rests while its model (and its effort,
  * when it has one) plays and runs under any other, which is why a switch of the playing model or effort away from it
- * starts its shadow plans and asks for the password (wakesShadow in src/web/server.ts). `same` never rests, so no
- * switch starts it: it costs what the pair that plays costs, and a switch to a dearer pair asks for the password anyway.
+ * starts its shadow plans and asks for the password (wakesShadow in src/web/server.ts). `same` follows the pair that
+ * plays, so a switch between pairs of the list does not start it (a dearer pair asks for the password anyway); a switch
+ * from a model the list does not have, where it cannot run, to one of the list starts it and asks too (R67A-1).
  */
 export function shadowModelsSet(store: Store, agentIndex?: number | null): string[] {
   return entriesSet(store, agentIndex).read.filter(runnable)

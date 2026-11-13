@@ -118,10 +118,10 @@ test('RS-1 the setting: `same` asks the real plan\'s own model and effort again 
 
 // ---- in the service ----
 
-function testConfig(dir: string): Config {
+function testConfig(dir: string, model = SONNET): Config {
   return {
     mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about', dataDir: dir, gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9',
-    gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: 'sk-ant-not-a-real-key-for-this-test-only', model: SONNET, telegramToken: undefined, telegramChatId: undefined,
+    gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: 'sk-ant-not-a-real-key-for-this-test-only', model, telegramToken: undefined, telegramChatId: undefined,
     isServer: false, defaultDryRun: true, maxAgents: 12,
   } as Config
 }
@@ -440,3 +440,101 @@ test('RS-5 the guides: the server guide gives the three test agents\' lists with
   assert.ok(section.includes('\nStays open:\n'))
   assert.doesNotMatch(section, /—|\bbot\b/i)
 }))
+
+// ---- the agent review of pull request #67 ----
+
+test('R67A-1 rule 7: `same` rests under a playing model the list does not have, so a switch from there to a model of the list starts it and asks for the password, also when the new model is not dearer', async () => {
+  const rules = web as unknown as {
+    wakesShadow: (shadows: readonly string[], current: string | Pair, next: string | Pair) => boolean
+    agentAiNeedsPassword: (current: Pair, next: Pair, shadows: readonly string[]) => boolean
+    allAgentsAiNeedsPassword: (all: Pair, next: Pair, agents: { settings: { aiModel: string; aiEffort: string }; shadows: string[] }[]) => boolean
+  }
+  const OPUS_48 = 'claude-opus-4-8' // priced (5/25/0.5), not on the list, no successor: AGENT_MODEL may still name it
+  assert.ok(Object.hasOwn(strategist.PRICES, OPUS_48) && !Object.hasOwn(strategist.MODELS, OPUS_48) && strategist.currentModel(OPUS_48) === OPUS_48)
+  // Under it `same` is left out (shadowChoices), so each plan is one request.
+  withoutEnv(() => {
+    const store = new Store('', ':memory:')
+    store.setKv('shadow_model', 'same')
+    const choices = S.shadowChoices(store, { model: OPUS_48, effort: 'medium' }, 0)
+    assert.deepEqual(S.shadowRuns(choices), [])
+    assert.deepEqual(choices.leftOut, [`same needs a model of the list, and the one that plays (${OPUS_48}) is not`])
+  })
+  // From a model the list does not have (priced or not) to any pair of the list, `same` starts: the password.
+  const ids = Object.keys(strategist.MODELS)
+  for (const from of [OPUS_48, 'gpt-oss']) for (const ea of strategist.EFFORTS) for (const to of ids) for (const eb of strategist.EFFORTS) {
+    const cur = { model: from, effort: ea }, next = { model: to, effort: eb }
+    const what = `${from} ${ea} to ${to} ${eb}`
+    assert.equal(rules.wakesShadow(['same'], cur, next), true, what)
+    assert.equal(rules.agentAiNeedsPassword(cur, next, ['same']), true, what)
+    assert.equal(rules.allAgentsAiNeedsPassword(cur, next, [{ settings: { aiModel: '', aiEffort: '' }, shadows: ['same'] }]), true, what)
+    // An agent with its own model of the list is not moved by the all-agents switch: its repeat ran before and after.
+    assert.equal(rules.wakesShadow(['same'], strategist.agentChoice({ aiModel: HAIKU }, cur), strategist.agentChoice({ aiModel: HAIKU }, next)), false, what)
+  }
+  // Without `same` the cheaper Opus 5.5 is one click from Opus 4.8, as before: only the repeat makes it a raise.
+  assert.equal(rules.agentAiNeedsPassword({ model: OPUS_48, effort: 'medium' }, { model: OPUS, effort: 'medium' }, []), false)
+  // Where it ran before it still never wakes: a model of the list, or one that left it and runs its successor.
+  assert.equal(rules.wakesShadow(['same'], { model: 'claude-sonnet-5', effort: 'high' }, { model: HAIKU, effort: 'high' }), false, 'Sonnet 5 runs Sonnet 5.5')
+  assert.equal(rules.wakesShadow(['same'], { model: OPUS, effort: 'high' }, { model: HAIKU, effort: 'low' }), false)
+  // Models alone (no effort known): it can run on neither side, so nothing starts.
+  assert.equal(rules.wakesShadow(['same'], OPUS_48, OPUS), false)
+
+  // The routes: AGENT_MODEL names Opus 4.8, nothing is saved in the dashboard, `same` is set for all agents.
+  const { Service } = await import('../src/service.ts')
+  const password = 'correct-horse-battery'
+  const creds = { username: 'admin', passwordHash: hashPassword(password), secretKey: 'k'.repeat(64) }
+  const web48 = async (set: (svc: InstanceType<typeof Service>) => void) => {
+    const svc = new Service(testConfig(mkdtempSync(join(tmpdir(), 'foxagent-r67-')), OPUS_48))
+    svc.ensureAgents()
+    ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
+    svc.notify = () => undefined
+    set(svc)
+    const server = web.startWeb(svc, creds, 0)
+    if (!server.listening) await once(server, 'listening')
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const sessions = new Sessions(creds.secretKey, creds.passwordHash)
+    const cookie = sessions.issue('admin')
+    const post = (path: string, body: unknown) => fetch(`${url}${path}`, { method: 'POST', headers: { cookie: `foxagent_session=${cookie}`, origin: url, 'x-csrf-token': sessions.csrfFor(cookie), 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    return { svc, server, post }
+  }
+  // The Strategist box: Opus 5.5 at the same effort is not dearer than Opus 4.8, but it starts the repeat.
+  const a = await web48(svc => svc.store.setKv('shadow_model', 'same'))
+  try {
+    assert.equal(a.svc.strategist!.model, OPUS_48)
+    let res = await a.post('/api/strategist', { model: OPUS, effort: a.svc.strategist!.effort })
+    assert.equal(res.status, 403, 'a switch that starts the repeat went through without the password')
+    assert.equal(a.svc.strategist!.model, OPUS_48)
+    res = await a.post('/api/strategist', { model: OPUS, effort: a.svc.strategist!.effort, password })
+    assert.equal(res.status, 200, await res.text())
+  } finally {
+    a.server.close()
+  }
+  // One agent that follows the all-agents Opus 4.8, with `same` in its own list, gets Opus 5.5 of its own.
+  const b = await web48(svc => svc.store.setKv('shadow_model_agent_1', 'same'))
+  try {
+    let res = await b.post('/api/agents/0/settings', { aiModel: OPUS })
+    assert.equal(res.status, 403, 'an own model that starts the repeat went through without the password')
+    assert.equal(b.svc.store.agent(0)!.settings.aiModel, '')
+    res = await b.post('/api/agents/0/settings', { aiModel: OPUS, password })
+    assert.equal(res.status, 200, await res.text())
+  } finally {
+    b.server.close()
+  }
+
+  // The page applies the same rule: the dialog says shadow plans start, and names the repeat.
+  const models = ids.map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
+  const instance = { model: OPUS_48, effort: 'medium', models, efforts: [...strategist.EFFORTS], shadowModels: [], shadowEntries: ['same'], ownAi: 0 }
+  const page = { instance, agents: [{ index: 0, ai: { model: OPUS_48, effort: 'medium', own: {}, shadows: ['same'] } }] }
+  assert.equal(pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow'], page)(OPUS, 'medium'), true)
+  assert.equal(pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow'], { instance: { ...instance, model: OPUS }, agents: [{ index: 0, ai: { own: {}, shadows: ['same'] } }] })(HAIKU, 'low'), false, 'from a model of the list: nothing starts')
+  assert.match(pageFunctions<(model: string, effort: string) => string>(['wakesShadow', 'aiRaiseText'], page)(OPUS, 'medium'), /would start with this switch: a repeat of the model and effort that plays for agent 1 and any agent you add\./)
+  const agentText = pageFunctions<(b: unknown, form: unknown) => string>(['agentAiText'], { instance: { ...instance, aiAll: { model: OPUS_48, effort: 'medium' } } })
+  assert.match(agentText({ ai: { model: OPUS_48, effort: 'medium', own: {}, shadows: ['same'] } }, { aiModel: OPUS, aiEffort: '' }), /^Shadow plans by a repeat of its model and effort are set on the server for this agent\./)
+  // The guide and the review say it.
+  const guide = readFileSync(join(REPO, 'docs/SERVER.md'), 'utf8').replace(/\s+/g, ' ')
+  assert.doesNotMatch(guide, /No switch of the playing model or effort starts it/)
+  assert.match(guide, /A switch from such a model to one of the list starts the repeat, so it asks for your password, also when the new model is not dearer\./)
+  const review = readFileSync(join(REPO, 'docs/SECURITY-REVIEW.md'), 'utf8')
+  const section = review.slice(review.indexOf('\n## Repeat shadow, chat Send and model output limits (2026-11-13)\n'))
+  assert.match(section, /\n\| R67A-1 \| medium \(rule 7; agent review of PR #67\) \| [^\n]+ \| [^\n]+ \|\n/)
+  assert.doesNotMatch(section, /`same` never rests, so `wakesShadow` never starts it/)
+})

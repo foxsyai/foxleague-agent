@@ -155,8 +155,11 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
 - `same` asks the real plan's own model and effort again: a repeat. It never rests: it follows the model and effort
   the agent plays, also after you change them. An entry that names the playing model and effort itself still rests,
   as before; with `same` beside it that pair runs once. `same` is written in small letters and takes no effort after a
-  colon. A repeat costs what the real plan costs, on top of it. No switch of the playing model or effort starts it, so
-  it asks for no password of its own: a dearer model or a higher effort asks as always and raises the repeat too.
+  colon. A repeat costs what the real plan costs, on top of it. A switch between models of the list does not start
+  it, so there it asks for no password of its own: a dearer model or a higher effort asks as always and raises the
+  repeat too. The one place it cannot run is a playing model the list does not have (`AGENT_MODEL` in the env file may
+  still name one, such as `claude-opus-4-8`): there `same` is left out and the log says why once. A switch from such a
+  model to one of the list starts the repeat, so it asks for your password, also when the new model is not dearer.
 - `AGENT_SHADOW_MODEL` (one model or several separated by commas) and `AGENT_SHADOW_EFFORT` in
   `/etc/foxleague-agent/env` do the same from the next start of the service. The database's setting wins, so `off`
   there switches it off whatever the env file says.

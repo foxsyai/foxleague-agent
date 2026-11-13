@@ -983,14 +983,15 @@ $('sModel').onchange = $('sEffort').onchange = () => { stratDirty = true; render
 // A switch that starts shadow plans asks for the password too (wakesShadow and allAgentsAiNeedsPassword in server.ts,
 // the same rule): a shadow entry set on the server rests while its model plays (at its effort, when the entry has one)
 // and under anything else every plan also pays for a shadow plan by it, however cheap the new model is. Several can be
-// set: the one that rests wakes with any switch away from it. It is weighed for each agent the switch really moves:
+// set: the one that rests wakes with any switch away from it. `same` (a repeat of the pair that plays) rests only under a
+// pair it cannot run at, a model the list does not have (R67A-1). It is weighed for each agent the switch really moves:
 // one with its own model and effort is not moved, so its shadow plans do not count. The retired agents count too:
 // Restore and Resume bring one back with one click each. So does an agent added later, which follows this box and the
 // all-agents shadow list (shadowEntries; a page that got only shadowModels, an older answer, reads those as before).
 function wakesShadow(model, effort) {
   const i = S.instance
   if (effort === undefined) effort = i.effort
-  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const rests = (e, m, f) => { if (e === 'same') return !(i.models.some(x => x.id === m) && i.efforts.includes(f)); const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
   const who = [...(S.agents || []), ...(S.retired || [])].filter(b => b.ai).concat([{ ai: { own: {}, shadows: i.shadowEntries || i.shadowModels || [] } }])
   return who.some(b => {
     const own = b.ai.own || {}
@@ -1020,8 +1021,8 @@ function aiRaiseText(model, effort) {
     const set = all.length > 1 ? list(all) : shadow
     return 'Shadow plans are set to ' + set + ' on this computer. ' + (all.length > 1 ? 'Those by ' + shadow : 'They') + ' rest while ' + shadow + ' plays. With another model playing, every plan of every agent also pays for a shadow plan by ' + shadow + '. Your password confirms it.'
   }
-  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
-  const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
+  const rests = (e, m, f) => { if (e === 'same') return !(i.models.some(x => x.id === m) && i.efforts.includes(f)); const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const entry = e => { if (e === 'same') return 'a repeat of the model and effort that plays'; const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
   // Each entry that would start, with the numbers of its agents (0 for an agent added later).
   const woken = new Map()
   const wake = (e, n) => { const k = entry(e); if (!woken.has(k)) woken.set(k, []); if (!woken.get(k).includes(n)) woken.get(k).push(n) }
@@ -1049,7 +1050,7 @@ function agentAiCostsMore(b, form) {
   if (!was || !will) return true
   if (will.id !== was.id && will.dearest.some((p, k) => p > was.cheapest[k])) return true
   if (i.efforts.indexOf(next.effort) > i.efforts.indexOf(ai.effort)) return true
-  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const rests = (e, m, f) => { if (e === 'same') return !(i.models.some(x => x.id === m) && i.efforts.includes(f)); const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
   return (ai.shadows || []).some(e => rests(e, ai.model, ai.effort) && !rests(e, next.model, next.effort))
 }
 // What the password dialog says for one agent's AI: why this change costs more.
@@ -1058,10 +1059,10 @@ function agentAiText(b, form) {
   const name = id => (i.models.find(m => m.id === id) || { label: id }).label
   const all = i.aiAll || { model: i.model, effort: i.effort }
   const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
-  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const rests = (e, m, f) => { if (e === 'same') return !(i.models.some(x => x.id === m) && i.efforts.includes(f)); const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
   const woken = (ai.shadows || []).filter(e => rests(e, ai.model, ai.effort) && !rests(e, next.model, next.effort))
   if (!woken.length) return 'A model with a higher price or a higher effort costs more on every plan of this agent. The AI spend has no cap of its own. Your password confirms it.'
-  const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
+  const entry = e => { if (e === 'same') return 'a repeat of its model and effort'; const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
   const names = woken.map(entry), list = names.length > 1 ? names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1] : names[0]
   return 'Shadow plans by ' + list + ' are set on the server for this agent. They rest while it plays ' + name(ai.model) + ' at ' + ai.effort + ' effort. With this change every plan of this agent also pays for them. Your password confirms it.'
 }
