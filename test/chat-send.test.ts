@@ -270,3 +270,78 @@ test('CO-1 the server answers one manager message at a time: a second one while 
   assert.equal(p.els.adviceBtn!.disabled, true)
   assert.match(fn('api'), /status: r\.status/, 'the page\'s api() keeps the status of a refused request')
 })
+
+test('CO-2 a failed Send whose answer was written meanwhile is not put back: the page finds it answered by the server\'s own times, at once or at the first state it can read; an edited box is left alone', async () => {
+  const t = (minute: number) => `2026-11-13T12:${String(minute).padStart(2, '0')}:00.000Z`
+  const earlier = [{ from: 'owner', text: 'skip boosters', at: t(1), source: 'web UI, admin' }, { from: 'manager', text: 'Done before.', at: t(2) }]
+  const answered = [...earlier, { from: 'owner', text: 'skip boosters', at: t(5), source: 'web UI, admin' }, { from: 'manager', text: 'Done.', at: t(9) }]
+  const ANSWERED = 'The manager answered while the page was away: its answer is in the conversation.'
+  const lost = async (): Promise<unknown> => { throw new Error('Failed to fetch') }
+
+  // The laptop slept: the answer was written and booked, the POST failed; the state read at once shows it answered.
+  const a = page({ post: lost, state: async () => ({ chat: answered }), chat: earlier })
+  await a.click('skip boosters')
+  assert.equal(a.els.adviceText!.value, '', 'not given back: it was answered')
+  assert.deepEqual(a.toasts, [[ANSWERED, false]])
+  assert.equal(a.els.adviceBtn!.disabled, false, 'nothing is being answered: Send is on')
+
+  // The same words answered before this Send (older than the newest line the page had) do not count.
+  const old = page({ post: lost, state: async () => ({ chat: earlier }), chat: earlier })
+  await old.click('skip boosters')
+  assert.equal(old.els.adviceText!.value, 'skip boosters')
+  assert.deepEqual(old.toasts, [['Failed to fetch', true]])
+
+  // The state cannot be read either: the message comes back, Send stays off, and the first state that can be read
+  // settles it. Answered meanwhile: the box is emptied and it says so.
+  let down = true
+  let chat: Line[] = answered
+  const b = page({ post: lost, state: async () => { if (down) throw new Error('Failed to fetch'); return { chat } }, chat: earlier })
+  await b.click('skip boosters')
+  assert.equal(b.els.adviceText!.value, 'skip boosters')
+  assert.equal(b.els.adviceBtn!.disabled, true)
+  down = false
+  await b.refresh()
+  assert.equal(b.els.adviceText!.value, '', 'emptied once the server shows it answered')
+  assert.deepEqual(b.toasts.at(-1), [ANSWERED, false])
+  assert.equal(b.els.adviceBtn!.disabled, false)
+  // Settled once: a later refresh says nothing more.
+  const said = b.toasts.length
+  await b.refresh()
+  assert.equal(b.toasts.length, said)
+
+  // Still being answered when the state can be read again: emptied, Send stays off.
+  down = true
+  chat = [...earlier, { from: 'owner', text: 'skip boosters', at: t(5), pending: true, source: 'web UI, admin' }]
+  const c = page({ post: lost, state: async () => { if (down) throw new Error('Failed to fetch'); return { chat } }, chat: earlier })
+  await c.click('skip boosters')
+  down = false
+  await c.refresh()
+  assert.equal(c.els.adviceText!.value, '')
+  assert.deepEqual(c.toasts.at(-1), ['The manager is still answering. Its answer shows here when it is ready.', false])
+  assert.equal(c.els.adviceBtn!.disabled, true)
+
+  // The owner changed the box meanwhile: it is left as he wrote it.
+  down = true
+  chat = answered
+  const d = page({ post: lost, state: async () => { if (down) throw new Error('Failed to fetch'); return { chat } }, chat: earlier })
+  await d.click('skip boosters')
+  d.els.adviceText!.value = 'skip boosters and packs'
+  down = false
+  await d.refresh()
+  assert.equal(d.els.adviceText!.value, 'skip boosters and packs')
+  assert.notDeepEqual(d.toasts.at(-1), [ANSWERED, false])
+
+  // The server never got it: the message stays in the box and Send comes back.
+  down = true
+  chat = earlier
+  const e = page({ post: lost, state: async () => { if (down) throw new Error('Failed to fetch'); return { chat } }, chat: earlier })
+  await e.click('skip boosters')
+  down = false
+  await e.refresh()
+  assert.equal(e.els.adviceText!.value, 'skip boosters')
+  assert.equal(e.els.adviceBtn!.disabled, false)
+
+  // The page itself settles it in loadState, after the state was read.
+  const load = fn('loadState')
+  assert.ok(load.indexOf('chatSettle()') > load.indexOf('chatUnsure = false'), 'loadState settles a lost Send once the state was read')
+})
