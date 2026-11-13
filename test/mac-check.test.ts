@@ -4,6 +4,7 @@
 // the section "Mac install check (2026-11-12)" of docs/SECURITY-REVIEW.md.
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as updater from '../src/update/updater.ts'
@@ -211,6 +212,42 @@ test('MAC-5: the release server is asked at most once in MIN_CHECK_GAP_MS: a che
   assert.equal(updater.MIN_CHECK_GAP_MS, 15_000)
   assert.equal(updater.CHECK_EVERY_MS, 10 * 60_000)
   assert.match(read('src/update/updater.ts'), /again\(CHECK_EVERY_MS \+ Math\.random\(\) \* 60_000\)[^\n]*\n[^\n]*\n[^\n]*\n\s*again\(30_000 \+ Math\.random\(\) \* 60_000\)/)
+})
+
+test('MAC-5 and the install replay: scripts/release/fresh-install-check.sh presses Update now only once the agent offers the release it just published, waiting longer than MIN_CHECK_GAP_MS', () => {
+  // A check sooner than MIN_CHECK_GAP_MS after the last one answers with that one, and Update now installs what it
+  // offered. The replay of 2026-11-13 published 1.0.5 four seconds after its check for 1.0.4: Update now installed
+  // 1.0.4 again and the four checks of step 11e failed. So every Update now comes after the agent offers the very
+  // release published last, asked through the dashboard's own check until it does (bounded), never in one go.
+  const file = join(REPO, 'scripts/release/fresh-install-check.sh')
+  const script = readFileSync(file, 'utf8')
+  assert.equal(spawnSync('bash', ['-n', file], { encoding: 'utf8' }).status, 0, 'the script parses')
+  const gap = updater.MIN_CHECK_GAP_MS / 1000
+  assert.ok(script.includes('offered() { fx fox-dash check >/dev/null 2>&1; state_has "\\"available\\":{\\"version\\":\\"$1\\""; }'), 'offered: the check of the round arrow, then the state')
+  assert.ok(script.includes('offered2() { fx2 fox-dash check >/dev/null 2>&1; state2_has "\\"available\\":{\\"version\\":\\"$1\\""; }'), 'offered2: the same on the machine of step 10')
+  let published: string | null = null
+  let offered = false
+  const updates: string[] = []
+  for (const line of script.split('\n')) {
+    if (/^\s*#/.test(line)) continue
+    const pub = /^\s*(?:publish|mkrel release "\$WORK\/rel") (\d+\.\d+\.\d+)\b/.exec(line)
+    if (pub) {
+      published = pub[1]!
+      offered = false
+      continue
+    }
+    const wait = /until_ok (\d+) (?:offered2? (\d+\.\d+\.\d+)\b|state2?_has '"available":\{"version":"(\d+\.\d+\.\d+)")/.exec(line)
+    if (wait && published !== null && (wait[2] ?? wait[3]) === published) {
+      assert.ok(Number(wait[1]) >= 2 * gap, `${line.trim()}: the wait is bounded and longer than twice the gap of ${gap} s`)
+      offered = true
+    }
+    if (/\bfox-dash update\b/.test(line)) {
+      assert.ok(published !== null, `${line.trim()}: after a release is published`)
+      assert.ok(offered, `${line.trim()}: Update now for ${published} only after the agent offers ${published}`)
+      updates.push(published)
+    }
+  }
+  assert.deepEqual(updates, ['1.0.1', '1.0.1', '1.0.3', '1.0.4', '1.0.5', '1.0.6', '1.0.6'], 'every Update now of the replay was read')
 })
 
 type Control = Element & { disabled: boolean }

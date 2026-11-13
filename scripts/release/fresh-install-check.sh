@@ -292,6 +292,11 @@ journal() { fx journalctl --user -u foxleague-agent --no-pager -o cat "$@" 2>/de
 journal_has() { journal | grep -Fq -- "$1"; }
 state() { fx fox-dash state 2>/dev/null; }
 state_has() { state | tr -d ' \n' | grep -Fq -- "$1"; }
+# offered <version>: the dashboard's check (the round arrow), then the state, until the agent offers that version. The
+# agent asks the release server at most once in 15 seconds (MIN_CHECK_GAP_MS, MAC-5): a check sooner than that after
+# its last one (the replay's own or the agent's timed one) gets the last answer, and Update now installs what that
+# answer offered. Polled with until_ok and a bound, so a step waits for the rule instead of racing it.
+offered() { fx fox-dash check >/dev/null 2>&1; state_has "\"available\":{\"version\":\"$1\""; }
 active_is() { [ "$(fx cat /home/fox/foxleague-agent/versions/active 2>/dev/null)" = "$1" ]; }
 healthz() { [ "$(docker exec "${2:-$C}" curl -fsS -m 3 "http://127.0.0.1:${1:-8870}/healthz" 2>/dev/null)" = ok ]; }
 wallet_mark() { fx bash -c 'cd ~/foxleague-agent && { grep "^AGENT_MNEMONIC=" .env; cat pem/agent1.pem; grep "^WEB_UI_PASSWORD_HASH=" .env; } | sha256sum | cut -c1-16'; }
@@ -479,7 +484,7 @@ until_ok 30 healthz
 check "the line is gone from the unit" fx sh -c '! grep -q "\"FOXAGENT_SUPERVISED=1\"" ~/.config/systemd/user/foxleague-agent.service'
 check "under such a unit the agent still knows that systemd restarts it" until_ok 30 state_has '"restarts":true'
 publish 1.0.3 --break-start --notes "New in 1.0.3: a release that does not start."
-fx fox-dash check >/dev/null 2>&1
+check "the agent offers 1.0.3 before Update now (it asks the release server at most once in 15 seconds)" until_ok 60 offered 1.0.3
 fx fox-dash update > "$LOGS/11c-update.txt" 2>&1
 check "Update now is accepted for 1.0.3, with a restart" has "$LOGS/11c-update.txt" 'Installing 1\.0\.3\. This takes a minute or two; the agent then restarts'
 check "after two starts that failed the launcher is back on 1.0.2 (within the unit's start limit)" until_ok 240 journal_has 'foxleague-agent: the update to v1.0.3 did not start twice, back on v1.0.2'
@@ -489,7 +494,7 @@ check "the dashboard shows the undo" until_ok 30 state_has '"kind":"undone","ver
 
 say "11d. A release whose archive was changed after it was signed: 1.0.4 is refused"
 publish 1.0.4 --tamper --notes "New in 1.0.4: its archive was changed after it was signed."
-fx fox-dash check >/dev/null 2>&1
+check "the agent offers 1.0.4 before Update now (it asks the release server at most once in 15 seconds)" until_ok 60 offered 1.0.4
 fx fox-dash update > "$LOGS/11d-update.txt" 2>&1
 check "the dashboard's update is refused, with the reason" until_ok 60 state_has 'thearchiveisnottheonethatwassigned(itsSHA-256differs):itwasrefused.Yourun1.0.2asbefore.'
 type_in "$C" fox 11d-terminal 120 "$PROMPT=>cd ~/foxleague-agent && ./install.sh --update" "$PROMPT_IN=>echo \"update status \$?\"; exit"
@@ -504,7 +509,8 @@ say "11e. An update that ends at once with status 0 (as Node.js 23 ends this cod
 # owner's machine two such updates are not minutes apart: the count is cleared the way the installer clears it.
 fx systemctl --user reset-failed foxleague-agent
 publish 1.0.5 --end-at-once --notes "New in 1.0.5: a release that ends at once with status 0."
-fx fox-dash check >/dev/null 2>&1
+# Seconds after the check of 11d for 1.0.4: a check at once would still offer 1.0.4.
+check "the agent offers 1.0.5 before Update now (it asks the release server at most once in 15 seconds)" until_ok 60 offered 1.0.5
 fx fox-dash update > "$LOGS/11e-update.txt" 2>&1
 check "Update now is accepted for 1.0.5" has "$LOGS/11e-update.txt" 'Installing 1\.0\.5'
 check "1.0.5 ran and ended with status 0" until_ok 180 journal_has 'fresh-install-check: this release ends at once with status 0'
@@ -521,6 +527,7 @@ run2() { docker exec -d -u fox -e HOME=/home/fox -e USER=fox -e LOGNAME=fox -w /
 down2() { ! docker exec "$C2" curl -fsS -m 3 http://127.0.0.1:8870/healthz >/dev/null 2>&1; }
 stop2() { fx2 sh -c 'kill "$(cat data/service.pid)"'; until_ok 60 down2; }
 state2_has() { fx2 fox-dash state 2>/dev/null | tr -d ' \n' | grep -Fq -- "$1"; }
+offered2() { fx2 fox-dash check >/dev/null 2>&1; state2_has "\"available\":{\"version\":\"$1\""; }
 active2_is() { [ "$(fx2 cat versions/active 2>/dev/null)" = "$1" ]; }
 log2_has() { fx2 grep -Fq -- "$1" /home/fox/agent.log; }
 same_process2() { [ -n "$PID2" ] && [ "$(fx2 cat data/service.pid 2>/dev/null)" = "$PID2" ] && healthz 8870 "$C2"; }
@@ -535,7 +542,7 @@ fx2 sh -c 'printf "AGENT_UPDATE_URL=\"http://127.0.0.1:8899\"\n" >> .env'
 run2
 until_ok 60 healthz 8870 "$C2"
 fx2 fox-dash login admin "$PASSWORD" >/dev/null 2>&1
-fx2 fox-dash check >/dev/null 2>&1
+check "the agent offers 1.0.6 before Update now (it asks the release server at most once in 15 seconds)" until_ok 60 offered2 1.0.6
 check "the agent knows that nothing starts it again (no service manager started it)" state2_has '"restarts":false'
 PID2=$(fx2 cat data/service.pid 2>/dev/null)
 fx2 fox-dash update > "$LOGS/11f-update.txt" 2>&1
