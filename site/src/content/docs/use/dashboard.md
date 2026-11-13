@@ -50,7 +50,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   the AI call.
 - **Activity**: everything the agent did, newest first, with a filter for plans, actions or problems. A row marked
   "shadow plan, not carried out" is what another AI model would have planned, recorded only to compare
-  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)).
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). A shadow plan by the agent's own model
+  and effort says so: it is the same model planning the same request a second time.
 - **Budget**: spend against today's cap, this month's budget and the setup budget.
 - **Talk to the manager**: advice or questions in plain words, typed or spoken ([Talk to your manager](/use/talk-to-your-manager/)).
 - **Settings**: the strategy, the agent's own AI model and effort (or the same as all agents) and every limit

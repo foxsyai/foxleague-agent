@@ -12,7 +12,7 @@ import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, veri
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
 import { EFFORTS, MODELS, agentChoice, currentModel, isKnownModel, ownAi, priceRange, type Effort } from '../strategist/strategist.ts'
-import { entryOf, hasOwnShadowList, rests, shadowModelsSet } from '../strategist/shadow.ts'
+import { SAME, entryOf, hasOwnShadowList, repeatRuns, rests, shadowModelsSet } from '../strategist/shadow.ts'
 import { isKeyName, type KeyValues } from '../store/secrets.ts'
 import { formatAtomic } from '../util/encoding.ts'
 import { fundsUsd, lowOnFunds, playableUsd } from '../snapshot/funds.ts'
@@ -193,13 +193,17 @@ type AiPair = { model: string; effort: string }
  * (shadowModelsSet), none when shadow plans are off. With several set, the one that rests wakes with any switch away
  * from its pair, also with a switch to another entry of the list: that one goes to rest, and what the two cost is not
  * weighed here. Entries that run before and after and a switch that only sends one to rest start nothing. Given as
- * models alone (no effort known), only the entries without an effort can rest.
+ * models alone (no effort known), only the entries without an effort can rest. `same` (a repeat of the pair that
+ * plays) runs under every pair of the list and moves with it, so between two such pairs it never wakes: a dearer pair
+ * asks by raisesAiSpend. Under a pair it cannot run at (a model the list does not have, which AGENT_MODEL may name,
+ * like claude-opus-4-8 with its own price) it rests, so a switch from there to a pair of the list starts it, also when
+ * the new model is not dearer (agent review of PR #67, R67A-1). `repeatRuns` is the test shadowChoices makes.
  */
 export function wakesShadow(shadows: readonly string[], current: string | AiPair, next: string | AiPair): boolean {
   const at = (p: string | AiPair) => (typeof p === 'string' ? { model: currentModel(p), effort: null } : { model: currentModel(p.model), effort: p.effort })
   const before = at(current)
   const after = at(next)
-  return shadows.some(entry => rests(entry, before) && !rests(entry, after))
+  return shadows.some(entry => (entry === SAME ? !repeatRuns(before) && repeatRuns(after) : rests(entry, before) && !rests(entry, after)))
 }
 
 /**
@@ -271,8 +275,10 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         models: Object.entries(MODELS).map(([id, m]) => ({ id, label: m.label, price: m.price, ...(m.long ? { long: m.long } : {}), ...priceRange(id)! })),
         efforts: EFFORTS,
         // The models of the all-agents shadow list, each once, none when it is off: what a page of the version before
-        // reads. The page of this version reads each agent's own entries (`ai.shadows` below).
-        shadowModels: [...new Set(shadowModelsSet(service.store).map(entry => entryOf(entry).model))],
+        // reads. The page of this version reads each agent's own entries (`ai.shadows` below). `same` names no model. A
+        // repeat starts only on a switch from a model the list does not have, and such a page asks for the password then
+        // in any case (it does not find that model in `models`).
+        shadowModels: [...new Set(shadowModelsSet(service.store).filter(entry => entry !== SAME).map(entry => entryOf(entry).model))],
         // The all-agents shadow entries with their efforts, for the page of this version: the list an agent added
         // later follows (the all-agents switch weighs it, agent review of PR #65).
         shadowEntries: shadowModelsSet(service.store),

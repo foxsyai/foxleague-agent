@@ -1517,7 +1517,8 @@ export class Service {
    * plan as plain data (as the model proposed it, before the tick drops anything). Off, which is the default, it keeps
    * nothing; the reason an entry of the setting does not run is said once in the log, per agent. It never throws: the
    * real plan must not depend on it. `playing`: the model and effort the real plan was asked from, as they were when
-   * its request went out; each shadow is compared with that pair, whatever plays by now.
+   * its request went out; each shadow is compared with that pair, whatever plays by now, and a repeat (`same`) is asked
+   * at that very pair. A repeat is a shadow plan like any other from here on: its own strategist, guard key, row and cost.
    */
   private prepareShadow(index: number, plan: Plan, request: string, playing: { model: string; effort: string }): void {
     try {
@@ -1650,7 +1651,7 @@ export class Service {
       if (!this.store.agent(index)) return
       this.store.log({
         agentIndex: index, kind: SHADOW_KIND, status: 'info',
-        summary: shadowLine({ model: job.model, effort: job.effort, usd, ms, text, ...(outcome === 'plan' ? { plan: shadow } : {}) }),
+        summary: shadowLine({ model: job.model, effort: job.effort, usd, ms, text, ...(outcome === 'plan' ? { plan: shadow } : {}), ...(job.model === job.realModel && job.effort === job.realEffort ? { repeat: true } : {}) }),
         detail: { shadow: { model: job.model, effort: job.effort, outcome, usd, ms }, carriedOut: false },
       })
       this.store.addShadowPlan({

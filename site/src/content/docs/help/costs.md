@@ -18,8 +18,9 @@ the same request goes to the second model too. What it would have done is only r
 A shadow plan never plays: nothing of it is carried out and the playing model never reads it. Each one costs what
 one plan costs on the second model, on top of the real plan. It shows in the dashboard's AI spend. You can try
 several models this way at the same time: each one plans by itself and each adds its own cost per plan. The model
-that plays can also plan in the shadow at another effort, to see what more or less thinking would change. Shadow
-plans can be set for one agent only. It is off
+that plays can also plan in the shadow at another effort, to see what more or less thinking would change. The model
+that plays can also plan once more in the shadow at its own effort, to see how much its plans differ from one request
+to the very same request. Shadow plans can be set for one agent only. It is off
 unless you switch it on yourself on the computer that runs the agent: the server guide in the repository
 (`docs/SERVER.md`) says how to do it and how to read the comparison (`shadow-report`).
 
