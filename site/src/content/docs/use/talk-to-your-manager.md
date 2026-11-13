@@ -22,7 +22,10 @@ The box keeps the conversation like a chat: your messages on the right, the mana
 to 100 messages, together with the ones you sent on Telegram. A proposed strategy waits under the conversation
 with **Apply** and **Cancel**, also when it was proposed on Telegram. **Ctrl+Enter** sends. While the manager is
 answering, **Send** waits: the answer is written and paid for even when the page loses the connection, so a second
-Send would pay twice. Send comes back when the answer is in the box.
+Send would pay twice. Send comes back when the answer is in the box. The manager answers one message at a time: one
+sent meanwhile, from Telegram or another tab, is turned away with that reason and costs nothing. Send it again when
+the answer is in. If the page lost the connection and the answer came meanwhile, the answer shows in the conversation
+and your message does not come back into the box.
 
 ### What the manager remembers
 
@@ -58,7 +61,7 @@ wait for it, so many agents never flood your chat; `/updates all` sends every up
 `/updates daily` goes back. A low-funds warning waits for the summary too, unless it comes with a top-up proposal.
 What you ask for yourself (`/do`, `/tick`) answers at once. Urgent messages always come at once: the kill switch, an internal error, a change of
 mode or keys, plans failing for a problem with the AI account (its key, credit or limits) or three times in a row
-for one agent, a payment whose outcome is unclear, top-up codes and a League + Knockout invitation. Any plain message goes to your manager, with the same Apply and Cancel buttons. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
+for one agent, a payment whose outcome is unclear, top-up codes and a League + Knockout invitation. Any plain message goes to your manager, with the same Apply and Cancel buttons. While the manager is still answering an earlier message, it replies that it is and nothing is paid for: send yours again when the answer is in. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
 
 | Command | What it does |
 |---|---|

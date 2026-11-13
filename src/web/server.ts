@@ -8,6 +8,7 @@ import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Service } from '../service.ts'
+import { ChatBusyError } from '../strategist/proposals.ts'
 import { BoundedQueue, COOKIE_NAME, LoginThrottle, SESSION_TTL_S, Sessions, clientKey, verifyPassword, verifyPasswordAsync, type Credentials } from './auth.ts'
 import { LEVEL_SETTINGS, STRATEGY_PRESETS, checkTiming, validateSettingsPatch, type AgentSettings, LEVEL_AI } from '../store/settings.ts'
 import { budgetView } from '../executor/budget.ts'
@@ -503,6 +504,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
               try {
                 return json(res, 200, { ...(await service.discuss(message, `web UI, ${user}`, [index])), chat: service.chatLines() })
               } catch (err) {
+                // Another message is being answered: turned away, never said or paid for (CO-1). The page gives it back.
+                if (err instanceof ChatBusyError) throw new HttpFail(409, err.message)
                 throw new HttpFail(502, err instanceof Error ? err.message : String(err))
               }
             }

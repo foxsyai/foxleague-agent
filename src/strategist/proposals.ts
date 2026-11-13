@@ -3,6 +3,19 @@
 
 import { randomBytes } from 'node:crypto'
 
+/**
+ * A message to the manager while it is still answering another one (the owner, 2026-11-13, CO-1): one answer at a time,
+ * so a second message from Telegram, another tab or a request made by hand never pays for a second answer meanwhile.
+ * Service.discuss throws it; the web route answers it with 409 and Telegram with its text as the reply. It lives here,
+ * with the chat's other plain data, so the web server can tell it apart without importing the service.
+ */
+export class ChatBusyError extends Error {
+  constructor() {
+    super('The manager is still answering the last message. Send this one when its answer is in.')
+    this.name = 'ChatBusyError'
+  }
+}
+
 export interface Proposal {
   id: string
   agents: number[]

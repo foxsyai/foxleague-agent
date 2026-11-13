@@ -60,9 +60,11 @@ Do not run `certbot --nginx` on the template afterwards: it has its 443 block al
 The template also holds the sign-in page to 30 requests a minute from one address (nginx answers 429 beyond that);
 the dashboard keeps its own lock on wrong passwords, per IPv4 address and per /64 for IPv6.
 
-The template's `proxy_read_timeout 1080s` lets Talk to the manager wait for the whole answer at the highest effort
-(up to 17 minutes). A server set up from an older template has 900 seconds: raise it to `1080s` and reload nginx, or a long
-answer shows an error on the page while it is still being written and paid for.
+The template's `proxy_read_timeout 1080s` lets Talk to the manager wait for the whole answer at the highest effort (up
+to 17 minutes). A server set up from an older template has 900 seconds: raise it to `1080s` and reload nginx, or a
+long answer shows an error on the page while it is still being written and paid for. The page then keeps Send off
+until the answer is in. The server answers one manager message at a time: a second one meanwhile, from Telegram or
+another tab, is turned away with the reason (the page shows it, Telegram replies with it) and costs nothing.
 
 ## Everyday
 

@@ -32,7 +32,7 @@ import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COO
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, agentChoice, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, shadowRuns, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
-import { Proposals, type Proposal } from './strategist/proposals.ts'
+import { ChatBusyError, Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
 import { creditRefunds } from './executor/refunds.ts'
 import { ensureBadge } from './setup/badge.ts'
@@ -541,49 +541,89 @@ export class Service {
    */
   async discuss(message: string, source: string, defaultAgents?: number[]): Promise<{ reply: string; proposal: Proposal | null }> {
     if (!this.strategist) throw new Error('the strategist is off (no ANTHROPIC_API_KEY)')
+    // One answer at a time (CO-1): while the conversation holds a message still being answered, another one is turned
+    // away before it is said or sent to the model. The check and the line below are made before anything is awaited,
+    // so two messages that arrive together cannot both pass. An answer that comes, an answer that fails and Clear each
+    // take the waiting line out; a waiting line is never saved, so a restart holds nothing.
+    if (this.chat.some(l => l.pending && l.from === 'owner')) throw new ChatBusyError()
     const agents = this.store.agents()
     const targets = defaultAgents?.length ? defaultAgents : agents.map(b => b.index)
     // The context is the conversation before this message; the message shows in the box at once, marked as
     // waiting for its answer, so a reload or Telegram shows it too.
     const recent = this.chatContext()
     const epoch = this.chatEpoch
-    const mine = this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets, pending: true })
-    let answer
     try {
-      answer = await this.strategist.discuss({
-        message: message.slice(0, 4000),
-        source,
-        defaultAgents: targets,
-        agents: agents.map(b => {
-          const s = this.snapshots.get(b.index)
-          return { index: b.index, team: s?.team?.name ?? s?.registration.teamName ?? null, strategy: b.settings.strategy, paused: b.paused }
-        }),
-        // Whole messages. An owner message that was about some of the agents only says which, so a follow-up
-        // about another agent is not mixed up with it.
-        recent: recent.map(l => ({
-          from: l.from,
-          text: l.from === 'owner'
-            ? `${l.agents?.length && l.agents.length < agents.length ? `(about ${whichAgents(l.agents)}) ` : ''}${l.text}`
-            : `${l.text}${l.strategy !== undefined ? ` [proposed strategy for ${whichAgents(l.agents ?? [])}: ${l.strategy}]` : ''}`,
-        })),
-        digests: targets.slice(0, 3).flatMap(i => {
-          const s = this.snapshots.get(i)
-          return s ? [{ index: i, digest: renderDigest(s) }] : []
-        }),
-      })
-    } catch (err) {
-      // No answer: the message leaves the box again (the web UI gives the text back to retry).
-      this.chat = this.chat.filter(l => l !== mine)
-      this.saveChat()
-      throw new Error(describeModelError(err))
+      const mine = this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets, pending: true })
+      let answer
+      try {
+        answer = await this.strategist.discuss({
+          message: message.slice(0, 4000),
+          source,
+          defaultAgents: targets,
+          agents: agents.map(b => {
+            const s = this.snapshots.get(b.index)
+            return { index: b.index, team: s?.team?.name ?? s?.registration.teamName ?? null, strategy: b.settings.strategy, paused: b.paused }
+          }),
+          // Whole messages. An owner message that was about some of the agents only says which, so a follow-up
+          // about another agent is not mixed up with it.
+          recent: recent.map(l => ({
+            from: l.from,
+            text: l.from === 'owner'
+              ? `${l.agents?.length && l.agents.length < agents.length ? `(about ${whichAgents(l.agents)}) ` : ''}${l.text}`
+              : `${l.text}${l.strategy !== undefined ? ` [proposed strategy for ${whichAgents(l.agents ?? [])}: ${l.strategy}]` : ''}`,
+          })),
+          digests: targets.slice(0, 3).flatMap(i => {
+            const s = this.snapshots.get(i)
+            return s ? [{ index: i, digest: renderDigest(s) }] : []
+          }),
+        })
+      } catch (err) {
+        // No answer: the message leaves the box again (below; the web UI gives the text back to retry).
+        throw new Error(describeModelError(err))
+      }
+      // Paid in any case, so booked first. A booking the database refuses does not fail the answer, which was written
+      // and is shown: the log says which cost is missing (R68A-1).
+      this.bookChatUsd(answer.usd)
+      // Cleared while the answer was written: it does not come back into the new conversation, and makes no proposal.
+      if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
+      delete mine.pending
+      const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
+      this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
+      return { reply: answer.reply, proposal }
+    } finally {
+      // Every way out releases the waiting line (agent review of PR #68, R68A-1): a failed answer, and also a database
+      // that refuses to save the line itself or the answer. Otherwise the line would stay waiting and the one-at-a-time
+      // rule would turn every message away until Clear or a restart. While the epoch is unchanged (no Clear), a waiting
+      // line here can only be this call's own: every other message was turned away while it waited. An answered line is
+      // no longer waiting and stays. Nothing to save: a waiting line is never saved.
+      if (epoch === this.chatEpoch) this.chat = this.chat.filter(l => !(l.pending && l.from === 'owner'))
     }
-    this.addModelUsd(answer.usd)
-    // Cleared while the answer was written: it does not come back into the new conversation, and makes no proposal.
-    if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
-    delete mine.pending
-    const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
-    this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
-    return { reply: answer.reply, proposal }
+  }
+
+  /**
+   * Adds the cost of an answer of the manager chat to the AI spend. It was paid whether or not the database takes the
+   * booking: when it refuses (a full disk, a lock held past the busy timeout), the answer still goes to the owner and
+   * the log says which cost could not be booked and where it is missing, the total or only the day's figure (R68A-1).
+   * The AI spend is not the ledger of the FOXSY and EGLD caps, so no cap reads it.
+   */
+  private bookChatUsd(usd: number): void {
+    // What the total held before: addModelUsd writes the total first and the day's figure after it, so a refusal can
+    // leave the cost in the total and out of the day's figure. The log line says which (display only).
+    let read = false
+    let before: string | undefined
+    try {
+      before = this.store.getKv('model_usd_total')
+      read = true
+      this.addModelUsd(usd)
+    } catch (err) {
+      let where = 'it may be missing from the AI spend total and from the day\'s figure'
+      try {
+        if (read) where = this.store.getKv('model_usd_total') !== before ? 'it is in the total but missing from the day\'s figure' : 'it is missing from the AI spend total and from the day\'s figure'
+      } catch {
+        // not readable either: "may be missing" stays
+      }
+      console.error(`[${new Date().toISOString()}] manager chat: the answer's cost $${usd.toFixed(4)} could not be booked in full in the AI spend (${err instanceof Error ? err.message : String(err)}): ${where}`)
+    }
   }
 
   applyProposal(id: string, by: string): string {
@@ -649,7 +689,15 @@ export class Service {
   }
 
   private async chatFromTelegram(text: string): Promise<TextReply> {
-    const { reply, proposal } = await this.discuss(text, 'Telegram')
+    let answer
+    try {
+      answer = await this.discuss(text, 'Telegram')
+    } catch (err) {
+      // The manager is answering another message: the reason is the reply, not a failure.
+      if (err instanceof ChatBusyError) return { text: err.message }
+      throw err
+    }
+    const { reply, proposal } = answer
     if (!proposal) return { text: reply || '(no answer)' }
     return {
       text: `${reply ? `${reply}\n\n` : ''}Proposed strategy for ${whichAgents(proposal.agents)}:\n${proposal.strategy}${proposal.changes ? `\n\nChanges: ${proposal.changes}` : ''}`,
