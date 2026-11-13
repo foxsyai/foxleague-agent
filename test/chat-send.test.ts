@@ -271,6 +271,82 @@ test('CO-1 the server answers one manager message at a time: a second one while 
   assert.match(fn('api'), /status: r\.status/, 'the page\'s api() keeps the status of a refused request')
 })
 
+test('R68A-1 a message whose answer could not be saved or booked does not lock the conversation: the line is released on every exit, the answer stays in it, an unbooked cost is said in the log, and the next message goes through on the web and on Telegram', async t => {
+  const { Service } = await import('../src/service.ts')
+  const web = await import('../src/web/server.ts')
+  const svc = new Service(serviceConfig(mkdtempSync(join(tmpdir(), 'foxagent-r68-'))))
+  svc.ensureAgents()
+  ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
+  svc.notify = () => undefined
+  let n = 0
+  svc.strategist = { model: 'claude-sonnet-5-5', effort: 'medium', discuss: async () => ({ reply: `answer ${++n}`, proposal: null, usd: 0.02 }) } as never
+  // The database refuses one write of this key, once (a full disk, or held past the busy timeout by `cli plan N`).
+  let refuse: string | null = null
+  const setKv = svc.store.setKv.bind(svc.store)
+  svc.store.setKv = (key: string, value: string) => {
+    if (key === refuse) {
+      refuse = null
+      throw new Error('database is locked')
+    }
+    setKv(key, value)
+  }
+  const errors: string[] = []
+  t.mock.method(console, 'error', (...a: unknown[]) => void errors.push(a.map(String).join(' ')))
+  const telegram = (text: string) => (svc as unknown as { chatFromTelegram(t: string): Promise<{ text: string }> }).chatFromTelegram(text)
+  const creds = { username: 'admin', passwordHash: hashPassword('correct-horse-battery'), secretKey: 'k'.repeat(64) }
+  const server = web.startWeb(svc, creds, 0)
+  if (!server.listening) await once(server, 'listening')
+  const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+  const sessions = new Sessions(creds.secretKey, creds.passwordHash)
+  const cookie = sessions.issue('admin')
+  const advise = (message: string) => fetch(`${url}/api/agents/0/advise`, { method: 'POST', headers: { cookie: `foxagent_session=${cookie}`, origin: url, 'x-csrf-token': sessions.csrfFor(cookie), 'content-type': 'application/json' }, body: JSON.stringify({ message }) })
+  const waitingLines = () => svc.chatLines().filter(l => l.pending).length
+  try {
+    // The answer was written and paid for; booking its cost fails.
+    refuse = 'model_usd_total'
+    const first = await svc.discuss('how is agent 1?', 'Telegram').then(r => r, (e: Error) => e)
+    // The conversation is not locked: the next message goes through, on Telegram and on the web.
+    assert.deepEqual(await telegram('and now?'), { text: 'answer 2' }, 'the next Telegram message was turned away')
+    const res = await advise('and on the web?')
+    assert.equal(res.status, 200, await res.clone().text())
+    // The first answer reached the owner and stays in the conversation; its cost is said in the log, not lost silently.
+    assert.deepEqual(first, { reply: 'answer 1', proposal: null })
+    assert.deepEqual(svc.chatLines().slice(0, 2).map(l => [l.from, l.text, l.pending ?? false]), [['owner', 'how is agent 1?', false], ['manager', 'answer 1', false]])
+    assert.ok(errors.some(e => /could not be booked/.test(e) && /\$0\.0200/.test(e) && /database is locked/.test(e)), errors.join(' | '))
+    assert.equal(Number(svc.store.getKv('model_usd_total')), 0.04, 'the two answers after it are booked')
+
+    // The message's own line cannot be saved: the call fails, its line is released.
+    refuse = 'chat'
+    await assert.rejects(svc.discuss('saved?', 'Telegram'), /database is locked/)
+    assert.equal(waitingLines(), 0)
+    assert.deepEqual(await telegram('after that?'), { text: 'answer 4' })
+    // The answer cannot be saved: the call fails, but the line was released and the cost booked first.
+    const booked = Number(svc.store.getKv('model_usd_total'))
+    const before = svc.chatLines().length
+    let saves = 0
+    svc.store.setKv = (key: string, value: string) => {
+      if (key === 'chat' && ++saves === 2) throw new Error('database is locked')
+      setKv(key, value)
+    }
+    await assert.rejects(svc.discuss('one more', 'Telegram'), /database is locked/)
+    svc.store.setKv = setKv
+    assert.equal(waitingLines(), 0)
+    assert.equal(svc.chatLines().length, before + 2, 'the message and its answer are in the conversation')
+    assert.ok(Math.abs(Number(svc.store.getKv('model_usd_total')) - (booked + 0.02)) < 1e-12)
+    const again = await advise('still there?')
+    assert.equal(again.status, 200, await again.text())
+  } finally {
+    server.close()
+  }
+  // The review has its row in the section of CO-1.
+  const review = readFileSync(join(REPO, 'docs/SECURITY-REVIEW.md'), 'utf8')
+  const section = review.slice(review.indexOf('\n## One manager message at a time (2026-11-13)\n'))
+  const row = section.split('\n').find(l => l.startsWith('| R68A-1 | low (agent review of PR #68) | '))
+  assert.ok(row, 'the R68A-1 row')
+  assert.equal(row.split(' | ').length, 4)
+  assert.doesNotMatch(row, /—|, and |\bbot\b/i)
+})
+
 test('CO-2 a failed Send whose answer was written meanwhile is not put back: the page finds it answered by the server\'s own times, at once or at the first state it can read; an edited box is left alone', async () => {
   const t = (minute: number) => `2026-11-13T12:${String(minute).padStart(2, '0')}:00.000Z`
   const earlier = [{ from: 'owner', text: 'skip boosters', at: t(1), source: 'web UI, admin' }, { from: 'manager', text: 'Done before.', at: t(2) }]
