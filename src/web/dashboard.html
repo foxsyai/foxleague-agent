@@ -336,7 +336,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
         <h2>Talk to the manager<i class="info" data-tip="advice">i</i><span class="spacer"></span><span id="chatClearBox" hidden><button class="btn sm" id="chatClear" type="button">Clear</button><i class="info" data-tip="chat_clear">i</i></span></h2>
         <div id="chatLog" hidden></div>
         <textarea id="adviceText" maxlength="4000" placeholder="Advice or a question, as in Telegram. For example: this week focus on Silver tournaments and skip boosters."></textarea>
-        <div class="controls"><button class="btn go" id="adviceBtn">Send</button><span id="speakBox" hidden><button class="btn" id="speakBtn" type="button">🎤 Speak</button><select id="speakLang" class="btn sm" aria-label="The language you speak" hidden></select><i class="info" data-tip="speak">i</i></span></div>
+        <div class="controls"><button class="btn go" id="adviceBtn">Send</button><span id="adviceBusy" class="note" hidden></span><span id="speakBox" hidden><button class="btn" id="speakBtn" type="button">🎤 Speak</button><select id="speakLang" class="btn sm" aria-label="The language you speak" hidden></select><i class="info" data-tip="speak">i</i></span></div>
         <div id="adviceOut" hidden>
           <div id="proposalBox" hidden>
             <div class="note" id="proposalFor"></div>
@@ -802,6 +802,8 @@ async function loadState() {
     const held = S && S.chat ? { chat: S.chat, rev: S.chatRev } : null
     S = await api('GET', '/api/state?chat=' + encodeURIComponent(held ? held.rev || '' : ''))
     if (S.chat === null && held) S.chat = held.chat
+    // The server's own conversation is read: whether a message is still being answered is known again (renderSend).
+    chatUnsure = false
     if (sel === null || !S.agents.some(b => b.index === sel)) { const r = recalled(); sel = S.agents.some(b => b.index === r) ? r : (S.agents[0] ? S.agents[0].index : null) }
     renderHeader(); renderAgentbar(); renderSetup()
     if (sel !== null) renderAgent()
@@ -1143,6 +1145,7 @@ const TIPS = {
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
     <p>A question gets an answer. Advice comes back as the full revised strategy with Apply and Cancel; nothing changes until you press Apply. Name other agents ("all agents", "agent 2") to include them.</p>
     <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, up to 100 messages, together with the ones from Telegram. Ctrl+Enter sends.</p>
+    <p>While the manager is answering a message (sent from here, another tab or Telegram), Send waits: the answer is written and paid for even when this page loses the connection, so a second Send would pay twice. Send comes back when the answer is in the box.</p>
     <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
   funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD, its WEGLD and its FOXSY. "To play with" is the same without the EGLD gas reserve, which is never swapped: it is what the agent can still spend on the game.</p>
@@ -1288,7 +1291,9 @@ $('keysTest').onclick = async () => {
   } catch (e) { toast(e.message, true) } finally { $('keysTest').disabled = false; $('keysTest').textContent = 'Test keys' }
 }
 // The conversation with the manager, Telegram included: the owner's lines on the right, the manager's on the left.
-let chatShown = '', chatWaiting = null
+// chatWaiting: the message this page is sending. chatUnsure: a Send failed and the page has not read the server's
+// conversation since, so it does not know whether the manager is still answering (loadState clears it).
+let chatShown = '', chatWaiting = null, chatUnsure = false
 function chatTime(iso) {
   const d = new Date(iso)
   return (d.toDateString() === new Date().toDateString() ? '' : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -1303,7 +1308,26 @@ function chatBubble(l) {
     l.proposed ? el('span', { class: 'prop', text: 'Proposed a strategy for ' + agentsLabel(l.agents || []) + (l.open && l === newestOpen ? ': Apply or Cancel below' : '') }) : null)
 }
 let newestOpen = null
+// The owner's message the manager is still answering (sent from here, another tab or Telegram), or null.
+function chatPending() {
+  return ((S && S.chat) || []).find(l => l.pending && l.from === 'owner') || null
+}
+// One answer at a time (agent review of PR #66): the server goes on writing an answer, and pays for it, even when this
+// page lost the connection or nginx gave up on the request; it does not refuse a second message meanwhile. So Send is
+// off while a message is on its way from here, while the server shows one being answered, and while a failed Send has
+// not been checked with the server yet.
+function chatAnswering() {
+  return Boolean(chatWaiting || chatUnsure || chatPending())
+}
+function renderSend() {
+  const busy = chatAnswering()
+  $('adviceBtn').disabled = busy
+  $('adviceBtn').textContent = chatWaiting ? 'Thinking…' : 'Send'
+  $('adviceBusy').hidden = !busy || Boolean(chatWaiting)
+  $('adviceBusy').textContent = chatUnsure && !chatPending() ? 'The page could not reach the server. Send comes back when it can see that the manager is not still answering.' : 'The manager is still answering. Send comes back when its answer is here.'
+}
 function renderChat() {
+  renderSend()
   const lines = (S && S.chat) || []
   const last = lines[lines.length - 1]
   const firstRead = lines.findIndex(l => l.read)
@@ -1339,7 +1363,7 @@ $('adviceBtn').onclick = async () => {
   stopSpeech(true)
   const message = $('adviceText').value.trim()
   if (!message) return toast('Write something first', true)
-  $('adviceBtn').disabled = true; $('adviceBtn').textContent = 'Thinking…'
+  if (chatAnswering()) { renderSend(); return toast('The manager is still answering. Its answer shows here when it is ready.') }
   chatWaiting = message; $('adviceText').value = ''; renderChat()
   try {
     const r = await api('POST', '/api/agents/' + sel + '/advise', { message })
@@ -1347,10 +1371,16 @@ $('adviceBtn').onclick = async () => {
     if (S) { S.chat = r.chat; S.chatRev = '' }
     renderChat()
   } catch (e) {
-    chatWaiting = null; renderChat()
-    if (!$('adviceText').value) $('adviceText').value = message
-    toast(e.message, true)
-  } finally { $('adviceBtn').disabled = false; $('adviceBtn').textContent = 'Send' }
+    // No answer here is not no answer: behind a timeout or a lost connection the server may still be writing it, and
+    // paying for it. Send stays off until the page has read the server's own conversation again.
+    chatWaiting = null; chatUnsure = true; renderChat()
+    await loadState()
+    if (!chatUnsure && chatPending()) toast('The manager is still answering. Its answer shows here when it is ready.')
+    else {
+      if (!$('adviceText').value) $('adviceText').value = message
+      toast(e.message, true)
+    }
+  } finally { renderSend() }
 }
 $('chatClear').onclick = async () => {
   try { const r = await api('POST', '/api/chat/clear'); if (S) { S.chat = r.chat; S.chatRev = '' } renderChat(); toast(r.message) } catch (e) { toast(e.message, true) }
