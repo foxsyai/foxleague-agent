@@ -1,14 +1,20 @@
 // Talk to the manager (the agent review of PR #66): when the POST to /api/agents/N/advise fails for any reason (nginx
 // gives up first, the connection drops), the page gave the message back and enabled Send, while the server kept the
-// owner's line as pending and went on writing (and paying for) the answer. A second Send paid twice. The server does
-// not refuse a second message while one is pending (Service.discuss has no such check), so the page keeps Send off
-// while its conversation holds an owner's message still being answered, and the normal state refresh brings Send back
-// when the answer is there. Seen failing on 0774eee: Send enabled and the message given back after a timeout.
+// owner's line as pending and went on writing (and paying for) the answer. A second Send paid twice. The page keeps
+// Send off while its conversation holds an owner's message still being answered, and the normal state refresh brings
+// Send back when the answer is there. Seen failing on 0774eee: Send enabled and the message given back after a timeout.
+// Since CO-1 (below) the server also turns a second message away while one is being answered.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { once } from 'node:events'
+import type { AddressInfo } from 'node:net'
+import type { Config } from '../src/config.ts'
+import type { ChatAnswer } from '../src/strategist/strategist.ts'
+import { Sessions, hashPassword } from '../src/web/auth.ts'
 
 const REPO = resolve(import.meta.dirname, '..')
 const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
@@ -37,10 +43,10 @@ type Page = {
  * real one does for the conversation (SEND-1 pins that below): it replaces S and draws the conversation again.
  */
 function page(o: { post: (message: string) => Promise<unknown>; state: () => Promise<{ chat: Line[] }>; chat?: Line[] }): Page {
-  const helpers = ['chatPending', 'chatAnswering', 'renderSend'].map(fn).filter(Boolean).join('\n')
+  const helpers = ['chatPending', 'chatAnswering', 'renderSend', 'chatOwn', 'chatFate', 'chatSettle'].map(fn).filter(Boolean).join('\n')
   const handler = grab(/\n\$\('adviceBtn'\)\.onclick = async \(\) => \{[\s\S]*?\n\}/, 'the Send handler')
   const body = `
-    let S = { chat: env.chat || [] }, chatWaiting = null, chatUnsure = false, sel = 0
+    let S = { chat: env.chat || [] }, chatWaiting = null, chatUnsure = false, chatLost = null, sel = 0
     const els = {}
     const $ = id => els[id] || (els[id] = { disabled: false, textContent: id === 'adviceBtn' ? 'Send' : '', value: '', hidden: true })
     const toasts = [], posts = []
@@ -49,7 +55,7 @@ function page(o: { post: (message: string) => Promise<unknown>; state: () => Pro
     const api = async (method, path, b) => { posts.push(b.message); return env.post(b.message) }
     const renderChat = () => { if (typeof renderSend === 'function') renderSend() }
     async function loadState() {
-      try { S = await env.state(); chatUnsure = false; renderChat() } catch (e) { toast('Could not load state: ' + e.message, true) }
+      try { S = await env.state(); chatUnsure = false; if (typeof chatSettle === 'function') chatSettle(); renderChat() } catch (e) { toast('Could not load state: ' + e.message, true) }
     }
     ${helpers}
     ${handler}
@@ -162,4 +168,105 @@ test('R67A-2 after a failed Send the page keeps the message only when the server
   // The review has its row.
   const review = readFileSync(join(REPO, 'docs/SECURITY-REVIEW.md'), 'utf8')
   assert.match(review.slice(review.indexOf('\n## Repeat shadow, chat Send and model output limits (2026-11-13)\n')), /\n\| R67A-2 \| low \(cost; agent review of PR #67\) \| [^\n]+ \| [^\n]+ \|\n/)
+})
+
+// ---- one manager message at a time (the owner, 2026-11-13) ----
+
+const BUSY = 'The manager is still answering the last message. Send this one when its answer is in.'
+
+function serviceConfig(dir: string): Config {
+  return {
+    mnemonic: 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about', dataDir: dir, gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9',
+    gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: undefined, model: 'claude-sonnet-5-5', telegramToken: undefined, telegramChatId: undefined,
+    isServer: false, defaultDryRun: true, maxAgents: 5,
+  } as Config
+}
+
+test('CO-1 the server answers one manager message at a time: a second one while another is answered is turned away before it is said or paid for (web 409, Telegram the reason as its reply); Clear, an answer and a failed answer let the next through, a restart holds nothing; /ask is not the conversation', async () => {
+  const { Service } = await import('../src/service.ts')
+  const web = await import('../src/web/server.ts')
+  const cfg = serviceConfig(mkdtempSync(join(tmpdir(), 'foxagent-co1-')))
+  const svc = new Service(cfg)
+  svc.ensureAgents()
+  ;(svc as unknown as { schedule: unknown }).schedule = () => undefined
+  svc.notify = () => undefined
+  // Each answer the model is asked for waits until the test releases it (or fails it), newest last.
+  const calls: { resolve: (a: ChatAnswer) => void; reject: (e: Error) => void }[] = []
+  const release = (a: ChatAnswer) => calls.at(-1)!.resolve(a)
+  const fail = (e: Error) => calls.at(-1)!.reject(e)
+  const asked: string[] = []
+  svc.strategist = {
+    model: 'claude-sonnet-5-5', effort: 'medium',
+    discuss: (i: { message: string }) => (asked.push(i.message), new Promise<ChatAnswer>((resolve, reject) => void calls.push({ resolve, reject }))),
+    ask: async () => ({ answer: 'fine', usd: 0 }),
+  } as never
+  // /ask reads a snapshot: offline here, every read fails at once (the snapshot then carries warnings).
+  const offline = new Proxy({}, { get: () => async () => { throw new Error('offline in this test') } })
+  Object.assign(svc as object, { chain: offline, fox: offline })
+  const lines = () => svc.chatLines().map(l => [l.text, l.pending ?? false])
+  // A call that would wait for a second answer is not waited for here: it shows as "still waiting".
+  const within = <T>(q: Promise<T>) => Promise.race([q, new Promise<'still waiting'>(r => setTimeout(() => r('still waiting'), 200))])
+  const usd = () => svc.store.getKv('model_usd_total') ?? '0'
+
+  // A web message is being answered: one from Telegram is turned away with the reason as its reply, said nowhere,
+  // asked of nobody; one more from the web is turned away as well.
+  const first = svc.discuss('how is agent 1?', 'web UI, admin', [0])
+  const telegram = await within((svc as unknown as { chatFromTelegram(t: string): Promise<{ text: string; buttons?: unknown }> }).chatFromTelegram('and agent 2?'))
+  assert.deepEqual(telegram, { text: BUSY }, 'the owner gets the reason on Telegram, not a failure')
+  await assert.rejects(within(svc.discuss('one more', 'web UI, admin', [0])), (err: Error) => err.message === BUSY)
+  assert.deepEqual(asked, ['how is agent 1?'], 'the model was asked once')
+  assert.deepEqual(lines(), [['how is agent 1?', true]], 'the turned-away messages are not in the conversation')
+
+  // The web route: 409 with the reason; the server does not hold that message.
+  const creds = { username: 'admin', passwordHash: hashPassword('correct-horse-battery'), secretKey: 'k'.repeat(64) }
+  const server = web.startWeb(svc, creds, 0)
+  if (!server.listening) await once(server, 'listening')
+  try {
+    const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const sessions = new Sessions(creds.secretKey, creds.passwordHash)
+    const cookie = sessions.issue('admin')
+    const res = await fetch(`${url}/api/agents/0/advise`, { method: 'POST', headers: { cookie: `foxagent_session=${cookie}`, origin: url, 'x-csrf-token': sessions.csrfFor(cookie), 'content-type': 'application/json' }, body: JSON.stringify({ message: 'from another tab' }) })
+    assert.equal(res.status, 409)
+    assert.deepEqual(await res.json(), { error: BUSY })
+  } finally {
+    server.close()
+  }
+  assert.deepEqual(asked, ['how is agent 1?'])
+
+  // /ask is not the conversation: it is answered meanwhile.
+  assert.equal(await svc.command('ask', ['how', 'are', 'we?'], 'how are we?'), 'agent 1: fine')
+
+  // The answer is in: the next message goes through.
+  release({ reply: 'fine', proposal: null, usd: 0.01 })
+  await first
+  assert.equal(usd(), '0.01', 'one answer paid for')
+  const second = svc.discuss('and now?', 'Telegram')
+  assert.deepEqual(asked, ['how is agent 1?', 'and now?'])
+  // An answer that failed takes its line out: the next goes through.
+  fail(new Error('model down'))
+  await assert.rejects(second, /model down/)
+  const third = svc.discuss('again?', 'Telegram')
+  assert.equal(asked.length, 3)
+  // Cleared while it is answered: the conversation starts fresh and the next message goes through.
+  svc.clearChat('web UI, admin')
+  const fourth = svc.discuss('fresh start', 'web UI, admin', [0])
+  assert.equal(asked.length, 4)
+  // A restart holds nothing: a waiting line is never saved.
+  const after = new Service(cfg)
+  after.strategist = { discuss: async () => ({ reply: 'here', proposal: null, usd: 0 }) } as never
+  assert.deepEqual(await after.discuss('after a restart', 'Telegram'), { reply: 'here', proposal: null })
+  for (const c of calls) c.resolve({ reply: 'late', proposal: null, usd: 0 })
+  await Promise.all([third, fourth])
+
+  // The page: a 409 is final, the server does not hold the message: it comes back with the reason, also when an
+  // earlier message with the same words from this box is still being answered, and Send stays off meanwhile.
+  const p = page({
+    post: async () => { throw Object.assign(new Error(BUSY), { status: 409 }) },
+    state: async () => ({ chat: [{ from: 'owner', text: 'skip boosters', at, pending: true, source: 'web UI, admin' }] }),
+  })
+  await p.click('skip boosters')
+  assert.equal(p.els.adviceText!.value, 'skip boosters', 'given back: the server turned it away')
+  assert.deepEqual(p.toasts, [[BUSY, true]])
+  assert.equal(p.els.adviceBtn!.disabled, true)
+  assert.match(fn('api'), /status: r\.status/, 'the page\'s api() keeps the status of a refused request')
 })
