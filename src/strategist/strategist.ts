@@ -66,13 +66,15 @@ export const PRICES: Record<string, Rates> = {
 /**
  * The models the owner can pick in the web UI, from the least to the most capable, like the efforts (the owner's list
  * of 2026-11-11). All take adaptive thinking and every effort level. Haiku 5.5 is the cheapest, for trying things
- * out: how well it plays this game has not been measured.
+ * out: how well it plays this game has not been measured. `maxOutput`: the most tokens one answer of the model may
+ * write (max_tokens), from Anthropic's model table ("Max output"): 128,000 for each of the four. roomFor never asks a
+ * model for more, so a model added later with a lower limit gets a smaller room instead of a refused request.
  */
-export const MODELS: Record<string, { label: string } & Rates> = {
-  'claude-haiku-5-5': { label: 'Haiku 5.5', ...PRICES['claude-haiku-5-5']! },
-  'claude-sonnet-5-5': { label: 'Sonnet 5.5', ...PRICES['claude-sonnet-5-5']! },
-  'claude-opus-5-5': { label: 'Opus 5.5', ...PRICES['claude-opus-5-5']! },
-  'claude-fable-5-2': { label: 'Fable 5.2', ...PRICES['claude-fable-5-2']! },
+export const MODELS: Record<string, { label: string; maxOutput: number } & Rates> = {
+  'claude-haiku-5-5': { label: 'Haiku 5.5', maxOutput: 128_000, ...PRICES['claude-haiku-5-5']! },
+  'claude-sonnet-5-5': { label: 'Sonnet 5.5', maxOutput: 128_000, ...PRICES['claude-sonnet-5-5']! },
+  'claude-opus-5-5': { label: 'Opus 5.5', maxOutput: 128_000, ...PRICES['claude-opus-5-5']! },
+  'claude-fable-5-2': { label: 'Fable 5.2', maxOutput: 128_000, ...PRICES['claude-fable-5-2']! },
 }
 /** MODELS is a plain object: "constructor" or "toString" would pass a bare lookup, so ask for an own key. */
 export const isKnownModel = (id: string): boolean => Object.hasOwn(MODELS, id)
@@ -424,6 +426,8 @@ export function renderPlanRequest(p: PlanInput): string {
  * nothing ran and the call was paid. Its next xhigh plan wrote about 42,300. On the same ticks Haiku 5.5 at high wrote
  * about 16,300, Sonnet 5.5 at xhigh about 26,200 and Opus 5.5 at xhigh about 13,700. So xhigh got 5 times the base and
  * max 6 times, which keeps max above xhigh and every room under the 128,000 tokens each model on the list can write.
+ * Each request's room is also clamped to its own model's limit (MODELS, `maxOutput`), so that holds for a model added
+ * later with a lower one (the agent review of PR #66).
  */
 const ROOM_TIMES: Record<Effort, number> = { low: 1, medium: 1, high: 2, xhigh: 5, max: 6 }
 const PLAN_TOKENS = 16_000
@@ -432,10 +436,14 @@ const ASK_TOKENS = 4_000
 
 /**
  * The most one answer may write at an effort: a plan gets 16,000 tokens at low and medium, 32,000 at high, 80,000 at
- * xhigh and 96,000 at max; the manager chat (8,000 at low) and /ask (4,000 at low) grow the same way.
+ * xhigh and 96,000 at max; the manager chat (8,000 at low) and /ask (4,000 at low) grow the same way. With `model`, never
+ * more than that model can write. A model the list does not have (AGENT_MODEL naming another one) has no limit known
+ * here: none is guessed, the room stays as it is, and a request Anthropic cannot take is refused, so nothing of it runs.
  */
-export function roomFor(effort: Effort, base: number): number {
-  return base * ROOM_TIMES[effort]
+export function roomFor(effort: Effort, base: number, model?: string): number {
+  const room = base * ROOM_TIMES[effort]
+  const limit = model !== undefined && isKnownModel(model) ? MODELS[model]!.maxOutput : undefined
+  return limit !== undefined && Number.isSafeInteger(limit) && limit > 0 ? Math.min(room, limit) : room
 }
 
 /** How long a whole answer may take before the call is given up: a minute to begin plus 50 tokens a second. */
@@ -543,7 +551,7 @@ export class Strategist {
   async planFromRequest(request: string, cancel?: AbortSignal, effort: Effort = this.effort): Promise<{ plan: Plan; outcome: PlanOutcome }> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(effort, PLAN_TOKENS),
+      max_tokens: roomFor(effort, PLAN_TOKENS, model),
       thinking: { type: 'adaptive' },
       output_config: { effort },
       tools: TOOLS,
@@ -588,7 +596,7 @@ export class Strategist {
   async discuss(input: ChatInput): Promise<ChatAnswer> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(this.effort, CHAT_TOKENS),
+      max_tokens: roomFor(this.effort, CHAT_TOKENS, model),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       tools: TOOLS,
@@ -613,7 +621,7 @@ export class Strategist {
   async ask(snapshot: AgentSnapshot, question: string): Promise<{ answer: string; usd: number }> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(this.effort, ASK_TOKENS),
+      max_tokens: roomFor(this.effort, ASK_TOKENS, model),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       tools: TOOLS,
