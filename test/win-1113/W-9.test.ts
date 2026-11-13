@@ -29,6 +29,12 @@ test('W-9 the install replay runs on Ubuntu 26.04 too (FRESH_UBUNTU=26.04), wher
   assert.doesNotMatch(script, /^FROM ubuntu:24\.04$/m, 'no release written into the Dockerfile')
   assert.match(script, /say "1\. A fresh Ubuntu \$UBUNTU with systemd, no curl, no Node\.js"/)
   assert.match(script, /^#\s+FRESH_UBUNTU=26\.04 scripts\/release\/fresh-install-check\.sh/m, 'the head of the script says how')
+  // What 26.04 does otherwise, seen in its first replay: its image has no adduser (step 9 types it, as the
+  // installer's own message says), and systemd 259 lists the service manager of a user with linger as a session of
+  // class manager, so "nobody is logged in" counts the sessions of a person only.
+  assert.match(script, /apt-get install -y --no-install-recommends [^\n]*\badduser\b/)
+  assert.match(script, /^nobody_logged_in\(\) \{ docker exec "\$C" sh -c 'for s in \$\(loginctl list-sessions --no-legend \| awk "\{print \\\$1\}"\); do case "\$\(loginctl show-session "\$s" -p Class --value\)" in manager \| manager-early\) ;; \*\) exit 1 ;; esac; done'; \}$/m)
+  assert.match(script, /^check "nobody is logged in \(the service manager of a user with linger is no person\)" nobody_logged_in$/m)
 })
 
 const KEY = testKey()

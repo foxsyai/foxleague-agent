@@ -54,6 +54,9 @@ bad() { FAILED+=("$*"); printf '  \033[1;31mFAILED  %s\033[0m\n' "$*"; }
 check() { local what=$1; shift; if "$@" >/dev/null 2>&1; then ok "$what"; else bad "$what"; fi; }
 has() { grep -Eq -- "$2" "$1"; }      # has <file> <regex>
 hasnt() { ! grep -Eq -- "$2" "$1"; }
+# No session of a person. systemd 258 and later list the service manager of a user with linger as a session of its
+# own (class manager); 255 does not list it.
+nobody_logged_in() { docker exec "$C" sh -c 'for s in $(loginctl list-sessions --no-legend | awk "{print \$1}"); do case "$(loginctl show-session "$s" -p Class --value)" in manager | manager-early) ;; *) exit 1 ;; esac; done'; }
 # As the user inside a container, with the environment a login gives.
 fx() { docker exec -u fox -e HOME=/home/fox -e USER=fox -e LOGNAME=fox -e XDG_RUNTIME_DIR=/run/user/1000 -w /home/fox "$C" "$@"; }
 # until <seconds> <command...>: tries every 2 s.
@@ -91,7 +94,7 @@ printf 'FROM ubuntu:%s\n' "$UBUNTU" > "$WORK/image/Dockerfile"
 cat >> "$WORK/image/Dockerfile" <<'EOF'
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
- && apt-get install -y --no-install-recommends systemd systemd-sysv dbus dbus-user-session libpam-systemd polkitd sudo ca-certificates \
+ && apt-get install -y --no-install-recommends systemd systemd-sysv dbus dbus-user-session libpam-systemd polkitd sudo ca-certificates adduser \
  && (systemctl mask getty.target getty@.service autovt@.service console-getty.service serial-getty@.service systemd-resolved.service || true) \
  && (userdel -r ubuntu 2>/dev/null || true) \
  && useradd -m -u 1000 -s /bin/bash -G sudo fox \
@@ -388,7 +391,7 @@ MARK=$(wallet_mark)
 say "6. A reboot with nobody logged in"
 docker restart "$C" >/dev/null
 check "the agent is back by itself (linger)" until_ok 60 healthz
-check "nobody is logged in" sh -c "docker exec $C loginctl list-sessions --no-legend | wc -l | grep -qx 0"
+check "nobody is logged in (the service manager of a user with linger is no person)" nobody_logged_in
 
 say "7. The line pasted again, then ./install.sh six times in a row (more starts than the unit allows in ten minutes)"
 type_in "$C" fox 07-paste-again 300 "$PROMPT=>$LINE" \
