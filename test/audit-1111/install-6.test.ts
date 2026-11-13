@@ -49,7 +49,9 @@ test('INSTALL-6: the same version again and a newer one go through as before', a
   const newer = await sh(GET, [], { ...env, FOXAGENT_SOURCE: pack(smallTree(tmp(), '1.3.0')) })
   assert.equal(newer.status, 0, newer.out)
   assert.equal(readFileSync(join(i.dir, 'versions', 'active'), 'utf8'), 'v1.3.0\n')
-  assert.deepEqual(readdirSync(join(i.dir, 'versions')).sort(), ['active', 'v1.2.0', 'v1.3.0'])
+  // (Since W-11 of 2026-11-14 get.sh also names the release it replaced as the spare: versions/previous.)
+  assert.deepEqual(readdirSync(join(i.dir, 'versions')).sort(), ['active', 'previous', 'v1.2.0', 'v1.3.0'])
+  assert.equal(readFileSync(join(i.dir, 'versions', 'previous'), 'utf8'), 'v1.2.0\n')
   i.untouched()
 })
 
