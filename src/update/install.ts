@@ -74,6 +74,8 @@ export interface RunResult {
   tail: string
   /** Its standard output, up to 4 MB (a listing); empty beyond that. */
   out: string
+  /** The first 4 KB of its error output: where a command that fails on many files says why (W-10). */
+  err?: string
 }
 export type Runner = (cmd: string, args: string[], o: { cwd: string; env: Record<string, string>; timeoutMs: number }) => Promise<RunResult>
 
@@ -82,6 +84,7 @@ export const run: Runner = (cmd, args, o) =>
   new Promise(done => {
     let tail = ''
     let out = ''
+    let err = ''
     let tooMuch = false
     const keep = (b: Buffer) => (tail = (tail + b.toString('utf8')).slice(-1500))
     let child
@@ -95,9 +98,12 @@ export const run: Runner = (cmd, args, o) =>
       if (out.length + b.length > 4 * 1024 * 1024) tooMuch = true
       else out += b.toString('utf8')
     })
-    child.stderr.on('data', keep)
-    child.on('error', err => done({ code: null, tail: err.message, out: '' }))
-    child.on('close', code => done({ code, tail: tail.trim(), out: tooMuch ? '' : out }))
+    child.stderr.on('data', (b: Buffer) => {
+      keep(b)
+      if (err.length < 4096) err = (err + b.toString('utf8')).slice(0, 4096)
+    })
+    child.on('error', e => done({ code: null, tail: e.message, out: '', err: e.message }))
+    child.on('close', code => done({ code, tail: tail.trim(), out: tooMuch ? '' : out, err }))
   })
 
 /**
@@ -144,6 +150,25 @@ function ownersPath(rel: string): boolean {
 }
 
 /**
+ * Why an archive could not be unpacked, in words for the owner, with tar's own first line; its first lines go to the
+ * log (W-10: the first lines name the path and the reason, the many after them repeat it for every file).
+ * Ubuntu 26.04's tar resolves each path with openat2, which a service started with RestrictSUIDSGID=true is refused
+ * with ENOSYS ("Function not implemented"); the 24.04 one falls back to openat. The installers of 2026-11-14 and
+ * later write no such line and an update's prepare takes it out of an older unit, but the update that meets it
+ * runs from that older unit: a terminal is not inside it (W-9).
+ */
+function unpackFailure(r: RunResult): string {
+  const lines = (r.err ?? r.tail).split('\n').map(l => l.trim()).filter(Boolean)
+  if (lines.length) console.error(`the update's archive could not be unpacked; tar said:\n${lines.slice(0, 8).join('\n')}`)
+  const first = lines[0]?.replace(/^\S*tar: /, '').slice(0, 200)
+  const said = first ? ` (tar: ${first})` : ''
+  if (lines.some(l => /Function not implemented/.test(l))) {
+    return `this system's tar cannot unpack inside the agent's background service as an older installer set it up${said}. Run ./install.sh --update once in a terminal, in the agent's folder: that installs it and renews the service, so later updates are one click again`
+  }
+  return `the archive could not be unpacked${said}`
+}
+
+/**
  * Unpacks a verified archive into versions/v<version> and has the new release prepare itself (its own
  * `install.sh --prepare`: Node, dependencies, the recovery words check, the launcher). Returns the folder's name.
  * Throws UpdateError and leaves nothing behind when a step fails.
@@ -187,8 +212,9 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
   if (kinds.code !== 0) return fail('the archive could not be read')
   if (!archiveOnlyFilesAndFolders(kinds.out)) return fail('the archive holds something that is not a plain file or folder (a link or a special file)')
   mkdirSync(staging, { recursive: true, mode: 0o700 })
-  const unpack = await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=1'], { cwd: versions, env, timeoutMs: 120_000 })
-  if (unpack.code !== 0) return fail('the archive could not be unpacked')
+  // In the C language whatever the owner's: tar's reason is read below.
+  const unpack = await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=1'], { cwd: versions, env: { ...env, LC_ALL: 'C' }, timeoutMs: 120_000 })
+  if (unpack.code !== 0) return fail(unpackFailure(unpack))
   let pkg: { name?: unknown; version?: unknown }
   try {
     pkg = JSON.parse(readFileSync(join(staging, 'package.json'), 'utf8')) as typeof pkg
