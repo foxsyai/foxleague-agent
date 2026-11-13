@@ -393,6 +393,15 @@ test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by
   const mac5 = section.split('\n').find(l => l.startsWith('| MAC-5 |')) ?? ''
   for (const item of [/no "check for updates now"/, /`\/api\/update\/check` existed, but the page never called it/, /30 to 90 seconds after a start, then every 10 to 11 minutes/, /`\.\/cli\.sh update-check`/, /the owner's call/, /the owner's go on 2026-11-13/]) assert.match(mac5.split(' | ')[2] ?? '', item, 'the finding')
   for (const item of [/\*\*Check for updates\*\*, a round arrow between the version and its info bubble/, /no wider|narrower than before at every width/, /"an unexpected error \(see the log\)"/, /`POST \/api\/update\/check`/, /session and CSRF token/, /`MIN_CHECK_GAP_MS`/, /at most once in 15 seconds/, /The check every 10 to 11 minutes is unchanged/]) assert.match(mac5.split(' | ')[3] ?? '', item, 'the fix')
+  // The install replay met MAC-5's rule (the test "MAC-5 and the install replay" above): its row comes right under MAC-5.
+  const rows = section.split('\n')
+  const replay = rows.findIndex(l => l.startsWith('| MAC-5R |'))
+  assert.equal(replay, rows.findIndex(l => l.startsWith('| MAC-5 |')) + 1, 'the replay\'s row is the one under MAC-5')
+  assert.equal(rows.filter(l => l.startsWith('| MAC-5R |')).length, 1)
+  const [, rSeverity, rFinding, rFix] = rows[replay]!.split(' | ')
+  assert.match(rSeverity!, /^low \(the release check only\)$/)
+  for (const item of [/`scripts\/release\/fresh-install-check\.sh`/, /step 11e/, /installed 1\.0\.4 again/, /11c, 11d and 11f/]) assert.match(rFinding!, item, 'the finding')
+  for (const item of [/`offered`/, /bounded at 60 seconds/, /92 checks, none failed/, /No code of the agent changed/]) assert.match(rFix!, item, 'the fix')
   assert.ok(section.includes('\nStays open: nothing of this check. The item it left open is MAC-5 above.\n'), 'nothing of the check stays open')
   assert.doesNotMatch(section, /The dashboard has no "check for updates now"/)
   assert.doesNotMatch(section, /—|\bbot\b/i)
