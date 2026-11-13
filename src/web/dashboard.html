@@ -1318,9 +1318,9 @@ function chatPending() {
   return ((S && S.chat) || []).find(l => l.pending && l.from === 'owner') || null
 }
 // One answer at a time (agent review of PR #66): the server goes on writing an answer, and pays for it, even when this
-// page lost the connection or nginx gave up on the request; it does not refuse a second message meanwhile. So Send is
-// off while a message is on its way from here, while the server shows one being answered, and while a failed Send has
-// not been checked with the server yet.
+// page lost the connection or nginx gave up on the request. It turns a second message away meanwhile (409, CO-1), so
+// Send would only bring that refusal. So Send is off while a message is on its way from here, while the server shows
+// one being answered, and while a failed Send has not been checked with the server yet.
 function chatAnswering() {
   return Boolean(chatWaiting || chatUnsure || chatPending())
 }

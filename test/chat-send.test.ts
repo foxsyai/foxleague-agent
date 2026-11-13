@@ -314,12 +314,19 @@ test('R68A-1 a message whose answer could not be saved or booked does not lock t
     assert.deepEqual(svc.chatLines().slice(0, 2).map(l => [l.from, l.text, l.pending ?? false]), [['owner', 'how is agent 1?', false], ['manager', 'answer 1', false]])
     assert.ok(errors.some(e => /could not be booked/.test(e) && /\$0\.0200/.test(e) && /database is locked/.test(e)), errors.join(' | '))
     assert.equal(Number(svc.store.getKv('model_usd_total')), 0.04, 'the two answers after it are booked')
+    // The log line says what is missing: here the total was never written.
+    assert.match(errors.at(-1)!, /it is missing from the AI spend total and from the day's figure$/)
+    // The total is written and only the day's figure is refused: the log line says so.
+    refuse = 'model_usd_days'
+    assert.deepEqual(await svc.discuss('and the day?', 'Telegram'), { reply: 'answer 4', proposal: null })
+    assert.ok(Math.abs(Number(svc.store.getKv('model_usd_total')) - 0.06) < 1e-12, 'in the total')
+    assert.match(errors.at(-1)!, /the answer's cost \$0\.0200 could not be booked in full in the AI spend \(database is locked\): it is in the total but missing from the day's figure$/)
 
     // The message's own line cannot be saved: the call fails, its line is released.
     refuse = 'chat'
     await assert.rejects(svc.discuss('saved?', 'Telegram'), /database is locked/)
     assert.equal(waitingLines(), 0)
-    assert.deepEqual(await telegram('after that?'), { text: 'answer 4' })
+    assert.deepEqual(await telegram('after that?'), { text: 'answer 5' })
     // The answer cannot be saved: the call fails, but the line was released and the cost booked first.
     const booked = Number(svc.store.getKv('model_usd_total'))
     const before = svc.chatLines().length
@@ -343,6 +350,48 @@ test('R68A-1 a message whose answer could not be saved or booked does not lock t
   const section = review.slice(review.indexOf('\n## One manager message at a time (2026-11-13)\n'))
   const row = section.split('\n').find(l => l.startsWith('| R68A-1 | low (agent review of PR #68) | '))
   assert.ok(row, 'the R68A-1 row')
+  assert.equal(row.split(' | ').length, 4)
+  assert.doesNotMatch(row, /—|, and |\bbot\b/i)
+})
+
+test('R68A-2 an earlier answer that comes or fails after Clear does not release the next message\'s waiting line: that one is still answered, so one more message is still turned away', async () => {
+  const { Service } = await import('../src/service.ts')
+  const svc = new Service(serviceConfig(mkdtempSync(join(tmpdir(), 'foxagent-r68b-'))))
+  svc.ensureAgents()
+  svc.notify = () => undefined
+  const calls: { resolve: (a: ChatAnswer) => void; reject: (e: Error) => void }[] = []
+  const asked: string[] = []
+  svc.strategist = { model: 'claude-sonnet-5-5', effort: 'medium', discuss: (i: { message: string }) => (asked.push(i.message), new Promise<ChatAnswer>((resolve, reject) => void calls.push({ resolve, reject }))) } as never
+  const lines = () => svc.chatLines().map(l => [l.text, l.pending ?? false])
+  const within = <T>(q: Promise<T>) => Promise.race([q, new Promise<'still waiting'>(r => setTimeout(() => r('still waiting'), 200))])
+  for (const end of ['answered', 'failed'] as const) {
+    // A is being answered, the owner presses Clear, B is sent and waits for its own answer.
+    const a = svc.discuss(`A ${end}`, 'Telegram')
+    svc.clearChat('web UI, admin')
+    const b = svc.discuss(`B after A ${end}`, 'web UI, admin', [0])
+    // A's answer comes (or fails) now. It leaves nothing in the new conversation and takes nothing out of it.
+    if (end === 'answered') {
+      calls.at(-2)!.resolve({ reply: 'A late', proposal: null, usd: 0 })
+      assert.deepEqual(await a, { reply: 'A late', proposal: null })
+    } else {
+      calls.at(-2)!.reject(new Error('model down'))
+      await assert.rejects(a, /model down/)
+    }
+    assert.deepEqual(lines(), [[`B after A ${end}`, true]], `${end}: B is still waiting for its answer`)
+    // B is still answered and paid for: one more message is turned away, and the model is not asked.
+    const count = asked.length
+    await assert.rejects(within(svc.discuss(`C after A ${end}`, 'Telegram')), (err: Error) => err.message === BUSY)
+    assert.equal(asked.length, count)
+    // B's answer comes in under its own question.
+    calls.at(-1)!.resolve({ reply: `B answer ${end}`, proposal: null, usd: 0 })
+    await b
+    assert.deepEqual(lines(), [[`B after A ${end}`, false], [`B answer ${end}`, false]])
+  }
+  // The review has its row in the section of CO-1.
+  const review = readFileSync(join(REPO, 'docs/SECURITY-REVIEW.md'), 'utf8')
+  const section = review.slice(review.indexOf('\n## One manager message at a time (2026-11-13)\n'))
+  const row = section.split('\n').find(l => l.startsWith('| R68A-2 | low (missing test; re-review of PR #68) | '))
+  assert.ok(row, 'the R68A-2 row')
   assert.equal(row.split(' | ').length, 4)
   assert.doesNotMatch(row, /—|, and |\bbot\b/i)
 })

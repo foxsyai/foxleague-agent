@@ -531,14 +531,26 @@ export class Service {
   /**
    * Adds the cost of an answer of the manager chat to the AI spend. It was paid whether or not the database takes the
    * booking: when it refuses (a full disk, a lock held past the busy timeout), the answer still goes to the owner and
-   * the log says which cost is missing from the AI spend figure (R68A-1). The AI spend is not the ledger of the FOXSY
-   * and EGLD caps, so no cap reads it.
+   * the log says which cost could not be booked and where it is missing, the total or only the day's figure (R68A-1).
+   * The AI spend is not the ledger of the FOXSY and EGLD caps, so no cap reads it.
    */
   private bookChatUsd(usd: number): void {
+    // What the total held before: addModelUsd writes the total first and the day's figure after it, so a refusal can
+    // leave the cost in the total and out of the day's figure. The log line says which (display only).
+    let read = false
+    let before: string | undefined
     try {
+      before = this.store.getKv('model_usd_total')
+      read = true
       this.addModelUsd(usd)
     } catch (err) {
-      console.error(`[${new Date().toISOString()}] manager chat: the answer's cost $${usd.toFixed(4)} could not be booked in the AI spend (${err instanceof Error ? err.message : String(err)}); it is missing from the AI spend figure`)
+      let where = 'it may be missing from the AI spend total and from the day\'s figure'
+      try {
+        if (read) where = this.store.getKv('model_usd_total') !== before ? 'it is in the total but missing from the day\'s figure' : 'it is missing from the AI spend total and from the day\'s figure'
+      } catch {
+        // not readable either: "may be missing" stays
+      }
+      console.error(`[${new Date().toISOString()}] manager chat: the answer's cost $${usd.toFixed(4)} could not be booked in full in the AI spend (${err instanceof Error ? err.message : String(err)}): ${where}`)
     }
   }
 
