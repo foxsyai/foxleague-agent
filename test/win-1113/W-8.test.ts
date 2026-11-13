@@ -53,7 +53,7 @@ test("W-8 with no AI key the level's line says which pair the agents play once t
 })
 
 test('W-8 the Strategist bubble and the Dashboard page say what the box shows without the AI key', () => {
-  assert.match(html, /<p>Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set, and you can change them from then on\.<\/p>/)
+  assert.match(html, /<p>Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set\. You can change them from then on\.<\/p>/)
   const page = readFileSync(join(REPO, 'site/src/content/docs/use/dashboard.md'), 'utf8').replace(/\s+/g, ' ')
   assert.match(page, /Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set \(Sonnet 5\.5 at medium on a new install\)/)
 })
