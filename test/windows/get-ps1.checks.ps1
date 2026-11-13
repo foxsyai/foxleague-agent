@@ -401,6 +401,17 @@ Check 'W-13 the hidden wsl.exe of the keep-alive is told by its whole command li
         True (-not (Test-FoxKeepAliveCommand $line)) ('taken for the keep-alive: ' + $line)
     }
 }
+Check 'W-1 free disk space: 4 GB before Ubuntu is downloaded, 1 GB before the agent alone; unknown is said, not refused' {
+    $low = Get-FoxDiskProblem -FreeBytes ([long](0.2 * 1GB)) -NeedsUbuntu $true -Drive 'C:'
+    True ($low -match '^Ubuntu and the agent need about 4 GB free on C: and it has 0\.2 GB\.') $low
+    True ($low -match 'Free some space \(Settings, System, Storage\), then paste the line again$') $low
+    Equal (Get-FoxDiskProblem -FreeBytes ([long](6.6 * 1GB)) -NeedsUbuntu $true -Drive 'C:') ''
+    Equal (Get-FoxDiskProblem -FreeBytes ([long](4 * 1GB)) -NeedsUbuntu $true -Drive 'C:') ''
+    $agent = Get-FoxDiskProblem -FreeBytes ([long](0.5 * 1GB)) -NeedsUbuntu $false -Drive 'D:'
+    Equal $agent 'The agent needs about 1 GB free on D: and it has 0.5 GB.'
+    Equal (Get-FoxDiskProblem -FreeBytes ([long](2 * 1GB)) -NeedsUbuntu $false -Drive 'C:') ''
+    Equal (Get-FoxDiskProblem -FreeBytes $null -NeedsUbuntu $true -Drive 'C:') ''
+}
 Check 'the PC: 32-bit, the 32-bit PowerShell, an old build, no wsl.exe, the ISE, a Linux terminal are each said in a sentence' {
     $ok = @{ InsideLinux = $false; Is64 = $true; Is64Process = $true; Build = 19045; WslExe = 'C:\WINDOWS\System32\wsl.exe'; HostName = 'ConsoleHost' }
     Equal (Get-FoxWindowsProblem $ok) ''
@@ -522,7 +533,7 @@ function New-World {
                    HypervisorPresent = $VmCompute; VirtFirmware = $true; VmCompute = $VmCompute; SystemRoot = 'C:\WINDOWS' }
         VmCompute = $VmCompute; VmComputeAfterInstall = $VmCompute; Elevated = @(); ElevatedOutcome = @{ Outcome = 'done'; ExitCode = 0 }
         Task = $null; TaskRegistered = 0; Answers = @(); Asked = @(); Lines = @(); Urls = @(); Opened = @(); DashboardAnswers = $true
-        Processes = @(); ProcessesUnknown = $false; Stopped = @()
+        Processes = @(); ProcessesUnknown = $false; Stopped = @(); FreeSpace = @{ Drive = 'C:'; Bytes = [long](50 * 1GB) }
         Env = @{ FOXAGENT_GET_URL = 'http://127.0.0.1:1/get.sh' }
     }
 }
@@ -539,6 +550,7 @@ function Stop-FoxProcess([int]$Id) { $World['Stopped'] += $Id; $World['Processes
 function Test-FoxUrl([string]$Url) { $World['Urls'] += $Url; return $World['DashboardAnswers'] }
 function Open-FoxBrowser([string]$Url) { $World['Opened'] += $Url }
 function Wait-Fox([int]$Seconds) { }
+function Get-FoxFreeSpace { return $World['FreeSpace'] }
 function Read-FoxLine([string]$Prompt) {
     $World['Asked'] += $Prompt
     if (@($World['Answers']).Count -eq 0) { return '' }
@@ -711,6 +723,30 @@ Check 'W-4 Ubuntu''s question "Help improve Ubuntu!" is told before Ubuntu asks 
     $screen = Screen
     $before = $screen.Substring(0, $screen.IndexOf('Ubuntu is installed and has a user of its own'))
     True ($before -match '- Ubuntu may also ask "Help improve Ubuntu!" \(Y/n/e\): either answer is fine for the agent\.') $before
+}
+Check 'W-1 a PC with 0.2 GB free stops before Ubuntu is downloaded, says how much is needed, and changes nothing' {
+    New-World
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    $World['FreeSpace'] = @{ Drive = 'C:'; Bytes = [long](0.2 * 1GB) }
+    $end = Run-Install
+    True ($end -match '^stop: Ubuntu and the agent need about 4 GB free on C: and it has 0\.2 GB') $end
+    True ((Calls) -notmatch '--install') (Calls)
+    True ($null -eq $World['Task']) 'a task without an agent'
+    # With Ubuntu there and little room: said before the installer inside runs, not refused (Ubuntu's disk may have
+    # been moved to another drive, which this script does not look at).
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    $World['FreeSpace'] = @{ Drive = 'C:'; Bytes = [long](0.3 * 1GB) }
+    Equal (Run-Install) 'done' (Screen)
+    $screen = Screen
+    True ($screen -match 'The agent needs about 1 GB free on C: and it has 0\.3 GB\.\nIf the installer stops for lack of space, free some \(Settings, System, Storage\)\.') $screen
+    True ($screen.IndexOf('The agent needs about 1 GB') -gt $screen.IndexOf('the agent''s installer, inside Ubuntu')) 'said at the installer''s step, as it starts'
+    # Unknown: said, and the install goes on.
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    $World['FreeSpace'] = $null
+    Equal (Run-Install) 'done' (Screen)
+    True ((Screen) -match 'How much space is free on the disk could not be read') (Screen)
 }
 Check 'Ubuntu that was there, with systemd=false and things running: asked before it is restarted; no means stop' {
     New-World -Distros "* Debian    Running         2`n  Ubuntu    Running         2`n" -HasUser $true -Conf "[automount]`nenabled=true`n`n[boot]`nsystemd=false`n"

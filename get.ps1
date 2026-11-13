@@ -493,6 +493,24 @@ function Install-FoxLeagueAgent {
         return 'unknown'
     }
 
+    # Is there room on the disk? '' or one sentence. Measured on the PC of 13 Nov 2026 (W-1, where C: had 0.2 GB):
+    # Ubuntu's download was 0.42 GB (in %TEMP%) and its disk 1.39 GB right after its first start; the agent takes
+    # about 0.24 GB, 0.28 GB once an update has kept the release before it. About 2.1 GB at the peak, so 4 GB before
+    # Ubuntu is downloaded leaves room for Windows itself and for Ubuntu's disk, which grows and never shrinks by
+    # itself. With Ubuntu there: 1 GB for the agent. An amount that cannot be read is not refused (said where asked).
+    function Get-FoxDiskProblem {
+        param($FreeBytes, [bool]$NeedsUbuntu, [string]$Drive)
+        if ($null -eq $FreeBytes) { return '' }
+        $gb = [double]$FreeBytes / 1GB
+        $has = $gb.ToString('0.0', [System.Globalization.CultureInfo]::InvariantCulture)
+        if ($NeedsUbuntu) {
+            if ($gb -ge 4) { return '' }
+            return ('Ubuntu and the agent need about 4 GB free on ' + $Drive + ' and it has ' + $has + ' GB. Ubuntu''s download and its disk take about 2 GB and the agent about 0.3 GB; Windows needs room besides. Free some space (Settings, System, Storage), then paste the line again')
+        }
+        if ($gb -ge 1) { return '' }
+        return ('The agent needs about 1 GB free on ' + $Drive + ' and it has ' + $has + ' GB.')
+    }
+
     # ================================================================================================
     # The thin part: everything that asks Windows something or starts a program.
     # ================================================================================================
@@ -720,6 +738,17 @@ function Install-FoxLeagueAgent {
         } catch { return $false }
     }
     function Open-FoxBrowser([string]$Url) { Start-Process $Url }
+    # The free space of the drive that holds %LOCALAPPDATA%, where wsl --install puts a new distribution (its download
+    # goes to %TEMP% on the same drive): @{ Drive = 'C:'; Bytes } or $null when Windows does not say. An Ubuntu that
+    # was moved to another drive is not looked for.
+    function Get-FoxFreeSpace {
+        try {
+            $root = [System.IO.Path]::GetPathRoot([string]$env:LOCALAPPDATA)
+            if ([string]::IsNullOrEmpty($root)) { return $null }
+            $d = New-Object System.IO.DriveInfo($root)
+            return @{ Drive = $root.TrimEnd('\'); Bytes = [long]$d.AvailableFreeSpace }
+        } catch { return $null }
+    }
     function Wait-Fox([int]$Seconds) { Start-Sleep -Seconds $Seconds }
 
     # ================================================================================================
@@ -817,6 +846,12 @@ function Install-FoxLeagueAgent {
 
         if ($now['Readiness'] -eq 'not-registered') {
             $fresh = $true
+            $disk = Get-FoxFreeSpace
+            if ($null -eq $disk) { Write-FoxLine 'How much space is free on the disk could not be read. Ubuntu and the agent need about 4 GB.' }
+            else {
+                $full = Get-FoxDiskProblem -FreeBytes $disk['Bytes'] -NeedsUbuntu $true -Drive $disk['Drive']
+                if ($full -ne '') { Stop-Fox $full }
+            }
             # Not wrapped in @( ): the function returns its list as one value (return , $names), and @( ) around
             # that made a list of one list, which was counted as one name and printed as System.Object[] (W-2).
             $others = Get-FoxOtherUbuntus $now['Distros']
@@ -953,6 +988,12 @@ function Install-FoxLeagueAgent {
     # Step 5.
     function Step-FoxInstaller($Passed) {
         Write-FoxStep 'Windows 5/6: the agent''s installer, inside Ubuntu'
+        $disk = Get-FoxFreeSpace
+        if ($null -eq $disk) { Write-FoxLine 'How much space is free on the disk could not be read. The agent needs about 1 GB.' }
+        else {
+            $low = Get-FoxDiskProblem -FreeBytes $disk['Bytes'] -NeedsUbuntu $false -Drive $disk['Drive']
+            if ($low -ne '') { Write-FoxLine $low; Write-FoxLine 'If the installer stops for lack of space, free some (Settings, System, Storage).' }
+        }
         Write-FoxLine 'From here on it is the same installer as on Linux, with its own seven steps. Its questions are answered here.'
         $r = Invoke-FoxLinux -Command (Get-FoxInstallerCommand $Passed)
         if ($r['ExitCode'] -eq 130) { Stop-Fox 'the installer was stopped with Ctrl-C. Paste the line again to go on: your wallet and your answers are kept' }

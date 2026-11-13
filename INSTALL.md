@@ -54,7 +54,8 @@ irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
 ```
 
 It sets up what is missing and then starts the same installer, inside Ubuntu. It is safe to paste it again at any
-time: each run finds what is already done and goes on from there.
+time: each run finds what is already done and goes on from there. When Ubuntu still has to be installed it needs
+about 4 GB free on drive C: and checks that before the download.
 
 1. **WSL.** When Windows does not have it yet, the line runs Microsoft's own `wsl --install --no-distribution`.
    That needs an administrator, so Windows shows its own prompt: answer Yes. When Windows then needs a restart,

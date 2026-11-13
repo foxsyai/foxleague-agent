@@ -47,7 +47,8 @@ and **Windows through WSL2**. The computer has to stay on for the agent to play;
 		irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
 		```
 
-		It needs 64-bit Windows 11 or Windows 10 version 2004 or later. On Windows the agent runs inside
+		It needs 64-bit Windows 11 or Windows 10 version 2004 or later. When Ubuntu still has to be installed it
+		also needs about 4 GB free on drive C: (the line checks it before the download). On Windows the agent runs inside
 		**Ubuntu**, a Linux that Windows itself runs (WSL2). The line sets that up where it is missing and then
 		starts the same installer as on Linux. It is safe to paste it again at any time: each run finds what is
 		already done and goes on from there. What it does and what it asks:
