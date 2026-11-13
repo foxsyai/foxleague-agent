@@ -273,6 +273,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         // The models of the all-agents shadow list, each once, none when it is off: what a page of the version before
         // reads. The page of this version reads each agent's own entries (`ai.shadows` below).
         shadowModels: [...new Set(shadowModelsSet(service.store).map(entry => entryOf(entry).model))],
+        // The all-agents shadow entries with their efforts, for the page of this version: the list an agent added
+        // later follows (the all-agents switch weighs it, agent review of PR #65).
+        shadowEntries: shadowModelsSet(service.store),
         // How many agents play an own model or effort (the Strategist box says so).
         ownAi: agents.filter(b => {
           const own = ownAi(b.settings)
@@ -600,10 +603,13 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         if (!EFFORTS.includes(effort)) throw new HttpFail(400, `unknown effort ${effort}`)
         // A cheaper model or less effort is one click; a dearer one needs the password again. So does a switch that
         // starts shadow plans for an agent that follows the all-agents pair: a cheaper model that wakes a resting one.
-        // The retired agents count too: Restore and Resume bring one back with one click each (agent review of PR #65).
+        // The retired agents count too: Restore and Resume bring one back with one click each. So does an agent added
+        // later: + Add agent makes one that follows the all-agents pair and the all-agents shadow list, so it stands in
+        // as one more agent with no settings of its own (agent review of PR #65).
         if (service.strategist) {
           const all = { model: service.strategist.model, effort: service.strategist.effort }
-          const agents = [...service.store.agents(), ...service.store.retiredAgents()].map(b => ({ settings: b.settings, shadows: shadowModelsSet(service.store, b.index) }))
+          const agents: { settings: { aiModel: string; aiEffort: string }; shadows: string[] }[] = [...service.store.agents(), ...service.store.retiredAgents()].map(b => ({ settings: b.settings, shadows: shadowModelsSet(service.store, b.index) }))
+          agents.push({ settings: { aiModel: '', aiEffort: '' }, shadows: shadowModelsSet(service.store) })
           if (allAgentsAiNeedsPassword(all, { model, effort }, agents)) recheckPassword(req, body.password)
         }
         try {

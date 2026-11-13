@@ -507,7 +507,9 @@ test('PAM-10 the all-agents switch looks at what it changes: agents with their o
   const { svc, server, password, post } = await webService({ agents: 2 })
   const switchTo = (model: string, effort: string, pw?: string) => post('/api/strategist', { model, effort, ...(pw ? { password: pw } : {}) })
   try {
-    svc.store.setKv('shadow_model', FABLE)
+    // Each agent's own shadow list holds Fable 5.2. The all-agents list stays off: an entry of it would also start for
+    // an agent added later, so a switch that starts one always asks (R65A-5).
+    for (const i of [0, 1]) svc.store.setKv(`shadow_model_agent_${i + 1}`, FABLE)
     svc.setStrategist(FABLE, 'medium', 'test')
     // Every agent plays its own model: the Fable 5.2 shadow rests for none of them and runs before and after.
     for (const i of [0, 1]) svc.store.updateSettings(i, { aiModel: OPUS, aiEffort: 'high' })
@@ -530,13 +532,17 @@ test('PAM-10 the all-agents switch looks at what it changes: agents with their o
     assert.equal(res.status, 403)
     // An entry with an effort: less effort for every agent that follows, and the entry at high wakes.
     svc.store.setKv('shadow_model', `${SONNET}:high`)
+    for (const i of [0, 1]) svc.store.setKv(`shadow_model_agent_${i + 1}`, '')
     for (const i of [0, 1]) svc.store.updateSettings(i, { aiModel: '', aiEffort: '' })
     svc.setStrategist(SONNET, 'high', 'test')
     res = await switchTo(SONNET, 'medium')
     assert.equal(res.status, 403, 'less effort, but the Sonnet 5.5 shadow at high would start on every plan')
     res = await switchTo(SONNET, 'medium', password)
     assert.equal(res.status, 200, await res.text())
-    // Every agent with its own effort: the all-agents effort moves nobody, one click.
+    // Every agent with its own effort: the all-agents effort moves nobody, one click. Their own lists hold the entry at
+    // high; the all-agents list is off (R65A-5).
+    svc.store.setKv('shadow_model', 'off')
+    for (const i of [0, 1]) svc.store.setKv(`shadow_model_agent_${i + 1}`, `${SONNET}:high`)
     for (const i of [0, 1]) svc.store.updateSettings(i, { aiEffort: 'medium' })
     svc.setStrategist(SONNET, 'high', 'test')
     res = await switchTo(SONNET, 'low')
@@ -925,7 +931,9 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
 test('R65A-1 the all-agents switch weighs the retired agents too: one that follows the all-agents pair would start its shadow plans after Restore and Resume, one click each', async () => {
   const { svc, server, password, post, state } = await webService({ agents: 2 })
   try {
-    svc.store.setKv('shadow_model', FABLE)
+    // Agent 2's own shadow list holds Fable 5.2. The all-agents list stays off: an entry of it would also start for an
+    // agent added later, so that switch asks in any case (R65A-5).
+    svc.store.setKv('shadow_model_agent_2', FABLE)
     svc.setStrategist(FABLE, 'medium', 'test')
     // Agent 1 plays its own model and effort; agent 2 follows Fable 5.2, under which its Fable 5.2 shadow rests. Agent 2 is retired.
     svc.store.updateSettings(0, { aiModel: OPUS, aiEffort: 'high' })
@@ -935,7 +943,7 @@ test('R65A-1 the all-agents switch weighs the retired agents too: one that follo
     // The page gets the retired agent's AI, as it gets the active agents', and asks by the same rule.
     const s = await state()
     const retired = (s as unknown as { retired: { index: number; ai?: unknown }[] }).retired
-    assert.deepEqual(retired.map(r => [r.index, r.ai]), [[1, { model: FABLE, effort: 'medium', own: { model: null, effort: null }, ignored: [], shadows: [FABLE], ownShadows: false }]])
+    assert.deepEqual(retired.map(r => [r.index, r.ai]), [[1, { model: FABLE, effort: 'medium', own: { model: null, effort: null }, ignored: [], shadows: [FABLE], ownShadows: true }]])
     const page = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], s)
     assert.equal(page(HAIKU, 'medium'), true, 'the page asks for the password')
     res = await post('/api/strategist', { model: HAIKU, effort: 'medium', password })
@@ -1064,4 +1072,34 @@ test('R65A-4 with the strategist off (no AI key yet) the page resolves "Same as 
   const strat = html.match(/function renderStrat\(\) \{[\s\S]*?\n\}/)?.[0] ?? ''
   assert.match(strat, /if \(!i\.model\) \{ \$\('stratApply'\)\.hidden = true; \$\('kModelS'\)\.textContent = 'off \(no ANTHROPIC_API_KEY\)'; return \}/, 'the Strategist box says off')
   assert.match(html, /\$\('lastPlan'\)\.textContent = b\.lastPlan \|\| 'No plan yet\.' \+ \(S\.instance\.model \? '' : ' The strategist is off \(no ANTHROPIC_API_KEY\)\.'\)/)
+})
+
+test('R65A-5 the all-agents switch weighs an agent added afterwards: with every agent on its own AI, a switch that starts an all-agents shadow entry still asks, since + Add agent makes one that follows it', async () => {
+  const { svc, server, password, post, state } = await webService({ agents: 1 })
+  try {
+    svc.store.setKv('shadow_model', FABLE)
+    svc.setStrategist(FABLE, 'medium', 'test')
+    // The only agent plays its own model and effort: the switch moves nobody today.
+    svc.store.updateSettings(0, { aiModel: OPUS, aiEffort: 'high' })
+    let res = await post('/api/strategist', { model: HAIKU, effort: 'medium' })
+    assert.equal(res.status, 403, 'cheaper, but a new agent would follow Haiku 5.5 and pay a Fable 5.2 shadow plan on every plan')
+    // The page asks by the same rule, from the state the server sends.
+    const st = await state()
+    assert.deepEqual(st.instance.shadowEntries, [FABLE])
+    assert.equal(pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], st)(HAIKU, 'medium'), true, 'the page asks for the password')
+    res = await post('/api/strategist', { model: HAIKU, effort: 'medium', password })
+    assert.equal(res.status, 200, await res.text())
+    // An entry with an effort: a lower all-agents effort starts it for a new agent too.
+    svc.store.setKv('shadow_model', `${SONNET}:high`)
+    svc.setStrategist(SONNET, 'high', 'test')
+    res = await post('/api/strategist', { model: SONNET, effort: 'medium' })
+    assert.equal(res.status, 403)
+    assert.equal(pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], await state())(SONNET, 'medium'), true)
+    // With the all-agents list off and every agent on its own AI, a cheaper switch is one click.
+    svc.store.setKv('shadow_model', 'off')
+    res = await post('/api/strategist', { model: HAIKU, effort: 'low' })
+    assert.equal(res.status, 200, await res.text())
+  } finally {
+    server.close()
+  }
 })
