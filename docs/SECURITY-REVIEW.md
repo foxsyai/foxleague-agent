@@ -1673,3 +1673,48 @@ Stays open:
   once an hour per message. With agents on several models, one model's access can fail while the others plan; the
   message does not name the model.
 - What stays open in the two sections above stays open: a shadow plan is judged by reading it, never by the rules.
+
+## Extra-high room (2026-11-13)
+
+On 13 Nov 2026 agent 9's real plan on Haiku 5.5 at xhigh filled all of its 48,000 tokens and was cut off ("plan
+truncated at max_tokens; nothing executed"); its next xhigh plan wrote about 42,300. On the same ticks Haiku 5.5 at
+high wrote about 16,300 tokens, Sonnet 5.5 at xhigh about 26,200 and Opus 5.5 at xhigh about 13,700. The owner asked
+for more room at xhigh. Each finding has a test of the same name in `test/strategist.test.ts` that failed on the branch
+before its fix for the reason given and passes now. XROOM-2 comes from the fix of XROOM-1: on `main` its test passes.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| XROOM-1 | low (the owner, 2026-11-13) | The room of one answer was 3 times the base at xhigh and 4 times at max: a plan got 48,000 tokens at xhigh and Haiku 5.5 filled them. A cut-off plan runs nothing, so it is safe, but the agent stays idle until its next plan and the call is paid. The test saw 48,000 where 80,000 belongs | `ROOM_TIMES` xhigh 5 and max 6; low, medium and high stay. A plan gets 80,000 tokens at xhigh and 96,000 at max, the manager chat 40,000 and 48,000, /ask 20,000 and 24,000. Every room stays under the 128,000 tokens each of the four models can write (the test asks every model at every effort). The deadline formula stays: a minute to begin plus 50 tokens a second, about 27.7 minutes at 80,000 and 33 at 96,000 |
+| XROOM-2 | low (cost; no money path or auth effect) | Talk to the manager waits for the whole answer inside one web request. After XROOM-1 a chat at max may take 1,020 seconds and the nginx template gave up after 900: the page showed an error and gave the message back with Send enabled while the answer was still being written and paid for, so a second Send paid for it twice | `proxy_read_timeout 1080s` in `deploy/nginx-foxleague-agent.conf`, which the test reads against the deadline of a chat at max. `docs/SERVER.md` and the site's server page tell a server set up from an older template to raise it |
+
+What was checked and needs no change:
+- The scheduler sets an agent's next plan only once its plan and actions have ended, so a longer call moves the next
+  plan later and two plans of one agent never overlap; the 10-minute floor counts from that end. The plan lock has no
+  time limit. Each action reads a fresh snapshot before it runs. The planning tick an hour before a match lock still
+  leaves about 27 minutes after the longest plan; the actions' window ends 10 minutes before the lock as before.
+- Plan now and Telegram /tick start the plan and answer at once. Telegram runs each command without waiting for the
+  one before, so a long /ask never holds back /kill.
+- The Anthropic client's 180-second timeout covers only the wait for the start of a streamed answer; the whole answer is
+  bounded by `deadlineMs`.
+- No code books, estimates or caps AI spend from the room. Each call is counted after it ends, from the tokens Anthropic
+  reports, at the price of the model that answered (PAM-3). The AI spend is not in the ledger or the FOXSY and EGLD
+  caps, so rules 3 and 4 have nothing to book here.
+
+Stays open:
+- A single plan at xhigh or max can now cost more. The most one plan request costs, with a prompt of about 120,000
+  tokens at the plain input price and the whole room written (Haiku 5.5 on its card for a prompt over 100,000 tokens):
+  Haiku 5.5 $0.26 at xhigh and $0.30 at max (before $0.18 and $0.22), Sonnet 5.5 $1.04 and $1.20 (before $0.72 and
+  $0.88), Opus 5.5 $2.08 and $2.40 (before $1.44 and $1.76), Fable 5.2 $4.16 and $4.80 (before $2.88 and $3.52). A
+  one-hour cache write of the manual adds its input price once more on that part. A request the server-side
+  fallback runs again is paid per attempt. A shadow plan at xhigh or max has the same room; the chat and /ask grow by
+  the same factor. The AI spend has no cap of its own.
+- Choosing xhigh or max still asks for the owner's password, for one agent and for all agents (rule 7, PAM-9 and
+  PAM-10), unchanged. The `model` command on the machine asks for none, as before.
+- The live server's own nginx file is not the template: until its `proxy_read_timeout` is raised to 1080 seconds
+  there, a chat at max effort that takes longer than 15 minutes ends as XROOM-2 says.
+- A shadow plan is given up after 10 minutes (SHADOW-2), well before its deadline at xhigh or max: at the 50 tokens a
+  second the deadline assumes, that is about 27,000 tokens. One given up is recorded as "no answer in time" and its
+  tokens are not counted in the AI spend, like a real plan cut by its deadline (TA4).
+- A plan at xhigh or max can keep its agent busy for up to 27.7 or 33 minutes. Delete and Remove answer "busy; try
+  again in a minute" meanwhile. A deploy waits at most 150 seconds before the call ends unbooked (TA4; the server
+  guide says to check first that no plan is running).

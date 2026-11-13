@@ -20,7 +20,8 @@ In short:
    Telegram), `agentctl.sh set-web-password` (the dashboard login), `agentctl.sh check-keys`.
 4. Start it: `systemctl enable --now foxleague-agent`.
 5. Optional: the dashboard on your own domain behind nginx with TLS, from the template
-   `deploy/nginx-foxleague-agent.conf`.
+   `deploy/nginx-foxleague-agent.conf`. Set up from an older template, raise its `proxy_read_timeout` to `1080s`:
+   Talk to the manager can take up to 17 minutes at the highest effort.
 
 On a server the recovery words are read once in your own SSH session and written on paper; the agent refuses to
 print them there. PEM files are written on your own computer, never on the server: with the same recovery words

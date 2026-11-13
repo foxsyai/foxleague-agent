@@ -44,6 +44,9 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
 `deploy/nginx-foxleague-agent.conf` is a template: replace `agent.example.com` with your domain, point its DNS at
 the server, get a certificate (for example `certbot --nginx`) and reload nginx. The dashboard listens on
 127.0.0.1:8870 only and sends its own security headers, including a per-page Content Security Policy.
+Its `proxy_read_timeout 1080s` lets Talk to the manager wait for the whole answer at the highest effort (up to 17
+minutes). A server set up from an older template has 900 seconds: raise it to `1080s` and reload nginx, or a long
+answer shows an error on the page while it is still being written and paid for.
 
 ## Everyday
 
