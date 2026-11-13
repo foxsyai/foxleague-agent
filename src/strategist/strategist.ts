@@ -419,13 +419,21 @@ export function renderPlanRequest(p: PlanInput): string {
  * Room for one answer, thinking included. The higher the effort, the longer the model thinks before it
  * writes: at xhigh the thinking alone once filled 16,000 tokens and cut a plan off, and nothing runs from a
  * cut-off plan. So the room grows with the effort. It is only a ceiling: the tokens used are what is paid for.
+ *
+ * On 13 Nov 2026 a plan on Haiku 5.5 at xhigh filled all of its 48,000 tokens (3 times the base then) and was cut off:
+ * nothing ran and the call was paid. Its next xhigh plan wrote about 42,300. On the same ticks Haiku 5.5 at high wrote
+ * about 16,300, Sonnet 5.5 at xhigh about 26,200 and Opus 5.5 at xhigh about 13,700. So xhigh got 5 times the base and
+ * max 6 times, which keeps max above xhigh and every room under the 128,000 tokens each model on the list can write.
  */
-const ROOM_TIMES: Record<Effort, number> = { low: 1, medium: 1, high: 2, xhigh: 3, max: 4 }
+const ROOM_TIMES: Record<Effort, number> = { low: 1, medium: 1, high: 2, xhigh: 5, max: 6 }
 const PLAN_TOKENS = 16_000
 const CHAT_TOKENS = 8_000
 const ASK_TOKENS = 4_000
 
-/** The most one answer may write at an effort: a plan gets 16,000 tokens at low and medium, 64,000 at max. */
+/**
+ * The most one answer may write at an effort: a plan gets 16,000 tokens at low and medium, 32,000 at high, 80,000 at
+ * xhigh and 96,000 at max; the manager chat (8,000 at low) and /ask (4,000 at low) grow the same way.
+ */
 export function roomFor(effort: Effort, base: number): number {
   return base * ROOM_TIMES[effort]
 }

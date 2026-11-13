@@ -182,7 +182,7 @@ test('PAM-3 each agent plans with its own model and effort, the others with the 
   // The all-agents switch moves the agents that follow it, and none with a model of its own.
   m.svc.setStrategist(OPUS, 'xhigh', 'test')
   for (const i of [0, 1, 2]) await m.svc.tick(i)
-  assert.deepEqual(m.requests.slice(-3).map(asked), [[HAIKU, 'high', 32_000], [OPUS, 'xhigh', 48_000], [OPUS, 'low', 16_000]])
+  assert.deepEqual(m.requests.slice(-3).map(asked), [[HAIKU, 'high', 32_000], [OPUS, 'xhigh', 80_000], [OPUS, 'low', 16_000]])
 })
 
 test('PAM-4 an own value the list does not know, written by hand on the server: the agent plays the all-agents one for it and the log says why once', async t => {
@@ -340,7 +340,7 @@ test('PAM-7 in the service: an agent with its own list asks the same model at th
   try {
     await m.svc.tick(0)
     await m.settled()
-    assert.deepEqual(m.requests.map(asked), [[OPUS, 'high', 32_000], [OPUS, 'low', 16_000], [OPUS, 'medium', 16_000], [OPUS, 'xhigh', 48_000]])
+    assert.deepEqual(m.requests.map(asked), [[OPUS, 'high', 32_000], [OPUS, 'low', 16_000], [OPUS, 'medium', 16_000], [OPUS, 'xhigh', 80_000]])
     // The real plan's words, word for word, to each.
     for (const r of m.requests.slice(1)) assert.deepEqual(r.messages, m.requests[0]!.messages)
     // One shadow strategist for the model, its own connection apart from the playing one; the effort goes per request.
@@ -368,7 +368,7 @@ test('PAM-7 in the service: an agent with its own list asks the same model at th
     const second = m.requests.length
     await m.svc.tick(0)
     await new Promise(r => setTimeout(r, 30))
-    assert.deepEqual(m.requests.slice(second).map(asked), [[OPUS, 'high', 32_000], [OPUS, 'medium', 16_000], [OPUS, 'xhigh', 48_000]], 'low is still on its way: not asked again')
+    assert.deepEqual(m.requests.slice(second).map(asked), [[OPUS, 'high', 32_000], [OPUS, 'medium', 16_000], [OPUS, 'xhigh', 80_000]], 'low is still on its way: not asked again')
     // Nor another agent's same pair: agent 3 with its own list asks Opus 5.5 at low too... and hangs on it by itself.
     m.svc.store.setKv('shadow_model_agent_3', `${OPUS}:low`)
     const third = m.requests.length

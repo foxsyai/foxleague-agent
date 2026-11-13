@@ -172,7 +172,7 @@ test('manual pages: title heading, no imports or source comments, callouts as qu
   )
 })
 
-test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, and a cut-off one runs nothing', async () => {
+test('room grows with the effort: a plan streams with 16,000 to 96,000 tokens, and a cut-off one runs nothing', async () => {
   const s = new Strategist('test-key', 'claude-sonnet-5', 'xhigh')
   const sent: { max_tokens: number; output_config: { effort: string }; stream?: unknown }[] = []
   let answer: Record<string, unknown> = {}
@@ -192,7 +192,7 @@ test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, a
 
   answer = { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: 't', name: 'submit_plan', input: { summary: 'train', actions: [{ action: { type: 'sync' }, reason: 'dirty cards' }] } }] }
   const plan = await s.plan(input)
-  assert.equal(sent[0]!.max_tokens, 48_000)
+  assert.equal(sent[0]!.max_tokens, 80_000)
   assert.equal(sent[0]!.output_config.effort, 'xhigh')
   const rooms: number[] = []
   for (const effort of EFFORTS) {
@@ -200,10 +200,10 @@ test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, a
     await s.plan(input)
     rooms.push(sent.at(-1)!.max_tokens)
   }
-  assert.deepEqual(rooms, [16_000, 16_000, 32_000, 48_000, 64_000], 'low, medium, high, xhigh, max')
-  assert.deepEqual([roomFor('max', 8_000), roomFor('max', 4_000), roomFor('medium', 8_000)], [32_000, 16_000, 8_000], 'chat and questions grow the same way')
-  assert.ok(64_000 <= 128_000, 'under the 128,000 tokens a model can write')
-  assert.deepEqual([deadlineMs(16_000), deadlineMs(64_000)], [380_000, 1_340_000], 'a minute to begin plus 50 tokens a second')
+  assert.deepEqual(rooms, [16_000, 16_000, 32_000, 80_000, 96_000], 'low, medium, high, xhigh, max')
+  assert.deepEqual([roomFor('max', 8_000), roomFor('max', 4_000), roomFor('medium', 8_000)], [48_000, 24_000, 8_000], 'chat and questions grow the same way')
+  assert.ok(96_000 <= 128_000, 'under the 128,000 tokens a model can write')
+  assert.deepEqual([deadlineMs(16_000), deadlineMs(96_000)], [380_000, 1_980_000], 'a minute to begin plus 50 tokens a second')
   assert.equal(plan.summary, 'train')
   assert.equal(plan.actions.length, 1)
 
@@ -211,6 +211,53 @@ test('room grows with the effort: a plan streams with 16,000 to 64,000 tokens, a
   const cut = await s.plan(input)
   assert.match(cut.summary, /truncated at max_tokens; nothing executed/)
   assert.equal(cut.actions.length, 0)
+})
+
+test('XROOM-1: a Haiku 5.5 xhigh plan has room for the 48,000 tokens it filled on 13 Nov', async () => {
+  // On 13 Nov agent 9's plan on Haiku 5.5 at xhigh filled its whole room of 48,000 tokens and was cut off (nothing ran,
+  // the call was paid); its next xhigh plan wrote about 42,300. The owner's answer: xhigh 5 times the base, max 6 times.
+  const s = new Strategist('test-key', 'claude-haiku-5-5', 'xhigh')
+  const sent: { kind: string; max_tokens: number; effort: string }[] = []
+  ;(s as unknown as { client: unknown }).client = {
+    beta: {
+      messages: {
+        stream: (p: { max_tokens: number; output_config: { effort: string }; messages: { content: string }[] }) => {
+          const content = p.messages[0]!.content
+          sent.push({ kind: /Call submit_plan now\.$/.test(content) ? 'plan' : /## The owner asks/.test(content) ? 'ask' : 'chat', max_tokens: p.max_tokens, effort: p.output_config.effort })
+          return { finalMessage: async () => ({ model: 'claude-haiku-5-5', stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 20 }, content: [{ type: 'text', text: 'ok' }] }) }
+        },
+      },
+    },
+  }
+  const input = { snapshot: snapshot(), settings: DEFAULT_SETTINGS, budget: budgetView(setup().store, 0, DEFAULT_SETTINGS, true, new Date(), 14), recent: [], dryRun: true }
+  const chat: ChatInput = { message: 'how are we doing?', source: 'test', defaultAgents: [0], agents: [{ index: 0, team: null, strategy: 'x', paused: false }], recent: [], digests: [] }
+
+  await s.plan(input)
+  assert.deepEqual(sent[0], { kind: 'plan', max_tokens: 80_000, effort: 'xhigh' })
+  assert.ok(sent[0]!.max_tokens > 48_000, 'more room than the 48,000 tokens the plan of 13 Nov filled')
+
+  // Every request the strategist sends, at every effort, on every model of the list.
+  const rooms: Record<string, number[]> = { plan: [], chat: [], ask: [] }
+  for (const model of Object.keys(MODELS)) {
+    for (const effort of EFFORTS) {
+      s.configure(model, effort)
+      sent.length = 0
+      await s.plan(input)
+      await s.discuss(chat)
+      await s.ask(snapshot(), 'how are we doing?')
+      assert.deepEqual(sent.map(r => [r.kind, r.effort]), [['plan', effort], ['chat', effort], ['ask', effort]])
+      for (const r of sent) {
+        assert.ok(r.max_tokens <= 128_000, `${model} at ${effort}: ${r.kind} under the 128,000 tokens every model on the list can write`)
+        if (model === 'claude-haiku-5-5') rooms[r.kind]!.push(r.max_tokens)
+      }
+    }
+  }
+  assert.deepEqual(rooms.plan, [16_000, 16_000, 32_000, 80_000, 96_000], 'a plan: low, medium, high, xhigh, max')
+  assert.deepEqual(rooms.chat, [8_000, 8_000, 16_000, 40_000, 48_000], 'the manager chat grows the same way')
+  assert.deepEqual(rooms.ask, [4_000, 4_000, 8_000, 20_000, 24_000], '/ask grows the same way')
+  for (const kind of ['plan', 'chat', 'ask']) assert.ok(rooms[kind]!.at(-1)! > rooms[kind]!.at(-2)!, `${kind}: max has more room than xhigh`)
+  // The deadline formula is unchanged: a minute to begin plus 50 tokens a second.
+  assert.deepEqual([deadlineMs(80_000), deadlineMs(96_000)], [1_660_000, 1_980_000], 'about 27.7 and 33 minutes')
 })
 
 test('while the history still cites the removed rule about the owner\'s other agents, the plan is told it no longer holds', () => {
