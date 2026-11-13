@@ -308,6 +308,17 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
 - **Windows: the dashboard does not open at `http://localhost:8870`:** the agent runs inside Ubuntu and Windows
   passes `localhost` on to it. Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line
   again: it starts Ubuntu, the agent and the scheduled task again. Your wallet and your answers are kept.
+- **Windows: the Ubuntu download stays at 0%:** a click into the PowerShell window starts Windows' text selection,
+  which pauses the program in it: press Enter once and the download goes on. A window "Welcome to WSL" may open by
+  itself while Ubuntu installs: close it.
+- **Windows: Task Scheduler shows 0x800710E0 for "FoxLeague Agent (WSL)":** Windows' "The operator or administrator
+  has refused the request". The task's 5-minute trigger found the task still running and did not start a second
+  copy: normal while the agent runs.
+- **"The update to ... was not installed: this system's tar cannot unpack inside the agent's background service":**
+  the background service of an install made before 14 November 2026 refuses a call that the tar of Ubuntu 26.04
+  needs to unpack an update. Run `./install.sh --update` once in a terminal, in the agent's folder: it installs the
+  update outside the service and takes that one line out of the service's file, so later updates are one click
+  again. Pasting the install line again does the same.
 - **"Command 'curl' not found" on Ubuntu:** run `sudo apt install curl`, then paste the install line again.
 - **The agent does not start after I changed the recovery words:** its history and limits belong to the wallets
   of the words it was made with. Put the original words back in `.env` and restart. To play another wallet's

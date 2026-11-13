@@ -280,7 +280,8 @@ test('WIN-1 the record: one row, and what stays open says that get.ps1 has not r
   for (const said of ['`get.ps1`', '`wsl --install --no-distribution`', 'the first `systemd` line counts', 'never `--shutdown`', 'a download cut short runs nothing',
     'only the digits of the dashboard port', '`-Uninstall` removes that task and nothing else', 'Checked on Linux only']) assert.ok(cells[3]!.includes(said), said)
   const open = section.slice(section.indexOf('Stays open:')).replace(/\s+/g, ' ')
-  assert.match(open, /`get\.ps1` has not run on a real Windows PC yet/)
+  // (Since the real-PC check of 2026-11-13 the line says that it ran, and where its findings are.)
+  assert.match(open, /`get\.ps1` ran on a real Windows PC on 13 Nov 2026: what was found, fixed and left open is in the section "Windows real-PC check \(2026-11-13\)"/)
   assert.match(open, /`docs\/WINDOWS-TEST\.md` is the walk-through for the owner's PC/)
   assert.doesNotMatch(open, /is prepared apart and is not shipped/)
 })
@@ -288,9 +289,11 @@ test('WIN-1 the record: one row, and what stays open says that get.ps1 has not r
 test('WIN-1 the plan for the real PC: the public key only, what cannot be driven over SSH, and every step of the walk-through', () => {
   const plan = raw('docs/WINDOWS-TEST.md')
   const flat = plan.replace(/\s+/g, ' ')
-  assert.match(flat, /It has never run on Windows/)
+  // (It ran on a real PC on 2026-11-13; the walk-through says so and points at the record.)
+  assert.match(flat, /\*\*It ran on a real Windows PC once\*\*, on 13 Nov 2026/)
   assert.match(flat, /Only a \*\*public\*\* key crosses a chat\. Never a password and never a private key/)
-  assert.match(plan, /^Add-WindowsCapability -Online -Name OpenSSH\.Server~~~~0\.0\.1\.0$/m)
+  // (One script block since W-DOC-2 of 2026-11-14, with Microsoft's MSI where the capability fails: W-DOC-1.)
+  assert.match(plan, /^ {4}try \{ Add-WindowsCapability -Online -Name OpenSSH\.Server~~~~0\.0\.1\.0 \| Out-Null \} catch \{ \}$/m)
   assert.match(plan, /^\$file = "\$env:ProgramData\\ssh\\administrators_authorized_keys"$/m)
   assert.match(plan, /^icacls\.exe \$file \/inheritance:r \/grant '\*S-1-5-32-544:F' \/grant '\*S-1-5-18:F'$/m)
   assert.match(plan, /'PasswordAuthentication no'/)
