@@ -738,6 +738,9 @@ function Install-FoxLeagueAgent {
         } catch { return $false }
     }
     function Open-FoxBrowser([string]$Url) { Start-Process $Url }
+    # The window's title, or $null where there is no window to ask.
+    function Get-FoxTitle { try { return [string]$Host.UI.RawUI.WindowTitle } catch { return $null } }
+    function Set-FoxTitle([string]$Title) { try { $Host.UI.RawUI.WindowTitle = $Title } catch { } }
     # The free space of the drive that holds %LOCALAPPDATA%, where wsl --install puts a new distribution (its download
     # goes to %TEMP% on the same drive): @{ Drive = 'C:'; Bytes } or $null when Windows does not say. An Ubuntu that
     # was moved to another drive is not looked for.
@@ -1145,15 +1148,22 @@ function Install-FoxLeagueAgent {
         $passed = Get-FoxPassedEnv (Get-FoxEnvValues)
         if ($passed['Error'] -ne '') { Stop-Fox ($passed['Error'] + '. Nothing was changed') }
 
-        $facts = Step-FoxCheckPc
-        $FoxRun['WslExe'] = $facts['WslExe']
-        $wsl = Step-FoxWsl $facts
-        $fresh = Step-FoxUbuntu $wsl
-        Step-FoxUbuntuSettings ([bool]$fresh)
-        Step-FoxInstaller $passed
-        $install = Get-FoxInstallFacts $passed
-        [void](Step-FoxKeepAlive $facts $install)
-        Step-FoxDone $install
+        # Ubuntu's shell and the installer inside set a title of their own on this window: it gets its own back
+        # when the run ends, also when it stops (W-7).
+        $title = Get-FoxTitle
+        try {
+            $facts = Step-FoxCheckPc
+            $FoxRun['WslExe'] = $facts['WslExe']
+            $wsl = Step-FoxWsl $facts
+            $fresh = Step-FoxUbuntu $wsl
+            Step-FoxUbuntuSettings ([bool]$fresh)
+            Step-FoxInstaller $passed
+            $install = Get-FoxInstallFacts $passed
+            [void](Step-FoxKeepAlive $facts $install)
+            Step-FoxDone $install
+        } finally {
+            if ($null -ne $title -and $title -ne '') { Set-FoxTitle $title }
+        }
     }
 
     if ($DefineOnly) { return }

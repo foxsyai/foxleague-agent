@@ -533,7 +533,7 @@ function New-World {
                    HypervisorPresent = $VmCompute; VirtFirmware = $true; VmCompute = $VmCompute; SystemRoot = 'C:\WINDOWS' }
         VmCompute = $VmCompute; VmComputeAfterInstall = $VmCompute; Elevated = @(); ElevatedOutcome = @{ Outcome = 'done'; ExitCode = 0 }
         Task = $null; TaskRegistered = 0; Answers = @(); Asked = @(); Lines = @(); Urls = @(); Opened = @(); DashboardAnswers = $true
-        Processes = @(); ProcessesUnknown = $false; Stopped = @(); FreeSpace = @{ Drive = 'C:'; Bytes = [long](50 * 1GB) }
+        Processes = @(); ProcessesUnknown = $false; Stopped = @(); FreeSpace = @{ Drive = 'C:'; Bytes = [long](50 * 1GB) }; Title = 'Windows PowerShell'; Titles = @()
         Env = @{ FOXAGENT_GET_URL = 'http://127.0.0.1:1/get.sh' }
     }
 }
@@ -551,6 +551,8 @@ function Test-FoxUrl([string]$Url) { $World['Urls'] += $Url; return $World['Dash
 function Open-FoxBrowser([string]$Url) { $World['Opened'] += $Url }
 function Wait-Fox([int]$Seconds) { }
 function Get-FoxFreeSpace { return $World['FreeSpace'] }
+function Get-FoxTitle { return $World['Title'] }
+function Set-FoxTitle([string]$Title) { $World['Titles'] += $Title; $World['Title'] = $Title }
 function Read-FoxLine([string]$Prompt) {
     $World['Asked'] += $Prompt
     if (@($World['Answers']).Count -eq 0) { return '' }
@@ -747,6 +749,19 @@ Check 'W-1 a PC with 0.2 GB free stops before Ubuntu is downloaded, says how muc
     $World['FreeSpace'] = $null
     Equal (Run-Install) 'done' (Screen)
     True ((Screen) -match 'How much space is free on the disk could not be read') (Screen)
+}
+Check 'W-7 the window gets its own title back after Ubuntu and its installer set theirs, also when the run stops' {
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    $World['Title'] = 'Windows PowerShell'
+    Equal (Run-Install) 'done' (Screen)
+    Equal (@($World['Titles']) | Select-Object -Last 1) 'Windows PowerShell' 'the title after the run'
+    New-World
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    $World['Title'] = 'Windows PowerShell'
+    [System.IO.File]::WriteAllText("$W/install-fails", '')
+    True ((Run-Install) -match '^stop: Ubuntu could not be installed') 'it stopped'
+    Equal (@($World['Titles']) | Select-Object -Last 1) 'Windows PowerShell' 'the title after a stop'
 }
 Check 'Ubuntu that was there, with systemd=false and things running: asked before it is restarted; no means stop' {
     New-World -Distros "* Debian    Running         2`n  Ubuntu    Running         2`n" -HasUser $true -Conf "[automount]`nenabled=true`n`n[boot]`nsystemd=false`n"
