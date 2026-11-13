@@ -190,6 +190,11 @@ main() {
   rm -rf "$DIR/versions/.replaced-get"
   # Chosen by hand, so no undo note for the launcher.
   rm -f "$DIR/versions/pending" "$DIR/versions/rolled-back"
+  # The release this one replaces is the spare that its first confirmed start keeps (versions/previous); without
+  # this line an older spare was kept and the release that ran just before was deleted (W-11).
+  if [ -n "${cur:-}" ] && [ "$cur" != "$name" ] && [ -d "$DIR/versions/$cur" ]; then
+    printf '%s\n' "$cur" > "$DIR/versions/previous.new" && mv -f "$DIR/versions/previous.new" "$DIR/versions/previous"
+  fi
   printf '%s\n' "$name" > "$DIR/versions/active.new" && mv -f "$DIR/versions/active.new" "$DIR/versions/active"
 
   if [ "${FOXAGENT_NO_RUN:-0}" = 1 ]; then echo "  Downloaded (FOXAGENT_NO_RUN=1: installer not started)."; exit 0; fi
