@@ -313,7 +313,7 @@ function pageFunctions<T>(names: string[], state: unknown): T {
   return new Function('S', `${src.join('\n')}; return ${names.at(-1)}`)(state) as T
 }
 
-test('RS-4 the readers: cli model and the page name `same` in plain words; /api/state lists it among the entries but not among the models; it never wakes, so only a dearer pair asks for the password', async () => {
+test('RS-4 the readers: cli model and the page name `same` in plain words; /api/state lists it among the entries but not among the models; between the models of the list it never wakes, so only a dearer pair asks for the password (from a model the list does not have: R67A-1)', async () => {
   // cli model, as agentctl.sh runs it.
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-rs-cli-'))
   const env = { PATH: process.env.PATH!, HOME: dir, AGENT_ENV_FILE: join(dir, 'no-such.env'), AGENT_DATA_DIR: dir, MVX_GATEWAY_URL: 'http://127.0.0.1:9', MVX_API_URL: 'http://127.0.0.1:9', FOXLEAGUE_URL: 'http://127.0.0.1:9' }
@@ -347,7 +347,9 @@ test('RS-4 the readers: cli model and the page name `same` in plain words; /api/
     server.close()
   }
 
-  // The password rule: `same` never rests, so no switch starts it; its cost follows the pair, which raisesAiSpend weighs.
+  // The password rule between the models of the list: `same` runs under every such pair, so no switch between them
+  // starts it; its cost follows the pair, which raisesAiSpend weighs. From a model the list does not have it does start
+  // (R67A-1, below).
   const rules = web as unknown as {
     wakesShadow: (shadows: readonly string[], current: string | Pair, next: string | Pair) => boolean
     agentAiNeedsPassword: (current: Pair, next: Pair, shadows: readonly string[]) => boolean
@@ -363,7 +365,8 @@ test('RS-4 the readers: cli model and the page name `same` in plain words; /api/
   assert.equal(rules.agentAiNeedsPassword({ model: OPUS, effort: 'high' }, { model: OPUS, effort: 'xhigh' }, ['same']), true, 'a higher effort raises the repeat too: the password')
   assert.equal(rules.agentAiNeedsPassword({ model: OPUS, effort: 'xhigh' }, { model: OPUS, effort: 'high' }, ['same']), false, 'a lower one is one click')
 
-  // The page: the line under an agent's AI fields names it in plain words; the page's rule never wakes it either.
+  // The page: the line under an agent's AI fields names it in plain words; between the models of the list the page's
+  // rule never wakes it either.
   const models = ids.map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
   const instance = { model: SONNET, effort: 'medium', models, efforts: [...strategist.EFFORTS], shadowModels: [], shadowEntries: ['same'], ownAi: 1 }
   const hint = pageFunctions<(b: unknown, form: unknown) => string>(['ownAiHint'], { instance })
