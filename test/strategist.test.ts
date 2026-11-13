@@ -1,5 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import Anthropic from '@anthropic-ai/sdk'
 import { Store } from '../src/store/db.ts'
 import { EFFORTS, MODELS, Strategist, deadlineMs, renderPlanRequest, roomFor, strategistChoice, usd, type ChatInput } from '../src/strategist/strategist.ts'
@@ -258,6 +259,23 @@ test('XROOM-1: a Haiku 5.5 xhigh plan has room for the 48,000 tokens it filled o
   for (const kind of ['plan', 'chat', 'ask']) assert.ok(rooms[kind]!.at(-1)! > rooms[kind]!.at(-2)!, `${kind}: max has more room than xhigh`)
   // The deadline formula is unchanged: a minute to begin plus 50 tokens a second.
   assert.deepEqual([deadlineMs(80_000), deadlineMs(96_000)], [1_660_000, 1_980_000], 'about 27.7 and 33 minutes')
+})
+
+test('XROOM-2: the nginx template waits for a manager chat at max effort as long as the strategist does', async () => {
+  // Talk to the manager waits for the whole answer inside one web request. When nginx gives up first, the page gets an
+  // error and gives the message back with Send enabled, while the answer is still being written and paid for on the
+  // server: a second Send pays for it twice.
+  const s = new Strategist('test-key', 'claude-opus-5-5', 'max')
+  let room = 0
+  ;(s as unknown as { client: unknown }).client = {
+    beta: { messages: { stream: (p: { max_tokens: number }) => ((room = p.max_tokens), { finalMessage: async () => ({ model: 'claude-opus-5-5', stop_reason: 'end_turn', usage: { input_tokens: 10, output_tokens: 20 }, content: [{ type: 'text', text: 'ok' }] }) }) } },
+  }
+  await s.discuss({ message: 'how are we doing?', source: 'test', defaultAgents: [0], agents: [{ index: 0, team: null, strategy: 'x', paused: false }], recent: [], digests: [] })
+  const deadline = deadlineMs(room)
+  const conf = readFileSync(new URL('../deploy/nginx-foxleague-agent.conf', import.meta.url), 'utf8')
+  const seconds = Number(conf.match(/^\s*proxy_read_timeout (\d+)s;$/m)?.[1])
+  assert.ok(seconds * 1000 >= deadline, `nginx gives up after ${seconds} s; a chat at max effort may take ${deadline / 1000} s (${room} tokens)`)
+  assert.match(conf, new RegExp(`up to ${Math.ceil(deadline / 60_000)} minutes at the highest effort`), 'the comment says how long')
 })
 
 test('while the history still cites the removed rule about the owner\'s other agents, the plan is told it no longer holds', () => {
