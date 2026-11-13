@@ -330,7 +330,7 @@ NoNewPrivileges=true
 LockPersonality=true
 RestrictRealtime=true
 # No RestrictSUIDSGID: its filter refuses openat2, which the tar of Ubuntu 26.04 needs to unpack an update.
-# The agent runs as you, and NoNewPrivileges keeps a set-user-ID file from raising what it may do.
+# The agent runs as you; NoNewPrivileges keeps a set-user-ID file from raising what it may do.
 RestrictNamespaces=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 SystemCallArchitectures=native
