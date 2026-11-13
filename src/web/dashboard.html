@@ -1003,14 +1003,37 @@ function aiCostsMore(model, effort) {
   if (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) return true
   return i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
 }
-// What the password dialog says: why this switch costs more.
-function aiRaiseText(model) {
-  if (!wakesShadow(model)) return 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
-  const i = S.instance, name = id => (i.models.find(m => m.id === id) || { label: id }).label
-  // The shadow model that wakes is the one that plays now; with several set, all are named and that one is pointed out.
-  const shadow = name(i.model), all = i.shadowModels.map(name)
-  const set = all.length > 1 ? all.slice(0, -1).join(', ') + ' and ' + all[all.length - 1] : shadow
-  return 'Shadow plans are set to ' + set + ' on this computer. ' + (all.length > 1 ? 'Those by ' + shadow : 'They') + ' rest while ' + shadow + ' plays. With another model playing, every plan of every agent also pays for a shadow plan by ' + shadow + '. Your password confirms it.'
+// What the password dialog says: why this switch costs more. When it starts shadow plans, which ones and for which
+// agents (wakesShadow's rule, entry by entry): an agent's own list names that agent, the all-agents list also any agent
+// added later. A page that got no agents (an older answer) knows only the all-agents list and says it as before.
+function aiRaiseText(model, effort) {
+  const i = S.instance
+  if (effort === undefined) effort = i.effort
+  if (!wakesShadow(model, effort)) return 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+  const name = id => (i.models.find(m => m.id === id) || { label: id }).label
+  const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a.join('')
+  if (!S.agents) {
+    // The shadow model that wakes is the one that plays now; with several set, all are named and that one is pointed out.
+    const shadow = name(i.model), all = (i.shadowModels || []).map(name)
+    const set = all.length > 1 ? list(all) : shadow
+    return 'Shadow plans are set to ' + set + ' on this computer. ' + (all.length > 1 ? 'Those by ' + shadow : 'They') + ' rest while ' + shadow + ' plays. With another model playing, every plan of every agent also pays for a shadow plan by ' + shadow + '. Your password confirms it.'
+  }
+  const rests = (e, m, f) => { const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
+  const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
+  // Each entry that would start, with the numbers of its agents (0 for an agent added later).
+  const woken = new Map()
+  const wake = (e, n) => { const k = entry(e); if (!woken.has(k)) woken.set(k, []); if (!woken.get(k).includes(n)) woken.get(k).push(n) }
+  for (const b of [...S.agents, ...(S.retired || [])].filter(b => b.ai)) {
+    const own = b.ai.own || {}
+    const cm = own.model || i.model, ce = own.effort || i.effort, nm = own.model || model, ne = own.effort || effort
+    for (const e of b.ai.shadows || []) if (rests(e, cm, ce) && !rests(e, nm, ne)) wake(e, b.index + 1)
+  }
+  for (const e of i.shadowEntries || []) if (rests(e, i.model, i.effort) && !rests(e, model, effort)) wake(e, 0)
+  const whom = ns => {
+    const agents = ns.filter(n => n > 0)
+    return [agents.length > 1 ? 'agents ' + list(agents) : agents.length ? 'agent ' + agents[0] : '', ns.includes(0) ? 'any agent you add' : ''].filter(Boolean).join(' and ')
+  }
+  return 'Shadow plans set on this computer rest while the AI of the Strategist box plays and would start with this switch: ' + [...woken].map(([k, ns]) => k + ' for ' + whom(ns)).join('; ') + '. Each adds its cost to every plan of those agents. Your password confirms it.'
 }
 // One agent's own model and effort (agentAiNeedsPassword in server.ts, the same rule): from the pair it plays to the
 // pair it would play after saving (its own where the form gives one, else the all-agents one), a dearer model, a higher
@@ -1047,7 +1070,7 @@ $('stratApply').onclick = async (e, password) => {
   // Only a model of the server's list is sent: never the greyed-out local model, never an empty pick.
   if (!S.instance.models.some(m => m.id === body.model)) { toast('Pick a model from the list', true); return false }
   if (aiCostsMore(body.model, body.effort)) {
-    if (!password) password = await askPassword(wakesShadow(body.model) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(body.model))
+    if (!password) password = await askPassword(wakesShadow(body.model, body.effort) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(body.model, body.effort))
     if (!password) { toast('Strategist unchanged', true); return false }
     body.password = password
   }
@@ -1467,7 +1490,7 @@ function openLevel(k) {
     if (aiMore) {
       password = limitsMore
         ? await askPassword('Raise a limit and switch to a dearer AI', 'Some of these settings let the agent spend more and the new AI costs more on every plan of every agent. Your password confirms both.')
-        : await askPassword(wakesShadow(ai.model) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(ai.model))
+        : await askPassword(wakesShadow(ai.model, ai.effort) ? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText(ai.model, ai.effort))
       if (!password) return toast('Nothing saved', true)
     }
     // A refused switch (a mistyped password) stops here: its error is shown once and nothing else is saved.

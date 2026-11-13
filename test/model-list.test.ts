@@ -503,7 +503,8 @@ test('R63A-1 the dashboard asks for the password in the same cases, so the owner
   const none = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], { instance: { model: 'claude-fable-5-2', effort: 'low', models, efforts } })
   assert.equal(none('claude-haiku-5-5', 'low'), false)
   const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 900)
-  assert.match(apply, /askPassword\(wakesShadow\(body\.model\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model\)\)/)
+  // Since the agent review of PR #65 (R65A-6) the effort goes with the model: a lower effort can start an entry with one.
+  assert.match(apply, /askPassword\(wakesShadow\(body\.model, body\.effort\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model, body\.effort\)\)/)
   const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
   assert.match(tip, /A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays\./)
   assert.doesNotMatch(tip, /—|, and |, or /)

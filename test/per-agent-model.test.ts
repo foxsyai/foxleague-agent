@@ -1103,3 +1103,35 @@ test('R65A-5 the all-agents switch weighs an agent added afterwards: with every 
     server.close()
   }
 })
+
+test('R65A-6 the Strategist box\'s password dialog reads the effort too and names the shadow plans that would start and the agents they start for', () => {
+  const html = readFileSync(join(REPO, 'src/web/dashboard.html'), 'utf8')
+  const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 900)
+  assert.match(apply, /askPassword\(wakesShadow\(body\.model, body\.effort\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model, body\.effort\)\)/, 'the dialog is chosen without the effort')
+  const level = html.slice(html.indexOf("$('lvlOk').onclick"), html.indexOf("$('lvlKeep').onclick"))
+  assert.match(level, /askPassword\(wakesShadow\(ai\.model, ai\.effort\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(ai\.model, ai\.effort\)\)/)
+  const models = Object.keys(strategist.MODELS).map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
+  const efforts = [...strategist.EFFORTS]
+  const dialog = (S: unknown) => {
+    const wakes = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow'], S)
+    const text = pageFunctions<(model: string, effort: string) => string>(['wakesShadow', 'aiRaiseText'], S)
+    return (model: string, effort: string) => ({ title: wakes(model, effort) ? 'Start shadow plans' : 'Switch to a dearer AI', text: text(model, effort) })
+  }
+  // A lower effort that starts the all-agents entry Opus 5.5 (high), resting while Opus 5.5 plays at high, for agent 1 and a new agent.
+  const lower = dialog({ instance: { model: OPUS, effort: 'high', models, efforts, shadowModels: [OPUS], shadowEntries: [`${OPUS}:high`] }, agents: [{ index: 0, ai: { own: {}, shadows: [`${OPUS}:high`] } }, { index: 1, ai: { own: { model: SONNET, effort: 'high' }, shadows: [`${OPUS}:high`] } }], retired: [] })
+  assert.deepEqual(lower(OPUS, 'medium'), {
+    title: 'Start shadow plans',
+    text: 'Shadow plans set on this computer rest while the AI of the Strategist box plays and would start with this switch: Opus 5.5 (high) for agent 1 and any agent you add. Each adds its cost to every plan of those agents. Your password confirms it.',
+  })
+  // One agent's own list: named, never "every agent".
+  const own = dialog({ instance: { model: SONNET, effort: 'low', models, efforts, shadowModels: [], shadowEntries: [] }, agents: [{ index: 0, ai: { own: { model: HAIKU, effort: 'high' }, shadows: [] } }], retired: [{ index: 2, ai: { own: {}, shadows: [`${SONNET}:low`, FABLE] } }] })
+  const said = own(HAIKU, 'low')
+  assert.equal(said.title, 'Start shadow plans')
+  assert.equal(said.text, 'Shadow plans set on this computer rest while the AI of the Strategist box plays and would start with this switch: Sonnet 5.5 (low) for agent 3. Each adds its cost to every plan of those agents. Your password confirms it.')
+  assert.doesNotMatch(said.text, /every agent|—|, and |, or /)
+  // Several entries, several agents.
+  const many = dialog({ instance: { model: FABLE, effort: 'medium', models, efforts, shadowModels: [FABLE], shadowEntries: [FABLE] }, agents: [{ index: 0, ai: { own: {}, shadows: [FABLE] } }, { index: 1, ai: { own: { effort: 'low' }, shadows: [`${FABLE}:low`] } }, { index: 4, ai: { own: {}, shadows: [FABLE] } }], retired: [] })
+  assert.equal(many(OPUS, 'medium').text, 'Shadow plans set on this computer rest while the AI of the Strategist box plays and would start with this switch: Fable 5.2 for agents 1 and 5 and any agent you add; Fable 5.2 (low) for agent 2. Each adds its cost to every plan of those agents. Your password confirms it.')
+  // A dearer switch that starts nothing keeps its words.
+  assert.deepEqual(many(FABLE, 'high'), { title: 'Switch to a dearer AI', text: 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.' })
+})
