@@ -332,7 +332,8 @@ export class Store {
     this.db.exec('BEGIN')
     try {
       for (const table of ['activity', 'spend', 'pending_tx', 'shadow_plans']) this.db.prepare(`DELETE FROM ${table} WHERE agent_idx = ?`).run(index)
-      const keys = PER_AGENT_KV.map(p => `${p}${index}`)
+      // Its own list of shadow models goes too: keyed by its number from 1 (agentShadowKey in src/strategist/shadow.ts).
+      const keys = [...PER_AGENT_KV.map(p => `${p}${index}`), `shadow_model_agent_${index + 1}`]
       this.db.prepare(`DELETE FROM kv WHERE key IN (${keys.map(() => '?').join(', ')})`).run(...keys)
       this.db.prepare('DELETE FROM agents WHERE idx = ?').run(index)
       this.setKv('deleted_agents', JSON.stringify([...this.deletedAgents(), gone].slice(-200)))

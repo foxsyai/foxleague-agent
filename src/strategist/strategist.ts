@@ -9,7 +9,7 @@ import { parseAction, type PlannedAction } from '../executor/actions.ts'
 import type { BudgetView } from '../executor/budget.ts'
 import type { Config } from '../config.ts'
 import type { ActivityRow, Store } from '../store/db.ts'
-import type { AgentSettings } from '../store/settings.ts'
+import { AI_EFFORTS, type AgentSettings } from '../store/settings.ts'
 import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
@@ -66,13 +66,15 @@ export const PRICES: Record<string, Rates> = {
 /**
  * The models the owner can pick in the web UI, from the least to the most capable, like the efforts (the owner's list
  * of 2026-11-11). All take adaptive thinking and every effort level. Haiku 5.5 is the cheapest, for trying things
- * out: how well it plays this game has not been measured.
+ * out: how well it plays this game has not been measured. `maxOutput`: the most tokens one answer of the model may
+ * write (max_tokens), from Anthropic's model table ("Max output"): 128,000 for each of the four. roomFor never asks a
+ * model for more, so a model added later with a lower limit gets a smaller room instead of a refused request.
  */
-export const MODELS: Record<string, { label: string } & Rates> = {
-  'claude-haiku-5-5': { label: 'Haiku 5.5', ...PRICES['claude-haiku-5-5']! },
-  'claude-sonnet-5-5': { label: 'Sonnet 5.5', ...PRICES['claude-sonnet-5-5']! },
-  'claude-opus-5-5': { label: 'Opus 5.5', ...PRICES['claude-opus-5-5']! },
-  'claude-fable-5-2': { label: 'Fable 5.2', ...PRICES['claude-fable-5-2']! },
+export const MODELS: Record<string, { label: string; maxOutput: number } & Rates> = {
+  'claude-haiku-5-5': { label: 'Haiku 5.5', maxOutput: 128_000, ...PRICES['claude-haiku-5-5']! },
+  'claude-sonnet-5-5': { label: 'Sonnet 5.5', maxOutput: 128_000, ...PRICES['claude-sonnet-5-5']! },
+  'claude-opus-5-5': { label: 'Opus 5.5', maxOutput: 128_000, ...PRICES['claude-opus-5-5']! },
+  'claude-fable-5-2': { label: 'Fable 5.2', maxOutput: 128_000, ...PRICES['claude-fable-5-2']! },
 }
 /** MODELS is a plain object: "constructor" or "toString" would pass a bare lookup, so ask for an own key. */
 export const isKnownModel = (id: string): boolean => Object.hasOwn(MODELS, id)
@@ -106,7 +108,8 @@ export function priceRange(id: string): { cheapest: Price; dearest: Price } | nu
   return { cheapest: each(Math.min), dearest: each(Math.max) }
 }
 
-export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
+/** The five efforts, from the least to the most thinking: one list, kept with the agent settings that also take one. */
+export const EFFORTS = AI_EFFORTS
 export type Effort = (typeof EFFORTS)[number]
 
 /**
@@ -143,6 +146,49 @@ export function strategistChoice(store: Store, cfg: Config, say?: (text: string)
   }
   const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? 'medium'
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
+}
+
+/** A value typed by hand reaches the log only as what a model id can hold, and no more than 60 characters of it. */
+const named = (v: unknown): string => String(v).slice(0, 60).replace(/[^\w.:-]/g, '?')
+
+/**
+ * The model and effort one agent plays with (the owner, 2026-11-13): its own (the settings aiModel and aiEffort) where
+ * it has them, else the all-agents ones (the Strategist box, `all`). Each is read by itself. Unknown is not a value: an
+ * own model the list does not have and an own effort that is not one of the five are never used. The agent plays the
+ * all-agents one in its place, and `ignored` says why, for the log. An own model that left the list runs its successor,
+ * as the all-agents choice does: the same tier at the same price or less, so the agent never ends on a dearer model
+ * than its own choice, nor on the all-agents one when that is dearer.
+ */
+export function agentChoice(own: { aiModel?: unknown; aiEffort?: unknown }, all: { model: string; effort: string }): { model: string; effort: Effort; ignored: string[] } {
+  const ignored: string[] = []
+  let model = all.model
+  const ownModel = own.aiModel
+  if (ownModel !== undefined && ownModel !== '') {
+    const id = typeof ownModel === 'string' ? ownModel : ''
+    if (id && isKnownModel(id)) model = id
+    else if (id && Object.hasOwn(SUCCESSORS, id)) {
+      model = currentModel(id)
+      ignored.push(`its own model ${id} is no longer on the list: it plays its successor ${model}`)
+    } else ignored.push(`its own model ${named(ownModel)} is not on the list (${Object.keys(MODELS).join(', ')}): it plays the all-agents model ${all.model}`)
+  }
+  let effort = all.effort as Effort
+  const ownEffort = own.aiEffort
+  if (ownEffort !== undefined && ownEffort !== '') {
+    if (typeof ownEffort === 'string' && (EFFORTS as readonly string[]).includes(ownEffort)) effort = ownEffort as Effort
+    else ignored.push(`its own effort ${named(ownEffort)} is not one of ${EFFORTS.join(', ')}: it plays the all-agents effort ${all.effort}`)
+  }
+  return { model, effort, ignored }
+}
+
+/**
+ * The own values an agent's settings hold that agentChoice uses: its own model (a model that left the list as its
+ * successor) and its own effort, each null where it has none or the value is not used.
+ */
+export function ownAi(own: { aiModel?: unknown; aiEffort?: unknown }): { model: string | null; effort: Effort | null } {
+  const id = typeof own.aiModel === 'string' ? own.aiModel : ''
+  const model = id && isKnownModel(id) ? id : id && Object.hasOwn(SUCCESSORS, id) ? currentModel(id) : null
+  const effort = typeof own.aiEffort === 'string' && (EFFORTS as readonly string[]).includes(own.aiEffort) ? (own.aiEffort as Effort) : null
+  return { model, effort }
 }
 
 const SUBMIT_PLAN: Anthropic.Tool = {
@@ -375,15 +421,29 @@ export function renderPlanRequest(p: PlanInput): string {
  * Room for one answer, thinking included. The higher the effort, the longer the model thinks before it
  * writes: at xhigh the thinking alone once filled 16,000 tokens and cut a plan off, and nothing runs from a
  * cut-off plan. So the room grows with the effort. It is only a ceiling: the tokens used are what is paid for.
+ *
+ * On 13 Nov 2026 a plan on Haiku 5.5 at xhigh filled all of its 48,000 tokens (3 times the base then) and was cut off:
+ * nothing ran and the call was paid. Its next xhigh plan wrote about 42,300. On the same ticks Haiku 5.5 at high wrote
+ * about 16,300, Sonnet 5.5 at xhigh about 26,200 and Opus 5.5 at xhigh about 13,700. So xhigh got 5 times the base and
+ * max 6 times, which keeps max above xhigh and every room under the 128,000 tokens each model on the list can write.
+ * Each request's room is also clamped to its own model's limit (MODELS, `maxOutput`), so that holds for a model added
+ * later with a lower one (the agent review of PR #66).
  */
-const ROOM_TIMES: Record<Effort, number> = { low: 1, medium: 1, high: 2, xhigh: 3, max: 4 }
+const ROOM_TIMES: Record<Effort, number> = { low: 1, medium: 1, high: 2, xhigh: 5, max: 6 }
 const PLAN_TOKENS = 16_000
 const CHAT_TOKENS = 8_000
 const ASK_TOKENS = 4_000
 
-/** The most one answer may write at an effort: a plan gets 16,000 tokens at low and medium, 64,000 at max. */
-export function roomFor(effort: Effort, base: number): number {
-  return base * ROOM_TIMES[effort]
+/**
+ * The most one answer may write at an effort: a plan gets 16,000 tokens at low and medium, 32,000 at high, 80,000 at
+ * xhigh and 96,000 at max; the manager chat (8,000 at low) and /ask (4,000 at low) grow the same way. With `model`, never
+ * more than that model can write. A model the list does not have (AGENT_MODEL naming another one) has no limit known
+ * here: none is guessed, the room stays as it is, and a request Anthropic cannot take is refused, so nothing of it runs.
+ */
+export function roomFor(effort: Effort, base: number, model?: string): number {
+  const room = base * ROOM_TIMES[effort]
+  const limit = model !== undefined && isKnownModel(model) ? MODELS[model]!.maxOutput : undefined
+  return limit !== undefined && Number.isSafeInteger(limit) && limit > 0 ? Math.min(room, limit) : room
 }
 
 /** How long a whole answer may take before the call is given up: a minute to begin plus 50 tokens a second. */
@@ -400,15 +460,20 @@ export class Strategist {
   effort: Effort
   /** Models whose API refused the fallbacks parameter: asked without it from then on. */
   private readonly noFallback = new Set<string>()
-  /** Whether another call is due within the hour (the service reads its schedule); without one, always yes. */
-  private readonly expectsCallSoon: () => boolean
+  /**
+   * Whether another call of this model at this effort is due within the hour (the service reads its schedule);
+   * without one, always yes. A cache belongs to one model, and Anthropic's docs leave open, per model, whether a
+   * request at another effort can read it (an effort change is rendered with the thinking settings, which on some
+   * models come before the tools and the system prompt), so the pair is what counts.
+   */
+  private readonly expectsCallSoon: (model: string, effort: Effort) => boolean
   /** When the cache last served or stored the manual, per model and effort (the cache holds per model, tools and effort). */
   private readonly cachedAt = new Map<string, number>()
   /** How often the connection sends a failed request again by itself (rate limit, server error, lost connection). */
   private readonly retries: number
 
   /** `retries: 0` for a request that is sent once and never again (a shadow plan). */
-  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: () => boolean = () => true, o: { retries?: number } = {}) {
+  constructor(apiKey: string, model: string, effort: Effort = 'medium', expectsCallSoon: (model: string, effort: Effort) => boolean = () => true, o: { retries?: number } = {}) {
     this.retries = o.retries ?? 2
     this.client = new Anthropic({ apiKey, maxRetries: this.retries, timeout: 180_000 })
     this.model = model
@@ -454,11 +519,11 @@ export class Strategist {
    * the last 55 minutes) or another call is due within the hour; otherwise, a single agent at the 2-hour tick for
    * one, it goes uncached at the plain input price (owner, 2026-10-24).
    */
-  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
-    const key = `${this.model}:${this.effort}`
+  private async createWithManual(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model' | 'system'>, cancel?: AbortSignal, effort: Effort = this.effort): Promise<Anthropic.Beta.BetaMessage> {
+    const key = `${this.model}:${effort}`
     const text = MANUAL ? `${SYSTEM_PROMPT}\n\n${MANUAL}` : SYSTEM_PROMPT
     const warm = Date.now() - (this.cachedAt.get(key) ?? Number.NEGATIVE_INFINITY) < CACHE_WARM_MS
-    const cached = warm || this.expectsCallSoon()
+    const cached = warm || this.expectsCallSoon(this.model, effort)
     // The cache is written or renewed when the request is processed, at its start: a long answer must not move it on.
     const sent = Date.now()
     const response = await this.create({ ...params, system: [{ type: 'text', text, ...(cached ? { cache_control: { type: 'ephemeral' as const, ttl: '1h' as const } } : {}) }] }, cancel)
@@ -469,27 +534,30 @@ export class Strategist {
 
   /**
    * A plan for one agent. `request` is the text of the request when the caller rendered it already: the service keeps
-   * it, so that a shadow plan can be asked with the very same words.
+   * it, so that a shadow plan can be asked with the very same words. `effort`: the agent's own, when it has one; this
+   * strategist's effort otherwise.
    */
-  async plan(input: PlanInput, request: string = renderPlanRequest(input)): Promise<Plan> {
-    return (await this.planFromRequest(request)).plan
+  async plan(input: PlanInput, request: string = renderPlanRequest(input), effort: Effort = this.effort): Promise<Plan> {
+    return (await this.planFromRequest(request, undefined, effort)).plan
   }
 
   /**
    * The plan request as a text: the same system prompt, manual, tools and settings whoever sends it, and the same
    * reading of the answer. `outcome` says whether a submit_plan call was read or why there is none. Nothing of one
-   * call stays in this object for the next but the cache decision and the fallback memory, each per model.
+   * call stays in this object for the next but the cache decision (per model and effort) and the fallback memory (per
+   * model). `effort` is this request's: one strategist serves its model at every effort, so requests at two efforts
+   * can be on their way at once (an agent's own effort, shadow plans at several efforts).
    */
-  async planFromRequest(request: string, cancel?: AbortSignal): Promise<{ plan: Plan; outcome: PlanOutcome }> {
+  async planFromRequest(request: string, cancel?: AbortSignal, effort: Effort = this.effort): Promise<{ plan: Plan; outcome: PlanOutcome }> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(this.effort, PLAN_TOKENS),
+      max_tokens: roomFor(effort, PLAN_TOKENS, model),
       thinking: { type: 'adaptive' },
-      output_config: { effort: this.effort },
+      output_config: { effort },
       tools: TOOLS,
       tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: `${request}\n\nCall submit_plan now.` }],
-    }, cancel)
+    }, cancel, effort)
     const usage = {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
@@ -528,7 +596,7 @@ export class Strategist {
   async discuss(input: ChatInput): Promise<ChatAnswer> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(this.effort, CHAT_TOKENS),
+      max_tokens: roomFor(this.effort, CHAT_TOKENS, model),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       tools: TOOLS,
@@ -553,7 +621,7 @@ export class Strategist {
   async ask(snapshot: AgentSnapshot, question: string): Promise<{ answer: string; usd: number }> {
     const model = this.model
     const response = await this.createWithManual({
-      max_tokens: roomFor(this.effort, ASK_TOKENS),
+      max_tokens: roomFor(this.effort, ASK_TOKENS, model),
       thinking: { type: 'adaptive' },
       output_config: { effort: this.effort },
       tools: TOOLS,

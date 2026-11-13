@@ -20,7 +20,9 @@ limits, dry run or live, pause, the kill switch or the model.
 
 The box keeps the conversation like a chat: your messages on the right, the manager's answers on the left, up
 to 100 messages, together with the ones you sent on Telegram. A proposed strategy waits under the conversation
-with **Apply** and **Cancel**, also when it was proposed on Telegram. **Ctrl+Enter** sends.
+with **Apply** and **Cancel**, also when it was proposed on Telegram. **Ctrl+Enter** sends. While the manager is
+answering, **Send** waits: the answer is written and paid for even when the page loses the connection, so a second
+Send would pay twice. Send comes back when the answer is in the box.
 
 ### What the manager remembers
 

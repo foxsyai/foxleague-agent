@@ -80,7 +80,7 @@ test('LIST-4 a model without a price is booked at the price of the model that wa
 })
 
 test('HAIKU-1 Claude Haiku 5.5: two rate cards chosen by the length of the prompt, each attempt on its own card', () => {
-  assert.deepEqual(MODELS['claude-haiku-5-5'], { label: 'Haiku 5.5', price: [0.1, 0.5, 0.01], long: { over: 100_000, price: [0.5, 2.5, 0.05] } })
+  assert.deepEqual(MODELS['claude-haiku-5-5'], { label: 'Haiku 5.5', maxOutput: 128_000, price: [0.1, 0.5, 0.01], long: { over: 100_000, price: [0.5, 2.5, 0.05] } })
   const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} is not ${b}`)
   // The prompt is every input token of the request: uncached input, cache reads and cache writes. 100,000 is still short.
   const short = tokens(20_000, 1_000_000, 70_000, 10_000)
@@ -503,7 +503,8 @@ test('R63A-1 the dashboard asks for the password in the same cases, so the owner
   const none = pageFunctions<(model: string, effort: string) => boolean>(['wakesShadow', 'aiCostsMore'], { instance: { model: 'claude-fable-5-2', effort: 'low', models, efforts } })
   assert.equal(none('claude-haiku-5-5', 'low'), false)
   const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 900)
-  assert.match(apply, /askPassword\(wakesShadow\(body\.model\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model\)\)/)
+  // Since the agent review of PR #65 (R65A-6) the effort goes with the model: a lower effort can start an entry with one.
+  assert.match(apply, /askPassword\(wakesShadow\(body\.model, body\.effort\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model, body\.effort\)\)/)
   const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
   assert.match(tip, /A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays\./)
   assert.doesNotMatch(tip, /—|, and |, or /)

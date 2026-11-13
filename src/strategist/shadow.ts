@@ -2,8 +2,13 @@
 // second model and only records what that model would have done, so an owner can compare a cheaper model with the one
 // that plays before switching. A shadow plan is never carried out, never shown to the playing model and changes
 // nothing the agents play by. Since 2026-11-12 several shadow models can be set at once: each gets the request and is
-// recorded by itself. This module holds what is plain data about a shadow plan: the setting, the copy that is kept
-// and the report. It knows nothing of wallets, the chain or the code that carries actions out.
+// recorded by itself. Since 2026-11-13 each entry may carry its own effort (`claude-opus-5-5:low`) and each agent may
+// have its own list (kv shadow_model_agent_N, N as agents are numbered from 1), so the same model can plan in the
+// shadow at other efforts next to the one that plays. Also since 2026-11-13 the entry `same` asks the very model and
+// effort of the real plan again (a repeat): the same model at the same effort does not plan the same twice either, and
+// how often it agrees with itself is the baseline the other shadows are read against. This module holds what is plain
+// data about a shadow plan: the setting, the copy that is kept and the report. It knows nothing of wallets, the chain
+// or the code that carries actions out.
 
 import type { Store } from '../store/db.ts'
 import { agentName } from '../names.ts'
@@ -14,6 +19,19 @@ export const SHADOW_KIND = 'shadow'
 
 /** A shadow request that has not answered after this long is given up (the request is cancelled, nothing is asked again). */
 export const SHADOW_TIMEOUT_MS = 10 * 60_000
+
+/**
+ * The entry of a shadow list that asks the real plan's own model and effort again: a repeat. It is written exactly so,
+ * takes no effort after a colon and follows the model and effort the real plan of that tick was asked with. It rests
+ * only where it cannot run: under a playing model the list does not have (repeatRuns).
+ */
+export const SAME = 'same'
+
+/** How the activity and the report name a repeat. */
+const AGAIN = "the real plan's own model and effort again"
+
+/** An entry as the log and the CLI name it: `same` in plain words, any other as written. */
+export const entryText = (entry: string): string => (entry === SAME ? `${SAME} (the real plan's model and effort again)` : entry)
 
 /** How a shadow request ended: as a plan request can end, or with an error, or without an answer in time. */
 export type ShadowOutcome = PlanOutcome | 'error' | 'timeout'
@@ -56,52 +74,155 @@ export interface ShadowPlanRow {
   ms: number
 }
 
-/** The shadow models that run next to one real plan, their one effort and why an entry of the setting does not run. */
+/** The shadow models that run next to one real plan, their efforts and why an entry of the setting does not run. */
 export interface ShadowChoices {
-  /** The models that get this plan's request, in the order they were written, each once. Empty: no shadow plans. */
+  /**
+   * The entries that get this plan's request, in the order they were written, each (model and effort) once: a model
+   * id, a model id and its effort after a colon (`claude-opus-5-5:low`) or `same`. Empty: no shadow plans. shadowRuns
+   * reads them as models and efforts.
+   */
   readonly models: string[]
-  /** One effort for every shadow model. */
+  /** The effort of an entry written without its own (shadow_effort, else medium). */
   readonly effort: Effort
   /** For the log: one reason per entry that was left out (not on the list or the model that plays). */
   readonly leftOut: string[]
+  /** The model and effort `same` runs at: the pair the real plan was asked with. Only there while `same` runs. */
+  readonly repeat?: { readonly model: string; readonly effort: Effort }
 }
 
 /** The entries of a setting that are read: the list of models has four, and a setting typed by hand must not fill the log. */
 const MAX_ENTRIES = 16
 
+/** The kv key of one agent's own list of shadow models: N as agents are numbered in the CLI and the dashboard, from 1. */
+export const agentShadowKey = (index: number): string => `shadow_model_agent_${index + 1}`
+
 /**
- * The setting as written: the database's (kv shadow_model), else AGENT_SHADOW_MODEL from the environment. One model
- * id or several separated by commas, each once. Not set, empty or "off" means none; "off" anywhere among several
- * switches all of them off, so a half-typed setting never costs anything.
+ * The list that holds for an agent: its own (kv shadow_model_agent_N) when that holds anything but blanks, else the
+ * all-agents one (kv shadow_model, else AGENT_SHADOW_MODEL from the environment). Without an agent, the all-agents one.
  */
-function entriesSet(store: Store): { read: string[]; unread: number } {
-  const ids = [...new Set((store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '').split(',').map(id => id.trim()).filter(Boolean))]
+function listOf(store: Store, agentIndex?: number | null): { text: string; own: boolean } {
+  if (agentIndex !== undefined && agentIndex !== null) {
+    const own = store.getKv(agentShadowKey(agentIndex))
+    if (own !== undefined && own.trim()) return { text: own, own: true }
+  }
+  return { text: store.getKv('shadow_model') ?? process.env.AGENT_SHADOW_MODEL ?? '', own: false }
+}
+
+/** Whether an agent has a list of its own, set on the machine (else it follows the all-agents list). */
+export function hasOwnShadowList(store: Store, agentIndex: number): boolean {
+  return listOf(store, agentIndex).own
+}
+
+/**
+ * The setting as written: entries separated by commas, each once. Not set, empty or "off" means none; "off" anywhere
+ * among several switches all of them off, so a half-typed setting never costs anything.
+ */
+function entriesSet(store: Store, agentIndex?: number | null): { read: string[]; unread: number } {
+  const ids = [...new Set(listOf(store, agentIndex).text.split(',').map(id => id.trim()).filter(Boolean))]
   if (ids.some(id => id.toLowerCase() === 'off')) return { read: [], unread: 0 }
   return { read: ids.slice(0, MAX_ENTRIES), unread: Math.max(0, ids.length - MAX_ENTRIES) }
 }
 
+/** One entry of the setting: its model and its own effort, null when it has none (`claude-opus-5-5:low`, `claude-haiku-5-5`). */
+export function entryOf(entry: string): { model: string; effort: string | null } {
+  const at = entry.indexOf(':')
+  return at < 0 ? { model: entry, effort: null } : { model: entry.slice(0, at), effort: entry.slice(at + 1) }
+}
+
+const isEffort = (effort: string): effort is Effort => (EFFORTS as readonly string[]).includes(effort)
+
 /**
- * The shadow models of a plan and their effort: the database's setting (kv shadow_model, shadow_effort), else
- * AGENT_SHADOW_MODEL and AGENT_SHADOW_EFFORT from the environment. shadow_model holds one model id or several
- * separated by commas. Not set, empty or "off" means no shadow plans, which is the default. An entry the list of
- * models does not have and the model that plays are left out, each with its reason for the log; a repeated entry
- * counts once. The effort is one for every shadow model. There is no dashboard control and no Telegram command for
- * any of it: it adds AI spend, so it is switched on only on the machine itself.
+ * Whether `same` can run under this playing pair: a model of the list with one of the five efforts. Under any other
+ * (a model the list does not have, AGENT_MODEL naming one; no effort known) it is left out, so it rests there, and a
+ * switch from there to a pair of the list starts it (wakesShadow in src/web/server.ts; agent review of PR #67, R67A-1).
  */
-export function shadowChoices(store: Store, playing: string): ShadowChoices {
-  const { read, unread } = entriesSet(store)
+export function repeatRuns(playing: string | { model: string; effort: string | null }): boolean {
+  const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
+  return isKnownModel(p.model) && p.effort !== null && isEffort(p.effort)
+}
+
+/** An entry that can run: `same`, or a model of the list with no effort or one of the five. */
+const runnable = (entry: string): boolean => {
+  if (entry === SAME) return true
+  const e = entryOf(entry)
+  return isKnownModel(e.model) && (e.effort === null || isEffort(e.effort))
+}
+
+/**
+ * Whether an entry rests while this model and effort play: one with its own effort only at that very model and effort,
+ * one without at its model whatever the effort, as before entries had efforts. `playing` given as a model alone (no
+ * effort known) rests only the entries without an effort. `same` is not an entry at a pair: it is the pair that plays,
+ * so it is never at rest here; where it cannot run is repeatRuns.
+ */
+export function rests(entry: string, playing: string | { model: string; effort: string | null }): boolean {
+  if (entry === SAME) return false
+  const e = entryOf(entry)
+  const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
+  return e.model === p.model && (e.effort === null || e.effort === p.effort)
+}
+
+/**
+ * The shadow models of a plan and their efforts. The list is the agent's own (kv shadow_model_agent_N) when it has
+ * one, else the all-agents one: the database's setting (kv shadow_model), else AGENT_SHADOW_MODEL from the
+ * environment. It holds one entry or several separated by commas, each a model id with or without its effort after a
+ * colon, or `same`. Not set, empty or "off" means no shadow plans, which is the default. An entry without an effort
+ * takes shadow_effort (else AGENT_SHADOW_EFFORT, else medium; one nobody knows is medium). An entry the list of models
+ * does not have, an effort that is not one of the five and an entry that rests (see `rests`) are left out, each with
+ * its reason for the log; a repeated model and effort counts once. `same` runs at `playing` (a repeat) and never rests;
+ * it is left out when `playing` is not a model of the list with one of the five efforts, since the pair it would run is
+ * then not known. An explicit entry at the playing pair rests as before, so with `same` beside it the pair runs once.
+ * There is no dashboard control and no Telegram command for any of it: it adds AI spend, so it is switched on only on
+ * the machine itself.
+ */
+export function shadowChoices(store: Store, playing: string | { model: string; effort: string | null }, agentIndex?: number | null): ShadowChoices {
+  const { read, unread } = entriesSet(store, agentIndex)
+  const fallback = (store.getKv('shadow_effort') ?? process.env.AGENT_SHADOW_EFFORT ?? 'medium').trim()
+  const effort: Effort = isEffort(fallback) ? fallback : 'medium'
   const models: string[] = []
   const leftOut: string[] = []
+  const pairs = new Set<string>()
+  let repeat: { model: string; effort: Effort } | undefined
   for (const id of read) {
-    // A setting typed by hand: only what a model id can hold reaches the log.
+    // A setting typed by hand: only what a model id and an effort can hold reaches the log.
     const named = id.slice(0, 60).replace(/[^\w.:-]/g, '?')
-    if (!isKnownModel(id)) leftOut.push(`${named} is not a model on the list (${Object.keys(MODELS).join(', ')})`)
-    else if (id === playing) leftOut.push(`${named} is the model that plays, and a shadow plan needs another one`)
-    else models.push(id)
+    const e = entryOf(id)
+    if (id === SAME) {
+      const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
+      if (!isKnownModel(p.model)) leftOut.push(`${SAME} needs a model of the list, and the one that plays (${String(p.model).slice(0, 60).replace(/[^\w.:-]/g, '?')}) is not`)
+      // These two checks together are repeatRuns, with a reason each.
+      else if (p.effort === null || !isEffort(p.effort)) leftOut.push(`${SAME} needs the effort that plays, which is not known here`)
+      else {
+        const pair = `${p.model}:${p.effort}`
+        if (!pairs.has(pair)) models.push(SAME)
+        pairs.add(pair)
+        repeat = { model: p.model, effort: p.effort }
+      }
+    } else if (e.model === SAME) leftOut.push(`${named} has an effort, and ${SAME} takes none: it is the real plan's model and effort`)
+    else if (!isKnownModel(e.model)) leftOut.push(`${named} is not a model on the list (${Object.keys(MODELS).join(', ')})`)
+    else if (e.effort !== null && !isEffort(e.effort)) leftOut.push(`${named} has an effort that is not one of ${EFFORTS.join(', ')}`)
+    else if (rests(id, playing)) {
+      leftOut.push(e.effort === null ? `${named} is the model that plays, and a shadow plan needs another one` : `${named} is the model and effort that play, and a shadow plan needs another model or effort`)
+    } else {
+      const pair = `${e.model}:${e.effort ?? effort}`
+      if (!pairs.has(pair)) models.push(id)
+      pairs.add(pair)
+    }
   }
   if (unread) leftOut.push(`${unread} more entries are not read (${MAX_ENTRIES} at most)`)
-  const effort = (store.getKv('shadow_effort') ?? process.env.AGENT_SHADOW_EFFORT ?? 'medium').trim()
-  return { models, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium', leftOut }
+  // `repeat` only while `same` runs: a setting without it reads exactly as before.
+  return { models, effort, leftOut, ...(repeat && models.includes(SAME) ? { repeat } : {}) }
+}
+
+/**
+ * The models and efforts that get a plan's request, from its choices: each entry with its own effort or the shared one,
+ * `same` at the pair the real plan was asked with (none without that pair).
+ */
+export function shadowRuns(choices: ShadowChoices): { model: string; effort: Effort }[] {
+  return choices.models.flatMap(id => {
+    if (id === SAME) return choices.repeat ? [{ model: choices.repeat.model, effort: choices.repeat.effort }] : []
+    const e = entryOf(id)
+    return [{ model: e.model, effort: e.effort !== null && isEffort(e.effort) ? e.effort : choices.effort }]
+  })
 }
 
 /**
@@ -110,17 +231,20 @@ export function shadowChoices(store: Store, playing: string): ShadowChoices {
  */
 export function shadowNote(choices: ShadowChoices): string | null {
   if (!choices.leftOut.length) return null
-  return `${choices.models.length ? `shadow plans run by ${choices.models.join(', ')} only` : 'shadow plans are off'}: ${choices.leftOut.join('; ')}`
+  return `${choices.models.length ? `shadow plans run by ${choices.models.map(entryText).join(', ')} only` : 'shadow plans are off'}: ${choices.leftOut.join('; ')}`
 }
 
 /**
- * The shadow models that are set, whatever model plays: the entries of the setting that the list of models has, each
- * once; none when nothing is set or it is "off". One of them rests while it is the model that plays and runs under
- * any other, which is why a switch of the playing model away from it starts its shadow plans and asks for the
- * password (wakesShadow in src/web/server.ts).
+ * The shadow entries that are set for an agent (its own list, else the all-agents one) or, without an agent, the
+ * all-agents ones, whatever model plays: the entries that can run (`same`, or a model of the list with no effort or one
+ * of the five), each once; none when nothing is set or it is "off". One of them rests while its model (and its effort,
+ * when it has one) plays and runs under any other, which is why a switch of the playing model or effort away from it
+ * starts its shadow plans and asks for the password (wakesShadow in src/web/server.ts). `same` follows the pair that
+ * plays, so a switch between pairs of the list does not start it (a dearer pair asks for the password anyway); a switch
+ * from a model the list does not have, where it cannot run, to one of the list starts it and asks too (R67A-1).
  */
-export function shadowModelsSet(store: Store): string[] {
-  return entriesSet(store).read.filter(id => isKnownModel(id))
+export function shadowModelsSet(store: Store, agentIndex?: number | null): string[] {
+  return entriesSet(store, agentIndex).read.filter(runnable)
 }
 
 /** The most a rejected proposal may take in a record: a model can write anything there. */
@@ -168,10 +292,10 @@ const oneLine = (text: string): string => text.replace(/[\p{Cc}\p{Cf}\u2028\u202
 /**
  * The activity line of a shadow plan: who, the cost and the time, then the plan's own summary and its actions as
  * compact JSON, each marked with what parseAction said. Without a plan (a refusal, a cut-off answer, an error, no
- * answer in time) the one line that says so.
+ * answer in time) the one line that says so. A repeat (`repeat`: the real plan's own model and effort) says so.
  */
-export function shadowLine(o: { model: string; effort: string; usd: number; ms: number; text: string; plan?: RecordedPlan }): string {
-  const head = `shadow plan by ${MODELS[o.model]?.label ?? o.model} (${o.effort}), $${o.usd.toFixed(4)}, ${Math.round(o.ms / 1000)} s: `
+export function shadowLine(o: { model: string; effort: string; usd: number; ms: number; text: string; plan?: RecordedPlan; repeat?: boolean }): string {
+  const head = `shadow plan by ${MODELS[o.model]?.label ?? o.model} (${o.effort})${o.repeat ? `, ${AGAIN}` : ''}, $${o.usd.toFixed(4)}, ${Math.round(o.ms / 1000)} s: `
   const actions = o.plan ? ` ${JSON.stringify(o.plan.actions.map(a => (a.ok ? { ok: true, action: a.action } : { error: a.error, action: a.action })))}` : ''
   const line = head + oneLine(o.text).slice(0, SUMMARY_CHARS) + actions
   return line.length > LINE_CHARS ? `${line.slice(0, LINE_CHARS - 1)}…` : line
@@ -221,13 +345,41 @@ function modelsOf(rows: ShadowPlanRow[]): string[] {
   return [...listedFirst, ...met.filter(id => !listedFirst.includes(id))]
 }
 
+/** A shadow model at one effort, as a row records it. */
+type ShadowPair = { model: string; effort: string }
+const samePair = (r: ShadowPlanRow, p: ShadowPair): boolean => r.shadowModel === p.model && r.shadowEffort === p.effort
+
+/**
+ * The shadow models and efforts of the rows (since 2026-11-13 one model can plan in the shadow at several efforts):
+ * the models in the order of modelsOf, each model's efforts from the least, then any other effort in the order met.
+ */
+function pairsOf(rows: ShadowPlanRow[]): ShadowPair[] {
+  return modelsOf(rows).flatMap(model => {
+    const met = [...new Set(rows.filter(r => r.shadowModel === model).map(r => r.shadowEffort))]
+    const known: string[] = EFFORTS.filter(e => met.includes(e))
+    return [...known, ...met.filter(e => !known.includes(e))].map(effort => ({ model, effort }))
+  })
+}
+
+/** A row of a repeat (`same`): its shadow model and effort are the real plan's own. No shadow of another entry can be one. */
+const isRepeat = (r: ShadowPlanRow): boolean => r.shadowModel === r.realModel && r.shadowEffort === r.realEffort
+
+/** A block of the report: one shadow model at one effort, its repeats apart from its shadows next to another real pair. */
+type ShadowGroup = ShadowPair & { repeat: boolean }
+const inGroup = (r: ShadowPlanRow, g: ShadowGroup): boolean => samePair(r, g) && isRepeat(r) === g.repeat
+
+/** The blocks of the rows, in the order of pairsOf; at one model and effort the shadows of another real pair first, then the repeats. */
+function groupsOf(rows: ShadowPlanRow[]): ShadowGroup[] {
+  return pairsOf(rows).flatMap(p => [false, true].filter(repeat => rows.some(r => inGroup(r, { ...p, repeat }))).map(repeat => ({ ...p, repeat })))
+}
+
 /** The shadow plans of one real plan are recorded within this long of each other: each is given up after SHADOW_TIMEOUT_MS. */
 const SAME_TICK_MS = SHADOW_TIMEOUT_MS + 60_000
 
 /**
  * The rows grouped by the real plan they stand next to, newest first: the same agent, the same recorded real plan
  * (model, effort and the plan itself, with its cost), recorded within the time one tick's shadow plans can take, and
- * each shadow model once. The table has no column for it and needs none. Two rows that only look alike (the same
+ * each shadow model at each effort once. The table has no column for it and needs none. Two rows that only look alike (the same
  * agent with the very same real plan twice) are told apart by the time or by a shadow model met twice.
  */
 function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
@@ -236,7 +388,7 @@ function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
   for (const r of rows) {
     const key = JSON.stringify([r.agentIndex, r.realModel, r.realEffort, r.real])
     const group = newest.get(key)
-    if (group && !group.some(x => x.shadowModel === r.shadowModel) && Date.parse(group[0]!.at) - Date.parse(r.at) <= SAME_TICK_MS) group.push(r)
+    if (group && !group.some(x => samePair(x, { model: r.shadowModel, effort: r.shadowEffort })) && Date.parse(group[0]!.at) - Date.parse(r.at) <= SAME_TICK_MS) group.push(r)
     else {
       const next = [r]
       newest.set(key, next)
@@ -249,27 +401,40 @@ function byRealPlan(rows: ShadowPlanRow[]): ShadowPlanRow[][] {
 /**
  * The report of `cli shadow-report`: how many shadow plans, how many answered with a plan, how many of their actions
  * parsed, how often the shadow proposed the same action types as the real plan of the same tick and the average cost
- * and time, once per shadow model when there are several; then the last real plans, each with its shadow plans
- * below it. `rows` newest first, as the store gives them.
+ * and time, once per shadow model when there are several, and once per model and effort when a model planned at
+ * several efforts (each block then named like "Opus 5.5 (low)"); then the last real plans, each with its model and
+ * effort and its shadow plans below it. Repeats (`same`: a row whose shadow model and effort are its real plan's own)
+ * are a block of their own per model and effort, named "Opus 5.5 (xhigh), the real plan's own model and effort again",
+ * and marked "repeat" under their real plan. `rows` newest first, as the store gives them; rows of one agent for `N`.
+ * Rows without a repeat give the report as before, line for line.
  */
 export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentIndex?: number | null } = {}): string {
   const who = o.agentIndex === null || o.agentIndex === undefined ? 'all agents' : agentName(o.agentIndex)
-  if (!rows.length) return `No shadow plans recorded (${who}). Shadow plans are off unless shadow_model is set on this machine: see docs/SERVER.md.`
-  const models = modelsOf(rows)
+  if (!rows.length) return `No shadow plans recorded (${who}). Shadow plans are off unless shadow_model is set on this machine (or shadow_model_agent_N for agent N): see docs/SERVER.md.`
+  const groups = groupsOf(rows)
+  const repeats = rows.filter(isRepeat).length
+  // Named by the model alone while each model planned at one effort and nothing repeated, as before; else by model and
+  // effort. A repeat is named by its model and effort and in words.
+  const byEffort = repeats > 0 || pairsOf(rows).length > modelsOf(rows).length
+  const name = (g: ShadowGroup): string => (g.repeat ? `${label(g.model)} (${g.effort}), ${AGAIN}` : byEffort ? `${label(g.model)} (${g.effort})` : label(g.model))
   const span = `from ${minute(rows.at(-1)!.at)} to ${minute(rows[0]!.at)} UTC`
   const lines: string[] = []
-  if (models.length === 1) lines.push(`Shadow plans (${who}): ${rows.length}, ${span}`, ...summaryOf(rows))
+  if (groups.length === 1 && !repeats) lines.push(`Shadow plans (${who}): ${rows.length}, ${span}`, ...summaryOf(rows))
   else {
-    lines.push(`Shadow plans (${who}): ${rows.length} by ${models.length} shadow models, ${span}`)
-    for (const model of models) {
-      const own = rows.filter(r => r.shadowModel === model)
-      lines.push('', `${label(model)}: ${own.length} shadow plan${own.length === 1 ? '' : 's'}`, ...summaryOf(own))
+    lines.push(repeats
+      ? `Shadow plans (${who}): ${rows.length}, ${span}; ${repeats} of them by ${AGAIN}`
+      : `Shadow plans (${who}): ${rows.length} by ${groups.length} ${byEffort ? 'shadow pairs (model and effort)' : 'shadow models'}, ${span}`)
+    for (const g of groups) {
+      const own = rows.filter(r => inGroup(r, g))
+      lines.push('', `${name(g)}: ${own.length} shadow plan${own.length === 1 ? '' : 's'}`, ...summaryOf(own))
     }
     lines.push('')
   }
   const ticks = byRealPlan(rows)
   const last = ticks.slice(0, o.last ?? 5)
-  lines.push('A shadow plan is judged by reading it: nothing here says which plan was the better one.', '', `The last ${last.length}:`)
+  lines.push('A shadow plan is judged by reading it: nothing here says which plan was the better one.')
+  if (repeats) lines.push(`A repeat asks the real plan's own model and effort again: how often it agrees with the real plan is the baseline for the other groups.`)
+  lines.push('', `The last ${last.length}:`)
   for (const tick of last) {
     // The first recorded of the group is the nearest to the moment the real plan was made.
     const first = tick.at(-1)!
@@ -278,9 +443,10 @@ export function shadowReport(rows: ShadowPlanRow[], o: { last?: number; agentInd
       `  real   ${label(first.realModel)} (${first.realEffort}): ${listed(first.real)}`,
       `         ${oneLine(first.real.summary).slice(0, 200)}`,
     )
-    for (const r of [...tick].sort((a, b) => models.indexOf(a.shadowModel) - models.indexOf(b.shadowModel))) {
+    const at = (r: ShadowPlanRow): number => groups.findIndex(g => inGroup(r, g))
+    for (const r of [...tick].sort((a, b) => at(a) - at(b))) {
       lines.push(
-        `  shadow ${label(r.shadowModel)} (${r.shadowEffort}), $${r.usd.toFixed(4)}, ${Math.round(r.ms / 1000)} s: ${r.outcome === 'plan' ? listed(r.shadow) : (OTHER_OUTCOMES.find(([k]) => k === r.outcome)?.[1] ?? r.outcome)}`,
+        `  ${isRepeat(r) ? 'repeat' : 'shadow'} ${label(r.shadowModel)} (${r.shadowEffort}), $${r.usd.toFixed(4)}, ${Math.round(r.ms / 1000)} s: ${r.outcome === 'plan' ? listed(r.shadow) : (OTHER_OUTCOMES.find(([k]) => k === r.outcome)?.[1] ?? r.outcome)}`,
         `         ${oneLine(r.shadow.summary).slice(0, 200)}`,
       )
     }

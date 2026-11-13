@@ -10,13 +10,18 @@ import { RELEASE_KEYS } from '../../src/update/keys.ts'
 const ROOT = new URL('../../', import.meta.url)
 const record = readFileSync(new URL('docs/SECURITY-REVIEW.md', ROOT), 'utf8')
 const TITLE = '## Final audit before the public launch (2026-11-11): six Claude Fable 5.2 reviewers at extra-high effort, the fixes by Claude Fable 5.2 at high effort'
-const section = record.slice(record.indexOf(TITLE))
+// Found by its heading, up to the next one, as SHADOW-15 finds its own: the sections of later dates follow it.
+const from = record.indexOf(`\n${TITLE}\n`)
+const next = from < 0 ? -1 : record.indexOf('\n## ', from + 1)
+const section = from < 0 ? '' : record.slice(from + 1, next < 0 ? undefined : next)
 const flat = section.replace(/\s+/g, ' ')
 const AREAS: Record<string, [findings: number, medium: number, low: number]> = { MONEY: [4, 2, 2], ATTACK: [8, 2, 6], EDGE: [8, 1, 7], INTEG: [6, 0, 6], INSTALL: [21, 5, 16], DOCS: [14, 6, 8] }
 
-test('the final audit is one section at the end of the record, with the method and one table in the file\'s format', () => {
+test('the final audit is one section of the record, after the Mac install check, with the method and one table in the file\'s format', () => {
   assert.equal(record.split(TITLE).length, 2, 'the section is there once')
-  assert.equal(section.split('\n## ').length, 1, 'it is the last section')
+  assert.ok(from > 0, 'the section is found by its heading')
+  assert.ok(from > record.indexOf('\n## Mac install check (2026-11-12)\n'), 'after the section before it')
+  assert.ok(section.startsWith(`${TITLE}\n`), 'the section starts at its heading')
   assert.match(flat, /on the frozen tree `ac8833f`/)
   assert.match(flat, /the proofs are kept under `test\/audit-1111\/`/)
   assert.match(flat, /No critical and no high finding/)

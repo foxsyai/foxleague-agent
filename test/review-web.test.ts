@@ -97,7 +97,7 @@ test('B2 a dearer model or a higher effort for every agent needs the password; a
     res = await post('/api/strategist', { model: 'claude-sonnet-5', effort: 'low' })
     assert.equal(res.status, 400, 'Sonnet 5 is no longer offered')
     PRICES['test-dearer-cache-read'] = { price: [2, 10, 0.2] }
-    MODELS['test-dearer-cache-read'] = { label: 'Test', price: [2, 10, 0.2] }
+    MODELS['test-dearer-cache-read'] = { label: 'Test', maxOutput: 128_000, price: [2, 10, 0.2] }
     try {
       assert.equal(raisesAiSpend({ model: 'claude-sonnet-5-5', effort: 'low' }, { model: 'test-dearer-cache-read', effort: 'low' }), true, 'a dearer cache read alone raises the price')
       res = await post('/api/strategist', { model: 'test-dearer-cache-read', effort: 'low' })

@@ -80,7 +80,7 @@ the dashboard or by chatting with it on Telegram.
 
 - **Dashboard** at `http://localhost:8870`: every agent with its balances, spend against the caps, last plan and
   activity; settings with an explanation on every field; Pause, Plan now, Add agent, Go LIVE and the kill switch;
-  the AI's model and effort; the Keys panel.
+  the AI's model and effort for all agents or one agent; the Keys panel.
 - **Telegram** (optional): a summary of every agent each morning, every update as it happens if you want it
   (`/updates all`). Write in plain words ("focus on Silver tournaments this
   week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`
@@ -97,7 +97,7 @@ the dashboard or by chatting with it on Telegram.
 ## What it costs
 
 - **The game:** never more than your caps (defaults $5 a day and $150 a month, plus $20 for the registration).
-- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day.
+- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. Each agent can also have its own model and effort; the cache is shared by the agents on the same model and effort.
 - **Network fees:** a few cents a day.
 
 ## Command line
@@ -112,6 +112,7 @@ lists every command):
 ./cli.sh dry-run 1 '<json>'   # run hand-written actions through the checks, simulated
 ./cli.sh kill on|off | pause N | resume N | mode [dry|live] | log [N]
 ./cli.sh shadow-report [N]     # what each shadow model would have planned (shadow plans, docs/SERVER.md)
+./cli.sh model [N] [model effort]  # each agent's AI; agent N's own model and effort (same: the all-agents one)
 ./cli.sh configure            # keys, typed hidden
 ./cli.sh check-keys           # test the keys
 ./cli.sh set-web-password     # dashboard login

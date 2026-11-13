@@ -266,7 +266,11 @@ test('WIN-1 no page promises as seen what nobody has seen on a real Windows PC',
 
 test('WIN-1 the record: one row, and what stays open says that get.ps1 has not run on a real Windows PC', () => {
   const record = raw('docs/SECURITY-REVIEW.md')
-  const section = record.slice(record.indexOf('## Final audit before the public launch (2026-11-11)'))
+  // Its section, found by its heading up to the next one: the sections of later dates follow it.
+  const from = record.indexOf('\n## Final audit before the public launch (2026-11-11)')
+  assert.ok(from > 0, 'the section is in the record')
+  const next = record.indexOf('\n## ', from + 1)
+  const section = record.slice(from, next < 0 ? undefined : next)
   const rows = section.split('\n').filter(l => l.startsWith('| WIN-1 |'))
   assert.equal(rows.length, 1)
   const cells = rows[0]!.split(/(?<!\\)\|/).slice(1, -1).map(c => c.trim())

@@ -337,7 +337,7 @@ test('the record: the check has its section in docs/SECURITY-REVIEW.md, found by
   const start = review.indexOf(heading)
   assert.ok(start >= 0, 'the section is in the record')
   assert.equal(review.split(heading).length, 2, 'once')
-  // The final audit before the public launch stays the last section (test/audit-1111/docs-record.test.ts).
+  // The final audit before the public launch follows it (test/audit-1111/docs-record.test.ts).
   assert.ok(start < review.indexOf('\n## Final audit before the public launch (2026-11-11)'), 'before the final audit')
   const next = review.indexOf('\n## ', start + heading.length)
   const section = review.slice(start, next < 0 ? undefined : next)

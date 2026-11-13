@@ -20,7 +20,8 @@ In short:
    Telegram), `agentctl.sh set-web-password` (the dashboard login), `agentctl.sh check-keys`.
 4. Start it: `systemctl enable --now foxleague-agent`.
 5. Optional: the dashboard on your own domain behind nginx with TLS, from the template
-   `deploy/nginx-foxleague-agent.conf`.
+   `deploy/nginx-foxleague-agent.conf`. Set up from an older template, raise its `proxy_read_timeout` to `1080s`:
+   Talk to the manager can take up to 17 minutes at the highest effort.
 
 A server set up this way does not update itself. The dashboard and Telegram still tell you when a new version is
 out; ship it from your computer with `./deploy/deploy.sh`, as in step 2 ([Update](/help/update/)).
@@ -32,4 +33,6 @@ in your local copy's `.env`, `./deploy/sync-pems.sh` writes a `pem/agentN.pem` f
 
 The full guide also says how to let one or more other AI models plan in the shadow, to compare them with the one
 that plays before you switch ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). It shows how
-to read the comparison with `agentctl.sh shadow-report` too.
+to read the comparison with `agentctl.sh shadow-report` too, how to set an agent's own model and effort from the
+command line (`agentctl.sh model`), how to let one agent's model plan in the shadow at other efforts and how to let
+the model that plays plan once more at its own effort, as a baseline for the others.

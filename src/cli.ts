@@ -11,14 +11,15 @@ import type { MatchFormations } from './foxleague/types.ts'
 import type { MarketSale, MarketSalesCache } from './snapshot/market.ts'
 import { renderDigest, snapshotToJson } from './snapshot/digest.ts'
 import { assertSameWords, deriveWallet, exportPem, generateMnemonicInto, shardOf, type AgentWallet } from './wallet/wallet.ts'
-import { Store, readShadowPlans } from './store/db.ts'
+import { Store, readShadowPlans, type AgentRow } from './store/db.ts'
+import { validateSettingsPatch, type AgentSettings } from './store/settings.ts'
 import { secretsFile, writeSecrets } from './store/secrets.ts'
 import { Executor, formatResult, liveSigningAllowed } from './executor/executor.ts'
 import { parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { Strategist, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
+import { EFFORTS, MODELS, Strategist, agentChoice, isKnownModel, ownAi, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
 import { buildManual, manualStatus } from './strategist/manual.ts'
-import { shadowReport } from './strategist/shadow.ts'
+import { entryText, hasOwnShadowList, shadowModelsSet, shadowReport } from './strategist/shadow.ts'
 import { checkKeys, pickOwnerChat, promptHidden, setEnvValues, telegramMe, telegramRecentChats } from './setup/keys.ts'
 import { Address } from '@multiversx/sdk-core'
 import { randomBytes, randomInt } from 'node:crypto'
@@ -64,6 +65,9 @@ function usage(): never {
   log [N]                       recent activity
   shadow-report [N]             what each shadow model would have planned next to the real plans (shadow plans, off
                                 unless shadow_model is set: docs/SERVER.md); it only reads, also while the service runs
+  model [N] [<model>|same <effort>|same]  each agent's AI model and effort and its shadow plans; with a model and an
+                                effort, agent N's own from its next plan (same: the all-agents one). Set here, on the
+                                machine, it asks for no password
   configure                    enter the API keys with hidden input; they go straight into the env file
   check-keys                    verify the Anthropic, Telegram and Binance keys (Binance: withdraw-only, IP-locked)
   set-web-password              web UI username and password (stored as a scrypt hash) and the session key
@@ -318,7 +322,9 @@ async function main(): Promise<void> {
         console.log(renderPlanRequest(input))
         return
       }
-      const choice = strategistChoice(store, cfg)
+      // The agent's own model and effort where it has them, as the service plans it.
+      const choice = agentChoice(agent.settings, strategistChoice(store, cfg))
+      for (const why of choice.ignored) console.log(`${agentName(index)}: ${why}`)
       const plan = await new Strategist(cfg.anthropicApiKey, choice.model, choice.effort).plan(input)
       console.log(`PLAN: ${plan.summary}\nmodel $${plan.usage.usd.toFixed(4)}, in ${plan.usage.inputTokens} (+${plan.usage.cacheReadTokens} cached, ${plan.usage.cacheWriteTokens} written), out ${plan.usage.outputTokens}, stop ${plan.stopReason}`)
       for (const r of plan.rejected) console.log(`rejected proposal: ${r.error} ${JSON.stringify(r.raw)}`)
@@ -365,6 +371,40 @@ async function main(): Promise<void> {
       } else {
         for (const r of store.activity(args[0] ? agentIndex(args[0]) : null, 30).reverse()) console.log(`${r.at.slice(0, 19)} ${r.agentIndex === null ? '-' : `a${r.agentIndex + 1}`} ${r.kind} [${r.status}] ${r.summary}`)
       }
+      return
+    }
+    case 'model': {
+      // An agent's own AI model and effort (the owner, 2026-11-13). Set on the machine, like every server-side setting,
+      // it asks for no dashboard password. A running service reads it at the agent's next plan.
+      const store = new Store(cfg.dataDir)
+      const all = strategistChoice(store, cfg, () => undefined)
+      const pair = (ai: { model: string; effort: string }) => `${MODELS[ai.model]?.label ?? ai.model} at ${ai.effort} effort`
+      const whose = (s: AgentSettings) => {
+        const own = ownAi(s)
+        return own.model && own.effort ? 'its own model and its own effort' : own.model ? 'its own model' : own.effort ? 'its own effort' : 'same as all agents'
+      }
+      const line = (b: AgentRow) => {
+        const ai = agentChoice(b.settings, all)
+        const shadows = shadowModelsSet(store, b.index)
+        return `${agentName(b.index)}: ${pair(ai)} (${[whose(b.settings), ...ai.ignored].join('; ')})${shadows.length ? `; shadow plans by ${shadows.map(entryText).join(', ')}${hasOwnShadowList(store, b.index) ? ' (its own list)' : ''}` : ''}`
+      }
+      if (!args.length) {
+        console.log(`all agents: ${pair(all)} (the Strategist box)`)
+        for (const b of store.agents()) console.log(line(b))
+        return
+      }
+      const index = agentIndex(args[0])
+      const agent = store.agent(index)
+      if (!agent) throw new Error(`no ${agentName(index)}`)
+      if (args.length === 1) return console.log(line(agent))
+      if (args.length !== 3) throw new Error('usage: model <N> <model|same> <effort|same>')
+      const [, model, effort] = args as [string, string, string]
+      if (model !== 'same' && !isKnownModel(model)) throw new Error(`unknown model ${model}: one of ${Object.keys(MODELS).join(', ')} or same`)
+      if (effort !== 'same' && !(EFFORTS as readonly string[]).includes(effort)) throw new Error(`unknown effort ${effort}: one of ${EFFORTS.join(', ')} or same`)
+      const next = store.updateSettings(index, validateSettingsPatch({ aiModel: model === 'same' ? '' : model, aiEffort: effort === 'same' ? '' : effort }))
+      const ai = agentChoice(next, all)
+      store.log({ agentIndex: index, kind: 'control', status: 'info', summary: `AI model and effort ${pair(ai)} (CLI)` })
+      console.log(`${agentName(index)} plays ${pair(ai)} from its next plan (${whose(next)})`)
       return
     }
     case 'shadow-report': {
