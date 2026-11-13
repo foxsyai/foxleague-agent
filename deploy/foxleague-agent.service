@@ -28,6 +28,9 @@ PrivateDevices=true
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
+# Kept on this server unit, taken out of the user unit of install.sh (W-9, 2026-11-14): its filter refuses openat2,
+# which Ubuntu 26.04's tar needs. Nothing in this unit runs tar: a server set up by hand never updates itself and
+# deploy.sh copies the code in with rsync. The agent runs here as a user of its own, where the rule does its work.
 RestrictSUIDSGID=true
 LockPersonality=true
 ReadWritePaths=/var/lib/foxleague-agent
