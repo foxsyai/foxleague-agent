@@ -165,7 +165,9 @@ that keeps Ubuntu running:
 Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false
 ```
 
-This line does the same: it removes that task and nothing else, then names the step inside Ubuntu.
+That removes the task, but the hidden `wsl.exe` it started runs on and keeps Ubuntu up until Windows restarts:
+`wsl --terminate Ubuntu` stops Ubuntu now. This line does both: it removes that task, stops that one `wsl.exe` (it
+knows it by its whole command line) and nothing else, then names the step inside Ubuntu.
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall

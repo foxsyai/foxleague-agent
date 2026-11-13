@@ -389,6 +389,18 @@ Check 'the scheduled task: one wsl.exe kept attached, without a window, named so
     True (-not (Test-FoxOwnTask $a['Execute'] '--headless C:\WINDOWS\System32\wsl.exe -d Debian --cd ~ --exec /bin/sleep infinity')) 'another distribution'
     True (-not (Test-FoxOwnTask $a['Execute'] '--headless powershell.exe -File C:\x.ps1')) 'another command'
 }
+Check 'W-13 the hidden wsl.exe of the keep-alive is told by its whole command line, and nothing else is' {
+    foreach ($line in @('C:\WINDOWS\System32\wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity', '"C:\Program Files\WSL\wsl.exe" -d Ubuntu --cd ~ --exec /bin/sleep infinity',
+                        '"D:\My Windows\System32\wsl.exe" -d Ubuntu --cd ~ --exec /bin/sleep infinity', 'c:\windows\system32\WSL.EXE -d Ubuntu --cd ~ --exec /bin/sleep infinity ')) {
+        True (Test-FoxKeepAliveCommand $line) ('not told: ' + $line)
+    }
+    foreach ($line in @('C:\WINDOWS\System32\wsl.exe -d Ubuntu', 'C:\WINDOWS\System32\wsl.exe', 'wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep 600',
+                        'C:\WINDOWS\System32\wsl.exe -d Debian --cd ~ --exec /bin/sleep infinity', 'C:\WINDOWS\System32\wsl.exe -d ubuntu --cd ~ --exec /bin/sleep infinity',
+                        'C:\WINDOWS\System32\wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity; rm -rf ~', 'C:\WINDOWS\System32\conhost.exe --headless C:\WINDOWS\System32\wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity',
+                        'C:\Tools\notwsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity', '', $null)) {
+        True (-not (Test-FoxKeepAliveCommand $line)) ('taken for the keep-alive: ' + $line)
+    }
+}
 Check 'the PC: 32-bit, the 32-bit PowerShell, an old build, no wsl.exe, the ISE, a Linux terminal are each said in a sentence' {
     $ok = @{ InsideLinux = $false; Is64 = $true; Is64Process = $true; Build = 19045; WslExe = 'C:\WINDOWS\System32\wsl.exe'; HostName = 'ConsoleHost' }
     Equal (Get-FoxWindowsProblem $ok) ''
@@ -510,6 +522,7 @@ function New-World {
                    HypervisorPresent = $VmCompute; VirtFirmware = $true; VmCompute = $VmCompute; SystemRoot = 'C:\WINDOWS' }
         VmCompute = $VmCompute; VmComputeAfterInstall = $VmCompute; Elevated = @(); ElevatedOutcome = @{ Outcome = 'done'; ExitCode = 0 }
         Task = $null; TaskRegistered = 0; Answers = @(); Asked = @(); Lines = @(); Urls = @(); Opened = @(); DashboardAnswers = $true
+        Processes = @(); ProcessesUnknown = $false; Stopped = @()
         Env = @{ FOXAGENT_GET_URL = 'http://127.0.0.1:1/get.sh' }
     }
 }
@@ -521,6 +534,8 @@ function Register-FoxKeepAlive([string]$User, $Action) { $World['Task'] = @{ Exe
 function Start-FoxKeepAlive { $World['Task']['State'] = 'Running' }
 function Get-FoxTask { return $World['Task'] }
 function Remove-FoxKeepAlive { $World['Task'] = $null }
+function Get-FoxWslProcesses { if ($World['ProcessesUnknown']) { throw 'Access is denied.' }; return , @($World['Processes']) }
+function Stop-FoxProcess([int]$Id) { $World['Stopped'] += $Id; $World['Processes'] = @(@($World['Processes']) | Where-Object { $_['Id'] -ne $Id }) }
 function Test-FoxUrl([string]$Url) { $World['Urls'] += $Url; return $World['DashboardAnswers'] }
 function Open-FoxBrowser([string]$Url) { $World['Opened'] += $Url }
 function Wait-Fox([int]$Seconds) { }
@@ -792,6 +807,34 @@ Check '-Uninstall removes the task this script made, says how to remove the agen
     True ((Screen) -match 'WSL, Ubuntu and the line systemd=true .* are left as they are') (Screen)
     Equal (Calls) '' 'wsl.exe was started by the uninstall'
     Equal (Conf) "[boot]`nsystemd=true`n"
+}
+Check 'W-13 -Uninstall also stops the hidden wsl.exe the task started, which outlives the task and kept Ubuntu running, and no other program' {
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    $a = Get-FoxKeepAliveAction 'C:\WINDOWS'
+    $World['Task'] = @{ Execute = $a['Execute']; Arguments = $a['Arguments']; State = 'Running' }
+    # As on the PC of 13 Nov: the two wsl.exe of the keep-alive (the one in System32 and the one it starts), and others.
+    $World['Processes'] = @(
+        @{ Id = 11424; CommandLine = 'C:\WINDOWS\System32\wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity' },
+        @{ Id = 6732; CommandLine = '"C:\Program Files\WSL\wsl.exe" -d Ubuntu --cd ~ --exec /bin/sleep infinity' },
+        @{ Id = 500; CommandLine = 'C:\WINDOWS\System32\wsl.exe -d Ubuntu' },
+        @{ Id = 501; CommandLine = 'C:\WINDOWS\System32\wsl.exe -d Debian --cd ~ --exec /bin/sleep infinity' },
+        @{ Id = 502; CommandLine = $null })
+    Invoke-FoxUninstall
+    Equal ((@($World['Stopped']) | Sort-Object) -join ',') '6732,11424' 'the processes stopped'
+    True ((Screen) -match 'Stopped the hidden wsl\.exe that the task had started') (Screen)
+    True ((Screen) -match 'Ubuntu stops a short while after its last window closes') (Screen)
+    Equal (Calls) '' 'wsl.exe was started by the uninstall'
+    # Also when the task was removed by hand before: what it left running is stopped.
+    New-World -Distros $UbuntuThere -HasUser $true
+    $World['Processes'] = @(@{ Id = 7; CommandLine = 'C:\WINDOWS\System32\wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity' })
+    Invoke-FoxUninstall
+    Equal (@($World['Stopped']) -join ',') '7'
+    # A list Windows does not give is not "none": the uninstall says what to type.
+    New-World -Distros $UbuntuThere -HasUser $true
+    $World['ProcessesUnknown'] = $true
+    Invoke-FoxUninstall
+    True ((Screen) -match 'wsl --terminate Ubuntu') (Screen)
+    Equal @($World['Stopped']).Count 0
 }
 Check '-Uninstall leaves a task of the same name that is not ours, and says so when there is none' {
     New-World

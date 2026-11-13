@@ -76,6 +76,8 @@ function Install-FoxLeagueAgent {
     # What the installer inside Ubuntu names its service and its folder (install.sh, get.sh).
     $FoxUnit = 'foxleague-agent.service'
     $FoxFolder = 'foxleague-agent'
+    # What the scheduled task gives wsl.exe to run: it keeps Ubuntu up (Get-FoxKeepAliveAction).
+    $FoxKeepAliveArgs = '-d ' + $FoxDistro + ' --cd ~ --exec /bin/sleep infinity'
 
     # ================================================================================================
     # Words on the screen
@@ -443,7 +445,15 @@ function Install-FoxLeagueAgent {
         $sys = $SystemRoot.TrimEnd('\') + '\System32'
         $wsl = $sys + '\wsl.exe'
         if ($wsl -match '\s') { $wsl = '"' + $wsl + '"' }
-        return @{ Execute = ($sys + '\conhost.exe'); Arguments = ('--headless ' + $wsl + ' -d ' + $FoxDistro + ' --cd ~ --exec /bin/sleep infinity') }
+        return @{ Execute = ($sys + '\conhost.exe'); Arguments = ('--headless ' + $wsl + ' ' + $FoxKeepAliveArgs) }
+    }
+
+    # Is this the command line of the wsl.exe that the task keeps attached? Its program is a wsl.exe (in quotes or
+    # not, in any folder: the one in System32 starts the one of the Store package with the same arguments) and its
+    # arguments are exactly the task's, letter for letter. Nothing else is ever taken for it.
+    function Test-FoxKeepAliveCommand([string]$CommandLine) {
+        $program = '(?i:"[^"]*\\wsl\.exe"|[^\s"]*\\wsl\.exe|wsl\.exe)'
+        return ($CommandLine -cmatch ('^\s*' + $program + '\s+' + [regex]::Escape($FoxKeepAliveArgs) + '\s*$'))
     }
 
     # Is a task with our name the one this script makes? -Uninstall removes nothing else.
@@ -693,6 +703,11 @@ function Install-FoxLeagueAgent {
         try { Stop-ScheduledTask -TaskName $FoxTaskName -ErrorAction SilentlyContinue } catch { }
         Unregister-ScheduledTask -TaskName $FoxTaskName -Confirm:$false
     }
+    # The wsl.exe programs that run now, as @{ Id; CommandLine }. Throws when Windows does not say.
+    function Get-FoxWslProcesses {
+        return , @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'wsl.exe'" | ForEach-Object { @{ Id = [int]$_.ProcessId; CommandLine = [string]$_.CommandLine } })
+    }
+    function Stop-FoxProcess([int]$Id) { Stop-Process -Id $Id -Force -ErrorAction SilentlyContinue }
 
     # True when the address answers "ok" (the agent's /healthz) within a few seconds.
     function Test-FoxUrl([string]$Url) {
@@ -1025,21 +1040,45 @@ function Install-FoxLeagueAgent {
         }
     }
 
+    # Stopping the task ends its conhost.exe, not the wsl.exe that conhost started: that one goes on alone and keeps
+    # Ubuntu running until Windows restarts (W-13, seen on a real PC). Stops the wsl.exe programs whose whole command
+    # line is the task's and returns how many, or -1 when Windows did not say which programs run.
+    function Stop-FoxKeepAliveProcesses {
+        $list = $null
+        try { $list = Get-FoxWslProcesses } catch { return -1 }
+        $n = 0
+        foreach ($p in @($list)) {
+            if ($null -ne $p -and (Test-FoxKeepAliveCommand ([string]$p['CommandLine']))) { Stop-FoxProcess ([int]$p['Id']); $n++ }
+        }
+        return $n
+    }
+
     function Invoke-FoxUninstall {
         Write-FoxStep 'Removing what the Windows installer added'
         if ((Get-FoxWindowsFacts)['InsideLinux']) { Stop-Fox 'this removes a scheduled task of Windows: run it in PowerShell on Windows' }
         $task = Get-FoxTask
+        $ours = $true
         if ($null -eq $task) {
             Write-FoxLine ('There is no scheduled task "' + $FoxTaskName + '": nothing to remove on the Windows side.')
         } elseif (-not (Test-FoxOwnTask $task['Execute'] $task['Arguments'])) {
+            $ours = $false
             Write-FoxLine ('A scheduled task "' + $FoxTaskName + '" exists, but it is not the one this installer makes, so it was left alone.')
             Write-FoxLine ('It starts: ' + $task['Execute'] + ' ' + $task['Arguments'])
         } else {
             Remove-FoxKeepAlive
             Write-FoxLine ('Removed the scheduled task "' + $FoxTaskName + '". That is all this installer added to Windows.')
         }
-        Write-FoxLine 'The agent itself is inside Ubuntu and was not touched. Without the task it stops a short while after the'
-        Write-FoxLine 'last Ubuntu window closes. To stop it now and remove its background service, open Ubuntu and type:'
+        if ($ours) {
+            $stopped = Stop-FoxKeepAliveProcesses
+            if ($stopped -gt 0) { Write-FoxLine 'Stopped the hidden wsl.exe that the task had started: it kept Ubuntu running.' }
+            elseif ($stopped -lt 0) {
+                Write-FoxLine 'Windows did not say which programs run: the hidden wsl.exe of the task may still keep Ubuntu running.'
+                Write-FoxLine ('To stop Ubuntu now, type:  wsl --terminate ' + $FoxDistro)
+            }
+        }
+        Write-FoxLine 'The agent itself is inside Ubuntu and was not touched.'
+        Write-FoxLine 'Ubuntu stops a short while after its last window closes. To stop the agent now and remove'
+        Write-FoxLine 'its background service, open Ubuntu and type:'
         Write-FoxLine ('  wsl -d ' + $FoxDistro + ' --cd ~')
         Write-FoxLine ('  cd ~/' + $FoxFolder + ' && ./install.sh --uninstall')
         Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu. The agent wallets may still hold funds.'
