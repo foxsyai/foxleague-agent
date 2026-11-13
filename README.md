@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 
 On Windows 10 and 11, open PowerShell (a normal window) and paste this line instead. It sets up WSL2 and Ubuntu
 where they are missing, which may need an administrator prompt and one restart of Windows (then paste the same
-line again), and runs the same installer inside Ubuntu:
+line again), and runs the same installer inside Ubuntu. Installing Ubuntu needs about 4 GB free on drive C:.
 
 ```
 irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex

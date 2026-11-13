@@ -26,4 +26,5 @@ test('W-4 the guides say that Ubuntu may ask "Help improve Ubuntu!" and that eit
 test('W-1 the guides say how much free space the Windows line needs and that it checks it', () => {
   assert.match(flat('INSTALL.md'), /When Ubuntu still has to be installed it needs about 4 GB free on drive C: and checks that before the download\./)
   assert.match(flat('site/src/content/docs/start/install.mdx'), /When Ubuntu still has to be installed it also needs about 4 GB free on drive C: \(the line checks it before the download\)\./)
+  assert.match(flat('README.md'), /Installing Ubuntu needs about 4 GB free on drive C:\./)
 })
