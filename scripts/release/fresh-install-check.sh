@@ -2,10 +2,15 @@
 # The install as a newcomer meets it, replayed on a fresh Ubuntu: run it before every release.
 #
 #   scripts/release/fresh-install-check.sh [--keep]
+#   FRESH_UBUNTU=26.04 scripts/release/fresh-install-check.sh [--keep]
 #
-# It builds a throwaway Ubuntu 24.04 container that runs systemd (no curl, no Node.js, one ordinary user with
-# sudo), builds releases of THIS folder as it is now (tracked files, also changes that are not committed yet) the
-# way a real release is built (scripts/release/release.ts), signed with a key that is made here and thrown away,
+# Run it on both. Ubuntu 26.04's tar resolves every path it unpacks with openat2, which a hardened service may
+# refuse (W-9 of 2026-11-13: the one-click update did not install there). FRESH_UBUNTU names the release, 24.04
+# without it.
+#
+# It builds a throwaway Ubuntu container (24.04, or the release FRESH_UBUNTU names) that runs systemd (no curl,
+# no Node.js, one ordinary user with sudo), builds releases of THIS folder as it is now (tracked files, also changes
+# that are not committed yet) the way a real release is built (scripts/release/release.ts), signed with a key that is made here and thrown away,
 # and then does what the guide tells a newcomer, typing the answers on a terminal:
 #   the pasted line without curl, with curl, with mistakes (Yes, a short password); the checks after "Done";
 #   a reboot with nobody logged in; the line pasted again; ./install.sh again, six times in a row; the line as
@@ -27,7 +32,9 @@ set -uo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 KEEP=0
 [ "${1:-}" = --keep ] && KEEP=1
-IMAGE=fox-fresh-ubuntu:24.04
+UBUNTU=${FRESH_UBUNTU:-24.04}
+case "$UBUNTU" in 24.04 | 26.04) ;; *) echo "FRESH_UBUNTU must be 24.04 or 26.04"; exit 2 ;; esac
+IMAGE=fox-fresh-ubuntu:$UBUNTU
 C=fox-fresh
 C2=fox-fresh-nosd
 HOST_PORT=${FRESH_PORT:-8765}
@@ -78,10 +85,10 @@ if docker ps -a --format '{{.Names}}' | grep -Eq "^($C|$C2)\$"; then echo "a con
 # ---------------------------------------------------------------------------------------------------------------
 # The tools of this check, written into the work folder.
 
-cat > "$WORK/image/Dockerfile" <<'EOF'
-# As close to a fresh Ubuntu 24.04 as a container gets, with systemd as PID 1. No curl and no Node.js on purpose:
+# As close to a fresh Ubuntu as a container gets, with systemd as PID 1. No curl and no Node.js on purpose:
 # Ubuntu Desktop ships without curl. polkitd is on every Ubuntu Server and Desktop (it lets a user turn on linger).
-FROM ubuntu:24.04
+printf 'FROM ubuntu:%s\n' "$UBUNTU" > "$WORK/image/Dockerfile"
+cat >> "$WORK/image/Dockerfile" <<'EOF'
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
  && apt-get install -y --no-install-recommends systemd systemd-sysv dbus dbus-user-session libpam-systemd polkitd sudo ca-certificates \
@@ -304,7 +311,7 @@ PROMPT='fox@fresh:~\$ '
 PROMPT_IN='fox@fresh:~/foxleague-agent\$ '
 
 # ---------------------------------------------------------------------------------------------------------------
-say "1. A fresh Ubuntu 24.04 with systemd, no curl, no Node.js"
+say "1. A fresh Ubuntu $UBUNTU with systemd, no curl, no Node.js"
 docker build -q -t "$IMAGE" "$WORK/image" >/dev/null || { echo "the image could not be built"; exit 2; }
 # --privileged with its own cgroup namespace: systemd needs to manage cgroups. Never --network host.
 docker run -d --name "$C" --hostname fresh --privileged --cgroupns=private --tmpfs /run --tmpfs /run/lock "$IMAGE" /sbin/init >/dev/null || exit 2
