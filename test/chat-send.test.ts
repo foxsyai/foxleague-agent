@@ -345,3 +345,36 @@ test('CO-2 a failed Send whose answer was written meanwhile is not put back: the
   const load = fn('loadState')
   assert.ok(load.indexOf('chatSettle()') > load.indexOf('chatUnsure = false'), 'loadState settles a lost Send once the state was read')
 })
+
+test('CO-docs the guides and the review say that the manager answers one message at a time and what the page does after a failed Send; the review has its section, the last one, in the table format', () => {
+  const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
+  const flat = (f: string) => read(f).replace(/\s+/g, ' ')
+  const talk = flat('site/src/content/docs/use/talk-to-your-manager.md')
+  for (const said of [
+    /The manager answers one message at a time: one sent meanwhile, from Telegram or another tab, is turned away with that reason and costs nothing\. Send it again when the answer is in\./,
+    /If the page lost the connection and the answer came meanwhile, the answer shows in the conversation and your message does not come back into the box\./,
+    /While the manager is still answering an earlier message, it replies that it is and nothing is paid for: send yours again when the answer is in\./,
+  ]) assert.match(talk, said)
+  assert.match(flat('docs/SERVER.md'), /The server answers one manager message at a time: a second one meanwhile, from Telegram or another tab, is turned away with the reason \(the page shows it, Telegram replies with it\) and costs nothing\./)
+  const tip = html.match(/\n {2}advice: \['Talk to the manager', `([^`]*)`\]/)?.[1] ?? ''
+  assert.match(tip.replace(/\s+/g, ' '), /A message sent meanwhile from Telegram or another tab is turned away with that reason: send it again when the answer is in\./)
+  for (const f of ['site/src/content/docs/use/talk-to-your-manager.md', 'docs/SERVER.md']) {
+    const text = flat(f)
+    for (const s of [text.indexOf('The manager answers one message at a time'), text.indexOf('While the manager is still answering an earlier message'), text.indexOf('The server answers one manager message at a time')].filter(i => i >= 0)) {
+      assert.doesNotMatch(text.slice(s, text.indexOf('.', text.indexOf('.', s) + 1) + 1), /—|, and |, or |\bbot\b/i, f)
+    }
+  }
+
+  const review = read('docs/SECURITY-REVIEW.md')
+  const start = review.indexOf('\n## One manager message at a time (2026-11-13)\n')
+  assert.ok(start > 0, 'the section is in the review')
+  assert.ok(start > review.indexOf('\n## Repeat shadow, chat Send and model output limits (2026-11-13)\n'), 'after the section before it')
+  assert.equal(review.indexOf('\n## ', start + 1), -1, 'the last section')
+  const section = review.slice(start)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| CO-1 \| low \(cost; the owner, 2026-11-13\) \|/)
+  for (const id of ['CO-2', 'CO-3']) assert.match(section, new RegExp(`\\n\\| ${id} \\|`), id)
+  for (const line of section.split('\n').filter(l => l.startsWith('| CO-'))) assert.equal(line.split(' | ').length, 4, line.slice(0, 40))
+  assert.match(section.replace(/\s+/g, ' '), /The live server's nginx waits 1080 seconds since 13 Nov 2026/)
+  assert.ok(section.includes('\nStays open:\n'))
+  assert.doesNotMatch(section, /—|\bbot\b/i)
+})
