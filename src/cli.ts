@@ -469,9 +469,12 @@ async function main(): Promise<void> {
         console.error('set-web-password needs an interactive terminal')
         process.exit(2)
       }
+      // No name is offered, not even an earlier one: the owner makes up their own (the owner's decision of 12 Nov 2026,
+      // LOGIN-1). An empty answer saves nothing, and the installer asks again.
       const rl = createInterface({ input: process.stdin, output: process.stdout })
-      const username = (await rl.question(`Web UI username [${process.env.WEB_UI_USER ?? 'admin'}]: `)).trim() || process.env.WEB_UI_USER || 'admin'
+      const username = (await rl.question('Dashboard username, your own choice (3 to 32 letters or digits): ')).trim()
       rl.close()
+      if (!username) throw new Error('a username is needed: type one of your own (3 to 32 letters or digits; dot, dash and underscore work too)')
       if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) throw new Error('username: 3-32 letters, digits, dot, dash or underscore')
       const pw = await promptHidden('Password (at least 12 characters): ')
       if (pw.length < 12) throw new Error('password too short: use at least 12 characters')

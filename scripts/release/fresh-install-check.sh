@@ -338,13 +338,14 @@ check "bash says that curl is not there (the guide must tell: sudo apt install c
 docker exec "$C" apt-get install -y -qq curl >/dev/null 2>&1
 check "curl installed the way the guide tells (apt install curl)" docker exec "$C" sh -c 'command -v curl'
 
-say "4. The pasted line, with a newcomer's mistakes: Yes with a capital, a password that is too short"
+say "4. The pasted line, with a newcomer's mistakes: Yes with a capital, Enter at the username, a password that is too short"
 type_in "$C" fox 04-first-paste 300 "$PROMPT=>$LINE" \
   'Type yes when the words are written down: =>ok' \
   'Type yes when the words are written down: =>Yes' \
-  'Web UI username \[admin\]: =>owner' \
+  'Dashboard username, your own choice \(3 to 32 letters or digits\): =>' \
+  'Dashboard username, your own choice \(3 to 32 letters or digits\): =>owner' \
   'Password \(at least 12 characters\): =>short' \
-  'Web UI username \[[a-z]+\]: =>owner' \
+  'Dashboard username, your own choice \(3 to 32 letters or digits\): =>owner' \
   "Password \\(at least 12 characters\\): =>$PASSWORD" \
   "Repeat the password: =>$PASSWORD" \
   'Dashboard port on this machine \[8870\]: =>' \
@@ -363,6 +364,7 @@ check "no npm notice and no spinner between the installer's lines" hasnt "$F" 'n
 check "an answer that is not yes is told what to type" has "$F" 'Type the word yes \(then Enter\)'
 check "the words were shown and are masked in the transcript" has "$F" '^24\. \*\*\*\*$'
 check "the short password was asked for again, the install went on" has "$F" 'Nothing was saved\. Try again'
+check "the username has no default: Enter was refused and asked again (LOGIN-1)" sh -c "grep -q 'a username is needed: type one of your own' '$F' && ! grep -q 'username \\[admin\\]' '$F'"
 check "no line written for a server (restart the service, check-keys, never copy it to the server)" hasnt "$F" 'Restart the service|check-keys|to the server'
 check "step 7 says Running." has "$F" '^  Running\.$'
 check "the last screen names the folder (cd /home/fox/foxleague-agent)" has "$F" '^ +cd /home/fox/foxleague-agent$'
@@ -420,7 +422,7 @@ say "9. A second user reached with su from root (a server newcomer after 'create
 type_in "$C" root 09-su 300 'root@fresh:~# =>adduser --disabled-password --gecos "" sam >/dev/null && su - sam' \
   "sam@fresh:~\\\$ =>$LINE" \
   'Type yes when the words are written down: =>yes' \
-  'Web UI username \[admin\]: =>' \
+  'Dashboard username, your own choice \(3 to 32 letters or digits\): =>sam' \
   "Password \\(at least 12 characters\\): =>$PASSWORD" \
   "Repeat the password: =>$PASSWORD" \
   'Dashboard port on this machine \[8870\]: =>' \
@@ -442,7 +444,7 @@ docker exec "$C2" apt-get install -y -qq curl >/dev/null 2>&1
 type_in "$C2" fox 10-nosd 300 "fox@nosd:~\\\$ =>$LINE" \
   'fox@nosd:~\$ =>echo "installer status $?"; cd ~/foxleague-agent && ./install.sh --no-service' \
   'Type yes when the words are written down: =>yes' \
-  'Web UI username \[admin\]: =>' \
+  'Dashboard username, your own choice \(3 to 32 letters or digits\): =>owner' \
   "Password \\(at least 12 characters\\): =>$PASSWORD" \
   "Repeat the password: =>$PASSWORD" \
   'Dashboard port on this machine \[8870\]: =>' \
@@ -548,7 +550,7 @@ stop2
 fx2 sh -c 'printf "AGENT_UPDATE_URL=\"http://127.0.0.1:8899\"\n" >> .env'
 run2
 until_ok 60 healthz 8870 "$C2"
-fx2 fox-dash login admin "$PASSWORD" >/dev/null 2>&1
+fx2 fox-dash login owner "$PASSWORD" >/dev/null 2>&1
 check "the agent offers 1.0.6 before Update now (it asks the release server at most once in 15 seconds)" until_ok 60 offered2 1.0.6
 check "the agent knows that nothing starts it again (no service manager started it)" state2_has '"restarts":false'
 PID2=$(fx2 cat data/service.pid 2>/dev/null)
