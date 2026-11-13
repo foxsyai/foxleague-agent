@@ -914,9 +914,14 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
   assert.match(settings.replace(/\s+/g, ' '), /\| Effort \| Same as all agents \|/)
   assert.match(read('site/src/content/docs/help/server.mdx').replace(/\s+/g, ' '), /an agent's own model and effort/)
   for (const f of ['site/src/content/docs/help/costs.md', 'site/src/content/docs/use/dashboard.md', 'site/src/content/docs/use/settings.md', 'site/src/content/docs/help/server.mdx']) assert.doesNotMatch(read(f), /—|\bbot\b/i, f)
-  // The review: its own section, the last one, in the table format, with what stays open.
+  // The review: its own section, whole and in its place, in the table format, with what stays open. A later change adds
+  // its own section after it (SHADOW-15 and SHADOWS-11 read theirs the same way).
   const review = read('docs/SECURITY-REVIEW.md')
-  const section = review.slice(review.lastIndexOf('\n## '))
+  const start = review.indexOf('\n## Per-agent models and shadow efforts (2026-11-13)\n')
+  assert.ok(start > 0, 'the section of 2026-11-13 is in the review')
+  assert.ok(start > review.indexOf('\n## Several shadow models at once (2026-11-12)\n'), 'after the section before it')
+  const end = review.indexOf('\n## ', start + 1)
+  const section = review.slice(start, end < 0 ? undefined : end)
   assert.match(section, /^\n## Per-agent models and shadow efforts \(2026-11-13\)\n/)
   assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| PAM-1 \|/)
   for (let k = 1; k <= 17; k++) assert.match(section, new RegExp(`\\n\\| PAM-${k} \\|`), `PAM-${k}`)

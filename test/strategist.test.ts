@@ -278,6 +278,29 @@ test('XROOM-2: the nginx template waits for a manager chat at max effort as long
   assert.match(conf, new RegExp(`up to ${Math.ceil(deadline / 60_000)} minutes at the highest effort`), 'the comment says how long')
 })
 
+test('XROOM in the security review: its own section after the one of the per-agent models, in the table format, with the worst case and the password rule under what stays open', () => {
+  const review = readFileSync(new URL('../docs/SECURITY-REVIEW.md', import.meta.url), 'utf8')
+  const from = review.indexOf('\n## Extra-high room (2026-11-13)\n')
+  assert.ok(from > 0, 'the section is in the review')
+  assert.ok(from > review.indexOf('\n## Per-agent models and shadow efforts (2026-11-13)\n'), 'after the section before it')
+  const next = review.indexOf('\n## ', from + 1)
+  const section = review.slice(from, next < 0 ? undefined : next)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| XROOM-1 \| low \(the owner, 2026-11-13\) \|/)
+  assert.match(section, /\n\| XROOM-2 \| low /)
+  for (const line of section.split('\n').filter(l => l.startsWith('| XROOM-'))) assert.equal(line.split(' | ').length, 4, line.slice(0, 40))
+  const open = section.slice(section.indexOf('\nStays open:\n')).replace(/\s+/g, ' ')
+  assert.ok(section.includes('\nStays open:\n'))
+  // The most one plan request costs at 80,000 and 96,000 tokens out, a prompt of about 120,000 tokens, from PRICES.
+  for (const [label, xhigh, max] of [['Haiku 5.5', 0.26, 0.3], ['Sonnet 5.5', 1.04, 1.2], ['Opus 5.5', 2.08, 2.4], ['Fable 5.2', 4.16, 4.8]] as const) {
+    const id = Object.keys(MODELS).find(m => MODELS[m]!.label === label)!
+    const [inP, outP] = id === 'claude-haiku-5-5' ? MODELS[id]!.long!.price : MODELS[id]!.price
+    assert.deepEqual([80_000, 96_000].map(out => Math.round((120_000 * inP + out * outP) / 1e4) / 100), [xhigh, max], label)
+    assert.match(open, new RegExp(`${label} \\$${xhigh.toFixed(2)} (at xhigh )?and \\$${max.toFixed(2)}`), label)
+  }
+  assert.match(open, /Choosing xhigh or max still asks for the owner's password/)
+  assert.doesNotMatch(section, /—|\bbot\b/i)
+})
+
 test('while the history still cites the removed rule about the owner\'s other agents, the plan is told it no longer holds', () => {
   const store = new Store('', ':memory:')
   store.addAgent(0, 'erd1x')
