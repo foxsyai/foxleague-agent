@@ -1914,6 +1914,10 @@ Stays open:
 - A problem with the AI account is told on Telegram as "Plans are failing: ... Every agent waits until it is fixed",
   once an hour per message. With agents on several models, one model's access can fail while the others plan; the
   message does not name the model.
+- A hand-written `shadow_model_agent_N` for an agent number no agent has yet is not weighed by the all-agents
+  switch's password check: the switch weighs an agent added afterwards by the all-agents shadow list (R65A-5), while
+  the agent that + Add agent makes with that number plays that list from its first plan (a note of the review of
+  PR #65).
 - What stays open in the two shadow sections before (2026-11-11 and 2026-11-12) stays open: a shadow plan is judged
   by reading it, never by the rules.
 
