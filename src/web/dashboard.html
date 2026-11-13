@@ -699,11 +699,11 @@ function aiEffortOptions() {
   return [['', 'Same as all agents' + (all.effort ? ' (' + all.effort + ')' : '')], ...i.efforts.map(e => [e, e])]
 }
 // The line under the AI fields: what the agent plays, what it would play after saving, its shadow plans set on the
-// server and a value saved on the server that is not used.
+// server (`same`: a repeat of the model and effort it plays) and a value saved on the server that is not used.
 function ownAiHint(b, form) {
   const i = S.instance, ai = b.ai || {}, own = ai.own || {}
   const name = id => (i.models.find(m => m.id === id) || { label: id }).label
-  const entry = e => { const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
+  const entry = e => { if (e === 'same') return 'a repeat of the model and effort it plays'; const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
   const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a.join('')
   const all = i.aiAll || { model: i.model, effort: i.effort }
   const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }

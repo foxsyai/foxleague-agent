@@ -18,7 +18,7 @@ import { parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
 import { EFFORTS, MODELS, Strategist, agentChoice, isKnownModel, ownAi, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
 import { buildManual, manualStatus } from './strategist/manual.ts'
-import { hasOwnShadowList, shadowModelsSet, shadowReport } from './strategist/shadow.ts'
+import { entryText, hasOwnShadowList, shadowModelsSet, shadowReport } from './strategist/shadow.ts'
 import { checkKeys, pickOwnerChat, promptHidden, setEnvValues, telegramMe, telegramRecentChats } from './setup/keys.ts'
 import { Address } from '@multiversx/sdk-core'
 import { randomBytes, randomInt } from 'node:crypto'
@@ -347,7 +347,7 @@ async function main(): Promise<void> {
       const line = (b: AgentRow) => {
         const ai = agentChoice(b.settings, all)
         const shadows = shadowModelsSet(store, b.index)
-        return `${agentName(b.index)}: ${pair(ai)} (${[whose(b.settings), ...ai.ignored].join('; ')})${shadows.length ? `; shadow plans by ${shadows.join(', ')}${hasOwnShadowList(store, b.index) ? ' (its own list)' : ''}` : ''}`
+        return `${agentName(b.index)}: ${pair(ai)} (${[whose(b.settings), ...ai.ignored].join('; ')})${shadows.length ? `; shadow plans by ${shadows.map(entryText).join(', ')}${hasOwnShadowList(store, b.index) ? ' (its own list)' : ''}` : ''}`
       }
       if (!args.length) {
         console.log(`all agents: ${pair(all)} (the Strategist box)`)
