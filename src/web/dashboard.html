@@ -458,7 +458,8 @@ async function api(method, path, body) {
   const r = await fetch(path, { method, credentials: 'same-origin', headers: { 'content-type': 'application/json', 'x-csrf-token': CSRF }, body: body === undefined ? undefined : JSON.stringify(body) })
   if (r.status === 401) { location.href = '/login'; throw new Error('signed out') }
   const j = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(j.error || ('HTTP ' + r.status))
+  // The status goes with the error: a 409 from Send means the server turned the message away and does not hold it.
+  if (!r.ok) throw Object.assign(new Error(j.error || ('HTTP ' + r.status)), { status: r.status })
   return j
 }
 function remember(i) { try { localStorage.setItem('foxagent.agent', String(i)) } catch {} }
@@ -802,8 +803,10 @@ async function loadState() {
     const held = S && S.chat ? { chat: S.chat, rev: S.chatRev } : null
     S = await api('GET', '/api/state?chat=' + encodeURIComponent(held ? held.rev || '' : ''))
     if (S.chat === null && held) S.chat = held.chat
-    // The server's own conversation is read: whether a message is still being answered is known again (renderSend).
+    // The server's own conversation is read: whether a message is still being answered is known again (renderSend),
+    // and a Send that failed while the state could not be read either is settled (chatSettle).
     chatUnsure = false
+    chatSettle()
     if (sel === null || !S.agents.some(b => b.index === sel)) { const r = recalled(); sel = S.agents.some(b => b.index === r) ? r : (S.agents[0] ? S.agents[0].index : null) }
     renderHeader(); renderAgentbar(); renderSetup()
     if (sel !== null) renderAgent()
@@ -1146,7 +1149,7 @@ const TIPS = {
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
     <p>A question gets an answer. Advice comes back as the full revised strategy with Apply and Cancel; nothing changes until you press Apply. Name other agents ("all agents", "agent 2") to include them.</p>
     <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, up to 100 messages, together with the ones from Telegram. Ctrl+Enter sends.</p>
-    <p>While the manager is answering a message (sent from here, another tab or Telegram), Send waits: the answer is written and paid for even when this page loses the connection, so a second Send would pay twice. Send comes back when the answer is in the box.</p>
+    <p>While the manager is answering a message (sent from here, another tab or Telegram), Send waits: the answer is written and paid for even when this page loses the connection, so a second Send would pay twice. Send comes back when the answer is in the box. A message sent meanwhile from Telegram or another tab is turned away with that reason: send it again when the answer is in. If this page lost the connection and the answer came meanwhile, it shows in the conversation and your message does not come back into the box.</p>
     <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
   funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD, its WEGLD and its FOXSY. "To play with" is the same without the EGLD gas reserve, which is never swapped: it is what the agent can still spend on the game.</p>
@@ -1293,8 +1296,9 @@ $('keysTest').onclick = async () => {
 }
 // The conversation with the manager, Telegram included: the owner's lines on the right, the manager's on the left.
 // chatWaiting: the message this page is sending. chatUnsure: a Send failed and the page has not read the server's
-// conversation since, so it does not know whether the manager is still answering (loadState clears it).
-let chatShown = '', chatWaiting = null, chatUnsure = false
+// conversation since, so it does not know whether the manager is still answering (loadState clears it). chatLost: such
+// a Send ({ message, before }), settled by the first state that can be read (chatSettle).
+let chatShown = '', chatWaiting = null, chatUnsure = false, chatLost = null
 function chatTime(iso) {
   const d = new Date(iso)
   return (d.toDateString() === new Date().toDateString() ? '' : d.toLocaleDateString([], { day: 'numeric', month: 'short' }) + ' ') + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -1314,11 +1318,35 @@ function chatPending() {
   return ((S && S.chat) || []).find(l => l.pending && l.from === 'owner') || null
 }
 // One answer at a time (agent review of PR #66): the server goes on writing an answer, and pays for it, even when this
-// page lost the connection or nginx gave up on the request; it does not refuse a second message meanwhile. So Send is
-// off while a message is on its way from here, while the server shows one being answered, and while a failed Send has
-// not been checked with the server yet.
+// page lost the connection or nginx gave up on the request. It turns a second message away meanwhile (409, CO-1), so
+// Send would only bring that refusal. So Send is off while a message is on its way from here, while the server shows
+// one being answered, and while a failed Send has not been checked with the server yet.
 function chatAnswering() {
   return Boolean(chatWaiting || chatUnsure || chatPending())
+}
+// A line of the conversation that is this message, sent from this box: from the owner, the same words, the web UI.
+function chatOwn(l, message) {
+  return l.from === 'owner' && l.text === message && /^web UI/.test(l.source || '')
+}
+// What became of a message whose Send failed, by the server's own times (ISO strings, compared as text): 'held' while
+// it is still being answered, 'answered' when its answer came after `before` (the newest line the page had when it
+// sent it), else null: the server does not have it (CO-2).
+function chatFate(message, before) {
+  const lines = (S && S.chat) || []
+  if (lines.some(l => chatOwn(l, message) && l.pending)) return 'held'
+  if (lines.some(l => chatOwn(l, message) && !l.pending && l.at > before)) return 'answered'
+  return null
+}
+// A Send that failed while the state could not be read either came back into the box: the first state that can be
+// read settles it. Held or answered by then, the box is emptied, if it still holds exactly that message.
+function chatSettle() {
+  if (!chatLost) return
+  const { message, before } = chatLost
+  chatLost = null
+  const fate = chatFate(message, before)
+  if (!fate || $('adviceText').value.trim() !== message) return
+  $('adviceText').value = ''
+  toast(fate === 'held' ? 'The manager is still answering. Its answer shows here when it is ready.' : 'The manager answered while the page was away: its answer is in the conversation.')
 }
 function renderSend() {
   const busy = chatAnswering()
@@ -1365,6 +1393,8 @@ $('adviceBtn').onclick = async () => {
   const message = $('adviceText').value.trim()
   if (!message) return toast('Write something first', true)
   if (chatAnswering()) { renderSend(); return toast('The manager is still answering. Its answer shows here when it is ready.') }
+  // The newest line the page has: an own line after it, answered, is this message (chatFate).
+  const before = ((S && S.chat) || []).reduce((t, l) => (l.at > t ? l.at : t), '')
   chatWaiting = message; $('adviceText').value = ''; renderChat()
   try {
     const r = await api('POST', '/api/agents/' + sel + '/advise', { message })
@@ -1376,13 +1406,16 @@ $('adviceBtn').onclick = async () => {
     // paying for it. Send stays off until the page has read the server's own conversation again.
     chatWaiting = null; chatUnsure = true; renderChat()
     await loadState()
-    // Kept only when the server holds this very message, sent from this box, as still being answered. Another one (from
-    // Telegram or another tab) keeps Send off, but this one comes back with its error (agent review of PR #67, R67A-2).
-    const held = ((S && S.chat) || []).some(l => l.pending && l.from === 'owner' && l.text === message && /^web UI/.test(l.source || ''))
-    if (!chatUnsure && held) toast('The manager is still answering. Its answer shows here when it is ready.')
+    // Kept out of the box only when the server holds this very message (R67A-2) or answered it meanwhile (CO-2). A 409
+    // is the server turning it away: it holds nothing of it, whatever an earlier message with the same words does (CO-1).
+    const fate = e.status === 409 || chatUnsure ? null : chatFate(message, before)
+    if (fate === 'held') toast('The manager is still answering. Its answer shows here when it is ready.')
+    else if (fate === 'answered') toast('The manager answered while the page was away: its answer is in the conversation.')
     else {
       if (!$('adviceText').value) $('adviceText').value = message
       toast(e.message, true)
+      // Not known yet (the state could not be read either): the first state that can be read settles it.
+      if (chatUnsure && e.status !== 409) chatLost = { message, before }
     }
   } finally { renderSend() }
 }

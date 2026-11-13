@@ -1774,3 +1774,39 @@ Stays open:
 - A model of the list whose limit Anthropic lowers must be changed in `MODELS` by hand. A model the list does not have
   (`AGENT_MODEL` naming another one) has no known limit: its room is not clamped, and a request it cannot take is
   refused by Anthropic, so nothing of that plan runs.
+
+## One manager message at a time (2026-11-13)
+
+What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
+`test/chat-send.test.ts` (CO-3 is wording in `test/repeat-shadow.test.ts`) that failed on `main` at 3e881bf for the
+reason given and passes now. R68A-1 comes from the agent review of PR #68; its test failed on the branch at e666c42,
+before its fix. R68A-2 comes from its re-review: its test fails when the condition it pins is taken out of the code.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| CO-1 | low (cost; the owner, 2026-11-13) | The server accepted a second manager message while one was being answered: `Service.discuss` had no guard, so a message from Telegram, an open page of the version before or a request made by hand paid for a second answer. The test saw a Telegram message sent to the model while a web message was still answered | While the conversation (one for all agents) holds an owner's message still being answered, `discuss` turns another one away with `ChatBusyError` ("The manager is still answering the last message. Send this one when its answer is in.") before the line is said or the model is asked. The check comes before anything is awaited, so two messages that arrive together cannot both pass. The web route answers 409 with that reason; the page keeps the status of a refused request, gives the message back with the reason and keeps Send off while the other one is answered (a 409 is final: the server holds nothing of it, whatever an earlier message with the same words does). Telegram replies with the reason instead of "error: ...". An answer, a failed answer (its line is taken out) and Clear let the next message through; a waiting line is never saved, so a restart holds nothing. `/ask` is not the conversation and is answered meanwhile |
+| CO-2 | low (cost; re-review of PR #67) | A failed Send whose answer had been written meanwhile came back with a red error. The owner sends a message, the laptop sleeps or the network drops, the server finishes and books the answer, the page wakes and the POST fails: the message was put back, the next refresh turned Send on and a second Send paid twice. The test saw the answered message given back | Before the POST the page keeps the time of the newest line it has, by the server's own clock (`at`, ISO strings compared as text, no page clock). After a failed Send it reads the state and looks for this very message from the web box: still being answered, it stays out of the box as before (R67A-2); answered after that time, it stays out and a toast says the answer is in the conversation; otherwise it comes back with its error. When the state cannot be read either, the message comes back, Send stays off and the first state that can be read settles it: held or answered by then, the box is emptied if it still holds exactly that message, and a toast says which |
+| CO-3 | hygiene (re-review of PR #67) | The title and two comments of RS-4 still said that `same` never rests, so no switch starts it; that holds between the models of the list only (R67A-1) | Reworded; its checks are unchanged |
+| R68A-1 | low (agent review of PR #68) | CO-1 made a waiting line that is never released a lock. The booking of an answer's cost (`addModelUsd`, a write to SQLite) ran outside the `try` and before the line stopped waiting: when the database refused it (a full disk, a lock held past the 5-second busy timeout by `cli plan N` or `cli dry-run N`), `discuss` failed (web 502, Telegram "error: ..."), the line stayed waiting and every later message was turned away as "still answering" until Clear or a restart. Saving the message's own line could leave it waiting the same way. The test saw the next Telegram message turned away after a refused booking | Every way out of `discuss` now releases the waiting line (`finally`, while no Clear came in between; then only this call's line can be waiting). The answer's cost is booked first and a refused booking no longer fails the answer: it goes to the owner and stays in the conversation. The log says which cost could not be booked, why and where it is missing: from the total and the day's figure, or only from the day's figure when the total was written first (the re-review of PR #68). When the database refuses to save the message or the answer, the call fails as before but releases the line; an answer that was written stays in the conversation and its cost is booked. The test runs each of the three with the next message on the web and on Telegram |
+| R68A-2 | low (missing test; re-review of PR #68) | No test failed when the condition "no Clear came in between" was taken out of the new `finally`. It is what keeps an answer that comes or fails after Clear from releasing the next message's waiting line: A is being answered, Clear, B is sent and waits, A's answer comes or fails. Without it A's way out took B's line away. A third message then passed the one-at-a-time rule while B was still being answered and paid for. B's answer came in with no question above it | A test of both cases (A answered and A failed after Clear): B is still waiting, one more message is turned away without asking the model and B's answer comes in under its own question. Seen failing with the condition taken out ("B is still waiting for its answer": none was), passing with it. Two notes of the same review are fixed too. The comment above `chatAnswering()` in the page no longer says that the server takes a second message. The log line of a refused booking says where the cost is missing |
+
+What was checked and needs no change:
+- `Service.discuss` has two callers, the web route and Telegram's plain messages; both handle the refusal. Nothing else
+  starts a manager answer. `/ask` and the plans use the strategist directly and are not refused.
+- Clear empties the conversation, the waiting line with it: the next message goes through while the earlier answer is
+  still written (it is not put back into the new conversation, as before).
+- The live server's nginx waits 1080 seconds since 13 Nov 2026, raised by the owner's word: the open item of XROOM-2
+  is done there.
+
+Stays open:
+- A message turned away is not kept to be sent later: the owner sends it again when the answer is in.
+- After Clear the answer that was on its way is still written and paid for, and the next message is let through, so
+  two answers can be paid for at once then. Clear is the owner's own act.
+- CO-2 tells this message by its words and its web source: two tabs that send the very same words can be taken for
+  each other. When the conversation was cleared or the line left the 100 kept before the page could read it again,
+  the page cannot tell, and the message comes back with its error.
+- The refusal holds in the service's memory, one conversation per install. Two services on one database are not
+  supported and would each have their own.
+- A cost the database refused to book is said in the log only (`journalctl -u foxleague-agent`): it is missing from
+  the AI spend total and the day's figure, or from the day's figure only, and is not booked again later. The AI spend is not the ledger of the FOXSY and EGLD caps, so no
+  cap misses it.
