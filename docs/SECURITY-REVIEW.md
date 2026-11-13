@@ -1718,3 +1718,56 @@ Stays open:
 - A plan at xhigh or max can keep its agent busy for up to 27.7 or 33 minutes. Delete and Remove answer "busy; try
   again in a minute" meanwhile. A deploy waits at most 150 seconds before the call ends unbooked (TA4; the server
   guide says to check first that no plan is running).
+
+## Repeat shadow, chat Send and model output limits (2026-11-13)
+
+The owner tests whether a lower effort plans almost the same as a higher one: three live agents plan for real at one
+model and effort and shadow plans of the same model at other efforts get the real plan's request word for word. The
+comparison had no baseline, since the same model at the same effort does not plan the same twice either. The owner
+approved a repeat shadow for it. Two findings of the agent review of PR #66 (chat Send, the output limit per model)
+are fixed with it. Each finding has a test of the same name (`test/repeat-shadow.test.ts`, `test/chat-send.test.ts`,
+`test/strategist.test.ts`) that failed on `main` at 0774eee for the reason given and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| RS-1 | design (the owner, 2026-11-13) | A shadow list could not ask the playing model and effort again: an entry at that pair rests by design (`rests`), so a list never pays for a copy by accident, and `same` was left out as "not a model on the list". "Medium agreed with xhigh 6 of 10" could not be read without knowing how often xhigh agrees with itself | `same` in a shadow list (an agent's own `shadow_model_agent_N` or the all-agents `shadow_model`) is a shadow plan by the pair the real plan was asked with: the `playing` pair of `prepareShadow`, after the per-agent fallback and the successor rule. It never rests and counts once. It is explicit, so the settings of before mean what they meant: an entry at the playing pair still rests, and with `same` beside it the pair runs once. Fail closed: `same:low`, another spelling, an unknown effort or a playing model the list does not have leave it out with its reason in the log, never at a guessed pair. `off` still switches every entry off |
+| RS-2 | design (no money path) | A repeat must stay a shadow plan: never asked through the playing strategist, never carried out, booked like the others | In the service a repeat runs through the shadow strategist of its model (its own connection, no retries, nothing of the playing one shared), with the request word for word, its own activity row ("the real plan's own model and effort again"), its own `shadow_plans` row (shadow pair equal to the real pair) and its cost in the AI spend. The guard key is the agent, model and effort, as for any shadow. It follows the pair that plays: after the agent's effort changes, its repeat is at the new effort. Only the real plan's actions reach the executor |
+| RS-3 | low | `shadow-report` grouped rows by shadow model and effort only: a repeat (agent 7's Opus 5.5 xhigh next to its own Opus 5.5 xhigh) and a shadow of another real pair (Opus 5.5 xhigh next to an Opus 5.5 high plan) would be one block, the baseline mixed into the comparison | A row whose shadow model and effort equal its real ones is a repeat. Repeats are a block of their own per model and effort, named "Opus 5.5 (xhigh), the real plan's own model and effort again", with the same lines as the others (valid tool call, actions, same action types as the real plan, cost, time); the head line says how many there are and one line says that a repeat is the baseline. Under each real plan a repeat is marked `repeat`. Rows without a repeat give the report as before, line for line (SHADOW-13, SHADOWS-10 and PAM-12 still pin it) |
+| RS-4 | low | `cli model`, the log and the dashboard's line under an agent's AI fields would not show `same` or show it as a model; `/api/state` `shadowModels`, which an older page reads as model ids, would carry it | `cli model` and the log say "same (the real plan's model and effort again)", the dashboard "a repeat of the model and effort it plays". `/api/state` lists `same` among an agent's entries and `shadowEntries`, not among `shadowModels`. The password rule needed no change and the test pins it: `same` never rests, so `wakesShadow` never starts it (server and page), and `agentAiNeedsPassword` and `allAgentsAiNeedsPassword` answer with `same` set exactly as without it over every pair of models and efforts. A repeat costs what the playing pair costs, so a dearer model or a higher effort, which already asks for the password (rule 7), raises the repeat too; a lower one is one click and lowers it |
+| RS-5 | docs | The guides did not say what a repeat is or how to set it | `docs/SERVER.md` gives the three test agents' lists with `same` in front (the test runs them as written). It says what a repeat costs, that it never rests and counts once and how the report shows it. The site's costs, server and dashboard pages and `.env.example` say it in plain words, with no number, no model and no promise on the public pages |
+| SEND-1 | low (cost; no money path or auth effect; agent review of PR #66) | When the POST to `/api/agents/N/advise` failed for any reason (nginx timeout, lost connection) the page gave the message back and enabled Send, while the server kept the owner's line as pending and went on writing and paying for the answer. The server does not refuse a second message while one is pending (`Service.discuss` has no such check), so a second Send paid twice | The page keeps Send off while a message is on its way from it, while its conversation shows an owner's message still being answered (also from another tab or Telegram) and while a failed Send has not been checked with the server. A failed Send reads the state at once: a message the server still answers is not given back and a toast says the answer will show; one the server dropped comes back with the error. The normal state refresh brings Send back when the answer is there. A line under Send and the box's bubble say why |
+| LIM-1 | low (agent review of PR #66) | `roomFor` gave 80,000 tokens at xhigh and 96,000 at max on the assumption that every model of the list can write 128,000; a model added later with a lower limit would get its requests refused (400) | `MODELS` records each model's maximum output from Anthropic's model table: Fable 5.2, Opus 5.5, Sonnet 5.5 and Haiku 5.5 128,000 each. Every room is clamped to its model's limit where `max_tokens` is set: the plan and the shadow plans (`planFromRequest`), the manager chat and `/ask`. The deadline reads the clamped room. XROOM-1 checks the per-model limit instead of the literal 128,000 |
+
+What was checked and needs no change:
+- The one-at-a-time guard (`agent:model:effort`): a repeat's key is the playing pair. An explicit entry at that pair
+  rests in the same tick, so the two never run for one real plan. After a change of the playing pair, a repeat still
+  on its way at the old pair holds back an explicit entry at that pair for one plan, as the guard means.
+- The stored row: nothing that reads `shadow_plans` assumed a shadow pair differs from the real one, except the report
+  (RS-3). The report's grouping of one tick still takes each shadow pair once: within one agent's real plan a repeat
+  and another entry of the same pair cannot both run.
+- The cost booking: a repeat is added to the AI spend before its row is written, at the price of the model that
+  answered, like every shadow plan.
+- The cache-warmth key is per strategist, model and effort. A repeat has the shadow strategist of its model, so it
+  keeps its own memory of the cache, apart from the playing one. The cache rule already counts the playing pair, so a
+  repeat adds no pair to it.
+- `SHADOW_TIMEOUT_MS` stays 10 minutes, as the owner asked; the longest shadow plan so far took 99 seconds.
+- `max_tokens` is set only in the strategist; nothing else asks a model for an answer.
+
+Stays open:
+- Each repeat adds one more plan at the playing model and effort to every plan of its agent: for agents 7 and 1 at
+  xhigh, the cost of an xhigh plan each time (the most one can cost is under "Extra-high room"). Like every shadow list
+  it is set on the machine only and asks for no password.
+- When the playing strategist's cache of the manual is warm from its own last plan and the shadow strategist's is not,
+  with no other call of that pair due within the hour, the repeat sends the manual uncached at its plain input price
+  where the real plan read it at a tenth. The report then shows the repeat dearer than the real plan of the same tick;
+  the plans themselves are not affected.
+- A repeat at xhigh or max has the real plan's room but is given up after 10 minutes like every shadow plan, so a
+  repeat of a real plan that took longer is recorded as "no answer in time".
+- The server still accepts a second chat message while one is being answered: Telegram, an open page of the version
+  before or a request made by hand still pay twice. Only this page keeps Send off. A refusal on the server would also
+  turn away a Telegram message while a web answer is on its way, so it is left to the owner.
+- A state refresh that the server answered before it received a Send that then failed can clear "not known" without
+  the pending line; the next refresh, 15 seconds later, shows it and turns Send off again.
+- A model of the list whose limit Anthropic lowers must be changed in `MODELS` by hand. A model the list does not have
+  (`AGENT_MODEL` naming another one) has no known limit: its room is not clamped, and a request it cannot take is
+  refused by Anthropic, so nothing of that plan runs.

@@ -136,7 +136,7 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
 ```
 
 - Each model is one of the list (`claude-haiku-5-5`, `claude-sonnet-5-5`, `claude-opus-5-5`, `claude-fable-5-2`) and
-  not the one that plays. An entry that is anything else is left out and the log says why once
+  not the one that plays, or the word `same` (a repeat, below). An entry that is anything else is left out and the log says why once
   (`journalctl -u foxleague-agent`); the others still run. A model written twice counts once. `off` anywhere in the
   setting switches all of them off.
 - A shadow model that is also the model that plays rests. When you later pick another playing model in the dashboard,
@@ -152,6 +152,11 @@ sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=Exp
   model plays, at any effort, as before. A change of the playing effort that starts an entry asks for the password
   like a dearer model, also when the new effort is lower. An entry with an effort nobody knows is left out with its
   reason in the log. A model and effort written twice count once.
+- `same` asks the real plan's own model and effort again: a repeat. It never rests: it follows the model and effort
+  the agent plays, also after you change them. An entry that names the playing model and effort itself still rests,
+  as before; with `same` beside it that pair runs once. `same` is written in small letters and takes no effort after a
+  colon. A repeat costs what the real plan costs, on top of it. No switch of the playing model or effort starts it, so
+  it asks for no password of its own: a dearer model or a higher effort asks as always and raises the repeat too.
 - `AGENT_SHADOW_MODEL` (one model or several separated by commas) and `AGENT_SHADOW_EFFORT` in
   `/etc/foxleague-agent/env` do the same from the next start of the service. The database's setting wins, so `off`
   there switches it off whatever the env file says.
@@ -206,3 +211,28 @@ sudo /opt/foxleague-agent/app/deploy/agentctl.sh shadow-report 9
 
 The report gives the numbers once per model and effort, each block named like "Opus 5.5 (low)". Then it lists every
 real plan with its model and effort ("real   Opus 5.5 (high)") and its shadow plans at the three efforts below it.
+
+### The same model and effort again: a repeat
+
+The same model at the same effort does not plan the same twice either. So "medium agreed with xhigh 6 times out of
+10" says little until you know how often xhigh agrees with itself. Put `same` in an agent's list and the model that
+plays plans once more in the shadow, at the very effort it plays: how often that repeat agrees with the real plan is
+the baseline for the other efforts. Here agents 7 and 1 play Opus 5.5 and Sonnet 5.5 at xhigh and agent 9 plays Haiku
+5.5 at high. Each keeps its three other efforts and gets `same` in front:
+
+```
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model_agent_7 same,claude-opus-5-5:low,claude-opus-5-5:medium,claude-opus-5-5:high
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model_agent_1 same,claude-sonnet-5-5:low,claude-sonnet-5-5:medium,claude-sonnet-5-5:high
+sudo -u foxleague-agent /opt/foxleague-agent/node/bin/node --disable-warning=ExperimentalWarning -e "$SET" shadow_model_agent_9 same,claude-haiku-5-5:low,claude-haiku-5-5:medium,claude-haiku-5-5:high
+```
+
+Agent 9's `claude-haiku-5-5:high` rests while it plays Haiku 5.5 at high, as before (the log says so once), and the
+repeat runs at high. So agents 7 and 1 make five requests a plan (the real one, the repeat and three other efforts)
+and agent 9 four. A repeat at xhigh costs what an xhigh plan costs. `agentctl.sh model` shows the entry as "same (the
+real plan's model and effort again)".
+
+In `agentctl.sh shadow-report 7` the repeats are a block of their own, named like "Opus 5.5 (xhigh), the real plan's
+own model and effort again", with the same lines as the other blocks. Under each real plan its repeat is marked
+"repeat" instead of "shadow". A shadow plan of another agent at the same model and effort, next to a real plan of
+another effort, stays in a block of its own. In the Activity a repeat's row says "the real plan's own model and effort
+again".

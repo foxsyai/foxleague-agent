@@ -373,3 +373,70 @@ test('RS-4 the readers: cli model and the page name `same` in plain words; /api/
   assert.equal(costsMore(HAIKU, 'low'), false, 'a cheaper pair with a repeat set is one click')
   assert.equal(costsMore(SONNET, 'high'), true)
 })
+
+// ---- the guides and the review ----
+
+test('RS-5 the guides: the server guide gives the three test agents\' lists with `same` and they run as written; the site says what a repeat is for; the review has its section, after the one before it, in the table format', () => withoutEnv((): void => {
+  const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
+  const guide = read('docs/SERVER.md')
+  const script = guide.match(/^SET='([^'\n]+)'$/m)?.[1]
+  assert.ok(script, 'the guide\'s one-line script')
+  const from = guide.indexOf('### The same model and effort again: a repeat')
+  assert.ok(from > guide.indexOf('### The same model at other efforts, on three agents'), 'after the example of other efforts')
+  const block = guide.slice(from, guide.indexOf('```\n', guide.indexOf('```', from) + 3))
+  const sets = [...block.matchAll(/-e "\$SET" (shadow_model\S*) (\S+)\n/g)].map(m => [m[1]!, m[2]!] as [string, string])
+  // The owner's three test agents: today's lists with `same` in front.
+  assert.deepEqual(sets, [
+    ['shadow_model_agent_7', `same,${OPUS}:low,${OPUS}:medium,${OPUS}:high`],
+    ['shadow_model_agent_1', `same,${SONNET}:low,${SONNET}:medium,${SONNET}:high`],
+    ['shadow_model_agent_9', `same,${HAIKU}:low,${HAIKU}:medium,${HAIKU}:high`],
+  ])
+  // As written, against a database of this test, with the three agents playing as the owner's do.
+  const dir = mkdtempSync(join(tmpdir(), 'foxagent-rs-guide-'))
+  const store = new Store(dir)
+  for (const [key, value] of sets) {
+    const r: { status: number | null; stderr: string } = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '-e', script.replace('/var/lib/foxleague-agent/agent.db', join(dir, 'agent.db')), key, value], { encoding: 'utf8', timeout: 60_000 })
+    assert.equal(r.status, 0, r.stderr)
+  }
+  const runs = (playing: Pair, index: number) => S.shadowRuns(S.shadowChoices(store, playing, index))
+  assert.deepEqual(runs({ model: OPUS, effort: 'xhigh' }, 6), [['xhigh'], ['low'], ['medium'], ['high']].map(([effort]) => ({ model: OPUS, effort })), 'agent 7: a repeat and three other efforts')
+  assert.deepEqual(runs({ model: SONNET, effort: 'xhigh' }, 0), ['xhigh', 'low', 'medium', 'high'].map(effort => ({ model: SONNET, effort })), 'agent 1')
+  assert.deepEqual(runs({ model: HAIKU, effort: 'high' }, 8), ['high', 'low', 'medium'].map(effort => ({ model: HAIKU, effort })), 'agent 9: its high entry rests, the repeat is at high')
+  const part = guide.slice(guide.indexOf('## Shadow plans: trying another model without letting it play')).replace(/\s+/g, ' ')
+  for (const said of [
+    /`same` asks the real plan's own model and effort again: a repeat\./,
+    /It never rests: it follows the model and effort the agent plays, also after you change them\./,
+    /An entry that names the playing model and effort itself still rests, as before; with `same` beside it that pair runs once\./,
+    /A repeat costs what the real plan costs, on top of it\./,
+    /"Opus 5\.5 \(xhigh\), the real plan's own model and effort again"/,
+    /marked "repeat"/,
+  ]) assert.match(part, said)
+  assert.doesNotMatch(guide.slice(guide.indexOf('## Shadow plans')), /—|\bbot\b/i)
+  assert.match(read('.env.example'), /^# same in the list asks the playing model and effort again, the baseline for the others \(docs\/SERVER\.md\)\.$/m)
+
+  // The site: what a repeat is for, still no number, no model and no promise.
+  const costs = read('site/src/content/docs/help/costs.md')
+  const para = costs.slice(costs.indexOf('## Comparing a second model before you switch'), costs.indexOf('## To start')).replace(/\s+/g, ' ')
+  assert.match(para, /The model that plays can also plan once more in the shadow at its own effort, to see how much its plans differ from one request to the very same request\./)
+  assert.doesNotMatch(para, /\$|\d|Haiku|Sonnet|Opus|Fable|cheaper|better|—|, and |, or /)
+  assert.match(read('site/src/content/docs/help/server.mdx').replace(/\s+/g, ' '), /how to let the model that plays plan once more at its own effort/)
+  assert.match(read('site/src/content/docs/use/dashboard.md').replace(/\s+/g, ' '), /A row marked "shadow plan, not carried out" is what another AI model would have planned, recorded only to compare[^.]*\. A shadow plan by the agent's own model and effort says so: it is the same model planning the same request a second time\./)
+  assert.match(read('site/src/content/docs/use/talk-to-your-manager.md').replace(/\s+/g, ' '), /While the manager is answering, \*\*Send\*\* waits: the answer is written and paid for even when the page loses the connection, so a second Send would pay twice\./)
+  for (const f of ['site/src/content/docs/help/costs.md', 'site/src/content/docs/help/server.mdx', 'site/src/content/docs/use/dashboard.md']) assert.doesNotMatch(read(f), /—|\bbot\b/i, f)
+  // The talk page names "your Telegram bot" elsewhere, as Telegram calls it; the new words do not.
+  const talk = read('site/src/content/docs/use/talk-to-your-manager.md').replace(/\s+/g, ' ')
+  assert.doesNotMatch(talk.slice(talk.indexOf('While the manager is answering'), talk.indexOf('### What the manager remembers')), /—|, and |, or |\bbot\b/i)
+
+  // The review: its own section, after the one before it, in the table format, with what stays open.
+  const review = read('docs/SECURITY-REVIEW.md')
+  const start = review.indexOf('\n## Repeat shadow, chat Send and model output limits (2026-11-13)\n')
+  assert.ok(start > 0, 'the section is in the review')
+  assert.ok(start > review.indexOf('\n## Extra-high room (2026-11-13)\n'), 'after the section before it')
+  const end = review.indexOf('\n## ', start + 1)
+  const section = review.slice(start, end < 0 ? undefined : end)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| RS-1 \| design \(the owner, 2026-11-13\) \|/)
+  for (const id of ['RS-2', 'RS-3', 'RS-4', 'RS-5', 'SEND-1', 'LIM-1']) assert.match(section, new RegExp(`\\n\\| ${id} \\|`), id)
+  for (const line of section.split('\n').filter(l => /^\| (RS|SEND|LIM)-/.test(l))) assert.equal(line.split(' | ').length, 4, line.slice(0, 40))
+  assert.ok(section.includes('\nStays open:\n'))
+  assert.doesNotMatch(section, /—|\bbot\b/i)
+}))
