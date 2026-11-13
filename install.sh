@@ -690,7 +690,14 @@ EOF
 opener=$(browser_opener)
 if [ "$NO_SERVICE" = 0 ] && [ -n "$opener" ] && [ "$LINKS" = 1 ] && curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1; then
   if yes_no "Open the dashboard in your browser now?" y; then
-    "$opener" "http://localhost:$port" >/dev/null 2>&1 &
+    # On WSL explorer.exe has to be done before this script ends: WSL ends what a session started when the session
+    # ends, and a background one went with it (W-6, seen on a real PC). It hands the address to Windows and returns
+    # at once, with status 1 even when it worked. A Mac's open returns at once too. xdg-open may wait for the
+    # browser to close, so it goes to the background.
+    case "$opener" in
+      */xdg-open) "$opener" "http://localhost:$port" >/dev/null 2>&1 & ;;
+      *) "$opener" "http://localhost:$port" >/dev/null 2>&1 || true ;;
+    esac
   fi
 fi
 exit 0
