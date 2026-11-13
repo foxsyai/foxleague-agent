@@ -1,6 +1,6 @@
 // FRESH-13 (the owner's own install on a real Ubuntu desktop, 2026-11-11): the last screen showed the dashboard's
 // address as plain text among the other lines, with nothing to tell that it is the next thing to open. Safe: the
-// address is a link the terminal can open (blue and underlined, a real hyperlink where the terminal knows them),
+// address is a link the terminal can open (underlined, a real hyperlink where the terminal knows them),
 // the screen says how, and on a machine with a desktop the installer offers to open it in the browser itself.
 // Where the output is no terminal (a log, a pipe) the address stays plain text with no control bytes.
 import { test } from 'node:test'
@@ -16,7 +16,8 @@ test('FRESH-13: the dashboard address is a link on a terminal and plain text eve
   // Read with spawnSync: the shared `sh` helper strips colour codes from what it returns, and they are the point here.
   const fn = shellFunction(join(REPO, 'install.sh'), 'link')
   const run = (links: string): string => spawnSync('bash', ['-c', `LINKS=${links}\n${fn}\nlink http://localhost:8870`], { encoding: 'utf8' }).stdout
-  assert.equal(run('1'), `${ESC}]8;;http://localhost:8870${ESC}\\${ESC}[4;34mhttp://localhost:8870${ESC}[0m${ESC}]8;;${ESC}\\`, 'a hyperlink, blue and underlined, closed again')
+  // (Bold and underlined in the terminal's own colour since W-5 of 2026-11-14: blue did not show on PowerShell's blue.)
+  assert.equal(run('1'), `${ESC}]8;;http://localhost:8870${ESC}\\${ESC}[1;4mhttp://localhost:8870${ESC}[0m${ESC}]8;;${ESC}\\`, 'a hyperlink, bold and underlined, closed again')
   assert.equal(run('0'), 'http://localhost:8870', 'no control bytes when the output is no terminal')
 })
 

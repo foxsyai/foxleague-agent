@@ -39,11 +39,12 @@ RUN_DIR=${FOXAGENT_RUN:-/run}
 
 say() { printf '\n\033[1;33m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
-# A web address on the screen: blue and underlined and, where the terminal knows hyperlinks (most do), a link it
-# opens with Ctrl and a click (Cmd on a Mac). Plain text with no control bytes when the output is no terminal.
+# A web address on the screen: bold and underlined in the terminal's own text colour, which every background shows
+# (blue was a dark smudge on Windows PowerShell's blue, W-5) and, where the terminal knows hyperlinks (most do), a
+# link it opens with Ctrl and a click (Cmd on a Mac). Plain text with no control bytes when the output is no terminal.
 LINKS=0
 [ -t 1 ] && [ "${TERM:-dumb}" != dumb ] && LINKS=1
-link() { if [ "$LINKS" = 1 ]; then printf '\033]8;;%s\033\\\033[4;34m%s\033[0m\033]8;;\033\\' "$1" "$1"; else printf '%s' "$1"; fi; }
+link() { if [ "$LINKS" = 1 ]; then printf '\033]8;;%s\033\\\033[1;4m%s\033[0m\033]8;;\033\\' "$1" "$1"; else printf '%s' "$1"; fi; }
 # The program that opens a web address in the owner's browser on this machine, or nothing where there is none
 # (a server reached over SSH, a terminal with no desktop).
 browser_opener() {
