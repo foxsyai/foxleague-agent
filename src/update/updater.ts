@@ -59,7 +59,7 @@ export interface UpdateView {
   canInstall: boolean
   how: string | null
   state: 'idle' | 'downloading' | 'preparing' | 'restarting'
-  /** How the last update went, kept until the next one. */
+  /** How the last update went, kept until the next one and given only while the version that told it runs. */
   last: { kind: 'updated' | 'undone' | 'failed'; version: string; at: string; message: string } | null
   enabled: boolean
   /** True when a service manager starts the agent again after an update; false when the owner has to. */
@@ -94,17 +94,24 @@ export class Updater {
     return this.d.source ?? DEFAULT_SOURCE
   }
 
+  /**
+   * How the last update went, while the version that told it is the one running (W-16): "you run 1.0.2 as before"
+   * is not shown once 1.0.4 runs, after the install line was pasted again or an update from a terminal. A result
+   * written before results named their version (`ran`) is shown as before.
+   */
   private last(): UpdateView['last'] {
     try {
-      const v = JSON.parse(this.d.kv.get(KV_LAST) ?? 'null') as UpdateView['last']
-      return v && typeof v.version === 'string' && typeof v.message === 'string' && typeof v.at === 'string' && ['updated', 'undone', 'failed'].includes(v.kind) ? v : null
+      const v = JSON.parse(this.d.kv.get(KV_LAST) ?? 'null') as (NonNullable<UpdateView['last']> & { ran?: unknown }) | null
+      if (!v || typeof v.version !== 'string' || typeof v.message !== 'string' || typeof v.at !== 'string' || !['updated', 'undone', 'failed'].includes(v.kind)) return null
+      if (v.ran !== undefined && v.ran !== this.d.installed) return null
+      return { kind: v.kind, version: v.version, at: v.at, message: v.message }
     } catch {
       return null
     }
   }
 
   private setLast(kind: NonNullable<UpdateView['last']>['kind'], version: string, message: string): void {
-    this.d.kv.set(KV_LAST, JSON.stringify({ kind, version, at: new Date().toISOString(), message }))
+    this.d.kv.set(KV_LAST, JSON.stringify({ kind, version, at: new Date().toISOString(), message, ran: this.d.installed }))
   }
 
   private get restarts(): boolean {
