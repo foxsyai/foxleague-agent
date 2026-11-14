@@ -1200,7 +1200,9 @@ function Install-FoxLeagueAgent {
                 Write-FoxInnerUninstallByHand $folder
             }
         } elseif ($plan -eq 'no-ubuntu') {
-            Write-FoxLine 'WSL has no distribution called Ubuntu, so there is no agent inside it to stop.'
+            # What WSL lists, not a claim: a WSL that cannot list looks the same. Without the task Ubuntu stops by
+            # itself anyway once its last window closes, and an agent inside it with it.
+            Write-FoxLine 'WSL lists no distribution called Ubuntu, so no agent inside it was looked for.'
         } elseif ($plan -eq 'no-service') {
             Write-FoxLine ('The agent in ' + $folder + ' has no background service in Ubuntu: nothing to stop there.')
         } elseif ($plan -eq 'no-folder') {

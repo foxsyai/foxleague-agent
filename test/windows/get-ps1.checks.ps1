@@ -1039,7 +1039,8 @@ Check 'W-17 -Uninstall answered n, without Ubuntu, without the folder or its ser
     # No distribution called Ubuntu: said, nothing is started and there is nothing to do by hand.
     New-World -Distros "* Debian    Running         2`n"
     Invoke-FoxUninstall
-    True ((Screen) -match 'WSL has no distribution called Ubuntu, so there is no agent inside it to stop\.') (Screen)
+    # (What WSL lists, not a claim: a WSL that cannot list its distributions looks the same.)
+    True ((Screen) -match 'WSL lists no distribution called Ubuntu, so no agent inside it was looked for\.') (Screen)
     True ((Screen) -notmatch 'To do it by hand') (Screen)
     True ((Calls) -notmatch '--exec') (Calls)
     $screens += @($World['Lines'])
