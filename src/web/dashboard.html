@@ -492,6 +492,11 @@ function renderUpdate() {
   if (!u) return
   $('verPill').hidden = false; $('verPill').textContent = 'v' + u.installed
   if (updating && u.installed === updating.to) { updating = null; toast('Updated to version ' + u.installed) }
+  // W-15: the agent is idle again with a new result for that very version: it was not installed, or it started and
+  // was undone. The notice shows it at once instead of "Installing" for up to 20 minutes. A result is this attempt's
+  // when it is not the one the agent held at the click (compared by the agent's own time, never the page's clock).
+  // While the agent is away restarting no answer comes, so that minute stays quiet.
+  else if (updating && u.state === 'idle' && u.last && u.last.kind !== 'updated' && u.last.version === updating.to && u.last.at !== updating.last) updating = null
   const recent = u.last && Date.now() - Date.parse(u.last.at) < 86400000 ? u.last : null
   const busy = u.state !== 'idle' || Boolean(updating)
   // Check for updates: only where the agent checks at all, and off while it asks or an update installs.
@@ -549,7 +554,7 @@ async function startUpdate() {
     toast(r.message)
     // Where nothing restarts the agent it never goes away: its own state says how far the update is.
     if (u.restarts === false) { await loadState(); const w = setInterval(() => { loadState(); if (S.instance.update.state === 'idle') clearInterval(w) }, 4000); return }
-    updating = { to: u.available.version, since: Date.now() }
+    updating = { to: u.available.version, since: Date.now(), last: u.last ? u.last.at : null }
     renderUpdate()
     // Look often while it installs and restarts; the page is quiet about the minute the agent is away.
     const h = setInterval(() => { if (!updating || Date.now() - updating.since > 20 * 60000) { updating = null; clearInterval(h); loadState() } else loadState() }, 4000)
