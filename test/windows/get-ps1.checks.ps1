@@ -562,6 +562,8 @@ function Read-FoxLine([string]$Prompt) {
 }
 function Write-FoxStep([string]$Text) { $World['Lines'] += ('== ' + $Text) }
 function Write-FoxLine([string]$Text) { $World['Lines'] += $Text }
+# A highlighted line (W-14) is marked with !! on the stand-in screen.
+function Write-FoxNote([string]$Text) { $World['Lines'] += ('!! ' + $Text) }
 function Get-FoxEnvValues { return $World['Env'] }
 # The whole install as the main function runs it. Returns 'done' or 'stop: <the sentence>'.
 function Run-Install {
@@ -725,6 +727,34 @@ Check 'W-4 Ubuntu''s question "Help improve Ubuntu!" is told before Ubuntu asks 
     $screen = Screen
     $before = $screen.Substring(0, $screen.IndexOf('Ubuntu is installed and has a user of its own'))
     True ($before -match '- Ubuntu may also ask "Help improve Ubuntu!" \(Y/n/e\): either answer is fine for the agent\.') $before
+}
+Check 'W-14 the last line before Ubuntu''s own output, highlighted, says to type exit at Ubuntu''s prompt (the note before Ready? was 15 lines away)' {
+    New-World
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    # How many lines were on the screen when wsl --install -d Ubuntu started (its own output comes after them).
+    $real = ${function:Invoke-FoxWsl}
+    function Invoke-FoxWsl {
+        param([string]$Arguments, [switch]$Capture, [string]$StdinText, [int]$TimeoutSeconds = 0)
+        if ($Arguments -eq '--install -d Ubuntu') { $World['LinesAtInstall'] = @($World['Lines']).Count }
+        & $real @PSBoundParameters
+    }
+    Equal (Run-Install) 'done' (Screen)
+    $at = $World['LinesAtInstall']
+    True ($null -ne $at -and $at -gt 0) 'wsl --install -d Ubuntu was not started'
+    Equal (@($World['Lines'])[$at - 1]) '!! When Ubuntu shows a line that ends with $, type  exit  and press Enter to come back here.' 'the last line before Ubuntu''s output'
+    True ((('  ' + @($World['Lines'])[$at - 1].Substring(3))).Length -le 100) 'it fits in 100 columns'
+    # The note among the others before Ready? stays where it was.
+    $before = (@($World['Lines'])[0..($at - 2)] -join "`n")
+    True ($before -match '- When Ubuntu then shows its own prompt \(a line that ends with \$\), type  exit  and press Enter') $before
+    # Highlighted: get.ps1's Write-FoxNote writes the line in a colour of its own, as the step titles are.
+    $def = $ast.Find({ param($n) $n.GetType().Name -eq 'FunctionDefinitionAst' -and $n.Name -eq 'Write-FoxNote' }, $true)
+    True ($null -ne $def) 'get.ps1 has no Write-FoxNote'
+    True ($def.Extent.Text -match 'Write-Host \(''  '' \+ \$Text\) -ForegroundColor Yellow') $def.Extent.Text
+    # Only when Ubuntu is downloaded here: a PC with Ubuntu and its user gets no such line.
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    Equal (Run-Install) 'done' (Screen)
+    True ((Screen) -notmatch '!! ') (Screen)
 }
 Check 'W-1 a PC with 0.2 GB free stops before Ubuntu is downloaded, says how much is needed, and changes nothing' {
     New-World

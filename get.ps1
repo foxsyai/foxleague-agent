@@ -84,6 +84,8 @@ function Install-FoxLeagueAgent {
     # ================================================================================================
     function Write-FoxStep([string]$Text) { Write-Host ''; Write-Host $Text -ForegroundColor Yellow }
     function Write-FoxLine([string]$Text) { Write-Host ('  ' + $Text) }
+    # One line that must not be missed, in the colour of the step titles (W-14).
+    function Write-FoxNote([string]$Text) { Write-Host ('  ' + $Text) -ForegroundColor Yellow }
     # Ends the run with one sentence. The main function catches it; nothing after it runs.
     function Stop-Fox([string]$Text) {
         $e = New-Object System.InvalidOperationException($Text)
@@ -878,6 +880,9 @@ function Install-FoxLeagueAgent {
                 Write-FoxLine 'This PC makes new distributions for WSL 1 (your own setting, which is left as it is): Ubuntu is moved to WSL 2 after it.'
             }
             if (-not (Confirm-Fox 'Ready?' $true)) { Stop-Fox 'Ubuntu was not installed. Paste the line again when you are ready' }
+            # Said again as the last line before Ubuntu's own output, the nearest one to its prompt: among the notes
+            # above it was 15 lines away, and on the PC of 14 Nov nothing on the screen said it at the prompt (W-14).
+            Write-FoxNote 'When Ubuntu shows a line that ends with $, type  exit  and press Enter to come back here.'
             $r = Invoke-FoxWsl -Arguments ('--install -d ' + $FoxDistro)
             $now = Get-FoxUbuntuNow
             if ($now['Readiness'] -eq 'not-registered' -and $r['ExitCode'] -ne 0) {
