@@ -157,21 +157,32 @@ off.
 
 ### On Windows
 
-The uninstall has two parts. Inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell), go to the
-`foxleague-agent` folder and run `./install.sh --uninstall` as above. In PowerShell, remove the scheduled task
-that keeps Ubuntu running:
-
-```powershell
-Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false
-```
-
-That removes the task, but the hidden `wsl.exe` it started runs on and keeps Ubuntu up until Windows restarts:
-`wsl --terminate Ubuntu` stops Ubuntu now. This line does both: it removes that task, stops that one `wsl.exe` (it
-knows it by its whole command line) and nothing else, then names the step inside Ubuntu.
+The uninstall is one line in PowerShell:
 
 ```powershell
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall
 ```
+
+It removes the scheduled task that keeps Ubuntu running and stops the hidden `wsl.exe` the task started (it knows
+it by its whole command line). Nothing else of Windows is touched. Then it asks one question: "Also stop the agent
+and remove its background service in Ubuntu?" Enter means yes: it runs `./install.sh --uninstall` inside Ubuntu for
+you (as above) and says how that went. Nothing has to be typed inside Ubuntu.
+
+With `n` or when it cannot do it, it shows the lines to type by hand. The first goes into PowerShell, the others
+into Ubuntu, one at a time (pasted together, some reach the wrong window):
+
+```powershell
+wsl -d Ubuntu --cd ~
+```
+
+```sh
+cd ~/foxleague-agent && ./install.sh --uninstall
+exit
+```
+
+To remove only the scheduled task: `Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false`.
+The hidden `wsl.exe` it started then runs on and keeps Ubuntu up until Windows restarts: `wsl --terminate Ubuntu`
+stops Ubuntu now.
 
 The task is all the installer added to Windows. WSL, Ubuntu and the line `systemd=true` in Ubuntu's
 `/etc/wsl.conf` stay, because other programs may use them. If the installer changed a file that was already

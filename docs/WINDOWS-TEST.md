@@ -2,11 +2,12 @@
 
 For maintainers. `get.ps1` was written on Linux. What is checked there: the PowerShell parser reads it, its
 decisions are held by `test/windows/get-ps1.checks.ps1` (PowerShell 7 in a container, `wsl.exe` and Windows
-replaced by stand-ins) and `test/audit-1111/windows-1.test.ts`. **It ran on a real Windows PC once**, on
-13 Nov 2026: Windows 10 Home 22H2 (build 19045), Windows PowerShell 5.1, the Microsoft Store WSL 3.0.1.0, which
-installed Ubuntu 26.04.1 LTS. What was seen and fixed is the section "Windows real-PC check (2026-11-13)" of
-`docs/SECURITY-REVIEW.md`. Run the walk-through again after a change of `get.ps1` and on another PC when one is
-at hand: what stays open is listed there.
+replaced by stand-ins) and `test/audit-1111/windows-1.test.ts`. **It ran on a real Windows PC twice**, on
+13 and 14 Nov 2026, the same PC both times: Windows 10 Home 22H2 (build 19045), Windows PowerShell 5.1, the
+Microsoft Store WSL 3.0.1.0, which installed Ubuntu 26.04.1 LTS. What was seen and fixed is in the sections
+"Windows real-PC check (2026-11-13)" and "Windows real-PC re-test (2026-11-14)" of `docs/SECURITY-REVIEW.md`. Run
+the walk-through again after a change of `get.ps1` and on another PC when one is at hand: what stays open is listed
+there.
 
 What only a real PC can show:
 
@@ -172,17 +173,17 @@ text), how long it took, and anything that was not what the installer or the gui
 | 2 | The administrator prompt | PC | What the prompt names ("Windows Subsystem for Linux"?). Whether a window opens and closes. What the installer says after Yes. Then once more with **No**: the sentence it stops with. A PC with the Store WSL already there asks nothing here (the first PC) |
 | 3 | The restart | PC | Does it say "Restart Windows now, then paste the same line again"? Paste the line again **before** restarting: what happens (a second prompt is expected, no harm) |
 | 4 | After the restart, paste again | PC | Does it go straight to "Windows 3/6"? Is there a second administrator prompt (there should be none)? |
-| 5 | Ubuntu's first user | PC | Does Ubuntu ask in the same window or in its own? The exact questions (the first PC also got "Help improve Ubuntu!", Y/n/e). Did the download look stuck at 0% (a click pauses the window: Enter goes on) and did a "Welcome to WSL" window open? Is `exit` needed to come back, as the installer said? What the installer prints when it goes on |
+| 5 | Ubuntu's first user | PC | Does Ubuntu ask in the same window or in its own? The exact questions (the first PC also got "Help improve Ubuntu!", Y/n/e). Did the download look stuck at 0% (a click pauses the window: Enter goes on) and did a "Welcome to WSL" window open? Is `exit` needed to come back, as the installer said (the last line before Ubuntu's own output, in yellow)? Try Enter alone at Ubuntu's username question once. What the installer prints when it goes on |
 | 6 | "Windows 4/6" | PC, then SSH | What it says about `/etc/wsl.conf`. Over SSH: `wsl -d Ubuntu -u root cat /etc/wsl.conf` (one `[boot]`), `wsl -d Ubuntu systemctl is-system-running` |
 | 7 | The installer's questions (the seven steps) | PC | Are the questions readable and answered in the same window? The username has no default (Enter alone is refused). Do the recovery words disappear after the yes? Is the dashboard address readable on PowerShell's blue? The installer inside offers the browser (it finds `explorer.exe`): does Enter open the dashboard? |
 | 8 | "Windows 6/6" and "Done" | PC, then SSH | The trigger it names ("logon and every 5 minutes"?). "The task is running"? Any window that stays open or flashes? The dashboard address, the Explorer path (open it). The dashboard in the Windows browser: sign in. The window's title is PowerShell's own again |
 | 9 | Close **every** window, wait 15 minutes | SSH | First `curl.exe -s http://localhost:8870/healthz` (expected: `ok`), then `Get-ScheduledTask -TaskName 'FoxLeague Agent (WSL)'` (State), `Get-Process wsl, conhost`, and last `wsl -d Ubuntu journalctl --user -u foxleague-agent --since -20min` (no stop and start in between) |
 | 10 | Restart Windows, log on, open nothing | PC, then SSH | After 6 minutes the same three checks as step 9. Did a window show at log on? Then lock the screen for 15 minutes and check again |
-| 11 | Paste the line again on the finished install | PC | No administrator prompt, no restart of Ubuntu, "systemd is already turned on", the installer's questions with the earlier answers as defaults, one task (not two) in Task Scheduler |
+| 11 | Paste the line again on the finished install | PC | No administrator prompt, no restart of Ubuntu, "systemd is already turned on", the installer's questions with the earlier answers as defaults, one task (not two) in Task Scheduler. Afterwards the dashboard's notice no longer shows how an update of the version before went |
 | 12 | An update from the dashboard (Update now) | PC | The notice, the click, the dashboard away for about half a minute, the new version in the header. The task still running (section 3: `AGENT_UPDATE_URL` and the relay) |
-| 13 | An update that does not start (a release made with `--break-start`) | PC, then SSH | Update now; after two starts that fail the launcher is back on the version before and the agent says so. Then publish a release that starts, before step 11 is done again |
+| 13 | An update that does not start (a release made with `--break-start`) | PC, then SSH | Update now; after two starts that fail the launcher is back on the version before and the agent says so. The notice says so too, without a reload (it no longer says "Installing" for 20 minutes). Then publish a release that starts, before step 11 is done again |
 | 14 | `wsl --shutdown`, open nothing, wait 6 minutes | SSH | `curl.exe` on `/healthz`: is the agent back by itself (the task's 5-minute trigger)? |
-| 15 | The uninstall: the PowerShell line with `-Uninstall`, then `./install.sh --uninstall` inside Ubuntu | PC | What each says ("Stopped the hidden wsl.exe that the task had started"). Task Scheduler without the task. After 15 minutes with every window closed: `wsl -l --running` shows no Ubuntu. `wsl -l -v` still lists Ubuntu, `/etc/wsl.conf` still has `systemd=true`, the folder and `.env` are there |
+| 15 | The uninstall: the one PowerShell line with `-Uninstall` and Enter at its one question | PC, then SSH | What it says: "Stopped the hidden wsl.exe that the task had started", the question "Also stop the agent and remove its background service in Ubuntu?", the installer's own lines from inside Ubuntu, then "Done: the agent is stopped and its background service in Ubuntu is removed." Nothing is typed inside Ubuntu. Task Scheduler without the task. After 15 minutes with every window closed: `wsl -l --running` shows no Ubuntu. Then (this starts Ubuntu, so last): `wsl -l -v` still lists Ubuntu, `/etc/wsl.conf` still has `systemd=true`, the folder and `.env` are there, `wsl -d Ubuntu systemctl --user is-enabled foxleague-agent` finds no unit. If there is time: the line once more answered `n` (the lines by hand, each marked with the window it is typed in) |
 
 Worth a second run when there is time: Windows PowerShell 5.1 and PowerShell 7 (`pwsh`); a PC that already has
 an Ubuntu with files in it; a Windows account that is not an administrator (the prompt then asks for another

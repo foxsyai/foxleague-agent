@@ -251,16 +251,19 @@ has kept the release before it (kept so that the update can be undone). On Linux
 on, which lets background services of your user start without a login: `loginctl disable-linger $USER` turns it
 off. Delete the folder only when the agent wallets are empty and your recovery words are safe.
 
-On Windows the uninstall has two parts. Inside Ubuntu, `./install.sh --uninstall` as above. In PowerShell, the
-scheduled task that keeps Ubuntu running is removed with
-`Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false`; the hidden `wsl.exe` it started runs
-on and keeps Ubuntu up until Windows restarts (`wsl --terminate Ubuntu` stops Ubuntu now). This line does both: it
-removes that task, stops that one `wsl.exe` (known by its whole command line) and nothing else, then names the step
-inside Ubuntu.
+On Windows the uninstall is one line in PowerShell:
 
 ```
 & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall
 ```
+
+It removes the scheduled task that keeps Ubuntu running and stops the hidden `wsl.exe` the task started (known by
+its whole command line). Nothing else of Windows is touched. Then it asks one question: "Also stop the agent and
+remove its background service in Ubuntu?" Enter means yes: it runs `./install.sh --uninstall` inside Ubuntu for you
+and says how that went. With `n` or when it cannot do it, it shows the lines to type by hand: `wsl -d Ubuntu --cd ~` in
+PowerShell, then inside Ubuntu `cd ~/foxleague-agent && ./install.sh --uninstall` and `exit`, one line at a time.
+`Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false` removes only the task: the hidden
+`wsl.exe` it started runs on and keeps Ubuntu up until Windows restarts (`wsl --terminate Ubuntu` stops Ubuntu now).
 
 WSL, Ubuntu and the line `systemd=true` in Ubuntu's `/etc/wsl.conf` stay, because other programs may use them.
 Your folder with the wallet words stays inside Ubuntu: do not remove Ubuntu itself (`wsl --unregister Ubuntu`
@@ -318,7 +321,9 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
   the background service of an install made by an older installer refuses a call that the tar of Ubuntu 26.04
   needs to unpack an update. Run `./install.sh --update` once in a terminal, in the agent's folder: it installs the
   update outside the service and takes that one line out of the service's file, so later updates are one click
-  again. Pasting the install line again does the same.
+  again. Pasting the install line again does the same. On Windows, open Ubuntu first: `wsl -d Ubuntu --cd ~` in
+  PowerShell, then `cd foxleague-agent`. Until then the dashboard offers no **Update now**: it would fail the same
+  way.
 - **"Command 'curl' not found" on Ubuntu:** run `sudo apt install curl`, then paste the install line again.
 - **The agent does not start after I changed the recovery words:** its history and limits belong to the wallets
   of the words it was made with. Put the original words back in `.env` and restart. To play another wallet's

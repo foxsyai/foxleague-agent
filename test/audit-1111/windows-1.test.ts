@@ -191,7 +191,8 @@ test('WIN-1 the Windows tab: the line, what it does and asks, where the dashboar
   assert.match(tab, /does not play while the PC is off or asleep and not before you log in after a restart/)
   // Update and uninstall.
   assert.match(tab, /An update is one click in the dashboard/)
-  assert.match(tab, /\[Uninstall\]\(\/help\/update\/#uninstall\): one command inside Ubuntu and one in PowerShell/)
+  // (One line in PowerShell since W-17 of 2026-11-14: it removes the agent inside Ubuntu too, after one question.)
+  assert.match(tab, /\[Uninstall\]\(\/help\/update\/#uninstall\): one line in PowerShell, which also removes the agent's background service inside Ubuntu after one question/)
   // By hand: never a second [boot].
   const hand = tab.slice(tab.indexOf('**By hand**'))
   assert.match(hand, /`wsl --install -d Ubuntu`/)
@@ -295,8 +296,8 @@ test('WIN-1 the record: one row, and what stays open says that get.ps1 has not r
 test('WIN-1 the plan for the real PC: the public key only, what cannot be driven over SSH, and every step of the walk-through', () => {
   const plan = raw('docs/WINDOWS-TEST.md')
   const flat = plan.replace(/\s+/g, ' ')
-  // (It ran on a real PC on 2026-11-13; the walk-through says so and points at the record.)
-  assert.match(flat, /\*\*It ran on a real Windows PC once\*\*, on 13 Nov 2026/)
+  // (It ran on a real PC on 2026-11-13 and again on 2026-11-14; the walk-through says so and points at the record.)
+  assert.match(flat, /\*\*It ran on a real Windows PC twice\*\*, on 13 and 14 Nov 2026, the same PC both times/)
   assert.match(flat, /Only a \*\*public\*\* key crosses a chat\. Never a password and never a private key/)
   // (One script block since W-DOC-2 of 2026-11-14, with Microsoft's MSI where the capability fails: W-DOC-1.)
   assert.match(plan, /^ {4}try \{ Add-WindowsCapability -Online -Name OpenSSH\.Server~~~~0\.0\.1\.0 \| Out-Null \} catch \{ \}$/m)

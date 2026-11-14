@@ -2098,6 +2098,58 @@ Stays open:
 - `systemctl is-system-running` said degraded on the PC (some unit of Ubuntu failed); `get.ps1` counts that as
   running and nobody looked at which unit it was. Ubuntu's own prompt is dark blue on PowerShell's blue too.
 
+## Windows real-PC re-test (2026-11-14)
+
+The owner walked through `docs/WINDOWS-TEST.md` again on the same PC (Windows 10 Home 22H2, build 19045, Windows
+PowerShell 5.1, the Microsoft Store WSL 3.0.1.0) with the release candidate at 67f1031 (every fix of 13 Nov) and
+throwaway releases served from the maintainer's laptop. Ubuntu was removed first (`wsl --unregister
+Ubuntu`, on the owner's word, with the old test wallet empty) and `get.ps1` installed Ubuntu 26.04.1 anew. Every fix
+of 13 Nov that the walk-through reaches passed on the PC. Five findings, none about money, keys or signing. The
+fixes are by Claude Opus 5.5, each test first: the tests are in `test/win-1114/` (one file per id, `docs.test.ts`
+for this record and the guides) and the PowerShell side in `test/windows/get-ps1.checks.ps1` (checks named after
+the ids). Each was seen failing before its fix.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| W-15 | medium (the owner's view) | After a one-click update that failed (1.0.2 on the older unit of W-9b), the dashboard kept "Installing version 1.0.2. The agent restarts in a minute or two and this page comes back by itself." for up to 20 minutes and hid the failure and what to do. The agent had been idle with the failure for 4 min 45 s; only a reload showed it. The page's own `updating`, set by the click, ended only when the new version ran or after 20 minutes | With the click the page keeps the time of the result the agent held then (the agent's own `at`, never the page's clock). As soon as the agent is idle with a newer result for that very version (not installed or undone after it started), `updating` ends and the notice shows it. A result from before the click or for another version does not end it. While the agent is away restarting no answer comes, so that minute stays quiet |
+| W-15b | low | Next to the old-install message ("Run ./install.sh --update once in a terminal, in the agent's folder ...") the dashboard still offered Update now, which fails the same way again on that install: the cause is the service an older installer wrote, not the release. On Windows "a terminal, in the agent's folder" named no way into Ubuntu. Only installs made before the W-9 fix see it | `UpdateError` carries a flag, `terminal`, set only for that failure. The updater keeps it with the result (`last.terminal`): the dashboard reads the flag, not the words. While it stands the notice offers no button for that version or a newer one (a newer one fails the same way there) and shows the message alone; for a newer version it adds that `./install.sh --update` installs the newest. It stays while the version that told it runs, also after a day. Under WSL (the kernel's name says so: the agent's service has no `WSL_DISTRO_NAME`) the message adds "On Windows: open PowerShell and type wsl -d Ubuntu --cd ~ , then cd foxleague-agent", the folder named from Ubuntu's home. Telegram's `/upgrade` still tries and says the same again |
+| W-16 | low | After the install line was pasted again (it installed 1.0.4), the dashboard still showed in red "The update to 1.0.3 did not start and was undone: you run 1.0.2 as before..." under a header that said V1.0.4. The last one-click result was shown for a day whatever ran since | Each result names the version that told it (`ran`). The updater gives it only while that version runs: a re-install by hand and an update from a terminal drop it at once (after a terminal update the new version's own "Updated from ... to ..." follows once it has stayed up). A result written before the field existed (only release-candidate installs have one) is shown as before |
+| W-14 | low | At Ubuntu's own `$` prompt after its first user was made, nothing on the screen said to type `exit`: the note was printed before "Ready?", about 15 lines above, among nine others. The owner typed it only because the chat told him | The note is repeated as the last line before `wsl --install -d Ubuntu` starts, in the yellow of the step titles: "When Ubuntu shows a line that ends with $, type  exit  and press Enter to come back here." The note among the others stays. The guides and the walk-through's lines file say it at the same place |
+| W-17 | low (the owner chose the design) | The uninstall took lines in two shells: the PowerShell line, then inside Ubuntu `wsl -d Ubuntu --cd ~`, `cd ~/foxleague-agent && ./install.sh --uninstall` and `exit`. Pasted together, bash got `wsl ...` ("command not found") and Windows PowerShell 5.1 got the `&&` (a parser error): harmless, but confusing | After the task and its hidden `wsl.exe` (the order of W-13) the PowerShell line asks one question, "Also stop the agent and remove its background service in Ubuntu?" (Enter means yes, as at the other questions of `get.ps1` where going on is the point). Then it runs the folder's own `install.sh --uninstall` as the Linux user: `wsl.exe -d Ubuntu --cd ~ --exec /bin/bash <folder>/install.sh --uninstall`, each argument on its own and no shell of the user reading the line, as every other call of `get.ps1`. The folder is the one Ubuntu names (`$HOME/foxleague-agent` or `FOXAGENT_DIR` set in the window, held to the install's rules); one that is not a plain absolute path is never run. No distribution called Ubuntu, Ubuntu out of reach as its user, no `install.sh`, no background service, a refused `FOXAGENT_DIR`, an uninstall that fails and `n` are each said; where it helps the lines by hand follow, each marked with the window it is typed in. It waits for every `wsl.exe` it starts and starts nothing that stays, so Ubuntu still stops by itself. WIN-1's guard against `wsl.exe`'s own `--uninstall` (which removes WSL) allows exactly this call, whose `--uninstall` goes after `--exec`. The walk-through has one PowerShell line for step 15. Its lines file marks every block typed inside Ubuntu |
+
+What passed on the PC, as the notes of 14 Nov have it:
+- W-2 (no "You have System.Object[]" on a PC with no distribution), W-3 and W-4 (the notes before "Ready?"),
+  LOGIN-1 (no default username), W-5 (the address readable on PowerShell's blue), W-6 (Edge opened the dashboard,
+  twice), W-7 (the window's own title back after Ubuntu and the installer set theirs).
+- W-9 on the new unit: the one-click update 1.0.0 to 1.0.1, back in about 45 seconds. W-9b with the rule put back
+  into the unit by hand: the plain message, with tar's lines in the log (W-10); `./install.sh --update` in a
+  terminal installed 1.0.2 and took the line out; the next one-click update, on the renewed unit, installed 1.0.3.
+- An update that did not start (1.0.3 made with `--break-start`): back on 1.0.2 in about 96 seconds. W-11: after
+  the line was pasted again `versions/` held v1.0.2 and v1.0.4 and the spare was the release it replaced.
+- The restart of Windows: the dashboard answered from Windows about a minute after the boot. systemd said running
+  with no failed unit (degraded on 13 Nov).
+- W-12 (no word broken at the window's edge) and W-13: right after `-Uninstall` no task and no keep-alive
+  `wsl.exe` were left. Ubuntu stopped about a minute after its last window closed.
+
+Stays open:
+- None of these five fixes has run on the real PC yet. W-17's run inside Ubuntu was checked against a stand-in
+  `wsl.exe` in a container. That `install.sh` reaches the user's systemd when `wsl.exe --exec` starts it rests on
+  the install (it runs `install.sh` the same way and enabled the service on this PC twice) and on `install.sh`
+  falling back to `/run/user/<uid>` when the session names none (FRESH-3). An uninstall that cannot stop the
+  service says so; `get.ps1` then shows the lines by hand.
+- Not seen on the PC, so not claimed: Enter alone at Ubuntu's username question (the owner typed a name); the
+  free-space stop below 4 GB (C: had 6.27 GB); "Help improve Ubuntu!" and the "Welcome to WSL" window (neither came
+  the second time). Step 9 (15 minutes with every window closed) was not repeated: it passed on 13 Nov and the task
+  is made the same way.
+- W-15 tells this attempt's result from an earlier one by the agent's time of it. A page whose state was older than
+  the agent's last result at the click (an update asked on Telegram in between) can show that earlier result for a
+  moment, until this attempt's comes.
+- W-15b holds back only the dashboard's button. `/upgrade` on Telegram tries again and fails with the same message.
+- W-17 knows "no Ubuntu" from the table of `wsl -l -v`; a WSL that cannot list its distributions looks the same.
+  The uninstall then says what WSL lists and looks no further. Without the task Ubuntu stops by itself once its last
+  window closes, with any agent inside it.
+- The PowerShell checks run in PowerShell 7 in a container, not in Windows PowerShell 5.1.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
