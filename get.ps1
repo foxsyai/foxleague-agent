@@ -17,7 +17,8 @@
 #   7. the dashboard address.
 # It is safe to paste any number of times: every run looks at what is already there and goes on from it.
 #
-# To remove what it added on the Windows side (the scheduled task, nothing else):
+# To remove what it added on the Windows side (the scheduled task, nothing else) and, after one question, the agent's
+# background service inside Ubuntu (./install.sh --uninstall, run for you; your folder and wallet words stay):
 #   & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall
 #
 # Switches, set in the PowerShell window before the line ($env:NAME = 'value'). The first four are get.sh's own
@@ -56,7 +57,7 @@
 function Install-FoxLeagueAgent {
     [CmdletBinding()]
     param(
-        # Removes the scheduled task this script made, and says how to remove the agent inside Ubuntu.
+        # Removes the scheduled task this script made and, after one question, the agent's service inside Ubuntu.
         [switch]$Uninstall,
         # Only defines the functions (for the checks in test/windows/): nothing is looked at and nothing runs.
         [switch]$DefineOnly
@@ -462,6 +463,25 @@ function Install-FoxLeagueAgent {
     function Test-FoxOwnTask([string]$Execute, [string]$Arguments) {
         if ($Execute -notmatch '(?i)\\conhost\.exe$') { return $false }
         return ($Arguments -match ('(?i)wsl\.exe"? -d ' + [regex]::Escape($FoxDistro) + ' .*--exec /bin/sleep infinity$'))
+    }
+
+    # What -Uninstall does inside Ubuntu once the task is gone (W-17):
+    #   $Yes        the answer to its one question
+    #   $Readiness  Get-FoxUbuntuReadiness of Ubuntu now ('' when it was not asked)
+    #   $Facts      what the install inside says of itself (Get-FoxInstallFacts), @{} when it could not be asked
+    # 'by-hand' (the answer was no), 'no-ubuntu' (WSL lists no distribution called Ubuntu), 'unreachable' (Ubuntu is
+    # there and could not be started as its user, or did not say where the agent is), 'no-folder' (no install.sh in
+    # the agent's folder), 'no-service' (the folder has no background service: nothing to stop) or 'run'. A folder
+    # that is not a plain absolute path is never run.
+    function Get-FoxInnerUninstallPlan {
+        param([bool]$Yes, [string]$Readiness, $Facts)
+        if (-not $Yes) { return 'by-hand' }
+        if ($Readiness -eq 'not-registered') { return 'no-ubuntu' }
+        if ($Readiness -ne 'ready') { return 'unreachable' }
+        if ([string]$Facts['dir'] -notmatch '^/[A-Za-z0-9._/+-]+$') { return 'unreachable' }
+        if ($Facts['script'] -ne '1') { return 'no-folder' }
+        if ($Facts['service'] -ne '1') { return 'no-service' }
+        return 'run'
     }
 
     # Why this PC cannot run the installer, in one sentence, or '' when it can.
@@ -1016,6 +1036,7 @@ function Install-FoxLeagueAgent {
         $script = 'd=${FOXAGENT_DIR:-$HOME/' + $FoxFolder + '}; case $d in /*) ;; *) d=$PWD/$d ;; esac; ' +
             'echo "user=$(id -un)"; echo "dir=$d"; ' +
             'if [ -f "$d/versions/active" ]; then echo installed=1; else echo installed=0; fi; ' +
+            'if [ -f "$d/install.sh" ]; then echo script=1; else echo script=0; fi; ' +
             'if [ -f "$HOME/.config/systemd/user/' + $FoxUnit + '" ]; then echo service=1; else echo service=0; fi; ' +
             'if command -v explorer.exe >/dev/null 2>&1; then echo explorer=1; else echo explorer=0; fi; ' +
             'echo "port=$(grep -a -m 1 ''^WEB_UI_PORT='' "$d/.env" 2>/dev/null | tr -cd 0-9)"'
@@ -1110,9 +1131,21 @@ function Install-FoxLeagueAgent {
         return $n
     }
 
+    # The uninstall inside Ubuntu by hand: the first line in PowerShell, the others inside Ubuntu, one at a time
+    # (W-17: pasted together, bash got the wsl line and Windows PowerShell 5.1 got the && of the next one).
+    function Write-FoxInnerUninstallByHand([string]$Folder) {
+        Write-FoxLine 'To do it by hand: in PowerShell, open Ubuntu with'
+        Write-FoxLine ('  wsl -d ' + $FoxDistro + ' --cd ~')
+        Write-FoxLine 'then type inside Ubuntu, one line at a time:'
+        if ($Folder -eq '') { Write-FoxLine ('  cd ~/' + $FoxFolder + ' && ./install.sh --uninstall') }
+        else { Write-FoxLine ('  cd ' + $Folder + ' && ./install.sh --uninstall') }
+        Write-FoxLine '  exit'
+    }
+
     function Invoke-FoxUninstall {
         Write-FoxStep 'Removing what the Windows installer added'
-        if ((Get-FoxWindowsFacts)['InsideLinux']) { Stop-Fox 'this removes a scheduled task of Windows: run it in PowerShell on Windows' }
+        $windows = Get-FoxWindowsFacts
+        if ($windows['InsideLinux']) { Stop-Fox 'this removes a scheduled task of Windows: run it in PowerShell on Windows' }
         $task = Get-FoxTask
         $ours = $true
         if ($null -eq $task) {
@@ -1134,15 +1167,60 @@ function Install-FoxLeagueAgent {
                 Write-FoxLine ('Ubuntu running. To stop Ubuntu now, type:  wsl --terminate ' + $FoxDistro)
             }
         }
-        Write-FoxLine 'The agent itself is inside Ubuntu and was not touched.'
-        Write-FoxLine 'Ubuntu stops a short while after its last window closes. To stop the agent now and remove'
-        Write-FoxLine 'its background service, open Ubuntu and type:'
-        Write-FoxLine ('  wsl -d ' + $FoxDistro + ' --cd ~')
-        Write-FoxLine ('  cd ~/' + $FoxFolder + ' && ./install.sh --uninstall')
+        # The agent inside Ubuntu (W-17): one question, then this script does it, so that no line has to be typed into
+        # a second shell. It comes after the task and its hidden wsl.exe (W-13). Every wsl.exe it starts is waited for
+        # and nothing stays behind, so Ubuntu still stops by itself. The installer runs as the Linux user, from the
+        # agent's folder, with --exec: no shell of the user reads the line. Its systemd is reached as in the install,
+        # which runs the same way (install.sh falls back to /run/user/<uid> when the session names none).
+        Write-FoxLine 'The agent itself runs inside Ubuntu. Your folder and wallet words stay there either way.'
+        $yes = Confirm-Fox 'Also stop the agent and remove its background service in Ubuntu?' $true
+        $readiness = ''; $facts = @{}; $refused = ''
+        if ($yes) {
+            $passed = Get-FoxPassedEnv (Get-FoxEnvValues)
+            if ($passed['Error'] -ne '') { $refused = $passed['Error'] }
+            else {
+                $FoxRun['WslExe'] = $windows['WslExe']
+                if ((Get-FoxWslPath) -eq '') { $readiness = 'no-start' }
+                else {
+                    $readiness = (Get-FoxUbuntuNow)['Readiness']
+                    if ($readiness -eq 'ready') { $facts = Get-FoxInstallFacts $passed }
+                }
+            }
+        }
+        $plan = 'by-hand'
+        if ($yes -and $refused -eq '') { $plan = Get-FoxInnerUninstallPlan -Yes $true -Readiness $readiness -Facts $facts }
+        $folder = ''
+        if ($plan -eq 'run' -or $plan -eq 'no-folder' -or $plan -eq 'no-service') { $folder = [string]$facts['dir'] }
+        if ($plan -eq 'run') {
+            Write-FoxLine ('Running ./install.sh --uninstall in ' + $folder + ' inside Ubuntu:')
+            $r = Invoke-FoxLinux -Command @('/bin/bash', ($folder + '/install.sh'), '--uninstall')
+            if ($r['ExitCode'] -eq 0) { Write-FoxLine 'Done: the agent is stopped and its background service in Ubuntu is removed.' }
+            else {
+                Write-FoxLine ('The uninstall inside Ubuntu did not finish (status ' + $r['ExitCode'] + '; what it said is above).')
+                Write-FoxInnerUninstallByHand $folder
+            }
+        } elseif ($plan -eq 'no-ubuntu') {
+            Write-FoxLine 'WSL has no distribution called Ubuntu, so there is no agent inside it to stop.'
+        } elseif ($plan -eq 'no-service') {
+            Write-FoxLine ('The agent in ' + $folder + ' has no background service in Ubuntu: nothing to stop there.')
+        } elseif ($plan -eq 'no-folder') {
+            Write-FoxLine ('There is no install.sh in ' + $folder + ' inside Ubuntu, so nothing was run there.')
+            Write-FoxLine 'If the agent is in another folder, use that one in the cd line.'
+            Write-FoxInnerUninstallByHand ''
+        } elseif ($plan -eq 'unreachable') {
+            Write-FoxLine 'Ubuntu could not be reached as your Linux user, so the agent inside it was not touched.'
+            Write-FoxInnerUninstallByHand ''
+        } else {
+            if ($refused -ne '') { Write-FoxLine ($refused + '.') }
+            Write-FoxLine 'The agent inside Ubuntu was not touched.'
+            Write-FoxInnerUninstallByHand ''
+        }
+        if ($plan -eq 'no-ubuntu') { return }
         Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu.'
         Write-FoxLine 'The agent wallets may still hold funds.'
         Write-FoxLine 'WSL, Ubuntu and the line systemd=true in Ubuntu''s /etc/wsl.conf are left as they are:'
         Write-FoxLine 'other programs may use them.'
+        Write-FoxLine 'Ubuntu stops a short while after its last window closes.'
     }
 
     function Invoke-FoxInstall {

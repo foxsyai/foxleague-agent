@@ -127,9 +127,15 @@ test('WIN-1 what it takes for granted of get.sh and install.sh is still true of 
 test('WIN-1 only Ubuntu, by name, and never all of WSL: no shutdown, no default changed, nothing unregistered', () => {
   assert.ok(code.includes("$FoxDistro = 'Ubuntu'"))
   assert.match(code, /\$parts = @\('-d', \$FoxDistro\)/)
+  // What Invoke-FoxLinux is given always comes after --exec: arguments of the Linux program, never of wsl.exe.
+  assert.match(code, /\$parts \+= @\('--cd', '~', '--exec'\)\n\s+foreach \(\$c in \$Command\) \{ \$parts \+= \(ConvertTo-FoxArgument \$c\) \}/)
+  // (W-17 of 2026-11-14: the one exception is the agent's own installer inside Ubuntu, `install.sh --uninstall`,
+  // given to Invoke-FoxLinux and so after --exec. wsl.exe's own --uninstall, which removes WSL, stays out of every call.)
+  const inner = "$r = Invoke-FoxLinux -Command @('/bin/bash', ($folder + '/install.sh'), '--uninstall')"
+  assert.equal(code.split(inner).length, 2, 'the uninstall inside Ubuntu is that one call')
   for (const never of ['--shutdown', '--set-default', '--unregister', '--uninstall', '--import', '--export']) {
     // (--shutdown is named in sentences that tell the user what to type; it is never an argument of a call.)
-    const calls = code.split('\n').filter(l => /Invoke-FoxWsl|Start-FoxElevated|Invoke-FoxLinux/.test(l) && l.includes(never))
+    const calls = code.split('\n').filter(l => /Invoke-FoxWsl|Start-FoxElevated|Invoke-FoxLinux/.test(l) && l.includes(never) && l.trim() !== inner)
     assert.deepEqual(calls, [], never)
   }
   assert.match(code, /Invoke-FoxWsl -Arguments \('--terminate ' \+ \$FoxDistro\)/)

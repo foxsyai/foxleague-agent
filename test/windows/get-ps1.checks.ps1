@@ -401,6 +401,22 @@ Check 'W-13 the hidden wsl.exe of the keep-alive is told by its whole command li
         True (-not (Test-FoxKeepAliveCommand $line)) ('taken for the keep-alive: ' + $line)
     }
 }
+Check 'W-17 the uninstall inside Ubuntu runs only on a yes, with Ubuntu reachable as its user and the folder''s install.sh and service there' {
+    $ok = ConvertFrom-FoxFacts "user=ana`ndir=/home/ana/foxleague-agent`ninstalled=1`nscript=1`nservice=1`nexplorer=1`nport=8870`n"
+    Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'ready' -Facts $ok) 'run'
+    Equal (Get-FoxInnerUninstallPlan -Yes $false -Readiness 'ready' -Facts $ok) 'by-hand' 'n'
+    Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'not-registered' -Facts @{}) 'no-ubuntu'
+    foreach ($state in @('busy', 'wsl1', 'no-start', 'no-user', '')) { Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness $state -Facts $ok) 'unreachable' $state }
+    # Facts that could not be read, or a folder that is no plain absolute path, are never run: the lines by hand.
+    Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'ready' -Facts @{}) 'unreachable' 'no facts'
+    foreach ($dir in @('', 'foxleague-agent', '/home/ana/my fox', '/home/ana/a;b', '/home/ana/$(id)', "/home/ana/a`nb")) {
+        $f = $ok.Clone(); $f['dir'] = $dir
+        Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'ready' -Facts $f) 'unreachable' ('dir ' + $dir)
+    }
+    $f = $ok.Clone(); $f['script'] = '0'; Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'ready' -Facts $f) 'no-folder'
+    $f = $ok.Clone(); $f.Remove('script'); Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'ready' -Facts $f) 'no-folder' 'script not said'
+    $f = $ok.Clone(); $f['service'] = '0'; Equal (Get-FoxInnerUninstallPlan -Yes $true -Readiness 'ready' -Facts $f) 'no-service'
+}
 Check 'W-1 free disk space: 4 GB before Ubuntu is downloaded, 1 GB before the agent alone; unknown is said, not refused' {
     $low = Get-FoxDiskProblem -FreeBytes ([long](0.2 * 1GB)) -NeedsUbuntu $true -Drive 'C:'
     True ($low -match '^Ubuntu and the agent need about 4 GB free on C: and it has 0\.2 GB\.') $low
@@ -576,6 +592,16 @@ function Calls { if (Test-Path "$W/calls.log") { return [System.IO.File]::ReadAl
 function LinuxLog { if (Test-Path "$W/linux.log") { return [System.IO.File]::ReadAllText("$W/linux.log") }; return '' }
 function Conf { if (Test-Path '/etc/wsl.conf') { return [System.IO.File]::ReadAllText('/etc/wsl.conf') }; return $null }
 $UbuntuThere = "* Ubuntu    Running         2`n"
+# An install of the agent inside the stand-in Ubuntu as get.sh leaves one (W-17): the folder with versions/active, the
+# service's file and an install.sh that stands in for the real one, notes how it was run and ends with $Exit.
+function Put-AgentInstall {
+    param([string]$Dir = '/home/fox/foxleague-agent', [int]$Exit = 0, [bool]$Service = $true)
+    & bash -c "mkdir -p '$Dir/versions' /home/fox/.config/systemd/user && echo v1.0.0 > '$Dir/versions/active'"
+    if ($Service) { & bash -c "echo '[Unit]' > /home/fox/.config/systemd/user/foxleague-agent.service" }
+    $stand = "#!/bin/bash`necho `"install.sh `$* ran as `$(id -un) in `$PWD`" >> `"`$FOX_WORLD/linux.log`"`necho '  Removing the background service'`nexit $Exit`n"
+    [System.IO.File]::WriteAllText("$Dir/install.sh", $stand)
+    & bash -c "chmod 755 '$Dir/install.sh' && chown -R fox:fox '$Dir' /home/fox/.config"
+}
 
 Check 'a real process: arguments with spaces, quotes, $ and backslashes reach Linux as they were written' {
     New-World -Distros $UbuntuThere -HasUser $true
@@ -907,10 +933,12 @@ Check 'the task cannot be made: said, with what keeps the agent playing until th
     True ((Screen) -match 'leave one open') (Screen)
 }
 
-Check '-Uninstall removes the task this script made, says how to remove the agent, and touches nothing in Ubuntu' {
+Check '-Uninstall removes the task this script made and, answered n, says how to remove the agent and touches nothing in Ubuntu' {
     New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
     $a = Get-FoxKeepAliveAction 'C:\WINDOWS'
     $World['Task'] = @{ Execute = $a['Execute']; Arguments = $a['Arguments']; State = 'Running' }
+    # (Since W-17 of 2026-11-14 Enter also removes the agent inside Ubuntu: that is checked below.)
+    $World['Answers'] = @('n')
     Invoke-FoxUninstall
     True ($null -eq $World['Task']) 'the task is still there'
     True ((Screen) -match 'Removed the scheduled task "FoxLeague Agent \(WSL\)"') (Screen)
@@ -930,6 +958,7 @@ Check 'W-13 -Uninstall also stops the hidden wsl.exe the task started, which out
         @{ Id = 500; CommandLine = 'C:\WINDOWS\System32\wsl.exe -d Ubuntu' },
         @{ Id = 501; CommandLine = 'C:\WINDOWS\System32\wsl.exe -d Debian --cd ~ --exec /bin/sleep infinity' },
         @{ Id = 502; CommandLine = $null })
+    $World['Answers'] = @('n')
     Invoke-FoxUninstall
     Equal ((@($World['Stopped']) | Sort-Object) -join ',') '6732,11424' 'the processes stopped'
     True ((Screen) -match 'Stopped the hidden wsl\.exe that the task had started') (Screen)
@@ -956,6 +985,118 @@ Check '-Uninstall leaves a task of the same name that is not ours, and says so w
     New-World
     Invoke-FoxUninstall
     True ((Screen) -match 'nothing to remove on the Windows side') (Screen)
+}
+Check 'W-17 -Uninstall asks one question and, with Enter, removes the agent inside Ubuntu itself, after the task and its keep-alive' {
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    Put-AgentInstall
+    $a = Get-FoxKeepAliveAction 'C:\WINDOWS'
+    $World['Task'] = @{ Execute = $a['Execute']; Arguments = $a['Arguments']; State = 'Running' }
+    $World['Processes'] = @(@{ Id = 7; CommandLine = 'C:\WINDOWS\System32\wsl.exe ' + $FoxKeepAliveArgs })
+    # What was already gone when the uninstall inside Ubuntu started.
+    $real = ${function:Invoke-FoxLinux}
+    function Invoke-FoxLinux {
+        param([string]$User = '', [string[]]$Command, [switch]$Capture, [string]$StdinText)
+        if (($Command -join ' ') -match '--uninstall') { $World['AtInner'] = @{ Task = $World['Task']; Stopped = (@($World['Stopped']) -join ',') } }
+        & $real @PSBoundParameters
+    }
+    Invoke-FoxUninstall
+    Equal @($World['Asked']).Count 1 'questions asked'
+    Equal $World['Asked'][0] 'Also stop the agent and remove its background service in Ubuntu? (Enter means yes, n means no)'
+    True (('  ' + $World['Asked'][0] + ': ').Length -le 100) 'the question fits in 100 columns'
+    # The installer of the release that runs, through the folder's own install.sh, as the Linux user, with no shell
+    # of the user reading the line (--exec, each argument on its own).
+    True ((Calls) -match "(?m)^-d`tUbuntu`t--cd`t~`t--exec`t/bin/bash`t/home/fox/foxleague-agent/install\.sh`t--uninstall$") (Calls)
+    True ((LinuxLog) -match 'install\.sh --uninstall ran as fox in /home/fox\n') (LinuxLog)
+    # The order of W-13: the task and its hidden wsl.exe go first.
+    True ($null -ne $World['AtInner']) 'the uninstall inside Ubuntu did not run'
+    True ($null -eq $World['AtInner']['Task']) 'the task was still there when the uninstall inside Ubuntu started'
+    Equal $World['AtInner']['Stopped'] '7' 'the hidden wsl.exe of the task when the uninstall inside Ubuntu started'
+    $screen = Screen
+    True ($screen -match 'Removed the scheduled task "FoxLeague Agent \(WSL\)"') $screen
+    True ($screen -match 'Done: the agent is stopped and its background service in Ubuntu is removed\.') $screen
+    True ($screen -notmatch 'To do it by hand') 'the lines by hand after an uninstall that was done'
+    True ($screen -match 'Your folder, your wallet words \(\.env\), your data and your PEM files stay in Ubuntu\.') $screen
+    True ($screen -match 'Ubuntu stops a short while after its last window closes') $screen
+    # Nothing it starts keeps running, so Ubuntu still stops by itself: it waits for every wsl.exe it starts and
+    # starts nothing in the background.
+    $fn = $ast.Find({ param($n) $n.GetType().Name -eq 'FunctionDefinitionAst' -and $n.Name -eq 'Invoke-FoxUninstall' }, $true)
+    $started = @($fn.FindAll({ param($n) $n.GetType().Name -eq 'CommandAst' -and [string]$n.GetCommandName() -match '^(Start-|Register-|Invoke-FoxWsl$|Invoke-FoxProcess$)' }, $true) | ForEach-Object { [string]$_.GetCommandName() })
+    Equal ($started -join ',') '' 'programs the uninstall starts other than through Invoke-FoxLinux'
+    True ((Calls) -notmatch 'sleep') 'a keep-alive was started'
+}
+Check 'W-17 -Uninstall answered n, without Ubuntu, without the folder or its service, with Ubuntu out of reach or when the uninstall inside fails: said, with the lines by hand where they help' {
+    $screens = @()
+    $byHand = 'To do it by hand: in PowerShell, open Ubuntu with\n  wsl -d Ubuntu --cd ~\nthen type inside Ubuntu, one line at a time:\n  cd ~/foxleague-agent && \./install\.sh --uninstall\n  exit'
+    # n: nothing is started in Ubuntu, and each line by hand says in which window it is typed.
+    New-World -Distros $UbuntuThere -HasUser $true
+    Put-AgentInstall
+    $World['Answers'] = @('n')
+    Invoke-FoxUninstall
+    Equal (Calls) '' 'wsl.exe was started after n'
+    True ((Screen) -match 'The agent inside Ubuntu was not touched\.') (Screen)
+    True ((Screen) -match $byHand) (Screen)
+    $screens += @($World['Lines'])
+    # No distribution called Ubuntu: said, nothing is started and there is nothing to do by hand.
+    New-World -Distros "* Debian    Running         2`n"
+    Invoke-FoxUninstall
+    True ((Screen) -match 'WSL has no distribution called Ubuntu, so there is no agent inside it to stop\.') (Screen)
+    True ((Screen) -notmatch 'To do it by hand') (Screen)
+    True ((Calls) -notmatch '--exec') (Calls)
+    $screens += @($World['Lines'])
+    # Ubuntu without the agent's install.sh: said, with the lines by hand.
+    New-World -Distros $UbuntuThere -HasUser $true
+    Invoke-FoxUninstall
+    True ((Screen) -match 'There is no install\.sh in /home/fox/foxleague-agent inside Ubuntu, so nothing was run there\.') (Screen)
+    True ((Screen) -match $byHand) (Screen)
+    True ((Calls) -notmatch '--uninstall') (Calls)
+    $screens += @($World['Lines'])
+    # The folder without a background service: nothing to stop.
+    New-World -Distros $UbuntuThere -HasUser $true
+    Put-AgentInstall -Service $false
+    Invoke-FoxUninstall
+    True ((Screen) -match 'The agent in /home/fox/foxleague-agent has no background service in Ubuntu: nothing to stop there\.') (Screen)
+    True ((LinuxLog) -notmatch 'ran as') (LinuxLog)
+    $screens += @($World['Lines'])
+    # Ubuntu whose first start was never done (its user is root): out of reach as the user, the lines by hand.
+    New-World -Distros $UbuntuThere
+    Put-AgentInstall
+    Invoke-FoxUninstall
+    True ((Screen) -match 'Ubuntu could not be reached as your Linux user, so the agent inside it was not touched\.') (Screen)
+    True ((Screen) -match $byHand) (Screen)
+    True ((LinuxLog) -notmatch 'ran as') (LinuxLog)
+    $screens += @($World['Lines'])
+    # The uninstall inside fails: said, with its status and the lines by hand for that folder.
+    New-World -Distros $UbuntuThere -HasUser $true
+    Put-AgentInstall -Exit 1
+    Invoke-FoxUninstall
+    True ((LinuxLog) -match 'install\.sh --uninstall ran as fox') (LinuxLog)
+    True ((Screen) -match 'The uninstall inside Ubuntu did not finish \(status 1; what it said is above\)\.') (Screen)
+    True ((Screen) -match 'To do it by hand: in PowerShell, open Ubuntu with\n  wsl -d Ubuntu --cd ~\nthen type inside Ubuntu, one line at a time:\n  cd /home/fox/foxleague-agent && \./install\.sh --uninstall\n  exit') (Screen)
+    True ((Screen) -notmatch 'Done: the agent is stopped') (Screen)
+    $screens += @($World['Lines'])
+    # FOXAGENT_DIR set in the window, as for the install: that folder.
+    New-World -Distros $UbuntuThere -HasUser $true
+    Put-AgentInstall -Dir '/home/fox/fox2'
+    $World['Env'] = @{ FOXAGENT_DIR = '/home/fox/fox2' }
+    Invoke-FoxUninstall
+    True ((Calls) -match "(?m)^-d`tUbuntu`t--cd`t~`t--exec`t/bin/bash`t/home/fox/fox2/install\.sh`t--uninstall$") (Calls)
+    $screens += @($World['Lines'])
+    # A FOXAGENT_DIR that is refused: said, nothing is run, the lines by hand.
+    New-World -Distros $UbuntuThere -HasUser $true
+    Put-AgentInstall
+    $World['Env'] = @{ FOXAGENT_DIR = 'C:\fox' }
+    Invoke-FoxUninstall
+    True ((Screen) -match 'FOXAGENT_DIR must name a folder inside Ubuntu') (Screen)
+    True ((Screen) -match $byHand) (Screen)
+    True ((Calls) -notmatch '--uninstall') (Calls)
+    $screens += @($World['Lines'])
+    # Every line: 100 columns, plain ASCII, no comma before the last "and" or "or", never the word bot.
+    foreach ($line in $screens) {
+        True (('  ' + $line).Length -le 100 -or $line -like 'It starts: *' -or $line -like 'FOXAGENT_DIR must*') ('longer than 100 columns: ' + $line)
+        True ($line -cmatch '^[\x20-\x7E]*$') ('not plain ASCII: ' + $line)
+        True ($line -notmatch ', (and|or) ') ('a comma before and/or: ' + $line)
+        True ($line -notmatch '(?i)\bbots?\b') ('the word bot: ' + $line)
+    }
 }
 Check 'W-12 every line of -Uninstall fits in 100 columns (the PC''s window had 120 and broke words at its edge)' {
     $screens = @()
