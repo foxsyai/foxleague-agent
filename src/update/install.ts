@@ -155,17 +155,38 @@ function ownersPath(rel: string): boolean {
  * Ubuntu 26.04's tar resolves each path with openat2, which a service started with RestrictSUIDSGID=true is refused
  * with ENOSYS ("Function not implemented"); the 24.04 one falls back to openat. The installers of 2026-11-14 and
  * later write no such line and `./install.sh --update` takes it out of an older unit: an update from the dashboard
- * runs inside that unit, one from a terminal does not (W-9).
+ * runs inside that unit, one from a terminal does not (W-9). That failure is marked `terminal` (W-15b) and, under WSL,
+ * says how to open Ubuntu from PowerShell: "a terminal" on Windows is not where the owner types.
  */
-function unpackFailure(r: RunResult): string {
+function unpackFailure(r: RunResult, root: string, wsl: string | null): { message: string; terminal: boolean } {
   const lines = (r.err ?? r.tail).split('\n').map(l => l.trim()).filter(Boolean)
   if (lines.length) console.error(`the update's archive could not be unpacked; tar said:\n${lines.slice(0, 8).join('\n')}`)
   const first = lines[0]?.replace(/^\S*tar: /, '').slice(0, 200)
   const said = first ? ` (tar: ${first})` : ''
   if (lines.some(l => /Function not implemented/.test(l))) {
-    return `this system's tar cannot unpack inside the agent's background service as an older installer set it up${said}. Run ./install.sh --update once in a terminal, in the agent's folder: that installs it and renews the service, so later updates are one click again`
+    // Marked (W-15b): the cause is the service, not the release, so a click on Update now would fail the same way.
+    const hint = wsl === null ? '' : `. ${windowsHint(wsl, root, process.env.HOME)}`
+    return { message: `this system's tar cannot unpack inside the agent's background service as an older installer set it up${said}. Run ./install.sh --update once in a terminal, in the agent's folder: that installs it and renews the service, so later updates are one click again${hint}`, terminal: true }
   }
-  return `the archive could not be unpacked${said}`
+  return { message: `the archive could not be unpacked${said}`, terminal: false }
+}
+
+/**
+ * The WSL distribution this agent runs in, or null outside WSL (W-15b). A terminal under WSL has WSL_DISTRO_NAME; the
+ * agent's service does not (systemd starts it, not wsl.exe), so the kernel's name tells, and the distribution is then
+ * the one get.ps1 installs. A kernel name that cannot be read is not WSL: the message stays the one for Linux.
+ */
+export function wslDistro(env: Record<string, string | undefined> = process.env, osrelease: string | null = readLine('/proc/sys/kernel/osrelease')): string | null {
+  const wsl = osrelease !== null && /microsoft|wsl/i.test(osrelease)
+  const named = env.WSL_DISTRO_NAME
+  if (named && NAME_RE.test(named)) return named
+  return wsl ? 'Ubuntu' : null
+}
+
+/** How the owner reaches the agent's folder from Windows: PowerShell, Ubuntu's home, then the folder (W-15b). */
+export function windowsHint(distro: string, root: string, home: string | undefined): string {
+  const folder = home && root.startsWith(`${home.replace(/\/+$/, '')}/`) ? root.slice(home.replace(/\/+$/, '').length + 1) : root
+  return `On Windows: open PowerShell and type wsl -d ${distro} --cd ~ , then cd ${folder}`
 }
 
 /**
@@ -173,7 +194,7 @@ function unpackFailure(r: RunResult): string {
  * `install.sh --prepare`: Node, dependencies, the recovery words check, the launcher). Returns the folder's name.
  * Throws UpdateError and leaves nothing behind when a step fails.
  */
-export async function stage(layout: Layout, manifest: Manifest, archive: string, o: { run?: Runner; env?: Record<string, string> } = {}): Promise<string> {
+export async function stage(layout: Layout, manifest: Manifest, archive: string, o: { run?: Runner; env?: Record<string, string>; /** Left out: wslDistro(). */ wsl?: string | null } = {}): Promise<string> {
   if (!layout.managed) throw new UpdateError('this install cannot update itself')
   if (!parseVersion(manifest.version)) throw new UpdateError('the release has no plain version')
   const exec = o.run ?? run
@@ -198,10 +219,10 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
     writeFileSync(lock, '', { mode: 0o600 }) // left by an update that was killed: taken over
   }
   const clean = (): void => rmSync(staging, { recursive: true, force: true })
-  const fail = (why: string): never => {
+  const fail = (why: string, terminal = false): never => {
     clean()
     rmSync(lock, { force: true })
-    throw new UpdateError(why)
+    throw new UpdateError(why, { terminal })
   }
   clean()
   const listing = await exec('tar', ['-tzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
@@ -214,7 +235,10 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
   mkdirSync(staging, { recursive: true, mode: 0o700 })
   // In the C language whatever the owner's: tar's reason is read below.
   const unpack = await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=1'], { cwd: versions, env: { ...env, LC_ALL: 'C' }, timeoutMs: 120_000 })
-  if (unpack.code !== 0) return fail(unpackFailure(unpack))
+  if (unpack.code !== 0) {
+    const why = unpackFailure(unpack, layout.root, o.wsl === undefined ? wslDistro() : o.wsl)
+    return fail(why.message, why.terminal)
+  }
   let pkg: { name?: unknown; version?: unknown }
   try {
     pkg = JSON.parse(readFileSync(join(staging, 'package.json'), 'utf8')) as typeof pkg

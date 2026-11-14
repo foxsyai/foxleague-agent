@@ -484,7 +484,8 @@ function remember(i) { try { localStorage.setItem('foxagent.agent', String(i)) }
 function recalled() { try { const v = localStorage.getItem('foxagent.agent'); return v === null ? null : Number(v) } catch { return null } }
 const agent = () => S && S.agents.find(b => b.index === sel)
 
-// The update notice: a newer signed release, an update in progress or how the last one went (for a day).
+// The update notice: a newer signed release, an update in progress or how the last one went (for a day, while the
+// version that told it runs).
 // Every text is set with textContent: the notes are the maintainers' own words, shown as plain text all the same.
 let updating = null
 function renderUpdate() {
@@ -497,7 +498,11 @@ function renderUpdate() {
   // when it is not the one the agent held at the click (compared by the agent's own time, never the page's clock).
   // While the agent is away restarting no answer comes, so that minute stays quiet.
   else if (updating && u.state === 'idle' && u.last && u.last.kind !== 'updated' && u.last.version === updating.to && u.last.at !== updating.last) updating = null
-  const recent = u.last && Date.now() - Date.parse(u.last.at) < 86400000 ? u.last : null
+  // How the last update went: for a day, and only while the version that told it runs (the agent gives it only then,
+  // W-16). A failure that only ./install.sh --update in a terminal gets past (W-15b: the service of an older
+  // installer) stays while that version runs: Update now would fail the same way, for any version, so it is not offered.
+  const recent = u.last && (u.last.terminal || Date.now() - Date.parse(u.last.at) < 86400000) ? u.last : null
+  const byTerminal = Boolean(recent && recent.kind === 'failed' && recent.terminal)
   const busy = u.state !== 'idle' || Boolean(updating)
   // Check for updates: only where the agent checks at all, and off while it asks or an update installs.
   $('upCheck').hidden = !u.enabled
@@ -508,7 +513,10 @@ function renderUpdate() {
   // u.waiting then holds what the owner does to start it.
   if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + (u.restarts === false ? '. This takes a minute or two. The agent keeps playing: it does not restart by itself here, and this notice then says how to start the new version.' : '. The agent restarts in a minute or two and this page comes back by itself.')
   else if (u.waiting) text = u.waiting.message
-  else if (u.available) {
+  else if (u.available && byTerminal) {
+    text = recent.message + (recent.version === u.available.version ? '' : ' Version ' + u.available.version + ' is out too: ./install.sh --update installs the newest.')
+    notes = u.available.notes; tone = 'bad'
+  } else if (u.available) {
     // The very release that was just undone here is offered again: the owner has nothing to do, and the button
     // says that it tries that version once more (read as "Update now" it looked like the way back).
     again = Boolean(recent && recent.kind === 'undone' && recent.version === u.available.version)
@@ -1194,6 +1202,7 @@ const TIPS = {
     <p>The notice and a short message then give the answer at once. Checking installs nothing. Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered. Two checks less than 15 seconds apart ask once: the second shows the answer of the first. The arrow is off while an update installs and is not shown where the check is switched off.</p>
     <p><b>Update now</b> installs it in one click: the agent downloads the release, checks that it is signed by the foxleague-agent maintainers, prepares it next to the running version and restarts into it. That takes a minute or two. An action that is being signed finishes first; the other waiting actions of a running plan are dropped and the next plan takes them up. Your wallet, keys, settings and history are not touched. On Telegram, <b>/upgrade</b> does the same.</p>
     <p>Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password. If the new version does not start, the agent goes back to the one it ran before and tells you. The notice then says that nothing has to be done and its button reads <b>Try again</b>: press it only if you want to install that version once more.</p>
+    <p>How the last update went stays in the notice for a day and only while the version it speaks of still runs: after you install another version by hand or from a terminal it goes. When the agent's background service was set up by an older installer, the notice may say to run ./install.sh --update once in a terminal. It then offers no <b>Update now</b>, which would fail the same way, until that is done. On Windows, open Ubuntu first: type wsl -d Ubuntu --cd ~ in PowerShell, then cd foxleague-agent.</p>
     <p>An agent that you start yourself with ./run.sh (an install without the background service) does not restart by itself: the new version is put in place, the agent keeps playing and the notice says how to start the new version.</p>
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],

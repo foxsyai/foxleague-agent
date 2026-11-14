@@ -59,8 +59,11 @@ export interface UpdateView {
   canInstall: boolean
   how: string | null
   state: 'idle' | 'downloading' | 'preparing' | 'restarting'
-  /** How the last update went, kept until the next one and given only while the version that told it runs. */
-  last: { kind: 'updated' | 'undone' | 'failed'; version: string; at: string; message: string } | null
+  /**
+   * How the last update went, kept until the next one and given only while the version that told it runs. `terminal`
+   * (only on a failure, and only when true): only `./install.sh --update` in a terminal gets past it here (W-15b).
+   */
+  last: { kind: 'updated' | 'undone' | 'failed'; version: string; at: string; message: string; terminal?: true } | null
   enabled: boolean
   /** True when a service manager starts the agent again after an update; false when the owner has to. */
   restarts: boolean
@@ -104,14 +107,14 @@ export class Updater {
       const v = JSON.parse(this.d.kv.get(KV_LAST) ?? 'null') as (NonNullable<UpdateView['last']> & { ran?: unknown }) | null
       if (!v || typeof v.version !== 'string' || typeof v.message !== 'string' || typeof v.at !== 'string' || !['updated', 'undone', 'failed'].includes(v.kind)) return null
       if (v.ran !== undefined && v.ran !== this.d.installed) return null
-      return { kind: v.kind, version: v.version, at: v.at, message: v.message }
+      return { kind: v.kind, version: v.version, at: v.at, message: v.message, ...(v.kind === 'failed' && v.terminal === true ? { terminal: true as const } : {}) }
     } catch {
       return null
     }
   }
 
-  private setLast(kind: NonNullable<UpdateView['last']>['kind'], version: string, message: string): void {
-    this.d.kv.set(KV_LAST, JSON.stringify({ kind, version, at: new Date().toISOString(), message, ran: this.d.installed }))
+  private setLast(kind: NonNullable<UpdateView['last']>['kind'], version: string, message: string, terminal = false): void {
+    this.d.kv.set(KV_LAST, JSON.stringify({ kind, version, at: new Date().toISOString(), message, ran: this.d.installed, ...(terminal ? { terminal: true } : {}) }))
   }
 
   private get restarts(): boolean {
@@ -293,7 +296,7 @@ export class Updater {
     } catch (err) {
       const message = `The update to ${version} was not installed: ${err instanceof UpdateError ? err.message : 'an unexpected error (see the log)'}. You run ${this.d.installed} as before.`
       if (!(err instanceof UpdateError)) console.error('update failed:', err)
-      this.setLast('failed', version, message)
+      this.setLast('failed', version, message, err instanceof UpdateError && err.terminal)
       this.state = 'idle'
       this.d.notify(message)
     } finally {

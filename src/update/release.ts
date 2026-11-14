@@ -32,7 +32,17 @@ export interface Manifest {
 }
 
 /** Any reason a release is not taken. The message is safe to show to the owner. */
-export class UpdateError extends Error {}
+export class UpdateError extends Error {
+  /**
+   * True when only `./install.sh --update` in a terminal gets past it on this install (W-15b: the service of an older
+   * installer refuses the unpack). One click would fail the same way, so the dashboard offers none while it stands.
+   */
+  readonly terminal: boolean
+  constructor(message: string, o: { terminal?: boolean } = {}) {
+    super(message)
+    this.terminal = o.terminal === true
+  }
+}
 
 const VERSION_RE = /^(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})\.(0|[1-9]\d{0,5})$/
 
