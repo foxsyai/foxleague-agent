@@ -485,3 +485,51 @@ test('R72A-1 a very large answer is cut off while it streams, never buffered who
   assert.ok(declared.pulled <= MB, `${declared.pulled / MB} MB pulled: only what the stream queued on its own`)
   assert.ok(declared.cancelled)
 })
+
+test('R72A-2 a new copy of the manual brought the same day is checked again, and the old copy\'s line is not shown', async () => {
+  const fusion = { ...SOURCE, 'mechanics/fusion.mdx': SOURCE['mechanics/fusion.mdx']!.replace('same rarity', 'same rarity, none of them injured') }
+  const live = foxleagueMcp(fusion)
+  const kv = memoryKv()
+  const watch = (manual: string, record: unknown) => Object.assign(new ManualWatch({ enabled: true, base: BASE, zone: 'UTC', kv }), { fetch: live.fetch, readManual: () => manual, readRecord: () => record, gapMs: 0 })
+  // The installed copy (A) and the one the maintainer syncs and releases the same day (B), built from FoxLeague's newer manual.
+  const recordA = recorded()
+  const manualB = MANUAL.replace('1a2b3c4d5 2026-11-10', '9f8e7d6c5 2026-11-16')
+  const recordB = manualRecord(foxleagueRepo(fusion), 'HEAD', manualB)
+  const morning = Date.parse('2026-11-16T09:00:00Z')
+
+  const a = watch(MANUAL, recordA)
+  assert.equal((await a.today(morning))?.state, 'behind')
+  const set = live.seen.length
+  assert.equal(set, 5)
+  assert.match(String(a.view(morning).text), /^FoxLeague's manual changed since the agents' copy \(pages: mechanics\/fusion\)/)
+  assert.match(String(a.line(morning)), /^FoxLeague's manual changed since the agents' copy/)
+
+  // 14:00: an update brings copy B and the service restarts on it, with the same database.
+  const afternoon = morning + 5 * 3600_000
+  const b = watch(manualB, recordB)
+  // Before its own check, the line about copy A is not shown: the dashboard has nothing, the summary says it could not check.
+  assert.equal(b.view(afternoon).text, null, 'the dashboard does not show the old copy\'s line')
+  assert.equal(b.view(afternoon).state, null)
+  assert.equal(b.line(afternoon), "Could not check FoxLeague's manual today.")
+  const c = await b.today(afternoon)
+  assert.equal(c?.state, 'current', JSON.stringify(c))
+  assert.equal(live.seen.length, 2 * set, 'one more request set, for the new copy')
+  assert.equal(b.view(afternoon).text, null)
+  assert.equal(b.view(afternoon).state, 'current')
+  assert.equal(b.line(afternoon), null, 'the summary is quiet: the new copy matches')
+  // Still at most once a day per copy: another call and a restart on copy B ask nothing more.
+  await b.today(afternoon + 3600_000)
+  await watch(manualB, recordB).today(afternoon + 2 * 3600_000)
+  assert.equal(live.seen.length, 2 * set)
+
+  // The next day a copy with a record of another manual.md is installed ("could not check" without asking), then the
+  // fixed record: the same manual.md, so the record is part of what is compared too.
+  const day2 = Date.parse('2026-11-17T09:00:00Z')
+  const wrong = watch(manualB, recordA)
+  assert.match(String((await wrong.today(day2))?.why), /not the one of the agents' manual/)
+  assert.equal(live.seen.length, 2 * set, 'FoxLeague is not asked without a record of this manual.md')
+  const fixed = watch(manualB, recordB)
+  assert.equal(fixed.view(day2).text, null, 'the line about the wrong record is not shown')
+  assert.equal((await fixed.today(day2 + 3600_000))?.state, 'current')
+  assert.equal(live.seen.length, 3 * set)
+})

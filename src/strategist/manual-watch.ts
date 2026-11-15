@@ -266,6 +266,9 @@ export interface ManualView {
   text: string | null
 }
 
+/** A check as the database keeps it: the day it was made (in the summary's zone) and the copy it compared. */
+type StoredCheck = ManualCheck & { day: string; copy?: string }
+
 /** The service's side: the check at most once a day, kept in the database so a restart does not ask again. */
 export class ManualWatch {
   readonly enabled: boolean
@@ -282,9 +285,9 @@ export class ManualWatch {
     this.enabled = deps.enabled
   }
 
-  private last(): (ManualCheck & { day: string }) | null {
+  private last(): StoredCheck | null {
     try {
-      const v = JSON.parse(this.d.kv.get(KV) ?? 'null') as (ManualCheck & { day: string }) | null
+      const v = JSON.parse(this.d.kv.get(KV) ?? 'null') as StoredCheck | null
       if (!v || typeof v.day !== 'string' || !['current', 'behind', 'unknown'].includes(v.state) || !Array.isArray(v.pages)) return null
       return v
     } catch {
@@ -292,30 +295,48 @@ export class ManualWatch {
     }
   }
 
-  /** Today's check: the one already made today, the one running or a new one. Null when switched off. */
+  /**
+   * The agents' copy installed now: manual.md and its page record as read, and a key for the pair. A check of another
+   * copy (before an update or a deploy brought this one, or a fixed record) tells nothing about this one.
+   */
+  private copy(): { manual: string | null; record: unknown; key: string } {
+    let manual: string | null = null
+    let record: unknown = null
+    try {
+      manual = this.readManual()
+    } catch {
+      // Said by the check.
+    }
+    try {
+      record = this.readRecord()
+    } catch {
+      // No record or one that is not JSON: said by the check.
+    }
+    return { manual, record, key: sha256(JSON.stringify([manual, record ?? null])) }
+  }
+
+  /** The stored check when it is of the copy installed now; null when there is none or it is of another copy. */
+  private ofThisCopy(): StoredCheck | null {
+    const last = this.last()
+    return last && last.copy === this.copy().key ? last : null
+  }
+
+  /**
+   * Today's check: the one already made today of the copy installed now, the one running or a new one. Null when
+   * switched off. At most once a day per copy: an update that brings a new manual.md is checked again the same day.
+   */
   today(now = Date.now()): Promise<ManualCheck | null> {
     if (!this.enabled) return Promise.resolve(null)
     if (this.running) return this.running
     const day = zoneDate(now, this.d.zone)
+    const copy = this.copy()
     const last = this.last()
-    if (last?.day === day) return Promise.resolve(last)
+    if (last?.day === day && last.copy === copy.key) return Promise.resolve(last)
     const run = async (): Promise<ManualCheck> => {
       // Marked before anything is asked: a check that a restart cuts short is not made again the same day.
-      this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day }))
-      let manual: string | null = null
-      let record: unknown = null
-      try {
-        manual = this.readManual()
-      } catch {
-        // Said by the check.
-      }
-      try {
-        record = this.readRecord()
-      } catch {
-        // No record or one that is not JSON: said by the check.
-      }
-      const c = await checkManual({ base: this.d.base, manual, record, fetch: this.fetch, gapMs: this.gapMs })
-      this.d.kv.set(KV, JSON.stringify({ ...c, day }))
+      this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key }))
+      const c = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
+      this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key }))
       return c
     }
     this.running = run().finally(() => {
@@ -324,17 +345,17 @@ export class ManualWatch {
     return this.running
   }
 
-  /** The morning summary's line: today's check; "could not check" when there is none for today. */
+  /** The morning summary's line: today's check; "could not check" when there is none for today of this copy. */
   line(now = Date.now()): string | null {
     if (!this.enabled) return null
-    const last = this.last()
+    const last = this.ofThisCopy()
     if (!last || last.day !== zoneDate(now, this.d.zone)) return "Could not check FoxLeague's manual today."
     return manualLine(last)
   }
 
-  /** For the dashboard: the last check and its notice. */
+  /** For the dashboard: the last check of the copy installed now and its notice. */
   view(now = Date.now()): ManualView {
-    const last = this.enabled ? this.last() : null
+    const last = this.enabled ? this.ofThisCopy() : null
     if (!last) return { enabled: this.enabled, state: null, pages: [], why: null, synced: null, at: null, day: null, text: null }
     const text = manualLine(last, last.day === zoneDate(now, this.d.zone) ? 'today' : `on ${last.day}`)
     return { enabled: true, state: last.state, pages: last.pages, why: last.why, synced: last.synced, at: last.at, day: last.day, text }
