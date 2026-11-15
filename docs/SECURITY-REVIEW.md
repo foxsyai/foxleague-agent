@@ -2281,10 +2281,22 @@ the quarter hour.
 | SM-7 | low (a wasted create; FoxLeague refuses it before any payment) | The snapshot cut each time to its minute: a window that ends at 18:47:30 read "18:47", so the gap seemed to start at 18:47 and a start at 19:47 seemed free. The gaps were given without the year, in another form than any field takes | The gaps are rounded inward to the minute in the form `starts_at` takes, each with the starts that fit it ("starts_at from 19:48 to 20:00 less the estimate"); a gap too short for the smallest tournament (3 matches) is left out. A taken window ends at its minute rounded up, in the list and in the refusal |
 | SM-8 | design | The model must be told the new form | The prompt's create line shows `"starts_at":"YYYY-MM-DDTHH:MMZ"`: a UTC minute 2 to 72 hours after the action runs, its whole window inside one free gap of the snapshot. `src/strategist/prompt.ts` changed in that one line, so the prompt cache is rebuilt once at the deploy |
 | SM-9 | low (an edge start could clash; FoxLeague refuses it before any payment) | With whole hours the slot check counted from the executor's moment but the create counted again from its own clock, after the reads before it (the organizer quote among them): FoxLeague was sent a later start than the one checked, 90 seconds later in the test | The rules hand the executor the instant they checked (`facts.startsAt`) and the create sends exactly that, in both forms; a create without it is not sent |
+| R74A-1 | low (GitHub review of PR #74; a wasted plan, nothing paid) | When the calendar was free at the 2-hour floor, a clash named the first free start as `starts_at` 2 hours after the refusal. The next plan reads it in its activity log a tick or more later, when that minute is about 1 hour ahead: its create was refused with "less than 2 hours from now". The old `starts_in_hours 2` still worked there | The refusal searches from 2 hours plus `nextPlanLeadMs` (`slots.ts`): the rest of this plan's window (0.8 of a tick, as the refusal can come at its start), the tick and its jitter before the next plan, then that plan's own lead (`planLeadMs`, R74A-2). At a 60-minute tick with 10 minutes of jitter that is 181 minutes, so the start named is at least 5 h 1 min ahead. A stretch free now that is too short for a start that late is passed over for the next free start; when none is left it reads "no free start the next plan can still create in the next 72 hours". Two tests "R74A-1 ..." in `test/start-minutes.test.ts` failed on bf2f0c1 (the start named 2 hours ahead was refused 43 minutes later; a stretch free until 4 hours ahead was named) and pass now, one tick later and at the latest moment |
+| R74A-2 | low (GitHub review of PR #74; a wasted create, nothing paid) | For a gap open now (the gaps are counted from 1 hour after the snapshot) the first `starts_at` of the hint was the gap's first minute plus the hour before a kickoff: exactly 2 hours after the snapshot was rendered. The create runs after the plan call and a fresh snapshot, so a model that took the first start offered was always refused by the 2-hour floor; the actions before it in the plan had moved earlier with its deadline for nothing | No start is given before 2 hours plus `planLeadMs` after the snapshot: the plan's window (0.8 of the agent's tick, which `renderPlanRequest` passes) plus 15 minutes for the plan call with a fresh snapshot, 63 minutes at a 60-minute tick. A gap open now begins its starts there; a gap too short from there for the smallest tournament (3 matches) is left out; every other gap keeps its first start. The line names that earliest start. A snapshot rendered without a plan (the CLI, the owner's chat) takes the longest tick the settings allow (240 minutes). Two tests "R74A-2 ..." failed on bf2f0c1 (the first start offered was refused 13 minutes later; a gap open until 3 h 30 min ahead was offered) and pass now |
+
+The room for R74A-1 and R74A-2 is the agent's own delays rather than a fixed margin: a fixed one would be too short at
+a 240-minute tick or hours too long at a 10-minute one. Each suggested start covers the latest moment the create that
+takes it can run, so it does not lean on the deadline-first schedule of PR #70: match gates before the create can still
+hold it to the end of its plan's window. The 15 minutes cover a plan call at high effort (given up after 11 min 40 s)
+with a fresh snapshot; a longer call (xhigh) is covered by that schedule, since the create's deadline then falls inside
+the window. A start later than needed costs only a later tournament: the next snapshot gives the nearer gaps again,
+fresh. The window's share (0.8) is one constant now, `PLAN_WINDOW_SHARE`, read by `runPlan` too.
 
 Changed tests: in `test/slots.test.ts` the two checks of `firstFreeStartHours` (gone) now pin `firstFreeStart` to the
 exact minute (14:51, where whole hours gave 24 h: 15:37); the clash test reads `starts_at` instead of
 `starts_in_hours` and checks the minute 2 hours ahead. The behaviour each one holds is the same, stated to the minute.
+Since R74A-1 the clash test checks the minute 2 hours plus the next plan's lead ahead, where it held the 2-hour floor
+itself (the finding); it is pinned to the minute as before.
 
 What was checked and needs no change:
 - `src/strategist/manual.md` describes FoxLeague's blocking window, not the agent's action: unchanged (FoxLeague's
@@ -2300,9 +2312,18 @@ Stays open:
 - Another organizer may take the gap between the plan and the run; FoxLeague then refuses the create before any
   payment.
 - A start chosen a little over 2 hours ahead runs by its deadline less the 5-minute margin, but the actions before it
-  in the plan can still push it late (as for every deadline action of PR #70); the executor then refuses it.
+  in the plan can still push it late (as for every deadline action of PR #70); the executor then refuses it. A start
+  the snapshot or a refusal gives has room for that since R74A-1 and R74A-2; one the model picks nearer does not.
 - The snapshot's last gap ends 72 hours after the snapshot, so its latest start there is on the safe side.
 - A model that still sends whole hours (as in older plans of its activity log) is served as before.
+- A registration that closes more than 90 minutes before the start puts the create's own floor (that close plus 30
+  minutes) past 2 hours: the first start a gap gives cannot know the close the model will pick. The rules refuse such
+  a create with their reason before anything is paid.
+- A next plan that comes later than one cycle (outside active hours, after a failed plan call or a pause) can find a
+  refusal's start too near; the floor refuses it then. That plan's own snapshot gives the gaps again, fresh.
+- With no tournament on the calendar the snapshot names no gap (the slots line reads "none"), so no first start either:
+  the model picks one from the prompt's rule (2 to 72 hours after the action runs). Not changed here: no suggestion is
+  made in that case.
 
 ## One manager message at a time (2026-11-13)
 

@@ -355,3 +355,16 @@ test('R74A-2 a gap open now that is too short once that room is added is not off
     mock.timers.reset()
   }
 })
+
+test('R74A record: the two rows of the GitHub review of PR #74, in its section', () => {
+  const review = readFileSync(join(import.meta.dirname, '..', 'docs/SECURITY-REVIEW.md'), 'utf8')
+  const start = review.indexOf('\n## A tournament start to the minute (2026-11-15)\n')
+  const section = review.slice(start, review.indexOf('\n## ', start + 1))
+  for (const id of ['R74A-1', 'R74A-2']) {
+    const row = section.split('\n').find(l => l.startsWith(`| ${id} |`))
+    assert.ok(row, `${id} has its row`)
+    assert.equal(row.split(' | ').length, 4, `${id}: four cells`)
+    assert.match(row, new RegExp(`^\\| ${id} \\| low \\(GitHub review of PR #74; `))
+  }
+  assert.doesNotMatch(section, /—|, and |, or |\bbots?\b/i)
+})
