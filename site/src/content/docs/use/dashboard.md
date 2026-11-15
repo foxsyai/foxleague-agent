@@ -32,6 +32,10 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   installer, the notice may say to run `./install.sh --update` once in a terminal: it then offers no **Update now**,
   which would fail the same way, until that is done ([Troubleshooting](/help/troubleshooting/)). An install that
   cannot update itself shows what to do instead of the button ([Update](/help/update/)).
+- **The manual notice** appears under the header when the day's check found that FoxLeague's manual changed since
+  the copy your agents play by (it names up to eight pages and counts the rest) or could not read it (it says why).
+  Nothing shows while the copy matches. Its **i** says what to do
+  ([Update](/help/update/#when-foxleagues-manual-changes)).
 
 ## The totals
 

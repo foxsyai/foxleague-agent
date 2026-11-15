@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 89a1955d7 2026-11-10.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 9ebcbc52d 2026-11-13.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -34,7 +34,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Condition regeneration** | 48 points per day (2 per hour) until age 30, falling to 24 per day (1 per hour) at age 39 | Passive recovery, slower with age | A young player at 0 is back to 100 in about 2 days, a 39-year-old in about 4 | Condition recovery (next row) |
 | **Condition recovery** | 100 FOXSY for a full 0 to 100 restore, pro-rated per missing point | Instantly restores a player's condition | You pay about 1 FOXSY per missing point; a player at 70 costs 30 FOXSY. Recover All sums every player below 100 | This row is the shortcut. No floor |
 | **Minimum field condition** | 30 | The match-fit line for tournaments, 1v1s plus training | Below it a player cannot train. In a tournament or 1v1 match a starter below it is auto-substituted by a fit bench player; fewer than 11 fit players forfeits 3-0. Casual and ranked games do not apply it: they refuse only a starter at 0 condition, so a tired starter still plays there with every stat scaled down by condition | Condition recovery brings a player back above it |
-| **Fusion inputs** | 3 players of the same rarity, each at the match gate of its rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 | What one fusion burns | Inputs must be synced, in your wallet, not listed, not under a transfer cooldown and, from Friday 13 November 2026, 14:00 UTC, not injured or suspended. A fused player inherits the longest remaining transfer cooldown of its inputs, also their injury and their ban to serve. The contract reads the on-chain competitive counter plus the waived credit | Fusion match waiver per missing match: Uncommon 20 FOXSY (at most 10, so 5 really played), Rare 100 (at most 30, 15 played), Epic 100 (at most 90, 45 played). None for Common |
+| **Fusion inputs** | 3 players of the same rarity, each at the match gate of its rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 | What one fusion burns | Inputs must be synced (until 20 November 2026, 14:00 UTC; from then the game signs their current stats), in your wallet, not listed, not under a transfer cooldown and, from Friday 13 November 2026, 14:00 UTC, not injured or suspended. A fused player inherits the longest remaining transfer cooldown of its inputs, also their injury and their ban to serve. The contract reads the competitive counter plus the waived credit. From 20 November the new card is minted with a new face, each stat the average of the three translated to the new rarity's range (see [Fusion](/mechanics/fusion/)) | Fusion match waiver per missing match: Uncommon 20 FOXSY (at most 10, so 5 really played), Rare 100 (at most 30, 15 played), Epic 100 (at most 90, 45 played). None for Common |
 | **Fusion fee** | Common to Uncommon 100, Uncommon to Rare 200, Rare to Epic 400, Epic to Legendary 800 FOXSY | The fee paid with the three cards | Refunded with the cards if the fusion fails. Legendary cannot be fused further | None |
 | **Fusion card cooldown** | 14 days per fused card | A fusion output waits before it can be an input again | Belongs to the card and travels with it if sold. Does not block play, listing or your other fusions | Fusion cooldown waiver: 75 FOXSY per day down to a 3-day floor, at most 11 days and 825 FOXSY per card |
 | **Fusion wallet spacing** | 20 hours between two fusions of one wallet | Pacing on the wallet, whatever the cards | Counts from your last successful fusion | Not for sale |
@@ -58,6 +58,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Aging** | Minted at 18; one in-game week per real day; ramp from age 30 to the peak at 39 | Older players lose more condition per match and per training while regenerating less | Stats never drop. Every condition cost climbs to 3x its base at 39: matches from 10 or 5 to 30 or 15, training from 5 to 15; regeneration falls from 48 to 24 a day. A 39-year-old plays three tournament matches from full, then rests about 4 days | Condition recovery keeps a veteran on the pitch. Age itself is not for sale |
 | **Onboarding EGLD bonus** | Spent. The first 101 wallets that registered with less than 0.01 EGLD received 0.1 EGLD each | Covered roughly 100 on-chain actions of gas for a new manager | All 101 were paid. A wallet that registers today gets no EGLD from FoxLeague and tops up EGLD itself: the swap window's Ramp Network link, xPortal or an exchange | None |
 | **Registration relayer** | 3 attempts per wallet per 10 minutes; 5,000 relayed registrations per day platform-wide | Rate limits on the gas-free registration | Past the daily cap the gas-free registration closes (the registration screen says "Onboarding closed for today"): try again tomorrow or ask the team on Telegram. There is no path where you pay the registration gas yourself | Not for sale |
+| **Shop purchase confirmations** | 10 per wallet per minute | Rate limit on confirming a shop payment | Buying normally never reaches it. Past it your payment is kept but not confirmed yet: the shop says "Not confirmed yet", press Pay Now again after a moment and the same payment is confirmed. Nothing is signed twice | Not for sale |
 
 ## How long and how much from A to B
 
@@ -571,7 +572,12 @@ Fusion is how you **break the rarity ceiling**. Burn three players of the same r
 
 - **Burns** 3 player NFTs you own
 - **Pays** a FOXSY fee to the player smart contract
-- **Mints** 1 new player NFT at the next rarity tier
+- **Gives** you 1 player NFT at the next rarity tier
+
+> **From Friday 20 November 2026, 14:00 UTC: fusion makes a new card**
+> Until then a fusion gives you a card drawn from a pre-minted pool, as described in [The fusion flow](#the-fusion-flow). From that moment (the players contract's own switch) every fusion **mints a brand new card** with a new face, a name and a country. Each of its 7 stats is the average of that stat over your three cards, translated to the range of the new rarity. You see its position, OVR and stats before you sign; its face, name, country and shirt are a surprise until it is minted. Your cards no longer need a sync first. See [Fusion that makes a new card](#fusion-that-makes-a-new-card). The FOXSY cost, the match gate and the cooldowns do not change.
+>
+> While the Fusion tab says **Fusion is being updated. No fusion can be made right now. Try again later.**, the game is being updated: no fusion can be made and nothing is signed. Your cards stay as they are.
 
 ## Requirements
 
@@ -579,11 +585,11 @@ All three input players must:
 
 - Be in your wallet (not listed on the marketplace, not in an auction)
 - Share the **same rarity** (e.g. three Commons)
-- Be **synced** (unsynced players can't be fused)
+- Be **synced** (unsynced players can't be fused). From 20 November 2026, 14:00 UTC no sync is needed: the game signs your cards' current stats and match counts for the contract
 - Not be under a **transfer cooldown**. A player still inside its wallet-to-wallet cooldown cannot be selected: the Fusion tab lists it under the grid as locked (**In a transfer lock: these cannot be fused until it ends**), so you cannot use fusion to wash a cooled-down player into a fresh one. Its waivers can still be bought there: matches waived for a locked card count toward its gate and, on a card moved before its gate, each takes 6 hours off its lock. If such a player is fused anyway, the new player inherits the longest remaining transfer cooldown among the three inputs. When any of the three is still inside a cooldown it got by moving before its match gate, the new player's lock is of that kind too: it ends when that longest cooldown ends, neither Reduce Cooldown nor a match waiver shortens it. See [Marketplace](/mechanics/marketplace/) for the cooldown rules
-- Have reached the **match gate** of their rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 (Legendary 405, for listing). Waived matches count, but a part must really be played: 5 for a Common or an Uncommon, 15 for a Rare, 45 for an Epic, 135 for a Legendary. The contract checks the on-chain match counter, so only synced matches count. The Fusion tab shows how far every candidate is and lists any selected player still below its gate. A card that still needs matches or is inside its own fusion cooldown carries a red **no-entry sign** (a red disc with a white bar) in its top-left corner. Hover over it (tap it on a phone) to see why. An unsynced card carries no sign: the Fusion tab names it once you select it. The same two gates also apply to listing a card on the [Marketplace](/mechanics/marketplace/)
+- Have reached the **match gate** of their rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 (Legendary 405, for listing). Waived matches count, but a part must really be played: 5 for a Common or an Uncommon, 15 for a Rare, 45 for an Epic, 135 for a Legendary. Until 20 November 2026, 14:00 UTC the contract checks the on-chain match counter, so only synced matches count; from then the game signs the competitive matches your cards show, synced or not. The Fusion tab shows how far every candidate is and lists any selected player still below its gate. A card that still needs matches or is inside its own fusion cooldown carries a red **no-entry sign** (a red disc with a white bar) in its top-left corner. Hover over it (tap it on a phone) to see why. An unsynced card carries no sign: the Fusion tab names it once you select it. The same two gates also apply to listing a card on the [Marketplace](/mechanics/marketplace/)
 - Not be inside its own **fusion cooldown**. A player that came out of a fusion waits **14 days** before it can go into another one (see below)
-- From Friday 13 November 2026, 14:00 UTC: not be **injured** and not be **suspended** (see [Injuries](/getting-started/players/#injuries) and [Yellow card bans](/getting-started/players/#yellow-card-bans)). The Fusion tab lists such a card under the grid with the reason (**Injured until ...: cannot be fused**, **Suspended: cannot be fused**) and it cannot be chosen. Its waivers can still be bought there. When you press **Fuse** the game checks the three cards again and asks nothing to sign if one of them is injured or suspended
+- From Friday 13 November 2026, 14:00 UTC: not be **injured** and not be **suspended** (see [Injuries](/getting-started/players/#injuries) and [Yellow card bans](/getting-started/players/#yellow-card-bans)). The Fusion tab lists such a card under the grid with the reason (**Injured until ...: cannot be fused**, **Suspended: cannot be fused**) and it cannot be chosen. Its waivers can still be bought there. When you press **Fuse** the game checks the three cards again and asks nothing to sign if one of them is injured or suspended. The fusion that makes a new card (from 20 November 2026, 14:00 UTC) lists such a card the same way and the game signs nothing for it
 
 You also need enough FOXSY in your wallet to cover the fusion fee. The app reads your FOXSY balance before your wallet opens. When the fee is higher than the balance it tells you so and asks nothing to sign. If your balance cannot be read at that moment the fusion is not blocked: the chain has the last word.
 
@@ -598,7 +604,7 @@ From **Monday 9 November 2026, 14:00 UTC** the counter follows the [competition 
 - Silver and Gold tournament matches plus 1v1 challenges count as before.
 - A card counts at most **3 competitive matches per day** at every level, in the same daily window as the XP cap (reset at 14:00 UTC). A fourth match that day still plays and still moves ELO, but it adds nothing to the counter.
 
-Your player's career **matches played** stat still counts every appearance, AI games included. Only the fusion counter is limited to competitive play. The on-chain counter written by [Sync](/mechanics/sync/) is the competitive one, which is what the contract reads.
+Your player's career **matches played** stat still counts every appearance, AI games included. Only the fusion counter is limited to competitive play. The on-chain counter written by [Sync](/mechanics/sync/) is the competitive one, which is what the contract reads until 20 November 2026, 14:00 UTC; from then the contract reads the count the game signs with the fusion, the one your card shows.
 
 ### Per-card fusion cooldown
 
@@ -640,22 +646,54 @@ Both waivers are FOXSY payments to the players contract, signed the same way as 
 1. Open **Marketplace → Fusion** tab
 2. Pick the **rarity** you want to fuse (dropdown shows how many players per rarity you own)
 3. Pick **three players** of that rarity from your roster. Each card shows its competitive matches and, when it is still cooling down, its own "ready in" countdown
-4. Confirm the **position** of the output player (one of the three input positions). Name and portrait come pre-assigned with the output player rather than being picked from your inputs
+4. Confirm the **position** of the output player (one of the three input positions). Name and portrait come pre-assigned with the output player rather than being picked from your inputs. From 20 November 2026, 14:00 UTC the Fusion tab shows the new card's position, OVR and stats here; its face, name, country and shirt show once it is minted
 5. Review the cost summary
 6. Click **Fuse**
 7. Approve the fusion transaction in your wallet. A single signature sends the required $FOXSY together with all 3 NFTs in one transaction.
 8. Wait for confirmation
 9. The new player appears in your Squad at the next rarity tier, with its own 14-day fusion cooldown already running
 
-The burned NFTs are destroyed on-chain. The new NFT is not minted on the spot: it is a **random card** of the pre-minted **fusion pool** for the output rarity and your chosen position, drawn by the contract when your fusion is processed: choosing the position does not choose the card. It comes with its own pre-rolled stats inside the new tier's range (expect to train it up to the new cap). If that pool happens to be empty the transaction fails with a "try again later" message; nothing is burned and your FOXSY stays in your wallet.
+The burned NFTs are destroyed on-chain. Until 20 November 2026, 14:00 UTC the new NFT is not minted on the spot: it is a **random card** of the pre-minted **fusion pool** for the output rarity and your chosen position, drawn by the contract when your fusion is processed: choosing the position does not choose the card. It comes with its own pre-rolled stats inside the new tier's range (expect to train it up to the new cap). If that pool happens to be empty the transaction fails with a "try again later" message; nothing is burned and your FOXSY stays in your wallet. From that moment the flow changes as the next section says.
 
 The new card starts at **0/3** yellow cards toward a ban, whatever its three inputs carried. A card keeps its ban and its injury. Fusing clears neither: the Fusion tab refuses an injured or suspended card. A fusion sent to the contract another way does not clear them either (from Friday 13 November 2026, 14:00 UTC): the new card is injured until the latest end among its three inputs (Medicine counts the third already served) and it has the most bans one of them still had to serve. When a match still on air at the fusion ends, what it gives one of the three counts for that card: an injury keeps the new card injured until that injury ends, if that is later. A ban counts as one more that card owes, so the new card gets it only if that card then owes the most. See [Yellow card bans](/getting-started/players/#yellow-card-bans) and [Injuries](/getting-started/players/#injuries).
 
 A card that came out of a fusion keeps a **Fused** mark for good, also after a sale: you see it on the card in your Squad, in its profile, on the marketplace plus on the Fusion screen. Cards from a starter squad or a Common pack have no mark. The mark only shows where the card comes from; no rule or price reads it.
 
+## Fusion that makes a new card
+
+From **Friday 20 November 2026, 14:00 UTC** (the players contract's own switch) the contract mints the new card in your fusion transaction:
+
+- **Face, name and country:** a new face never used on any card, framed in the colour of the new rarity, with a generated name and the face's country. They are a surprise: you see them once the card is minted, on the Fusion tab as soon as the chain confirms it (a few seconds), in your Squad and in the fusion history.
+- **Position and shirt:** the position of the card you choose among the three; a random shirt number from 1 to 99, like every minted card.
+- **Stats:** each of the 7 stats is the **average of that stat over your three cards**, whatever their positions, **translated to the range of the new rarity**: the three values added up, times the new rarity's cap, divided by three times the old cap, rounded down. Then no stat stays below the stat floor of the new rarity (Uncommon 22, Rare 30, Epic 36, Legendary 40). The floors are set on the players contract. See the worked example below.
+- **Fresh:** level 1, no XP, condition 100, no matches, goals or assists and 0/3 yellow cards toward a ban. Its age starts at the fusion. An injury or a ban is the exception: fusing clears neither, as [The fusion flow](#the-fusion-flow) says.
+
+**Before you sign** the Fusion tab shows the stats part of the new card: its position, rarity and OVR plus each stat next to its value on each of your three cards (and whether a floor raised it). Its face, name, country and shirt stay a surprise until the card is minted. Change the position and it shows the card again; preparing again never re-rolls the card. The stats you see are exactly what the contract mints. The prepared fusion is valid for 10 minutes. The app prepares it again when you press **Fuse**, so you always have more than 5 minutes to sign in your wallet. If the floors were changed in between, the contract refuses the fusion, nothing is burned and you press Fuse again to see the new card first. The FOXSY you sign is always the cost the **Fuse** button shows: if the fusion cost was changed after the page showed it, the app asks nothing to sign, tells you the cost changed and shows the new cost. Check it and press Fuse again.
+
+**No sync needed:** the game signs your three cards' current stats and competitive matches for the contract, so training not synced yet counts too. An **injured** or **suspended** card cannot be fused: the Fusion tab lists it under the grid with the reason and the game signs nothing for it. A card that turns injured or suspended after the fusion was prepared (inside its 10 minutes) still fuses, like one whose match is still on air at the fusion: the new card then carries the injury and the ban exactly as [The fusion flow](#the-fusion-flow) describes.
+
+If no new face is left for the position you chose, the Fusion tab says so: choose the position of another of the three cards or try again later.
+
+### A worked example
+
+Three Commons (stat cap 30) fused into one Uncommon (stat cap 55). For each stat, add up the three values, multiply by 55, divide by 90 (three times 30) and round down:
+
+| Stat on your three Commons | Their average | The new Uncommon gets |
+|----------------------------|---------------|-----------------------|
+| 30, 30, 30 | 30 | **55** |
+| 30, 30, 29 | 29.67 | **54** |
+| 30, 18, 12 | 20 | **36** |
+| 12, 15, 18 | 15 | **27** |
+| 30, 5, 5 | 13.33 | **24** |
+| 3, 3, 3 | 3 | 5, raised to the floor **22** |
+
+- **The new cap needs all three.** A stat lands on the cap of the new rarity only when all three cards hold it at their cap: three Commons at 30 give 55, three Epics at 90 give a Legendary 100. Two Epics at 60 next to one at 90 give 77.
+- **One trained card does not carry the other two.** A Common trained to 30 fused with two Commons at 5 gives 24, not 55.
+- **A stat of the new card can be lower than the same stat on your best card.** In the table the cards at 30, 5 and 5 give 24 where your best card had 30. This is how the rule works, not an error. The new card has a higher cap (55 in place of 30) and you train it up to that cap. It is never lower than the same stat on your weakest card: in the same row the two cards at 5 give 24.
+
 ## Stat caps after fusion
 
-The fused player inherits the new rarity's stat cap, but **not** automatically full stats. You still need to train the new player toward the new cap:
+The fused player inherits the new rarity's stat cap, but **not** automatically full stats (from 20 November 2026, 14:00 UTC: the average of your three cards, translated to the new rarity, so a stat can start lower than on your best card, but never lower than on your weakest one). You still need to train the new player toward the new cap:
 
 | Rarity | Stat cap |
 |--------|----------|
@@ -669,12 +707,15 @@ The fused player inherits the new rarity's stat cap, but **not** automatically f
 
 Every fusion you do is recorded in the Fusion tab's history panel: the date, the input rarity, the burned players (struck through after a fox skull), the card you got (with its own picture and its **Fused** mark) and the transaction link. Useful for tracking your long-term team-building investment. When a later fusion burns the card you got (fusing your way up the rarities), its row shows the fox skull in place of its picture, its name struck through and **Burned in a later fusion**.
 
-A fusion still waiting for its on-chain result shows as **Pending**; the platform keeps re-checking it for up to 48 hours. A fusion that reverted on-chain shows as **Failed** with the reason. Your three players and the fee are returned to your wallet in that case. A pending or failed fusion has no card yet, so it shows no picture and no Fused mark; a failed one burned nothing, so it has no fox skull either.
+A fusion still waiting for its on-chain result shows as **Pending**; the platform keeps re-checking it for up to 48 hours. A fusion that reverted on-chain shows as **Failed** with the reason. Your three players and the fee are returned to your wallet in that case. The players come back as they were: their stats, level and XP (synced or not), their matches, their cooldowns and any injury or suspension. A player sent to a fusion leaves your lineup, so put them back in it yourself. A pending or failed fusion has no card yet, so it shows no picture and no Fused mark; a failed one burned nothing, so it has no fox skull either.
+
+The bell tells you the outcome once it is known, never while the fusion still shows as Pending (with a push notification if you turned push on): **Fusion complete** when your new player is ready, **Fusion failed** when the fusion reverted on-chain. The second one reminds you that your three players and the fee are back in your wallet and that the players are out of your lineup until you put them back. To stop both, turn off **Fusion** in **Settings > Notify me about**.
 
 ## Tips
 
 - **Don't fuse your best Common**. Burning a near-cap Common (OVR close to 30) to mint a fresh Uncommon that starts much lower is often a net loss early on. Sell the Common on the marketplace and train an Uncommon you already have.
-- **Sync first**. An unsynced player can't be fused (fusion reads on-chain stats only), so any training or matches that aren't synced yet are invisible to it, including the match gate.
+- **Sync first** (until 20 November 2026, 14:00 UTC). An unsynced player can't be fused (fusion reads on-chain stats only), so any training or matches that aren't synced yet are invisible to it, including the match gate. From then no sync is needed: the new card is made from the stats your cards show.
+- **Train all three inputs** (from 20 November 2026, 14:00 UTC). The new card takes the average of each stat of the three, translated to the new rarity, so every point trained on any of the three counts for a third. One trained card next to two untrained ones gives a weak new card.
 - **Play the matches where they count**. Casual games against the AI keep your players fit and fill the career stats, but they never move the fusion counter. A card that only ever played the AI stays at 0 competitive matches however many games it has. Silver and Gold tournaments plus 1v1 challenges are what get a card fusion-ready; from Monday 9 November 2026 a paid Bronze tournament plus a ranked game you paid for count too, at most 3 a day per card.
 - **Buy time only when the queue is the problem**. The cooldown waiver saves at most 11 days per card and the match waiver at most the waivable part of the card's gate (10 matches for an Uncommon up to 270 for a Legendary); the 20-hour wallet spacing still applies to every fusion. If several cards are cooling down at once, waiving the one you need first is cheaper than waiving all of them.
 - **Legendary is a commitment**. Reaching Legendary by pure fusion takes **3⁴ = 81 Commons**, condensed through 27 Uncommons, then 9 Rares, then 3 Epics, then 1 Legendary. That's **40 fusions** in total. Cumulative fees: 27 × 100 + 9 × 200 + 3 × 400 + 1 × 800 = **6,500 FOXSY**. With one fusion per wallet every 20 hours those 40 fusions alone take at least 39 × 20 h = **32.5 days**. On top of that every fused card sits out its own 14-day cooldown (3 days with a paid waiver) before it can be an input at the next tier, before counting the competitive matches each input still has to play: 5 per Common, 15 per Uncommon, 45 per Rare, 135 per Epic. Realistic path is to mix marketplace purchases at higher rarities with your own fusions instead of grinding the whole pyramid from Common.
@@ -771,6 +812,13 @@ The owner sees your team name, your coach name, your offer, the time and your Te
 The player's profile in your Squad also shows **Interested managers** with the list of the last 7 days. If the player changes owner, the new owner never sees the interests sent to the previous one.
 
 **When the owner lists the player**, every manager who showed interest in it during the last 7 days gets a notification that it is on the market, with its price. The listing is **public**: any manager can bid on it and buy it first, not only the one who made an offer.
+
+**Marketplace → My interests** keeps both sides in one place. Its top line reads **Sent today 2 of 5**.
+
+- **Sent** lists the players you showed interest in during the last 30 days, newest first (the newest 100 at most): the team you told, your price or **No price**, when you sent it, whether you shared your Telegram and when you can ask that owner again. Press a player to open the card. When the owner has listed the player, the row reads **On the market now** and links to the listing. When the player is no longer with that team (sold, transferred or used in a fusion), the row says so.
+- **Received** lists your own players that managers asked about during the last 7 days, one row per player: how many managers, the best offer, a link to the managers and **List for sale**.
+
+Only you see these two lists.
 
 Do not want these requests? Turn off **Interest in players** in **Settings > Notify me about**. It also stops the market notice of players you showed interest in. When you do not see the button at all, the feature is not switched on yet.
 
@@ -1175,7 +1223,7 @@ A record is one small JSON file (about 1 KB):
 - `replay`: the match page, the download address of the replay file (`.rcg`), the file's size in bytes and its SHA-256 fingerprint
 - `recorded_at`: when the record was made
 
-Public game data only: no wallet address, no coach name, no e-mail address, no Telegram user id or username, no IP address. The replay itself is not uploaded, only its size and its fingerprint. A team is named the way its match page names it when the record is made: a later rename does not change a record already written. The [Privacy Policy](/legal/privacy/) (section 12) says the same.
+Public game data only: no wallet address, no coach name, no e-mail address, no Telegram user id or username, no IP address. The record holds no replay, only its size and its fingerprint. A team is named the way its match page names it when the record is made: a later rename does not change a record already written. The [Privacy Policy](/legal/privacy/) (section 12) says the same.
 
 ## When it is written
 
@@ -1193,9 +1241,17 @@ After the broadcast has ended, once FoxLeague keeps the replay in its off-site a
 
 Equal means the replay you downloaded is, byte for byte, the replay FoxLeague recorded when the broadcast ended. The fingerprint is of the file exactly as FoxLeague serves it for download. Should FoxLeague ever change how it serves replays, a record written before keeps the fingerprint of the file as it was served then. This page will say so.
 
+## The full replay
+
+For some matches FoxLeague also keeps the full replay file (`.rcg`) on Autonomys Auto Drive, after the record. It is byte for byte the file the record's `replay.download` address serves: the match as the match engine recorded it, with the two team names, the match engine's settings (each player's type included), every position and action of the players and the ball, the referee's decisions and the score. FoxLeague links it only after checking that its size and its SHA-256 equal the record's `replay.bytes` and `replay.sha256`. Like the record, it is permanent and public. It holds no wallet address, no coach name, no e-mail address, no Telegram user id or username, no IP address. Ranked and casual games, developer tournaments and developer challenges get no replay file. The [Privacy Policy](/legal/privacy/) (section 12) says the same.
+
+Which matches get one is FoxLeague's choice within the storage it has on Autonomys: every tournament match and 1v1 challenge whose broadcast ended from a set date, unless FoxLeague keeps only the finals.
+
+When a match has one, its page shows **Permanent record and full replay on Autonomys**, with a link on each. The replay link opens the file on the public Autonomys gateway: steps 3 and 4 above check it against the record the same way.
+
 ## Through an AI assistant
 
-The FoxLeague MCP's tournament detail (`get_tournament`) gives each finished match its `permanent_record`: the record's `cid` and its `url` on the gateway. See [Connect an AI](/connect-ai/).
+The FoxLeague MCP's tournament detail (`get_tournament`) gives each finished match its `permanent_record`: the record's `cid` and its `url` on the gateway. A match with its full replay on Autonomys also gives `permanent_replay`, its `cid` and its `url`. See [Connect an AI](/connect-ai/).
 
 # Shop
 (docs.foxleague.ai/mechanics/shop/)
@@ -1439,7 +1495,7 @@ The percentage is measured over your 11 lineup starters only (your whole squad u
 
 A few actions REQUIRE you to sync first:
 
-- **Fusion**: you can't fuse an unsynced player, so sync them first as fusion reads the latest stats.
+- **Fusion**: until Friday 20 November 2026, 14:00 UTC you can't fuse an unsynced player, so sync them first as fusion reads the latest stats. From then a fusion needs no sync: the game signs your cards' current stats for the contract (see [Fusion](/mechanics/fusion/#fusion-that-makes-a-new-card)).
 - **List on the marketplace**: bidders pay for the on-chain version, so you must sync before you put a player up for auction.
 
 Match play does NOT require sync. You just play with the previous synced values.
@@ -1461,7 +1517,7 @@ The exception: **wallet-to-wallet transfers** (gifts, OTC trades) come with a **
 | If you... | Do this |
 |-----------|---------|
 | Trained players and want to use new stats in matches | **Sync** |
-| Want to fuse an unsynced player | **Sync first** |
+| Want to fuse an unsynced player | **Sync first** until 20 November 2026, 14:00 UTC; no sync needed from then |
 | Want to list an unsynced player for sale | **Sync first** |
 | Want to play a match (any type) | Just play (the system uses synced stats automatically) |
 | Want to know what you're missing | Look at the banner on Squad |
@@ -1919,6 +1975,7 @@ FoxLeague expects you to own a full 18 (11 starters + 7 substitutes) when your n
 - Once the match has ended, its card on the tournament page lists the auto-subs of each side under **Lineup changes before kickoff**: who was relieved, who took his place and why (injured, suspended, below the condition floor, listed for sale or saved outside his line). Nothing of it shows before the match has ended
 - A suspended player (3 yellow cards, see [Yellow card bans](/getting-started/players/#yellow-card-bans)) or an injured one (see [Injuries](/getting-started/players/#injuries)) sits the match out. He is replaced the same way. An outfield shirt takes your bench keeper only when no other fit player is left. Your bench plays one short
 - If fewer than 11 match-fit players can be assembled from your 18 (or you no longer own all 18), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
+- A forfeited match is not broadcast. Its result and the forfeit reason show at its kickoff
 - If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero. In a knockout match, where one side must go through, the home side of the fixture advances (in round 1 of a Knockout, the higher seed)
 - From Monday 9 November 2026, 14:00 UTC a forfeit (by one team or by both) moves no ELO. The win, loss or draw and the standings still count it
 - From Friday 13 November 2026, 14:00 UTC each team that forfeits loses the most ELO one match of its level can move: 9 in Bronze, 13 in Silver, 17 in Gold. When both teams forfeit, both lose it. The other team gains no ELO; its win and its standings points still count. A match the server could not play is never a forfeit
@@ -2080,6 +2137,12 @@ The flow:
 3. Watch the pack-opening animation. All 18 players appear card-by-card in your Squad
 
 One wallet receives one starter squad; the players contract enforces it. Later on-chain actions (sync, marketplace, tournament entries) are paid from your own EGLD, a small network fee each, typically under 0.005 EGLD. The EGLD welcome bonus of the first 101 wallets is spent, so keep a little EGLD in your wallet. See [Get Started](/getting-started/onboarding/).
+
+## You already own 18 players
+
+A wallet that already holds **at least 18 FXLP players** and has not paid the fee registers **without paying the 5,000 FOXSY**. It receives no starter squad: the team plays with the players the wallet holds. This is for a new player who bought FXLP cards on another NFT marketplace or received them: they do not pay for a squad they do not get.
+
+The count is read once, when you register. Players that leave your wallet afterwards leave your team too: every match and every tournament lock needs 18 of your own players, so a team registered with borrowed cards cannot play until it holds 18 of its own.
 
 ## Rarity tiers
 

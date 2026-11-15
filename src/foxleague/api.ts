@@ -26,6 +26,7 @@ import type {
   LeaderboardPage,
   CanFuse,
   CanList,
+  FusionPrepared,
   FloorPrice,
   MarketListing,
   MedicineQuote,
@@ -394,6 +395,17 @@ export class FoxLeague {
 
   canFuse(w: AgentWallet, nonces: number[]): Promise<CanFuse> {
     return this.call(`/fusion/can-fuse?nonces=${nonces.join(',')}`, { wallet: w })
+  }
+
+  /**
+   * The fusionMint transaction of these three cards (in this order) taking the position of `nonces[positionChoice]`,
+   * from FoxLeague's fusion switch on (routes/fusion_mint.rs prepare_fusion). FoxLeague checks the cards, holds a new
+   * face for the wallet and signs the new card; asked again within its 10 minutes it answers the same signature. Before
+   * the switch, or for a card it will not fuse, it refuses in its own words. A new signature at most every 2 seconds a
+   * wallet: a quicker one is refused with the code fusion_prepare_pace.
+   */
+  fusionPrepare(w: AgentWallet, nonces: number[], positionChoice: number): Promise<FusionPrepared> {
+    return this.call('/fusion/prepare', { method: 'POST', wallet: w, body: { nonces, position_choice: positionChoice }, timeoutMs: 45_000 })
   }
 
   /** Best effort: the chain indexer records the fusion on its own either way. */

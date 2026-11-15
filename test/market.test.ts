@@ -21,7 +21,7 @@ test('fusion and auction transactions match the web app byte for byte', () => {
     f.data,
     `MultiESDTNFTTransfer@${PLAYERS_HEX}@04@464f5853592d356435663365@00@056bc75e2d63100000@46584c502d366632386535@28@01@46584c502d366632386535@29@01@46584c502d366632386535@012c@01@667573696f6e@00@00`,
   )
-  assert.equal(f.gasLimit, 21_000_000n)
+  assert.equal(f.gasLimit, 22_800_000n) // FoxLeague's app for the fusionMint players contract (2026-11-13)
   assert.throws(() => fusionTx(ME, 1n, [1, 2], 0))
   const b = auctionBidTx(300, 1000)
   assert.equal(b.receiver, MAINNET.playersContract)
@@ -67,7 +67,8 @@ function snap(extra: PlayerView[] = []): AgentSnapshot {
     gameDay: { resetHourUtc: 14, nextResetAt: '', hoursToReset: 5 },
     chain: { egld: wholeToAtomic(2), nonce: 3, foxsy: wholeToAtomic(3000), wegld: 0n, nftCount: 18 + extra.length },
     prices: { egldUsd: 4.5, egldPerFoxsy: 0.0005, foxsyUsd: 0.00225 },
-    config: { fusion_costs_foxsy: [100, 200, 400, 800], auction_enabled: true, marketplace_min_list_price_foxsy: 500 } as AgentSnapshot['config'],
+    // fusion_mint: FoxLeague's fusion switch as it serves it since 2026-11-13 (none set: the old fusion runs).
+    config: { fusion_costs_foxsy: [100, 200, 400, 800], auction_enabled: true, marketplace_min_list_price_foxsy: 500, fusion_mint: { live: false, live_from: null, paused: false } } as AgentSnapshot['config'],
     registration: { registered: true, teamName: 'Agent', feePaidOnChain: true, whitelisted: true, relayerEnabled: true, relaysRemaining: 1 },
     profile: null,
     team: { id: 1, user_id: 1, name: 'Agent', coach_name: null, formation: '4-4-2', lineup: players.slice(0, 11).map(p => p.nonce), substitutes: players.slice(11).map(p => p.nonce), team_overall: 20, badge: null },

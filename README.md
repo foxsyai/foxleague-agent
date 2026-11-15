@@ -95,13 +95,16 @@ the dashboard or by chatting with it on Telegram.
   Only a release signed by the maintainers and newer than yours is taken, it is prepared next to the running
   version, and a version that does not start is undone by itself. `./install.sh --update` does the same from a
   terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
+- **FoxLeague's manual:** once a day the agent compares the manual FoxLeague serves with the copy its agents play
+  by. When a page changed, the morning summary and the dashboard name it; a version with the new manual follows
+  (the maintainer runs `sync-manual`). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
 ## What it costs
 
 - **The game:** never more than your caps (defaults $5 a day and $150 a month, plus $20 for the registration).
-- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. Each agent can also have its own model and effort; the cache is shared by the agents on the same model and effort.
+- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. Each agent can also have its own model and effort; the cache is shared by the agents on the same model and effort.
 - **Network fees:** a few cents a day.
 
 ## Command line
@@ -142,7 +145,8 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
-manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`).
+manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`, which also writes
+`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with).
 
 ## Fair play
 

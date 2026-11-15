@@ -73,6 +73,8 @@ export function snapshot(extra: PlayerView[] = []): AgentSnapshot {
       tournament_defaults: { match_stagger_minutes: 15, deadline_grace_minutes: 30, knockout_min_participants: 2, swiss_min_participants: 3, groups_knockout_group_size: 4, one_v_one_max_active_per_user: 1, one_v_one_prize_delivery_seconds: 180 },
       min_field_condition: 30, condition_regen_points_per_day: 48, condition_loss_per_match: 10, condition_loss_per_match_ranked: 5, fusion_costs_foxsy: [100, 200, 400, 800], auction_enabled: true,
       marketplace_min_list_price_foxsy: 500, foxsy_token_id: 'FOXSY-5d5f3e', rarity_match_gate: MAINNET_GATE,
+      // FoxLeague's fusion switch as it serves it (2026-11-13): no switch set here, so the old fusion runs.
+      fusion_mint: { live: false, live_from: null, paused: false },
     } as AgentSnapshot['config'],
     registration: { registered: true, teamName: 'Agent', feePaidOnChain: true, whitelisted: true, relayerEnabled: true, relaysRemaining: 5000 },
     profile: { id: 100, wallet_address: ADDR, username: null, elo_rating: 1200, league: 'Bronze', matches_won: 0, matches_lost: 0, matches_drawn: 0, team_name: 'Agent', badge: null, verified: false, tournament_wins: 0, active_title: null, player_count: 18 },

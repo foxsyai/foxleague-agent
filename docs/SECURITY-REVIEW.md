@@ -2248,6 +2248,147 @@ Stays open:
   `scripts/release/fresh-install-check.sh` says it needs "`npm ci` done in this folder" (the script itself asks for
   `npm ci --ignore-scripts` when the packages are missing).
 
+## Daily check of FoxLeague's manual (2026-11-15)
+
+On 15 Nov the agents' manual (`src/strategist/manual.md`, synced at FoxLeague's 89a1955d7 of 10 Nov) was five days
+behind the manual FoxLeague serves (its main at 9ebcbc52d of 13 Nov, with a fusion change) and nobody was told:
+`manual-status` needs a FoxLeague checkout and `deploy/deploy.sh` runs it only at a deploy, on the maintainer's
+computer. The live server has no checkout. The owner said yes to a daily check on 15 Nov. It is about what the agents
+know, not what they may pay: the code still checks every action against the game rules and the caps. Built by Claude
+Opus 5.5, test first: each test of the same name in `test/manual-watch.test.ts` failed against a skeleton of the
+module (its shape only: "current" with nothing read, no line, no notice) and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MW-1 | low (the owner, 2026-11-15; game knowledge) | Nothing told the owner that FoxLeague's manual had moved ahead of the agents' copy | `src/strategist/manual-watch.ts` asks FoxLeague's public read-only MCP server (`https://foxleague.ai/mcp`, the tools `list_manual_pages` and `get_manual_page`) for the pages it serves and compares each page the agents take in with the fingerprint sync-manual recorded for it (sha256 of its body as FoxLeague's server builds it, whitespace folded). A changed page, a new one and one that went are named. The signal changes only when the manual changes, not with every FoxLeague deploy. Run once against the live server on 15 Nov: it named the seven pages that changed between 89a1955d7 and FoxLeague's main (players, sync, tournaments, permanent records, marketplace, fusion, economy map) and none of the five pages left out on purpose that changed too; a record built from FoxLeague's main came out current |
+| MW-2 | with MW-1 | The check must not report a difference that is no change of the rules | Pages left out on purpose (`LEFT_OUT` in `manual.ts`: connect-ai, the World Cup preview, the terms and the others) are not compared. A change of line breaks or of a page's title alone is no change. "current" comes only from reading the list and every page compared |
+| MW-3 | with MW-1 (rule 4) | A check that cannot read FoxLeague must never say "current" | Every failure ends the day's check as "unknown" with the reason in our own words, never FoxLeague's text: no network, an HTTP error, an answer that is not JSON-RPC, a tool error, an empty list, a slug that is no slug, a page other than the one asked, a request over 15 seconds or a check over 90. No page record, a record of another `manual.md` or a `manual.md` that cannot be read say so without asking FoxLeague |
+| MW-4 | with MW-1 (polite) | The check must not load FoxLeague or send anything of the install | One request for the list and one per page the agents know (17 today), 0.6 seconds apart (FoxLeague's nginx allows 2 a second on `/mcp`), no retry. Each is a POST of a read-only tool call, the only way the MCP route answers, with a fixed client name and no cookie, key or address |
+| MW-5 | with MW-1 | At most once a day | The day (in the summary's time zone) is written to the database before anything is asked: a second call, a call while one runs, a restart and a failed check ask nothing more that day. `AGENT_MANUAL_CHECK=0` switches it off; a service a test builds asks nobody |
+| MW-6 | with MW-1 | The owner's Telegram is quiet on purpose | No message of its own: the morning summary carries one line, "FoxLeague's manual changed since the agents' copy (pages: ...). The maintainer runs sync-manual." or "Could not check FoxLeague's manual today: ...". It has none while the copy is current. The summary runs the day's check before it is built; `/summary` reads the same check |
+| MW-7 | with MW-1 | Where Telegram is not linked the owner still has to see it | A notice under the dashboard's header with its info bubble, shown only when there is something to tell, set as plain text. Without Telegram the service runs the check from the summary's hour on, looked at every hour |
+| MW-8 | with MW-1 | The comparison needs what the agents' copy was built from | `sync-manual` writes `src/strategist/manual-pages.json` next to `manual.md`: the commit, the sha256 of `manual.md` and a fingerprint per page, read from the same FoxLeague checkout (read only, after its fetch). The test holds that the committed record belongs to the committed `manual.md`. The record on this branch was built from 89a1955d7 without a fetch and matches `manual.md` byte for byte |
+| MW-9 | with MW-1 | The maintainer needs the same answer without a checkout | `manual-check` runs the same check from the command line (`./cli.sh manual-check`, `agentctl.sh manual-check` on a server): exit code 0 current, 2 changed, 1 could not check. It writes nothing |
+| MW-10 | with MW-1 (docs) | The guides must say what the line means and what to do | `docs/SERVER.md`, the Update, Troubleshooting, Safety, Dashboard and Talk pages of the site, README and `.env.example` |
+
+Stays open:
+- The page text is built at sync time by a copy of FoxLeague's `mcp/src/resources.ts` (front matter off, MDX imports
+  and comments off). If FoxLeague changes how its server builds the pages, every page reads as changed and
+  `sync-manual` does not clear the line: `servedBody` and `liveBody` in `manual-watch.ts` then follow FoxLeague's file.
+  The check fails loud there, not silent.
+- FoxLeague's MCP server serves the manual its container was built with. A manual deployed to docs.foxleague.ai
+  without a new MCP server is not seen. On 15 Nov the server served FoxLeague's main.
+- FoxLeague deploys a release branch before it promotes it to main (on 15 Nov `release/mainnet-1.0` held the
+  MetaStaking Shop discount of 1 Dec, not served yet). `sync-manual` reads main, so a page FoxLeague serves before its
+  main has it stays named after a sync until FoxLeague promotes it. The reverse (main ahead of what is served) is
+  named too: the line says that the pages differ, not which side is newer.
+- A page the agents take in that FoxLeague's server does not serve (a draft, a page outside the sidebar) is not
+  compared; once FoxLeague serves it, it is named "(new)" until the next sync.
+- The check runs from the hour of the morning summary: a change FoxLeague makes later that day is told the next
+  morning.
+- FoxLeague's server answers a tool call without an `initialize` first (stateless). If that changes, the line says
+  "could not check" every day until the check sends one.
+- Merge order with the sync branch (`foxleague-sync-1113`): whichever merges second, `sync-manual` runs once more with
+  this code so that `manual-pages.json` follows the new `manual.md`. Until then the daily check says that the record
+  is not the one of `manual.md` and MW-8 fails.
+
+GitHub review of PR #72 (2026-11-15). The agent review of this pull request on GitHub (Claude Fable 5.2 at high
+effort) passed it with two medium and three low findings, none about money, keys or signing. The fixes are by Claude
+Opus 5.5, test first, in `test/manual-watch.test.ts`: the tests "R72A-1 ...", "R72A-2 ..." and "R72A-3 ..." each
+failed on the branch before their fix and pass now. "R72A-4 ..." and "R72A-5 ..." add the cases that were missing:
+they passed on the code as it was and were each seen failing on four breaks of the code they hold, restored after.
+The re-review after those fixes (the same reviewer) passed the pull request with one new medium finding, R72A-6,
+fixed the same way: "R72A-6 a slug longer than 120 characters ..." and "R72A-6 many pages ..." failed before the fix
+and pass now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R72A-1 | medium (agent review of PR #72; memory of the process that signs) | `callTool` in `src/strategist/manual-watch.ts` read FoxLeague's answer whole with `res.text()` and compared its size only afterwards: the comment "An answer larger than this is not read" was not true. Whatever answers at `FOXLEAGUE_URL/mcp` (FoxLeague on a bad day, a proxy in front of it or a compressed answer that unpacks to gigabytes) could fill the memory of the process that books and signs, once a day. `src/util/http.ts` had closed this for every other FoxLeague read (ATTACK-5) | The answer is read with `readCapped`, now exported from `src/util/http.ts` with a cap per caller: 2 MB here, counted as it streams and cut off past it, a declared `content-length` over it refused unread, a compressed answer counted by what it unpacks to. Its refusal is an `AnswerTooLargeError`, which the check says as "FoxLeague's answer could not be read"; a timeout or a cut connection while reading is told as before. The test streams 64 MB: the old read took in all of it, the new one stops after at most 4 MB and cancels the stream. One that declares 64 MB is refused with nothing more read |
+| R72A-2 | medium (agent review of PR #72; a notice that outlived its copy) | The stored check was kept by the day only. After an update or a deploy brought a new `manual.md` the same day, the dashboard and `/summary` kept saying "FoxLeague's manual changed since the agents' copy (pages: ...)" until the next morning, while `manual-check` said the copy matched. The same held for "the page record is not the one of the agents' manual.md" after the record was fixed and deployed | The stored check carries a key of the copy it compared: the sha256 of `manual.md` with its page record, as read. A check of another copy is not shown (the dashboard has no notice, the summary line says that it could not check) and the day's check runs again for the copy installed now. Still at most once a day per copy: another call or a restart on the same copy asks nothing more. A fixed record alone counts as a new copy. The test failed on the dashboard showing copy A's line to the service restarted on copy B |
+| R72A-3 | low (agent review of PR #72; the dashboard) | While the day's check ran (about 10 seconds, up to 90) the dashboard showed its restart marker as a failed check: "Could not check FoxLeague's manual today: the check did not finish." The dashboard loads every 15 seconds, so on most days one load showed it, in place of the day before's notice | While a check runs, the dashboard and the summary line give the check before it (nothing on the very first check). The marker keeps its meaning where no check runs: a service that restarted while one was under way still says "the check did not finish". The test failed on the marker shown while FoxLeague held its answer |
+| R72A-4 | low (agent review of PR #72; tests) | The path without Telegram (`armManualCheck` in `src/service.ts`: from the summary hour, every hour, cleared at stop) had no test, though MW-7 names it | The test holds it on mocked timers: the first look three minutes after a start then every hour, nothing asked before the summary hour, a start after the hour asks at its first look, nothing after a stop and nothing when switched off. It failed on each of four breaks: no hour condition, no hourly look, the timer kept at stop, armed when switched off |
+| R72A-5 | low (agent review of PR #72; tests) | The `text/event-stream` branch of `callTool` and the refusals past the size cap and past `MAX_PAGES` had no case in MW-3 | The test holds that an answer sent as server-sent events is read from its last data line (alone or after a notification) and one with no data line is refused; that an answer of exactly the cap is read while one byte more is refused with nothing asked after it; that a list of 200 pages is compared while 201 are refused unread. It failed on each of four breaks: the stream branch not taken, the first data line read, no cap of its own, the page count off by one |
+| R72A-6 | medium (agent re-review of PR #72; the owner's Telegram and the dashboard) | A slug had no length limit: `SLUG` in `src/strategist/manual-watch.ts` limits its characters and its five parts, not their length. One list answer under the 2 MB cap with long slugs (one of 1.9 MB or 196 of 10,000 characters) passed `SLUG` and `MAX_PAGES`, ended as "behind" and put about 2 MB of FoxLeague's text into the line of the morning summary: about 500 Telegram messages on the one send queue, holding urgent warnings, top-up codes and the answers to `/kill` back for 10 minutes or more, sent once more by `/summary`. The same text went into the stored check and into every `/api/state`, every 15 seconds per open dashboard | A slug longer than 120 characters (`MAX_SLUG`; the longest real one has 29) makes FoxLeague's list unreadable: "Could not check FoxLeague's manual today: FoxLeague's answer could not be read." (rule 4), with nothing asked after it. The page record takes the same cap. The owner's line names at most eight pages (`MAX_NAMED`) and counts the rest ("... and 188 more"), so a manual FoxLeague rebuilt with 200 pages stays a line of about 1,100 characters in a summary of one message. The stored check and `/api/state` keep the full list: at most 200 slugs of 120 characters. The first test failed on a slug of 121 characters taken as a new page; it refuses slugs of 121 characters, 10,000 characters and 1.9 MB as well as 196 of 10,000 unread, takes one of 120 and holds that a record with a long slug is no record. The second failed on nine pages all named; eight are all named, nine name eight "and 1 more" and 200 of the longest give a line under 1,500 characters. Error texts and titles: the third test (each of 1.5 MB: an HTTP error page, a JSON-RPC error, a tool refusal, an answer that is not JSON, a cut connection, a page of another slug as well as a title in the list) passed on the code as it was, since every reason the check gives is in our own words and titles are not read. It stays as a guard: it failed on two breaks, FoxLeague's error page in the reason and the network error's message in the reason, restored after |
+
+Stays open after the review:
+- Between a deploy of a new copy and its first check the dashboard shows no notice, as on a first start: a check is
+  never shown for a copy it did not compare. Before the summary hour that lasts until the hour (the morning summary
+  runs the check before it is sent, so it always carries the line of the copy installed).
+- A copy rolled back and forward the same day is checked once per change: each deploy of another copy asks once
+  more (one list and one request per page). It stays bounded by the deploys.
+- The key of the copy is taken from `manual.md` (about 245 KB) and its record each time the dashboard loads its
+  state (every 15 seconds while it is open): about a millisecond, nothing cached.
+- A check a restart cut short still counts as made for that copy that day (MW-5): its line says that the check did
+  not finish until the next day or the next copy.
+- The line names the first eight pages in FoxLeague's order with the pages that went last (R72A-6): in a large
+  change a changed page can be among those counted, not named. `sync-manual` shows the maintainer every page.
+- The number of pages in the page record has no cap of its own: it is the maintainer's file, built by `sync-manual`
+  from a FoxLeague checkout, not read from FoxLeague's server. The line names at most eight of them either way.
+
+## FoxLeague mainnet of 13 Nov: fusion mint and the rest (2026-11-15)
+
+FoxLeague's `origin/main` from `89a1955d7` (the last sync, 2026-11-10) to `56e5b9855` (its promotion #742 of
+2026-11-13, manual `9ebcbc52d`), read through git only. On chain, read only: the players contract was upgraded on
+mainnet at 2026-11-13 21:32:50 UTC to the fusionMint build (72,036 bytes, code hash `e628771c...`,
+`getFusionMintVersion` 2) and `/api/config` serves `fusion_mint: {live: false, live_from: "2026-11-20T14:00:00Z",
+paused: false}`. The agent's fusion was correct and safe on mainnet that day: until the switch the old fusion runs on
+the upgraded contract, the agent's 21M gas was 1.38x of the 15.26M it now uses; from the switch FoxLeague's
+pre-check (`can-fuse` with nonces answers an error) makes the agent refuse every fusion before anything is signed.
+What it lacked: the switch itself (a fusion signed in the minute around it could revert, the gas lost) and the new
+fusion (from the switch it could never fuse again). The fixes are by Claude Opus 5.5, test first: each test under
+`test/foxleague-1113/` failed on `1a3dffb` for the reason given and passes now. `docs/FOXLEAGUE-INTEGRATION.md`
+sections 1.7, 4.5, 13.5 and 26 and `docs/ECONOMY-AND-RULES.md` sections 8, 9, 10, 14, 17 and 20 carry the details.
+R73A-1 and R73A-2 come from the GitHub review of PR #73 (two lows, no other finding). The tests of R73A-2 failed on the
+branch at `f919d43` for the reason given; those of R73A-1 pass there, as the code was right, and each was seen failing
+with the behaviour it pins broken in the source, which was then restored.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| FL13-1 | low (bookkeeping of the registration fee; FoxLeague #717) | FoxLeague's relay answers HTTP 409 in its own envelope for two new guards that run before anything is signed or sent: a relay of the wallet still in flight (G17) and another transaction of the wallet waiting in the pool (G16). The agent knew 403, 429 and 503 only, so a 409 kept the 5,000 FOXSY fee booked in the setup budget and told the owner the payment may have gone out | 409 joins the statuses that release the booking. The relay's 400 (the wallet address) stays on the careful side as MONEY-3 pins it |
+| FL13-2 | low (gas; the players contract upgrade of 13 Nov) | Every call of the upgraded players contract uses about 834,300 gas more. The agent's limits fell to 1.27x to 1.38x of the gas used: still above 1x but under the owner's 1.4x to 1.8x band; the next upgrade adds as much again | FoxLeague's new limits: fusion 22.8M, waivers 17.5M, shopPay 14M, auction list 17.2M, bid 15.8M, cancel 13.9M, each about 1.5x; registerAndPay keeps 12M, bound by the relay ceiling as in FoxLeague's app. The test holds each one inside 1.4x to 1.8x of FoxLeague's measured gas on the 72,036-byte contract; the two tests that pinned the old fusion and shopPay limits pin the new ones |
+| FL13-3 | low (gas only; fails closed) | The agent read none of FoxLeague's fusion switch. A plan's actions run over most of an hour, so a pre-check read just before `live_from` could send an old fusion that reaches the chain after it and reverts (FoxLeague's own pre-check reads its probe once a minute). `paused` (the contract and the server speak different fusion versions) and a config without the switch were no reason to stop | `fusionMode` (`src/foxleague/levels.ts`) reads the switch at the action's own time: no fusion while it cannot be read (a block that is not exactly `{live, live_from, paused}`), while `paused` or in the 10 minutes before `live_from`; the old fusion only before them. The fixture and the market test's config carry the switch as FoxLeague serves it |
+| FL13-4 | medium (game rules; from 2026-11-20 14:00 UTC; nothing unsafe) | From the switch every fusion is FoxLeague's `fusionMint`: the server signs the inputs' live attributes and the new card (`POST /api/fusion/prepare`) and the wallet signs the data it serves with the gas limit it serves. The agent knew only the old fusion: from the switch its pre-check is an error and the pool is empty, so it could never fuse again | From the switch the executor asks the prepare (once more after FoxLeague's 2-second pace), takes its refusal as its word and an unanswered prepare as no "yes"; it signs the served data with the served gas only when it is exactly the fusion planned (`fusionMintTx` in `src/executor/tx.ts`): a self transfer of the fee of the rarity and nothing more (the cost the answer names too), the three planned cards in their order as transfers and as signed inputs, `fusionMint`, the position asked, an expiry 2 to 20 minutes ahead, a 64-byte signature, 26 parts, gas inside 24.3M to 48.6M as in FoxLeague's app. Its own card checks stay; no sync, can-fuse or pool from the switch. The notes name the card FoxLeague says it mints. A dry run simulates the same data |
+| FL13-5 | low (words only) | `GET /api/fusion/can-fuse` serves the wallet spacing left as text (`"0d 19h"`); the agent divided it by 3,600 and its refusal said "NaN h left" | Text of that shape is read as it is, seconds as hours, anything else left out |
+| FL13-6 | low (what the plan knows; from the switch) | The prompt said only that the contract draws a random card from the pool (so the result is never known) and that inputs need synced stats; the snapshot said nothing of the switch. From it the plan would weigh every fusion by a rule that no longer runs | The snapshot's Fusion line says which fusion runs and when it changes, with the rule. The prompt's fusion paragraph gives both fusions and the average rule with its floors and what it means (a stat reaches the new cap only when all three hold it; one trained card does not carry two untrained ones). Only that paragraph of the prompt changes: its rule is wrong from the switch |
+| R73A-1 | low (tests; GitHub review of PR #73) | No test ran the branches of the executor's `prepareFusion`: FL13-4 handed `{ refusal }` and `null` to `checkAction` directly and stubbed only a prepare that answers. An edit that let the error leave `prepareFusion` (every fusion from the switch an executor error) or looped on the pace code (the wallet's lock held while it asks again and again) left every test green | `test/foxleague-1113/r73a-1-fusion-prepare-paths.test.ts` runs them live through the executor with mocked timers: FoxLeague's pace refusal (`fusion_prepare_pace`) is not asked again before 2.1 s, is asked once more at 2.1 s and never a third time, then signs or takes the refusal as FoxLeague's word; its refusal is refused in its words; a timeout, a plain error or an answer that is not its envelope is refused as unprepared. None of them books or signs anything. Seen failing with no retry, a 1-second wait, no bound on the retry, the refusal or the error leaving `prepareFusion` and an answer that is not the envelope read as FoxLeague's word |
+| R73A-2 | low (hygiene, no money; GitHub review of PR #73) | From the switch the executor asked the prepare (`POST /api/fusion/prepare`, a write on FoxLeague: a new card signed for 10 minutes, one every 2 seconds a wallet, up to 45 s) while it read the context, before any check of its own, and in a dry run too. A fuse refused for what the agent already knew (a listed card, a card in its fusion cooldown, one on the bench, short of its gate, the fee above Max shop payment or the FOXSY for it, no prices, the daily cap, the EGLD for gas) still cost a prepare and that time under the wallet's lock; a dry run asked one for every fuse. The test saw a prepare asked for each of those nine, live and in a dry run | Until the executor asks, the rules see `FUSION_UNASKED` and allow a fusion that passes every other check as `unprepared`, with nothing to sign. Live, the caps and the EGLD for gas are then checked with the least a fusionMint that `fusionMintTx` would sign can cost (`fusionMintBound`: the band's floor, the shortest card data), so they refuse only what the served fusion could not pass; only then is the prepare asked (once more after the pace), and its answer goes through the rules, the caps and the EGLD check again. A missing or refused prepare refuses and the served data is checked exactly as before; only a prepared fusion is built to be signed. A dry run asks no prepare and simulates no fusionMint (the signature in it is FoxLeague's): it books the fee and the most a fusionMint's gas can be (the band's ceiling, the longest card data). This replaces the last sentence of FL13-4: a dry run no longer simulates the served data |
+
+Also in this change: the game manual copy is synced to `9ebcbc52d` (16 pages, none left undecided). The rules with
+the manual are now about 105,000 tokens: DOCS-4 asked for the stated size to be restated (the five places and MS-C
+say so; the cost of a plan at the defaults stays about $0.25). The site's "How it plays" says how the agent fuses.
+
+What was checked and needs no change:
+- #701: at most 10 shop confirmations a wallet in 60 s (`/shop/confirm`, `/shop/medicine`, `/shop/ranked-ticket`,
+  `/shop/waive-cooldown`). Past it FoxLeague answers HTTP 429 with code `tx_pending` and "Your payment is kept"; the
+  agent reads `tx_pending` as "confirm the same hash again", never as refused or refunded. The request is unchanged.
+- #717's free onboarding badges (10 a day per connection) count only the free draw of a wallet with no team; the
+  agent's badge is a regeneration of a registered team, so many agents on one server are not affected.
+- #731 (fusion notifications), #730 (a forfeit is not broadcast; no new phase or status), #737 (`permanent_replay`,
+  ships off), #733 (My interests): nothing the agent reads changes.
+- `docs/manual/openapi.json`: no route the agent calls moved or lost a field it reads.
+- A sync's served gas limit is 18M + 3M a card since the upgrade; the agent signs up to 20M + 3M a card.
+
+Stays open:
+- The served fusionMint is checked for everything that moves money or cards. The new card itself (its face, name,
+  country, shirt and stats) and the inputs' signed attributes are FoxLeague's, signed by its game server and checked
+  by the contract, as a sync payload's are; the preview is shown in the notes, not compared with the agent's own sum.
+- FoxLeague's served fusionMint gas is its estimate (21.4M of processing; its contract audit measured 21.2M to 24.3M
+  on the Go VM); the first mainnet fusionMints will show it. The agent signs only inside FoxLeague's band.
+- The plan gets the rule and each card's stats, not a computed result per candidate fusion: the model does the sum.
+- Since R73A-2 a dry run does not hear FoxLeague's own checks of a fusion that mints (the wallet's 20-hour spacing, the
+  cards on chain, a reserved face): it may show a fusion as done that FoxLeague would refuse live. Live, that refusal
+  comes before anything is booked or signed.
+- The relay's 400 stays on the careful side (MONEY-3); FoxLeague's app counts it as refused before the broadcast.
+- The manual now documents that a wallet holding 18 cards registers without the fee (no starter squad). The agent
+  pays the fee as before; a new agent's wallet holds no card, so it never meets the case.
+- The rules and the manual are about 105,000 tokens by the measured ratio, above Haiku 5.5's 100,000-token card.
+- Production was not read: agent 7's confirmed fusion of 13 Nov is from the owner's activity. Until this is deployed,
+  the running agents fuse the old way until the switch and refuse every fusion from it (FoxLeague's pre-check); it has
+  to be live before 2026-11-20 14:00 UTC for them to fuse after it.
+- `sync-manual` and `manual-status` fetch in the FoxLeague checkout they are given. The FoxLeague checkout is read
+  only here, so both ran against a scratch mirror of its `origin/main` at `56e5b9855`; run `manual-status` on the
+  checkout itself before the deploy.
+
 ## A tournament start to the minute (2026-11-15)
 
 Seen live at 17:09 UTC. Following the owner's new organizer line, agents 7 and 9 (Opus) each planned a public Silver
@@ -2325,6 +2466,7 @@ Stays open:
 - With no tournament on the calendar the snapshot names no gap (the slots line reads "none"), so no first start either:
   the model picks one from the prompt's rule (2 to 72 hours after the action runs). Not changed here: no suggestion is
   made in that case.
+
 
 ## One manager message at a time (2026-11-13)
 

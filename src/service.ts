@@ -54,6 +54,7 @@ import { UpdateError } from './update/release.ts'
 import { RESTART_EXIT_CODE, Updater } from './update/updater.ts'
 import { supervised } from './update/supervised.ts'
 import { keepServiceLogBounded } from './service-log.ts'
+import { ManualWatch } from './strategist/manual-watch.ts'
 
 /** The installed version (package.json), shown when the service starts. */
 export const VERSION = (() => {
@@ -361,6 +362,8 @@ export class Service {
   readonly topups: TopUps
   /** Looks for a newer signed release and installs it when the owner asks (dashboard or /upgrade). */
   readonly updater: Updater
+  /** Once a day: has FoxLeague's live manual moved ahead of the agents' copy? (the morning summary and the dashboard) */
+  readonly manualWatch: ManualWatch
   /**
    * Both replaced at run time when the admin panel changes their key or token. The strategist is the all-agents one
    * (the Strategist box): the model and effort of every agent without its own, of the manager chat and of /ask.
@@ -450,6 +453,10 @@ export class Service {
       enabled: cfg.updateCheck === true,
       dataDir: cfg.dataDir, kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
       notify: text => this.notify(text), restart: () => this.restartForUpdate(), supervised: supervised(),
+    })
+    this.manualWatch = new ManualWatch({
+      enabled: cfg.manualCheck === true, base: cfg.foxleagueUrl, zone: this.summaryZone,
+      kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
     })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
@@ -838,13 +845,17 @@ export class Service {
       }
     })
     const label = o.soFar ? 'today so far' : new Intl.DateTimeFormat('en-GB', { timeZone: zone, weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(from.getTime() + 12 * 3600_000))
-    return summaryText(label, days, { aiUsd: this.modelUsdByDay()[day] ?? null, live, killSwitch: this.store.killSwitch, waitingTopUps: this.topups.openCount() })
+    return summaryText(label, days, { aiUsd: this.modelUsdByDay()[day] ?? null, live, killSwitch: this.store.killSwitch, waitingTopUps: this.topups.openCount(), manual: this.manualWatch.line() })
   }
 
   /** The morning summary of yesterday, once a day (a restart after the hour sends a missed one). */
-  private sendDailySummary(): void {
+  private async sendDailySummary(): Promise<void> {
     const today = zoneDate(Date.now(), this.summaryZone)
     if (this.store.getKv('summary_sent_day') === today || !this.telegram) return
+    // The day's check of FoxLeague's manual first, so the summary carries its line: at most once a day, ended by its
+    // own time limit; a check that fails is said as such.
+    await this.manualWatch.today().catch(() => null)
+    if (this.stopping || this.store.getKv('summary_sent_day') === today || !this.telegram) return
     // Built before it is marked sent: a summary that fails to build comes at the next try, not never.
     const text = this.summary(dayBefore(today), { scheduled: true })
     this.telegram.send(text)
@@ -861,11 +872,7 @@ export class Service {
     if (!this.telegram || this.stopping) return
     if (Date.now() < zoneInstant(zoneDate(Date.now(), this.summaryZone), this.summaryHour, this.summaryZone)) return this.scheduleSummary()
     this.summaryTimer = setTimeout(() => {
-      try {
-        this.sendDailySummary()
-      } catch (err) {
-        console.error('daily summary failed:', err)
-      }
+      void this.sendDailySummary().catch(err => console.error('daily summary failed:', err))
       this.scheduleSummary()
     }, 120_000)
   }
@@ -875,13 +882,24 @@ export class Service {
     if (!this.telegram || this.stopping) return
     const at = nextSummaryAt(Date.now(), this.summaryHour, this.summaryZone)
     this.summaryTimer = setTimeout(() => {
-      try {
-        this.sendDailySummary()
-      } catch (err) {
-        console.error('daily summary failed:', err)
-      }
+      void this.sendDailySummary().catch(err => console.error('daily summary failed:', err))
       this.scheduleSummary()
     }, Math.max(1000, at - Date.now()))
+  }
+
+  private manualTimer: NodeJS.Timeout | undefined
+  /**
+   * The day's check of FoxLeague's manual for the dashboard, also where no Telegram is linked: from the summary's hour
+   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour and made
+   * at most once a day (manual-watch.ts keeps the day in the database).
+   */
+  private armManualCheck(delayMs = 180_000): void {
+    clearTimeout(this.manualTimer)
+    if (!this.manualWatch.enabled || this.stopping) return
+    this.manualTimer = setTimeout(() => {
+      if (Date.now() >= zoneInstant(zoneDate(Date.now(), this.summaryZone), this.summaryHour, this.summaryZone)) void this.manualWatch.today().catch(() => undefined)
+      this.armManualCheck(3600_000)
+    }, delayMs)
   }
 
   /**
@@ -1356,6 +1374,7 @@ export class Service {
     )
     this.startTelegram()
     this.armSummary()
+    this.armManualCheck()
     this.armPendingRetry()
     // Each agent's FoxLeague user id, for one that was never noted (retired or added before this version): the pooled
     // formation record leaves out the matches between the owner's teams.
@@ -1412,6 +1431,7 @@ export class Service {
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)
     clearTimeout(this.summaryTimer)
+    clearTimeout(this.manualTimer)
     clearTimeout(this.pendingTimer)
     this.updater.stop()
     this.telegram?.stop()
@@ -2149,6 +2169,8 @@ export class Service {
       }
       case 'summary': {
         const today = zoneDate(Date.now(), this.summaryZone)
+        // The day's check of FoxLeague's manual, the one already made today if there is one.
+        await this.manualWatch.today().catch(() => null)
         return args[0] === 'today' ? this.summary(today, { soFar: true }) : this.summary(dayBefore(today))
       }
       case 'updates': {

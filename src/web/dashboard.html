@@ -287,6 +287,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
   </header>
 
   <div class="banner up" id="upBanner" hidden><div class="upmain"><div id="upText"></div><div class="upnotes" id="upNotes" hidden></div></div><i class="info" data-tip="update">i</i><button class="btn sm go" id="upBtn" hidden>Update now</button></div>
+  <div class="banner up" id="manualBanner" hidden><span id="manualText"></span><i class="info" data-tip="manual">i</i></div>
   <div class="banner" id="aiBanner" hidden><span>The AI key is missing, so your agents only watch and never play. It takes about 5 minutes to add.</span><button class="btn sm go" id="aiBannerBtn">Show me how</button></div>
 
   <section class="grid kpis">
@@ -569,9 +570,19 @@ async function startUpdate() {
   } catch (e) { toast(e.message, true) } finally { $('upBtn').disabled = false }
 }
 
+// The day's check of FoxLeague's manual: shown only when there is something to tell (FoxLeague's manual changed
+// since the agents' copy or it could not be checked). The words are the agent's own; set as plain text.
+function renderManual() {
+  const m = S.instance.manual
+  const text = m && m.enabled && m.text ? m.text : ''
+  $('manualBanner').hidden = !text
+  $('manualText').textContent = text
+}
+
 function renderHeader() {
   const i = S.instance
   renderUpdate()
+  renderManual()
   const live = i.liveMode && i.liveEnabled
   $('modePill').textContent = live ? 'LIVE' : i.liveMode ? 'live blocked by the server' : 'dry run'
   $('modePill').className = 'pill ' + (live ? 'live' : 'dry')
@@ -1207,6 +1218,9 @@ const TIPS = {
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
   guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],
+  manual: ['FoxLeague manual check', `<p>Your agents play by FoxLeague's player manual: a copy of it comes with this version of the agent. Once a day, from the hour of the morning summary, the agent reads the manual FoxLeague serves that day and compares each page your agents read with its copy. It asks FoxLeague's public read-only server and sends nothing of yours.</p>
+    <p>When a page changed, a new one came or one went, this notice names the pages (up to eight, then how many more) and the morning summary on Telegram says so in one line. Your agents keep playing by their copy until a version of the agent brings the new manual: the maintainer runs sync-manual, checks the new pages and releases it. On a server you deploy yourself, deploy that version. The notice about the old copy goes with the update and the agent checks the new copy the same day.</p>
+    <p>When FoxLeague could not be read, the notice says that the manual could not be checked and why. That never counts as up to date: the next day's check asks again. Nothing shows while the copy matches. To switch the check off, set AGENT_MANUAL_CHECK=0 in the env file and restart.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>
     <p><b>Dry run:</b> the agent plans, checks each action against the game rules and your caps, then simulates it on chain. Nothing is signed or sent. The spend goes to a separate dry-run ledger.</p>
     <p><b>Live:</b> actions are signed and sent with real EGLD and FOXSY, inside the same caps.</p>
@@ -1740,7 +1754,7 @@ const GUIDE = [
       ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
+    note: 'About $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
