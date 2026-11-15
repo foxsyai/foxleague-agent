@@ -389,15 +389,15 @@ test('R74A-4 a title of 60 characters: the next plan still reads the whole first
   assert.deepEqual(read, Object.fromEntries(cases.map(c => [c.name, `${DAY}T19:48Z`])), lines.join('\n'))
 })
 
-test('R74A record: the two rows of the GitHub review of PR #74, in its section', () => {
+test('R74A record: the rows of the GitHub review of PR #74 and of its re-review, in its section', () => {
   const review = readFileSync(join(import.meta.dirname, '..', 'docs/SECURITY-REVIEW.md'), 'utf8')
   const start = review.indexOf('\n## A tournament start to the minute (2026-11-15)\n')
   const section = review.slice(start, review.indexOf('\n## ', start + 1))
-  for (const id of ['R74A-1', 'R74A-2']) {
+  for (const [id, by] of [['R74A-1', 'review'], ['R74A-2', 'review'], ['R74A-4', 're-review']]) {
     const row = section.split('\n').find(l => l.startsWith(`| ${id} |`))
     assert.ok(row, `${id} has its row`)
     assert.equal(row.split(' | ').length, 4, `${id}: four cells`)
-    assert.match(row, new RegExp(`^\\| ${id} \\| low \\(GitHub review of PR #74; `))
+    assert.match(row, new RegExp(`^\\| ${id} \\| low \\(GitHub ${by} of PR #74; `))
   }
   assert.doesNotMatch(section, /—|, and |, or |\bbots?\b/i)
 })
