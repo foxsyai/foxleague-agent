@@ -423,7 +423,7 @@ async function main(): Promise<void> {
         if (v) values[key] = v
       }
       await ask('ANTHROPIC_API_KEY', 'Anthropic API key (sk-ant-...)')
-      await ask('TELEGRAM_BOT_TOKEN', 'Telegram bot token from @BotFather')
+      await ask('TELEGRAM_BOT_TOKEN', 'Telegram token from BotFather')
       const token = values.TELEGRAM_BOT_TOKEN ?? cfg.telegramToken
       // A token that Telegram does not take, or a network that does not answer now, must not lose the keys typed
       // so far: the token is left out, the owner is told where to add it, and the other keys are asked and saved.
@@ -435,22 +435,22 @@ async function main(): Promise<void> {
           const why = err instanceof Error ? err.message : String(err)
           if (values.TELEGRAM_BOT_TOKEN !== undefined) {
             delete values.TELEGRAM_BOT_TOKEN
-            console.log(`The Telegram bot token was not saved: it could not be checked (${why}). Add it later in the dashboard: Keys.`)
-          } else console.log(`Telegram could not be reached with the saved bot token (${why}): your chat is not linked now. Link it later in the dashboard (Keys).`)
+            console.log(`The Telegram token was not saved: it could not be checked (${why}). Add it later in the dashboard: Keys.`)
+          } else console.log(`Telegram could not be reached with the saved Telegram token (${why}): your chat is not linked now. Link it later in the dashboard (Keys).`)
         }
       }
       if (token && !cfg.telegramChatId && name !== null) {
         const code = String(randomInt(100_000, 1_000_000))
         const since = Date.now() // only a message sent after this moment can carry the code
-        console.log(`Telegram bot @${name}. From your own Telegram account, send it this code: ${code}   then press Enter here.`)
+        console.log(`Your agent's Telegram account is @${name}. From your own Telegram account, send it this code: ${code}   then press Enter here.`)
         await promptHidden('')
         // The same for the look at the chats: a network that fails here keeps the token and the other keys.
         const id = await telegramRecentChats(token, since).then(chats => pickOwnerChat(chats, code), () => null)
         if (id) {
           values.TELEGRAM_CHAT_ID = id
-          console.log('Your chat was found and saved: your Telegram bot answers only you.')
+          console.log('Your chat was found and saved: your agent\'s Telegram account answers only you.')
         } else {
-          console.log(`The code was not found. ${GUIDED ? 'Link your chat later in the dashboard: Keys, Link my Telegram.' : 'Send exactly those digits to your Telegram bot, then run configure again.'}`)
+          console.log(`The code was not found. ${GUIDED ? 'Link your chat later in the dashboard: Keys, Link my Telegram.' : 'Send exactly those digits to your agent\'s Telegram account, then run configure again.'}`)
         }
       }
       await ask('BINANCE_API_KEY', 'Binance API key (withdraw-only, IP-restricted)')

@@ -311,7 +311,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
     <div class="controls"><button class="btn go" id="keysSave">Save</button><button class="btn" id="keysTest">Test keys</button><i class="info" data-tip="keys_test">i</i></div>
     <div id="keysTestOut"></div>
     <div id="tgLink" hidden>
-      <div class="note">Your Telegram bot token is saved but no chat is linked yet. Link your own chat, so your Telegram bot talks only to you.</div>
+      <div class="note">Your Telegram token is saved but no chat is linked yet. Link your own chat, so your agent's Telegram account talks only to you.</div>
       <div class="controls"><button class="btn go" id="tgLinkBtn">Link my Telegram</button><span id="tgLinkCode" class="note" style="margin:0"></span><button class="btn" id="tgLinkDone" hidden>I sent it</button></div>
     </div>
   </section>
@@ -1241,8 +1241,8 @@ const TIPS = {
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
-  key_TELEGRAM_BOT_TOKEN: ['Telegram bot token', `<p>The token of your Telegram bot from @BotFather. Notifications go out through it and your commands come in through it. A new token restarts the Telegram connection at once.</p>`],
-  key_TELEGRAM_CHAT_ID: ['Telegram chat id', `<p>Your own chat with your Telegram bot. It answers only this chat and ignores everyone else. It is not a secret, so it is shown in full.</p>`],
+  key_TELEGRAM_BOT_TOKEN: ['Telegram token', `<p>The token of your agent's Telegram account, from BotFather. Notifications go out through it and your commands come in through it. A new token restarts the Telegram connection at once.</p>`],
+  key_TELEGRAM_CHAT_ID: ['Telegram chat id', `<p>Your own chat with your agent's Telegram account. It answers only this chat and ignores everyone else. It is not a secret, so it is shown in full.</p>`],
   key_BINANCE_API_KEY: ['Binance API key', `<p>For EGLD top-ups of the agent wallets that you approve. When an agent runs low, Telegram shows what it has, the EGLD that brings it to its monthly budget and a one-time code; <b>/topup</b> with the code sends it (with an amount after the code, less). <b>/topup N</b> asks for one at any time. It needs Telegram and LIVE mode. An EU account also needs BINANCE_ACCOUNT_TYPE (individual or corporate) in the env file, for Binance's Travel Rule form.</p>
     <p>The key must allow reading and withdrawals only, be restricted to the server's IP and send only to the whitelisted agent addresses. Test keys checks the withdrawal and IP settings, that trading and transfers are off and which agent wallets are on your withdrawal whitelist: a top-up goes only to a whitelisted wallet. Switch the whitelist itself on in Binance (Account, Withdrawal): that switch cannot be read through the API.</p>`],
   key_BINANCE_API_SECRET: ['Binance API secret', `<p>The secret that belongs to the Binance API key. Binance shows it only once, when you create the key.</p>`],
@@ -1744,11 +1744,11 @@ const GUIDE = [
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
-      ['On your phone, open Telegram and start a chat with BotFather, the official bot that makes bots.', 'https://t.me/BotFather'],
-      ['Send /newbot. Give it a name, then a username that ends in bot, for example myfox_manager_bot.'],
+      ['On your phone, open Telegram and start a chat with BotFather. It creates your agent\'s Telegram account.', 'https://t.me/BotFather'],
+      ['Send /newbot. Give it a name, then a username. Telegram requires the username to end in "bot", for example myfox_manager_bot.'],
       ['BotFather answers with a token that looks like 123456789:AAH... Copy it.'],
-      ['Back here, press Keys, paste it into Telegram bot token, type your password and press Save.', null, true],
-      ['Still in Keys, press Link my Telegram, send the 6-digit code to your new Telegram bot, then press I sent it. From then on it talks only to you.', null, true],
+      ['Back here, press Keys, paste it into Telegram token, type your password and press Save.', null, true],
+      ['Still in Keys, press Link my Telegram, send the 6-digit code to your agent\'s Telegram account, then press I sent it. From then on it talks only to you.', null, true],
     ] },
   { id: 'binance', title: 'CEX top-up, optional', need: false, done: st => st.binance,
     intro: 'Lets your agents get EGLD from an exchange (a CEX), each top-up approved by you: when an agent runs low, Telegram shows the proposal and a one-time code, and /topup with the code sends it. The example is Binance: a key that can only read and withdraw EGLD to your agent wallets.',
@@ -1821,7 +1821,7 @@ function renderSetup() {
   $('tgLink').hidden = !(st.telegramToken && !st.telegramChat)
 }
 
-// Link my Telegram: a one-time code the owner sends to their Telegram bot, so nobody has to find a chat id.
+// Link my Telegram: a one-time code the owner sends to their agent's Telegram account, so nobody has to find a chat id.
 $('tgLinkBtn').onclick = async () => {
   const password = $('adminPw').value
   if (!password) { $('adminPw').focus(); return toast('Enter your web UI password first', true) }

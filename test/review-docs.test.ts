@@ -95,7 +95,7 @@ test('D9 INSTALL.md says Binance top-ups are built, each approved by a code', ()
   const doc = read('INSTALL.md').replace(/\s+/g, ' ')
   assert.doesNotMatch(doc, /a later feature/)
   assert.doesNotMatch(doc, /for automatic top-ups/)
-  assert.match(doc, /Optional: a Telegram bot [^.]*Binance API key for EGLD top-ups[^.]*one-time code/)
+  assert.match(doc, /Optional: your agent's Telegram account [^.]*Binance API key for EGLD top-ups[^.]*one-time code/)
 })
 
 test('D10 the dashboard Tick input allows what the server allows: the floor is MIN_TICK_MINUTES', () => {

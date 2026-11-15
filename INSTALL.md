@@ -14,8 +14,8 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 - About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
-- Optional: a Telegram bot for notifications and commands on your phone, and a Binance API key for EGLD top-ups
-  of the agent wallets, each one approved by you on Telegram with a one-time code.
+- Optional: your agent's Telegram account for notifications and commands on your phone, and a Binance API key for
+  EGLD top-ups of the agent wallets, each one approved by you on Telegram with a one-time code.
 
 ## Install
 
@@ -437,12 +437,12 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
 
 **2. Telegram (optional): a morning summary of every agent and details on request; you can also talk to your manager**
 
-1. In Telegram, open [BotFather](https://t.me/BotFather), the official bot that makes bots.
-2. Send `/newbot`. Give it a name, then a username that ends in `bot`.
+1. In Telegram, open [BotFather](https://t.me/BotFather). It creates your agent's Telegram account.
+2. Send `/newbot`. Give it a name, then a username. Telegram requires the username to end in "bot".
 3. Copy the token it sends you (it looks like `123456789:AAH...`).
-4. Paste it in the installer, or in the dashboard: Keys, Telegram bot token, your password, Save.
+4. Paste it in the installer, or in the dashboard: Keys, Telegram token, your password, Save.
 5. Link your chat: the installer shows a 6-digit code, or press **Link my Telegram** in Keys. Send the code to
-   your new Telegram bot from your own account, then press **I sent it**. It then talks only to you.
+   your agent's Telegram account from your own Telegram account, then press **I sent it**. It then talks only to you.
 
 **3. CEX top-up (optional): EGLD top-ups from an exchange, each one approved by you on Telegram**
 
