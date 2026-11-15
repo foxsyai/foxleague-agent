@@ -42,7 +42,10 @@ test('W-DOC re-test: the record has one row per id in the table format, what pas
   assert.match(open, /below 4 GB/)
   assert.match(open, /"Help improve Ubuntu!"/)
   assert.match(open, /"Welcome to WSL"/)
-  assert.match(open, /None of these five fixes has run on the real PC yet/)
+  // The check on the real PC of 15 Nov: W-14 not seen there, the other four passed, W-18 not run there.
+  assert.match(open, /W-14 has not run on the real PC/)
+  assert.match(open, /The other four passed there on\s+15 Nov/)
+  assert.match(open, /W-18 has not run on the real PC/)
   assert.doesNotMatch(s, /[^\x00-\x7e]/, 'plain ASCII: no long dash')
   assert.doesNotMatch(text, /\bbots?\b/i)
 })

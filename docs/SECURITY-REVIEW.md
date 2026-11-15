@@ -2135,11 +2135,14 @@ What passed on the PC, as the notes of 14 Nov have it:
   `wsl.exe` were left. Ubuntu stopped about a minute after its last window closed.
 
 Stays open:
-- None of these five fixes has run on the real PC yet. W-17's run inside Ubuntu was checked against a stand-in
-  `wsl.exe` in a container. That `install.sh` reaches the user's systemd when `wsl.exe --exec` starts it rests on
-  the install (it runs `install.sh` the same way and enabled the service on this PC twice) and on `install.sh`
-  falling back to `/run/user/<uid>` when the session names none (FRESH-3). An uninstall that cannot stop the
-  service says so; `get.ps1` then shows the lines by hand.
+- W-14 has not run on the real PC: it shows only while a new Ubuntu is installed. The other four passed there on
+  15 Nov (the release candidate at 3171260, installed over the Ubuntu of 14 Nov, test releases 2.0.0 and 2.0.1):
+  W-15 showed the failed 2.0.1 by itself about 20 seconds after Update now, with no reload; W-15b offered no
+  Update now and gave the line for Windows; after `./install.sh --update` in a terminal the page of W-16 turned to
+  V2.0.1 with "Updated from 2.0.0 to 2.0.1" and the failure gone; W-17's PowerShell line and one Enter ran the
+  uninstall inside Ubuntu ("Done: the agent is stopped ...") and Ubuntu stopped within about 30 seconds, with no
+  task left. A result written by the build of 14 Nov, before `ran` existed, showed under V2.0.0 until the next
+  result took its place, as W-16 says. W-18 has not run on the real PC.
 - Not seen on the PC, so not claimed: Enter alone at Ubuntu's username question (the owner typed a name); the
   free-space stop below 4 GB (C: had 6.27 GB); "Help improve Ubuntu!" and the "Welcome to WSL" window (neither came
   the second time). Step 9 (15 minutes with every window closed) was not repeated: it passed on 13 Nov and the task
