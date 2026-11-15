@@ -1578,7 +1578,11 @@ planned: the fee of the rarity and nothing more (the cost it names too), the thr
 transfers and as signed inputs, `fusionMint`, the position asked, an expiry 2 to 20 minutes ahead, a 64-byte
 signature, gas inside 24.3M to 48.6M. Its own card checks stay (the gate on the live count, no listing, no transfer
 lock, no fusion cooldown, no injury or ban, outside the 18, 18 cards left); the sync check, can-fuse and the pool are
-not asked from the switch.
+not asked from the switch. The prepare is a write on FoxLeague, so the agent asks it only once every check of its own
+has passed: the cards, the fee within Max shop payment and the FOXSY for it, the caps and the EGLD for gas, these two
+counted with the least a fusionMint it would sign can cost (`fusionMintBound`). Its answer then goes through every
+check again. A dry run asks no prepare: it checks the fusion the same way, counts its gas at the most a fusionMint can
+take and simulates nothing, since the signature in it is FoxLeague's (GitHub review of PR #73, R73A-2).
 
 ---
 

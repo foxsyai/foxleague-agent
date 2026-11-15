@@ -34,7 +34,9 @@ swap is counted for that day. Both are expected: the team is registered after Go
 New agents start in **dry run**: the agent plans, checks each action against the game rules and your limits, then
 **simulates** it on chain. Nothing is signed or sent. Read a plan or two in **Last plan** and **Activity**; every
 action shows what it would have done and cost, or why it was refused. An action that needs what an earlier one
-would have bought is refused in dry run, as the registration of a new wallet is (above).
+would have bought is refused in dry run, as the registration of a new wallet is (above). A fusion that makes a new
+card is checked and its cost counted, but not simulated: FoxLeague prepares that transaction only for a real fusion,
+so its own checks of the cards come into play only after Go LIVE.
 
 Meanwhile, set your **limits** and **strategy** in **Settings** ([Every setting explained](/use/settings/)).
 

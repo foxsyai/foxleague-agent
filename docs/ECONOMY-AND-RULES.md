@@ -502,7 +502,8 @@ among the called-up players by contribution. Nothing of it exists in the code on
   sync, each stat the average of the three inputs translated to the new rarity, at least the floor. The agent refuses
   any fusion while the switch cannot be read, while FoxLeague says fusion is being updated and in the 10 minutes before
   the switch; from it, it signs FoxLeague's prepared `fusionMint` only when it is exactly the fusion planned
-  (`docs/FOXLEAGUE-INTEGRATION.md` section 13.5).
+  (`docs/FOXLEAGUE-INTEGRATION.md` section 13.5). It asks FoxLeague to prepare one only once its own checks passed,
+  and never in a dry run, which checks and counts the fusion but simulates none.
 - **Gas** (the same upgrade): every players-contract call uses about 834,300 more. The agent signs FoxLeague's new
   limits: fusion 22.8M, waivers 17.5M, shopPay 14M, auction list 17.2M, bid 15.8M, cancel 13.9M; registerAndPay keeps
   12M (the relay ceiling); a sync's served limit is 18M + 3M a card.
