@@ -27,6 +27,7 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
+import { actionDeadline } from './executor/deadlines.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
@@ -82,6 +83,18 @@ const PLAN_MATCH_GAP_MS = MATCH_RUNS_MS
 const PLAN_RANKED_GAP_MS = RANKED_COOLDOWN_MS + 30_000
 /** How far past the plan's window a match may still start when the action before it took longer than planned. */
 const MATCH_DRIFT_MS = 2 * 60_000
+/**
+ * An action with a deadline runs at the latest this long before it (2026-11-15): before it runs, a fresh snapshot is
+ * read (tens of seconds), the action before it may run past its own moment by about a minute and a payment must
+ * settle and reach FoxLeague before the deadline. The executor's own margins (120 s for a paid entry, 30 minutes for
+ * an invitation or a seats lock) are inside the deadline already (src/executor/deadlines.ts).
+ */
+const DEADLINE_MARGIN_MS = 5 * 60_000
+/**
+ * The room each action before a deadline action takes when they move earlier with it: a fresh snapshot, a transaction
+ * and its confirmation. Spaced only by the gap, a run of them would push the deadline action late by their run time.
+ */
+const ACTION_RUN_MS = 90_000
 /** How far ahead a planned call makes the one-hour cache of the game manual worth writing (a margin under the hour). */
 const CACHE_HORIZON_MS = 55 * 60_000
 
@@ -98,36 +111,83 @@ export interface ScheduledAction {
  * starts before the plan included (`lastMatchMs` and `lastRankedMs`, in ms after the plan's start, so negative). A
  * match pushed past the window is dropped (returned with the reason) and pushes nothing; every other action keeps its
  * random moment unless the action before it now runs later.
+ *
+ * An action with a deadline (`deadlines`, one per action, in ms after the plan's start: src/executor/deadlines.ts) runs
+ * at the latest DEADLINE_MARGIN_MS before it, at once when that is already past and at the start of the window when
+ * its deadline could not be read (never late). The plan's order holds: the actions before it move earlier with it,
+ * ACTION_RUN_MS apart, so a lineup still comes before its match and a swap before the bid it funds. A match gate before
+ * it still holds it back (the order is never changed to pass a match).
+ *
+ * The drops are decided first, as without deadlines (R70A-2), and the kept actions are placed with the deadlines after.
+ * Placed in one pass, a match moved earlier with a deadline action after it could make room for one that was dropped
+ * without deadlines, whose gate then held the deadline action past its deadline (or push out one that was kept). With
+ * the same matches kept, every gate starts from the same match at the same moment or earlier, so no action runs later
+ * than it would without deadlines.
  */
 export function scheduleActions(
   actions: PlannedAction[],
-  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null },
+  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: (number | 'unread' | null)[] },
 ): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
   const raw = actions.map(() => o.random() * o.windowMs).sort((a, b) => a - b)
-  const kept: ScheduledAction[] = []
-  const dropped: { p: PlannedAction; reason: string }[] = []
+  // Without deadlines: what is dropped, and why.
+  const plain = placeActions(actions, raw, actions.map(() => Infinity), o, null)
+  const dropped = new Set(plain.dropped.map(d => d.i))
+  // The latest moment of each action kept, from the last one back: its own deadline less the margin (0 for one that
+  // could not be read) and room to run before the next action's latest moment. A dropped action does not run, so it
+  // takes no room.
+  const latest = new Array<number>(actions.length).fill(Infinity)
+  let next = Infinity
+  for (let i = actions.length - 1; i >= 0; i--) {
+    if (dropped.has(i)) continue
+    const d = o.deadlines?.[i] ?? null
+    const own = d === 'unread' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
+    latest[i] = Math.min(own, next)
+    next = latest[i]! - Math.max(o.gapMs, ACTION_RUN_MS)
+  }
+  const placed = placeActions(actions, raw, latest, o, dropped)
+  return {
+    kept: placed.kept.map(k => ({ p: actions[k.i]!, offset: k.offset })),
+    dropped: plain.dropped.map(d => ({ p: actions[d.i]!, reason: d.reason })),
+  }
+}
+
+/**
+ * One forward pass of scheduleActions: each action at its draw, or at its latest moment when that is sooner, after the
+ * one before it by the gap, a match after its gates. With `dropped` null a match that a gate pushes past the window is
+ * dropped; with the set of the drops already decided those are skipped and nothing else is dropped.
+ */
+function placeActions(
+  actions: PlannedAction[],
+  raw: number[],
+  latest: number[],
+  o: { windowMs: number; gapMs: number; lastMatchMs?: number | null; lastRankedMs?: number | null },
+  dropped: Set<number> | null,
+): { kept: { i: number; offset: number }[]; dropped: { i: number; reason: string }[] } {
+  const kept: { i: number; offset: number }[] = []
+  const drops: { i: number; reason: string }[] = []
   let last = -o.gapMs
   let lastMatch = o.lastMatchMs ?? null
   let lastRanked = o.lastRankedMs ?? null
   actions.forEach((p, i) => {
-    let at = Math.max(raw[i]!, last + o.gapMs)
+    if (dropped?.has(i)) return
+    let at = Math.max(Math.min(raw[i]!, latest[i]!), last + o.gapMs)
     if (p.action.type === 'play_match') {
       const afterMatch = lastMatch === null ? -Infinity : lastMatch + PLAN_MATCH_GAP_MS
       const afterRanked = p.action.match_type === 'ranked' && lastRanked !== null ? lastRanked + PLAN_RANKED_GAP_MS : -Infinity
       const spaced = Math.max(at, afterMatch, afterRanked)
       // Dropped only when a gate pushes it out of the window (the 30-second gaps alone never drop an action).
-      if (spaced > o.windowMs && spaced > at) {
-        dropped.push({ p, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team about 13 minutes)' })
+      if (dropped === null && spaced > o.windowMs && spaced > at) {
+        drops.push({ i, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team about 13 minutes)' })
         return
       }
       at = spaced
       lastMatch = at
       if (p.action.match_type === 'ranked') lastRanked = at
     }
-    kept.push({ p, offset: at })
+    kept.push({ i, offset: at })
     last = at
   })
-  return { kept, dropped }
+  return { kept, dropped: drops }
 }
 
 /**
@@ -1588,7 +1648,7 @@ export class Service {
         this.store.log({ agentIndex: index, kind: p.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(p.action)}: it could not read FoxLeague's settings, so it did not know the platform fee` })
         return false
       })
-      const running = this.runPlan(agent, plan.actions, !ownerRequest)
+      const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
       this.startShadow(index, plan)
@@ -1837,10 +1897,11 @@ export class Service {
 
   /**
    * Runs the actions at random moments across the next window (at least minGapSeconds apart, the matches spaced by
-   * their cooldowns: scheduleActions), each against a fresh snapshot. Routine actions pass the per-action
-   * probability; owner requests always run.
+   * their cooldowns, an action with a deadline before it: scheduleActions), each against a fresh snapshot. The
+   * deadlines come from `planSnap`, the snapshot the plan was made from; without one every deadline is unread and its
+   * action runs early. Routine actions pass the per-action probability; owner requests always run.
    */
-  private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean): Promise<void> {
+  private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot): Promise<void> {
     if (!actions.length) return
     let windowMs = routine ? agent.settings.tickMinutes * 60_000 * 0.8 : 0
     // Never spread past our next strategy lock: a sync or a recovery meant for that match must land before it.
@@ -1856,7 +1917,12 @@ export class Service {
     const start = Date.now()
     // The matches keep FoxLeague's gates apart, the agent's last starts before this plan included (its own log).
     const before = lastMatchStarts(this.store, agent.index, new Date(start))
-    const { kept, dropped } = scheduleActions(actions, { windowMs, gapMs, random: Math.random, lastMatchMs: before.match ? before.match.getTime() - start : null, lastRankedMs: before.ranked ? before.ranked.getTime() - start : null })
+    // Each action's deadline by the plan's own snapshot, in ms after the start (the executor checks it again when it runs).
+    const deadlines = actions.map(p => {
+      const d = actionDeadline(p.action, planSnap)
+      return typeof d === 'number' ? d - start : d
+    })
+    const { kept, dropped } = scheduleActions(actions, { windowMs, gapMs, random: Math.random, lastMatchMs: before.match ? before.match.getTime() - start : null, lastRankedMs: before.ranked ? before.ranked.getTime() - start : null, deadlines })
     for (const d of dropped) {
       const summary = `dropped from this plan: ${describeAction(d.p.action)}: ${d.reason} leaves no room before the plan's window ends; the next plan can play it`
       this.store.log({ agentIndex: agent.index, kind: d.p.action.type, status: 'info', summary })

@@ -2174,6 +2174,52 @@ Stays open:
   minutes by the clock (a laptop that sleeps in the middle of it) can be taken over by a second one, and whichever
   ends first removes the lock while the other still runs. Preparing takes at most 15 minutes.
 
+## Actions with a deadline run before it (2026-11-15)
+
+Seen live on agent 7 six times in seven days, fixed on the owner's word. Each point has a test of the same name in
+`test/deadline-first.test.ts` that failed on the branch at dcac14b (the action ran at its random moment, 47.5 minutes
+into the window) and passes now. Only the moment an action runs changes: the executor checks every action against a
+fresh snapshot when it runs, as before, and nothing skips a check. The pin of the tick's `runPlan` call in
+`test/shadow-plan.test.ts` names the new argument.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| DL-1 | low (a plan's aim lost; nothing paid: the executor refused each late action) | `runPlan` gave every action of a plan a random moment of its window (0.8 of the tick, 48 minutes at 60), sorted to keep the plan's order, and nothing looked at an action's own deadline. A plan at 10:32 UTC left its unanswered targeted 2,500 Silver 1v1 (T5976) "now", 12 minutes before it ran out at 10:44, to send a challenge to another team; the leave ran at 10:58 and was refused ("can only leave an open tournament before its deadline"). Leaves were refused the same way on other days. The test saw a leave whose deadline was 12 minutes ahead run at 47.5 minutes | `scheduleActions` (service.ts) takes each action's deadline, read by `actionDeadline` (`src/executor/deadlines.ts`) from the snapshot the plan was made from, which the tick now hands to `runPlan`. An action with a deadline runs at the latest 5 minutes before it (`DEADLINE_MARGIN_MS`): before it runs a fresh snapshot is read (tens of seconds), the action before it may run about a minute late and a payment must settle and reach FoxLeague in time. The test sees it run at 7 minutes |
+| DL-2 | design | Moving one action earlier could undo what the plan's order holds: a lineup before its match, a swap before the bid it funds, a leave before the challenge that needs the free 1v1 slot | The order never changes. The actions before a deadline action move earlier with it, 90 s apart (`ACTION_RUN_MS`, what one action takes to run), so their own run time does not push it late; one whose draw is earlier keeps it and the actions after it keep their draws. The prompt's "Actions run in the order you list them" stays true |
+| DL-3 | design | A deadline already past, or closer than the margin | It runs at once, at the first slot (after the actions before it, at the gap). A deadline that has passed is refused by the executor with its reason |
+| DL-4 | design (rule 4: unknown is not "none") | A deadline that cannot be read must not be taken for no deadline: its tournament in no list of the snapshot, a deadline that is no time, no snapshot at all, an auction without an end or one the snapshot does not show | It runs early: at the start of the window, after the actions before it, never late |
+| DL-5 | design | Actions without a deadline, the match gates and the drops | The drops are decided first, exactly as without deadlines, and only the kept actions are then placed with the deadlines (R70A-2): the same draws, the same gates (13 minutes after a match, 16 between ranked starts, the agent's starts before the plan included) and the same drops, with or without deadlines. No action runs later than it would without them; the actions before a deadline action may run earlier (DL-2). Test D1's cases pass as they were |
+| DL-6 | low (as DL-1) | A bid on an auction that ends inside the window ran at a random moment, possibly after the end | It runs by the end less 5 minutes; a swap before it in the plan runs before it |
+| DL-7 | design | Which actions have a time limit, and the executor's own margins | `join_tournament` (accepting a 1v1 too): the registration deadline (less the 120 s the executor keeps for a paid entry), its start when sooner and for a League + Knockout its invitation's expiry less 30 minutes. `leave_tournament`: the deadline and for a League + Knockout seat its seats lock less 30 minutes. `widen_range`: the deadline. `bid`: the auction's end. `cancel_listing`: unread (the market list leaves the agent's own auctions out), so early. The times come from the agent's own tournaments, the open ones, the 1v1s aimed at it and its invitations; the earliest copy counts. No other action has one; the next strategy lock still cuts the whole window in `runPlan` |
+| R70A-1 | low (agent review of PR #70; tests only, no code changed) | Three behaviours of this change had no test that failed without them: a League + Knockout join whose invitation is not in the snapshot (the invitations unread, none pending or only another tournament's) is unread and runs early, not by its registration deadline hours away; the earliest copy of a tournament sets its deadline and an entry is free (no 120 s) only when every copy says a free Bronze; a gated match listed before a deadline action keeps the plan's order, the deadline action waiting behind it | Three tests "R70A-1: ..." in `test/deadline-first.test.ts`, one per behaviour. Each passes on the code as it is and was proved by breaking its behaviour for a moment, then restoring the code exactly: without the League + Knockout branch the join got its registration deadline less 120 s instead of unread; with `closes` taking the first copy the deadline came out 28 minutes late (the 40-minute copy over the 12-minute one); with "free when any copy says so" a Bronze copy with a fee lost the 120 s, and with "free by the first copy" a 1v1 aimed at this team lost it; with the deadline action no longer waiting on the match before it and the schedule sorted by time, the leave ran ahead of the ranked match (without the sort it ran at 0 instead of 11.5). No bug was found |
+| R70A-2 | medium (correctness, no money at risk: the executor refuses a late action; re-review of PR #70) | Moving the actions before a deadline action earlier could keep a match that the schedule without deadlines dropped, and that match's gate then held the deadline action past its deadline, later than it ran before this change. Plan `[ranked, ranked, leave]`, a 48-minute window, a 30 s gap, the leave's deadline at 39 minutes, draws 33, 33 and 34: without deadlines the second ranked was gated to 49, past the window, so dropped, and the leave ran at 34; with them the first ranked moved to 31, the second was kept at 47 and the leave ran at 47.5, 8.5 minutes after its deadline. It flipped the other way too: with a casual match third in that plan, kept at 46 without deadlines, the second ranked was kept at 45.5 and the casual dropped. It made DL-5's "the same drops" and the open point's "as before" untrue | `scheduleActions` decides the drops first in a pass without deadlines (every latest moment at infinity, the schedule as it was before this change), then places the kept actions with the deadlines in a second pass that skips those drops and drops nothing more (`placeActions`). The latest moments are counted back over the kept actions only, as a dropped match takes no room. With the same matches kept, every gate starts from the same match at the same moment or earlier, so no action runs later than without deadlines. Three tests "R70A-2: ..." in `test/deadline-first.test.ts` failed on 90adee0 and pass now: the reviewer's case (nothing was dropped; now the second ranked is, the leave runs at 34 and the first ranked 90 s before it, at 32.5, by DL-2), the casual case (the casual was dropped in place of the second ranked; now it is kept at 44, 2 minutes sooner than without deadlines) and a property test over 600 seeded random plans, deadlines and draws (7 failed; now none: the same drops with the same reasons, no kept action later, the order and the gap held). A run of 200,000 such cases outside the suite found none either |
+
+What was checked and needs no change:
+- `src/strategist/prompt.ts` says "Actions run in the order you list them, spread over the next window. Every action is
+  re-checked against fresh state right before it runs." That stays true, so it is not changed (it is byte-stable for
+  the prompt cache). `src/strategist/manual.md` says nothing of when a plan's actions run.
+
+Stays open:
+- A match listed before a deadline action keeps its gates: when they hold it past its latest moment, it runs late and
+  the executor refuses it. It never runs later than it would without deadlines (R70A-2: the same matches kept, each at
+  the same moment or earlier), so a deadline action that ran in time before this change still does. The order is never
+  changed to pass a match (test R70A-1). Dropping such a match, so that the deadline action after it runs in time, is
+  a design choice for the owner (named in the re-review of PR #70) and is not made here: test R70A-2's casual case
+  shows it.
+- The schedule is planned, run times are not: actions before it that each take longer than 90 s (a slow snapshot, a
+  transaction waiting for its confirmation) still push it later by what they take over 90 s, inside the 5-minute
+  margin for a few of them.
+- Pieces an extension cuts from an action (`src/extensions.ts`) queue behind it at the gap: a split action before a
+  deadline action pushes it later by a gap a piece, and the later pieces of a split deadline action may run past it
+  (the executor checks each).
+- A race is no deadline: an open 1v1 another team accepts first is active whatever the moment (the join refused as
+  "is active" 20 minutes after the plan chose it may have been that).
+- A deadline that moves after the plan (a 1v1 that fills: its deadline becomes now) is seen by the executor when the
+  action runs, not by the schedule.
+- The 1v1 busy window FoxLeague serves (`viewer_tournament_window_opens_in_secs`) is read from the tournament's detail
+  when the join runs; the schedule does not use it.
+- `cancel_listing` runs early in every plan that has one.
+
 ## GitHub review of PR #71 (2026-11-15)
 
 The agent review of PR #71 on GitHub (the install videos on the site, Claude Fable 5.2 at high effort) passed it with
