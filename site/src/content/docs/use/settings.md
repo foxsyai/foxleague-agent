@@ -77,5 +77,7 @@ model of the Strategist box.
 
 Two things are fixed: the actions of a plan run at least 30 seconds apart, and every planned action is carried out (a match that its cooldown pushes past the plan's window waits for the next plan; a plan keeps at most 12 actions).
 
+The actions run in the plan's order at random moments over the next 80 percent of the tick. An action with a deadline (joining or leaving before registration closes, widening a range or bidding before the auction ends) runs at least 5 minutes before it, and the actions listed before it run earlier with it; only a match listed before it, waiting for its gate, can still hold it back. When the deadline is that close already, or cannot be read, it runs at once, right after the actions listed before it.
+
 Before each match session, the agent also plans about an hour before the lineup locks (inside its active hours), so
 it can sync, set the lineup and recover condition in time.
