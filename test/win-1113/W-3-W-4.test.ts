@@ -11,7 +11,9 @@ import { join } from 'node:path'
 import { REPO } from '../update-fixtures.ts'
 
 const flat = (f: string): string => readFileSync(join(REPO, f), 'utf8').replace(/\s+/g, ' ')
-const GUIDES = ['INSTALL.md', 'site/src/content/docs/start/install.mdx']
+// (The Windows page since 2026-11-15, when the Install page became the choice of a system.)
+const WINDOWS = 'site/src/content/docs/start/install-windows.mdx'
+const GUIDES = ['INSTALL.md', WINDOWS]
 
 test('W-3 the guides say that the Ubuntu download can look stuck, why, and the welcome window', () => {
   for (const f of GUIDES) {
@@ -24,7 +26,8 @@ test('W-4 the guides say that Ubuntu may ask "Help improve Ubuntu!" and that eit
 })
 
 test('W-1 the guides say how much free space the Windows line needs and that it checks it', () => {
-  assert.match(flat('INSTALL.md'), /When Ubuntu still has to be installed it needs about 4 GB free on drive C: and checks that before the download\./)
-  assert.match(flat('site/src/content/docs/start/install.mdx'), /When Ubuntu still has to be installed it also needs about 4 GB free on drive C: \(the line checks it before the download\)\./)
+  for (const f of GUIDES) {
+    assert.match(flat(f), /\*\*About 4 GB free on drive C:\*\* when Ubuntu still has to be installed\. The line checks it before the download and stops below that\./, f)
+  }
   assert.match(flat('README.md'), /Installing Ubuntu needs about 4 GB free on drive C:\./)
 })

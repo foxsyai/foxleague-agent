@@ -80,8 +80,9 @@ test('LOGIN-1 the install replay types a username of its own, shows that Enter i
   const typed = [...script.matchAll(/'Dashboard username, your own choice \\\(3 to 32 letters or digits\\\): =>([^']*)'/g)].map(m => m[1])
   assert.deepEqual(typed, ['', 'owner', 'owner', 'sam', 'owner'], 'Enter once in step 4 (refused), a name everywhere else')
   assert.match(script, /check "the username has no default: Enter was refused and asked again \(LOGIN-1\)"/)
-  for (const f of ['INSTALL.md', 'site/src/content/docs/start/install.mdx']) {
-    const row = readFileSync(join(REPO, f), 'utf8').split('\n').find(l => l.startsWith('| 3. Dashboard login |'))
+  // (One install page per system since 2026-11-15, with the installer's own step names: 3/7 Dashboard login.)
+  for (const f of ['INSTALL.md', 'site/src/content/docs/start/install-windows.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']) {
+    const row = readFileSync(join(REPO, f), 'utf8').split('\n').find(l => l.startsWith('| 3/7 Dashboard login |'))
     assert.ok(row, f)
     assert.match(row!, /There is no default username: Enter alone is refused\./, f)
   }

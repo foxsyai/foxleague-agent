@@ -58,7 +58,7 @@ test('no message for the owner of an installed agent names npm: the sources and 
 
 test('the guides keep npm only where a developer is meant', () => {
   assert.match(raw('README.md'), /In a git checkout with your own Node\.js, `npm run cli -- <command>` and `npm start` do the same\./)
-  for (const f of ['INSTALL.md', 'docs/SERVER.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/help/troubleshooting.md', 'site/src/content/docs/start/install.mdx']) {
+  for (const f of ['INSTALL.md', 'docs/SERVER.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/help/troubleshooting.md', 'site/src/content/docs/start/install.mdx', 'site/src/content/docs/start/install-windows.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']) {
     assert.doesNotMatch(raw(f), /npm run cli|npm start/, f)
   }
   assert.match(raw('AGENTS.md'), /`npm ci --ignore-scripts` then `npm run typecheck` and `npm test`/)

@@ -60,8 +60,9 @@ Until the repository is public, the install line and the repository address sit 
 (`src/components/ComingSoon.astro`): it shows the real address, and a click opens Foxsy AI's GitHub page, never a
 404. When the repository goes public:
 
-1. Remove the `<ComingSoon>` frames (keep what they wrap) in `index.mdx`, `start/install.mdx` and `help/server.mdx`,
-   and the `banner:` lines in `index.mdx` and `start/install.mdx`.
+1. Remove the `<ComingSoon>` frames (keep what they wrap) in `index.mdx`, `start/install-windows.mdx`,
+   `start/install-mac.mdx`, `start/install-linux.mdx` and `help/server.mdx`, and the `banner:` lines in `index.mdx`,
+   `start/install.mdx` and the three `start/install-*.mdx` pages.
 2. Point the GitHub icon in `astro.config.mjs` at `https://github.com/foxsyai/foxleague-agent`.
 3. Deploy, then run the one-line install on a clean machine.
 

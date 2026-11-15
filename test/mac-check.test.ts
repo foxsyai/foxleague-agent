@@ -55,7 +55,7 @@ test('MAC-1: npm keeps its cache and its logs in the install folder, so deleting
   assert.match(runs('install.sh')[0]!, /^deps\(\) \{/)
   for (const f of ['get.sh', 'run.sh', 'cli.sh', 'get.ps1']) assert.deepEqual(runs(f), [], f)
   // And no page still says that npm's cache stays in ~/.npm after the folder is gone.
-  for (const f of ['INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md']) assert.doesNotMatch(read(f), /~\/\.npm\b/, f)
+  for (const f of ['INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/start/install-windows.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']) assert.doesNotMatch(read(f), /~\/\.npm\b/, f)
 })
 
 /** Every file under a folder of the repository, as paths from the repository's root. */
@@ -65,12 +65,13 @@ function filesUnder(dir: string): string[] {
     .map(e => join(e.parentPath, e.name).slice(REPO.length + 1))
 }
 
-test('MAC-2: the folder size is the one measured on the Mac, said the same way in INSTALL.md and on the Update page, and nowhere 190 MB', () => {
+test('MAC-2: the folder size is the one measured on the Mac, said the same way in INSTALL.md and on the install page of each system, and nowhere 190 MB', () => {
   // Measured: Node.js (.node) 189 MB, each release folder 42 MB, npm's cache about 6 MB (in the folder since MAC-1).
   const size = /about (\d+) MB, and about (\d+) MB once an update has kept the release before it/
   const said = (f: string): number[] | undefined => size.exec(flat(f))?.slice(1, 3).map(Number)
   assert.deepEqual(said('INSTALL.md'), [240, 280], 'INSTALL.md')
-  assert.deepEqual(said('site/src/content/docs/help/update.md'), said('INSTALL.md'), 'the Update page says what INSTALL.md says')
+  // (The Update page said it until 2026-11-15; the uninstall is now on the page of each system.)
+  for (const f of ['site/src/content/docs/start/install-windows.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']) assert.deepEqual(said(f), said('INSTALL.md'), `${f} says what INSTALL.md says`)
   // Every other place that could state a size (the record of this check names the old figure, so it is left out).
   const places = ['README.md', 'INSTALL.md', 'install.sh', 'get.sh', 'get.ps1', 'src/web/dashboard.html', ...filesUnder('site/src'), ...filesUnder('docs').filter(f => f !== join('docs', 'SECURITY-REVIEW.md'))]
   assert.ok(places.length > 25, `${places.length} files`)
@@ -147,9 +148,11 @@ test('MAC-4: the uninstall does not state that the wallets hold funds, which it 
   assert.match(r.out, /The agent wallets may still hold funds\. Keep the recovery words; delete the folder\n {2}only when the wallets are empty\./)
   assert.doesNotMatch(r.out, /still hold their funds|backup words/)
   // The Windows uninstall and the pages that tell the uninstall say it the same way.
-  for (const f of ['install.sh', 'get.ps1', 'INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md']) assert.doesNotMatch(flat(f), /wallets (still hold their|keep their|hold their) funds/, f)
+  for (const f of ['install.sh', 'get.ps1', 'INSTALL.md', 'README.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/start/install-windows.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']) assert.doesNotMatch(flat(f), /wallets (still hold their|keep their|hold their) funds/, f)
   assert.match(flat('get.ps1'), /The agent wallets may still hold funds\./)
-  assert.match(flat('site/src/content/docs/help/update.md'), /The agent wallets may still hold funds\./)
+  // (The Update page said it until 2026-11-15; the uninstall is now on the page of each system.)
+  for (const f of ['site/src/content/docs/start/install-windows.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']) assert.match(flat(f), /The agent wallets may still hold funds\./, f)
+  assert.match(flat('site/src/content/docs/help/update.md'), /the agent wallets may still hold funds\./)
 })
 
 const KEY = testKey()

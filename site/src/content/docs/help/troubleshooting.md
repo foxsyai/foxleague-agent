@@ -3,6 +3,12 @@ title: Troubleshooting
 description: Fixes for the most common problems.
 ---
 
+Problems while installing, and those of one system only, are on the page of that system, under "If it gets
+stuck": [Install on Windows](/start/install-windows/#if-it-gets-stuck),
+[Install on Mac](/start/install-mac/#if-it-gets-stuck) and [Install on Linux](/start/install-linux/#if-it-gets-stuck).
+For example: virtualization, Ubuntu and the scheduled task on Windows; a Mac that sleeps; curl, root, systemd and
+linger on Linux. This page has what can happen on every system once the agent runs.
+
 | Problem | Fix |
 |---|---|
 | **The dashboard does not open** | Check the logs (below). Another program may use the port: run `./install.sh` again in the `foxleague-agent` folder and pick another one. |
@@ -13,20 +19,6 @@ description: Fixes for the most common problems.
 | **Nothing happens at night** | Each agent plans only inside its active hours (08:00 to 20:00 UTC by default). Change them in Settings, Timing. |
 | **"refused" in the Activity** | An action did not fit the game rules or your limits; the line says why. The agent adapts on its next cycle. Raise a limit only if you mean it. |
 | **Telegram stays silent** | By default Telegram sends only the morning summary and urgent messages; send `/updates all` for every plan and result as it happens. If nothing arrives at all, press Test keys in Keys; if the chat is not linked, press Link my Telegram and send the code to your Telegram bot. |
-| **The agent stops when I log out (Linux)** | Run `sudo loginctl enable-linger $USER` once. |
-| **The agent stops on Windows when I close Ubuntu, or after Windows restarts** | On Windows the agent runs while Ubuntu (WSL) runs. By itself WSL stops Ubuntu a short while after its last window closes and does not start with Windows. The scheduled task "FoxLeague Agent (WSL)", which the PowerShell line makes ([Install](/start/install/), Windows), is there to keep Ubuntu running while you are logged in: look for it in Task Scheduler (Task Scheduler Library) and paste the PowerShell line again to make it again. Until it runs, open Ubuntu and leave its window open (minimised is fine): the agent starts with it. The agent does not play while the PC is off or asleep and not before you log in. |
-| **Windows: an error that names virtualization or 0x80370102** | WSL 2 needs virtualization, which is turned on in the PC's BIOS or UEFI setup (Intel VT-x, AMD-V or SVM; the PC maker's guide tells where). Turn it on, then paste the PowerShell line again. |
-| **Windows: "WSL 2 requires an update to its kernel component"** | Run `wsl --update` in PowerShell, then paste the PowerShell line again. |
-| **Windows: "Restart Windows now, then paste the same line again"** | Windows finishes installing WSL while it restarts. Use Restart (not Shut down), open PowerShell again and paste the same line: it goes on where it stopped. Pasting it more than once does no harm. |
-| **Windows: the Ubuntu download stays at 0%** | A click into the PowerShell window starts Windows' text selection, which pauses the program in it: press Enter once and the download goes on. A window "Welcome to WSL" may open by itself while Ubuntu installs: close it. |
-| **Windows: Task Scheduler shows 0x800710E0 for "FoxLeague Agent (WSL)"** | That is Windows' "The operator or administrator has refused the request": the task's 5-minute trigger found the task still running and did not start a second copy. It is normal while the agent runs. |
-| **Windows: the dashboard does not open at `http://localhost:8870`** | The agent runs inside Ubuntu and Windows passes `localhost` on to it. Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again: it starts Ubuntu, the agent and the scheduled task again. Your wallet and your answers are kept. |
-| **The agent does not play while my Mac sleeps** | On macOS the agent starts when you log in, and a sleeping Mac plays nothing. Set the Mac not to sleep while the agent should play. |
-| **"Command 'curl' not found" on Ubuntu** | Run `sudo apt install curl`, then paste the install line again. Use this one, not the snap: the apt one is the one the install is tested with. |
-| **"this machine does not run systemd"** | systemd keeps the agent running in the background. On Windows the PowerShell line turns it on by itself ([Install](/start/install/), Windows): it puts `systemd=true` under `[boot]` in Ubuntu's `/etc/wsl.conf` (it corrects a line that says false and never adds a second `[boot]`) and restarts Ubuntu. By hand: make the line under `[boot]` read `systemd=true`, run `wsl --shutdown` in PowerShell, open Ubuntu again and run the installer again. Without systemd: run `./install.sh --no-service` in the `foxleague-agent` folder, then start the agent yourself with `./run.sh`. |
-| **"the background services of the user ... cannot be reached from this terminal"** | The terminal was opened with `su` or `sudo` and the installer could not start the user's services from it. Log in as that user itself (a new terminal, or `ssh` to the machine as that user) and run the installer again. |
-| **"Job for foxleague-agent.service failed"** (or "Start request repeated too quickly") | systemd allows the agent five starts in ten minutes and then refuses the next one. Run `systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent`. The installer and `./install.sh --update` clear that count themselves before they restart the agent. |
-| **"do not install the agent as root"** | Create a user for the agent: `adduser fox`, then `su - fox` and paste the line again. |
 | **"foxleague-agent already runs on this data folder"** | A second copy was started while the agent runs, for example `./run.sh` in a terminal next to the background service. It does not start, because two copies would plan and pay for every agent twice. Use the one that runs (its dashboard or Telegram) or stop it first. If you are sure that no other copy runs, delete the file the message names and start again. |
 | **"The update to ... did not start and was undone"** | The new version did not stay up, so the agent went back to the version that ran before. Nothing of yours changed and nothing has to be done: the agent keeps playing on the version it ran. To try that version again later, press **Try again** in the dashboard's notice or send `/upgrade`; if it is undone again, keep the version you run and tell the maintainers what the logs (below) say. |
 | **"The update to ... was not installed: this system's tar cannot unpack inside the agent's background service"** | The background service of an install made by an older installer refuses a call that the tar of Ubuntu 26.04 needs to unpack an update. Run `./install.sh --update` once in a terminal, in the `foxleague-agent` folder: it installs the update outside the service and takes that one line out of the service's file, so later updates are one click again. Pasting the install line again does the same. On Windows, open Ubuntu first: `wsl -d Ubuntu --cd ~` in PowerShell, then `cd foxleague-agent`. Until then the dashboard's notice offers no **Update now**: it would fail the same way. |
@@ -46,4 +38,5 @@ description: Fixes for the most common problems.
 The Linux commands work from any folder. The commands that start with `./` (`./install.sh --update`, `./cli.sh`
 and `./install.sh --uninstall`) and the Mac's log are typed in the agent's folder: go there first with
 `cd ~/foxleague-agent`. On Windows they are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in
-PowerShell.
+PowerShell. The uninstall on Windows is one line in PowerShell
+([Install on Windows](/start/install-windows/#uninstalling)).

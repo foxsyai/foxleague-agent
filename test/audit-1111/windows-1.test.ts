@@ -24,6 +24,10 @@ const LINE = 'irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main
 const UNINSTALL_LINE = '& ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall'
 const TASK = 'FoxLeague Agent (WSL)'
 const INSTALL_PAGE = 'site/src/content/docs/start/install.mdx'
+// Since the guide of 2026-11-15 the Install page only picks the system: what its Windows tab said is on this page,
+// with the Windows rows of Troubleshooting and the Windows uninstall of the Update page.
+const WINDOWS = 'site/src/content/docs/start/install-windows.mdx'
+const SYSTEMS = [WINDOWS, 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-linux.mdx']
 const TROUBLE = 'site/src/content/docs/help/troubleshooting.md'
 const UPDATE = 'site/src/content/docs/help/update.md'
 const IMAGE = 'mcr.microsoft.com/powershell:latest'
@@ -152,8 +156,8 @@ test('WIN-1 the sentences it shows: no comma before the "and" or "or" that ends 
   assert.doesNotMatch(ps, /\bbots?\b/i)
 })
 
-test('WIN-1 the line to paste is the same, letter for letter, in INSTALL.md, the README and the Install page', () => {
-  for (const f of ['INSTALL.md', 'README.md', INSTALL_PAGE]) {
+test('WIN-1 the line to paste is the same, letter for letter, in INSTALL.md, the README and the Windows page', () => {
+  for (const f of ['INSTALL.md', 'README.md', WINDOWS]) {
     const lines = raw(f).split('\n').map(l => l.trim())
     assert.ok(lines.includes(LINE), `${f} does not give the line on a line of its own`)
     // Every other line that names get.ps1 or irm is the uninstall line.
@@ -162,15 +166,17 @@ test('WIN-1 the line to paste is the same, letter for letter, in INSTALL.md, the
   }
   assert.ok(psLines.includes(`#   ${LINE}`), 'the head of get.ps1 gives the same line')
   assert.ok(psLines.includes(`#   ${UNINSTALL_LINE}`), 'and the same uninstall line')
-  for (const f of ['INSTALL.md', UPDATE]) assert.ok(raw(f).split('\n').includes(UNINSTALL_LINE), `${f} gives the uninstall line`)
-  // The home page gives the curl line only, so it sends a Windows reader to the Install page.
-  assert.match(read('site/src/content/docs/index.mdx'), /On Windows the line is another one, pasted into PowerShell: see \[Install\]\(\/start\/install\/\)/)
+  for (const f of ['INSTALL.md', WINDOWS]) assert.ok(raw(f).split('\n').includes(UNINSTALL_LINE), `${f} gives the uninstall line`)
+  // The home page gives the curl line only, so it sends a Windows reader to the Windows page.
+  assert.match(read('site/src/content/docs/index.mdx'), /On Windows the line is another one, pasted into PowerShell: see \[Install on Windows\]\(\/start\/install-windows\/\)/)
+  // The Install page picks the system and gives no line of its own.
+  assert.match(read(INSTALL_PAGE), /href="\/start\/install-windows\/"/)
+  assert.doesNotMatch(raw(INSTALL_PAGE), /\birm\b|get\.ps1|get\.sh/)
 })
 
-test('WIN-1 the Windows tab: the line, what it does and asks, where the dashboard is, when the agent plays, update, uninstall, by hand', () => {
-  const page = read(INSTALL_PAGE)
-  const tab = page.slice(page.indexOf('<TabItem label="Windows">'), page.indexOf('</Tabs>'))
-  assert.ok(tab.indexOf(LINE) < tab.indexOf('**By hand**'), 'the line comes first, the steps by hand after it')
+test('WIN-1 the Windows page: the line, what it does and asks, where the dashboard is, when the agent plays, update, uninstall, by hand', () => {
+  const tab = read(WINDOWS)
+  assert.ok(tab.indexOf(LINE) > 0 && tab.indexOf(LINE) < tab.indexOf('## Installing by hand'), 'the line comes first, the steps by hand after it')
   assert.match(tab, /a normal window, not "as administrator"/)
   assert.match(tab, /64-bit Windows 11 or Windows 10 version 2004 or later/)
   assert.match(tab, /safe to paste it again at any time/)
@@ -180,7 +186,7 @@ test('WIN-1 the Windows tab: the line, what it does and asks, where the dashboar
   // Ubuntu's own username and password.
   assert.match(tab, /choose a Linux username and password, in the same window or in a window of its own/)
   assert.match(tab, /they are not your Windows login and the installer never sees them/)
-  assert.match(tab, /type `exit` to come back to the installer/)
+  assert.match(tab, /type `exit` and press Enter to come back to the installer/)
   // Then the same questions as on Linux.
   assert.match(tab, /The same seven steps as on Linux, in the same window/)
   // Where the dashboard is.
@@ -192,9 +198,10 @@ test('WIN-1 the Windows tab: the line, what it does and asks, where the dashboar
   // Update and uninstall.
   assert.match(tab, /An update is one click in the dashboard/)
   // (One line in PowerShell since W-17 of 2026-11-14: it removes the agent inside Ubuntu too, after one question.)
-  assert.match(tab, /\[Uninstall\]\(\/help\/update\/#uninstall\): one line in PowerShell, which also removes the agent's background service inside Ubuntu after one question/)
+  assert.match(tab, /## Uninstalling The uninstall is one line in PowerShell:/)
+  assert.ok(tab.includes('"Also stop the agent and remove its background service in Ubuntu?"'))
   // By hand: never a second [boot].
-  const hand = tab.slice(tab.indexOf('**By hand**'))
+  const hand = tab.slice(tab.indexOf('## Installing by hand'))
   assert.match(hand, /`wsl --install -d Ubuntu`/)
   assert.match(hand, /Do not add a second `\[boot\]`: WSL takes the first `systemd` line it finds/)
   assert.match(hand, /curl -fsSL https:\/\/raw\.githubusercontent\.com\/foxsyai\/foxleague-agent\/main\/get\.sh \| bash/)
@@ -208,13 +215,17 @@ test('WIN-1 the Windows tab: the line, what it does and asks, where the dashboar
 
 test('WIN-1 INSTALL.md says the same of Windows, with the switches and the uninstall', () => {
   const page = read('INSTALL.md')
-  assert.match(page, /### On Windows Open Windows PowerShell \(Start, type PowerShell\) in a normal window, not "as administrator"/)
+  // (Since 2026-11-15 INSTALL.md has the same sections per system as the site's pages.)
+  assert.match(page, /### On Windows On Windows the agent runs inside Ubuntu/)
+  for (const f of ['INSTALL.md', WINDOWS]) {
+    assert.match(read(f), /Open \*\*Windows PowerShell\*\*: press Start, type PowerShell and choose Windows PowerShell\. Use a normal window, not "as administrator"/, f)
+    assert.match(read(f), /set it in PowerShell before the line, for example `\$env:FOXAGENT_VERSION = 'vX\.Y\.Z'`\. `FOXAGENT_DIR` names another folder, always one inside Ubuntu, never a Windows folder/, f)
+  }
   assert.match(page, /`wsl --install --no-distribution`\. That needs an administrator, so Windows shows its own prompt: answer Yes/)
   assert.match(page, /restart, open PowerShell again and paste the same line/)
   assert.match(page, /they are not your Windows login and the installer never sees them/)
   assert.match(page, /never adds a second `\[boot\]`/)
   assert.ok(page.includes(`"${TASK}"`))
-  assert.match(page, /The switches above are set in PowerShell before the line, for example `\$env:FOXAGENT_VERSION = 'vX\.Y\.Z'`; `FOXAGENT_DIR` then names a folder inside Ubuntu, never a Windows folder/)
   assert.match(page, /`Unregister-ScheduledTask -TaskName 'FoxLeague Agent \(WSL\)' -Confirm:\$false`/)
   assert.match(page, /`wsl --unregister Ubuntu` deletes everything in it/)
   assert.doesNotMatch(page, /from the Microsoft Store and paste the line in its terminal/, 'the old Windows sentence is gone')
@@ -226,30 +237,48 @@ test('WIN-1 INSTALL.md says the same of Windows, with the switches and the unins
   assert.match(page, /`\/etc\/wsl\.conf\.before-foxleague`/)
 })
 
-test('WIN-1 Troubleshooting has the Windows rows: virtualization, the kernel component, the restart, systemd, localhost, the task', () => {
-  const page = read(TROUBLE)
-  assert.match(page, /\| \*\*Windows: an error that names virtualization or 0x80370102\*\* \| WSL 2 needs virtualization, which is turned on in the PC's BIOS or UEFI setup/)
-  assert.match(page, /\| \*\*Windows: "WSL 2 requires an update to its kernel component"\*\* \| Run `wsl --update` in PowerShell, then paste the PowerShell line again\. \|/)
-  assert.match(page, /\| \*\*Windows: "Restart Windows now, then paste the same line again"\*\* \| Windows finishes installing WSL while it restarts\./)
-  assert.match(page, /\| \*\*"this machine does not run systemd"\*\* \| [^|]*On Windows the PowerShell line turns it on by itself[^|]*never adds a second `\[boot\]`[^|]*\|/)
-  assert.match(page, /\| \*\*Windows: the dashboard does not open at `http:\/\/localhost:8870`\*\* \| [^|]*Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again/)
-  assert.match(page, /\| \*\*The agent stops on Windows[^|]*\*\* \| [^|]*The scheduled task "FoxLeague Agent \(WSL\)"[^|]*is there to keep Ubuntu running while you are logged in/)
+test('WIN-1 the Windows page has the Windows rows: virtualization, the kernel component, the restart, systemd, localhost, the task', () => {
+  // (In Troubleshooting until 2026-11-15; now under "If it gets stuck" of the Windows page, which Troubleshooting names.)
+  const all = read(WINDOWS)
+  const page = all.slice(all.indexOf('## If it gets stuck'), all.indexOf('## Installing by hand'))
+  assert.ok(page.length > 1000, 'the Windows page has its table')
+  assert.match(page, /\| \*\*"Windows says that virtualization is turned off"\*\*, or an error that names virtualization or 0x80370102 \| WSL 2 needs virtualization, which is turned on in the PC's BIOS or UEFI setup/)
+  assert.match(page, /\| \*\*"WSL 2 requires an update to its kernel component"\*\* \| Run `wsl --update` in PowerShell, then paste the PowerShell line again\. \|/)
+  assert.match(page, /\| \*\*"Restart Windows now, then paste the same line again"\*\* \| Windows finishes installing WSL while it restarts\./)
+  assert.match(page, /\| \*\*"this machine does not run systemd"\*\* \| [^|]*The PowerShell line turns systemd on by itself[^|]*never adds a second `\[boot\]`[^|]*\|/)
+  assert.match(page, /\| \*\*The dashboard does not open at `http:\/\/localhost:8870`\*\* \| [^|]*Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again/)
+  assert.match(page, /\| \*\*The agent stops when I close Ubuntu, or after Windows restarts\*\* \| [^|]*The scheduled task "FoxLeague Agent \(WSL\)"[^|]*is there to keep Ubuntu running while you are logged in/)
+  assert.match(read(TROUBLE), /\[Install on Windows\]\(\/start\/install-windows\/#if-it-gets-stuck\)/, 'Troubleshooting leads to them')
   // The words of the rows are the script's own.
   assert.ok(code.includes("Write-FoxStep 'Restart Windows now, then paste the same line again'"))
   assert.match(code, /"WSL 2 requires an update to its kernel component": type {2}wsl --update/)
   assert.match(code, /An error that names virtualization or 0x80370102/)
   assert.match(code, /If it stays closed: type {2}wsl --shutdown {2}wait ten seconds, then paste the line again/)
-  for (const f of ['INSTALL.md']) {
-    const md = read(f)
-    for (const row of ['**Windows: an error that names virtualization or 0x80370102:**', '**Windows: "WSL 2 requires an update to its kernel component":**',
-      '**Windows: "Restart Windows now, then paste the same line again":**', '**Windows: the dashboard does not open at `http://localhost:8870`:**']) assert.ok(md.includes(row), `${f}: ${row}`)
+  assert.ok(code.includes("Write-FoxLine 'Windows says that virtualization is turned off in this PC''s BIOS or UEFI setup. WSL 2 needs it.'"))
+  assert.ok(code.includes("return ('Ubuntu and the agent need about 4 GB free on ' + $Drive"))
+  assert.ok(code.includes("Stop-Fox 'WSL was not installed: the administrator prompt was answered with No"))
+  assert.ok(code.includes("Write-FoxLine 'Ubuntu has no user of your own yet: its first start"))
+  for (const [q, said] of [['"Ubuntu and the agent need about 4 GB free on C:"', /`powercfg \/h off` in a PowerShell opened as administrator removes it\. That turns off hibernation and Fast Startup/],
+    ['"WSL was not installed: the administrator prompt was answered with No"', /type `wsl --install --no-distribution`/], ['"Ubuntu has no user of your own yet"', /open Ubuntu from the Start menu/]] as const) {
+    // One row of the table: up to where the next row starts (the page is read with its line ends as spaces).
+    const at = page.indexOf(`| **${q}** |`)
+    assert.ok(at > 0, q)
+    const end = page.indexOf('| | **', at)
+    assert.match(page.slice(at, end < 0 ? undefined : end), said, q)
   }
+  // INSTALL.md has the same rows in its Windows section.
+  const md = read('INSTALL.md')
+  const win = md.slice(md.indexOf('### On Windows'), md.indexOf('### On a Mac'))
+  for (const row of ['**"Windows says that virtualization is turned off", or an error that names virtualization or 0x80370102:**', '**"WSL 2 requires an update to its kernel component":**',
+    '**"Restart Windows now, then paste the same line again":**', '**The dashboard does not open at `http://localhost:8870`:**']) assert.ok(win.includes(row), `INSTALL.md: ${row}`)
 })
 
-test('WIN-1 the Update page says how to uninstall on Windows: the agent inside Ubuntu, the task in PowerShell, Ubuntu and WSL left alone', () => {
-  const page = read(UPDATE)
-  const part = page.slice(page.indexOf('### On Windows'))
-  assert.ok(part.length > 200, 'the Uninstall part has a Windows section')
+test('WIN-1 the Windows page says how to uninstall: the agent inside Ubuntu, the task in PowerShell, Ubuntu and WSL left alone', () => {
+  // (On the Update page until 2026-11-15, which now leads here.)
+  const page = read(WINDOWS)
+  const part = page.slice(page.indexOf('## Uninstalling'), page.indexOf('## If it gets stuck'))
+  assert.ok(part.length > 200, 'the Windows page has its Uninstalling section')
+  assert.match(read(UPDATE), /\[Install on Windows\]\(\/start\/install-windows\/#uninstalling\) \(one line in PowerShell\)/)
   assert.match(part, /`\.\/install\.sh --uninstall`/)
   assert.match(part, /Unregister-ScheduledTask -TaskName 'FoxLeague Agent \(WSL\)' -Confirm:\$false/)
   assert.ok(part.includes(UNINSTALL_LINE))
@@ -263,7 +292,7 @@ test('WIN-1 the Update page says how to uninstall on Windows: the agent inside U
 })
 
 test('WIN-1 no page promises as seen what nobody has seen on a real Windows PC', () => {
-  for (const f of ['INSTALL.md', 'README.md', INSTALL_PAGE, TROUBLE, UPDATE]) {
+  for (const f of ['INSTALL.md', 'README.md', INSTALL_PAGE, ...SYSTEMS, TROUBLE, UPDATE]) {
     const page = read(f)
     // The task is said by its purpose ("is there to keep", "keeps one hidden wsl.exe attached"), never as a result.
     assert.doesNotMatch(page, /(keeps|keep) the agent running (after|when) you close|keeps playing with every window closed|starts with Windows by itself|survives a restart of Windows/i, f)

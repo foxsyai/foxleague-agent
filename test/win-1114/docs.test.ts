@@ -86,7 +86,9 @@ test('W-DOC re-test: the walk-through, INSTALL.md and the site tell the uninstal
   assert.match(plan, /Nothing is typed inside Ubuntu\./)
   assert.match(plan, /"Windows real-PC re-test \(2026-11-14\)"/)
   const question = '"Also stop the agent and remove its background service in Ubuntu?"'
-  for (const f of ['INSTALL.md', 'site/src/content/docs/help/update.md']) {
+  // (The Windows page since 2026-11-15; the Update page leads there.)
+  assert.match(flat('site/src/content/docs/help/update.md'), /\[Install on Windows\]\(\/start\/install-windows\/#uninstalling\) \(one line in PowerShell\)/)
+  for (const f of ['INSTALL.md', 'site/src/content/docs/start/install-windows.mdx']) {
     const page = flat(f)
     assert.match(page, /the uninstall is one line in PowerShell:/i, f)
     assert.ok(page.includes(question), `${f}: the question`)

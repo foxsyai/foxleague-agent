@@ -11,7 +11,12 @@ const ROOT = new URL('../../', import.meta.url)
 const raw = (f: string): string => readFileSync(new URL(f, ROOT), 'utf8')
 const read = (f: string): string => raw(f).replace(/\s+/g, ' ')
 const DOCS = 'site/src/content/docs'
-const INSTALL_PAGE = `${DOCS}/start/install.mdx`
+// Since the guide of 2026-11-15 each system has its own install page (the Install page only picks one), and the rows
+// that belong to one system moved from Troubleshooting to that page.
+const WINDOWS = `${DOCS}/start/install-windows.mdx`
+const MAC = `${DOCS}/start/install-mac.mdx`
+const LINUX = `${DOCS}/start/install-linux.mdx`
+const SYSTEMS = [WINDOWS, MAC, LINUX]
 const UPDATE = `${DOCS}/help/update.md`
 const TROUBLE = `${DOCS}/help/troubleshooting.md`
 const DASH = `${DOCS}/use/dashboard.md`
@@ -23,7 +28,7 @@ test('the two messages about systemd are the installer\'s own, in place of the o
   assert.doesNotMatch(installer, /systemd user services are not available/)
   assert.match(installer, /die "this machine does not run systemd, which keeps the agent running in the background\./)
   assert.match(installer, /die "the background services of the user \$USER_NAME cannot be reached from this terminal\./)
-  for (const f of ['INSTALL.md', TROUBLE]) {
+  for (const f of ['INSTALL.md', LINUX]) {
     const page = read(f)
     assert.doesNotMatch(page, /systemd user services are not available/, `${f} still names a message the installer no longer prints`)
     assert.match(page, /\*\*"this machine does not run systemd"/, f)
@@ -39,7 +44,7 @@ test('"Job for foxleague-agent.service failed": the start limit, and the two com
   const fix = 'systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent'
   assert.match(installer, /systemctl --user reset-failed \$SERVICE && systemctl --user restart \$SERVICE/)
   assert.match(installer, /^StartLimitIntervalSec=600\nStartLimitBurst=5$/m)
-  for (const f of ['INSTALL.md', TROUBLE]) {
+  for (const f of ['INSTALL.md', LINUX]) {
     const page = read(f)
     assert.match(page, /\*\*"Job for foxleague-agent\.service failed"/, f)
     assert.ok(page.includes(fix), `${f} does not give: ${fix}`)
@@ -55,9 +60,12 @@ test('the everyday commands are typed in the agent\'s folder, and the pages say 
 test('step 3: a short or mistyped password is asked for again, and a port in use is refused', () => {
   assert.match(installer, /Nothing was saved\. Try again: 3 to 32 letters or digits for the username, at least 12 characters for the password, typed the same both times\./)
   assert.match(installer, /Port \$port is already used by another program on this machine\. Choose another one\./)
-  for (const f of ['INSTALL.md', INSTALL_PAGE]) {
+  // (The rows carry the installer's own step names since 2026-11-15: 3/7 Dashboard login.)
+  for (const f of ['INSTALL.md', ...SYSTEMS]) {
     const page = read(f)
-    const row = page.slice(page.indexOf('| 3. Dashboard login |'), page.indexOf('| 4. Keys |'))
+    const at = page.indexOf('| 3/7 Dashboard login |')
+    assert.ok(at > 0, `${f}: the row of step 3`)
+    const row = page.slice(at, page.indexOf('| 4/7 Keys |'))
     assert.match(row, /asked for again/, f)
     assert.match(row, /port that another program already uses is refused/, f)
   }
@@ -67,16 +75,21 @@ test('as root: adduser fox, then su - fox and paste the line', () => {
   assert.match(installer, /do not install the agent as root: create a user for it \(adduser fox,/)
   // A terminal opened with su works since FRESH-3: the installer finds the user's service manager itself.
   assert.match(installer, /find_user_systemd start \|\| no_user_systemd/)
-  for (const f of ['INSTALL.md', INSTALL_PAGE]) assert.match(read(f), /`adduser fox`, then `su - fox` and paste the line/, f)
+  for (const f of ['INSTALL.md', LINUX]) assert.match(read(f), /`adduser fox`, then `su - fox` and paste the line/, f)
 })
 
 test('the uninstall leaves linger on and the folder in place, and the pages say how to turn linger off', () => {
   assert.match(installer, /To turn that off: loginctl disable-linger \$USER_NAME/)
-  for (const f of ['INSTALL.md', UPDATE]) {
+  for (const f of ['INSTALL.md', LINUX]) {
     const page = read(f)
     assert.match(page, /`loginctl disable-linger \$USER`/, f)
     assert.match(page, /leaves your folder/, f)
   }
+  // The Mac's uninstall leaves the folder too; on Windows the uninstall inside Ubuntu names linger with the Linux user.
+  assert.match(read(MAC), /leaves your folder/)
+  assert.match(read(WINDOWS), /`loginctl disable-linger` and your Linux username, inside Ubuntu/)
+  // The Update page leads to the three.
+  for (const f of SYSTEMS) assert.ok(read(UPDATE).includes(`(/${f.slice(DOCS.length + 1).replace(/\.mdx$/, '')}/#uninstalling)`), f)
 })
 
 test('the update page gives the timings: the dashboard is away about half a minute, an update that does not start is undone after about a minute and a half', () => {
@@ -90,7 +103,7 @@ test('the update page gives the timings: the dashboard is away about half a minu
 })
 
 test('the curl sentence no longer says that the snap cannot download', () => {
-  for (const f of ['INSTALL.md', INSTALL_PAGE]) {
+  for (const f of ['INSTALL.md', LINUX]) {
     const page = read(f)
     assert.match(page, /not the snap/i, f)
     assert.match(page, /the apt one is the one the install is tested with/, f)
@@ -103,16 +116,16 @@ test('the last screen: the dashboard address is a link, a desktop is offered the
   assert.match(installer, /in most terminals: hold Ctrl and click it; on a Mac, Cmd/)
   assert.match(installer, /yes_no "Open the dashboard in your browser now\?" y/)
   assert.match(installer, /On every later\n# run it means no/)
-  for (const f of ['INSTALL.md', INSTALL_PAGE]) {
-    const page = read(f)
-    assert.match(page, /hold Ctrl and click/, f)
-    assert.match(page, /offers to open it in your browser/, f)
-    assert.match(page, /"Enter keys now\?"[^.]*Enter (means no|skips the keys)/, f)
-  }
+  assert.match(read('INSTALL.md'), /offers to open it in your browser/)
+  for (const f of ['INSTALL.md', LINUX]) assert.match(read(f), /hold Ctrl and click/, f)
+  assert.match(read(MAC), /hold Cmd and click/)
+  assert.match(read(WINDOWS), /in most terminals Ctrl and a click on it opens it/)
+  for (const f of SYSTEMS) assert.match(read(f), /"Open the dashboard in your browser now\?"/, f)
+  for (const f of ['INSTALL.md', ...SYSTEMS]) assert.match(read(f), /"Enter keys now\?"[^.]*Enter (means no|skips the keys)/, f)
 })
 
 test('two browsers, two sign-ins: the pages say why the page the installer opens can ask for the login', () => {
-  for (const f of ['INSTALL.md', INSTALL_PAGE, TROUBLE]) {
+  for (const f of ['INSTALL.md', ...SYSTEMS, TROUBLE]) {
     const page = read(f)
     assert.match(page, /two browsers/, f)
     assert.match(page, /[Ee]ach (browser )?has its own sign-in/, f)

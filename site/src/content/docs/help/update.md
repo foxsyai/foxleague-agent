@@ -140,53 +140,8 @@ Already playing FoxLeague? **Import team** gives an agent the team you have ([Im
 
 ## Uninstall
 
-In the `foxleague-agent` folder:
-
-```sh
-./install.sh --uninstall
-```
-
-It stops the background service and leaves your folder, wallet and PEM files in place. Everything the install
-added is in that folder, the download cache of npm included: about 240 MB, and about 280 MB once an update has
-kept the release before it (kept so that the update can be undone). The agent wallets may still hold funds. Delete
-the folder only when the wallets are empty and your recovery words are safe.
-
-On Linux the installer turned on linger, which lets background services of your user start without a login. The
-uninstall leaves it on, because other services of yours may count on it: `loginctl disable-linger $USER` turns it
-off.
-
-### On Windows
-
-The uninstall is one line in PowerShell:
-
-```powershell
-& ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall
-```
-
-It removes the scheduled task that keeps Ubuntu running and stops the hidden `wsl.exe` the task started (it knows
-it by its whole command line). Nothing else of Windows is touched. Then it asks one question: "Also stop the agent
-and remove its background service in Ubuntu?" Enter means yes: it runs `./install.sh --uninstall` inside Ubuntu for
-you (as above) and says how that went. Nothing has to be typed inside Ubuntu.
-
-With `n` or when it cannot do it, it shows the lines to type by hand. The first goes into PowerShell, the others
-into Ubuntu, one at a time (pasted together, some reach the wrong window):
-
-```powershell
-wsl -d Ubuntu --cd ~
-```
-
-```sh
-cd ~/foxleague-agent && ./install.sh --uninstall
-exit
-```
-
-To remove only the scheduled task: `Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false`.
-The hidden `wsl.exe` it started then runs on and keeps Ubuntu up until Windows restarts: `wsl --terminate Ubuntu`
-stops Ubuntu now.
-
-The task is all the installer added to Windows. WSL, Ubuntu and the line `systemd=true` in Ubuntu's
-`/etc/wsl.conf` stay, because other programs may use them. If the installer changed a file that was already
-there, the file as it was is in `/etc/wsl.conf.before-foxleague`.
-
-Your folder with the wallet words stays inside Ubuntu. Do not remove Ubuntu itself while the agent wallets hold
-funds or the recovery words are not on paper: `wsl --unregister Ubuntu` deletes everything in it.
+How to uninstall and what stays is on the page of your system, under "Uninstalling":
+[Install on Windows](/start/install-windows/#uninstalling) (one line in PowerShell),
+[Install on Mac](/start/install-mac/#uninstalling) and [Install on Linux](/start/install-linux/#uninstalling)
+(`./install.sh --uninstall` in the `foxleague-agent` folder). In every case your folder with the recovery words
+stays: the agent wallets may still hold funds.
