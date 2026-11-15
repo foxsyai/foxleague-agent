@@ -2,10 +2,10 @@
 // the final judge; these keep the agent from sending what the interface would refuse, and from
 // paying for something that cannot work). Every number is read live where a public source exists.
 
-import { blockingWindow, clash, firstFreeStartHours } from './slots.ts'
+import { blockingWindow, ceilMinute, clash, firstFreeStart } from './slots.ts'
 import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
-import { FORMATION_SLOTS, rangeWords } from './actions.ts'
+import { CREATE_START_MAX_MS, CREATE_START_MIN_MS, FORMATION_SLOTS, createStartMs, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
 import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, MedicineQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
@@ -1270,22 +1270,30 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.min_teams > a.max_teams || a.min_teams < 3) return refuse('min_teams must be 3..max_teams')
       const ceiling = sizeCeiling(s)
       if (a.max_teams > ceiling) return refuse(`${a.max_teams} teams is larger than recent tournaments fill (ceiling ${ceiling})`)
-      if (a.registration_closes_minutes_before >= a.starts_in_hours * 60 - 30) return refuse('registration would close within 30 minutes of now')
+      // The start, counted from now, when the create runs: a minute the plan named, or whole hours from this moment. Every
+      // check below and the start FoxLeague is sent (facts.startsAt) are this one instant (2026-11-15).
+      const startsAt = createStartMs(a, ctx.now.getTime())
+      if (startsAt === null) return refuse('the start could not be read: starts_at, a UTC minute such as 2026-11-17T19:49Z')
+      const startIso = new Date(startsAt).toISOString()
+      const ahead = startsAt - ctx.now.getTime()
+      if (!(ahead >= CREATE_START_MIN_MS)) return refuse(`starts ${startIso.slice(0, 16)} UTC, less than 2 hours from now: pick a later free start`)
+      if (ahead > CREATE_START_MAX_MS) return refuse(`starts ${startIso.slice(0, 16)} UTC, more than 72 hours from now`)
+      if (a.registration_closes_minutes_before >= ahead / 60_000 - 30) return refuse('registration would close within 30 minutes of now')
       const mine = s.auth?.myTournaments?.active.filter(t => t.creator_user_id === s.profile!.id && t.max_teams > 2) ?? []
       if (mine.length) return refuse(`already running T${mine[0]!.id}: one created tournament at a time`)
       const runningLk = runningLeagueKnockout(s)
       if (runningLk) return refuse(`your team is in T${runningLk.id}, a League + Knockout that has started: no other tournament until it is over (1v1s and ranked stay open)`)
-      // FoxLeague refuses a create whose blocking window overlaps any live tournament's: check it first.
-      const startsAt = ctx.now.getTime() + a.starts_in_hours * 3600_000
+      // FoxLeague refuses a create whose blocking window overlaps any live tournament's: check it first. The first free
+      // start is named as the minute itself: whole hours from now would be stale by the next plan and miss a narrow gap.
       const taken = clash(s.market.slots ?? [], blockingWindow(a.format, a.max_teams, Boolean(a.home_and_away), startsAt))
       if (taken) {
-        const free = firstFreeStartHours(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime())
+        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS, CREATE_START_MAX_MS)
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
-        return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(taken.end)} UTC); ${free !== null ? `the first free start for this format and size is starts_in_hours ${free}` : 'no free start in the next 72 hours'}`)
+        return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC); ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z` : 'no free start in the next 72 hours'}`)
       }
-      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000).toISOString() }, ctx.now)
+      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)
-      const legal = squadLegal(s, new Date(ctx.now.getTime() + a.starts_in_hours * 3600_000), ', past the start of your tournament')
+      const legal = squadLegal(s, new Date(startsAt), ', past the start of your tournament')
       if (legal) return refuse(legal)
       // What the organizer owes: one payment, once FoxLeague asks for it at the create; nothing on a tournament it exempts.
       let organizerFoxsy = 0
@@ -1306,7 +1314,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         }
       }
       const total = a.entry_fee_foxsy + organizerFoxsy
-      return needFoxsy(total, allow(total, { fee: a.entry_fee_foxsy, organizerFoxsy, ...(organizerHash ? { organizerHash } : {}), ...(a.invite_user_ids?.length ? { invites } : {}) }, 'play', organizerNotes))
+      return needFoxsy(total, allow(total, { fee: a.entry_fee_foxsy, organizerFoxsy, startsAt: startIso, ...(organizerHash ? { organizerHash } : {}), ...(a.invite_user_ids?.length ? { invites } : {}) }, 'play', organizerNotes))
     }
 
     case 'create_challenge': {

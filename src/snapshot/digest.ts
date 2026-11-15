@@ -1,7 +1,7 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
 import { cardBansLive, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
-import { freeGaps } from '../executor/slots.ts'
+import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps } from '../executor/slots.ts'
 import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
@@ -386,9 +386,15 @@ export function renderDigest(s: AgentSnapshot): string {
   const hm = (t: number) => new Date(t).toISOString().slice(5, 16).replace('T', ' ')
   const slots = (m.slots ?? []).filter(w => w.end > now)
   out.push(`Tournament time slots taken (UTC; a created tournament reserves 1 h before its start to 1 h after start + FoxLeague's estimate, ~3 min per match; it may not overlap these): ${slots.length ? '' : 'none'}`)
-  for (const w of slots.slice(0, 20)) out.push(`  T${w.id} "${txt(w.title, 40)}" ${hm(w.start)} to ${hm(w.end)}`)
+  // To the minute, never a minute short: a window ends at its minute rounded up, a gap is rounded inward (2026-11-15).
+  for (const w of slots.slice(0, 20)) out.push(`  T${w.id} "${txt(w.title, 40)}" ${hm(w.start)} to ${hm(ceilMinute(w.end))}`)
+  const minute = (t: number) => `${new Date(t).toISOString().slice(0, 16)}Z`
+  // Each gap with the starts that fit it, as starts_at takes them: from its first minute plus the hour before a kickoff,
+  // to its last minute less the hour after the estimate. A gap too short for the smallest tournament (3 matches) is left out.
   const gaps = freeGaps(slots, now + 3600_000, now + 72 * 3600_000)
-  if (slots.length) out.push(`Free for a new tournament's whole window (next 72 h): ${gaps.slice(0, 8).map(g => `${hm(g.start)} to ${hm(g.end)}`).join('; ') || 'none'}`)
+    .map(g => ({ start: ceilMinute(g.start), end: floorMinute(g.end) }))
+    .filter(g => g.end - g.start >= 2 * 3600_000 + SMALLEST_ESTIMATE_MIN * 60_000)
+  if (slots.length) out.push(`Free for a new tournament's whole window (next 72 h; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.start + 3600_000)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
   if (m.recentStandard.length) {
     out.push('Recent standard tournaments (seated/max, fee, status):')
     for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${t.tier} ${t.format} ${t.seated}/${t.max_teams} fee ${t.fee} ${t.status} ${t.starts_at.slice(0, 16)}`)

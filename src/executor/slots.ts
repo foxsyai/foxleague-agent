@@ -34,8 +34,14 @@ export function estimateMinutes(format: string, maxTeams: number, homeAndAway: b
   }
 }
 
+/** The smallest estimate of a tournament the agent may create: 9 minutes (3 matches: a round robin or a Swiss of 3). */
+export const SMALLEST_ESTIMATE_MIN = Math.min(estimateMinutes('round_robin', 3, false), estimateMinutes('swiss', 3, false), estimateMinutes('knockout', 4, false), estimateMinutes('groups_knockout', 8, false))
+
+/** The pad a booking keeps before the start and after the estimate (FoxLeague's BOOKING_PAD_MINUTES). */
+const BOOKING_PAD_MS = 3600_000
+
 export function blockingWindow(format: string, maxTeams: number, homeAndAway: boolean, startsAt: number): { start: number; end: number } {
-  return { start: startsAt - 3600_000, end: startsAt + estimateMinutes(format, maxTeams, format === 'round_robin' && homeAndAway) * 60_000 + 3600_000 }
+  return { start: startsAt - BOOKING_PAD_MS, end: startsAt + estimateMinutes(format, maxTeams, format === 'round_robin' && homeAndAway) * 60_000 + BOOKING_PAD_MS }
 }
 
 /** Windows of the live standard tournaments (any status but completed, cancelled and delayed). */
@@ -56,12 +62,22 @@ export function clash(windows: SlotWindow[], w: { start: number; end: number }):
   return windows.find(x => x.start < w.end && x.end > w.start)
 }
 
-/** The first whole number of hours from now (within the create action's range) whose window is free. */
-export function firstFreeStartHours(windows: SlotWindow[], format: string, maxTeams: number, homeAndAway: boolean, now: number, minH = 2, maxH = 72): number | null {
-  for (let h = minH; h <= maxH; h++) {
-    if (!clash(windows, blockingWindow(format, maxTeams, homeAndAway, now + h * 3600_000))) return h
-  }
-  return null
+const MINUTE = 60_000
+/** A moment rounded up, or down, to the whole minute. */
+export const ceilMinute = (t: number): number => Math.ceil(t / MINUTE) * MINUTE
+export const floorMinute = (t: number): number => Math.floor(t / MINUTE) * MINUTE
+
+/**
+ * The first whole minute from `minAhead` to `maxAhead` after now (the create action's range: 2 to 72 hours) whose
+ * window is free, in ms; null when none is. Each window refuses the starts strictly between its start less the new
+ * window's length after the kickoff and its end plus the hour before it, so the first free minute is the first one of
+ * the range or the first minute at or after such an end (FoxLeague's `free_starts`, tournament_slots.rs).
+ */
+export function firstFreeStart(windows: SlotWindow[], format: string, maxTeams: number, homeAndAway: boolean, now: number, minAhead = 2 * 3600_000, maxAhead = 72 * 3600_000): number | null {
+  const lo = ceilMinute(now + minAhead)
+  const hi = now + maxAhead
+  const candidates = [lo, ...windows.map(w => ceilMinute(w.end + BOOKING_PAD_MS))].filter(t => t >= lo && t <= hi).sort((a, b) => a - b)
+  return candidates.find(t => !clash(windows, blockingWindow(format, maxTeams, homeAndAway, t))) ?? null
 }
 
 /** Stretches of time no window covers, between two moments, longest first after the first five by time. */

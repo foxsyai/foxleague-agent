@@ -1,0 +1,223 @@
+// A tournament start to the minute (2026-11-15). Seen live at 17:09 UTC: following the owner's organizer line, agents 7
+// and 9 each planned a public Silver round robin in the only free gap of FoxLeague's calendar in the next 72 hours,
+// 17 Nov 18:48 to 21:00 UTC. A tournament books 1 h before its start to 1 h after its estimate (3 minutes a match), so
+// only a 3-team round robin fits, starting from 19:48 to 19:51. Both sent "starts_in_hours": 50.7 and parseAction
+// refused it ("starts_in_hours must be an integer in [2, 72]"); whole hours from the moment the create runs (up to most
+// of a tick after the plan) cannot land in a 3-minute window. One test per point, named after it; each failed on the
+// branch at f9ca5f0 before the fix.
+//
+// FoxLeague (release/mainnet-1.0 fb820dd57, backend/src/tournament_slots.rs and routes/tournaments.rs
+// create_tournament_inner): `starts_at` is any instant (RFC 3339), never rounded or aligned; create asks only that it is
+// more than 1 hour from now (`far_enough`), at most 90 days ahead (`too_far`), more than 5 minutes after the deadline,
+// and that its booking [start - 1 h, start + estimate + 1 h) overlaps no other (half-open: touching is free). Only the
+// calendar's proposal (`next_free`) is on the quarter hour.
+
+import { mock, test } from 'node:test'
+import assert from 'node:assert/strict'
+import { describeAction, parseAction, type Action } from '../src/executor/actions.ts'
+import { actionDeadline } from '../src/executor/deadlines.ts'
+import { renderDigest } from '../src/snapshot/digest.ts'
+import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
+import { dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
+
+const H = 3600_000
+const MIN = 60_000
+/** Two days from now (UTC): 18:48 that day is 42 to 67 hours ahead, whatever the time the suite runs. */
+const DAY = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10)
+const at = (hm: string) => Date.parse(`${DAY}T${hm}Z`)
+/** A whole UTC minute in the form the action takes. */
+const minute = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}Z`
+
+const LIVE_FEES = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 0, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 0, calendar_deposit_grace_minutes: 60 }
+const NOTHING_OWED = { owed: false, games: 0, private_fee_foxsy: 0, deposit_foxsy: 0, total_foxsy: 0, grace_minutes: 60, no_free_cancel: false }
+
+/** FoxLeague's calendar of 15 Nov, two days ahead: taken until 18:48 and again from 21:00, nothing free in between. */
+function busyCalendar(s = snapshot()) {
+  s.market.slots = [
+    { id: 901, title: 'Before', start: Date.now() - H, end: at('18:48') },
+    { id: 902, title: 'After', start: at('21:00'), end: Date.now() + 100 * H },
+  ]
+  return s
+}
+
+/** The public Silver round robin of 3 agents 7 and 9 planned, at a start of the action's own. */
+const trio = (start: Record<string, unknown>) => ({ type: 'create_tournament', title: 'Evening Trio', format: 'round_robin', tier: 'silver', max_teams: 3, min_teams: 3, entry_fee_foxsy: 1000, registration_closes_minutes_before: 60, round_interval_minutes: 30, ...start })
+
+/** One dry run of one action, on an executor of its own (each create books its fee in the dry ledger). */
+async function dry(action: Action, s = busyCalendar()) {
+  const m = setup()
+  const [r] = await m.exec.run(m.agent(), dryWallet, s, [{ action, reason: '' }])
+  return r!
+}
+
+test('SM-1 the live case: a 3-team round robin in the only gap of 72 hours (18:48 to 21:00 UTC two days ahead) at 19:49 is parsed, passes the slot check and FoxLeague is sent 19:49', async () => {
+  const action = parseAction(trio({ starts_at: `${DAY}T19:49Z` }))
+  assert.equal((action as { starts_at?: string }).starts_at, `${DAY}T19:49:00.000Z`, 'kept as the UTC minute it names')
+  assert.match(describeAction(action), new RegExp(`starts ${DAY} 19:49 UTC`))
+  const quoted: unknown[] = []
+  const created: Record<string, unknown>[] = []
+  const m = setup({
+    fox: {
+      organizerFeeQuote: async (_w: unknown, body: Record<string, unknown>) => (quoted.push(body.starts_at), NOTHING_OWED),
+      createTournament: async (_w: unknown, body: Record<string, unknown>) => (created.push({ ...body }), { id: 55 }),
+      tournament: async () => tournament(55),
+      joinTournament: async () => ({}),
+    },
+  })
+  const s = busyCalendar()
+  s.config!.organizer_fees = LIVE_FEES
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  assert.deepEqual(quoted, [`${DAY}T19:49:00.000Z`], 'the organizer quote is asked for that start')
+  assert.equal(created.length, 1)
+  assert.equal(created[0]!.starts_at, `${DAY}T19:49:00.000Z`, 'FoxLeague is sent the minute the plan named, not a time counted from the run')
+  assert.equal(created[0]!.deadline, `${DAY}T18:49:00.000Z`, 'registration closes 60 minutes before it')
+})
+
+test('SM-2 a start one minute too early (19:47) or too late (19:52) for the gap is refused by the slot check, with the first free start as starts_at, which lands in the gap', async () => {
+  for (const [hm, by] of [['19:47', 901], ['19:52', 902]] as const) {
+    const r = await dry(parseAction(trio({ starts_at: `${DAY}T${hm}Z` })))
+    assert.equal(r.status, 'refused', `${hm}: ${r.summary}`)
+    assert.match(r.summary, new RegExp(`time slot taken by T${by}`), hm)
+    const free = /the first free start for this format and size is starts_at (\S+)/.exec(r.summary)?.[1]
+    assert.equal(free, `${DAY}T19:48Z`, `${hm}: the first free minute, in the form the parser takes: ${r.summary}`)
+    assert.doesNotMatch(r.summary, /starts_in_hours/, 'never whole hours: they are stale by the next plan and miss a gap like this one')
+    const ok = await dry(parseAction(trio({ starts_at: free })))
+    assert.equal(ok.status, 'dry_run', `the start it names fits: ${ok.summary}`)
+  }
+  // Both edges fit: a booking that ends where another starts does not overlap it (FoxLeague's half-open windows).
+  for (const hm of ['19:48', '19:51']) {
+    const r = await dry(parseAction(trio({ starts_at: `${DAY}T${hm}Z` })))
+    assert.equal(r.status, 'dry_run', `${hm}: ${r.summary}`)
+  }
+})
+
+test('SM-3 a start less than 2 hours or more than 72 hours after the create runs is refused', async () => {
+  const empty = () => snapshot()
+  const now = Date.now()
+  const ceil = (ms: number) => Math.ceil(ms / MIN) * MIN
+  const floor = (ms: number) => Math.floor(ms / MIN) * MIN
+  const soon = await dry(parseAction(trio({ starts_at: minute(ceil(now) + 119 * MIN) })), empty())
+  assert.equal(soon.status, 'refused', soon.summary)
+  assert.match(soon.summary, /less than 2 hours/)
+  const far = await dry(parseAction(trio({ starts_at: minute(ceil(now + 72 * H) + MIN) })), empty())
+  assert.equal(far.status, 'refused', far.summary)
+  assert.match(far.summary, /more than 72 hours/)
+  // Inside the bounds, by a minute or two.
+  assert.equal((await dry(parseAction(trio({ starts_at: minute(ceil(now + 2 * H) + 2 * MIN) })), empty())).status, 'dry_run')
+  assert.equal((await dry(parseAction(trio({ starts_at: minute(floor(now + 72 * H) - 2 * MIN) })), empty())).status, 'dry_run')
+  // The whole hours keep their own bounds at the parser.
+  for (const h of [1, 73]) assert.throws(() => parseAction(trio({ starts_in_hours: h })), /starts_in_hours must be an integer in \[2, 72\]/)
+})
+
+test('SM-4 a start that cannot be read is refused: by the parser for a plan, by the rules for an action built another way', async () => {
+  for (const bad of [
+    `${DAY} 19:49`, // no T
+    `${DAY}T19:49`, // no zone
+    `${DAY}T19:49+02:00`, // not UTC
+    `${DAY}T19:49:30Z`, // not a whole minute
+    `${DAY}T19:49:00.5Z`,
+    '2026-02-30T10:00Z', // no such day (Date.parse rolls it to 2 March)
+    `${DAY}T24:00Z`, // Date.parse takes it as the next midnight
+    `${DAY}T19:60Z`,
+    'in 50.7 hours',
+    '',
+    at('19:49'), // a number of milliseconds
+  ]) {
+    assert.throws(() => parseAction(trio({ starts_at: bad })), /starts_at must be a UTC minute/, String(bad))
+  }
+  // Neither form, or both: refused, never a guess.
+  assert.throws(() => parseAction(trio({})), /starts_at must be a UTC minute/)
+  assert.throws(() => parseAction(trio({ starts_at: null })), /starts_at must be a UTC minute/)
+  assert.throws(() => parseAction(trio({ starts_at: `${DAY}T19:49Z`, starts_in_hours: 50 })), /starts_at or starts_in_hours, not both/)
+  // What agents 7 and 9 sent stays refused: a fraction of an hour is no minute.
+  assert.throws(() => parseAction(trio({ starts_in_hours: 50.7 })), /starts_in_hours must be an integer in \[2, 72\]/)
+  // An action built another way (not through the parser): refused before anything is asked or paid.
+  const base = parseAction(trio({ starts_at: `${DAY}T19:49Z` })) as Record<string, unknown>
+  for (const start of [{ starts_at: 'tomorrow' }, { starts_at: undefined }, { starts_at: `${DAY}T19:49:00.000Z`, starts_in_hours: 50 }]) {
+    const r = await dry({ ...base, ...start } as unknown as Action)
+    assert.equal(r.status, 'refused', `${JSON.stringify(start)}: ${r.summary}`)
+    assert.match(r.summary, /the start could not be read/)
+  }
+})
+
+test('SM-5 the whole hours still work: parsed as before, created that many hours after the run, and a clash names the first free start as starts_at', async () => {
+  const old = parseAction(trio({ starts_in_hours: 24 }))
+  assert.equal((old as { starts_in_hours?: number }).starts_in_hours, 24)
+  assert.equal('starts_at' in old, false)
+  const created: Record<string, unknown>[] = []
+  const m = setup({ fox: { createTournament: async (_w: unknown, body: Record<string, unknown>) => (created.push({ ...body }), { id: 55 }), tournament: async () => tournament(55), joinTournament: async () => ({}) } })
+  const before = Date.now()
+  await withLive(m.store, async () => {
+    const [r] = await m.exec.run(m.agent(), liveWallet, snapshot(), [{ action: old, reason: '' }])
+    assert.equal(r!.status, 'confirmed', r!.summary)
+  })
+  const start = Date.parse(String(created[0]!.starts_at))
+  assert.ok(start >= before + 24 * H && start <= Date.now() + 24 * H, `24 hours after the run: ${created[0]!.starts_at}`)
+  assert.equal(Date.parse(String(created[0]!.deadline)), start - 60 * MIN)
+  // In the busy calendar: the first free start in the form that lands in the gap.
+  const r = await dry(parseAction(trio({ starts_in_hours: 50 })))
+  assert.equal(r.status, 'refused', r.summary)
+  assert.match(r.summary, new RegExp(`the first free start for this format and size is starts_at ${DAY}T19:48Z`))
+})
+
+test('SM-6 a create at a fixed minute runs before it is too late: its deadline is its start less 2 hours, or less its registration close and 30 minutes', () => {
+  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z` })), snapshot()), at('19:49') - 2 * H)
+  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z`, registration_closes_minutes_before: 120 })), snapshot()), at('19:49') - 150 * MIN)
+  // Without a snapshot too: the start is in the action itself.
+  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z` })), null), at('19:49') - 2 * H)
+  // Whole hours count from the run: no time limit, as before.
+  assert.equal(actionDeadline(parseAction(trio({ starts_in_hours: 24 })), snapshot()), null)
+})
+
+test('SM-7 the free-slot hint gives each gap to the minute, rounded inward, with the first starts_at that fits; a taken window ends rounded up', async () => {
+  const s = snapshot()
+  // Windows that end and start on seconds, as FoxLeague's do when a tournament was created at "now + N hours".
+  s.market.slots = [
+    { id: 901, title: 'Before', start: Date.now() - H, end: Date.parse(`${DAY}T18:47:30Z`) },
+    { id: 902, title: 'After', start: Date.parse(`${DAY}T21:00:20Z`), end: Date.now() + 100 * H },
+  ]
+  const d = renderDigest(s)
+  const md = DAY.slice(5)
+  assert.match(d, new RegExp(`T901 "Before" [^\\n]* to ${md} 18:48\\n`), 'the taken window up to its end, never a minute short')
+  const line = d.split('\n').find(l => l.startsWith("Free for a new tournament's whole window")) ?? ''
+  assert.match(line, new RegExp(`${DAY}T18:48Z to ${DAY}T21:00Z \\(starts_at from ${DAY}T19:48Z to ${DAY}T20:00Z less the estimate\\)`), line)
+  // The start it gives fits; the minute before it does not (its window would begin at 18:47, inside T901's).
+  assert.equal((await dry(parseAction(trio({ starts_at: `${DAY}T19:48Z` })), s)).status, 'dry_run')
+  assert.equal((await dry(parseAction(trio({ starts_at: `${DAY}T19:47Z` })), s)).status, 'refused')
+})
+
+test('SM-8 the prompt shows the create with starts_at, a UTC minute', () => {
+  const line = SYSTEM_PROMPT.split('\n').find(l => l.startsWith('- {"type":"create_tournament"')) ?? ''
+  assert.match(line, /"starts_at":"YYYY-MM-DDTHH:MMZ"/)
+  assert.doesNotMatch(line, /starts_in_hours/)
+  assert.match(line, /2 to 72 hours after the action runs/)
+})
+
+test('SM-9 whole hours: FoxLeague is sent the start the slot check used, counted from the moment the rules ran, not from a later clock', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  try {
+    const t0 = Date.now()
+    const created: Record<string, unknown>[] = []
+    const m = setup({
+      fox: {
+        // The reads before the create take time (here 90 seconds) after the executor took its moment.
+        organizerFeeQuote: async () => (mock.timers.tick(90_000), NOTHING_OWED),
+        createTournament: async (_w: unknown, body: Record<string, unknown>) => (created.push({ ...body }), { id: 55 }),
+        tournament: async () => tournament(55),
+        joinTournament: async () => ({}),
+      },
+    })
+    const s = snapshot()
+    s.config!.organizer_fees = LIVE_FEES
+    await withLive(m.store, async () => {
+      const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action: parseAction(trio({ starts_in_hours: 24 })), reason: '' }])
+      assert.equal(r!.status, 'confirmed', r!.summary)
+    })
+    assert.equal(created[0]!.starts_at, new Date(t0 + 24 * H).toISOString())
+  } finally {
+    mock.timers.reset()
+  }
+})

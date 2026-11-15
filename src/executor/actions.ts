@@ -50,7 +50,12 @@ export type Action =
       max_teams: number
       min_teams: number
       entry_fee_foxsy: number
-      starts_in_hours: number
+      /**
+       * The start, one of two forms (createStartMs): `starts_at`, a whole UTC minute in ISO form (2026-11-15, so a narrow
+       * gap of FoxLeague's calendar can be used), or `starts_in_hours`, whole hours from when the create runs (the first form).
+       */
+      starts_at?: string
+      starts_in_hours?: number
       registration_closes_minutes_before: number
       round_interval_minutes: number
       home_and_away?: boolean
@@ -190,7 +195,7 @@ export function parseAction(raw: unknown): Action {
         max_teams: int(o, 'max_teams', 3, 64),
         min_teams: int(o, 'min_teams', 2, 64),
         entry_fee_foxsy: int(o, 'entry_fee_foxsy', 1, 1_000_000),
-        starts_in_hours: int(o, 'starts_in_hours', 2, 72),
+        ...createStart(o),
         registration_closes_minutes_before: int(o, 'registration_closes_minutes_before', 10, 24 * 60),
         round_interval_minutes: int(o, 'round_interval_minutes', 30, 1440),
         ...(o.home_and_away === true && format === 'round_robin' ? { home_and_away: true } : {}),
@@ -244,6 +249,51 @@ function ovrRange(o: Record<string, unknown>): { ovr_min?: number; ovr_max?: num
   return { ...(lo !== undefined ? { ovr_min: lo } : {}), ...(hi !== undefined ? { ovr_max: hi } : {}) }
 }
 
+/** A create's start is at least 2 hours and at most 72 hours after the create runs (the rules check it then). */
+export const CREATE_START_MIN_MS = 2 * 3600_000
+export const CREATE_START_MAX_MS = 72 * 3600_000
+
+/** A whole UTC minute: `2026-11-17T19:49Z`, with `:00` or `:00.000` seconds allowed; no other zone, no other second. */
+const UTC_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::00(?:\.0{1,3})?)?Z$/
+const START_FORM = 'starts_at must be a UTC minute such as 2026-11-17T19:49Z (or starts_in_hours, whole hours 2 to 72)'
+
+/** The ms of a UTC minute in that form, or null: a day or an hour Date.parse would roll over (30 February, 24:00) is none. */
+function utcMinuteMs(v: unknown): number | null {
+  if (typeof v !== 'string' || !UTC_MINUTE.test(v)) return null
+  const ms = Date.parse(v)
+  return Number.isFinite(ms) && new Date(ms).toISOString().slice(0, 16) === v.slice(0, 16) ? ms : null
+}
+
+/**
+ * A create's start, in one of its two forms (A tournament start to the minute, 2026-11-15). `starts_at` names the minute
+ * itself, so the start FoxLeague is sent does not move with the moment the action runs (up to most of a tick after the
+ * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 to 72 hours ahead depends on when the create
+ * runs: the rules check it then. A day or hour Date.parse would roll over (30 February, 24:00) is refused, as is any
+ * second but :00. `starts_in_hours` keeps its bounds here, as before.
+ */
+function createStart(o: Record<string, unknown>): { starts_at: string } | { starts_in_hours: number } {
+  const hours = o.starts_in_hours !== undefined && o.starts_in_hours !== null
+  const at = o.starts_at !== undefined && o.starts_at !== null
+  if (hours && at) throw new ParseError('starts_at or starts_in_hours, not both')
+  if (hours) return { starts_in_hours: int(o, 'starts_in_hours', 2, 72) }
+  const ms = utcMinuteMs(o.starts_at)
+  if (ms === null) throw new ParseError(START_FORM)
+  return { starts_at: new Date(ms).toISOString() }
+}
+
+/**
+ * When a create's tournament starts, in ms: its `starts_at`, or `now` (the moment the rules check it) plus its whole
+ * hours. Null when it cannot be read: neither form, both, or a time that is none (an action not built by parseAction);
+ * the rules then refuse it.
+ */
+export function createStartMs(a: { starts_at?: unknown; starts_in_hours?: unknown }, now: number): number | null {
+  const at = a.starts_at !== undefined && a.starts_at !== null
+  const hours = a.starts_in_hours !== undefined && a.starts_in_hours !== null
+  if (at === hours) return null
+  if (at) return utcMinuteMs(a.starts_at)
+  return typeof a.starts_in_hours === 'number' && Number.isFinite(a.starts_in_hours) ? now + a.starts_in_hours * 3600_000 : null
+}
+
 /** The range in FoxLeague's words: "30 to 40", "at most 35", "at least 30". */
 export function rangeWords(lo: number | undefined, hi: number | undefined): string {
   return lo !== undefined && hi !== undefined ? (lo === hi ? `exactly ${lo}` : `${lo} to ${hi}`) : hi !== undefined ? `at most ${hi}` : lo !== undefined ? `at least ${lo}` : 'any'
@@ -261,7 +311,7 @@ export function describeAction(a: Action): string {
     case 'join_tournament': return `join tournament T${a.tournament_id}`
     case 'leave_tournament': return `leave tournament T${a.tournament_id}`
     case 'widen_range': return `widen the OVR range of T${a.tournament_id}${a.ovr_min !== undefined ? `, minimum ${a.ovr_min ?? 'none'}` : ''}${a.ovr_max !== undefined ? `, maximum ${a.ovr_max ?? 'none'}` : ''}`
-    case 'create_tournament': return `create ${a.invite_user_ids?.length ? `private (${a.invite_user_ids.length} invited) ` : ''}${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, starts in ${a.starts_in_hours} h${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
+    case 'create_tournament': return `create ${a.invite_user_ids?.length ? `private (${a.invite_user_ids.length} invited) ` : ''}${a.tier} ${a.format} "${a.title}" ${a.min_teams}-${a.max_teams} teams, fee ${a.entry_fee_foxsy}, ${a.starts_at !== undefined ? `starts ${String(a.starts_at).slice(0, 16).replace('T', ' ')} UTC` : `starts in ${a.starts_in_hours} h`}${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
     case 'create_challenge': return `create ${a.tier} 1v1, stake ${a.stake_foxsy}${a.target_user_id ? ` vs user ${a.target_user_id}` : ' (open)'}${a.ovr_min !== undefined || a.ovr_max !== undefined ? `, OVR ${rangeWords(a.ovr_min, a.ovr_max)}` : ''}`
     case 'buy': return `buy ${a.product}${a.quantity ? ` x${a.quantity}` : ''}${a.player_nonces ? ` for ${a.player_nonces.map(n => `#${n}`).join(',')}` : ''}`
     case 'claim_refund': return `claim refund T${a.tournament_id}`

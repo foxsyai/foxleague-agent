@@ -3,7 +3,7 @@
 import { test } from 'node:test'
 import { once } from 'node:events'
 import assert from 'node:assert/strict'
-import { blockingWindow, clash, estimateMinutes, firstFreeStartHours, freeGaps, slotWindows } from '../src/executor/slots.ts'
+import { blockingWindow, clash, estimateMinutes, firstFreeStart, freeGaps, slotWindows } from '../src/executor/slots.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import type { Tournament } from '../src/foxleague/types.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
@@ -34,10 +34,11 @@ test('slots: OTAN (16-team round robin at 06:51) blocks 05:51 to 13:51, the star
   // The agent's knockout, 18 h after 15:37: 09:37, inside OTAN's window.
   const now = Date.parse('2026-09-29T15:37:00Z')
   assert.equal(clash(windows, blockingWindow('knockout', 8, false, now + 18 * H))?.id, 65)
-  // First free whole hour: the new window (1 h before, 24 min + 1 h after) must clear 13:51.
-  assert.equal(firstFreeStartHours(windows, 'knockout', 8, false, now, 2, 72), 2)
-  // From 13 h on: the window starts 1 h before the kickoff, so the kickoff must be at 14:51 or later: 24 h (15:37).
-  assert.equal(firstFreeStartHours(windows, 'knockout', 8, false, now, 13, 72), 24)
+  // First free minute (whole hours until 2026-11-15): the new window (1 h before, 24 min + 1 h after) must clear 05:51.
+  assert.equal(firstFreeStart(windows, 'knockout', 8, false, now), now + 2 * H)
+  // From 13 h on: the window starts 1 h before the kickoff, so the kickoff must be at 14:51 or later: 14:51 itself
+  // (in whole hours it was 24 h, 15:37).
+  assert.equal(firstFreeStart(windows, 'knockout', 8, false, now, 13 * H), Date.parse('2026-09-30T14:51:00Z'))
 })
 
 test('slots: free gaps between windows', () => {
@@ -66,8 +67,9 @@ test('slots: a create that clashes is refused before FoxLeague is asked, with th
   const [r] = await m.exec.run(m.agent(), dryWallet, s, create(12))
   assert.equal(r!.status, 'refused')
   assert.match(r!.summary, /time slot taken by T65/)
-  const free = Number(/starts_in_hours (\d+)/.exec(r!.summary)?.[1])
-  assert.equal(free, 2, 'a start well before OTAN fits')
+  // The first free start as the minute itself (whole hours until 2026-11-15): 2 hours from now, rounded up to the minute.
+  const free = Date.parse(/starts_at (\S+)/.exec(r!.summary)?.[1] ?? '')
+  assert.ok(free % 60_000 === 0 && free >= now + 2 * H && free <= Date.now() + 2 * H + 60_000, `a start well before OTAN fits: ${r!.summary}`)
   const [ok] = await m.exec.run(m.agent(), dryWallet, s, create(19))
   assert.equal(ok!.status, 'dry_run', 'after OTAN (window ends at +17 h, ours starts 1 h earlier)')
   assert.match(renderDigest(s), /Tournament time slots taken[\s\S]*T65 "OTAN"/)
