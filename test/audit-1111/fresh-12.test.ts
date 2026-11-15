@@ -78,12 +78,13 @@ test('FRESH-12: a Telegram token that could not be checked is left out, and the 
   mkdirSync(join(home, 'data'), { mode: 0o700 }) // the installer makes it at its first step
   const r = await configureOnTerminal(envFile, join(home, 'data'), [
     [/Anthropic API key \(sk-ant-\.\.\.\): /, 'sk-ant-typed-by-the-owner'],
-    [/Telegram bot token from @BotFather: /, '123456789:AAH-a-token-that-cannot-be-checked-now'],
+    // (The question since 2026-11-15, never the word bot: test/no-word-bot.test.ts.)
+    [/Telegram token from BotFather: /, '123456789:AAH-a-token-that-cannot-be-checked-now'],
     [/Binance API key [^:]*: /, ''],
     [/Binance API secret: /, ''],
   ])
   assert.equal(r.status, 0, r.out)
-  assert.match(r.out, /The Telegram bot token was not saved: it could not be checked \(no network in a test\)\./)
+  assert.match(r.out, /The Telegram token was not saved: it could not be checked \(no network in a test\)\./)
   assert.match(r.out, /Saved: ANTHROPIC_API_KEY\./)
   const env = readFileSync(envFile, 'utf8')
   assert.match(env, /^ANTHROPIC_API_KEY="sk-ant-typed-by-the-owner"$/m, 'the key that was typed first is kept')

@@ -947,7 +947,7 @@ export class Service {
     const labels = changed.map(([k]) => KEY_FIELDS.find(f => f.key === k)!.label).join(', ')
     if (names.includes('TELEGRAM_BOT_TOKEN') || names.includes('TELEGRAM_CHAT_ID')) {
       // Tell the chat being replaced first, so a silent re-pointing of Telegram cannot go unnoticed.
-      this.telegram?.send(`keys updated: ${labels} (${by}). Notifications move to ${names.includes('TELEGRAM_CHAT_ID') ? `chat ${values.TELEGRAM_CHAT_ID}` : 'the new bot token'}; this chat stops receiving them.`)
+      this.telegram?.send(`keys updated: ${labels} (${by}). Notifications move to ${names.includes('TELEGRAM_CHAT_ID') ? `chat ${values.TELEGRAM_CHAT_ID}` : 'the new Telegram token'}; this chat stops receiving them.`)
       this.cfg.telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined
       this.cfg.telegramChatId = process.env.TELEGRAM_CHAT_ID?.trim() || undefined
       this.telegram?.stop()
@@ -968,7 +968,7 @@ export class Service {
   /** Starts linking the owner's Telegram chat: needs the bot token saved and no chat linked yet. */
   async startTelegramLink(): Promise<{ code: string; username: string }> {
     const token = this.cfg.telegramToken
-    if (!token) throw new Error('save the Telegram bot token first')
+    if (!token) throw new Error('save the Telegram token first')
     if (this.cfg.telegramChatId) throw new Error('a chat is already linked; to link another one, clear the Telegram chat id in Keys first')
     const username = await telegramMe(token)
     const code = String(randomInt(100_000, 1_000_000))
@@ -984,7 +984,7 @@ export class Service {
     const token = this.cfg.telegramToken
     if (!link || link.until < Date.now() || !token) throw new Error('the code expired: press Link my Telegram again')
     const id = pickOwnerChat(await telegramRecentChats(token, link.since), link.code)
-    if (!id) throw new Error('the code was not found yet: send exactly those 6 digits to your Telegram bot from your own Telegram account, then press I sent it again')
+    if (!id) throw new Error('the code was not found yet: from your own Telegram account, send exactly those 6 digits to your agent\'s Telegram account, then press I sent it again')
     this.telegramLink = null
     return this.updateKeys({ TELEGRAM_CHAT_ID: id }, by)
   }

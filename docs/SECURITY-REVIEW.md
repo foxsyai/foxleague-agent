@@ -724,8 +724,10 @@ windows, the ranked cooldown, the previous plan's length, the Zeus tick) the tes
 | MS-C3..C8 | low | Server, FAQ, Update, INSTALL.md, Costs, Troubleshooting, Keys: the server's processor (x86-64), the fourth thing the agents share (a private tournament never invites your other teams), the low-funds warning on Telegram (in the morning summary), a quiet Telegram (the default), the Binance key (it reads too) and the top-up amount (less, the fee comes off it) | Each page says what the code does |
 | R28A-1 | low | Agent review of PR #28: the Costs page still said a Binance key alone brings a top-up proposal | It names Telegram and LIVE and once a day per agent, as the other pages do; the test reads the Costs page too |
 
-Not changed: the Telegram key fields keep Telegram's own name, "bot token". The cost of a single agent at the 2-hour
-tick (MS-C1) is closed by CR1 below.
+Not changed then: the Telegram key fields kept Telegram's own name, "bot token". Changed on 15 Nov 2026 (NO-BOT, the
+owner's rule that no text a user reads says "bot"): the field is "Telegram token" and the account is "your agent's
+Telegram account"; only Telegram's username rule is quoted (`test/no-word-bot.test.ts`). The cost of a single agent
+at the 2-hour tick (MS-C1) is closed by CR1 below.
 
 ## The game manual cached only when it is read again, 2026-10-24
 
@@ -2217,6 +2219,34 @@ Stays open:
 - The 1v1 busy window FoxLeague serves (`viewer_tournament_window_opens_in_secs`) is read from the tournament's detail
   when the join runs; the schedule does not use it.
 - `cancel_listing` runs early in every plan that has one.
+
+## GitHub review of PR #71 (2026-11-15)
+
+The agent review of PR #71 on GitHub (the install videos on the site, Claude Fable 5.2 at high effort) passed it with
+one low finding, about the site's videos only: nothing about money, keys or signing. The fix is by Claude Opus 5.5,
+test first: the five tests "R71A-1 ..." in `test/install-videos.test.ts` failed on the branch at a689a57 (the script
+was not in the repository) and pass now. Its re-review after 22b2dae and 668e162 passed it with one more low finding
+(R71A-2), about the maintainer's own computer only. The fix is by Claude Opus 5.5, test first: the test "R71A-2: ..."
+in `test/audit-1111/install-12.test.ts` failed on the branch at 668e162 on the two lines named and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R71A-1 | low (agent review of PR #71; tests and hygiene, the site only) | The three install videos at the top of the install pages (`site/public/videos/install-{windows,mac,linux}.{mp4,jpg}`) had no test and the script that draws them was not in the repository. A missing or misnamed video or poster failed no test, nor did a page that gives the wrong length. When an installer line the videos show changed (this pull request changed one, the Telegram question), the videos went stale and nobody but their author could draw them again | The script moves into `site/scripts/videos/`, next to `site/scripts/screenshots.ts`, with its README (how to draw the videos again and when) and its own pinned development packages (Playwright's core and two fonts; the agent and the site do not get them). It finds the repository from where it sits. `test/install-videos.test.ts` holds that every install page names its own video and poster, that every file in `site/public/videos` is shown on a page and that each MP4 is real, has its index at the front and the length its page says twice. It holds every one of the 132 installer lines the videos quote: each must still stand in its file, found by its text, so a line that only moved fails nothing; a changed one fails with the lines named and "Re-render the videos". It holds that the script draws on example values only: the user ana, word1 to word24, a made-up address with a wrong checksum that every terminal screen tags as an example, a throwaway wallet, no key, no env file, no upstream it could reach. `site/README.md` names the script |
+| R71A-2 | low (agent re-review of PR #71; supply chain hygiene, the maintainer's computer only) | The steps to draw the install videos again (`site/scripts/videos/README.md:67`) built the site with `cd site && npm ci && npm run build`; the site's own README (`site/README.md:8`) said `npm install`. A maintainer who follows either page runs the install scripts of the site's dependency tree (esbuild, sharp and fsevents have one today) on their own computer, next to their SSH agent and GitHub login; CI never runs them, so nothing shows. INSTALL-12 closed that for `site/deploy-site.sh` and `site/Dockerfile`, but its test reads scripts only | Both pages say `npm ci --ignore-scripts`, the way `site/deploy-site.sh` builds: a clean clone of this branch installs the site that way and builds its 21 pages. The videos' own folder already did: its three packages have no install script (playwright-core downloads no browser; the README asks for Chrome on the machine). The test "R71A-2: ..." next to INSTALL-12 holds every `npm ci` or `npm install` of the READMEs, `AGENTS.md`, `INSTALL.md`, `docs/` and the site's manual to carry `--ignore-scripts` in the same command. `docs/SECURITY-REVIEW.md` is left out: its rows quote the old commands as the findings they were |
+
+Stays open:
+- What a frame shows cannot be read by a test: the tests hold the quoted lines, the files and the example values,
+  not the pictures. The screens the videos take from the dashboard (the login, the Getting started guide, the update
+  notice) and from the install page can change while every test stays green; the script's README says to look at a
+  few stills after such a change.
+- A short quote ("Done", "Running.", `cd ~/foxleague-agent`) holds while any line of its file has its words. A change
+  to that one line while the same words stand elsewhere in the file is not seen.
+- No video was drawn again: every quote holds on this branch. The line numbers in the script are hints for people;
+  the eight lines of the install pages that the new video block moved down by five are updated.
+- R71A-2 reads the pages it names, one line at a time, for `npm ci`, `npm install` and `npm i`. A command split over
+  two lines, another package manager or a comment in a script is not seen: the header of
+  `scripts/release/fresh-install-check.sh` says it needs "`npm ci` done in this folder" (the script itself asks for
+  `npm ci --ignore-scripts` when the packages are missing).
 
 ## One manager message at a time (2026-11-13)
 

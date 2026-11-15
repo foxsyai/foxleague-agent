@@ -7,7 +7,7 @@ import { join } from 'node:path'
 
 export const KEY_FIELDS = [
   { key: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', secret: true },
-  { key: 'TELEGRAM_BOT_TOKEN', label: 'Telegram bot token', secret: true },
+  { key: 'TELEGRAM_BOT_TOKEN', label: 'Telegram token', secret: true },
   { key: 'TELEGRAM_CHAT_ID', label: 'Telegram chat id', secret: false },
   { key: 'BINANCE_API_KEY', label: 'Binance API key', secret: true },
   { key: 'BINANCE_API_SECRET', label: 'Binance API secret', secret: true },
@@ -57,7 +57,7 @@ export function keyFormatError(key: KeyName, v: string): string | null {
     case 'ANTHROPIC_API_KEY':
       return /^sk-ant-[A-Za-z0-9_-]{20,}$/.test(v) ? null : 'expected sk-ant-…'
     case 'TELEGRAM_BOT_TOKEN':
-      return /^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(v) ? null : 'expected 123456789:AA… from @BotFather'
+      return /^\d{5,}:[A-Za-z0-9_-]{30,}$/.test(v) ? null : 'expected 123456789:AA… from BotFather'
     case 'TELEGRAM_CHAT_ID':
       return /^-?\d{3,}$/.test(v) ? null : 'expected a number'
     case 'BINANCE_API_KEY':

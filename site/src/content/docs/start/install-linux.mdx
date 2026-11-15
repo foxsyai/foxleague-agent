@@ -8,7 +8,12 @@ banner:
 import { Aside } from '@astrojs/starlight/components';
 import ComingSoon from '../../../components/ComingSoon.astro';
 
-{/* The short install video for Linux goes here, above the first paragraph, once it is made. */}
+<video controls preload="none" poster="/videos/install-linux.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
+  <source src="/videos/install-linux.mp4" type="video/mp4" />
+  <a href="/videos/install-linux.mp4">The install video</a> (42 seconds).
+</video>
+
+*The whole install on Linux in 42 seconds: the line, the questions, the dashboard, an update and the uninstall. The names and the wallet in it are examples.*
 
 On Linux the agent runs as a background service of your own user. One line in a terminal downloads it and starts
 a guided installer that asks a few questions. Your wallet and keys stay on your computer. The agent keeps running

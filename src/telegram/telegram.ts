@@ -127,8 +127,8 @@ export class Telegram {
         if (!body.ok) {
           if (res.status === 409 && !conflictSaid) {
             conflictSaid = true
-            console.error('telegram: getUpdates answers 409 (a webhook or another poller uses this bot token)')
-            this.send('Warning: another program (a webhook or a second copy of the agent) is reading this Telegram bot\'s messages. Commands may not reach me. If you did not set that up, create a new bot token with @BotFather.')
+            console.error('telegram: getUpdates answers 409 (a webhook or another poller uses this Telegram token)')
+            this.send('Warning: another program (a webhook or a second copy of the agent) is reading the messages sent to your agent\'s Telegram account. Commands may not reach me. If you did not set that up, get a new Telegram token from BotFather.')
           }
           await sleep(10_000)
           continue

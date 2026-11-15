@@ -426,7 +426,8 @@ test('RS-5 the guides: the server guide gives the three test agents\' lists with
   assert.match(read('site/src/content/docs/use/dashboard.md').replace(/\s+/g, ' '), /A row marked "shadow plan, not carried out" is what another AI model would have planned, recorded only to compare[^.]*\. A shadow plan by the agent's own model and effort says so: it is the same model planning the same request a second time\./)
   assert.match(read('site/src/content/docs/use/talk-to-your-manager.md').replace(/\s+/g, ' '), /While the manager is answering, \*\*Send\*\* waits: the answer is written and paid for even when the page loses the connection, so a second Send would pay twice\./)
   for (const f of ['site/src/content/docs/help/costs.md', 'site/src/content/docs/help/server.mdx', 'site/src/content/docs/use/dashboard.md']) assert.doesNotMatch(read(f), /—|\bbot\b/i, f)
-  // The talk page names "your Telegram bot" elsewhere, as Telegram calls it; the new words do not.
+  // The new words carry no long dash, no comma before the last "and" or "or" and no "bot" (since 2026-11-15 the
+  // whole page is free of that word: test/no-word-bot.test.ts).
   const talk = read('site/src/content/docs/use/talk-to-your-manager.md').replace(/\s+/g, ' ')
   assert.doesNotMatch(talk.slice(talk.indexOf('While the manager is answering'), talk.indexOf('### What the manager remembers')), /—|, and |, or |\bbot\b/i)
 

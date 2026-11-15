@@ -8,7 +8,12 @@ banner:
 import { Aside } from '@astrojs/starlight/components';
 import ComingSoon from '../../../components/ComingSoon.astro';
 
-{/* The short install video for the Mac goes here, above the first paragraph, once it is made. */}
+<video controls preload="none" poster="/videos/install-mac.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
+  <source src="/videos/install-mac.mp4" type="video/mp4" />
+  <a href="/videos/install-mac.mp4">The install video</a> (42 seconds).
+</video>
+
+*The whole install on a Mac in 42 seconds: the line, the questions, the dashboard, an update and the uninstall. The names and the wallet in it are examples.*
 
 On a Mac the agent runs as a background agent of your own user. One line in Terminal downloads it and starts a
 guided installer that asks a few questions. Your wallet and keys stay on your Mac. The agent then plays while you

@@ -1,0 +1,17 @@
+{
+  "name": "foxleague-agent-install-videos",
+  "private": true,
+  "type": "module",
+  "description": "The install videos of the site, drawn from the installers' own texts on example values (see README.md)",
+  "scripts": {
+    "capture": "node src/capture.mjs",
+    "render": "node src/render.mjs",
+    "check": "node src/check-quotes.mjs",
+    "all": "node src/capture.mjs && node src/render.mjs"
+  },
+  "devDependencies": {
+    "@fontsource/inconsolata": "5.3.0",
+    "@fontsource/inter": "5.3.0",
+    "playwright-core": "1.64.1"
+  }
+}
