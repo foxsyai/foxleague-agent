@@ -2389,6 +2389,94 @@ Stays open:
   only here, so both ran against a scratch mirror of its `origin/main` at `56e5b9855`; run `manual-status` on the
   checkout itself before the deploy.
 
+## A tournament start to the minute (2026-11-15)
+
+Seen live at 17:09 UTC. Following the owner's new organizer line, agents 7 and 9 (Opus) each planned a public Silver
+round robin in the only free gap of FoxLeague's calendar in the next 72 hours: 17 Nov 18:48 to 21:00 UTC. A tournament
+books 1 hour before its start to 1 hour after its estimate (3 minutes a match), so only a 3-team round robin fits,
+starting from 19:48 to 19:51. Both sent `"starts_in_hours": 50.7` and `parseAction` refused it ("starts_in_hours must
+be an integer in [2, 72]"). No whole number of hours from the moment the create runs lands in a 3-minute window, so
+the organizer feature could not use such a gap. Nothing was paid. The fix is by Claude Opus 5.5, test first: each
+point has a test of the same name in `test/start-minutes.test.ts` that failed on the branch at f9ca5f0 and passes now.
+
+The form chosen is an absolute `starts_at`, a whole UTC minute (`"starts_at":"2026-11-17T19:49Z"`). A plan's actions
+run at moments spread over most of the tick after the plan (up to 48 minutes at 60), so a start counted from the run
+(fractional `starts_in_hours` or a `starts_in_minutes`) moves by that delay and misses a narrow gap; a minute the plan
+names is the minute FoxLeague is sent. The older `starts_in_hours` keeps working (Telegram `/do`, older plans): one of
+the two, never both.
+
+What FoxLeague's create takes (release/mainnet-1.0 fb820dd57, `tournament_slots.rs` and `create_tournament_inner`):
+any instant in RFC 3339, neither rounded nor aligned; more than 1 hour from now; at most 90 days ahead; more than 5
+minutes after the registration deadline; a booking `[start - 1 h, start + estimate + 1 h)` that overlaps no other,
+half-open (one that ends where another starts does not overlap it). Only the calendar's proposal (`next_free`) is on
+the quarter hour.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SM-1 | low (a plan's aim lost; nothing paid: the parser refused it) | The live case: the create took only whole hours from the moment it runs, so the 3-team round robin of agents 7 and 9 could not be placed in the only gap of 72 hours (18:48 to 21:00 UTC two days ahead) | `create_tournament` takes `starts_at`, kept as the ISO minute it names. The rules check that instant against the time slots (the clash check and its blocking window), the schedule (`scheduleRefusal` and its condition at the start) and the squad at the start (`squadLegal`); the organizer quote is asked for it; FoxLeague is sent it, its deadline counted back from it. The test plans 19:49 in that calendar: parsed, through the slot check, FoxLeague and the quote are sent 19:49 |
+| SM-2 | low (a wasted plan; nothing paid) | A clash named the first free start as whole hours from the refusal's moment (`starts_in_hours N`), stale by the next plan an hour later; it said "no free start in the next 72 hours" when only a start to the minute fit: the live calendar gave exactly that refusal in the test | It names `starts_at` of the first free minute (`firstFreeStart` in `slots.ts`: the first minute of the range or the first minute at or after a window's end plus the hour before a kickoff, as FoxLeague's `free_starts`). The test starts at 19:47 and 19:52, is refused by T901 and T902, is told 19:48 and creates there; 19:48 and 19:51 fit (half-open windows) |
+| SM-3 | design | An absolute start is 2 to 72 hours ahead only at a given moment, which the parser does not know | The rules check it when the create runs: less than 2 hours or more than 72 hours from then is refused with its reason, as is a registration that would close within 30 minutes. `starts_in_hours` keeps its bounds at the parser |
+| SM-4 | design (rule 4: unknown is not a value) | A start that is no minute must be refused, never guessed: another zone, seconds, 30 February or 24:00 (`Date.parse` rolls both over), a number or a text, both forms or neither. An action built without the parser and without a readable start ended in an error (a `RangeError` of an invalid date) | The parser takes `YYYY-MM-DDTHH:MMZ` with `:00` or `:00.000` seconds only and checks that the date reads back as written. The rules refuse a start they cannot read ("the start could not be read") before anything is asked or paid; the executor builds the create only from the start the rules checked |
+| SM-5 | design | The older whole hours must keep working | Parsed as before, created that many hours after the run; a clash names the first free start as `starts_at` |
+| SM-6 | low (the executor refuses a late action) | A create at a fixed minute has a time limit, which the schedule of PR #70 did not know: a start chosen a little over 2 hours ahead could run past it at its random moment | `actionDeadline` gives it the start less 2 hours (less its registration close and 30 minutes when that is earlier). Whole hours count from the run and keep no time limit |
+| SM-7 | low (a wasted create; FoxLeague refuses it before any payment) | The snapshot cut each time to its minute: a window that ends at 18:47:30 read "18:47", so the gap seemed to start at 18:47 and a start at 19:47 seemed free. The gaps were given without the year, in another form than any field takes | The gaps are rounded inward to the minute in the form `starts_at` takes, each with the starts that fit it ("starts_at from 19:48 to 20:00 less the estimate"); a gap too short for the smallest tournament (3 matches) is left out. A taken window ends at its minute rounded up, in the list and in the refusal |
+| SM-8 | design | The model must be told the new form | The prompt's create line shows `"starts_at":"YYYY-MM-DDTHH:MMZ"`: a UTC minute 2 to 72 hours after the action runs, its whole window inside one free gap of the snapshot. `src/strategist/prompt.ts` changed in that one line, so the prompt cache is rebuilt once at the deploy |
+| SM-9 | low (an edge start could clash; FoxLeague refuses it before any payment) | With whole hours the slot check counted from the executor's moment but the create counted again from its own clock, after the reads before it (the organizer quote among them): FoxLeague was sent a later start than the one checked, 90 seconds later in the test | The rules hand the executor the instant they checked (`facts.startsAt`) and the create sends exactly that, in both forms; a create without it is not sent |
+| R74A-1 | low (GitHub review of PR #74; a wasted plan, nothing paid) | When the calendar was free at the 2-hour floor, a clash named the first free start as `starts_at` 2 hours after the refusal. The next plan reads it in its activity log a tick or more later, when that minute is about 1 hour ahead: its create was refused with "less than 2 hours from now". The old `starts_in_hours 2` still worked there | The refusal searches from 2 hours plus `nextPlanLeadMs` (`slots.ts`): the rest of this plan's window (0.8 of a tick, as the refusal can come at its start), the tick and its jitter before the next plan, then that plan's own lead (`planLeadMs`, R74A-2). At a 60-minute tick with 10 minutes of jitter that is 181 minutes, so the start named is at least 5 h 1 min ahead. A stretch free now that is too short for a start that late is passed over for the next free start; when none is left it reads "no free start the next plan can still create in the next 72 hours". Two tests "R74A-1 ..." in `test/start-minutes.test.ts` failed on bf2f0c1 (the start named 2 hours ahead was refused 43 minutes later; a stretch free until 4 hours ahead was named) and pass now, one tick later and at the latest moment |
+| R74A-2 | low (GitHub review of PR #74; a wasted create, nothing paid) | For a gap open now (the gaps are counted from 1 hour after the snapshot) the first `starts_at` of the hint was the gap's first minute plus the hour before a kickoff: exactly 2 hours after the snapshot was rendered. The create runs after the plan call and a fresh snapshot, so a model that took the first start offered was always refused by the 2-hour floor; the actions before it in the plan had moved earlier with its deadline for nothing | No start is given before 2 hours plus `planLeadMs` after the snapshot: the plan's window (0.8 of the agent's tick, which `renderPlanRequest` passes) plus 15 minutes for the plan call with a fresh snapshot, 63 minutes at a 60-minute tick. A gap open now begins its starts there; a gap too short from there for the smallest tournament (3 matches) is left out; every other gap keeps its first start. The line names that earliest start. A snapshot rendered without a plan (the CLI, the owner's chat) takes the longest tick the settings allow (240 minutes). Two tests "R74A-2 ..." failed on bf2f0c1 (the first start offered was refused 13 minutes later; a gap open until 3 h 30 min ahead was offered) and pass now |
+| R74A-3 | low (GitHub re-review of PR #74; a test only, no product code) | SM-5 asked for `starts_in_hours: 50`, which lands in the test calendar's only free gap when the suite runs from 17:48 to 17:51 UTC: the create was not refused and the test failed, about one run in 480 | SM-5 asks for 24 hours, which always falls inside T901 (it runs to 18:48 on the test day, at least 42 hours ahead), so the clash and the first free start named stay the same at every hour |
+| R74A-4 | low (GitHub re-review of PR #74; a wasted plan, nothing paid) | The next plan reads a refusal only as a line of its activity log, cut to 300 characters (`txt(r.summary, 300)` in `renderPlanRequest`). The clash refusal named the first free start last: after the action's description (a title of up to 60 characters, a private create's invited count, the start to the minute and an OVR range) and after the taken window. A long title cut the minute: from about 52 characters on a public 3-team round robin with an OVR range ("starts_at 2026-11-…" at 60), from about 42 on a private `groups_knockout` of 8 (no `starts_at` left at 60), fewer with a longer id or fee | The refusal names the first free start right after the tournament it clashes with and gives the taken window last, in its brackets: "time slot taken by T901; the first free start for this format and size is starts_at 2026-11-17T19:48Z (late enough for the next plan to create it; the taken window is ... UTC)". "No free start the next plan can still create in the next 72 hours" also comes before the window. With the longest description (a title of 60 characters, 63 invited or an OVR range, 64 teams, a fee of 5 digits, a 6-digit id) the minute ends by character 271, so a cut takes only the window. The test "R74A-4 ..." makes both creates with a 60-character title through the executor and reads the refusal from the plan request: it failed on 016bc07 ("2026-11-…" on the public one, nothing on the private one) and passes now |
+
+The room for R74A-1 and R74A-2 is the agent's own delays rather than a fixed margin: a fixed one would be too short at
+a 240-minute tick or hours too long at a 10-minute one. Each suggested start covers the latest moment the create that
+takes it can run, so it does not lean on the deadline-first schedule of PR #70: match gates before the create can still
+hold it to the end of its plan's window. The 15 minutes cover a plan call at high effort (given up after 11 min 40 s)
+with a fresh snapshot; a longer call (xhigh) is covered by that schedule, since the create's deadline then falls inside
+the window. A start later than needed costs only a later tournament: the next snapshot gives the nearer gaps again,
+fresh. The window's share (0.8) is one constant now, `PLAN_WINDOW_SHARE`, read by `runPlan` too.
+
+Changed tests: in `test/slots.test.ts` the two checks of `firstFreeStartHours` (gone) now pin `firstFreeStart` to the
+exact minute (14:51, where whole hours gave 24 h: 15:37); the clash test reads `starts_at` instead of
+`starts_in_hours` and checks the minute 2 hours ahead. The behaviour each one holds is the same, stated to the minute.
+Since R74A-1 the clash test checks the minute 2 hours plus the next plan's lead ahead, where it held the 2-hour floor
+itself (the finding); it is pinned to the minute as before.
+
+What was checked and needs no change:
+- `src/strategist/manual.md` describes FoxLeague's blocking window, not the agent's action: unchanged (FoxLeague's
+  manual is synced on its own). `docs/ECONOMY-AND-RULES.md`: no FoxLeague rule changed.
+
+Stays open:
+- `slotWindows` leaves out a tournament whose status is `simulation_delayed`; FoxLeague keeps its booking since
+  2026-10-01 (`tournament_slots.rs`). A start in such a window is refused by FoxLeague's create, which is asked before
+  the organizer payment and before the seat, so only the action is lost. Not changed here: whether such a status
+  reaches the lists the snapshot reads is FoxLeague's behaviour to confirm.
+- The agent reads the public tournament lists, not FoxLeague's calendar (`GET /api/tournaments/availability`): a slot
+  held by a tournament being created (the one-signature create, off today) is seen only when the create is refused.
+- Another organizer may take the gap between the plan and the run; FoxLeague then refuses the create before any
+  payment.
+- A start chosen a little over 2 hours ahead runs by its deadline less the 5-minute margin, but the actions before it
+  in the plan can still push it late (as for every deadline action of PR #70); the executor then refuses it. A start
+  the snapshot or a refusal gives has room for that since R74A-1 and R74A-2; one the model picks nearer does not.
+- The snapshot's last gap ends 72 hours after the snapshot, so its latest start there is on the safe side.
+- A model that still sends whole hours (as in older plans of its activity log) is served as before.
+- A registration that closes more than 90 minutes before the start puts the create's own floor (that close plus 30
+  minutes) past 2 hours: the first start a gap gives cannot know the close the model will pick. The rules refuse such
+  a create with their reason before anything is paid.
+- A next plan that comes later than one cycle (outside active hours, after a failed plan call or a pause) can find a
+  refusal's start too near; the floor refuses it then. That plan's own snapshot gives the gaps again, fresh.
+- With no tournament on the calendar the snapshot names no gap (the slots line reads "none"), so no first start either:
+  the model picks one from the prompt's rule (2 to 72 hours after the action runs). Not changed here: no suggestion is
+  made in that case.
+- The other refusals of a create were checked for the same cut with the longest description of R74A-4. Each keeps its
+  reason and its key value: the configured fees, the OVR, the ids, the injured card and its date, both organizer
+  amounts and the cap figures all stand in the first 130 characters of the refusal. Only the schedule's refusal can
+  lose its figures: with matches still owed to other tournaments, "need ~X condition, the squad has ~Y" ends past the
+  cut from a title of about 35 characters on a public round robin of 8 (about 21 with an OVR range, 15 with 7
+  invited). Its reason ("the schedule would wear the squad down: up to N matches", with the matches here and those
+  still owed) stays. It was so before this change (the start to the minute is 13 characters longer than "starts in
+  24 h"), the snapshot gives the squad's condition and no start is copied from it. Not changed here, to keep R74A-4
+  narrow.
+
 
 ## One manager message at a time (2026-11-13)
 

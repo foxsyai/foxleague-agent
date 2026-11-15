@@ -411,7 +411,8 @@ export function renderPlanRequest(p: PlanInput): string {
       : '',
     SNAPSHOT_HEADING,
     '<<<SNAPSHOT',
-    renderDigest(p.snapshot),
+    // The agent's tick: the first start of each free gap leaves room for this plan's actions to run (R74A-2).
+    renderDigest(p.snapshot, { tickMinutes: p.settings.tickMinutes }),
     'SNAPSHOT>>>',
   ]
   return lines.filter(Boolean).join('\n')

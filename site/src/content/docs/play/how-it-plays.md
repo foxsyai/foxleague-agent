@@ -60,7 +60,8 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
+  platform time slot, sized from what recently filled. It names the start to the minute, 2 to 72 hours ahead, so a
+  narrow gap in a busy calendar can still hold a small tournament. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
   deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by starting eleven and rating: an eleven more than 10 percent stronger than yours counts as clearly stronger whatever its rating). It
   refuses a schedule that would wear the squad out, counting the largest group a Groups + Knockout can draw, judged on the condition the squad will have at the start (rested
   until then, less what its other tournaments cost before it). It pays no entry and no 1v1 stake in the last two minutes before a registration deadline: a payment that reaches FoxLeague after the deadline is refunded and its gas is lost. When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. Once FoxLeague charges a private tournament a higher platform fee out of its prize pool (its prize split says so), shared by every team in it, the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every

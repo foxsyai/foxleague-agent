@@ -20,7 +20,7 @@ import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, whol
 import { sleep } from '../util/http.ts'
 import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
-import { describeAction, type Action, type PlannedAction } from './actions.ts'
+import { createStartMs, describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { FUSION_UNASKED, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
@@ -463,9 +463,13 @@ export class Executor {
       if (held) market.pendingOrganizer = { hash: held.hash, total: Number((held.payload as { total?: number }).total) }
     }
     if (a.type === 'create_tournament' && organizerFeesLive(snap.config, now)) {
-      market.organizerQuote = await soft(() =>
-        fox.organizerFeeQuote(wallet, { format: a.format, max_teams: a.max_teams, home_and_away: Boolean(a.home_and_away), has_third_place_match: a.format === 'knockout', private: Boolean(a.invite_user_ids?.length), developer_mode: false, starts_at: new Date(now.getTime() + a.starts_in_hours * 3600_000).toISOString() }),
-      )
+      // At the start the rules check (theirs is the same instant); a start that cannot be read is refused by them, unquoted.
+      const start = createStartMs(a, now.getTime())
+      if (start !== null) {
+        market.organizerQuote = await soft(() =>
+          fox.organizerFeeQuote(wallet, { format: a.format, max_teams: a.max_teams, home_and_away: Boolean(a.home_and_away), has_third_place_match: a.format === 'knockout', private: Boolean(a.invite_user_ids?.length), developer_mode: false, starts_at: new Date(start).toISOString() }),
+        )
+      }
     }
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
     if (a.type === 'buy' && a.product === 'xp_booster') {
@@ -1231,6 +1235,9 @@ export class Executor {
       case 'create_tournament':
       case 'create_challenge': {
         const nowMs = Date.now()
+        // The start the rules checked against the time slots, the bounds and the schedule, never one counted again here.
+        const startsAt = a.type === 'create_tournament' ? Date.parse(String(v.facts.startsAt)) : NaN
+        if (a.type === 'create_tournament' && !Number.isFinite(startsAt)) throw new Error('the start the rules checked is missing: nothing was asked or paid')
         const body: Record<string, unknown> =
           a.type === 'create_challenge'
             ? {
@@ -1254,8 +1261,8 @@ export class Executor {
                 max_teams: a.max_teams,
                 min_teams: a.min_teams,
                 entry_fee_foxsy: a.entry_fee_foxsy,
-                starts_at: new Date(nowMs + a.starts_in_hours * 3600_000).toISOString(),
-                deadline: new Date(nowMs + a.starts_in_hours * 3600_000 - a.registration_closes_minutes_before * 60_000).toISOString(),
+                starts_at: new Date(startsAt).toISOString(),
+                deadline: new Date(startsAt - a.registration_closes_minutes_before * 60_000).toISOString(),
                 round_interval_minutes: a.round_interval_minutes,
                 has_third_place_match: a.format === 'knockout',
                 ...(a.home_and_away ? { home_and_away: true } : {}),

@@ -106,6 +106,8 @@ export const MIN_GAS_RESERVE_EGLD = 0.05
 
 /** The shortest cycle: with at most about 20 actions a cycle and 30 s between them, 10 minutes is the floor. */
 export const MIN_TICK_MINUTES = 10
+/** The longest cycle: a snapshot rendered without an agent's tick (no plan) gives its starts for this one (R74A-2). */
+export const MAX_TICK_MINUTES = 240
 
 /** What a strategy level sets when the owner picks it (the manual's Strategy levels page lists them). */
 export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUsd' | 'topUpWarningUsd' | 'maxEntryFeeFoxsy' | 'maxShopPaymentFoxsy' | 'maxSwapFoxsy' | 'maxBidFoxsy' | 'entryFeesSilver' | 'entryFeesGold' | 'tickMinutes' | 'paidTrainingPerDay' | 'boostersPerWeek' | 'packsPerWeek' | 'medicineDaysPerWeek'>
@@ -206,7 +208,7 @@ export function validateSettingsPatch(raw: Record<string, unknown>): Partial<Age
   fees('entryFeesBronze', 100, 999, 0)
   fees('entryFeesSilver', 1000, 4999)
   fees('entryFeesGold', 5000, 1_000_000, 0)
-  num('tickMinutes', MIN_TICK_MINUTES, 240, true)
+  num('tickMinutes', MIN_TICK_MINUTES, MAX_TICK_MINUTES, true)
   num('tickJitterMinutes', 0, 60, true)
   if ('activeHoursUtc' in raw) {
     const v = raw.activeHoursUtc
