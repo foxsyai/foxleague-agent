@@ -2174,6 +2174,27 @@ Stays open:
   minutes by the clock (a laptop that sleeps in the middle of it) can be taken over by a second one, and whichever
   ends first removes the lock while the other still runs. Preparing takes at most 15 minutes.
 
+## GitHub review of PR #71 (2026-11-15)
+
+The agent review of PR #71 on GitHub (the install videos on the site, Claude Fable 5.2 at high effort) passed it with
+one low finding, about the site's videos only: nothing about money, keys or signing. The fix is by Claude Opus 5.5,
+test first: the five tests "R71A-1 ..." in `test/install-videos.test.ts` failed on the branch at a689a57 (the script
+was not in the repository) and pass now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R71A-1 | low (agent review of PR #71; tests and hygiene, the site only) | The three install videos at the top of the install pages (`site/public/videos/install-{windows,mac,linux}.{mp4,jpg}`) had no test and the script that draws them was not in the repository. A missing or misnamed video or poster failed no test, nor did a page that gives the wrong length. When an installer line the videos show changed (this pull request changed one, the Telegram question), the videos went stale and nobody but their author could draw them again | The script moves into `site/scripts/videos/`, next to `site/scripts/screenshots.ts`, with its README (how to draw the videos again and when) and its own pinned development packages (Playwright's core and two fonts; the agent and the site do not get them). It finds the repository from where it sits. `test/install-videos.test.ts` holds that every install page names its own video and poster, that every file in `site/public/videos` is shown on a page and that each MP4 is real, has its index at the front and the length its page says twice. It holds every one of the 132 installer lines the videos quote: each must still stand in its file, found by its text, so a line that only moved fails nothing; a changed one fails with the lines named and "Re-render the videos". It holds that the script draws on example values only: the user ana, word1 to word24, a made-up address with a wrong checksum that every terminal screen tags as an example, a throwaway wallet, no key, no env file, no upstream it could reach. `site/README.md` names the script |
+
+Stays open:
+- What a frame shows cannot be read by a test: the tests hold the quoted lines, the files and the example values,
+  not the pictures. The screens the videos take from the dashboard (the login, the Getting started guide, the update
+  notice) and from the install page can change while every test stays green; the script's README says to look at a
+  few stills after such a change.
+- A short quote ("Done", "Running.", `cd ~/foxleague-agent`) holds while any line of its file has its words. A change
+  to that one line while the same words stand elsewhere in the file is not seen.
+- No video was drawn again: every quote holds on this branch. The line numbers in the script are hints for people;
+  the eight lines of the install pages that the new video block moved down by five are updated.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in

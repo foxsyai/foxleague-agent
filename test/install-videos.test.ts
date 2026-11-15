@@ -203,3 +203,18 @@ test('R71A-1 the script is in the repository with its README, its own pinned pac
   assert.match(read('site/README.md'), /site\/scripts\/videos\//)
   assert.doesNotMatch(readme + read('site/README.md'), /—|\bbots?\b/i)
 })
+
+test('R71A-1 the record has its row, in a section of its own before the last one', () => {
+  const review = read('docs/SECURITY-REVIEW.md')
+  const start = review.indexOf('\n## GitHub review of PR #71 (2026-11-15)\n')
+  assert.ok(start > review.indexOf('\n## GitHub review of PR #69 (2026-11-15)\n'), 'after the review of PR #69')
+  // Another section may come between it and the last one (test/chat-send.test.ts pins the last).
+  const next = review.indexOf('\n## ', start + 1)
+  assert.ok(next > start && next <= review.indexOf('\n## One manager message at a time (2026-11-13)\n'), 'before the last section')
+  const section = review.slice(start, next)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| R71A-1 \| low \(agent review of PR #71; [^|]+\) \| [^\n]+ \| [^\n]+ \|\n/)
+  const row = section.split('\n').find(l => l.startsWith('| R71A-1 |'))!
+  assert.equal(row.split(' | ').length, 4)
+  assert.ok(section.includes('\nStays open:\n'))
+  assert.doesNotMatch(section, /—|, and |\bbots?\b/i)
+})
