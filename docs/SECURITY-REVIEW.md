@@ -2292,6 +2292,31 @@ Stays open:
   this code so that `manual-pages.json` follows the new `manual.md`. Until then the daily check says that the record
   is not the one of `manual.md` and MW-8 fails.
 
+GitHub review of PR #72 (2026-11-15). The agent review of this pull request on GitHub (Claude Fable 5.2 at high
+effort) passed it with two medium and three low findings, none about money, keys or signing. The fixes are by Claude
+Opus 5.5, test first, in `test/manual-watch.test.ts`: the tests "R72A-1 ...", "R72A-2 ..." and "R72A-3 ..." each
+failed on the branch before their fix and pass now. "R72A-4 ..." and "R72A-5 ..." add the cases that were missing:
+they passed on the code as it was and were each seen failing on four breaks of the code they hold, restored after.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R72A-1 | medium (agent review of PR #72; memory of the process that signs) | `callTool` in `src/strategist/manual-watch.ts` read FoxLeague's answer whole with `res.text()` and compared its size only afterwards: the comment "An answer larger than this is not read" was not true. Whatever answers at `FOXLEAGUE_URL/mcp` (FoxLeague on a bad day, a proxy in front of it or a compressed answer that unpacks to gigabytes) could fill the memory of the process that books and signs, once a day. `src/util/http.ts` had closed this for every other FoxLeague read (ATTACK-5) | The answer is read with `readCapped`, now exported from `src/util/http.ts` with a cap per caller: 2 MB here, counted as it streams and cut off past it, a declared `content-length` over it refused unread, a compressed answer counted by what it unpacks to. Its refusal is an `AnswerTooLargeError`, which the check says as "FoxLeague's answer could not be read"; a timeout or a cut connection while reading is told as before. The test streams 64 MB: the old read took in all of it, the new one stops after at most 4 MB and cancels the stream. One that declares 64 MB is refused with nothing more read |
+| R72A-2 | medium (agent review of PR #72; a notice that outlived its copy) | The stored check was kept by the day only. After an update or a deploy brought a new `manual.md` the same day, the dashboard and `/summary` kept saying "FoxLeague's manual changed since the agents' copy (pages: ...)" until the next morning, while `manual-check` said the copy matched. The same held for "the page record is not the one of the agents' manual.md" after the record was fixed and deployed | The stored check carries a key of the copy it compared: the sha256 of `manual.md` with its page record, as read. A check of another copy is not shown (the dashboard has no notice, the summary line says that it could not check) and the day's check runs again for the copy installed now. Still at most once a day per copy: another call or a restart on the same copy asks nothing more. A fixed record alone counts as a new copy. The test failed on the dashboard showing copy A's line to the service restarted on copy B |
+| R72A-3 | low (agent review of PR #72; the dashboard) | While the day's check ran (about 10 seconds, up to 90) the dashboard showed its restart marker as a failed check: "Could not check FoxLeague's manual today: the check did not finish." The dashboard loads every 15 seconds, so on most days one load showed it, in place of the day before's notice | While a check runs, the dashboard and the summary line give the check before it (nothing on the very first check). The marker keeps its meaning where no check runs: a service that restarted while one was under way still says "the check did not finish". The test failed on the marker shown while FoxLeague held its answer |
+| R72A-4 | low (agent review of PR #72; tests) | The path without Telegram (`armManualCheck` in `src/service.ts`: from the summary hour, every hour, cleared at stop) had no test, though MW-7 names it | The test holds it on mocked timers: the first look three minutes after a start then every hour, nothing asked before the summary hour, a start after the hour asks at its first look, nothing after a stop and nothing when switched off. It failed on each of four breaks: no hour condition, no hourly look, the timer kept at stop, armed when switched off |
+| R72A-5 | low (agent review of PR #72; tests) | The `text/event-stream` branch of `callTool` and the refusals past the size cap and past `MAX_PAGES` had no case in MW-3 | The test holds that an answer sent as server-sent events is read from its last data line (alone or after a notification) and one with no data line is refused; that an answer of exactly the cap is read while one byte more is refused with nothing asked after it; that a list of 200 pages is compared while 201 are refused unread. It failed on each of four breaks: the stream branch not taken, the first data line read, no cap of its own, the page count off by one |
+
+Stays open after the review:
+- Between a deploy of a new copy and its first check the dashboard shows no notice, as on a first start: a check is
+  never shown for a copy it did not compare. Before the summary hour that lasts until the hour (the morning summary
+  runs the check before it is sent, so it always carries the line of the copy installed).
+- A copy rolled back and forward the same day is checked once per change: each deploy of another copy asks once
+  more (one list and one request per page). It stays bounded by the deploys.
+- The key of the copy is taken from `manual.md` (about 245 KB) and its record each time the dashboard loads its
+  state (every 15 seconds while it is open): about a millisecond, nothing cached.
+- A check a restart cut short still counts as made for that copy that day (MW-5): its line says that the check did
+  not finish until the next day or the next copy.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in

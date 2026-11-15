@@ -690,3 +690,27 @@ test('R72A-5 an answer sent as an event stream is read, and the caps on an answe
   assert.equal(t.why, "FoxLeague's answer could not be read")
   assert.equal(tooMany.seen.length, 1, 'no page is read from a list that long')
 })
+
+test('R72A-1 to R72A-5 the record has their rows in the section of the daily check, and the guides say a new copy is checked the same day', () => {
+  const review = raw('docs/SECURITY-REVIEW.md')
+  const start = review.indexOf("\n## Daily check of FoxLeague's manual (2026-11-15)\n")
+  const section = review.slice(start, review.indexOf('\n## ', start + 1))
+  const part = section.slice(section.indexOf('\nGitHub review of PR #72 (2026-11-15).'))
+  assert.ok(part.length > 1 && part.length < section.length, 'a part of its own at the end of the section')
+  assert.match(part, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| R72A-1 \| medium \(agent review of PR #72; [^|]+\) \| /)
+  for (const [id, severity] of [['R72A-1', 'medium'], ['R72A-2', 'medium'], ['R72A-3', 'low'], ['R72A-4', 'low'], ['R72A-5', 'low']] as const) {
+    const row = part.split('\n').find(l => l.startsWith(`| ${id} | ${severity} (agent review of PR #72; `))
+    assert.ok(row, id)
+    assert.equal(row.split(' | ').length, 4, id)
+    assert.ok(row.endsWith(' |'), id)
+  }
+  assert.ok(part.includes('\nStays open after the review:\n'))
+  assert.doesNotMatch(part, /—|, and |, or |\bbots?\b/i)
+
+  for (const f of ['docs/SERVER.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/help/troubleshooting.md']) {
+    assert.match(flat(f), /new copy[^.]*the same day/i, f)
+  }
+  const html = raw('src/web/dashboard.html')
+  const bubble = html.slice(html.indexOf("\n  manual: ['FoxLeague manual check',"), html.indexOf('`],', html.indexOf("\n  manual: ['FoxLeague manual check',")))
+  assert.match(bubble.replace(/\s+/g, ' '), /new copy[^.]*the same day/i)
+})
