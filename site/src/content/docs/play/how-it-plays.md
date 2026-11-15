@@ -111,7 +111,13 @@ An empty plan is a good answer too: the agent never spends just because budget i
   quote, within your level's medicine days a week, your Max shop payment and your daily cap.
 - **Common packs**: 5 Common cards, the spare cards the first fusion needs.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
-  plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen.
+  plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen. FoxLeague runs
+  one of two fusions and the agent reads which from FoxLeague's settings: a card drawn from FoxLeague's pool, or a new
+  card minted from the three. The new card takes each stat as the average of that stat on the three cards, raised to
+  the next rarity's range and never under its floor (for example three Commons at 30, 18 and 12 in a stat give the new
+  Uncommon 36 there), so it fuses trained cards. For the new card FoxLeague prepares the transaction, and the agent
+  signs it only when it is exactly the fusion it planned, for the fee of that rarity and nothing more. It fuses nothing
+  while that setting cannot be read, while FoxLeague updates fusion or in the last minutes before it changes.
 - **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included.
 
 ## Getting started by itself
