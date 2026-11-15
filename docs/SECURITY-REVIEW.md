@@ -2172,6 +2172,46 @@ Stays open:
   minutes by the clock (a laptop that sleeps in the middle of it) can be taken over by a second one, and whichever
   ends first removes the lock while the other still runs. Preparing takes at most 15 minutes.
 
+## Actions with a deadline run before it (2026-11-15)
+
+Seen live on agent 7 six times in seven days, fixed on the owner's word. Each point has a test of the same name in
+`test/deadline-first.test.ts` that failed on the branch at dcac14b (the action ran at its random moment, 47.5 minutes
+into the window) and passes now. Only the moment an action runs changes: the executor checks every action against a
+fresh snapshot when it runs, as before, and nothing skips a check. The pin of the tick's `runPlan` call in
+`test/shadow-plan.test.ts` names the new argument.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| DL-1 | low (a plan's aim lost; nothing paid: the executor refused each late action) | `runPlan` gave every action of a plan a random moment of its window (0.8 of the tick, 48 minutes at 60), sorted to keep the plan's order, and nothing looked at an action's own deadline. A plan at 10:32 UTC left its unanswered targeted 2,500 Silver 1v1 (T5976) "now", 12 minutes before it ran out at 10:44, to send a challenge to another team; the leave ran at 10:58 and was refused ("can only leave an open tournament before its deadline"). Leaves were refused the same way on other days. The test saw a leave whose deadline was 12 minutes ahead run at 47.5 minutes | `scheduleActions` (service.ts) takes each action's deadline, read by `actionDeadline` (`src/executor/deadlines.ts`) from the snapshot the plan was made from, which the tick now hands to `runPlan`. An action with a deadline runs at the latest 5 minutes before it (`DEADLINE_MARGIN_MS`): before it runs a fresh snapshot is read (tens of seconds), the action before it may run about a minute late and a payment must settle and reach FoxLeague in time. The test sees it run at 7 minutes |
+| DL-2 | design | Moving one action earlier could undo what the plan's order holds: a lineup before its match, a swap before the bid it funds, a leave before the challenge that needs the free 1v1 slot | The order never changes. The actions before a deadline action move earlier with it, 90 s apart (`ACTION_RUN_MS`, what one action takes to run), so their own run time does not push it late; one whose draw is earlier keeps it and the actions after it keep their draws. The prompt's "Actions run in the order you list them" stays true |
+| DL-3 | design | A deadline already past, or closer than the margin | It runs at once, at the first slot (after the actions before it, at the gap). A deadline that has passed is refused by the executor with its reason |
+| DL-4 | design (rule 4: unknown is not "none") | A deadline that cannot be read must not be taken for no deadline: its tournament in no list of the snapshot, a deadline that is no time, no snapshot at all, an auction without an end or one the snapshot does not show | It runs early: at the start of the window, after the actions before it, never late |
+| DL-5 | design | Actions without a deadline, the match gates and the drops | Unchanged: the same draws, the same gates (13 minutes after a match, 16 between ranked starts, the agent's starts before the plan included) and the same drops, with or without deadlines; test D1's cases pass as they were |
+| DL-6 | low (as DL-1) | A bid on an auction that ends inside the window ran at a random moment, possibly after the end | It runs by the end less 5 minutes; a swap before it in the plan runs before it |
+| DL-7 | design | Which actions have a time limit, and the executor's own margins | `join_tournament` (accepting a 1v1 too): the registration deadline (less the 120 s the executor keeps for a paid entry), its start when sooner and for a League + Knockout its invitation's expiry less 30 minutes. `leave_tournament`: the deadline and for a League + Knockout seat its seats lock less 30 minutes. `widen_range`: the deadline. `bid`: the auction's end. `cancel_listing`: unread (the market list leaves the agent's own auctions out), so early. The times come from the agent's own tournaments, the open ones, the 1v1s aimed at it and its invitations; the earliest copy counts. No other action has one; the next strategy lock still cuts the whole window in `runPlan` |
+
+What was checked and needs no change:
+- `src/strategist/prompt.ts` says "Actions run in the order you list them, spread over the next window. Every action is
+  re-checked against fresh state right before it runs." That stays true, so it is not changed (it is byte-stable for
+  the prompt cache). `src/strategist/manual.md` says nothing of when a plan's actions run.
+
+Stays open:
+- A match listed before a deadline action keeps its gates: when they hold it past its latest moment, it runs late and
+  the executor refuses it, as before. The order is never changed to pass a match.
+- The schedule is planned, run times are not: actions before it that each take longer than 90 s (a slow snapshot, a
+  transaction waiting for its confirmation) still push it later by what they take over 90 s, inside the 5-minute
+  margin for a few of them.
+- Pieces an extension cuts from an action (`src/extensions.ts`) queue behind it at the gap: a split action before a
+  deadline action pushes it later by a gap a piece, and the later pieces of a split deadline action may run past it
+  (the executor checks each).
+- A race is no deadline: an open 1v1 another team accepts first is active whatever the moment (the join refused as
+  "is active" 20 minutes after the plan chose it may have been that).
+- A deadline that moves after the plan (a 1v1 that fills: its deadline becomes now) is seen by the executor when the
+  action runs, not by the schedule.
+- The 1v1 busy window FoxLeague serves (`viewer_tournament_window_opens_in_secs`) is read from the tournament's detail
+  when the join runs; the schedule does not use it.
+- `cancel_listing` runs early in every plan that has one.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
