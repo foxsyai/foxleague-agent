@@ -404,7 +404,7 @@ test('SHADOW-15 the guides: the server guide\'s own command switches shadow plan
   assert.deepEqual(shadowChoices(store, 'claude-sonnet-5-5'), { models: [], effort: 'low', leftOut: [] })
   assert.match(guide, /`agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`/, 'among the operator commands')
   assert.match(guide, /agentctl\.sh shadow-report 3 {4}# agent 3/)
-  assert.match(read('README.md'), /npm run cli -- shadow-report \[N\]/)
+  assert.match(read('README.md'), /\.\/cli\.sh shadow-report \[N\]/)
   assert.match(read('.env.example'), /^# AGENT_SHADOW_MODEL=claude-haiku-5-5\n# AGENT_SHADOW_EFFORT=medium$/m)
 
   // The public page: what it is, that it costs that model's price per plan and never plays; no figure, no model named.
@@ -430,7 +430,7 @@ test('SHADOW-15 the guides: the server guide\'s own command switches shadow plan
   assert.doesNotMatch(section, /—/)
 })
 
-test('SHADOWS-11 the guides say how to set several shadow models, what each costs and how the password rule reads a list; the review has its section, the last one', async () => {
+test('SHADOWS-11 the guides say how to set several shadow models, what each costs and how the password rule reads a list; the review has its section', async () => {
   const { shadowChoices } = await import('../src/strategist/shadow.ts')
   const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
   const guide = read('docs/SERVER.md')
@@ -462,7 +462,7 @@ test('SHADOWS-11 the guides say how to set several shadow models, what each cost
   ]) assert.match(flat, said)
   assert.doesNotMatch(part, /—|\bbot\b/i)
   assert.match(read('.env.example'), /^# Several models, separated by commas \(claude-haiku-5-5,claude-sonnet-5-5\), each get the request and each cost their own\n# price\. /m)
-  assert.match(read('README.md'), /npm run cli -- shadow-report \[N\] {5}# what each shadow model would have planned \(shadow plans, docs\/SERVER\.md\)/)
+  assert.match(read('README.md'), /\.\/cli\.sh shadow-report \[N\] {5}# what each shadow model would have planned \(shadow plans, docs\/SERVER\.md\)/)
 
   // The public pages: several at once, each at its own cost; still no number, no model named and no promise.
   const costs = read('site/src/content/docs/help/costs.md')

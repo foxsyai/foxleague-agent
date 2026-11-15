@@ -10,7 +10,7 @@ The files are in `deploy/`.
 |---|---|
 | Service user | `foxleague-agent` (no shell) |
 | Code | `/opt/foxleague-agent/app` |
-| Node.js (private copy, checksum verified) | `/opt/foxleague-agent/node` |
+| Node.js (private copy, checked against the SHA-256 written in `deploy/bootstrap.sh`) | `/opt/foxleague-agent/node` |
 | Env file (recovery words, keys, login; mode 600) | `/etc/foxleague-agent/env` |
 | Data (database, keys saved from the dashboard) | `/var/lib/foxleague-agent` |
 | systemd unit (sandboxed) | `foxleague-agent.service` |
@@ -41,20 +41,37 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
 
 ## Dashboard behind nginx
 
-`deploy/nginx-foxleague-agent.conf` is a template: replace `agent.example.com` with your domain, point its DNS at
-the server, get a certificate (for example `certbot --nginx`) and reload nginx. The dashboard listens on
-127.0.0.1:8870 only and sends its own security headers, including a per-page Content Security Policy.
-Its `proxy_read_timeout 1080s` lets Talk to the manager wait for the whole answer at the highest effort (up to 17
-minutes). A server set up from an older template has 900 seconds: raise it to `1080s` and reload nginx, or a long
-answer shows an error on the page while it is still being written and paid for. The page then keeps Send off until
-the answer is in. The server answers one manager message at a time: a second one meanwhile, from Telegram or another
-tab, is turned away with the reason (the page shows it, Telegram replies with it) and costs nothing.
+`deploy/nginx-foxleague-agent.conf` is a template with two server blocks. Its port 80 block only answers the certificate challenge and sends everything else to https.
+Its port 443 block holds the certificate and passes the requests to the dashboard, which listens on 127.0.0.1:8870
+only and sends its own security headers, including a per-page Content Security Policy. The dashboard is never
+served on plain http, so the certificate comes first:
+
+1. Point the DNS of your domain at the server.
+2. Get the certificate, before the template is in place:
+   `sudo certbot certonly --nginx -d agent.example.com --deploy-hook "systemctl reload nginx"`
+   (certbot answers the challenge through the running nginx and changes none of your sites; the hook makes nginx
+   read each renewed certificate).
+3. Copy the template to `/etc/nginx/sites-available/foxleague-agent`, replace `agent.example.com` with your domain
+   everywhere in it and link it: `sudo ln -s /etc/nginx/sites-available/foxleague-agent /etc/nginx/sites-enabled/`.
+4. Check and reload: `sudo nginx -t && sudo systemctl reload nginx`. `http://your-domain` now redirects to https.
+
+Do not run `certbot --nginx` on the template afterwards: it has its 443 block already.
+
+The template also holds the sign-in page to 30 requests a minute from one address (nginx answers 429 beyond that);
+the dashboard keeps its own lock on wrong passwords, per IPv4 address and per /64 for IPv6.
+
+The template's `proxy_read_timeout 1080s` lets Talk to the manager wait for the whole answer at the highest effort (up
+to 17 minutes). A server set up from an older template has 900 seconds: raise it to `1080s` and reload nginx, or a
+long answer shows an error on the page while it is still being written and paid for. The page then keeps Send off
+until the answer is in. The server answers one manager message at a time: a second one meanwhile, from Telegram or
+another tab, is turned away with the reason (the page shows it, Telegram replies with it) and costs nothing.
 
 ## Everyday
 
 | What | Command |
 |---|---|
 | Deploy a new version | `./deploy/deploy.sh` from your computer (restarts the service; check first that no plan is running, or its waiting actions are dropped) |
+| A new release is out | The dashboard and Telegram tell you (about every 10 minutes the agent asks GitHub, and the round arrow next to the version (**Check for updates**) asks at once; `AGENT_UPDATE_CHECK=0` in the env file switches that off). A server set up this way does not update itself: there is no Update now button, and `/upgrade` answers that it is updated the way it was deployed. Take the release's tag in your copy and run `./deploy/deploy.sh` |
 | Operator commands | `sudo /opt/foxleague-agent/app/deploy/agentctl.sh <command>`, agents numbered from 1: `agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`, `model` |
 | Keys | the dashboard's Keys panel (saved in `/var/lib/foxleague-agent/secrets.json`, mode 600) or `agentctl.sh configure` |
 | Security score | `systemd-analyze security foxleague-agent` |

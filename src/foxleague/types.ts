@@ -79,8 +79,13 @@ export interface FoxConfig {
   tournament_fee_bounds: { silver_min: number; silver_max: number; gold_min: number; bronze_min?: number; bronze_max?: number }
   competition_levels?: CompetitionLevels
   organizer_fees?: OrganizerFees
-  /** Yellow card bans and injuries (one switch): live from `live_from`; a ban at `yellow_cards_per_ban` tournament yellow cards. */
-  card_bans?: { live: boolean; live_from?: string | null; yellow_cards_per_ban: number }
+  /**
+   * Yellow card bans and injuries (one switch): live from `live_from`; a ban at `yellow_cards_per_ban` tournament yellow
+   * cards. The injury numbers in force (FoxLeague's Admin settings, routes/config.rs CardBansConfig): the chance one
+   * called foul injures the card fouled, in basis points, at condition 100 and at condition 30 and below (linear
+   * between), and the days out for 1, 2 and 3 or more injuries in one match. An older answer leaves them out.
+   */
+  card_bans?: { live: boolean; live_from?: string | null; yellow_cards_per_ban: number; injury_chance_bp_full_condition?: number; injury_chance_bp_condition_floor?: number; injury_days_out?: number[] }
   tournament_prize_split: PrizeSplit
   /** The split a private tournament created now pays; the public one until FoxLeague raises its platform fee. */
   private_tournament_prize_split?: PrizeSplit | null
@@ -114,6 +119,8 @@ export interface FoxConfig {
   /** FOXSY per day of that wait bought off (75 on mainnet, down to a 3-day floor). */
   fusion_cooldown_waiver_price_per_day?: number
   auction_enabled: boolean
+  /** The percent a bid must stand over the top bid (the players contract's setting, 1 to 50; 5 when unset). */
+  auction_min_increment_percent?: number
   marketplace_min_list_price_foxsy?: number
   transfer_cooldown_hours?: number
   league_thresholds?: Record<string, number>

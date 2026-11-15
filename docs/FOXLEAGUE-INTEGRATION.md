@@ -115,7 +115,11 @@ not listed here on purpose.
   - a malformed body fails JSON extraction before the handler runs (axum rejection, normally 4xx).
 - **Raw JSON routes (no envelope):** `GET /api/config` (`backend/src/routes/config.rs:421`), the health
   routes (`backend/src/routes/health.rs`), `GET /api/public/match/{id}`
-  (`backend/src/routes/matches.rs:612-791`).
+  (`backend/src/routes/matches.rs:612-791`). With no envelope only the HTTP status says such a route failed: the
+  agent's client takes `/api/config` as the game settings only from a 2xx answer that carries `registration_fee_wei`
+  as an amount, and throws for anything else (an error status with a JSON body, FoxLeague's own or an edge's), so the
+  snapshot keeps `config` null with a warning and every rule refuses on "live config unavailable"
+  (`src/foxleague/api.ts`, audit 2026-11-11, EDGE-6).
 - **`code: "tx_pending"`** (`backend/src/models.rs:670-685`): the payment was NOT refused, it could not
   be verified yet (chain read timed out, throttled or chain not ready). Keep the transaction hash and
   confirm THAT hash again later. Never sign a second payment on a `tx_pending` answer.
@@ -191,6 +195,14 @@ What the browser wallet does implicitly and an agent must do itself:
    (`backend/src/chain.rs:5657`). The relayed registration is the exception: the backend broadcasts
    it (section 4.4).
 4. **Wait for the outcome** (1.6), then call the backend confirm route of that flow, if it has one.
+
+The agent books a payment before the signature and, right after the signature, puts the transaction's hash (computed
+locally as the network computes it) on its ledger rows, before the broadcast (`send` in `src/executor/executor.ts`;
+audit 2026-11-11, EDGE-4). A broadcast that gets no answer (a timeout, a 5xx, an unreadable body) may still have
+reached the network: the payment stays booked under that hash, the activity row of the error carries it, and the
+refund checks can still read what became of it (an outbid bid in `src/executor/refunds.ts`, a shop payment FoxLeague
+returned in `src/executor/pending.ts`). A row is credited only on the chain's or FoxLeague's own word about that
+hash, once; the gateway's own definite refusal of a transaction it does not know releases the booking as before.
 
 ### 1.6 Deciding whether a transaction succeeded
 
@@ -555,6 +567,23 @@ background (`registration.rs:931-957`).
 A G9 slot is used as soon as a call reaches G9, even when a later guard refuses it; a G10 slot is
 given back on every error (`onboarding.rs:2140-2144`, `:2181-2195`). Validate everything locally
 before calling the relay.
+
+**What the agent keeps booked after the relay** (audit 2026-11-11, INTEG-4, MONEY-3 and EDGE-3; `src/executor/executor.ts`,
+the `register` case). The fee is booked in the one-time setup budget before the signature. After the relay's answer:
+
+- FoxLeague's own refusal (its envelope) with HTTP 403, 429 or 503 is a guard that runs before the broadcast
+  (`routes/onboarding.rs` `relay_registration`): nothing was sent and the booking is released. The client carries the
+  status on the refusal (`ApiRefusal.httpStatus`).
+- Its HTTP 500 is also what a failed broadcast answers (`The registration could not be sent to the network...`), and a
+  broadcast that failed for FoxLeague may still have reached the network. That, an answer that is not its envelope and
+  no answer at all keep the fee booked.
+- The contract takes the fee once per wallet (`Already paid registration`). So a later registration whose snapshot
+  reads `isRegistrationPaid` false counts the fee once: the earlier booking is left out of its setup-budget check, and
+  it is let go only when the new registration's own booking is kept (signed, and not released by a guard or a revert).
+  From the first signature on, one booking always stands for the fee: an earlier payment that lands late is never
+  left uncounted, and a registration that never happened no longer refuses the next one for good. The same holds in
+  the dry-run ledger, where every simulated registration replaces the one before. The plan of a team that does not
+  exist yet reads its setup budget without that booking (`budgetView` with `registered` false).
 
 **Contract** (`registerAndPay`, `contracts/foxleague-players/src/player_nft.rs:1217-1259`):
 `Contract is paused`, `Registration fee not set`, `Payment must be FOXSY`,
@@ -1347,7 +1376,9 @@ web app caps one purchase at 25 slots; the backend has no upper bound
 rolling 7 days; platform budget 500 cards (100 packs) per epoch on chain; positions drawn 2/6/6/4 like a
 starter squad (`backend/src/routes/shop_pack.rs:25-32`; `deploy/mainnet/chain-config.mainnet.env:50-52`).
 Check `/api/shop/status` `common_pack_available`, `common_pack_remaining_this_week` and
-`common_pack_epoch_remaining` before paying. Cards are delivered by the game server a minute or so later
+`common_pack_epoch_remaining` before paying (the agent buys no pack unless `common_pack_remaining_this_week` reads as a
+number above 0: a status that failed or an answer without it is unread, never "some left"; its plan is told the
+number). Cards are delivered by the game server a minute or so later
 (`distributePack`), with 0 competitive matches and no cooldown; a failed delivery is refunded
 (`shop_pack.rs:647-745`). Refusals (the settled payment is refunded):
 `The Common pack is not on sale right now.`,
@@ -1958,6 +1989,13 @@ ahead). No contract changed.
 - `viewer_tournament_window_opens_in_secs` on a 1v1's detail (read with the wallet): the seconds until FoxLeague's busy
   gate turns on for the team. A stake signed inside the last minutes reaches the join after it and is refunded with
   the gas lost; the agent refuses a 1v1 join when it opens within 120 s (LIVE-1).
+- The registration deadline has the same margin (audit 2026-11-11, INTEG-5): FoxLeague checks it when `POST /join`
+  arrives, not when the payment landed (`routes/tournaments.rs`, "Validate deadline": `refund_failed_join(..,
+  "deadline_passed")`, then `Registration deadline has passed`), so the agent signs no paid entry and no 1v1 stake
+  within 120 s of the deadline (`BUSY_OPENS_MARGIN_S`); a free seat signs nothing and needs none, and a deadline that
+  is no time is unread. For a payment already made, the pending retry takes that answer as final when it answers the
+  ask that carried the payment's hash (the request in which FoxLeague refunds); the entry's ledger row keeps counting
+  until the refund checks see it gone.
 - The five discipline fields on every card and listing, `card_bans` in `/api/config`, the medicine routes (section 6a
   of `docs/ECONOMY-AND-RULES.md`).
 
@@ -1968,8 +2006,12 @@ ahead). No contract changed.
 - Starts no match, 1v1 or tournament entry while an injured card is in the saved eleven (`squadLegal`): every strength
   the rules compare is the saved eleven's, and FoxLeague would put a bench card of its own choice in the shirt. A
   tournament entry is judged at its start, a game or a 1v1 now. The plan saves an eleven without the card first.
-- Counts 11 match-fit of the 18 (condition, no transfer cooldown, not injured) before a 1v1 stake is paid, at the
-  create too (the creator's own seat goes through the same join gate).
+- Counts the eleven shirts FoxLeague fills with a match-fit card of the 18 (condition, no transfer cooldown, not
+  injured) before a 1v1 stake is paid, at the create too (the creator's own seat goes through the same join gate). It
+  counts as FoxLeague's `auto_substitute` does (`matchFit` in `src/executor/rules.ts`): a tired outfield starter is
+  relieved only by a fit outfield bench card, a tired keeper by a fit bench keeper or, as the last resort, by a fit
+  outfield bench card, and an injured bench card is off the bench. Eleven fit cards among the 18 are not enough when
+  the bench keeper is the one left for an outfield shirt.
 - Leaves a card injured past a tournament's last match out of the condition its schedule is weighed against.
 - Refuses an injured or suspended card as a fusion input, whatever FoxLeague's pre-check answers.
 - Refuses a bid on a card whose injury cannot be read; an injured card may be bid on when its price deserves it (the
@@ -1987,6 +2029,15 @@ commit read above): the fusion refusal in `can-fuse` and the forfeit penalty. Th
 (CI-15). The agent's own fusion rule did not wait for it. The forfeit penalty's switch is not in `/api/config`; the
 prompt states the rule, and the agent's checks against a forfeit (a full 11 + 7, fit starters, the schedule's wear)
 are the ones it already had.
+
+**The injury numbers are Admin settings since 2026-11-10** (FoxLeague's main `9f65786f3`, read through its code
+only for the audit of 2026-11-11, INTEG-2): the chance per called foul is 1% at condition 100 to 3% at condition 30 by
+default (`card_injuries.rs:49-52`; 3% to 9% before), and `/api/config` `card_bans` serves the numbers in force:
+`injury_chance_bp_full_condition`, `injury_chance_bp_condition_floor` (basis points) and `injury_days_out` (three
+numbers of days; `routes/config.rs` `CardBansConfig`), next to `yellow_cards_per_ban`. The agent's plan reads them on
+the snapshot's "Cards and injuries" line (`levelLines` in `src/snapshot/digest.ts`); the prompt names no chance and no
+days of its own, and numbers the config leaves out are said to be unread. The manual copy is synced to FoxLeague's
+manual at `89a1955d7`, which states the same.
 
 **Left for 1 December 2026** (the MetaStaking discount on Shop prices): on 2026-11-10 `metastaking/discount.rs` only
 computes a percent and no payment check reads it. The agent pays list prices in exact amounts; when FoxLeague ships

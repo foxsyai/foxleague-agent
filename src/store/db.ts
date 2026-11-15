@@ -676,6 +676,21 @@ export class Store {
       .all(agentIndex, `${tag}:refunded`) as { tx_hash: string }[]).map(r => String(r.tx_hash)))
   }
 
+  /**
+   * The registration fees still counting in one ledger, oldest first: the FOXSY booked in the one-time setup budget.
+   * Only a registration books FOXSY there (a swap before the team exists books its fees and no FOXSY).
+   */
+  openRegistrationFees(agentIndex: number, dryRun: boolean): { id: number; at: string; usd: number; txHash: string | null }[] {
+    return (this.db
+      .prepare("SELECT id, at, usd, tx_hash FROM spend WHERE agent_idx = ? AND dry_run = ? AND category = 'setup' AND usd > 0 AND foxsy_atomic NOT IN ('0', '') ORDER BY id")
+      .all(agentIndex, dryRun ? 1 : 0) as Record<string, unknown>[]).map(r => ({ id: Number(r.id), at: String(r.at), usd: Number(r.usd), txHash: (r.tx_hash as string | null) ?? null }))
+  }
+
+  /** A registration fee's booking that a later one stands for (the contract takes the fee once): the row stays for the record, counting 0. */
+  replaceRegistrationFee(id: number): void {
+    this.db.prepare("UPDATE spend SET usd = 0, foxsy_atomic = '0', action = 'register:replaced' WHERE id = ?").run(id)
+  }
+
   /** A booked payment that never left the wallet (refused before sending, or reverted). */
   deleteSpend(id: number): void {
     this.db.prepare('DELETE FROM spend WHERE id = ?').run(id)

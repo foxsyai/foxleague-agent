@@ -54,6 +54,9 @@ export default defineConfig({
 					items: [
 						{ label: 'Welcome', slug: 'index' },
 						{ label: 'Install', slug: 'start/install' },
+						{ label: 'Install on Windows', slug: 'start/install-windows' },
+						{ label: 'Install on Mac', slug: 'start/install-mac' },
+						{ label: 'Install on Linux', slug: 'start/install-linux' },
 						{ label: 'Your keys, step by step', slug: 'start/keys' },
 						{ label: 'Fund it and go live', slug: 'start/go-live' },
 					],

@@ -14,6 +14,7 @@ import { Store, type AgentRow } from './store/db.ts'
 import { MIN_TICK_MINUTES, STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
 import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
+import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
@@ -45,6 +46,12 @@ import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
 import { sleep } from './util/http.ts'
 import { numberToIndex, agentName, pemName, whichAgents } from './names.ts'
+import { RELEASE_KEYS } from './update/keys.ts'
+import { detectLayout } from './update/install.ts'
+import { UpdateError } from './update/release.ts'
+import { RESTART_EXIT_CODE, Updater } from './update/updater.ts'
+import { supervised } from './update/supervised.ts'
+import { keepServiceLogBounded } from './service-log.ts'
 
 /** The installed version (package.json), shown when the service starts. */
 export const VERSION = (() => {
@@ -165,6 +172,61 @@ export function serviceRunning(dataDir: string): number | null {
   }
 }
 
+/** The command line of a live process (Linux: /proc; elsewhere: ps), '' when it has none, null when it cannot be read. */
+function commandOf(pid: number): string | null {
+  try {
+    return readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0').join(' ').trim()
+  } catch {
+    // no /proc on this system (macOS), or the process is hidden from this user
+  }
+  try {
+    return execFileSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a live process is to be taken for the service. With a command line: it runs this file (`.../src/service.ts`
+ * under node, as run.sh, the systemd unit and `npm start` launch it). Without one (it could not be read):
+ * - a process of this same user (`ownUser`: it can be signalled) counts as the service: unknown refuses, never guesses;
+ * - a process of another user that cannot even be looked at does not. That is what a pid file left by a power cut
+ *   names after the reboot (a system program's pid), and the server's unit hides other users' processes from the
+ *   service (ProtectProc=invisible). Refusing there would end the unit after three tries and keep the agent down
+ *   until someone deletes the file; the service starts as it did before this check existed.
+ */
+export function looksLikeService(command: string | null, ownUser: boolean): boolean {
+  return command === null ? ownUser : /(^|[\s/\\])service\.ts(\s|$)/.test(command)
+}
+
+/**
+ * The pid of another live copy of the service on this data folder, or null. The pid file alone is not enough: a
+ * crash or a power cut leaves it behind, and after a reboot its number may belong to any program. Refusing to start
+ * on that would keep the agent down until someone deletes the file, so the process must also look like the service.
+ */
+export function otherServiceRunning(dataDir: string): number | null {
+  const pid = serviceRunning(dataDir)
+  if (pid === null || pid === process.pid) return null
+  let ownUser = false
+  try {
+    process.kill(pid, 0)
+    ownUser = true
+  } catch {
+    ownUser = false // EPERM: another user's process; ESRCH: it ended meanwhile
+  }
+  return looksLikeService(commandOf(pid), ownUser) ? pid : null
+}
+
+/** A second copy was started on a data folder whose service runs: said in one line, without a stack trace. */
+export class AlreadyRunningError extends Error {
+  constructor(pid: number, pidFile: string) {
+    super(
+      `foxleague-agent already runs on this data folder (process ${pid}): this second copy does not start, because two copies would plan and pay for every agent twice. ` +
+        `Use the one that runs (its dashboard or Telegram) or stop it first. If you are sure no other copy runs, delete ${pidFile} and start again.`,
+    )
+  }
+}
+
 /** Telegram's "/" menu (agents are numbered from 1); /help lists the same commands with their arguments. */
 const TELEGRAM_MENU = [
   { command: 'status', description: 'This install and its agents' },
@@ -184,6 +246,7 @@ const TELEGRAM_MENU = [
   { command: 'topup', description: 'EGLD from Binance: /topup 2 asks, /topup code approves' },
   { command: 'summary', description: "Yesterday per agent (/summary today: so far today)" },
   { command: 'updates', description: 'Telegram: daily (summary only) or all (every update)' },
+  { command: 'upgrade', description: 'Install the newest version when one is out' },
   { command: 'kill', description: 'Stop every agent at once: /kill on' },
   { command: 'help', description: 'Every command with its options' },
 ]
@@ -235,6 +298,8 @@ export class Service {
   readonly executor: Executor
   /** EGLD top-ups from Binance that the owner approves with a one-time code on Telegram. */
   readonly topups: TopUps
+  /** Looks for a newer signed release and installs it when the owner asks (dashboard or /upgrade). */
+  readonly updater: Updater
   /**
    * Both replaced at run time when the admin panel changes their key or token. The strategist is the all-agents one
    * (the Strategist box): the model and effort of every agent without its own, of the manager chat and of /ask.
@@ -288,7 +353,7 @@ export class Service {
   private readonly shadowSaid = new Map<number, string | null>()
 
   constructor(cfg: Config) {
-    if (!cfg.mnemonic) throw new Error('AGENT_MNEMONIC is not set: run `npm run cli -- setup` first')
+    if (!cfg.mnemonic) throw new Error(`AGENT_MNEMONIC is not set: run \`${cfg.isServer ? 'agentctl.sh' : './cli.sh'} setup\` first`)
     this.cfg = cfg
     this.store = new Store(cfg.dataDir)
     this.chain = new Chain(cfg)
@@ -317,6 +382,13 @@ export class Service {
       binance: { egldOnBinance, travelRuleCountry, withdrawEgld, findWithdrawal, whitelisted },
       // The offer holds the code: straight to the owner's chat, never through notify (which also logs).
       send: text => this.telegram?.send(text),
+    })
+    this.updater = new Updater({
+      layout: detectLayout(), installed: VERSION, keys: RELEASE_KEYS, source: cfg.updateUrl, isServer: cfg.isServer,
+      // Only a real start looks for releases (loadConfig sets it): a Service built by a test or a CLI command asks nobody.
+      enabled: cfg.updateCheck === true,
+      dataDir: cfg.dataDir, kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
+      notify: text => this.notify(text), restart: () => this.restartForUpdate(), supervised: supervised(),
     })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
@@ -831,7 +903,7 @@ export class Service {
   }
 
   /** A pending "Link my Telegram" from the dashboard: the owner sends this code to their Telegram bot from their own account. */
-  private telegramLink: { code: string; until: number } | null = null
+  private telegramLink: { code: string; since: number; until: number } | null = null
 
   /** Starts linking the owner's Telegram chat: needs the bot token saved and no chat linked yet. */
   async startTelegramLink(): Promise<{ code: string; username: string }> {
@@ -840,7 +912,9 @@ export class Service {
     if (this.cfg.telegramChatId) throw new Error('a chat is already linked; to link another one, clear the Telegram chat id in Keys first')
     const username = await telegramMe(token)
     const code = String(randomInt(100_000, 1_000_000))
-    this.telegramLink = { code, until: Date.now() + 10 * 60_000 }
+    // `since`: only a message sent after this moment can carry the code (ATTACK-8).
+    const since = Date.now()
+    this.telegramLink = { code, since, until: since + 10 * 60_000 }
     return { code, username }
   }
 
@@ -849,7 +923,7 @@ export class Service {
     const link = this.telegramLink
     const token = this.cfg.telegramToken
     if (!link || link.until < Date.now() || !token) throw new Error('the code expired: press Link my Telegram again')
-    const id = pickOwnerChat(await telegramRecentChats(token), link.code)
+    const id = pickOwnerChat(await telegramRecentChats(token, link.since), link.code)
     if (!id) throw new Error('the code was not found yet: send exactly those 6 digits to your Telegram bot from your own Telegram account, then press I sent it again')
     this.telegramLink = null
     return this.updateKeys({ TELEGRAM_CHAT_ID: id }, by)
@@ -1205,6 +1279,10 @@ export class Service {
   }
 
   async start(): Promise<void> {
+    // Before the pid file is written: a second copy on this data folder would plan and pay for every agent a second
+    // time (the per-agent lock, the busy set and the schedule live in one process) and take the file (EDGE-8).
+    const other = otherServiceRunning(this.cfg.dataDir)
+    if (other !== null) throw new AlreadyRunningError(other, join(this.cfg.dataDir, SERVICE_PID_FILE))
     writeFileSync(join(this.cfg.dataDir, SERVICE_PID_FILE), String(process.pid), { mode: 0o600 })
     const agents = this.ensureAgents()
     const local = await loadExtensions().catch(err => [`local extension failed to load: ${err instanceof Error ? err.message : String(err)}`])
@@ -1227,11 +1305,25 @@ export class Service {
     // 127.0.0.1 unless WEB_UI_HOST says otherwise: a container that publishes the port on the host's loopback only
     // binds 0.0.0.0 inside its own network namespace.
     if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870), process.env.WEB_UI_HOST?.trim() || '127.0.0.1')
-    else console.log('web UI off: set it up with `agentctl.sh set-web-password`')
+    else console.log(`web UI off: set it up with \`${this.cfg.isServer ? 'agentctl.sh' : './cli.sh'} set-web-password\``)
     for (const b of agents) {
       this.schedule(b.index, 5_000 + Math.random() * 20_000)
       void this.snapshot(b.index).catch(() => undefined)
     }
+    // Last: a release counts as started only once everything above has come up.
+    this.updater.start()
+  }
+
+  /** Set by a test: what ends the process after an update is in place. */
+  exit: (code: number) => void = code => process.exit(code)
+
+  /**
+   * An update is in place: stop as for any restart (no new action; one already signing finishes and is booked),
+   * then exit with the code the service manager restarts on. The launcher then starts the new release.
+   */
+  async restartForUpdate(): Promise<void> {
+    await this.stop()
+    setTimeout(() => this.exit(RESTART_EXIT_CODE), 1500)
   }
 
   private schedule(index: number, delayMs: number): void {
@@ -1260,6 +1352,7 @@ export class Service {
     for (const t of this.timers.values()) clearTimeout(t)
     clearTimeout(this.summaryTimer)
     clearTimeout(this.pendingTimer)
+    this.updater.stop()
     this.telegram?.stop()
     const until = Date.now() + 150_000
     // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
@@ -1891,11 +1984,14 @@ export class Service {
           '/keys [test]  which keys are set (masked); test checks them. Change keys in the web UI only',
           '/summary [today]  yesterday per agent (or today so far); it also comes by itself every morning',
           '/updates [daily|all]  daily: plans and action results wait for the morning summary; all: every update as it happens',
+          '/upgrade  install the newest version of foxleague-agent when one is out: the agent restarts and says when it is back',
           '/topup [N | code [EGLD]]  EGLD from Binance: /topup N proposes a top-up for agent N, /topup <code> approves it (optionally fewer EGLD); alone, what waits',
         ].join('\n')
       case 'status': {
         const agents = this.store.agents()
+        const up = this.updater.view()
         return [
+          `foxleague-agent ${VERSION}${up.available ? ` (version ${up.available.version} is out: /upgrade installs it)` : ''}`,
           `mode ${this.modeText()}; kill switch ${this.store.killSwitch ? 'ON' : 'off'}; strategist ${this.strategist ? `${this.strategist.model} (${this.strategist.effort})` : 'off'}; model spend $${Number(this.store.getKv('model_usd_total') ?? 0).toFixed(2)}`,
           ...agents.map(b => `${agentName(b.index)}${b.paused ? ' PAUSED' : ''} ${b.address}${this.aiNote(b)}`),
         ].join('\n') + retiredLine(this.store.retiredAgents())
@@ -1994,6 +2090,14 @@ export class Service {
         this.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `Telegram updates set to ${to} (Telegram)` })
         return to === 'daily' ? `Done: plans and action results now wait for the summary at ${String(this.summaryHour).padStart(2, '0')}:00 ${this.summaryZone}. Urgent messages and top-up codes still come at once.` : 'Done: every plan and action result comes as it happens.'
       }
+      case 'upgrade':
+        // The owner's own chat asks: only a release signed by the maintainers and newer than this one is ever installed.
+        try {
+          return await this.updater.begin('Telegram')
+        } catch (err) {
+          if (!(err instanceof UpdateError)) throw err
+          return `No update was started: ${err.message}.`
+        }
       case 'topup': {
         const [first, amount] = args
         if (!first) return this.topups.listText()
@@ -2039,10 +2143,11 @@ function retiredLine(retired: AgentRow[]): string {
 }
 
 if (import.meta.main) {
+  keepServiceLogBounded(loadConfig().dataDir)
   const service = new Service(loadConfig())
   service.start().catch(err => {
     // Changed recovery words: what to do, without a stack trace around it.
-    console.error(err instanceof ChangedWordsError ? err.message : err)
+    console.error(err instanceof ChangedWordsError || err instanceof AlreadyRunningError ? err.message : err)
     process.exit(1)
   })
   let exiting = false

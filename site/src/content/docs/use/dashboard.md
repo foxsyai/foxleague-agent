@@ -15,6 +15,23 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 - **Go LIVE / Back to dry run** is one switch for all agents. Going live asks you to type `GO LIVE` and your
   password; back to dry run is one click.
 - **Kill switch** stops every agent at once. Turning it on is one click; releasing it asks for your password.
+- **The version** you run is the small label next to the mode, for example `v1.0.0`. Its **i** explains updates.
+  The round arrow next to it, **Check for updates**, asks GitHub now instead of at the next check, and the notice
+  and a short message give the answer. It installs nothing. It is off while an update installs and not shown where
+  the check is switched off.
+- **The update notice** appears under the header when a newer version is out: about every 10 minutes the agent
+  asks GitHub for the newest release. It shows the new version, the one you run and what is new. **Update now**
+  installs it in one click and needs no password; on Telegram, `/upgrade` does the same. While it installs, the
+  notice says so and the page comes back by itself after the restart. An agent started by hand with `./run.sh`
+  does not restart by itself: there the notice says that the new version is in place and how to start it. For a
+  day it then shows how the update went:
+  done, not installed (with why) or undone because the new version did not start. It shows that only while the
+  version it speaks of still runs: after you install another version by hand or from a terminal it goes. After an
+  undo nothing has to be done: the notice says so. While that same version is on offer its button reads **Try
+  again**, to install it once more only if you want to. When the background service was set up by an older
+  installer, the notice may say to run `./install.sh --update` once in a terminal: it then offers no **Update now**,
+  which would fail the same way, until that is done ([Troubleshooting](/help/troubleshooting/)). An install that
+  cannot update itself shows what to do instead of the button ([Update](/help/update/)).
 
 ## The totals
 
@@ -30,7 +47,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   one click. A switch that starts shadow plans asks for the password too
   ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
   soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
-  not ready.
+  not ready. Without the AI key the box is greyed out: it shows the model and effort the agents start on once the
+  key is set (Sonnet 5.5 at medium on a new install), and the level's recommended AI is shown next to the level.
 
 ## An agent's page
 

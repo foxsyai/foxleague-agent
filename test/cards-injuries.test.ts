@@ -201,8 +201,9 @@ test('CI-10: the executor pays the quoted medicine with one shopPay and confirms
 
 test('CI-11: the prompt carries the rules of cards, injuries, medicine and forfeits, and the medicine action', () => {
   assert.match(SYSTEM_PROMPT, /Cards and injuries: the snapshot's "Cards and injuries" line says whether they are live/)
-  assert.match(SYSTEM_PROMPT, /3 percent at condition 100 rising evenly to 9 percent at condition 30/)
-  assert.match(SYSTEM_PROMPT, /one injury in a match keeps the card out 3 days, two 9, three or more 27/)
+  // The chance and the days out are FoxLeague's settings: the prompt points at the snapshot's line (audit 2026-11-11, INTEG-2).
+  assert.match(SYSTEM_PROMPT, /can injure the player fouled, at the chance the line gives \(lowest at condition 100, highest at condition 30 and below\)/)
+  assert.match(SYSTEM_PROMPT, /one injury in a match, two, or three or more keep the card out for the days the line gives/)
   assert.match(SYSTEM_PROMPT, /a third of every injury is always served/)
   assert.match(SYSTEM_PROMPT, /loses the full ELO K of the match's level/)
   assert.match(SYSTEM_PROMPT, /\{"type":"buy","product":"medicine","player_nonces":\[N\],"quantity":D\}/)

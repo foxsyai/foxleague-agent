@@ -1603,6 +1603,253 @@ Stays open:
   it yet.
 - What stays open in the section above stays open: a shadow plan is judged by reading it, never by the rules.
 
+## Mac install check (2026-11-12)
+
+The owner installed the release candidate on his MacBook Air (macOS 15.7.3 on arm64, no Node.js before) with the
+pasted line, then updated and uninstalled it. Five findings, all low, none about money, keys or signing: MAC-1 to
+MAC-4 from the check and MAC-5, the one item it left open, done on the owner's go of 2026-11-13. They were fixed test
+first by Claude Opus 5.5. The tests are in `test/mac-check.test.ts` (and the route test of MAC-5 in
+`test/update-service.test.ts`), named after the ids below; each was seen failing before its fix. The final audit
+follows this section, and the sections of 2026-11-13 come after it.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MAC-1 | low | The install left npm's cache outside the agent's folder. On the Mac `deps()` (`npm ci`) created `~/.npm` (5.8 MB: the download cache and a debug log); after `./install.sh --uninstall` and deleting the folder it stayed. An update's prepare runs the same npm | `deps()` runs npm with `npm_config_cache="$ROOT/.npm-cache"` in the install, in an update's prepare and in the update of a git checkout: npm's cache and its logs stay in the install's folder and go with it. A git checkout ignores `.npm-cache/`. No other script of an install runs npm. The Update page no longer says that `~/.npm` stays |
+| MAC-2 | low | INSTALL.md and the Update page said that the folder takes about 190 MB. Measured on the Mac: Node.js (`.node`) 189 MB and 42 MB for each release folder, so about 231 MB after the install and 273 MB after an update (the running release and the one before it are kept for the undo) | Both say "about 240 MB, and about 280 MB once an update has kept the release before it", which counts npm's cache (about 6 MB) that MAC-1 moved into the folder. No other page, script or the dashboard states a size, and none says 190 MB |
+| MAC-3 | low | After an update that did not start and was undone, the dashboard's notice gave the updater's message and then "Version 1.0.3 is out. You run 1.0.2." with the button **Update now**. The owner asked twice whether he had to press it to get back to 1.0.2 | When the release on offer is the very one that was just undone here, the notice says "Nothing has to be done: the agent keeps running 1.0.2." and the button reads **Try again**. A newer release keeps the usual words and **Update now**. The updater's message is unchanged (Telegram sends it). The info bubble and the Update, Dashboard and Troubleshooting pages say the same |
+| MAC-4 | low | `./install.sh --uninstall` printed "The agent wallets still hold their funds. Keep the backup words" without reading a balance, so also for empty wallets | It prints "The agent wallets may still hold funds. Keep the recovery words; delete the folder only when the wallets are empty." The Windows uninstall (`get.ps1 -Uninstall`) and the Update page said "keep their funds" and now say "may still hold funds". No balance check was added |
+| MAC-5 | low | The dashboard had no "check for updates now". The route `/api/update/check` existed, but the page never called it. A check comes 30 to 90 seconds after a start, then every 10 to 11 minutes; only a terminal asked at once (`./cli.sh update-check`). The check left it open as the owner's call; done on the owner's go on 2026-11-13 | **Check for updates**, a round arrow between the version and its info bubble, shown only where the agent checks for updates. Its title and aria-label name it and the version's bubble explains it. A link with a bubble of its own first made the header wrap at 1280 px, where it held one row before: the version, the arrow and the bubble now form one tight group and the brand's gap is 8 px (as on a phone), so the header is 3 px narrower than before at every width. It calls `POST /api/update/check` through the page's `api()` (session and CSRF token, no password: it installs nothing), puts the answer in the page's state, shows the notice at once and says the answer in a short message; for the release that was just undone here it says that nothing has to be done (MAC-3). An error that is not the updater's own (a full disk, for example) reads "an unexpected error (see the log)" and goes to the log, where the message said "The check failed: the check failed." before. It is off while it asks (the arrow turns) and while an update installs. The updater asks the release server at most once in 15 seconds (`MIN_CHECK_GAP_MS`): a check sooner than that after the last one, or while one runs, gets that check's answer, so a page or a stuck double click cannot hammer the server. The check every 10 to 11 minutes is unchanged. Tried in headless Chrome against a test service at 1280, 1440, 1470, 1512 and 390 px: one row at the four desktop widths, as before. The Update, Dashboard, Troubleshooting, FAQ and Safety pages, INSTALL.md, the README and docs/SERVER.md name it |
+| MAC-5R | low (the release check only) | After MAC-5 the install replay (`scripts/release/fresh-install-check.sh`) failed four checks of step 11e: it published 1.0.5 four seconds after its check for 1.0.4, the dashboard's check gave the last answer (one ask in 15 seconds) and Update now installed 1.0.4 again. Steps 11c, 11d and 11f followed the same pattern, a check and then Update now, and 11c and 11d could meet the same race when the agent's own check came just before | Before each Update now the replay waits, bounded at 60 seconds, until the agent offers the version just published (`offered` and `offered2`: the dashboard's check, then the state). The test "MAC-5 and the install replay" reads the script and failed before the fix. The replay of 2026-11-13 passes: 92 checks, none failed. No code of the agent changed |
+
+What passed on the Mac:
+- The install on macOS 15.7.3 on arm64 with the system's bash 3.2 and without Xcode's command line tools, and the
+  background service under launchd.
+- The one-click update, found after the Mac had slept.
+- The update from the terminal (`./install.sh --update`), with the oldest release folder removed.
+- A release that does not start, undone in about 20 seconds under launchd.
+- The uninstall, which left no service, no process and no port of the agent.
+
+Stays open: nothing of this check. The item it left open is MAC-5 above.
+
+## Final audit before the public launch (2026-11-11): six Claude Fable 5.2 reviewers at extra-high effort, the fixes by Claude Fable 5.2 at high effort
+
+The last audit before the repository opens. Six reviewers (MONEY, ATTACK, EDGE, INTEG, INSTALL, DOCS) worked read-only,
+one area each, on the frozen tree `ac8833f`; INTEG also read FoxLeague's main of that day (`9f65786f3`) and its live
+`/api/config`, and INSTALL drove the real installer on a pseudo-terminal. A finding counted only with a proof that
+fails while the defect exists. Three fixers and one for the pages then worked test-first: each proof was seen failing
+before its fix, and the proofs are kept under `test/audit-1111/`.
+
+No critical and no high finding, and no way past the hard caps: every loss of track that was found counts a payment
+too much, never too little, and no path pays twice.
+
+| Area | Findings | Medium | Low |
+|---|---|---|---|
+| MONEY | 4 | 2 | 2 |
+| ATTACK | 8 | 2 | 6 |
+| EDGE | 8 | 1 | 7 |
+| INTEG | 6 | 0 | 6 |
+| INSTALL | 21 | 5 | 16 |
+| DOCS | 14 | 6 | 8 |
+| All | 61 | 16 | 45 |
+
+Some are one defect seen from two areas, and share a row below: EDGE-2 is ATTACK-3, EDGE-5 is INTEG-5, EDGE-7 is
+INTEG-6, MONEY-3 is INTEG-4, DOCS-5 is INTEG-2, DOCS-2 is INSTALL-1 and INSTALL-15 is EDGE-8. The one-click update was
+built while the audit ran, so the installer's findings about the old way of updating (INSTALL-1, INSTALL-2,
+INSTALL-16, the first half of INSTALL-7) are closed by its design and held by regression tests; its own guarantees
+are the rows named UPD-1 to UPD-20 and REL.
+
+After the fixes the install was replayed the way a newcomer meets it, on a fresh Ubuntu 24.04 in a container that
+runs systemd (`scripts/release/fresh-install-check.sh`, kept for every release: the pasted line, the mistakes, a
+reboot, the updates, the undo and the uninstall). The owner also installed on a real Ubuntu desktop. That gave
+fourteen more findings (FRESH-1 to FRESH-14, two medium and twelve low) and four in the updater and the service
+(UPD-21 to UPD-24, two medium and two low). The agent review of pull request #61, which was merged into this
+branch, gave R61A-1. They are not in the counts above and are the last rows. FRESH and UPD-21 to UPD-24 were fixed
+test-first, with their tests under `test/audit-1111/` (`fresh-<n>`, `upd-<n>`); the test of R61A-1 is in
+`test/review-web.test.ts`. The replay was then given a scenario for each of UPD-21 to UPD-24 under its real systemd
+and run on the fixes on 2026-11-11: 88 checks, none failed.
+
+The Windows one-line installer (`get.ps1`) was written after them, on the owner's decision that Windows stays on
+WSL2 with one pasted PowerShell line. It is a new feature and not a finding, and WIN-1 is the last row.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MONEY-1 | medium | A seated team counted as clearly stronger only when its ELO was more than 50 above ours and its lineup more than 5 percent above. A field of elevens twice as strong at our own ELO read "0 stronger" and the entry was paid | A lineup that was read decides alone once it is more than 10 percent above ours (`MAX_1V1_STRENGTH_RATIO`). Between 5 and 10 percent the ELO still has its say, and an unread lineup is judged on its ELO. The same count holds for Champions FoxLeague invitations. |
+| MONEY-2 | medium (the owner's decision, 2026-11-11) | The 1v1 win chance averaged the ELO chance and the squad chance, so a rival whose eleven is 10 percent stronger (32 percent by the squads) read 56 percent once its ELO was about 250 below ours and passed the 55 percent floor | With both numbers read, the estimate is the smaller of their average and the squad-only chance: a rival's lower ELO may lower our chance, never lift it. With one number read nothing changes. The plan reads the same number. |
+| MONEY-4 | low (not reachable today) | With Gold off, a join was refused only when the tier label read exactly `gold`. An unknown or missing tier with an entry far above the Silver ceiling passed | A tier that is not bronze, silver or gold is refused as unread, at any setting, and its label is not repeated. With Gold off, an entry or stake from the served `gold_min` up is refused whatever the label says, as is a paid entry while that bound cannot be read. |
+| EDGE-1 | medium | The bid's inherited-lock guard and the plan's auction line read a moved card whose `transfer_cooldown_hours` is null as "no lock", although null is FoxLeague's default lock (504 hours, served in `/api/config`). A bid up to the rarity limit could go to a card that cannot play for about 21 days | One helper (`transferLockEnd`) for the wallet's cards, the auction line and the bid: the card's hours, else the served default, else 504. A move whose time cannot be parsed is unread and takes no bid. |
+| INTEG-1 | low | The 1v1 match-fit count took any 11 fit cards of the 18. FoxLeague relieves a tired outfield starter only with a fit outfield bench card (the bench keeper never), holds injured bench cards out and refuses the join after the stake is paid (refunded, the gas lost) | `matchFit` counts the eleven shirts as FoxLeague fills them: an outfield shirt from the fit outfield bench cards, the keeper's from a fit bench keeper or an outfield card as the last resort. At a join and at a create. |
+| INTEG-2 (DOCS-5) | low | The prompt and the manual copy stated an injury chance of 3 to 9 percent. FoxLeague runs 1 to 3 percent, made the chance and the days out Admin settings and serves the ones in force in `/api/config` `card_bans` | The snapshot's "Cards and injuries" line gives the chance and the days as served, and says so when they are missing. The prompt points at that line and names no number. The manual copy is synced to FoxLeague's manual at `89a1955d7`. |
+| INTEG-3 | low (latent) | The bid's minimum raise was a 5 written in the agent. The contract reads a setting its owner may change from 1 to 50, served as `auction_min_increment_percent`. After a change every raise would revert and lose its gas, again at each plan | The rule reads the served percent (5 when the answer leaves it out, no raise when it is no whole number from 1 to 50 or the settings were not read). The refusal names it and the snapshot tells the plan. |
+| INTEG-5, EDGE-5 | low | A paid join was refused only once the deadline had passed. FoxLeague checks it when `POST /join` arrives, so a payment signed seconds before it was refused and refunded with the gas lost. The pending retry then asked for an hour and raised an alarm for an entry already refunded | No paid entry and no 1v1 stake within 120 seconds of the deadline (`BUSY_OPENS_MARGIN_S`). A free seat needs none. A deadline that is no time is refused. The retry takes "Registration deadline has passed" as final when it answers the ask that carried the hash. |
+| INTEG-6, EDGE-7 | low | A Common pack was refused only when the weekly quota read exactly 0. A shop status that failed, or an answer without the number, passed as "packs left", and 2,500 FOXSY were paid for a pack FoxLeague refuses at the confirm | Refused unless the number is finite and above 0. The snapshot tells the plan the packs left, or that they are unknown. |
+| EDGE-6 | low | `GET /api/config` is read without the envelope and the client did not look at the HTTP status: a 403, 429 or 500 with a JSON body came back as a config object with none of its fields, past the rules' one guard | The raw path throws on a status outside 2xx without repeating the body. `config()` returns only an object that carries `registration_fee_wei` as an amount. The snapshot keeps `config` null with a warning and every rule refuses. |
+| INTEG-4, MONEY-3 | low | Every refusal of the relay released the registration fee's booking, also FoxLeague's HTTP 500 after a failed broadcast and an answer that is not its envelope, although the signed transaction may have gone out | Only FoxLeague's own refusal with HTTP 403, 429 or 503 (its guards before the broadcast) releases it. The client carries the status on the refusal. Anything else keeps the fee booked. |
+| EDGE-3 | low | A registration fee booked for a registration that never happened (a relay with no answer, or every dry run's simulated fee) refused each later registration by the one-time setup budget for good | A registration whose snapshot reads the fee as not paid leaves the earlier booking out of its setup-budget check and lets it go only once its own booking is kept. Refused, unsigned, turned away by a guard or reverted, the earlier booking stays: one booking always stands for the one fee the contract takes. The plan of a team that does not exist reads the setup budget without it. |
+| EDGE-4 | low | A payment whose broadcast got no answer kept no hash on its ledger rows, although the hash was computed before the broadcast. Every refund check reads a row by its hash, so an outbid bid or a refunded shop payment kept counting | The rows are settled under the locally computed hash right after the signature, and the error row carries it. A row is credited only on the chain's or FoxLeague's own word about that hash, once. |
+| ATTACK-2 | medium | A cross-site `POST /login` from any website the owner visits counted wrong passwords against the owner's own address and locked the owner out of the sign-in and of every password re-prompt. The plain Origin rule could not fix it: the dashboard's pages ask for no referrer, so a browser sends the dashboard's own form with `Origin: null` | Before the throttle is read, a sign-in from another site is refused uncounted (403). `Sec-Fetch-Site` decides where the browser sends it (only `same-origin` and `none` pass). Otherwise an Origin that names a host must be the request's Host, and `Origin: null` passes only with the sign-in page's own `SameSite=Strict` mark. A request with no Origin is judged by its password as before. Checked with Chrome against the real server |
+| ATTACK-1 | medium | One IPv6 host was never locked out of the sign-in: the lock and the password queue counted the full address, and a host owns all addresses of its /64 | `LoginThrottle` and the queue count a client by `clientKey`: an IPv4 address, or the /64 of an IPv6 address. The nginx template holds `/login` to 30 requests a minute per address |
+| ATTACK-6 | low | A logged-out session came back to life after a restart: the revocation lived only in memory | A keyed hash of each logged-out session and its expiry are kept in the store and loaded when the web starts. The session itself is never stored |
+| ATTACK-3 | low | The 30 minutes of "unknown" for a top-up with a lost answer ran from the offer. An approval late in the code's hour was called "never went out" seconds later, and asking again sent a second withdrawal (also EDGE-2) | The time of the attempt is stored with the claim and again right before Binance is asked. The 30 minutes run from it; a row from an earlier version uses the end of its code hour |
+| ATTACK-4 | low | A read slept for whatever an upstream's `Retry-After` said, up to days, inside a tick or under an agent's lock | A pause of up to 60 seconds is kept and is never shorter than the usual back-off. An upstream that asks for more is not asked again in that read: its answer comes back at once. A value that is no number and no date counts as none |
+| ATTACK-5 | low | An upstream answer of any size was buffered whole before parsing: 256 MB cost about 780 MB of memory | The body is read as a stream and refused past 8 MB. A larger declared content-length is refused unread, and a compressed answer is counted by its unpacked size |
+| ATTACK-7 | low | A tournament title written by the model had no impersonation check, unlike a team name | `parseAction` refuses a title that matches the same blocklist as a team name |
+| ATTACK-8 | low | Link my Telegram read only the 20 earliest waiting messages: 20 lines from anyone hid the owner's code for a day, and an old line could match a new code | Every waiting message is read in pages of 100, and only one dated after the link was started counts. The offset moves only past a full page and only as far as the first message the service's own reader could still act on, so the owner's code and first commands stay waiting for it |
+| EDGE-8 | low | A second copy of the service on the same data folder started, took the pid file and planned every agent a second time (also INSTALL-15) | `start()` refuses before writing the pid file when the pid in it is alive, is not its own and runs the service. A stale pid that now belongs to another program does not block a start, also when the server's unit cannot look at that process |
+| INSTALL-5 | medium | `set_env` rebuilt `.env` with `grep -v ... \|\| true`. One NUL byte in the file made grep print nothing, so the new `.env` held only the line being set and the recovery words were gone. | `set_env` copies with `grep -a` under `LC_ALL=C`, treats a grep error as an error, counts the lines with `wc` before the new file replaces `.env` and stops when one would be lost. The file stays mode 600. |
+| INSTALL-4 | medium | Enter at "Allow this machine to sign real transactions" turned signing on unless `.env` said exactly `AGENT_LIVE_ENABLED=0`. A line that was commented out, removed or set to false, off or no was offered as yes while the database could still say LIVE. | Enter means yes only when `.env` says 1 or true, or on a first install (no database and the setting nowhere in `.env`). Every other state offers no, also when a second line in another form decides what the agent reads. |
+| INSTALL-8 | low | A first run that ended before the typed yes left the words in `.env`. Every later run said "Your existing wallet is kept" and never showed them again. | The typed yes is noted in `data/words-confirmed`. Until it exists every run of the installer shows the words and asks. INSTALL.md names `./cli.sh backup-words`. |
+| INSTALL-13 | low | An empty `AGENT_MNEMONIC=` line, as `.env.example` ships it, counted as "words exist", so setup failed and the installer still said "A new wallet was created". | An empty line is filled in place and a line that holds anything is never replaced, an `export` line included. The installer stops with the setup's own message when no wallet was made. |
+| INSTALL-14 | low | A system Node.js with no npm beside it was chosen and the installer stopped at `npm: command not found`. The version rule also accepted 23.x, 24.0 and 24.1, where the service loads and ends at once. | A system Node.js is used only when it is 22 from 22.18 or 24.2 and later and npm sits beside it. Otherwise the private copy is used. `engines` names the same range. |
+| INSTALL-3B | medium | The private Node.js download was checked against a SHASUMS256.txt fetched from the same server. | The SHA-256 of the four archives of v22.22.0 is written in `install.sh` and the one of `deploy/bootstrap.sh` in that script. A download that differs is refused before it is unpacked. |
+| INSTALL-6 | low | get.sh put an older version over a newer install without a word. The older code does not apply limits added since. | An older version is refused unless `FOXAGENT_ALLOW_DOWNGRADE=1`. The refusal names both versions and says that newer settings and limits would not be applied. |
+| INSTALL-9 | low | get.sh took any folder with a `src` and a `package.json` for an older install and removed its src, docs and test. It also unpacked into a folder that held the owner's own files. | A folder is an older install only when its `package.json` names foxleague-agent. A folder that is neither an install nor empty is refused untouched. |
+| INSTALL-10 | low | A download of get.sh that stopped part-way ran every complete line before the cut. On the new layout it could still move the running release away or remove a flat install's code and put nothing in place. | The body of get.sh is one function called on the last line. A cut script does not parse and nothing of it runs. |
+| INSTALL-1 | medium | The update copied the new get.sh over the one bash was reading. | Closed by the release-folder layout. A regression test updates to a release whose get.sh and install.sh changed. |
+| INSTALL-2 | medium | The update replaced the code before `npm ci` and had no way back. | Closed by the release-folder layout. A regression test fails the dependency install and checks that the running release still loads and is the one the launcher starts. |
+| INSTALL-16 | low | The old get.sh copied the archive over the install, so an archive that held a `.env` replaced the recovery words. | Closed by the release-folder layout. In addition get.sh and the updater refuse, before unpacking, an archive that holds `.env`, `data`, `pem`, `keys`, `node_modules`, `.node` or a PEM file. |
+| INSTALL-7B | low | An update whose restart failed ended with status 0 while the old version kept running. | A failed restart is an error that names the command to run. |
+| INSTALL-15B | low | The first update of an install made with `--no-service` installed and started a background service beside the agent the owner runs by hand. | An update restarts a service only when one is installed and never installs one. The owner is told to start the agent again. |
+| INSTALL-20 | low | Only the guided installer set the modes of `.env`, `data` and `pem`. An install copied to another machine was updated and started with the recovery words readable by every local account. | `--update` and `--prepare` set `.env` 600, `data` 700, `pem` 700 and `pem/*.pem` 600 when they exist. |
+| UPD-strict | low | The updater checked the paths of an archive and not the kind of each entry. A symbolic link could point out of the release folder. | The updater and get.sh refuse, before unpacking, an archive that holds anything but plain files and folders. |
+| INSTALL-17 | low | The installer ran as root without a word and set the agent up as a root user service. | As root the guided install and the pasted line stop with one sentence (create a user, or follow docs/SERVER.md) unless `FOXAGENT_ALLOW_ROOT=1`. |
+| INSTALL-18 | low | On macOS the service's output went to `data/service.log` and nothing ever cut it. | The service keeps the file bounded at its start and once an hour: over 5 MB it keeps the last 1 MB, cut in place because launchd holds the file open. |
+| INSTALL-12 | low | The site was built on the maintainer's computer with `npm ci` that ran the install scripts of its dependencies. | `npm ci --ignore-scripts` in `site/deploy-site.sh` and `site/Dockerfile`. A test holds every `npm ci` of the tracked scripts to it. |
+| INSTALL-19 | low | The nginx template proxied the dashboard on port 80 until certbot had run, so a password could travel in clear. | Port 80 only answers the certificate challenge and redirects to https. The proxy is in the 443 block and the guide gets the certificate first. |
+| INSTALL-11 | low | The update of a git checkout pulls its branch, which may hold commits that are in no release, while the guides promised the newest release. | The pull stays. The installer says before it that a checkout follows its branch and may hold code that is in no release yet, and the guides say the same. |
+| DOCS-3 | medium | The guides told every owner to type `npm run cli -- X` and `npm start`. An install with the private Node.js has no npm on the PATH, so those failed, the way back to the recovery words included. | `cli.sh` sits next to `run.sh` and runs the active release's command line with the installer's Node.js. The installer, README.md and INSTALL.md show `./cli.sh` and `./run.sh`. |
+| DOCS-1 | medium | The Go live page, INSTALL.md, the installer's last screen and the Getting started guide promised that a new wallet in dry run simulates its registration. A dry run buys nothing and every action of a plan runs against a fresh reading of the chain: the swap is simulated, the registration is refused ("needs 5000 FOXSY for the fee (swap first)") and later plans of the game day may refuse the swap too, by the daily swap allowance the simulated swap counts in | The four places say what a new wallet shows in dry run and that the team is registered after Go LIVE. A test runs the executor on a new wallet and holds the sentences to it. The code is as it was (see Stays open). |
+| DOCS-4 | medium | The pages gave the AI about $1 a day and $0.15 a plan for a single agent, measured when the game manual was 143 KB, and suggested a monthly limit of $20 at Anthropic. The manual is 245 KB, nothing tied the sentence to it, and no page gave the cost of the Opus 5.5 at high effort that every level recommends | Measured again on the maintainer's server on 2026-11-11 from real plans: the rules and the manual are about 99,000 tokens and a plan reads about 111,000 in all. The pages say about $0.25 a plan and $1.50 a day for a single agent at the defaults (derived from those counts at Sonnet 5's list price) and what ten agents on Opus 5.5 at high effort measured ($0.15 a plan with the manual from the cache, $0.60 without). The example limit is $60. A test ties each number to the size of the text every plan sends, the list prices and the default tick and hours: a manual that grows fails it. |
+| DOCS-6 | medium | Every page gives one line that starts with curl and none said that curl is needed. Ubuntu Desktop ships without it, and the snap that Ubuntu's hint names first cannot write the installer's Node.js download | The Install page, the home page, INSTALL.md, README.md and Troubleshooting give `sudo apt install curl` and say that it is the apt one. |
+| DOCS-7 | medium | On Windows the agent is a systemd user service inside WSL2, which stops some time after its last terminal closes and does not start with Windows, while the pages said "keeps it running after a restart". On macOS the service starts at login and a sleeping Mac plays nothing | The pages say when the agent runs on each system, step 7 of the installer's table names all three and Troubleshooting has a row for each. No keep-alive for Windows is shipped (see Stays open). |
+| DOCS-8 | low | The Max shop payment bubble said "At 2,500 the agent can buy anything in the shop", while medicine for a long injury and an Epic's match waiver cost up to 9,000 | The bubble says what 2,500 buys and what needs more, with the numbers of the levels and of the match gate. |
+| DOCS-9 | low | "A day in the life" gave the XP booster's 7 stat points without the rate they belong to, and said the seated teams are compared for the open Silver or Gold tournaments, while the snapshot reads a paid Bronze too | The sentence names the full rate and that a level earning a share of the XP brings that share. The field read says Silver, Gold or paid Bronze, and the test that pinned the old sentence pins the new one. |
+| DOCS-10 | low | Five lists in the dashboard, the Settings page and the Strategy levels page carried a comma before their last "and" | Reworded. |
+| DOCS-11 (c) | low | `site/README.md`, the site's nginx files and its deploy script named the maintainers' website server (its address, its deploy user and another site on it), and comments in the sign-in page and the dashboard, sent to every browser, named two other private projects | Placeholders, with a sentence that the real values are kept outside the repository (`site/.host`, which git ignores, or `SITE_HOST`). The comments are gone, also in `src/web/auth.ts` and a test's title. A test searches the tracked files. |
+| DOCS-12 | low | `setup` on a server told the owner to run `backup-words`, which a server refuses | On a server it says to read the words once from the env file in the owner's own SSH session, as the server guide does. On the owner's computer it names `./cli.sh backup-words`. |
+| DOCS-3 (the messages) | low | The agent's own messages still named `npm run cli -- setup` after the guides were corrected | The command line, the service and `.env.example` name `./cli.sh`, or `agentctl.sh` on a server. The maintainers' `sync-manual` line keeps npm. |
+| DOCS-13 | low | The manual's eleven screenshots dated from 2026-10-06 and showed a dashboard that no longer exists | Taken again with `site/scripts/screenshots.ts` on its demo agents (a throwaway wallet, demo keys, no upstream in reach). |
+| DOCS-14 | low | The home page promised an agent that plays "around the clock", while a new agent plans 12 hours a day | "every day, inside the hours you choose". |
+| DOCS-15 | low | Found while the update's pages were written: the notice of a new version said "send /update here". The command is `/upgrade`, and the agent answers `/update` with "unknown command" | The notice names `/upgrade`. A test asks the service every command the notice names. Only the words changed. |
+| UPD-1 to UPD-5 | new feature | What an installed agent may take as an update had to be decided by something an attacker of GitHub, of the download or of the network cannot forge | A release is a small manifest signed with the maintainers' Ed25519 key, whose public half is pinned in the code already installed. The manifest is read strictly (its known fields only), it counts only with a signature of exactly its bytes, only a later plain version is newer (no downgrade, not the same version, nothing unreadable), and the archive is kept only when its size and SHA-256 are the signed ones. A build that pins no key refuses every update. |
+| UPD-6 to UPD-11, GET-1, GET-2, INS-1, INS-2 | new feature | An update that fails half-way, or that does not start, must leave an agent that runs | Each release has a folder of its own under `versions/`, and the running one is never written to. The new release is unpacked next to it and prepares itself (`install.sh --prepare`: its own folder and Node.js only, without the agent's keys in its environment). The switch is one small file, written by rename with a note for the launcher. A release that has not stayed up for 45 seconds in two starts is undone by the launcher (`run.sh`), and the release that ran before tells the owner once. The launcher refuses a `versions/active` that names anything but a release folder. The pasted install line puts a release in its own folder only when the download matches its manifest, and keeps the wallet, the keys, the data and Node.js. |
+| UPD-12 to UPD-20 | new feature | When an update is installed, and who may ask | The agent asks for the newest release about every 10 minutes (`AGENT_UPDATE_CHECK=0`: never) and tells the owner once per version, in the dashboard and on Telegram. Looking installs nothing. An update is installed only on the owner's ask (Update now, with the session and its CSRF token, or `/upgrade` from the owner's own chat), it is verified again at that moment, one at a time. The service then stops as for any restart and ends with exit code 75, on which the service manager starts it again. An update that cannot be installed changes nothing and says why; an install that cannot update itself (a git checkout, a server set up by hand) is told what to do instead. |
+| REL-1, REL-2 | new feature | The maintainers' side of a release | `scripts/release/release.ts` packs a tag exactly as git holds it, writes the manifest and signs it on the maintainer's own computer. It refuses a release that agents would refuse (another version in the tag, no pinned key, a key the release before does not know) and never overwrites or prints the private key. `docs/RELEASING.md` has the steps. |
+| FRESH-1 | medium | The unit's start limit (5 starts in 10 minutes, there to end a crash loop) also counted the restarts the owner asks for. After several runs of the installer, a restart and two updates in a row, systemd refused the next start ("Start request repeated too quickly"): the agent was left stopped, the update said "the old version is still the one running" and the command it named was refused the same way | The installer clears the unit's count (`systemctl --user reset-failed`) before a restart the owner asked for. A restart that still fails says what really runs and names `reset-failed` with the restart. Step 7 no longer ends the installer without a word when `daemon-reload`, `enable` or the restart fails. |
+| FRESH-2 | low | systemd was looked for at step 7 of 7, after the newcomer had written down the words and typed a login and keys | It is looked for before the first question. The message says "this machine does not run systemd", with the WSL2 steps and `./install.sh --no-service`. |
+| FRESH-3 | medium | A terminal opened with `su - user` has no bus of the user: the install ended at step 7, `--update` could not restart the agent and `--uninstall` said "Stopped." while the agent kept running | The installer finds the user's service manager itself (`loginctl enable-linger` for its own user, then `XDG_RUNTIME_DIR`). An uninstall that cannot reach or stop the service says so and removes nothing. It also says that linger stays on. |
+| FRESH-4 | low | A dashboard password that was too short, or typed differently the second time, ended the installer | It is asked for again, up to five times. Ctrl-C still ends the installer. |
+| FRESH-5 | low | The last screen listed `./install.sh --update`, `./cli.sh` and the uninstall without the folder they are typed in | It names the folder first (`cd <folder>`). |
+| FRESH-6 | low | Without curl the Node.js download failed with "could not be downloaded. Check the connection" | "curl is needed and is not installed", with `sudo apt install curl`, before the first question. |
+| FRESH-7 | low | The notice of a new release said "send /update here": DOCS-15, met again on the fresh install | `/upgrade`, by the same fix. |
+| FRESH-8 | low | npm's own notice ("new version of npm available, to update run ...") and its spinner stood between the installer's lines, and a newcomer reads the notice as something to do | Both are switched off for the installer's `npm ci`. |
+| FRESH-9 | low | "Yes" with a capital was not taken as the yes at the words question. A shell without `USER` broke the installer. The guided install printed lines written for a server ("Restart the service", `check-keys`) | yes counts in any case. The user's name is asked of the system (`id -un`). Under the installer the command line leaves the server's lines out (`FOXAGENT_GUIDED=1`). |
+| FRESH-10 | low | The installer accepted a dashboard port that another program already listens on, and the agent then ended at every start | Step 3 refuses such a port and offers the next one. The port that this install's own running agent holds counts as its own. UPD-23 is the running agent's side. |
+| FRESH-11 | low | The Node.js download was written by curl itself (`curl -o`) into a temporary folder, which a confined curl (the snap) cannot write to | curl writes to its output and the shell writes the file. By reasoning: not measured with a real snap, and the guides still name the apt one as the one the install is tested with. |
+| FRESH-12 | low | A Telegram token that was refused, or Telegram not answering, saved none of the keys: the AI key typed just before was lost and the installer ended at step 4 | The token is left out and told, the other keys are saved and the install goes on. |
+| FRESH-13 | low | From the owner's install on a real Ubuntu desktop: the dashboard address on the last screen was plain text among the other lines | It is a link where the terminal knows links (plain text when the output is no terminal) and the screen says how to open it. On a machine with a desktop the installer offers to open the dashboard in the browser, never on a server or in a pipe. |
+| FRESH-14 | low | From the owner's install: when the installer was run again, Enter at "Enter keys now?" walked through all four key prompts whenever no AI key was set | Enter means yes only on a first install without an AI key. On every later run it skips the keys, and a typed y still opens them. |
+| R61A-1 | low | The agent review of pull request #61 (Claude Fable 5.2 in the strategist's model list): the password gate with the new model prices had no test, and two pages said "at the same price" of Sonnet 5.5, whose cache reads cost less | Fixed in that pull request, with a test and the wording: every list price counts for the gate, the cache read too. Sonnet 5.5 back to Sonnet 5 asks for the password, Fable 5.2 asks for it from every Sonnet and Opus, and Fable 5.2 to Opus 5.5 is one click. No code changed. |
+| UPD-21 | medium | On an install without a background service (`./install.sh --no-service`, the agent started with `./run.sh`) Update now and `/upgrade` put the release in place and ended the agent with exit code 75. Nothing starts such an agent again, so it stayed down while the dashboard said that the page comes back by itself | The agent knows whether a service manager started it (`src/update/supervised.ts`): the installer's unit and plist say so with `FOXAGENT_SUPERVISED=1`, launchd names its job, and a unit written before is known by `INVOCATION_ID` together with a `JOURNAL_STREAM` that names the agent's own output (a desktop terminal inherits `INVOCATION_ID`, so it alone proves nothing). Without a service manager the release is still verified, prepared and switched, and the agent does not end: the answer to the click, the dashboard notice and Telegram say that the new version runs from the next start, with the command. Asking again says the same and does nothing more. Whatever is not recognised counts as started by hand, so the mistake that is left is an agent that plays on, not one that stays down. |
+| UPD-22 | low | The systemd user unit restarted the agent only after a failure (`Restart=on-failure`) and the launchd plist only after an exit that was not 0. A new release that ends at once with status 0, as Node.js 23 ends this code, was not started a second time, so the launcher's undo waited for the owner | `Restart=always` in the user unit and `KeepAlive` true in the plist. `RestartSec`, the start limit and the lines for exit code 75 are unchanged. A stop that is asked for (`systemctl --user stop`, the uninstall) is not restarted. The server's unit in `deploy/` is not part of this. |
+| UPD-23 | medium | A dashboard port that another program holds (`EADDRINUSE` at listen) was an error nothing caught: it ended the whole agent. Under the unit it was started again until the start limit and then stayed stopped, although the agents do not need the dashboard to play | The failed listen is caught. The agent says once, in the log and on Telegram, which port it is, that the agents keep playing and how to set `WEB_UI_PORT`. It tries the port again every 60 seconds and says once when the dashboard is back. Any other error of the web server ends the process as before. |
+| UPD-24 | low | For the first 45 seconds after a new release started, `versions/pending` still names it and the launcher may still undo it. A second Update now in that time was accepted: it replaced the note, so a release that had not proven that it starts became the one to go back to | Refused with one sentence: "the last update is still being confirmed, try again in a minute". Nothing is asked, downloaded or switched. |
+| WIN-1 | new feature | On Windows the guide had the newcomer set up WSL2, Ubuntu, systemd and curl by hand in five steps, its systemd step could append a second `[boot]` to a file that already had one, and nothing kept Ubuntu running once its last window closed (DOCS-7). The owner decided: Windows stays on WSL2, with one pasted PowerShell line | `get.ps1` at the repository root, pasted with `irm` and `iex` like `get.sh` with curl and bash. It checks the PC (64-bit, build 19041 or later, virtualization where Windows tells it); when WSL 2 is missing it runs Microsoft's own `wsl --install --no-distribution` through the administrator prompt of Windows and, when Windows has to restart, says: restart, paste the same line again; it installs Ubuntu with `wsl --install -d Ubuntu`, where Ubuntu itself asks for the username and password; it turns systemd on in `/etc/wsl.conf` by the rules of WSL's own reader (the first `systemd` line counts, so the line that is there is corrected and a `[boot]` section is added only when the file has none; the old file is kept beside it and the new one is read back); it runs `get.sh` as the user's own Linux user in the same window; and it registers a scheduled task of the Windows user, "FoxLeague Agent (WSL)", that keeps one hidden `wsl.exe` attached to Ubuntu. The choices that keep it safe: nothing is downloaded and run on the Windows side except Microsoft's `wsl.exe`, started by its full path in the Windows folder; no code is built and run (no `Invoke-Expression`, no script block made from text), which the checks hold with the parser; the script is one function called on its last line, so a download cut short runs nothing, and it never ends the user's window; no password, key or recovery word passes through it (of `.env` only the digits of the dashboard port come back); the switches handed to `get.sh` are each held to their own shape and refused otherwise, and a `FOXAGENT_DIR` on the Windows disk is refused; only the distribution named Ubuntu is used and restarted (`wsl --terminate Ubuntu`, never `--shutdown`), the default distribution and version are left alone, and an Ubuntu that was already there is asked before its restart; the task runs with the user's ordinary rights, and `-Uninstall` removes that task and nothing else. Checked on Linux only: the PowerShell parser, PSScriptAnalyzer and the checks of `test/windows/get-ps1.checks.ps1` in PowerShell 7 with stand-ins for `wsl.exe` and Windows, run by `test/audit-1111/windows-1.test.ts` where Docker has the image. Since then it ran on a real Windows PC (13 Nov 2026): the section "Windows real-PC check (2026-11-13)" has what was found and fixed. `-Uninstall` also stops the hidden `wsl.exe` the task started (W-13) |
+
+Decisions of the owner (2026-11-11):
+- **Signed releases.** An installed agent takes an update only when it is signed with the release key. The key is
+  made once on the owner's own computer, with a passphrase, and its private half never reaches GitHub, CI or a
+  server (`docs/RELEASING.md`).
+- **One click, and `/upgrade` on Telegram, with no password.** The installer's reviewer disagreed: it asked for the
+  password on the click and for Telegram to announce only, because an update replaces the code that enforces the
+  caps. The owner kept one click, because only a signed release that is newer than the running one can be
+  installed, whoever asks.
+- **MONEY-2.** The 1v1 win chance never stands above what the two starting elevens alone give. It is stricter play:
+  a rival's lower ELO no longer lifts a weaker eleven over the 55 percent floor.
+
+Stays open:
+- The first install has no earlier version to check a signature with: it trusts GitHub over https and the release's
+  checksum, as the install line itself does. `get.sh` does not pass `--proto '=https'` to curl for its GitHub
+  downloads, and the tag ruleset on `v*` (only maintainers, no moving or deleting) is still to be asked of GitHub.
+- `RELEASE_KEYS` in `src/update/keys.ts` is empty until the owner makes the key: until a release pins it, no agent
+  offers or takes an update from its dashboard.
+- Nobody has run the installer or the update on macOS or on Windows (WSL2) yet (since then: the Mac check of
+  2026-11-12 and the Windows real-PC check of 2026-11-13, each in a section of its own; the replay also runs on
+  Ubuntu 26.04 since W-9). The fresh install was replayed on
+  Ubuntu 24.04 in a container that runs systemd and done by the owner on a real Ubuntu desktop, nowhere else: not
+  on an arm64 machine, not from a git clone, not with a snap's curl, not behind a slow network or on a full disk.
+  The pages say what follows from how macOS and Windows work (a LaunchAgent starts at login; WSL stops with its
+  last terminal and does not start with Windows). The Windows one-line installer (WIN-1) now makes a scheduled
+  task that is meant to keep Ubuntu running; the next line says what is known of it.
+- `get.ps1` ran on a real Windows PC on 13 Nov 2026: what was found, fixed and left open is in the section "Windows
+  real-PC check (2026-11-13)". What this line said before that run: it was written on Linux, the PowerShell parser
+  reads it and its decisions are checked in PowerShell 7 with stand-ins for `wsl.exe` and Windows. That says nothing of Windows
+  PowerShell 5.1, of what the real `wsl.exe` answers on a PC without WSL, of the administrator prompt and the
+  restart, of Ubuntu's first start, of whether an ordinary user may register the task, of whether
+  `conhost.exe --headless` shows no window and of whether Ubuntu stays up with every window closed.
+  `docs/WINDOWS-TEST.md` is the walk-through for the owner's PC. Until it is done, the guides say what the task
+  is there for and not that it works. Also open there: `install.sh` asks about the browser itself inside WSL
+  (through `explorer.exe`), so `get.ps1` asks only when the installer inside could not; a switch in `install.sh`
+  would let the Windows side, which tries the address from Windows, own that question.
+- A change of the unit or of the plist in a later release reaches an existing install only when its owner runs the
+  installer again: an update replaces the code, not the service file (one exception since W-9 of 2026-11-14:
+  `./install.sh --update` in a terminal takes the line `RestrictSUIDSGID=true` out of an older unit). The release notes have to say so. An install
+  made before 2026-11-11 keeps `Restart=on-failure` until then; its agent still knows that systemd restarts it,
+  because its output is the journal.
+- Two updates that do not start, asked for within ten minutes of each other, need six starts. The unit allows
+  five in ten minutes: the sixth, which would start the old release again, is refused and the agent stays stopped
+  until `systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent` (the installer
+  runs both). Found by counting, not replayed; the start limit was left as it is.
+- The SHA-256 values of the pinned Node.js v22.22.0 archives were read from nodejs.org on 2026-11-11; only the
+  linux-x64 one was compared with a second source. A person should compare the five once more.
+- The nginx template, merged from two fixers (the `/login` rate limit and the https-only layout), was not run through
+  `nginx -t`, and the certbot steps of the server guide were not run on a real server.
+- INSTALL-21 and the review job's clean-up are done in the next section (pull request #62, merged by hand on
+  2026-11-11). Their two steps run on GitHub for the first time at the next `merge-check`, and `id-token: write`
+  on the review job stays as it is.
+- DOCS-11's launch-day items: the "Coming soon" banners and frames of the site, "Status: in internal testing" in the
+  README, the GitHub link of the site and the version number (`0.11.0` until the first public release). The
+  screenshots show the version label of the day they were taken: take them again after the version is set.
+- DOCS-1 was closed in the text. A dry run of a new wallet still shows a refused registration, and from the second
+  plan of a game day a refused swap: keeping a dry plan's simulated balance, and leaving an unregistered agent's
+  dry swaps out of the allowance, is a change of the executor the owner may still want.
+- The cost of Sonnet 5 at the defaults is derived from the measured token counts, not measured on a lone agent, and
+  the FAQ still names Sonnet 5 as a good default while every level recommends Opus 5.5 at high effort.
+- An agent that never ran the release in which a new release key was added refuses every release signed with it:
+  its owner pastes the install line once. `docs/RELEASING.md` says to leave that release the newest for weeks.
+- On macOS the launch agent has no limit on restarts (a `ThrottleInterval` needs a Mac to try), and `KeepAlive`
+  true (UPD-22) was written from the meaning of the key, not tried on a Mac. `After=network-online.target` in the
+  user unit does nothing there (harmless).
+- The updater's reviewer also asked for a sequence number next to the version, a warning when no check has
+  succeeded for days and a copy of the database before a migration. None is built. A schema version that the code
+  refuses when it is newer was not taken, because it would block the undo: database changes stay additive instead.
+- The service does not refuse an env file that others can read (the installer and every update put the modes back),
+  and the installer does not set the mode back to dry run when its answer turns the live permission on while the
+  database says LIVE.
+- The sign-in: the owner of a /48 or /56 of IPv6 still gets five guesses for each /64. A browser that sends no
+  Origin on a form post is counted as before, and over plain http a sibling subdomain passes. DNS rebinding reaches
+  only `/healthz` and `/login` (there is no list of allowed Host names).
+- A tournament title written with look-alike letters of another alphabet passes the impersonation check.
+- Link my Telegram: a flood of more than 100 new messages after the link was started is read page by page and can
+  still make the owner send the code again. After the link the reader takes the owner's 6-digit code as a chat
+  message, as before.
+- The second-copy check (EDGE-8) was not run under the server's real systemd sandbox, and `cli tick` still reads
+  only the pid file.
+- Noted by the money reviewer without a proof: a failed bid is unbooked without asking the contract whether it
+  still names the agent as the top bidder, and the guard on the EGLD price is empty after a restart until the first
+  reading.
+- A session without the password can press Plan now and Talk to the manager as often as it likes: the AI spend has
+  no cap of its own (by design; the limit is the one set at Anthropic). `cli log` prints summaries as they are, with
+  any terminal escapes a rival's text holds.
+- Check before Friday 13 November 2026, 14:00 UTC: once FoxLeague's card bans are live, a card whose answer leaves
+  `injured_until` or `bans_pending` out counts as unread. If FoxLeague leaves out fields that are null, every card
+  is unread and every match is refused (the safe side, but no play).
+- The activity, spend and pending tables are never pruned (about 1 GB a year for ten agents).
+- The agent buys at most 18 days of medicine a week while FoxLeague's settings may sell more (the stricter side).
+- Not covered by this audit: the bytes of xExchange's `composeTasks`, FoxLeague's `tournament_slots.rs` against
+  `slots.ts`, the insides of Champions FoxLeague and the manual pages the copy leaves out.
+- `AGENTS.md` rules 7 and 8 do not name the Telegram commands that take no password (`/mode live confirm`,
+  `/kill off`, `/resume`, `/upgrade`): only the owner's own chat is answered. The README and the Safety page say so.
+
 ## Per-agent models and shadow efforts (2026-11-13)
 
 The owner's request of 2026-11-13: the ten live agents on three models (Opus 5.5, Sonnet 5.5 and Haiku 5.5, all at
@@ -1672,7 +1919,12 @@ Stays open:
 - A problem with the AI account is told on Telegram as "Plans are failing: ... Every agent waits until it is fixed",
   once an hour per message. With agents on several models, one model's access can fail while the others plan; the
   message does not name the model.
-- What stays open in the two sections above stays open: a shadow plan is judged by reading it, never by the rules.
+- A hand-written `shadow_model_agent_N` for an agent number no agent has yet is not weighed by the all-agents
+  switch's password check: the switch weighs an agent added afterwards by the all-agents shadow list (R65A-5), while
+  the agent that + Add agent makes with that number plays that list from its first plan (a note of the review of
+  PR #65).
+- What stays open in the two shadow sections before (2026-11-11 and 2026-11-12) stays open: a shadow plan is judged
+  by reading it, never by the rules.
 
 ## Extra-high room (2026-11-13)
 
@@ -1774,6 +2026,151 @@ Stays open:
 - A model of the list whose limit Anthropic lowers must be changed in `MODELS` by hand. A model the list does not have
   (`AGENT_MODEL` naming another one) has no known limit: its room is not clamped, and a request it cannot take is
   refused by Anthropic, so nothing of that plan runs.
+
+## Windows real-PC check (2026-11-13)
+
+The owner walked through `docs/WINDOWS-TEST.md` (section 4) on a real PC with the release candidate (ed8b41f) and
+a throwaway release served from the maintainer's laptop: Windows 10 Home 22H2 (build 19045), Windows PowerShell 5.1,
+the Microsoft Store WSL 3.0.1.0 already there and Ubuntu 26.04.1 LTS installed by `get.ps1` (systemd 259, GNU tar
+1.35+dfsg-4ubuntu0.4). Thirteen findings of the installers, LOGIN-1 against the owner's decision of 12 Nov and eight
+corrections of the walk-through. None is about money, keys or signing. The fixes are by Claude Opus 5.5, each test
+first: the tests are in `test/win-1113/` (one file per id, `docs.test.ts` for the record and the walk-through) and
+the PowerShell side in `test/windows/get-ps1.checks.ps1` (checks named after the ids, run in PowerShell 7 in a
+container). Each was seen failing before its fix, except where the row says otherwise.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| W-9 | high | The one-click update never installed on that Ubuntu: "The update to 1.0.1 was not installed: the archive could not be unpacked". The agent runs `tar -xzf` inside its systemd user unit, which had `RestrictSUIDSGID=true`. Ubuntu's tar security update for CVE-2025-45582 (June 2026, in 24.04 and 26.04) resolves every path it unpacks with `openat2(RESOLVE_BENEATH)`; systemd's filter for that rule cannot look inside `openat2`'s arguments and answers it with ENOSYS. The 24.04 build of tar then falls back to `openat` (traced), the 26.04 one does not: "Cannot mkdir: Function not implemented", status 2. Reproduced with the 26.04 tar under `systemd-run --user -p RestrictSUIDSGID=true` on systemd 255 and in a 26.04 container with systemd 259; without the rule it unpacks. The same tar in a terminal (outside the unit) works. W-9b: pasting the line again rewrote the unit with the rule; an update never rewrites the unit | (a) The user unit that `install.sh` writes has no `RestrictSUIDSGID`, with a comment that says why. The agent runs as the owner's own user with `NoNewPrivileges`: a set-user-ID file it made would not raise what it may do; as the owner's user it could make one in other ways too. The rest of the sandbox stays. (c) An unpack that the unit refuses says so: "this system's tar cannot unpack inside the agent's background service as an older installer set it up (tar: ...). Run ./install.sh --update once in a terminal, in the agent's folder: that installs it and renews the service, so later updates are one click again". `./install.sh --update` (a terminal is outside the unit) takes exactly the line `RestrictSUIDSGID=true` out of an older unit, leaves the rest as it is and has systemd read it before the restart; pasting the line again writes the new unit. An update's `--prepare` still never writes to the service (the rule of `docs/RELEASING.md`, which names this one exception). Not (b), a tar reader of our own: a new parser is new attack surface; `--prepare` runs tar for a new Node.js inside the unit too. The droplet's system unit (`deploy/`) keeps the rule: a server set up by hand never updates itself, `deploy.sh` copies the code with rsync, nothing in that unit runs tar; there the agent runs as a user of its own. The install replay takes `FRESH_UBUNTU=26.04` (its image gets `adduser`; "nobody is logged in" no longer counts systemd 259's session of a user's service manager). Replayed on 26.04: the unfixed candidate failed step 11a with the PC's own message; the fixed tree passes it |
+| W-10 | low | The log said only "the archive could not be unpacked"; tar's reason was found by running tar by hand | tar runs in the C language, the first lines of its errors go to the log ("the update's archive could not be unpacked; tar said: ...") and its first line into the message, without the program's path. The runner keeps the first 4 KB of a command's errors besides the tail |
+| W-13 | medium | `get.ps1 -Uninstall` left Ubuntu running until Windows restarted. Stopping the task ended its `conhost.exe`; the `wsl.exe -d Ubuntu --cd ~ --exec /bin/sleep infinity` it had started (two processes on that PC) went on alone. The uninstall's own sentence "Without the task it stops a short while after the last Ubuntu window closes" was then wrong. Stopping those two by hand: no running distribution 75 seconds later | After the task, the uninstall stops the `wsl.exe` programs whose whole command line is the task's (a `wsl.exe` in any folder, quoted or not, with exactly the task's arguments) and says so. Nothing else is taken for it: another distribution, another command, a longer command line and a process whose command line Windows does not give are left. When Windows does not say which programs run, the uninstall says so and names `wsl --terminate Ubuntu`. A task of the same name that is not ours stays with its processes. The Update page and INSTALL.md say what the line and `Unregister-ScheduledTask` alone do |
+| W-6 | medium (the first use) | "Open the dashboard in your browser now? (y/n) [y]: y" opened no browser, seen twice. `install.sh` started `explorer.exe` in the background and ended at once; WSL ended it with the session | On WSL the opener runs in the foreground (`explorer.exe` hands the address to Windows and returns at once, with status 1 even when it worked; the status is not an error). A Mac's `open` too. `xdg-open` stays in the background. `get.ps1` still asks only when the installer inside had no `explorer.exe`, so nobody is asked twice. The test ends the installer's process group the moment it ends, as WSL does |
+| LOGIN-1 | low (the owner's decision of 2026-11-12) | Step 3/7 asked "Web UI username [admin]:" and Enter took admin: the PC's install was signed in as admin | The question offers no name, not even an earlier one: "Dashboard username, your own choice (3 to 32 letters or digits):". An empty answer saves nothing and the installer asks again. The install replay types its own names and checks that Enter is refused. INSTALL.md and the Install page say there is no default username |
+| W-1 | low | `get.ps1` did not look at the free disk space; C: had 0.2 GB | Before Ubuntu is downloaded it needs 4 GB free on the drive of `%LOCALAPPDATA%` (where `wsl --install` puts a new distribution; the download goes to `%TEMP%` on it) and stops with how much is needed and where to free it. Measured on the PC: the download 0.42 GB and Ubuntu's disk 1.39 GB after its first start, the agent about 0.24 GB (0.28 GB with the release kept for an undo): about 2.1 GB at the peak; Ubuntu's disk grows and never shrinks by itself. With Ubuntu there, below 1 GB it warns before the installer. An amount Windows does not give is said, not refused. The guides name the 4 GB |
+| W-2 | low | "You have System.Object[]" on a PC with no distribution. `@( )` around a function that returns its list as one value made a list of one list. Two other Ubuntus were joined without "and" | No `@( )` around the call. The check runs the whole install with none and with two other Ubuntus |
+| W-3 | low | The Ubuntu download looked stuck at 0%: a click into the console window starts Windows' text selection, which pauses the program until Enter; WSL also opened its own "Welcome to WSL" window | Before the download `get.ps1` says both, with what to do (press Enter once; close the welcome window). The guides and Troubleshooting say the same. QuickEdit is not turned off |
+| W-4 | low | Ubuntu's first start asked "Help improve Ubuntu! ... (Y/n/e)", which nothing had mentioned | `get.ps1` and the guides name the question: either answer is fine for the agent |
+| W-5 | low | The installer's last screen printed the dashboard address in dark blue, a smudge on PowerShell's blue | Bold and underlined in the terminal's own text colour, still a hyperlink where the terminal knows them. FRESH-13's exact bytes follow |
+| W-7 | cosmetic | After the inner installer the PowerShell window kept Ubuntu's title | `get.ps1` keeps the title it found and puts it back when the run ends, also when it stops |
+| W-8 | low (checked first: a display bug) | Without an AI key the Strategist box showed no model and "effort medium" while the level recommends Opus 5.5 at high. The empty model is meant (the strategist is off); the effort was the page's own fallback whatever was saved, half of a pair nobody chose | The box shows, greyed out, the pair the agents start on once the key is set (the server's `aiAll`: Sonnet 5.5 at medium on a new install); the level's line names it next to the recommendation. The Strategist bubble and the Dashboard page say so. Which pair a new install starts on is not changed (see below) |
+| W-11 | low | After the line was pasted again, the first confirmed start kept an older release (1.0.0) as the spare and deleted the one that ran just before (1.0.1): `get.sh` never named the release it replaced | `get.sh` writes `versions/previous` = the release it replaces (never the same one, nothing on a first install). The undo still reads `versions/pending` only |
+| W-12 | cosmetic | Long lines of the uninstall broke words at the edge of the 120-column window ("hold f / unds"; the user name after `loginctl disable-linger` fell to a line of its own) | Every line of both uninstall screens fits in 100 columns, also with a Linux user name of 32 characters. The three existing checks that pinned the single long lines pin the same words across the line break |
+| W-DOC-1 | docs | `Add-WindowsCapability ... OpenSSH.Server` failed: "The specified package is not valid Windows package" | The walk-through tries it and, when it fails, says to install Microsoft's Win32-OpenSSH MSI (server only, its SHA-256 compared with the release page), which worked |
+| W-DOC-2 | docs | The setup script went on after the failed step and printed errors that hid the first one | It is one script block that stops at a failed step with one sentence; it can be pasted again |
+| W-DOC-3 | docs | `scp` to the PC failed ("Connection closed", no working SFTP subsystem) | The PC fetches the files with `curl.exe` from the laptop's server, which also serves `get.ps1` and the lines file |
+| W-DOC-4 | docs | The desktop was a folder of OneDrive | The lines use `[Environment]::GetFolderPath('Desktop')` |
+| W-DOC-5 | docs | The installed agent asks GitHub for updates: `FOXAGENT_RELEASES` reaches `get.sh` only. Step 12 found no update until `AGENT_UPDATE_URL` was put in `.env` | Section 3 says so, with the line |
+| W-DOC-6 | docs | The updater takes plain http only from a loopback address: the laptop's address was refused ("the release source must be https") | A relay inside Ubuntu (a transient user unit) passes `127.0.0.1:8765` on to the laptop, typed inside Ubuntu, not through PowerShell's quoting |
+| W-DOC-7 | docs | Copying lines from the chat to the PC was the hard part | `docs/WINDOWS-TEST-LINES.txt` holds every line of the walk-through in order; the laptop fills its address in and serves it; one line from the chat puts it on the desktop and opens it in Notepad |
+| W-DOC-8 | docs | Task Scheduler's last result `0x800710E0` ("refused") looked like an error; pasting the line again puts the newest release in place with no undo note, so a broken newest one stays | The walk-through and Troubleshooting say that `0x800710E0` is normal while the task runs; the walk-through publishes a release that starts before step 11 and has a step for an update that does not start. The table names what the first PC skipped (the prompt and the restart) |
+
+What passed on the PC, as the notes of 13 Nov have it:
+- The virtualization check (the PC had it off; on again after the BIOS change), the Store WSL found without an
+  administrator prompt or a restart, Ubuntu's first user, `/etc/wsl.conf` with one `[boot]`, the seven steps, the
+  task ("logon and every 5 minutes", running, no window), the dashboard in Chrome.
+- Every window closed for 15 minutes: the agent kept running, no stop and start. A restart of Windows: the task
+  started Ubuntu at log on and the agent was up within a minute. `wsl --shutdown`: back by the task's 5-minute
+  trigger after 4 min 38 s.
+- With the rule removed from that PC's unit by hand (the owner's word): the update 1.0.0 to 1.0.1 from the
+  dashboard and an update that did not start (undone by the launcher in about 94 seconds).
+- The line pasted again: one task, one `[boot]`, `.env` kept. The uninstall on both sides said what it did.
+
+Stays open:
+- None of these fixes has run on the real PC yet: W-9 was seen working there only with the line removed by hand,
+  W-6, W-13 and LOGIN-1 not at all. The 26.04 replay runs in a container with systemd as PID 1, not in WSL. A
+  second walk-through with this code is the proof.
+- An install made from the release candidate before this fix keeps the old unit. On Ubuntu 26.04 its one-click
+  update fails with "the archive could not be unpacked" (its code is older than the plain message):
+  `./install.sh --update` once in a terminal (or the line pasted again) fixes it for good. No public install exists
+  (no release key is pinned yet), so the PC and the Mac of the owner are the only ones.
+- The droplet's system unit keeps `RestrictSUIDSGID`. If a later change ever runs tar inside it on Ubuntu 26.04,
+  the same failure comes back.
+- Ubuntu 24.04's tar falls back from `openat2` today; a later update of it could stop doing so. New units no longer
+  have the rule, so only an older unit would meet it; it would get the plain message.
+- W-1 reads the drive of `%LOCALAPPDATA%`. An Ubuntu that was moved to another drive (`wsl --manage --move`) is not
+  looked for, which is why the check before the installer only warns.
+- W-3 tells what to do; QuickEdit is not turned off for the run.
+- W-8: a new install still starts on Sonnet 5.5 at medium (`AGENT_MODEL`'s default) while every level recommends
+  Opus 5.5 at high. Changing that default raises the AI spend: the owner's call.
+- W-13 knows the keep-alive by its exact command line, as seen with the Store WSL 3.0.1.0 (a `wsl.exe` in
+  System32 that starts a second one with the same arguments). Another WSL that starts it otherwise would leave it
+  running, and the uninstall would not say so.
+- The PowerShell checks run in PowerShell 7 in a container, not in Windows PowerShell 5.1.
+- `systemctl is-system-running` said degraded on the PC (some unit of Ubuntu failed); `get.ps1` counts that as
+  running and nobody looked at which unit it was. Ubuntu's own prompt is dark blue on PowerShell's blue too.
+
+## Windows real-PC re-test (2026-11-14)
+
+The owner walked through `docs/WINDOWS-TEST.md` again on the same PC (Windows 10 Home 22H2, build 19045, Windows
+PowerShell 5.1, the Microsoft Store WSL 3.0.1.0) with the release candidate at 67f1031 (every fix of 13 Nov) and
+throwaway releases served from the maintainer's laptop. Ubuntu was removed first (`wsl --unregister
+Ubuntu`, on the owner's word, with the old test wallet empty) and `get.ps1` installed Ubuntu 26.04.1 anew. Every fix
+of 13 Nov that the walk-through reaches passed on the PC. Five findings, none about money, keys or signing. The
+fixes are by Claude Opus 5.5, each test first: the tests are in `test/win-1114/` (one file per id, `docs.test.ts`
+for this record and the guides) and the PowerShell side in `test/windows/get-ps1.checks.ps1` (checks named after
+the ids). Each was seen failing before its fix. W-18, the last row, comes from the same PC on 15 Nov, after the
+one-line uninstall of W-17 ran there (the release candidate at 3171260); its fix is by Claude Opus 5.5, test first
+like the others.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| W-15 | medium (the owner's view) | After a one-click update that failed (1.0.2 on the older unit of W-9b), the dashboard kept "Installing version 1.0.2. The agent restarts in a minute or two and this page comes back by itself." for up to 20 minutes and hid the failure and what to do. The agent had been idle with the failure for 4 min 45 s; only a reload showed it. The page's own `updating`, set by the click, ended only when the new version ran or after 20 minutes | With the click the page keeps the time of the result the agent held then (the agent's own `at`, never the page's clock). As soon as the agent is idle with a newer result for that very version (not installed or undone after it started), `updating` ends and the notice shows it. A result from before the click or for another version does not end it. While the agent is away restarting no answer comes, so that minute stays quiet |
+| W-15b | low | Next to the old-install message ("Run ./install.sh --update once in a terminal, in the agent's folder ...") the dashboard still offered Update now, which fails the same way again on that install: the cause is the service an older installer wrote, not the release. On Windows "a terminal, in the agent's folder" named no way into Ubuntu. Only installs made before the W-9 fix see it | `UpdateError` carries a flag, `terminal`, set only for that failure. The updater keeps it with the result (`last.terminal`): the dashboard reads the flag, not the words. While it stands the notice offers no button for that version or a newer one (a newer one fails the same way there) and shows the message alone; for a newer version it adds that `./install.sh --update` installs the newest. It stays while the version that told it runs, also after a day. Under WSL (the kernel's name says so: the agent's service has no `WSL_DISTRO_NAME`) the message adds "On Windows: open PowerShell and type wsl -d Ubuntu --cd ~ , then cd foxleague-agent", the folder named from Ubuntu's home. Telegram's `/upgrade` still tries and says the same again |
+| W-16 | low | After the install line was pasted again (it installed 1.0.4), the dashboard still showed in red "The update to 1.0.3 did not start and was undone: you run 1.0.2 as before..." under a header that said V1.0.4. The last one-click result was shown for a day whatever ran since | Each result names the version that told it (`ran`). The updater gives it only while that version runs: a re-install by hand and an update from a terminal drop it at once (after a terminal update the new version's own "Updated from ... to ..." follows once it has stayed up). A result written before the field existed (only release-candidate installs have one) is shown as before |
+| W-14 | low | At Ubuntu's own `$` prompt after its first user was made, nothing on the screen said to type `exit`: the note was printed before "Ready?", about 15 lines above, among nine others. The owner typed it only because the chat told him | The note is repeated as the last line before `wsl --install -d Ubuntu` starts, in the yellow of the step titles: "When Ubuntu shows a line that ends with $, type  exit  and press Enter to come back here." The note among the others stays. The guides and the walk-through's lines file say it at the same place |
+| W-17 | low (the owner chose the design) | The uninstall took lines in two shells: the PowerShell line, then inside Ubuntu `wsl -d Ubuntu --cd ~`, `cd ~/foxleague-agent && ./install.sh --uninstall` and `exit`. Pasted together, bash got `wsl ...` ("command not found") and Windows PowerShell 5.1 got the `&&` (a parser error): harmless, but confusing | After the task and its hidden `wsl.exe` (the order of W-13) the PowerShell line asks one question, "Also stop the agent and remove its background service in Ubuntu?" (Enter means yes, as at the other questions of `get.ps1` where going on is the point). Then it runs the folder's own `install.sh --uninstall` as the Linux user: `wsl.exe -d Ubuntu --cd ~ --exec /bin/bash <folder>/install.sh --uninstall`, each argument on its own and no shell of the user reading the line, as every other call of `get.ps1`. The folder is the one Ubuntu names (`$HOME/foxleague-agent` or `FOXAGENT_DIR` set in the window, held to the install's rules); one that is not a plain absolute path is never run. No distribution called Ubuntu, Ubuntu out of reach as its user, no `install.sh`, no background service, a refused `FOXAGENT_DIR`, an uninstall that fails and `n` are each said; where it helps the lines by hand follow, each marked with the window it is typed in. It waits for every `wsl.exe` it starts and starts nothing that stays, so Ubuntu still stops by itself. WIN-1's guard against `wsl.exe`'s own `--uninstall` (which removes WSL) allows exactly this call, whose `--uninstall` goes after `--exec`. The walk-through has one PowerShell line for step 15. Its lines file marks every block typed inside Ubuntu |
+| W-18 | low (cosmetic) | After `-Uninstall` ran the uninstall inside Ubuntu and it ended well, the window said two things twice, one under the other: that the folder, the wallet words (`.env`), the data and the PEM files stay, and that the agent wallets may still hold funds. `install.sh --uninstall` inside Ubuntu said them, then `get.ps1` said them again | After "Done: the agent is stopped and its background service in Ubuntu is removed." `get.ps1` adds only what the installer inside cannot know: WSL, Ubuntu and the line `systemd=true` in `/etc/wsl.conf` stay, and Ubuntu stops a short while after its last window closes. `install.sh` says the other two on every uninstall that ends with 0 (the check reads them there). The answer `n`, an uninstall inside that failed, a folder without a service or without `install.sh` and an Ubuntu out of reach keep the whole text, with the lines by hand where they help. The check "W-18 ..." failed before the fix, and so did the line of the W-17 check that held the old repeat |
+
+What passed on the PC, as the notes of 14 Nov have it:
+- W-2 (no "You have System.Object[]" on a PC with no distribution), W-3 and W-4 (the notes before "Ready?"),
+  LOGIN-1 (no default username), W-5 (the address readable on PowerShell's blue), W-6 (Edge opened the dashboard,
+  twice), W-7 (the window's own title back after Ubuntu and the installer set theirs).
+- W-9 on the new unit: the one-click update 1.0.0 to 1.0.1, back in about 45 seconds. W-9b with the rule put back
+  into the unit by hand: the plain message, with tar's lines in the log (W-10); `./install.sh --update` in a
+  terminal installed 1.0.2 and took the line out; the next one-click update, on the renewed unit, installed 1.0.3.
+- An update that did not start (1.0.3 made with `--break-start`): back on 1.0.2 in about 96 seconds. W-11: after
+  the line was pasted again `versions/` held v1.0.2 and v1.0.4 and the spare was the release it replaced.
+- The restart of Windows: the dashboard answered from Windows about a minute after the boot. systemd said running
+  with no failed unit (degraded on 13 Nov).
+- W-12 (no word broken at the window's edge) and W-13: right after `-Uninstall` no task and no keep-alive
+  `wsl.exe` were left. Ubuntu stopped about a minute after its last window closed.
+
+Stays open:
+- W-14 has not run on the real PC: it shows only while a new Ubuntu is installed. The other four passed there on
+  15 Nov (the release candidate at 3171260, installed over the Ubuntu of 14 Nov, test releases 2.0.0 and 2.0.1):
+  W-15 showed the failed 2.0.1 by itself about 20 seconds after Update now, with no reload; W-15b offered no
+  Update now and gave the line for Windows; after `./install.sh --update` in a terminal the page of W-16 turned to
+  V2.0.1 with "Updated from 2.0.0 to 2.0.1" and the failure gone; W-17's PowerShell line and one Enter ran the
+  uninstall inside Ubuntu ("Done: the agent is stopped ...") and Ubuntu stopped within about 30 seconds, with no
+  task left. A result written by the build of 14 Nov, before `ran` existed, showed under V2.0.0 until the next
+  result took its place, as W-16 says. W-18 has not run on the real PC.
+- Not seen on the PC, so not claimed: Enter alone at Ubuntu's username question (the owner typed a name); the
+  free-space stop below 4 GB (C: had 6.27 GB); "Help improve Ubuntu!" and the "Welcome to WSL" window (neither came
+  the second time). Step 9 (15 minutes with every window closed) was not repeated: it passed on 13 Nov and the task
+  is made the same way.
+- W-15 tells this attempt's result from an earlier one by the agent's time of it. A page whose state was older than
+  the agent's last result at the click (an update asked on Telegram in between) can show that earlier result for a
+  moment, until this attempt's comes.
+- W-15b holds back only the dashboard's button. `/upgrade` on Telegram tries again and fails with the same message.
+- W-17 knows "no Ubuntu" from the table of `wsl -l -v`; a WSL that cannot list its distributions looks the same.
+  The uninstall then says what WSL lists and looks no further. Without the task Ubuntu stops by itself once its last
+  window closes, with any agent inside it.
+- W-18's fix has not run on the real PC: the checks run it against the stand-in `wsl.exe`.
+- The PowerShell checks run in PowerShell 7 in a container, not in Windows PowerShell 5.1.
+
+## GitHub review of PR #69 (2026-11-15)
+
+The agent review of PR #69 on GitHub (the release candidate, Claude Fable 5.2 at high effort) found one low finding,
+about updates only: nothing about money, keys or signing. The fix is by Claude Opus 5.5, test first: the test
+"R69A-1: ..." in `test/update.test.ts` failed on the branch at 4988b8f for the reason given and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R69A-1 | low (agent review of PR #69; updates only, fails closed) | `stage()` in `src/update/install.ts` released `versions/update.lock` only in its refusals (`fail()`) and on success. A file call that threw outside them (a full disk, a folder that cannot be written) left the lock, and every update for the next 30 minutes was refused as "another update is being installed right now". The running release was untouched. The test made `mkdirSync` of the staging folder throw and saw the lock left behind | Every way out of `stage()` after the lock is taken releases it and removes the staging folder, in a `finally`: a refusal, a file call that throws and success alike. A staging folder that cannot be removed is said in the log and the lock goes anyway (the next update and the next confirmed start try the folder again). A lock held by an update that is running still refuses and is kept; one older than 30 minutes is still taken over. The test covers `mkdirSync` and `renameSync` of the staging folder, a step that throws with the release unpacked, a lock taken over and the next update after them |
+
+Stays open:
+- The lock belongs to the folder and is told by its age alone, as before: an update that runs for more than 30
+  minutes by the clock (a laptop that sleeps in the middle of it) can be taken over by a second one, and whichever
+  ends first removes the lock while the other still runs. Preparing takes at most 15 minutes.
 
 ## One manager message at a time (2026-11-13)
 

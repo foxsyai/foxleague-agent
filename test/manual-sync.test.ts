@@ -94,7 +94,7 @@ test('MS-A how it plays, strategy levels, safety and the home page say what the 
   const levels = read(`${DOCS}/play/strategy-levels.md`)
   const safety = read(`${DOCS}/play/safety.md`)
   const home = read(`${DOCS}/index.mdx`)
-  assert.match(plays, new RegExp(`For the ${FIELD_TOURNAMENTS} open Silver or Gold tournaments it could join whose deadlines come first \\(up to ${FIELD_SEATS} seated teams each\\)`), 'A1 the field read')
+  assert.match(plays, new RegExp(`For the ${FIELD_TOURNAMENTS} open Silver, Gold or paid Bronze tournaments it could join whose deadlines come first \\(up to ${FIELD_SEATS} seated teams each\\)`), 'A1 the field read')
   assert.match(levels, /a \*\*win chance\*\* for each team on its challenge list \(up to 10, first the teams that take 1v1s they had not arranged\)/, 'A2 the challenge list')
   assert.match(levels, /For each team on its challenge list \(up to 10\) it reads the ELO and the lineup strength, ours at today's condition and theirs at full condition/, 'A2')
   assert.match(levels, new RegExp(`over the last ${MARKET_WINDOWS[0]} days \\(${MARKET_WINDOWS[1]} or ${MARKET_WINDOWS[2]} days when fewer than ${MIN_TRADING_DAYS} days traded; with too few sales even then the agent sees no market price\\)`), 'A3 the market windows')
@@ -140,7 +140,9 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
 
 test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.md and README say what the code does', () => {
   // Since 2026-10-24 the manual is cached only when another call is due within the hour (test/cache-when-reused.test.ts).
-  const COST = /About \$1 a day for a single agent with the default model, effort and tick \(Sonnet 5\.5 at medium, a plan every 2 hours, about \$0\.15 a plan\): the game manual the AI reads is cached for an hour only when another plan comes within that hour/i
+  // The numbers of this sentence are tied to the code and to the manual's size in test/audit-1111/docs-4.test.ts (DOCS-4,
+  // measured again on 2026-11-11): here only that the five places carry the same sentence.
+  const COST = /About \$1\.50 a day for a single agent with the default model, effort and tick \(Sonnet 5\.5 at medium, a plan every 2 hours inside 12 active hours, about \$0\.25 a plan\): every plan sends the rules and the game manual, about 100,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price\. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5\.5 at high effort averaged \$0\.15 a plan with the manual from the cache and \$0\.60 without\./i
   for (const f of [`${DOCS}/help/costs.md`, `${DOCS}/start/keys.mdx`, 'INSTALL.md', 'README.md']) {
     assert.doesNotMatch(read(f), /\$0\.20 to \$0\.50/, `C1 ${f} keeps the old AI cost`)
     assert.match(read(f), COST, `C1 ${f}`)

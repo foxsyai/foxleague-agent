@@ -267,6 +267,18 @@ export const MAX_1V1_PER_OPPONENT_WEEK = 2
 export const MAX_BIDS_PER_AUCTION = 2
 
 /**
+ * The percent a bid must stand over the top bid, as the players contract asks it (player_nft.rs: amount >= top bid x
+ * (100 + percent) / 100; the owner sets it from 1 to 50, 5 when unset) and /api/config serves it
+ * (auction_min_increment_percent). An answer without it is the contract's own default; one that is no whole number
+ * from 1 to 50 is unread (null): a raise under the real step reverts and loses its gas (audit 2026-11-11, INTEG-3).
+ */
+export function auctionMinRaisePercent(cfg: Pick<FoxConfig, 'auction_min_increment_percent'> | null | undefined): number | null {
+  const served = cfg?.auction_min_increment_percent
+  if (served === undefined) return 5
+  return typeof served === 'number' && Number.isInteger(served) && served >= 1 && served <= 50 ? served : null
+}
+
+/**
  * What a card of a rarity costs from Common packs and fusion fees alone, at FoxLeague's live prices: 3^n Commons
  * at a fifth of a pack each plus every fusion fee on the way up (Rare 5,000, Epic 15,400, Legendary 47,000 in
  * October 2026). A bid above it pays more than building the card; null when the prices are unknown.
@@ -685,6 +697,8 @@ function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, l
 export const MIN_1V1_CHANCE = 0.55
 export const STRONGER_SQUAD = 1.05
 export const STRONGER_ELO = 50
+/** What "clearly stronger" counts, for a refusal: the same margins judgeField uses. */
+const STRONGER_WORDS = `a lineup more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent with an ELO more than ${STRONGER_ELO} above yours`
 /** No entry into a field with this many clearly stronger teams, or this many unread (every level since 2026-11-06). */
 export const FIELD_LIMIT = 3
 
@@ -697,12 +711,17 @@ export interface FieldSeat {
 
 /**
  * How a seated field compares with us, the one test the join rule and the plan's field line both use. Clearly
- * stronger: ELO more than 50 above ours and a lineup more than 5 percent above ours (a lineup that could not be read
- * counts when its ELO alone is clearly higher). Clearly weaker: both margins the other way, both known. Unread:
- * neither known. The rest is even (or known only in part).
+ * stronger: a lineup that was read and is more than 10 percent above ours (MAX_1V1_STRENGTH_RATIO, the margin a 1v1
+ * is refused at), whatever its ELO; or a lineup more than 5 percent above ours with an ELO more than 50 above ours; a
+ * lineup that could not be read counts when its ELO alone is clearly higher. ELO is the one number a rival controls
+ * downward (a new team starts at 1200, a team can lose on purpose), so it may add to what the lineups say and never
+ * take away from it: a field of elevens far stronger than ours at a low ELO is no even field (audit 2026-11-11,
+ * MONEY-1). Clearly weaker: both margins the other way, both known. Unread: neither known. The rest is even (or known
+ * only in part).
  */
 export function judgeField(field: FieldSeat[], ours: number, myElo: number): { stronger: number; weaker: number; even: number; unread: number; strongestElo: number | null; strongestLineup: number | null } {
-  const isStronger = (f: FieldSeat) => f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD)
+  const isStronger = (f: FieldSeat) =>
+    (f.strength !== null && f.strength > ours * MAX_1V1_STRENGTH_RATIO) || (f.elo !== null && f.elo > myElo + STRONGER_ELO && (f.strength === null || f.strength > ours * STRONGER_SQUAD))
   const stronger = field.filter(isStronger).length
   const weaker = field.filter(f => f.elo !== null && f.elo < myElo - STRONGER_ELO && f.strength !== null && f.strength * STRONGER_SQUAD < ours).length
   // A seat known only in part (its ELO or its lineup unread) and not already clearly stronger is unread, never even
@@ -819,13 +838,33 @@ export function outInjured(p: PlayerView, at: Date): boolean {
   return p.disciplineUnread === true || (p.injuredUntil !== null && Date.parse(p.injuredUntil) > at.getTime())
 }
 
-/** The saved 18 that FoxLeague's 1v1 gate counts match-fit (squad_would_forfeit): condition, no transfer cooldown, not injured. */
+/**
+ * How many of the eleven shirts FoxLeague's 1v1 gate fills with a match-fit card (squad_would_forfeit, which runs the
+ * lock's own auto_substitute; fewer than 11 is a forfeit, refused after the stake is paid). Fit: condition, no transfer
+ * cooldown, not injured. It is no count of fit cards among the 18: a shirt whose starter is not fit is filled from the
+ * bench by FoxLeague's line rule (tournament_simulator.rs line_distance, find_best_sub, last_resort_keeper): an
+ * outfield shirt only by a fit outfield bench card, never the bench keeper; the keeper's shirt by a fit bench keeper,
+ * else by a fit outfield bench card as the last resort. An injured bench card is off the bench (held out). The saved
+ * eleven fits its formation (squadLegal), so a starter's position is his shirt's line (audit 2026-11-11, INTEG-1).
+ */
 function matchFit(s: AgentSnapshot, minCondition: number, at: Date): number {
-  return [...s.team!.lineup, ...s.team!.substitutes].filter(n => {
+  const fit = (p: PlayerView | undefined): boolean => Boolean(p && p.condition >= minCondition && !p.transferLockedUntil && !outInjured(p, at))
+  const bench = s.team!.substitutes.map(n => card(s, n)).filter(fit)
+  let keepers = bench.filter(p => p?.position === 'GK').length
+  let outfield = bench.length - keepers
+  let filled = 0
+  for (const n of s.team!.lineup) {
     const p = card(s, n)
-    return p && p.condition >= minCondition && !p.transferLockedUntil && !outInjured(p, at)
-  }).length
+    if (fit(p)) filled++
+    else if (p?.position === 'GK' && keepers > 0) { keepers--; filled++ }
+    else if (outfield > 0) { outfield--; filled++ }
+  }
+  return filled
 }
+
+/** The words of the 1v1 gate's refusal: what counts as match-fit, and who may take a tired starter's shirt. */
+const matchFitRefusal = (fit: number, minCondition: number): string =>
+  `only ${fit} match-fit players for the eleven shirts (condition >= ${minCondition}, no transfer cooldown, not injured; a tired outfield starter is relieved only by a fit outfield bench card, never the bench keeper)`
 
 /**
  * `at`: when the match is played (now for a game, a 1v1 or a casual test; a tournament's start for an entry). A
@@ -1040,12 +1079,32 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!d) return refuse(`tournament T${a.tournament_id} not found`)
       const t: Tournament = d.tournament
       if (t.status !== 'open') return refuse(`T${t.id} is ${t.status}`)
-      if (new Date(t.deadline) <= ctx.now) return refuse(`T${t.id} registration deadline passed`)
+      // A deadline that is no time is unread, never "still ahead".
+      const deadline = Date.parse(t.deadline)
+      if (!Number.isFinite(deadline)) return refuse(`T${t.id}'s registration deadline could not be read: not joining blind`)
+      if (deadline <= ctx.now.getTime()) return refuse(`T${t.id} registration deadline passed`)
+      // FoxLeague checks the deadline when POST /join arrives, not when the payment landed (tournaments.rs: "Registration
+      // deadline has passed", the entry refunded and the gas lost). A payment signed now settles and reaches that gate a
+      // minute or two later, the margin the 1v1 busy hour has (audit 2026-11-11, INTEG-5). A free seat signs nothing.
+      const paidEntry = !(t.tier === 'bronze' && !(t.entry_fee_foxsy > 0))
+      if (paidEntry && deadline - ctx.now.getTime() <= BUSY_OPENS_MARGIN_S * 1000) return refuse(`T${t.id}'s registration deadline is in ${Math.max(0, Math.round((deadline - ctx.now.getTime()) / 1000))} s: a payment signed now reaches FoxLeague's join after it (the entry refunded, the gas lost)`)
       if (t.is_private && d.user_can_join_private !== true) return refuse(`T${t.id} is private and this team is not invited`)
       if (t.developer_mode) return refuse(`T${t.id} is a developer tournament`)
       const unknownJoin = unsupportedFormat(t.format, 'joining')
       if (unknownJoin) return refuse(unknownJoin)
-      if (t.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
+      // A tier that is none of FoxLeague's three is unread, as an unknown format is: every tier rule below would pass it
+      // by. Its label is not repeated (audit 2026-11-11, MONEY-4).
+      if (t.tier !== 'bronze' && t.tier !== 'silver' && t.tier !== 'gold') return refuse(`T${t.id} is of a tier the agent does not know: not joining blind`)
+      if (!ctx.settings.entryFeesGold.length) {
+        if (t.tier === 'gold') return refuse(`Gold is off for this agent: no Gold amounts in its settings`)
+        // Gold off holds by the amount too, whatever the label says: an entry from FoxLeague's Gold bound up is a Gold
+        // amount. A bound that cannot be read is no bound far away.
+        if (t.entry_fee_foxsy > 0) {
+          const goldMin: unknown = cfg.tournament_fee_bounds?.gold_min
+          if (typeof goldMin !== 'number' || !Number.isFinite(goldMin)) return refuse('Gold is off for this agent and the Gold fee bound could not be read: not joining blind')
+          if (t.entry_fee_foxsy >= goldMin) return refuse(`Gold is off for this agent: an entry of ${t.entry_fee_foxsy} FOXSY is a Gold amount (from ${goldMin}), whatever the tournament is labelled`)
+        }
+      }
       const lk = t.format === 'league_knockout'
       if (lk) {
         // By invitation only, read again right before the payment: the contract admits only invited wallets (paying
@@ -1094,7 +1153,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const blind = oneVOneStateRefusal(s, ctx.now)
         if (blind) return refuse(blind)
         const fit = matchFit(s, cfg.min_field_condition, ctx.now)
-        if (fit < 11) return refuse(`only ${fit} match-fit players (condition >= ${cfg.min_field_condition}, no transfer cooldown, not injured)`)
+        if (fit < 11) return refuse(matchFitRefusal(fit, cfg.min_field_condition))
       }
       if (!oneVOne) {
         const worn = scheduleRefusal(s, t, ctx.now)
@@ -1108,7 +1167,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!atStart) return refuse('your current tournaments could not be read: no field is judged blind')
           if (!Number.isFinite(s.profile.elo_rating)) return refuse('your own ELO could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
-          if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (lineup and ELO): no real chance of the knockout`)
+          if (field.stronger >= LK_KNOCKOUT_PLACES) return refuse(`${field.stronger} of the invited teams are clearly stronger (${STRONGER_WORDS}): no real chance of the knockout`)
           if (field.stronger + field.unread >= LK_KNOCKOUT_PLACES) return refuse(`${field.unread} invited teams could not be read: no field is accepted blind`)
         } else {
           // Never blind: a field that could not be read is no field to pay into.
@@ -1119,7 +1178,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!Number.isFinite(s.profile.elo_rating)) return refuse('your own ELO could not be read: no field is judged blind')
           const field = judgeField(ctx.field, lineupStrength(s, atStart.at), s.profile.elo_rating)
           if (field.unread >= FIELD_LIMIT) return refuse(`${field.unread} seated teams could not be read: no field is entered blind`)
-          if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (lineup and ELO): no real chance of the top three`)
+          if (field.stronger >= FIELD_LIMIT) return refuse(`${field.stronger} seated teams are clearly stronger (${STRONGER_WORDS}): no real chance of the top three`)
         }
       }
       // A free Bronze (one FoxLeague's own team creates; the players' free ones were cancelled at the levels' switch) seats without a payment and earns nothing; a paid one goes on chain like Silver.
@@ -1282,7 +1341,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // The creator's own seat goes through FoxLeague's join gate after the stake is paid (tournaments.rs: the create
       // leaves the match-fit gate to the creator's later join): the same count as a join.
       const fit = matchFit(s, cfg.min_field_condition, ctx.now)
-      if (fit < 11) return refuse(`only ${fit} match-fit players (condition >= ${cfg.min_field_condition}, no transfer cooldown, not injured)`)
+      if (fit < 11) return refuse(matchFitRefusal(fit, cfg.min_field_condition))
       return needFoxsy(a.stake_foxsy, allow(a.stake_foxsy, { fee: a.stake_foxsy }))
     }
 
@@ -1372,7 +1431,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         }
         case 'common_pack': {
           if (!cfg.common_pack_available) return refuse(`Common pack unavailable${cfg.common_pack_unavailable_reason ? `: ${cfg.common_pack_unavailable_reason}` : ''}`)
-          if (s.auth?.shop?.common_pack_remaining_this_week === 0) return refuse('weekly Common pack quota used')
+          // FoxLeague's own count for the wallet (GET /api/shop/status; it refuses the confirm of a pack over the quota
+          // after the payment settled). A status that failed or an answer without the number is unread, never "some
+          // left": the agent's own 7-day count below knows nothing of packs bought in the app (audit 2026-11-11, INTEG-6).
+          const left = s.auth?.shop?.common_pack_remaining_this_week
+          if (typeof left !== 'number' || !Number.isFinite(left)) return refuse('the Common packs left this week could not be read (the shop status or its weekly quota): not buying blind')
+          if (left <= 0) return refuse('weekly Common pack quota used')
           // The level's count (owner, 2026-11-06), from the agent's own purchases of the last 7 days.
           const perWeek = ctx.settings.packsPerWeek
           if (perWeek <= 0) return refuse('no Common packs at this level (Packs a week is 0)')
@@ -1438,9 +1502,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // leaves the agent a whole-FOXSY bid just under the contract's minimum.
       const ceilWhole = (x: bigint) => Number((x + 10n ** 18n - 1n) / 10n ** 18n)
       const top = Number(au.highestBid / 10n ** 18n)
-      const minAtomic = au.highestBid === 0n ? au.minPrice : [(au.highestBid * 105n + 99n) / 100n, au.highestBid + 1n].reduce((x, y) => (x > y ? x : y))
+      // The raise over a top bid is the contract's setting, served by FoxLeague: never a number of the agent's own.
+      const raise = auctionMinRaisePercent(cfg)
+      if (au.highestBid !== 0n && raise === null) return refuse('the minimum raise over a top bid could not be read: not bidding blind')
+      const minAtomic = au.highestBid === 0n ? au.minPrice : [(au.highestBid * BigInt(100 + raise!) + 99n) / 100n, au.highestBid + 1n].reduce((x, y) => (x > y ? x : y))
       const min = ceilWhole(minAtomic)
-      if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + 5 percent` : 'the reserve'})`)
+      if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + ${raise} percent` : 'the reserve'})`)
       if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
       // Its limit and the build cost both hang on the rarity: unknown, no bid (agent review of PR #21).
       if (!ctx.cardRarity || !Object.hasOwn(RARITY_LEVEL, ctx.cardRarity)) return refuse(`the rarity of #${a.nonce} could not be read: not bidding blind`)

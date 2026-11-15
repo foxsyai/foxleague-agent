@@ -1,0 +1,287 @@
+---
+title: Install on Windows
+description: Install the FoxLeague agent on Windows 10 or 11 with one line in PowerShell, step by step.
+banner:
+  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import ComingSoon from '../../../components/ComingSoon.astro';
+
+{/* The short install video for Windows goes here, above the first paragraph, once it is made. */}
+
+On Windows the agent runs inside **Ubuntu**, a Linux that Windows itself runs (WSL 2). One line in PowerShell
+sets that up where it is missing and then starts the same guided installer as on Linux. Your wallet and keys stay
+on your PC. The agent then plays while you are logged in to Windows and the PC is awake.
+
+## Before you start
+
+- **64-bit Windows 11 or Windows 10 version 2004 or later** (build 19041 or newer). To see yours, press the Windows
+  key and R, type `winver` and press Enter. The installer checks it in its first step.
+- **Virtualization turned on** in the PC's BIOS or UEFI setup. Most PCs have it on. The installer checks it and
+  says so when it is off ([If it gets stuck](#if-it-gets-stuck)).
+- **About 4 GB free on drive C:** when Ubuntu still has to be installed. The line checks it before the download
+  and stops below that.
+- **Internet**, for Ubuntu, the agent and its Node.js.
+- **An ordinary PowerShell window**, not "Run as administrator". Where an administrator is needed, Windows asks
+  with its own prompt.
+- About 5 EGLD to send to your agent and an AI key from Anthropic ([Your keys](/start/keys/)). Both can come after
+  the install.
+
+## The line to paste
+
+Open **Windows PowerShell**: press Start, type PowerShell and choose Windows PowerShell. Use a normal window, not
+"as administrator". Copy this line (the button at its right copies it), paste it into the window with a right
+click or Ctrl+V and press Enter:
+
+<ComingSoon>
+
+```powershell
+irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
+```
+
+</ComingSoon>
+
+It is safe to paste it again at any time: each run finds what is already done and goes on from there. Paste one
+line at a time, here and everywhere on this page.
+
+To install a given version, set it in PowerShell before the line, for example `$env:FOXAGENT_VERSION = 'vX.Y.Z'`.
+`FOXAGENT_DIR` names another folder, always one inside Ubuntu, never a Windows folder.
+
+## What you will see, step by step
+
+The installer says each step in one yellow line. Most steps pass by themselves; the ones that need you are said
+below.
+
+### Windows 1/6: checking this PC
+
+It says "64-bit Windows, build ...: new enough for WSL 2." On a PC that cannot run the agent it stops with the
+reason in one red line: a 32-bit Windows, the 32-bit PowerShell ("Windows PowerShell (x86)": open the normal one),
+a build that is too old (install the Windows updates in Settings, Windows Update) or the PowerShell ISE (open
+Windows PowerShell instead). In a window opened as administrator it says that Ubuntu and the agent are set up for
+that Windows user.
+
+### Windows 2/6: WSL, the part of Windows that runs Linux
+
+"Asking Windows about WSL (this can take a minute)." On a PC that already has WSL 2 it then says "WSL 2 is
+installed." and goes on. A WSL that is too old for systemd is updated with Microsoft's own `wsl --update`.
+
+When WSL is missing, the installer first looks at virtualization. Then it runs Microsoft's own
+`wsl --install --no-distribution`. That needs an administrator, so Windows shows its own prompt: answer Yes. The
+prompt asks whether this app may make changes to your device and names Windows Subsystem for Linux (wsl.exe). The
+installer asks "Ready?" before it (Enter means yes). A window may open while it works; it closes by itself. When
+Windows then needs a restart, the installer says so: restart, open PowerShell again and paste the same line. It
+says "Restart Windows now, then paste the same line again": use Start, Power, Restart (not Shut down). After the
+restart it goes on where it stopped.
+
+### Windows 3/6: Ubuntu, the Linux the agent runs in
+
+When Ubuntu is not installed yet, the installer checks the free space, says what comes next and asks "Ready?".
+Then it downloads Ubuntu with Microsoft's own `wsl --install -d Ubuntu`, in the same window, with a progress bar.
+
+- The download can look stuck at 0%: a click into the PowerShell window pauses it (Windows then selects text), and
+  Enter once lets it go on. A window "Welcome to WSL" may open by itself: close it.
+- Ubuntu then asks you to choose a Linux username and password, in the same window or in a window of its own. They
+  are new and yours to choose: they are not your Windows login and the installer never sees them. Use small
+  letters for the username, for example `ana`: Ubuntu refuses capitals and spaces.
+- Nothing shows while you type the password, not even dots. That is normal: type it, press Enter, type it again.
+  Remember it: Ubuntu asks for it when a command starts with `sudo`.
+- Ubuntu may also ask "Help improve Ubuntu!" (Y/n/e): either answer is fine for the agent.
+- When Ubuntu then shows its own prompt (a line that ends with `$`), type `exit` and press Enter to come back to
+  the installer. The last yellow line before the download says it too.
+
+Then: "Ubuntu is installed and has a user of its own." If you already have another Ubuntu (for example
+Ubuntu-24.04), the agent gets a distribution of its own, called Ubuntu, and yours is not touched.
+
+### Windows 4/6: Ubuntu's settings (systemd, curl)
+
+The installer turns on systemd, which keeps the agent running in the background, in Ubuntu's `/etc/wsl.conf`. It
+corrects the line that is there and never adds a second `[boot]`; the file as it was is kept in
+`/etc/wsl.conf.before-foxleague`. When systemd still has to start, it restarts Ubuntu once; if you already use this
+Ubuntu, it asks "Restart Ubuntu now?" first, because programs that run in Ubuntu stop and its windows close. Then
+it installs curl, tar and the certificates for https when they are missing.
+
+### Windows 5/6: the agent's installer, inside Ubuntu
+
+The same seven steps as on Linux, in the same window: their questions are answered here. First it says
+"Downloading foxleague-agent" with the version and the folder, then "The download matches the release's checksum."
+and "Starting the installer". Then:
+
+| Step | What happens |
+|---|---|
+| 1/7 Node.js and dependencies | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. Nothing is installed for the whole system. |
+| 2/7 Your wallet | Creates a new wallet for your first agent and shows its **recovery words once**. Write them on paper, then type `yes`. |
+| 3/7 Dashboard login | You choose a username (3 to 32 letters or digits), a password (12 characters or more, typed twice) and a port (8870 by default). There is no default username: Enter alone is refused. A password that is too short or typed differently the second time is asked for again. A port that another program already uses is refused and the next one is offered. |
+| 4/7 Keys | The AI key, Telegram and the CEX top-up, each with simple steps and links. Nothing you paste is shown. Enter at a key skips it: every key can be added later in the dashboard. |
+| 5/7 Settings | Agents start in **dry run**. You choose whether this computer may sign real transactions once you press Go LIVE. |
+| 6/7 PEM files | Writes `pem/agent1.pem`, so you can log into the FoxLeague app as your agent's team and watch it play. |
+| 7/7 Background service | Starts the agent in the background, inside Ubuntu, and says "Running." once the dashboard answers. On Windows it runs while Ubuntu (WSL) runs: the next step is there to keep Ubuntu running while you are logged in. |
+| Done | The dashboard address with your username, agent 1's wallet address, the PEM folder, the next steps and the everyday commands (typed inside Ubuntu). Then "Open the dashboard in your browser now?": Enter opens it in your Windows browser. |
+
+<Aside type="caution" title="Your recovery words">
+The words are the only way to recover your agents' wallets. Keep them on paper, offline. Anyone with them controls
+the wallets. Never type them into a website, a chat or a screenshot. To see them again, open Ubuntu and run
+`./cli.sh backup-words` in the `foxleague-agent` folder, in your own terminal. Until you have typed `yes` at "Type
+yes when the words are written down", every run of the installer shows them and asks again.
+</Aside>
+
+### Windows 6/6: keeping the agent running
+
+"WSL stops Ubuntu a short while after its last window closes and does not start it with Windows." So the
+installer makes a scheduled task of your Windows user, called "FoxLeague Agent (WSL)", started at logon and every
+5 minutes. It says "The task is running."
+
+### Done
+
+The last screen shows the dashboard address (`http://localhost:8870` unless you chose another port), the agent's
+folder as Windows Explorer opens it and the line that opens Ubuntu. When the installer inside Ubuntu could not
+offer the browser, this screen asks "Open the dashboard in your browser now?". You are never asked twice.
+
+## After the install
+
+**The dashboard** is at `http://localhost:8870` in your Windows browser (or at the port you chose). Log in with
+the username and password you chose at step 3/7. The **Getting started** guide opens by itself and shows what is
+left: your keys, funding your agent and going live. Next: [Your keys, step by step](/start/keys/).
+
+**When it plays.** On Windows the agent runs while Ubuntu (WSL) runs. By itself, closing the last Ubuntu window
+may stop it after a short while and Ubuntu does not start with Windows. The scheduled task is there to keep Ubuntu
+running for as long as you are logged in to Windows, with every window closed. The agent does not play while the
+PC is off or asleep and not before you log in after a restart. After a restart the agent is back about a minute
+after you log in; after `wsl --shutdown`, within about 5 minutes, at the task's next check. To let it play while
+you are away from the PC, set the PC not to sleep (Settings, System, Power & sleep on Windows 10 or Power &
+battery on Windows 11). For an agent that plays every day without your PC, use a small server
+([Run it on a server](/help/server/)).
+
+**Its files** are inside Ubuntu, in `~/foxleague-agent`. From Windows Explorer that folder is
+`\\wsl$\Ubuntu\home\<your Linux username>\foxleague-agent`.
+
+**Commands.** The commands of these pages that start with `./`, `systemctl` or `journalctl` are typed inside
+Ubuntu. Open it with `wsl -d Ubuntu --cd ~` in PowerShell, then go to the agent's folder with `cd foxleague-agent`.
+Type `exit` to come back to PowerShell. Paste one line at a time: a line with `&&` belongs inside Ubuntu (Windows
+PowerShell refuses `&&`), and a line that starts with `wsl` belongs in PowerShell.
+
+| What | Inside Ubuntu |
+|---|---|
+| Logs | `journalctl --user -u foxleague-agent -f` (Ctrl-C ends it) |
+| Restart | `systemctl --user restart foxleague-agent` |
+| Command line | `./cli.sh` in the agent's folder (alone it lists the commands) |
+
+**Run the installer again** at any time by pasting the line again. It puts the newest version in place and keeps
+your wallet, login and keys. It asks again for the port, the keys and the live permission, each with your earlier
+answer as the default. At "Enter keys now?" Enter means no on every later run: the keys stay as they are, and you
+change them in the dashboard. Pressing Enter at the live permission keeps it as `.env` has it: on only when it
+already says 1 or true.
+
+## Updating
+
+- **The version** you run is in the dashboard's header, for example `v1.0.0`. The round arrow next to it,
+  **Check for updates**, asks now; by itself the agent asks about every 10 minutes.
+- **Update now.** When a new version is out, a notice under the header shows what is new and the **Update now**
+  button. Telegram tells you once too, and `/upgrade` there does the same. Nothing is installed by itself. An
+  update is one click in the dashboard and takes a minute or two: the dashboard is away for about half a minute
+  and its page comes back by itself. Your wallet, keys, settings and history are kept.
+- **If the new version does not start**, it is undone by itself after about a minute and a half: the agent goes
+  back to the version it ran and the notice says so, with **Try again** in place of **Update now**. Nothing has to
+  be done.
+- **If an update fails**, the notice says why and the agent keeps running the version it ran.
+- **From a terminal:** open Ubuntu with `wsl -d Ubuntu --cd ~`, then `cd foxleague-agent` and
+  `./install.sh --update`. Pasting the PowerShell line again also puts the newest version in place.
+- **"this system's tar cannot unpack inside the agent's background service".** An install made by an older
+  installer has a background service whose file stops the update. Open Ubuntu (`wsl -d Ubuntu --cd ~`), then
+  `cd foxleague-agent` and run `./install.sh --update` once. It installs the update and renews the service, so
+  later updates are one click again. Pasting the PowerShell line again does the same. Until then the notice offers
+  no **Update now**.
+
+How an update works and what its signature protects against: [Update](/help/update/).
+
+## Uninstalling
+
+The uninstall is one line in PowerShell:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall
+```
+
+It removes the scheduled task that keeps Ubuntu running and stops the hidden `wsl.exe` the task started (it knows
+it by its whole command line). The task is all the installer added to Windows: nothing else of Windows is
+touched. Then it asks one question: "Also stop the agent and remove its background service in Ubuntu?" Enter
+means yes: it runs `./install.sh --uninstall` inside Ubuntu for you and says how that went. Nothing has to be
+typed inside Ubuntu.
+
+With `n` or when it cannot do it, it shows the lines to type by hand. The first goes into PowerShell, the others
+into Ubuntu, one at a time (pasted together, some reach the wrong window):
+
+```powershell
+wsl -d Ubuntu --cd ~
+```
+
+```sh
+cd ~/foxleague-agent && ./install.sh --uninstall
+exit
+```
+
+**What stays:**
+
+- **Your folder** inside Ubuntu, with the wallet words (`.env`), the data and the PEM files: about 240 MB, and
+  about 280 MB once an update has kept the release before it (kept so that the update can be undone). The agent
+  wallets may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
+- **WSL and Ubuntu.** WSL, Ubuntu and the line `systemd=true` in Ubuntu's `/etc/wsl.conf` stay, because other
+  programs may use them. If the installer changed a file that was already there, the file as it was is in
+  `/etc/wsl.conf.before-foxleague`.
+- **Linger**, which lets background services of your Linux user start without a login. The uninstall says how to
+  turn it off: `loginctl disable-linger` and your Linux username, inside Ubuntu.
+
+Ubuntu stops by itself a short while after its last window closes. Do not remove Ubuntu itself while the agent
+wallets hold funds or the recovery words are not on paper: `wsl --unregister Ubuntu` deletes everything in it.
+
+To remove only the scheduled task: `Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false`.
+The hidden `wsl.exe` it started then runs on and keeps Ubuntu up until Windows restarts: `wsl --terminate Ubuntu`
+stops Ubuntu now.
+
+## If it gets stuck
+
+| Problem | What to do |
+|---|---|
+| **"Windows says that virtualization is turned off"**, or an error that names virtualization or 0x80370102 | WSL 2 needs virtualization, which is turned on in the PC's BIOS or UEFI setup. At the question "Go on anyway?" Enter means no and nothing is changed. Restart the PC and press the setup key while it starts: F2, Del, F10 or Esc, depending on the maker (the PC maker's guide tells which). Turn on Intel VT-x (Intel Virtualization Technology), AMD-V or SVM, save and restart. Then paste the line again. In PowerShell, `systeminfo` shows "Virtualization Enabled In Firmware: Yes" once it is on; Task Manager shows it too (Performance, CPU). |
+| **"Ubuntu and the agent need about 4 GB free on C:"** | Free some space on C:, then paste the line again. Settings, System, Storage shows what takes the room (Storage Sense and Disk Cleanup remove temporary files). The hibernation file, `hiberfil.sys`, can take several GB: `powercfg /h off` in a PowerShell opened as administrator removes it. That turns off hibernation and Fast Startup; `powercfg /h on` turns them on again. |
+| **"WSL 2 requires an update to its kernel component"** | Run `wsl --update` in PowerShell, then paste the PowerShell line again. |
+| **"Restart Windows now, then paste the same line again"** | Windows finishes installing WSL while it restarts. Use Restart (not Shut down), open PowerShell again and paste the same line: it goes on where it stopped. Pasting it more than once does no harm. |
+| **"WSL was not installed: the administrator prompt was answered with No"** | Paste the line again and answer Yes at Windows' prompt. On an account that is not an administrator: open PowerShell as administrator (right-click the Start button, then Terminal (Admin) or Windows PowerShell (Admin)), type `wsl --install --no-distribution`, restart Windows when it says so and paste the line again in a normal window. |
+| **The Ubuntu download stays at 0%** | A click into the PowerShell window starts Windows' text selection, which pauses the program in it: press Enter once (Esc works too) and the download goes on. A window "Welcome to WSL" may open by itself while Ubuntu installs: close it. |
+| **Ubuntu shows a line that ends with `$` and nothing happens** | That is Ubuntu's own prompt, after its first user was made. Type `exit` and press Enter: the installer goes on. |
+| **"Ubuntu has no user of your own yet"** | Ubuntu's first start was not finished. Press Enter: the installer starts Ubuntu, which asks for the username and password. If it asks nothing and shows a prompt at once, type `exit`, open Ubuntu from the Start menu, choose them there and paste the line again. |
+| **The dashboard username or password is refused** | The username is your own choice, with no default: 3 to 32 letters or digits, no spaces. The password needs at least 12 characters and is typed the same twice. The installer asks again. |
+| **The browser did not open** | Open `http://localhost:8870` in your browser yourself (or the port you chose). The installer prints the address; in most terminals Ctrl and a click on it opens it. |
+| **The dashboard does not open at `http://localhost:8870`** | The agent runs inside Ubuntu and Windows passes `localhost` on to it. Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again: it starts Ubuntu, the agent and the scheduled task again. Your wallet and your answers are kept. |
+| **The dashboard asks for the login although I am signed in** | The dashboard may be open in two browsers, for example Edge and Chrome. Each has its own sign-in, so the page the installer opens can ask for the login although another tab is signed in. Log in there too. |
+| **The agent stops when I close Ubuntu, or after Windows restarts** | On Windows the agent runs while Ubuntu (WSL) runs. By itself WSL stops Ubuntu a short while after its last window closes and does not start with Windows. The scheduled task "FoxLeague Agent (WSL)", which the PowerShell line makes, is there to keep Ubuntu running while you are logged in: look for it in Task Scheduler (Task Scheduler Library) and paste the PowerShell line again to make it again. Until it runs, open Ubuntu and leave its window open (minimised is fine): the agent starts with it. The agent does not play while the PC is off or asleep and not before you log in. |
+| **Task Scheduler shows 0x800710E0 for "FoxLeague Agent (WSL)"** | That is Windows' "The operator or administrator has refused the request": the task's 5-minute trigger found the task still running and did not start a second copy. It is normal while the agent runs. |
+| **"this machine does not run systemd"** | The PowerShell line turns systemd on by itself: it puts `systemd=true` under `[boot]` in Ubuntu's `/etc/wsl.conf` (it corrects a line that says false and never adds a second `[boot]`) and restarts Ubuntu. Paste the line again. By hand, see [Installing by hand](#installing-by-hand). |
+| **"The token '&&' is not a valid statement separator in this version"** | That line belongs inside Ubuntu. Open Ubuntu with `wsl -d Ubuntu --cd ~` and paste it there, one line at a time. |
+| **"wsl: command not found"** | That line belongs in PowerShell, not inside Ubuntu. Type `exit` to leave Ubuntu, then paste it again. |
+| **Where are the agent's files?** | In Windows Explorer at `\\wsl$\Ubuntu\home\<your Linux username>\foxleague-agent`. |
+
+Problems once the agent runs (the AI key, Go LIVE, Telegram, the update messages) are in
+[Troubleshooting](/help/troubleshooting/).
+
+## Installing by hand
+
+Without the PowerShell line:
+
+1. In PowerShell opened as administrator, run `wsl --install -d Ubuntu`. Restart Windows if it asks.
+2. Open Ubuntu from the Start menu. The first time, it asks for a Linux username and password.
+3. Turn on systemd, which runs the agent in the background. Run `cat /etc/wsl.conf`. If it says `systemd=true`
+   under `[boot]`, go to the next step. If it has no `[boot]` line, run
+   `sudo sh -c 'printf "\n[boot]\nsystemd=true\n" >> /etc/wsl.conf'`. If it has a `[boot]` line, open the file with
+   `sudo nano /etc/wsl.conf` and make the line under it read `systemd=true` (change a `systemd=false` or add the
+   line). Do not add a second `[boot]`: WSL takes the first `systemd` line it finds. Then close Ubuntu, run
+   `wsl --shutdown` in PowerShell and open Ubuntu again.
+4. If `curl --version` says that curl is not found, run `sudo apt install curl`.
+5. Paste the Linux line in Ubuntu:
+
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
+   ```
+
+Installed by hand, nothing keeps Ubuntu running: leave an Ubuntu window open (minimised is fine) for as long as
+the agent should play. Or paste the PowerShell line once: it keeps your install and adds the scheduled task.

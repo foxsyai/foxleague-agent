@@ -151,7 +151,11 @@ stays sustainable against 48 regenerated (EM paths (a) and (g)).
 
 ## 6a. Yellow card bans, injuries and the forfeit penalty (from Friday 13 November 2026, 14:00 UTC)
 
-One switch for the bans and the injuries: `/api/config` `card_bans` (`live`, `live_from`, `yellow_cards_per_ban`). Every
+One switch for the bans and the injuries: `/api/config` `card_bans` (`live`, `live_from`, `yellow_cards_per_ban`, and the
+injury numbers in force: `injury_chance_bp_full_condition`, `injury_chance_bp_condition_floor`, `injury_days_out`). The
+yellow cards per ban, the injury chance and the days out are FoxLeague's Admin settings: the numbers below are its
+defaults, the agent reads the ones in force from `card_bans` and its plan is told them on the snapshot's "Cards and
+injuries" line (never from a number written in the prompt). Every
 card's record carries `yellow_cards`, `fouls_suffered`, `ban_yellow_cards`, `bans_pending` and `injured_until` (own
 roster, any team's roster, `/players/nonce/{n}` and marketplace listings); the last three move only once the switch is
 live.
@@ -160,12 +164,12 @@ live.
 |---|---|---|
 | Ban | **3** yellow cards (`yellow_cards_per_ban`) in tournaments of more than 2 teams (Champions FoxLeague included) = the card misses its team's next tournament match, the first whose lineup locks after the third card; the count restarts at 0. `bans_pending` above 0 = suspended | `card_bans.rs`; Manual `getting-started/players.md` "Yellow card bans" |
 | What serves a ban | only a tournament match of more than 2 teams (also when the card is not in the 18; a forfeit serves it too). A 1v1 or a ranked game never does, and still takes the card | same |
-| Injury chance | per foul the referee calls on the card: **3%** at condition 100 rising evenly to **9%** at condition 30 (`300 + (100 - clamp(c, 30, 100)) x 600 / 70` basis points) | `card_injuries.rs:41-56` |
+| Injury chance | per foul the referee calls on the card: `injury_chance_bp_full_condition` at condition 100 moving evenly to `injury_chance_bp_condition_floor` at condition 30 and below, in basis points (`full + (100 - clamp(c, 30, 100)) x (floor - full) / 70`; each an Admin setting from 0 to 2000). By default **1%** at condition 100 and **3%** at condition 30 (100 and 300 basis points; 3% and 9% before FoxLeague lowered them) | `card_injuries.rs:49-52`, `InjuryRules::chance_bp`; `routes/config.rs` `CardBansConfig` |
 | Where | tournament matches and 1v1s that count, for both teams; a ranked game only for the team that started it; never a casual game, a free Bronze, a forfeit or the team drawn into a ranked game | `routes/matches.rs:5489-5497` |
-| Days out | 1 injury in a match **3 days**, 2 **9**, 3 or more **27**, from the end of the match; a later injury keeps the later end. `injured_until` in the future = out of every match | `card_injuries.rs` |
+| Days out | `injury_days_out`, three Admin settings (1 to 60 days each, in rising order): by default 1 injury in a match **3 days**, 2 **9**, 3 or more **27**, from the end of the match; a later injury keeps the later end, and a card already injured keeps its end when the settings change. `injured_until` in the future = out of every match | `card_injuries.rs` `DAYS_OUT`, `InjuryRules::try_days` |
 | At a lock | a suspended or injured starter is replaced by a fit bench card of its line, then the nearest line; the bench plays one short. Fewer than 11 fit of the saved 18 (condition 30, no transfer cooldown, not held out) forfeits | `tournament_simulator.rs` `take_match_lock` |
 | Ranked and casual | an injured starter is replaced the same way; with fewer than 11 available of the 18 (not injured, condition above 0) the game does not start, before any ticket is taken | `routes/matches.rs:2254-2323` |
-| 1v1 | joining (the creator's own seat too) needs 11 match-fit of the 18, an injured card not among them; refused after the stake is paid, which is refunded (the gas is lost) | `routes/tournaments.rs:6181-6200`, `squad_would_forfeit` |
+| 1v1 | joining (the creator's own seat too) needs the eleven shirts filled with match-fit cards of the 18, an injured card not among them: a starter who is not fit is relieved from the bench by the lock's line rule (an outfield shirt only by a fit outfield bench card, never the bench keeper; the keeper's shirt by a fit bench keeper, else by a fit outfield bench card as the last resort); refused after the stake is paid, which is refunded (the gas is lost) | `routes/tournaments.rs:6181-6200`, `squad_would_forfeit`; `tournament_simulator.rs` `auto_substitute`, `line_distance`, `find_best_sub`, `last_resort_keeper` |
 | Fusion | an injured or suspended card is refused by `GET /api/fusion/can-fuse` (codes `card_injured`, `card_suspended`); the contract sees neither, and a fusion sent anyway gives a card injured until the latest end of its inputs | `routes/marketplace.rs` (FoxLeague's main since its promotion of 2026-11-10) |
 | A sale or a transfer | keeps the yellow cards, the ban and the injury | Manual "Injuries" |
 | Forfeit penalty | each team that forfeits a match of a level loses the full K of that level (Bronze 9, Silver 13, Gold 17), in tournaments and 1v1s; the other team gains none; never for a match the server could not play. Its switch (`rules.forfeit_penalty_live_from`) is not in `/api/config` | `forfeit_penalty.rs` (FoxLeague's main since its promotion of 2026-11-10) |
@@ -283,7 +287,7 @@ squad in 7 days for 100 FOXSY (2 days for 1,000 FOXSY with match waivers); Commo
 |---|---|---|---|
 | Sale format | every sale is a **24 h English auction**; instant listing and buying are disabled on chain | EM:42; Manual `mechanics/marketplace.mdx:11`; CC:39 `AUCTION_DURATION_SECONDS=86400`; PNFT:1825, `:1863`; `marketplace.auction_enabled` SEED:56 | CFG `auction_enabled`, `auction_duration_seconds` |
 | Reserve (minimum list price) | **500 FOXSY** floor, whole FOXSY; the web app caps at 1,000,000 | EM:42; Manual `mechanics/marketplace.mdx:22`; CC:44 `AUCTION_MIN_PRICE_FOXSY=500` (the mainnet deploy set 10,000, `contracts/deploys.yaml:491-495`; lowered to 500 by owner decision, `CHANGELOG.md:639-641`, EM:42 source comment); `frontend/src/pages/Marketplace.tsx:198` | CFG `marketplace_min_list_price_foxsy`; VIEW `getAuctionMinPrice` |
-| Bid increment | at least **5 percent** over the top bid; first bid at least the reserve | EM:42; CC:40 | CFG `auction_min_increment_percent` |
+| Bid increment | at least **5 percent** over the top bid (the contract's setting, 1 to 50 percent, 5 when unset: `amount >= top bid x (100 + percent) / 100`); first bid at least the reserve. The agent reads the percent in force from the config (5 when the answer leaves it out, no raise when it is no whole number from 1 to 50) and its plan is told it | EM:42; CC:40; `player_nft.rs:1006-1008, 2584-2587, 3613-3619` | CFG `auction_min_increment_percent` |
 | Anti-snipe | a bid in the last **300 s** extends the end by **300 s**, repeatedly | EM:42; CC:53-54 | CFG `auction_snipe_window_seconds`, `auction_snipe_extension_seconds` |
 | Cancel | only while there are no bids | EM:42; PNFT:2210-2230 | |
 | Fee | **10 percent** of the winning bid, paid by the seller, only on a sale; no royalty | EM:44; CC:25 `MARKETPLACE_FEE_PERCENT=10` (the contract's `init` value is 5, PNFT:183) | CFG `marketplace_fee_percent`; VIEW `getMarketplaceFee` |
@@ -455,12 +459,23 @@ among the called-up players by contribution. Nothing of it exists in the code on
   training status the agent cannot read refuses a 1v1, an entry or a session; a seated team known only in part is
   unread; every seated team is judged; a fusion fee is held to the Max shop payment; the level's paid sessions a day
   are the sessions past the free ones. The schedule check judges the squad at a tournament's start;
-  every level compares a seated field with our eleven at the start (Zeus only until 2026-11-06); a plan spaces its casual and ranked matches 13 minutes
+  every level compares a seated field with our eleven at the start (Zeus only until 2026-11-06): a seated team is
+  clearly stronger when its lineup is more than 10 percent above ours whatever its ELO, or more than 5 percent above
+  ours with an ELO more than 50 above ours (an unread lineup on its ELO alone), and no entry is paid into a field with
+  3 of them (24 of the invited teams for a League + Knockout) (`judgeField`; the lineup alone decides since the audit
+  of 2026-11-11, MONEY-1); a plan spaces its casual and ranked matches 13 minutes
   apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
-  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. One brain for every level
+  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. A join reads the tier
+  FoxLeague serves: one that is not bronze, silver or gold is refused as unread, and with Gold off (no Gold amounts)
+  an entry or stake from `tournament_fee_bounds.gold_min` up is refused whatever the label says, as is every paid
+  entry while that bound cannot be read (audit 2026-11-11, MONEY-4). The win chance
+  (`src/snapshot/winchance.ts`) is the ELO expectation and the squad chance averaged, and since the owner's decision of
+  2026-11-11 (audit MONEY-2) never above the squad chance: a rival's lower ELO may lower the estimate, never lift it
+  over what the two elevens alone give, so an eleven weaker than the rival's is never a favourite because the rival's
+  ELO is low; with only one of the two numbers read, the estimate is that number's. One brain for every level
   (owner, 2026-11-06): what was Zeus's code holds at every level (the win chances in the plan, 55 percent against a
   known team, the field rules, the booster only for its own fixtures), and each level's money adds three counts the
   code holds: paid training sessions a game day (2, 4, 6, 8, 10, 10), XP boosters in any 7 days (0, 1, 2, 3, 7, 7) and

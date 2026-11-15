@@ -22,9 +22,10 @@ const why = (a: unknown, more: Partial<RulesContext> = {}, s = snapshot()) => {
 const steady = { ...TEST_SETTINGS, strategy: STRATEGY_PRESETS.steady! }
 
 test('OB-1: every level plays a 1v1 against a known team only from a 55 percent win chance', () => {
-  // Our eleven: 11 x 140 = 1540 at full condition, ELO 1200; this rival is about 43 percent.
+  // Our eleven: 11 x 140 = 1540 at full condition, ELO 1200; this rival is about 42 percent (the squads alone; the
+  // average with its ELO was 43 until the estimate stopped at the squads' chance, audit 2026-11-11, MONEY-2).
   const challenge = { type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 55, deadline_minutes: 60 }
-  assert.match(why(challenge, { opponent: { userId: 55, elo: 1250, strength: 1600 } }), /win chance against user 55 is about 43 percent; a 1v1 against a known team is played from 55 percent/)
+  assert.match(why(challenge, { opponent: { userId: 55, elo: 1250, strength: 1600 } }), /win chance against user 55 is about 42 percent; a 1v1 against a known team is played from 55 percent/)
   assert.equal(why(challenge, { opponent: { userId: 55, elo: 1150, strength: 1400 } }), '', 'about 63 percent: played')
 })
 

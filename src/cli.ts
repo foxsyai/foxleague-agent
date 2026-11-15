@@ -1,4 +1,5 @@
-// Operator CLI. `npm run cli -- <command>`.
+// Operator CLI. On an installed agent: `./cli.sh <command>` (on a server: deploy/agentctl.sh). In a checkout with
+// your own Node.js, `npm run cli -- <command>` runs the same file.
 
 import { readFileSync, existsSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -30,6 +31,8 @@ import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
 import { TopUps } from './topup.ts'
 
 const REPO_ROOT = resolve(import.meta.dirname, '..')
+/** Set by the guided installer for its own calls: lines that are for a server set up by hand are left out there. */
+const GUIDED = process.env.FOXAGENT_GUIDED === '1'
 
 function usage(): never {
   console.log(`foxleague-agent CLI (agents are numbered from 1)
@@ -68,14 +71,18 @@ function usage(): never {
   configure                    enter the API keys with hidden input; they go straight into the env file
   check-keys                    verify the Anthropic, Telegram and Binance keys (Binance: withdraw-only, IP-locked)
   set-web-password              web UI username and password (stored as a scrypt hash) and the session key
+  update-check                  say whether a newer signed release of foxleague-agent is out
+  update                        put the newest signed release in place (./install.sh --update runs it, then
+                                restarts the agent); exit code 3 when this version is the newest
 `)
   process.exit(1)
 }
 
 function mnemonicOrExit(): string {
-  const m = loadConfig().mnemonic
+  const cfg = loadConfig()
+  const m = cfg.mnemonic
   if (!m) {
-    console.error(`No AGENT_MNEMONIC in ${envFilePath()}: run \`npm run cli -- setup\` first.`)
+    console.error(`No AGENT_MNEMONIC in ${envFilePath()}: run \`${cfg.isServer ? 'agentctl.sh' : './cli.sh'} setup\` first.`)
     process.exit(1)
   }
   return m
@@ -112,7 +119,14 @@ async function main(): Promise<void> {
       const mnemonic = process.env.AGENT_MNEMONIC!
       console.log(created ? `New recovery words written to ${envFile} (mode 600).` : `Recovery words already exist in ${envFile}; left unchanged.`)
       console.log(`Agent 1 address: ${deriveWallet(mnemonic, 0).address}`)
-      if (created) console.log('Write the words down offline now: run `npm run cli -- backup-words` in your own terminal.')
+      // A server refuses backup-words (below): there the words are read once from the env file, as the server guide says.
+      if (created) {
+        console.log(
+          cfg.isServer
+            ? `Write the words down offline now: read them once in your own SSH session (sudo grep AGENT_MNEMONIC ${envFile}), write them on paper and never paste them anywhere. They are not printed on a server.`
+            : 'Write the words down offline now: run `./cli.sh backup-words` in your own terminal.',
+        )
+      }
       return
     }
     case 'backup-words': {
@@ -126,6 +140,31 @@ async function main(): Promise<void> {
         process.exit(1)
       }
       console.log(m.split(/\s+/).map((w, i) => `${String(i + 1).padStart(2)}. ${w}`).join('\n'))
+      return
+    }
+    case 'update-check':
+    case 'update': {
+      const { RELEASE_KEYS } = await import('./update/keys.ts')
+      const { detectLayout, installedVersion } = await import('./update/install.ts')
+      const { UpdateError, fetchRelease, isNewer, DEFAULT_SOURCE } = await import('./update/release.ts')
+      const { terminalUpdate } = await import('./update/updater.ts')
+      const installed = installedVersion()
+      try {
+        if (cmd === 'update-check') {
+          const rel = await fetchRelease(cfg.updateUrl ?? DEFAULT_SOURCE, RELEASE_KEYS)
+          console.log(isNewer(rel.manifest.version, installed) ? `Version ${rel.manifest.version} is out (you run ${installed}).\n${rel.manifest.notes.trim()}` : `You run ${installed}, the newest version.`)
+          return
+        }
+        const to = await terminalUpdate({ layout: detectLayout(), installed, keys: RELEASE_KEYS, source: cfg.updateUrl, dataDir: cfg.dataDir, isServer: cfg.isServer, say: line => console.log(`  ${line}`) })
+        if (to === null) {
+          console.log(`  You run ${installed}, the newest version.`)
+          process.exitCode = 3
+        } else console.log(`  Version ${to} is in place. It runs from the next start of the agent.`)
+      } catch (err) {
+        if (!(err instanceof UpdateError)) throw err
+        console.error(`No update: ${err.message}.`)
+        process.exitCode = 1
+      }
       return
     }
     case 'check-words': {
@@ -194,7 +233,7 @@ async function main(): Promise<void> {
       if (!path) usage()
       if (new Store(cfg.dataDir).agent(agentIndex(n))?.source === 'imported') throw new Error(`${agentName(agentIndex(n))} is an imported team: its PEM file is the one you imported`)
       const out = exportPem(mnemonicOrExit(), agentIndex(n), path, { isServer: cfg.isServer, repoRoot: REPO_ROOT })
-      console.log(`Wrote ${out} (mode 600). Keep it on this machine; never copy it to the server or into git.`)
+      console.log(`Wrote ${out} (mode 600). ${GUIDED ? 'Keep it on this computer and never send it to anyone.' : 'Keep it on this machine; never copy it to the server or into git.'}`)
       return
     }
     case 'manual-status': {
@@ -386,17 +425,32 @@ async function main(): Promise<void> {
       await ask('ANTHROPIC_API_KEY', 'Anthropic API key (sk-ant-...)')
       await ask('TELEGRAM_BOT_TOKEN', 'Telegram bot token from @BotFather')
       const token = values.TELEGRAM_BOT_TOKEN ?? cfg.telegramToken
+      // A token that Telegram does not take, or a network that does not answer now, must not lose the keys typed
+      // so far: the token is left out, the owner is told where to add it, and the other keys are asked and saved.
+      let name: string | null = null
       if (token && !cfg.telegramChatId) {
-        const name = await telegramMe(token)
+        try {
+          name = await telegramMe(token)
+        } catch (err) {
+          const why = err instanceof Error ? err.message : String(err)
+          if (values.TELEGRAM_BOT_TOKEN !== undefined) {
+            delete values.TELEGRAM_BOT_TOKEN
+            console.log(`The Telegram bot token was not saved: it could not be checked (${why}). Add it later in the dashboard: Keys.`)
+          } else console.log(`Telegram could not be reached with the saved bot token (${why}): your chat is not linked now. Link it later in the dashboard (Keys).`)
+        }
+      }
+      if (token && !cfg.telegramChatId && name !== null) {
         const code = String(randomInt(100_000, 1_000_000))
+        const since = Date.now() // only a message sent after this moment can carry the code
         console.log(`Telegram bot @${name}. From your own Telegram account, send it this code: ${code}   then press Enter here.`)
         await promptHidden('')
-        const id = pickOwnerChat(await telegramRecentChats(token), code)
+        // The same for the look at the chats: a network that fails here keeps the token and the other keys.
+        const id = await telegramRecentChats(token, since).then(chats => pickOwnerChat(chats, code), () => null)
         if (id) {
           values.TELEGRAM_CHAT_ID = id
           console.log('Your chat was found and saved: your Telegram bot answers only you.')
         } else {
-          console.log('The code was not found. Send exactly those digits to your Telegram bot, then run configure again.')
+          console.log(`The code was not found. ${GUIDED ? 'Link your chat later in the dashboard: Keys, Link my Telegram.' : 'Send exactly those digits to your Telegram bot, then run configure again.'}`)
         }
       }
       await ask('BINANCE_API_KEY', 'Binance API key (withdraw-only, IP-restricted)')
@@ -406,14 +460,21 @@ async function main(): Promise<void> {
         // The env file is now the source for these keys: drop the web UI's overrides of them.
         writeSecrets(secretsFile(cfg.dataDir), Object.fromEntries(Object.keys(values).map(k => [k, ''])))
       }
-      console.log(`Saved: ${Object.keys(values).join(', ') || 'nothing'}. Now run check-keys, then restart the service.`)
+      console.log(`Saved: ${Object.keys(values).join(', ') || 'nothing'}.${GUIDED ? '' : ' Now run check-keys, then restart the service.'}`)
       return
     }
     case 'set-web-password': {
-      if (!process.stdin.isTTY) throw new Error('set-web-password needs an interactive terminal')
+      // Status 2, not 1: the installer asks again after a password that was not accepted, never after this.
+      if (!process.stdin.isTTY) {
+        console.error('set-web-password needs an interactive terminal')
+        process.exit(2)
+      }
+      // No name is offered, not even an earlier one: the owner makes up their own (the owner's decision of 12 Nov 2026,
+      // LOGIN-1). An empty answer saves nothing, and the installer asks again.
       const rl = createInterface({ input: process.stdin, output: process.stdout })
-      const username = (await rl.question(`Web UI username [${process.env.WEB_UI_USER ?? 'admin'}]: `)).trim() || process.env.WEB_UI_USER || 'admin'
+      const username = (await rl.question('Dashboard username, your own choice (3 to 32 letters or digits): ')).trim()
       rl.close()
+      if (!username) throw new Error('a username is needed: type one of your own (3 to 32 letters or digits; dot, dash and underscore work too)')
       if (!/^[A-Za-z0-9._-]{3,32}$/.test(username)) throw new Error('username: 3-32 letters, digits, dot, dash or underscore')
       const pw = await promptHidden('Password (at least 12 characters): ')
       if (pw.length < 12) throw new Error('password too short: use at least 12 characters')
@@ -421,7 +482,7 @@ async function main(): Promise<void> {
       const values: Record<string, string> = { WEB_UI_USER: username, WEB_UI_PASSWORD_HASH: hashPassword(pw) }
       if (!process.env.WEB_UI_SECRET || process.env.WEB_UI_SECRET.length < 32) values.WEB_UI_SECRET = randomBytes(32).toString('hex')
       setEnvValues(envFilePath(), values, cfg.dataDir)
-      console.log(`Saved the web UI login for "${username}" in ${envFilePath()}. Restart the service to apply it.`)
+      console.log(`Saved the web UI login for "${username}" in ${envFilePath()}.${GUIDED ? '' : ' Restart the service to apply it.'}`)
       return
     }
     case 'check-keys': {

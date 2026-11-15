@@ -1,0 +1,60 @@
+Every line of the Windows walk-through (docs/WINDOWS-TEST.md), in its order.
+Copy one line at a time from here (select it, Ctrl+C) and paste it with a right click in the window named above it.
+Never paste several lines at once: they can reach the wrong window (PowerShell and Ubuntu read lines differently).
+Lines that start with # are notes, not commands. LAPTOP is the maintainer's laptop (section 3 fills it in).
+Lines between ">>> INSIDE UBUNTU" and "<<< BACK IN POWERSHELL" are typed inside Ubuntu, one at a time.
+
+== Step 0: before anything (PowerShell, a normal window) ==
+winver
+$PSVersionTable.PSVersion
+wsl --status; "exit code: $LASTEXITCODE"
+Get-PSDrive C | Select-Object Used, Free
+
+== Steps 1 to 8: the install (PowerShell, a normal window, in the folder that holds get.ps1) ==
+cd ([Environment]::GetFolderPath('Desktop'))
+$env:FOXAGENT_GET_URL = 'http://LAPTOP:8765/get.sh'
+$env:FOXAGENT_RELEASES = 'http://LAPTOP:8765'
+Get-Content -Raw .\get.ps1 | iex
+# If the Ubuntu download stays at 0%: press Enter once in that window. Close a "Welcome to WSL" window.
+# At Ubuntu's own prompt (a line that ends with $) after the username and password: type exit and press Enter.
+# After a restart of Windows: open PowerShell again and paste the four lines above again.
+
+== Step 9 and later: is the agent up? (PowerShell; curl.exe first, it does not start Ubuntu) ==
+curl.exe -s http://localhost:8870/healthz
+Get-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' | Get-ScheduledTaskInfo
+Get-Process wsl, conhost
+
+== Steps 12 and 13: the update source for the test (PowerShell first, then inside Ubuntu) ==
+wsl -d Ubuntu --cd ~
+# >>> INSIDE UBUNTU, one line at a time:
+systemd-run --user --unit fox-test-relay ~/foxleague-agent/.node/bin/node -e "const n=require('net');n.createServer(c=>{const u=n.connect(8765,'LAPTOP');c.pipe(u);u.pipe(c);u.on('error',()=>c.destroy());c.on('error',()=>u.destroy())}).listen(8765,'127.0.0.1')"
+printf 'AGENT_UPDATE_URL="http://127.0.0.1:8765"\n' >> ~/foxleague-agent/.env
+systemctl --user restart foxleague-agent
+exit
+# <<< BACK IN POWERSHELL
+
+== Step 14: WSL shut down (PowerShell) ==
+wsl --shutdown
+
+== Step 15: the uninstall (PowerShell, in the folder that holds get.ps1): one line ==
+cd ([Environment]::GetFolderPath('Desktop'))
+& ([scriptblock]::Create((Get-Content -Raw .\get.ps1))) -Uninstall
+# It asks one question: press Enter. It removes the task and its hidden wsl.exe, then the agent's service inside
+# Ubuntu. Nothing has to be typed inside Ubuntu.
+# Only if it says "To do it by hand" (or the question was answered n): the next line in PowerShell, then the lines
+# inside Ubuntu, one at a time.
+wsl -d Ubuntu --cd ~
+# >>> INSIDE UBUNTU, one line at a time:
+cd ~/foxleague-agent && ./install.sh --uninstall
+exit
+# <<< BACK IN POWERSHELL
+# 15 minutes later, with every window closed:
+wsl -l --running
+
+== After the test: the update source goes (PowerShell first, then inside Ubuntu) ==
+wsl -d Ubuntu --cd ~
+# >>> INSIDE UBUNTU, one line at a time:
+systemctl --user stop fox-test-relay
+sed -i '/^AGENT_UPDATE_URL=/d' ~/foxleague-agent/.env
+exit
+# <<< BACK IN POWERSHELL

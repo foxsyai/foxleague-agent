@@ -2,10 +2,10 @@
 
 import { cardBansLive, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
-import { casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
+import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { agentName } from '../names.ts'
-import { disciplineOf, type AgentSnapshot, type PlayerView } from './snapshot.ts'
+import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
@@ -215,9 +215,19 @@ function levelLines(s: AgentSnapshot): string[] {
   }
   const f = s.config?.organizer_fees
   if (f) out.push(`Organizer of a tournament: ${whenLive(organizerFeesLive(s.config, now), f.live_from)}: calendar deposit ${known(f.calendar_deposit_per_match_foxsy)} FOXSY a game${f.calendar_deposit_min_foxsy > 0 ? ` (at least ${f.calendar_deposit_min_foxsy})` : ''}${f.private_match_fee_foxsy > 0 ? `, private fee ${f.private_match_fee_foxsy} a game on an invite list` : ''}`)
-  // Yellow card bans and injuries: one switch (FoxLeague's card_bans); the chance, the days out and medicine are in the prompt.
+  // Yellow card bans and injuries: one switch (FoxLeague's card_bans). The injury chance and the days out are FoxLeague's
+  // Admin settings, served in card_bans: the line gives the ones in force and the prompt points here (audit 2026-11-11,
+  // INTEG-2). Numbers it does not serve are said to be unread, never given a value. Medicine is in the prompt.
   const b = s.config?.card_bans
-  if (b) out.push(`Cards and injuries: ${whenLive(cardBansLive(s.config, now), b.live_from)}: ${known(b.yellow_cards_per_ban)} yellow cards in tournaments of more than 2 teams = out of the team's next tournament match; an injured card plays no match until its injury ends`)
+  if (b) {
+    const percent = (bp: unknown) => (typeof bp === 'number' && Number.isFinite(bp) && bp >= 0 && bp <= 10_000 ? String(Math.round(bp) / 100) : null)
+    const full = percent(b.injury_chance_bp_full_condition)
+    const floor = percent(b.injury_chance_bp_condition_floor)
+    const chance = full !== null && floor !== null ? `a foul the referee calls injures the player fouled at ${full} percent at condition 100, moving evenly to ${floor} percent at condition 30 and below` : 'the injury chance could not be read'
+    const d = b.injury_days_out
+    const days = Array.isArray(d) && d.length === 3 && d.every(n => typeof n === 'number' && Number.isFinite(n) && n > 0) ? `one injury in a match keeps a card out ${d[0]} days, two ${d[1]}, three or more ${d[2]}` : 'the days an injury keeps a card out could not be read'
+    out.push(`Cards and injuries: ${whenLive(cardBansLive(s.config, now), b.live_from)}: ${known(b.yellow_cards_per_ban)} yellow cards in tournaments of more than 2 teams = out of the team's next tournament match; an injured card plays no match until its injury ends; ${chance}; ${days}`)
+  }
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   return out
@@ -257,6 +267,9 @@ export function renderDigest(s: AgentSnapshot): string {
     const t = a.shop?.training
     if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid sessions used today ${Number.isFinite(t.used_today) && Number.isFinite(t.daily_free) ? paidSessionsToday(t) : 'unknown'}, paid slots bought in 24 h ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
     out.push(boosterLine(a.shop, s.takenAt))
+    // FoxLeague's own count of the wallet's Common packs; unread, no pack is bought (audit 2026-11-11, INTEG-6).
+    const packs = a.shop?.common_pack_remaining_this_week
+    out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
@@ -340,7 +353,7 @@ export function renderDigest(s: AgentSnapshot): string {
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // Every level is held to the field rule (Zeus only until 2026-11-06).
-  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its ELO is more than ${STRONGER_ELO} above yours and its lineup (each card at the stronger of its synced and live stats, at full condition) more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours at the tournament's start; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
+  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
   for (const t of m.openStandard.slice(0, 30)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
     const field = m.fields?.find(f => f.id === t.id)
@@ -389,18 +402,23 @@ export function renderDigest(s: AgentSnapshot): string {
     out.push(`Market prices (median of the daily median sale prices; every trading day counts once): ${['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'].map(known).join(', ')}`)
   }
   if (m.auctions.length) {
+    // The raise the contract asks over a top bid, as FoxLeague serves it (audit 2026-11-11, INTEG-3). Game settings
+    // that were not read at all give no raise either: the default is for an answer that leaves the number out.
+    const raise = s.config ? auctionMinRaisePercent(s.config) : null
+    out.push(raise === null ? 'A bid must reach the reserve; the raise over a top bid could not be read, so no raise is placed.' : `A bid must reach the reserve, or the top bid plus ${raise} percent.`)
     out.push('Open auctions: the 10 strongest, then the 3 cheapest of each rarity (nonce, card, OVR, price now, ends):')
     for (const l of m.auctions) {
       const ovr = Math.round((l.speed + l.accuracy + l.defense + l.power + l.control + l.vision + l.stamina) / 7)
       const price = l.highest_bid ? `top bid ${l.highest_bid}` : `reserve ${l.min_price ?? '?'}`
-      const lock = l.transferred_at && l.transfer_cooldown_hours ? new Date(new Date(l.transferred_at).getTime() + l.transfer_cooldown_hours * 3600_000) : null
+      // Hours left out are FoxLeague's default lock, as on the agent's own cards (audit 2026-11-11, EDGE-1).
+      const lock = transferLockEnd(l.transferred_at, l.transfer_cooldown_hours, s.config)
       // Own keys only: a rarity named like an inherited property (toString) has no market price (review of PR #21).
       const market = m.prices && Object.hasOwn(m.prices, l.rarity) ? m.prices[l.rarity] : undefined
       out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}${disciplineText(s, l)}`)
     }
   }
   // The threshold every level's 1v1s against a known team are held to, next to the chances below.
-  if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: ELO expectation and lineup strength averaged, ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
+  if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: the ELO expectation and the lineup strength averaged, and never above what the lineups alone give (a rival's low ELO lifts no chance), ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
   if (s.leaderboardNeighbours.length) {
     out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged; a targeted 1v1 played within 2 minutes of its creation counts as arranged): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged` : ', took no 1v1 in 7 days it had not arranged'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }

@@ -6,5 +6,7 @@ data/
 *.pem
 pem/
 .node/
+.npm-cache/
 *.local.md
 deploy/.host
+dist/

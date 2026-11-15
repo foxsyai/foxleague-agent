@@ -1,0 +1,152 @@
+---
+title: Install on Mac
+description: Install the FoxLeague agent on a Mac with one line in Terminal, step by step.
+banner:
+  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import ComingSoon from '../../../components/ComingSoon.astro';
+
+{/* The short install video for the Mac goes here, above the first paragraph, once it is made. */}
+
+On a Mac the agent runs as a background agent of your own user. One line in Terminal downloads it and starts a
+guided installer that asks a few questions. Your wallet and keys stay on your Mac. The agent then plays while you
+are logged in and the Mac is awake.
+
+## Before you start
+
+- **A Mac with macOS**, with an Apple silicon or an Intel processor. The install was checked on macOS 15 on Apple
+  silicon.
+- **No Xcode and no developer tools.** The line needs only what every Mac has (Terminal, curl and tar), and the
+  installer brings its own copy of Node.js. The install was checked on a Mac without Xcode's command line tools.
+- **Your own user account**, the one you log in with. Do not put `sudo` in front of the line: as root the installer
+  stops.
+- **Internet**, for the agent and its Node.js.
+- About 5 EGLD to send to your agent and an AI key from Anthropic ([Your keys](/start/keys/)). Both can come after
+  the install.
+
+## The line to paste
+
+Open **Terminal**: press Cmd and Space, type Terminal and press Enter (or Finder, Applications, Utilities,
+Terminal). Copy this line (the button at its right copies it), paste it with Cmd and V and press Enter:
+
+<ComingSoon>
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
+```
+
+</ComingSoon>
+
+macOS has curl already. The line downloads the newest release into `~/foxleague-agent`, checks the download
+against the release's checksum and starts the guided installer. The download and the setup take a few minutes;
+the questions take as long as you need.
+
+To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older
+version is not put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway
+(the settings and limits the newer version added are then not applied). Another folder is named with
+`FOXAGENT_DIR`; it must be empty or hold an install of foxleague-agent.
+
+## What you will see, step by step
+
+First "Downloading foxleague-agent" with the version and the folder, then "The download matches the release's
+checksum." and "Starting the installer". Then the installer says each step in one yellow line:
+
+| Step | What happens |
+|---|---|
+| 1/7 Node.js and dependencies | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. Nothing is installed for the whole system. |
+| 2/7 Your wallet | Creates a new wallet for your first agent and shows its **recovery words once**. Write them on paper, then type `yes`. |
+| 3/7 Dashboard login | You choose a username (3 to 32 letters or digits), a password (12 characters or more, typed twice) and a port (8870 by default). There is no default username: Enter alone is refused. A password that is too short or typed differently the second time is asked for again. A port that another program already uses is refused and the next one is offered. |
+| 4/7 Keys | The AI key, Telegram and the CEX top-up, each with simple steps and links. Nothing you paste is shown. Enter at a key skips it: every key can be added later in the dashboard. |
+| 5/7 Settings | Agents start in **dry run**. You choose whether this computer may sign real transactions once you press Go LIVE. |
+| 6/7 PEM files | Writes `pem/agent1.pem`, so you can log into the FoxLeague app as your agent's team and watch it play. |
+| 7/7 Background service | Starts the agent in the background as a launch agent of your user (`ai.foxleague.agent`) and says "Running." once the dashboard answers. On macOS it starts when you log in, and it is started again if it ends. |
+| Done | The dashboard address with your username, agent 1's wallet address, the PEM folder, the next steps and the everyday commands. Then "Open the dashboard in your browser now?": Enter opens it. |
+
+The dashboard address on the last screen is a link: hold Cmd and click it to open it.
+
+<Aside type="caution" title="Your recovery words">
+The words are the only way to recover your agents' wallets. Keep them on paper, offline. Anyone with them controls
+the wallets. Never type them into a website, a chat or a screenshot. To see them again, run
+`./cli.sh backup-words` in the `foxleague-agent` folder, in your own terminal. Until you have typed `yes` at "Type
+yes when the words are written down", every run of the installer shows them and asks again.
+</Aside>
+
+## After the install
+
+**The dashboard** is at `http://localhost:8870` (or at the port you chose). Log in with the username and password
+you chose at step 3/7. The **Getting started** guide opens by itself and shows what is left: your keys, funding
+your agent and going live. Next: [Your keys, step by step](/start/keys/).
+
+**When it plays.** On macOS the agent starts when you log in, and a sleeping Mac plays nothing. Its timers pause
+while the Mac sleeps: it plans, plays and checks for updates only while the Mac is awake. When the Mac wakes, it
+goes on. To let it play while you are away, keep the Mac awake. In System Settings open Energy (on a MacBook:
+Battery, then Options) and turn on "Prevent automatic sleeping" (on a MacBook: on power adapter). Or run
+`caffeinate -i` in a Terminal window and leave it open: the Mac stays awake until you press Ctrl-C there. A
+MacBook with its lid closed sleeps. For an agent that plays every day without your Mac, use a small server
+([Run it on a server](/help/server/)).
+
+**Its files** are in `~/foxleague-agent`, the folder `foxleague-agent` in your home folder. The commands of these
+pages that start with `./` are typed there: go there first with `cd ~/foxleague-agent`.
+
+| What | In Terminal |
+|---|---|
+| Logs | `tail -f ~/foxleague-agent/data/service.log` (Ctrl-C ends it) |
+| Restart | `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent` |
+| Command line | `./cli.sh` in the agent's folder (alone it lists the commands) |
+
+**Run the installer again** at any time with `./install.sh` in the `foxleague-agent` folder: it keeps your
+wallet, login and keys. It asks again for the port, the keys and the live permission, each with your earlier
+answer as the default. At "Enter keys now?" Enter means no on every later run: the keys stay as they are, and you
+change them in the dashboard. Pressing Enter at the live permission keeps it as `.env` has it: on only when it
+already says 1 or true.
+
+## Updating
+
+- **The version** you run is in the dashboard's header, for example `v1.0.0`. The round arrow next to it,
+  **Check for updates**, asks now; by itself the agent asks about every 10 minutes while the Mac is awake. Its
+  timers pause while the Mac sleeps, so after a sleep the next check comes within about 10 minutes; the arrow asks
+  at once.
+- **Update now.** When a new version is out, a notice under the header shows what is new and the **Update now**
+  button. Telegram tells you once too, and `/upgrade` there does the same. Nothing is installed by itself. The
+  update takes a minute or two: the dashboard is away for about half a minute and its page comes back by itself.
+  Your wallet, keys, settings and history are kept.
+- **If the new version does not start**, it is undone by itself: the agent goes back to the version it ran and
+  the notice says so, with **Try again** in place of **Update now**. Nothing has to be done.
+- **If an update fails**, the notice says why and the agent keeps running the version it ran.
+- **From a terminal:** `cd ~/foxleague-agent`, then `./install.sh --update`. Pasting the install line again also
+  puts the newest version in place.
+
+How an update works and what its signature protects against: [Update](/help/update/).
+
+## Uninstalling
+
+In Terminal:
+
+```sh
+cd ~/foxleague-agent
+./install.sh --uninstall
+```
+
+It stops the background agent and removes its file from `~/Library/LaunchAgents`: no service, no background
+process and no open port of the agent are left. It leaves your folder, wallet and PEM files in place. Everything
+the install added is in that folder, its own Node.js and the download cache of npm included: about 240 MB, and
+about 280 MB once an update has kept the release before it (kept so that the update can be undone). The agent
+wallets may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
+
+## If it gets stuck
+
+| Problem | What to do |
+|---|---|
+| **The agent does not play while my Mac sleeps** | A sleeping Mac plays nothing. Keep it awake while the agent should play: "Prevent automatic sleeping" in System Settings under Energy (on a MacBook: Battery, then Options), or `caffeinate -i` in a Terminal window you leave open. |
+| **The agent does not run after a restart of the Mac** | It starts when you log in: log in at the Mac. It runs while you are logged in. |
+| **No update notice, although a new version is out** | The agent checks only while the Mac is awake, about every 10 minutes. Press the round arrow next to the version in the dashboard (**Check for updates**) to ask now. |
+| **"do not install the agent as root"** | The line was run with `sudo` or as root. Paste it in Terminal as your own user, without `sudo`. |
+| **"Port ... is already used by another program on this machine"** | Another program listens on that port. Type another port number; the installer offers the next one. |
+| **The browser did not open** | Open `http://localhost:8870` in your browser yourself (or the port you chose). On the installer's last screen, Cmd and a click on the address opens it. |
+| **The dashboard asks for the login although I am signed in** | The dashboard may be open in two browsers, for example Safari and Chrome. Each has its own sign-in, so the page the installer opens can ask for the login although another tab is signed in. Log in there too. |
+| **The dashboard does not open** | Look at the log: `tail -f ~/foxleague-agent/data/service.log`. Restart the agent with `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent`. Another program may use the port: run `./install.sh` again in the `foxleague-agent` folder and pick another one. |
+
+Problems once the agent runs (the AI key, Go LIVE, Telegram, the update messages) are in
+[Troubleshooting](/help/troubleshooting/).

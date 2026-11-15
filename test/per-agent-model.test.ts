@@ -709,10 +709,12 @@ test('PAM-13 cli model: shows each agent\'s AI and shadow entries, and sets an a
 test('PAM-14 Telegram /status and the start message show an agent\'s model and effort where they are not the all-agents ones', async () => {
   const m = await service({ agents: 3, own: { 1: { aiModel: HAIKU, aiEffort: 'high' }, 2: { aiEffort: 'low' } } })
   const lines = (await m.svc.command('status', [], '')).split('\n')
-  assert.match(lines[0]!, /strategist claude-sonnet-5-5 \(medium\)/)
-  assert.match(lines[1]!, /^agent 1 erd1\w+$/, 'the all-agents pair: nothing added')
-  assert.match(lines[2]!, /^agent 2 erd1\w+ · Haiku 5\.5 at high$/)
-  assert.match(lines[3]!, /^agent 3 erd1\w+ · Sonnet 5\.5 at low$/)
+  // The first line is the running version (the one-click update, test/update-service.test.ts).
+  assert.match(lines[0]!, /^foxleague-agent \d+\.\d+\.\d+/)
+  assert.match(lines[1]!, /strategist claude-sonnet-5-5 \(medium\)/)
+  assert.match(lines[2]!, /^agent 1 erd1\w+$/, 'the all-agents pair: nothing added')
+  assert.match(lines[3]!, /^agent 2 erd1\w+ · Haiku 5\.5 at high$/)
+  assert.match(lines[4]!, /^agent 3 erd1\w+ · Sonnet 5\.5 at low$/)
   // The start message lists the agents with the same words.
   const src = readFileSync(join(REPO, 'src/service.ts'), 'utf8')
   const start = src.slice(src.indexOf('  async start(): Promise<void> {'), src.indexOf('  private schedule('))
@@ -899,7 +901,7 @@ test('PAM-17 the guides: the owner\'s setup as the server guide writes it works 
   assert.match(guide, /`agents`, `snapshot 1`, `log 1`, `mode dry`, `kill on`, `check-keys`, `shadow-report`, `model`/)
   assert.doesNotMatch(guide.slice(guide.indexOf('## Shadow plans')), /—|\bbot\b/i)
   // The README, the site.
-  assert.match(read('README.md'), /npm run cli -- model \[N\] \[model effort\] {2}# each agent's AI; agent N's own model and effort \(same: the all-agents one\)/)
+  assert.match(read('README.md'), /\.\/cli\.sh model \[N\] \[model effort\] {2}# each agent's AI; agent N's own model and effort \(same: the all-agents one\)/)
   assert.match(read('README.md').replace(/\s+/g, ' '), /the AI's model and effort for all agents or one agent/)
   const costs = read('site/src/content/docs/help/costs.md')
   const para = costs.slice(costs.indexOf('## Comparing a second model before you switch'), costs.indexOf('## To start')).replace(/\s+/g, ' ')
