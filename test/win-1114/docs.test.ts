@@ -5,7 +5,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { flat, raw } from './helpers.ts'
 
-const IDS: [id: string, severity: RegExp][] = [['W-15', /^medium/], ['W-15b', /^low/], ['W-16', /^low/], ['W-14', /^low/], ['W-17', /^low/]]
+// W-18 was seen on the same PC on 15 Nov, when the fixes of W-14 to W-17 were tried there.
+const IDS: [id: string, severity: RegExp][] = [['W-15', /^medium/], ['W-15b', /^low/], ['W-16', /^low/], ['W-14', /^low/], ['W-17', /^low/], ['W-18', /^low/]]
 const HEADING = '\n## Windows real-PC re-test (2026-11-14)\n'
 
 function section(): string {
