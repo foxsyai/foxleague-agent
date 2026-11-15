@@ -344,7 +344,7 @@ test('SHADOW-6 (f) rule 1: no path from a shadow plan\'s actions to the executor
   void refused
   // In the tick, the shadow starts after the real plan's actions were handed to runPlan, and is never awaited.
   const tick = src.slice(src.indexOf('  async tick('), src.indexOf('  modelUsdByDay()'))
-  assert.match(tick, /const running = this\.runPlan\(agent, plan\.actions, !ownerRequest\)\n\s*(\/\/[^\n]*\n\s*)*this\.startShadow\(index, plan\)\n\s*await running\n/)
+  assert.match(tick, /const running = this\.runPlan\(agent, plan\.actions, !ownerRequest, snap\)\n\s*(\/\/[^\n]*\n\s*)*this\.startShadow\(index, plan\)\n\s*await running\n/)
   assert.doesNotMatch(tick, /await this\.(startShadow|shadowPlan)/)
 })
 

@@ -391,8 +391,11 @@ export const LK_KNOCKOUT_MATCHES = 9
 const LK_KNOCKOUT_SLOTS = 46
 /** A League + Knockout is accepted with a real chance of the knockout: places 1 to 24 (owner, 2026-10-24). */
 export const LK_KNOCKOUT_PLACES = 24
-/** An invitation this close to its expiry is not paid into (FoxLeague closes it when the next wave runs). */
-const INVITATION_MARGIN_MS = 30 * 60_000
+/**
+ * An invitation this close to its expiry is not paid into (FoxLeague closes it when the next wave runs), and a League +
+ * Knockout seat this close to its seats lock is not left.
+ */
+export const INVITATION_MARGIN_MS = 30 * 60_000
 
 /**
  * Minutes from a tournament's first match to its last, at its round interval: one round per interval, except a League

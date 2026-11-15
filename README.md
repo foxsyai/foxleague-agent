@@ -41,7 +41,8 @@ Anthropic API key for the AI. Telegram and Binance are optional.
 
 Every two hours by default (randomised, inside the active hours you choose; higher levels plan more often, Zeus every
 hour, and the tick is yours to set) each agent reads its team and the platform, asks the AI for a plan and runs the actions spread over the
-next minutes:
+next minutes, in the plan's order (one with a deadline, such as leaving a 1v1 before it runs out or a bid before the auction
+ends, at least 5 minutes before it):
 
 - **Daily routine:** the free training sessions on the starters who gain most, syncing stats to chain when it
   matters, lineup and formation, ranked and casual matches.
@@ -94,6 +95,9 @@ the dashboard or by chatting with it on Telegram.
   Only a release signed by the maintainers and newer than yours is taken, it is prepared next to the running
   version, and a version that does not start is undone by itself. `./install.sh --update` does the same from a
   terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
+- **FoxLeague's manual:** once a day the agent compares the manual FoxLeague serves with the copy its agents play
+  by. When a page changed, the morning summary and the dashboard name it; a version with the new manual follows
+  (the maintainer runs `sync-manual`). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
@@ -141,7 +145,8 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
-manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`).
+manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`, which also writes
+`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with).
 
 ## Fair play
 

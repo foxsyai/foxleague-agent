@@ -137,15 +137,18 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
 /** The most one answer may hold: far above the largest real one (a few hundred KB), far below what fills the memory. */
 export const MAX_ANSWER_BYTES = 8 * 1024 * 1024
 
+/** An answer refused by readCapped for its size: a failed read, told with the host and never the path. */
+export class AnswerTooLargeError extends Error {}
+
 /**
- * The body as text, read as it streams and refused past MAX_ANSWER_BYTES: `res.text()` buffers whatever the upstream
- * sends, hundreds of megabytes included (ATTACK-5). A declared content-length over the cap is refused unread; a
- * compressed answer is counted by what it unpacks to. The refusal is a plain error (a failed read, like a timeout),
- * with the host and never the path.
+ * The body as text, read as it streams and refused past `max` bytes (MAX_ANSWER_BYTES unless a caller asks for
+ * less): `res.text()` buffers whatever the upstream sends, hundreds of megabytes included (ATTACK-5). A declared
+ * content-length over the cap is refused unread; a compressed answer is counted by what it unpacks to. The refusal is
+ * an AnswerTooLargeError (a failed read, like a timeout), with the host and never the path.
  */
-async function readCapped(res: Response, url: string): Promise<string> {
-  const tooLarge = () => new Error(`answer from ${hostOf(url)} is too large (over ${MAX_ANSWER_BYTES / (1024 * 1024)} MB): not read`)
-  if (Number(res.headers.get('content-length')) > MAX_ANSWER_BYTES) {
+export async function readCapped(res: Response, url: string, max = MAX_ANSWER_BYTES): Promise<string> {
+  const tooLarge = () => new AnswerTooLargeError(`answer from ${hostOf(url)} is too large (over ${max / (1024 * 1024)} MB): not read`)
+  if (Number(res.headers.get('content-length')) > max) {
     await res.body?.cancel().catch(() => undefined)
     throw tooLarge()
   }
@@ -157,7 +160,7 @@ async function readCapped(res: Response, url: string): Promise<string> {
     const { done, value } = await reader.read()
     if (done) break
     size += value.byteLength
-    if (size > MAX_ANSWER_BYTES) {
+    if (size > max) {
       await reader.cancel().catch(() => undefined)
       throw tooLarge()
     }
