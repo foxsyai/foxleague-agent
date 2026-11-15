@@ -61,6 +61,12 @@ export interface Config {
   updateUrl?: string
   /** Looks for a newer release every ten minutes (AGENT_UPDATE_CHECK, default on). Off: nothing is asked or offered. */
   updateCheck?: boolean
+  /**
+   * Once a day, compares FoxLeague's live manual with the agents' copy (AGENT_MANUAL_CHECK, default on). Only a started
+   * service runs it (its timer, the morning summary and /summary); a service a test builds without it asks nobody.
+   * Off: nothing is asked or said.
+   */
+  manualCheck?: boolean
 }
 
 function num(name: string, fallback: number): number {
@@ -109,6 +115,7 @@ export function loadConfig(): Config {
     maxAgents: Math.min(100, Math.floor(num('AGENT_MAX_AGENTS', 5))),
     updateUrl: process.env.AGENT_UPDATE_URL?.trim() || undefined,
     updateCheck: flag('AGENT_UPDATE_CHECK', true),
+    manualCheck: flag('AGENT_MANUAL_CHECK', true),
   }
   return loaded
 }

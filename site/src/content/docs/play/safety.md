@@ -47,7 +47,9 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 The agent talks only to the services it needs:
 
 - **FoxLeague and the MultiversX network**: what the player app sends too. It reads public data, logs in as your
-  team and sends the transactions it signs.
+  team and sends the transactions it signs. Once a day it also reads the manual pages FoxLeague's public read-only
+  server gives, to see whether the game's manual changed since your agents' copy; that request carries nothing of
+  yours. `AGENT_MANUAL_CHECK=0` in `.env` switches it off.
 - **Anthropic**: what the AI needs to plan and to answer you. That is the snapshot of the game, your strategy, the
   budget that is left, the recent activity and your conversation with the manager. Never your recovery words or keys.
 - **Telegram and Binance**, only when you set their keys: your messages and the agent's answers, and the top-ups

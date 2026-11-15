@@ -344,6 +344,8 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         telegram: Boolean(service.telegram),
         // The running version, a newer signed release if there is one and how the last update went.
         update: service.updater.view(),
+        // The day's check of FoxLeague's manual: the notice when its live manual moved ahead of the agents' copy.
+        manual: service.manualWatch.view(),
         // The welcome guide's checklist: which keys are set (never their values) and whether it was hidden.
         setup: {
           ai: Boolean(cfg.anthropicApiKey),

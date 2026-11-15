@@ -2248,6 +2248,83 @@ Stays open:
   `scripts/release/fresh-install-check.sh` says it needs "`npm ci` done in this folder" (the script itself asks for
   `npm ci --ignore-scripts` when the packages are missing).
 
+## Daily check of FoxLeague's manual (2026-11-15)
+
+On 15 Nov the agents' manual (`src/strategist/manual.md`, synced at FoxLeague's 89a1955d7 of 10 Nov) was five days
+behind the manual FoxLeague serves (its main at 9ebcbc52d of 13 Nov, with a fusion change) and nobody was told:
+`manual-status` needs a FoxLeague checkout and `deploy/deploy.sh` runs it only at a deploy, on the maintainer's
+computer. The live server has no checkout. The owner said yes to a daily check on 15 Nov. It is about what the agents
+know, not what they may pay: the code still checks every action against the game rules and the caps. Built by Claude
+Opus 5.5, test first: each test of the same name in `test/manual-watch.test.ts` failed against a skeleton of the
+module (its shape only: "current" with nothing read, no line, no notice) and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MW-1 | low (the owner, 2026-11-15; game knowledge) | Nothing told the owner that FoxLeague's manual had moved ahead of the agents' copy | `src/strategist/manual-watch.ts` asks FoxLeague's public read-only MCP server (`https://foxleague.ai/mcp`, the tools `list_manual_pages` and `get_manual_page`) for the pages it serves and compares each page the agents take in with the fingerprint sync-manual recorded for it (sha256 of its body as FoxLeague's server builds it, whitespace folded). A changed page, a new one and one that went are named. The signal changes only when the manual changes, not with every FoxLeague deploy. Run once against the live server on 15 Nov: it named the seven pages that changed between 89a1955d7 and FoxLeague's main (players, sync, tournaments, permanent records, marketplace, fusion, economy map) and none of the five pages left out on purpose that changed too; a record built from FoxLeague's main came out current |
+| MW-2 | with MW-1 | The check must not report a difference that is no change of the rules | Pages left out on purpose (`LEFT_OUT` in `manual.ts`: connect-ai, the World Cup preview, the terms and the others) are not compared. A change of line breaks or of a page's title alone is no change. "current" comes only from reading the list and every page compared |
+| MW-3 | with MW-1 (rule 4) | A check that cannot read FoxLeague must never say "current" | Every failure ends the day's check as "unknown" with the reason in our own words, never FoxLeague's text: no network, an HTTP error, an answer that is not JSON-RPC, a tool error, an empty list, a slug that is no slug, a page other than the one asked, a request over 15 seconds or a check over 90. No page record, a record of another `manual.md` or a `manual.md` that cannot be read say so without asking FoxLeague |
+| MW-4 | with MW-1 (polite) | The check must not load FoxLeague or send anything of the install | One request for the list and one per page the agents know (17 today), 0.6 seconds apart (FoxLeague's nginx allows 2 a second on `/mcp`), no retry. Each is a POST of a read-only tool call, the only way the MCP route answers, with a fixed client name and no cookie, key or address |
+| MW-5 | with MW-1 | At most once a day | The day (in the summary's time zone) is written to the database before anything is asked: a second call, a call while one runs, a restart and a failed check ask nothing more that day. `AGENT_MANUAL_CHECK=0` switches it off; a service a test builds asks nobody |
+| MW-6 | with MW-1 | The owner's Telegram is quiet on purpose | No message of its own: the morning summary carries one line, "FoxLeague's manual changed since the agents' copy (pages: ...). The maintainer runs sync-manual." or "Could not check FoxLeague's manual today: ...". It has none while the copy is current. The summary runs the day's check before it is built; `/summary` reads the same check |
+| MW-7 | with MW-1 | Where Telegram is not linked the owner still has to see it | A notice under the dashboard's header with its info bubble, shown only when there is something to tell, set as plain text. Without Telegram the service runs the check from the summary's hour on, looked at every hour |
+| MW-8 | with MW-1 | The comparison needs what the agents' copy was built from | `sync-manual` writes `src/strategist/manual-pages.json` next to `manual.md`: the commit, the sha256 of `manual.md` and a fingerprint per page, read from the same FoxLeague checkout (read only, after its fetch). The test holds that the committed record belongs to the committed `manual.md`. The record on this branch was built from 89a1955d7 without a fetch and matches `manual.md` byte for byte |
+| MW-9 | with MW-1 | The maintainer needs the same answer without a checkout | `manual-check` runs the same check from the command line (`./cli.sh manual-check`, `agentctl.sh manual-check` on a server): exit code 0 current, 2 changed, 1 could not check. It writes nothing |
+| MW-10 | with MW-1 (docs) | The guides must say what the line means and what to do | `docs/SERVER.md`, the Update, Troubleshooting, Safety, Dashboard and Talk pages of the site, README and `.env.example` |
+
+Stays open:
+- The page text is built at sync time by a copy of FoxLeague's `mcp/src/resources.ts` (front matter off, MDX imports
+  and comments off). If FoxLeague changes how its server builds the pages, every page reads as changed and
+  `sync-manual` does not clear the line: `servedBody` and `liveBody` in `manual-watch.ts` then follow FoxLeague's file.
+  The check fails loud there, not silent.
+- FoxLeague's MCP server serves the manual its container was built with. A manual deployed to docs.foxleague.ai
+  without a new MCP server is not seen. On 15 Nov the server served FoxLeague's main.
+- FoxLeague deploys a release branch before it promotes it to main (on 15 Nov `release/mainnet-1.0` held the
+  MetaStaking Shop discount of 1 Dec, not served yet). `sync-manual` reads main, so a page FoxLeague serves before its
+  main has it stays named after a sync until FoxLeague promotes it. The reverse (main ahead of what is served) is
+  named too: the line says that the pages differ, not which side is newer.
+- A page the agents take in that FoxLeague's server does not serve (a draft, a page outside the sidebar) is not
+  compared; once FoxLeague serves it, it is named "(new)" until the next sync.
+- The check runs from the hour of the morning summary: a change FoxLeague makes later that day is told the next
+  morning.
+- FoxLeague's server answers a tool call without an `initialize` first (stateless). If that changes, the line says
+  "could not check" every day until the check sends one.
+- Merge order with the sync branch (`foxleague-sync-1113`): whichever merges second, `sync-manual` runs once more with
+  this code so that `manual-pages.json` follows the new `manual.md`. Until then the daily check says that the record
+  is not the one of `manual.md` and MW-8 fails.
+
+GitHub review of PR #72 (2026-11-15). The agent review of this pull request on GitHub (Claude Fable 5.2 at high
+effort) passed it with two medium and three low findings, none about money, keys or signing. The fixes are by Claude
+Opus 5.5, test first, in `test/manual-watch.test.ts`: the tests "R72A-1 ...", "R72A-2 ..." and "R72A-3 ..." each
+failed on the branch before their fix and pass now. "R72A-4 ..." and "R72A-5 ..." add the cases that were missing:
+they passed on the code as it was and were each seen failing on four breaks of the code they hold, restored after.
+The re-review after those fixes (the same reviewer) passed the pull request with one new medium finding, R72A-6,
+fixed the same way: "R72A-6 a slug longer than 120 characters ..." and "R72A-6 many pages ..." failed before the fix
+and pass now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R72A-1 | medium (agent review of PR #72; memory of the process that signs) | `callTool` in `src/strategist/manual-watch.ts` read FoxLeague's answer whole with `res.text()` and compared its size only afterwards: the comment "An answer larger than this is not read" was not true. Whatever answers at `FOXLEAGUE_URL/mcp` (FoxLeague on a bad day, a proxy in front of it or a compressed answer that unpacks to gigabytes) could fill the memory of the process that books and signs, once a day. `src/util/http.ts` had closed this for every other FoxLeague read (ATTACK-5) | The answer is read with `readCapped`, now exported from `src/util/http.ts` with a cap per caller: 2 MB here, counted as it streams and cut off past it, a declared `content-length` over it refused unread, a compressed answer counted by what it unpacks to. Its refusal is an `AnswerTooLargeError`, which the check says as "FoxLeague's answer could not be read"; a timeout or a cut connection while reading is told as before. The test streams 64 MB: the old read took in all of it, the new one stops after at most 4 MB and cancels the stream. One that declares 64 MB is refused with nothing more read |
+| R72A-2 | medium (agent review of PR #72; a notice that outlived its copy) | The stored check was kept by the day only. After an update or a deploy brought a new `manual.md` the same day, the dashboard and `/summary` kept saying "FoxLeague's manual changed since the agents' copy (pages: ...)" until the next morning, while `manual-check` said the copy matched. The same held for "the page record is not the one of the agents' manual.md" after the record was fixed and deployed | The stored check carries a key of the copy it compared: the sha256 of `manual.md` with its page record, as read. A check of another copy is not shown (the dashboard has no notice, the summary line says that it could not check) and the day's check runs again for the copy installed now. Still at most once a day per copy: another call or a restart on the same copy asks nothing more. A fixed record alone counts as a new copy. The test failed on the dashboard showing copy A's line to the service restarted on copy B |
+| R72A-3 | low (agent review of PR #72; the dashboard) | While the day's check ran (about 10 seconds, up to 90) the dashboard showed its restart marker as a failed check: "Could not check FoxLeague's manual today: the check did not finish." The dashboard loads every 15 seconds, so on most days one load showed it, in place of the day before's notice | While a check runs, the dashboard and the summary line give the check before it (nothing on the very first check). The marker keeps its meaning where no check runs: a service that restarted while one was under way still says "the check did not finish". The test failed on the marker shown while FoxLeague held its answer |
+| R72A-4 | low (agent review of PR #72; tests) | The path without Telegram (`armManualCheck` in `src/service.ts`: from the summary hour, every hour, cleared at stop) had no test, though MW-7 names it | The test holds it on mocked timers: the first look three minutes after a start then every hour, nothing asked before the summary hour, a start after the hour asks at its first look, nothing after a stop and nothing when switched off. It failed on each of four breaks: no hour condition, no hourly look, the timer kept at stop, armed when switched off |
+| R72A-5 | low (agent review of PR #72; tests) | The `text/event-stream` branch of `callTool` and the refusals past the size cap and past `MAX_PAGES` had no case in MW-3 | The test holds that an answer sent as server-sent events is read from its last data line (alone or after a notification) and one with no data line is refused; that an answer of exactly the cap is read while one byte more is refused with nothing asked after it; that a list of 200 pages is compared while 201 are refused unread. It failed on each of four breaks: the stream branch not taken, the first data line read, no cap of its own, the page count off by one |
+| R72A-6 | medium (agent re-review of PR #72; the owner's Telegram and the dashboard) | A slug had no length limit: `SLUG` in `src/strategist/manual-watch.ts` limits its characters and its five parts, not their length. One list answer under the 2 MB cap with long slugs (one of 1.9 MB or 196 of 10,000 characters) passed `SLUG` and `MAX_PAGES`, ended as "behind" and put about 2 MB of FoxLeague's text into the line of the morning summary: about 500 Telegram messages on the one send queue, holding urgent warnings, top-up codes and the answers to `/kill` back for 10 minutes or more, sent once more by `/summary`. The same text went into the stored check and into every `/api/state`, every 15 seconds per open dashboard | A slug longer than 120 characters (`MAX_SLUG`; the longest real one has 29) makes FoxLeague's list unreadable: "Could not check FoxLeague's manual today: FoxLeague's answer could not be read." (rule 4), with nothing asked after it. The page record takes the same cap. The owner's line names at most eight pages (`MAX_NAMED`) and counts the rest ("... and 188 more"), so a manual FoxLeague rebuilt with 200 pages stays a line of about 1,100 characters in a summary of one message. The stored check and `/api/state` keep the full list: at most 200 slugs of 120 characters. The first test failed on a slug of 121 characters taken as a new page; it refuses slugs of 121 characters, 10,000 characters and 1.9 MB as well as 196 of 10,000 unread, takes one of 120 and holds that a record with a long slug is no record. The second failed on nine pages all named; eight are all named, nine name eight "and 1 more" and 200 of the longest give a line under 1,500 characters. Error texts and titles: the third test (each of 1.5 MB: an HTTP error page, a JSON-RPC error, a tool refusal, an answer that is not JSON, a cut connection, a page of another slug as well as a title in the list) passed on the code as it was, since every reason the check gives is in our own words and titles are not read. It stays as a guard: it failed on two breaks, FoxLeague's error page in the reason and the network error's message in the reason, restored after |
+
+Stays open after the review:
+- Between a deploy of a new copy and its first check the dashboard shows no notice, as on a first start: a check is
+  never shown for a copy it did not compare. Before the summary hour that lasts until the hour (the morning summary
+  runs the check before it is sent, so it always carries the line of the copy installed).
+- A copy rolled back and forward the same day is checked once per change: each deploy of another copy asks once
+  more (one list and one request per page). It stays bounded by the deploys.
+- The key of the copy is taken from `manual.md` (about 245 KB) and its record each time the dashboard loads its
+  state (every 15 seconds while it is open): about a millisecond, nothing cached.
+- A check a restart cut short still counts as made for that copy that day (MW-5): its line says that the check did
+  not finish until the next day or the next copy.
+- The line names the first eight pages in FoxLeague's order with the pages that went last (R72A-6): in a large
+  change a changed page can be among those counted, not named. `sync-manual` shows the maintainer every page.
+- The number of pages in the page record has no cap of its own: it is the maintainer's file, built by `sync-manual`
+  from a FoxLeague checkout, not read from FoxLeague's server. The line names at most eight of them either way.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in

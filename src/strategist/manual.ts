@@ -5,7 +5,7 @@
 import { execFileSync } from 'node:child_process'
 
 export const MANUAL_BRANCH = 'origin/main'
-const ROOT = 'docs/manual/src/content/docs'
+export const ROOT = 'docs/manual/src/content/docs'
 /**
  * What shapes play decisions: the economy map first, every mechanics page, the players page (rarity, OVR, the yellow
  * card bans and the injuries, which no mechanics page states), fair play. A new page in these folders is taken in.

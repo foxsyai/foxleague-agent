@@ -18,7 +18,8 @@ import { Executor, formatResult, liveSigningAllowed } from './executor/executor.
 import { parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
 import { EFFORTS, MODELS, Strategist, agentChoice, isKnownModel, ownAi, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
-import { buildManual, manualStatus } from './strategist/manual.ts'
+import { MANUAL_BRANCH, buildManual, manualStatus } from './strategist/manual.ts'
+import { MANUAL_FILE, RECORD_FILE, checkManual, manualLine, manualRecord } from './strategist/manual-watch.ts'
 import { entryText, hasOwnShadowList, shadowModelsSet, shadowReport } from './strategist/shadow.ts'
 import { checkKeys, pickOwnerChat, promptHidden, setEnvValues, telegramMe, telegramRecentChats } from './setup/keys.ts'
 import { Address } from '@multiversx/sdk-core'
@@ -50,6 +51,8 @@ function usage(): never {
   sync-manual [foxleague-repo]  rebuild src/strategist/manual.md from the FoxLeague repo's mainnet branch
                                 (default ../next-foxleague); commit and deploy it afterwards
   manual-status [foxleague-repo]  say whether the strategist's game knowledge still matches FoxLeague's manual
+  manual-check                  the same question without a checkout: compare the agents' manual with the pages
+                                FoxLeague serves today (the check the service makes once a day)
   snapshot <N> [--json]         read-only snapshot of agent N (public API, chain, the agent's own authed routes)
   watch <erd1...> [--json]      public-only snapshot of any team (no login)
   dry-run <N> '<actions json>'  run a hand-written plan for agent N in dry run (always simulated, never signed)
@@ -246,6 +249,19 @@ async function main(): Promise<void> {
       if (!st.current) process.exitCode = 2
       return
     }
+    case 'manual-check': {
+      // Read-only calls to FoxLeague's public MCP server; nothing is written (the service keeps its own day's check).
+      let record: unknown = null
+      try {
+        record = JSON.parse(readFileSync(RECORD_FILE, 'utf8'))
+      } catch {
+        // No record or not JSON: the check says so.
+      }
+      const c = await checkManual({ base: cfg.foxleagueUrl, manual: readFileSync(MANUAL_FILE, 'utf8'), record })
+      console.log(manualLine(c) ?? `Game knowledge matches the manual FoxLeague serves today (synced at ${c.synced}).`)
+      process.exitCode = c.state === 'current' ? 0 : c.state === 'behind' ? 2 : 1
+      return
+    }
     case 'sync-manual': {
       const repo = resolve(args[0] ?? join(REPO_ROOT, '..', 'next-foxleague'))
       if (!existsSync(join(repo, '.git'))) throw new Error(`${repo} is not a FoxLeague checkout; pass its path`)
@@ -257,8 +273,10 @@ async function main(): Promise<void> {
       }
       const out = join(REPO_ROOT, 'src', 'strategist', 'manual.md')
       writeFileSync(out, text)
+      writeFileSync(RECORD_FILE, `${JSON.stringify(manualRecord(repo, MANUAL_BRANCH, text), null, 2)}\n`)
       console.log(`Wrote ${out}: ${pages} pages, ${Math.round(text.length / 1024)} KB (about ${Math.round(text.length / 2.7 / 1000)}k tokens; tables run about 2.7 characters a token), manual at ${commit}.`)
-      console.log('Commit and deploy it; the strategist reads it at start.')
+      console.log(`Wrote ${RECORD_FILE}: the page record the daily check compares FoxLeague's manual with.`)
+      console.log('Commit both and deploy them; the strategist reads the manual at start.')
       return
     }
     case 'snapshot':
