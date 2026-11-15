@@ -17,7 +17,8 @@ import { dirname, join } from 'node:path'
 import { Mnemonic } from '@multiversx/sdk-core'
 import type { Config } from '../src/config.ts'
 import { Sessions, hashPassword } from '../src/web/auth.ts'
-import { ManualWatch, checkManual, manualLine, manualRecord, type ManualRecord, type McpFetch } from '../src/strategist/manual-watch.ts'
+import { MAX_ANSWER_BYTES, MAX_PAGES, ManualWatch, checkManual, manualLine, manualRecord, type ManualRecord, type McpFetch } from '../src/strategist/manual-watch.ts'
+import { MAX_ANSWER_BYTES as HTTP_MAX_ANSWER_BYTES } from '../src/util/http.ts'
 import { snapshot } from './fixtures.ts'
 
 const REPO = new URL('..', import.meta.url).pathname
@@ -625,4 +626,67 @@ test('R72A-4 without Telegram the service runs the day\'s check from the summary
   assert.equal(late.asked.length, 1, 'nothing after the stop')
   // Switched off (AGENT_MANUAL_CHECK=0): never asked.
   assert.deepEqual(off.asked, [])
+})
+
+test('R72A-5 an answer sent as an event stream is read, and the caps on an answer\'s size and the page count refuse past them', async () => {
+  const record = recorded()
+  // FoxLeague's MCP server may answer a tool call as server-sent events: the JSON-RPC answer is on the last data line,
+  // after a notification or none.
+  const asEvents = (before: string) => {
+    const plain = foxleagueMcp()
+    const fetch: McpFetch = async (url, init) => {
+      const body = await (await plain.fetch(url, init)).text()
+      return new Response(`${before}event: message\nid: 1\ndata: ${body}\n\n`, { status: 200, headers: { 'content-type': 'text/event-stream; charset=utf-8' } })
+    }
+    return { fetch, seen: plain.seen }
+  }
+  for (const before of ['', 'event: message\ndata: {"jsonrpc":"2.0","method":"notifications/progress","params":{"progress":1}}\n\n']) {
+    const live = asEvents(before)
+    const c = await check(record, live.fetch)
+    assert.equal(c.state, 'current', `${JSON.stringify(c)} (${before ? 'after a notification' : 'alone'})`)
+    assert.equal(live.seen.length, 5)
+  }
+  const noData: McpFetch = async () => new Response('event: message\n\n', { status: 200, headers: { 'content-type': 'text/event-stream' } })
+  const empty = await check(record, noData)
+  assert.equal(empty.state, 'unknown')
+  assert.equal(empty.why, "FoxLeague's answer could not be read")
+
+  // The size cap: an answer of MAX_ANSWER_BYTES is read, one byte more is refused. Below http.ts's own cap.
+  assert.ok(MAX_ANSWER_BYTES >= MB && MAX_ANSWER_BYTES <= HTTP_MAX_ANSWER_BYTES, String(MAX_ANSWER_BYTES))
+  const padded = (extra: number) => {
+    const plain = foxleagueMcp()
+    const fetch: McpFetch = async (url, init) => {
+      const res = await plain.fetch(url, init)
+      if ((JSON.parse(init.body) as Seen['body']).params.name !== 'list_manual_pages') return res
+      const body = await res.text()
+      return new Response(body + ' '.repeat(MAX_ANSWER_BYTES - Buffer.byteLength(body) + extra), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    return { fetch, seen: plain.seen }
+  }
+  const atCap = padded(0)
+  assert.equal((await check(record, atCap.fetch)).state, 'current')
+  assert.equal(atCap.seen.length, 5)
+  const overCap = padded(1)
+  const over = await check(record, overCap.fetch)
+  assert.equal(over.state, 'unknown')
+  assert.equal(over.why, "FoxLeague's answer could not be read")
+  assert.equal(overCap.seen.length, 1, 'nothing is asked after it')
+
+  // The page count: a list of MAX_PAGES pages is compared, one more is refused unread.
+  assert.equal(MAX_PAGES, 200)
+  const listOf = (n: number) => {
+    const slugs = [...Object.keys(record.pages), ...Array.from({ length: n - Object.keys(record.pages).length }, (_, i) => `extra/page-${i}`)]
+    const rpc = new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: JSON.stringify(slugs.map(slug => ({ slug }))) }] } }), { status: 200, headers: { 'content-type': 'application/json' } })
+    return foxleagueMcp(SOURCE, SIDEBAR, { answer: call => (call.body.params.name === 'list_manual_pages' ? rpc : null) })
+  }
+  const full = listOf(MAX_PAGES)
+  const f = await check(record, full.fetch)
+  assert.equal(f.state, 'behind')
+  assert.equal(f.pages.length, MAX_PAGES - Object.keys(record.pages).length, 'every page past the four recorded is new')
+  assert.equal(full.seen.length, 5)
+  const tooMany = listOf(MAX_PAGES + 1)
+  const t = await check(record, tooMany.fetch)
+  assert.equal(t.state, 'unknown')
+  assert.equal(t.why, "FoxLeague's answer could not be read")
+  assert.equal(tooMany.seen.length, 1, 'no page is read from a list that long')
 })
