@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<title>Install video stage</title>
+<link rel="stylesheet" href="stage.css">
+</head><body>
+<!-- One frame of a video: everything on it is a function of the time t (stage.js, frame(t)). -->
+<div id="screen">
+  <div id="cam">
+    <div id="desktop"><div id="wall"></div><div id="icons"></div></div>
+    <div id="browser" class="win">
+      <div class="bchrome">
+        <div class="tabs"><div class="ctl-left"></div><div class="tablist"></div><div class="newtab">+</div><div class="ctl-right"></div></div>
+        <div class="toolbar">
+          <span class="nav"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></span>
+          <span class="nav dim"><svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></span>
+          <span class="nav"><svg viewBox="0 0 24 24"><path d="M19 12a7 7 0 1 1-2.05-4.95M19 5v4h-4"/></svg></span>
+          <div class="omni"><svg class="lock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 11v5M12 8v.5"/></svg><span class="url"></span></div>
+          <span class="nav"><svg viewBox="0 0 24 24"><circle cx="12" cy="6" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="18" r="1.2"/></svg></span>
+        </div>
+      </div>
+      <div class="page"></div>
+    </div>
+    <div id="term" class="win">
+      <div class="tchrome"><div class="ctl-left"></div><div class="ttitle"></div><div class="ctl-right"></div></div>
+      <div class="tbody"><div class="rows"></div><div class="sbar"><i></i></div></div>
+    </div>
+    <div id="bars"></div>
+    <div id="ripple"></div>
+    <div id="cursor"></div>
+  </div>
+  <div id="overlay">
+    <div id="note"><span class="clock"></span><span class="ntext"></span></div>
+    <div id="caption"></div>
+    <div id="keys"></div>
+    <div id="fade"></div>
+  </div>
+</div>
+<script src="stage.js"></script>
+</body></html>

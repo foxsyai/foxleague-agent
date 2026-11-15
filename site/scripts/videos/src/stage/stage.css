@@ -1,0 +1,157 @@
+/* The stage: a plain, logo-free desktop of each system. Sizes in px of a 1920x1080 frame. */
+@font-face{font-family:'Inconsolata';font-weight:400;src:url(../../node_modules/@fontsource/inconsolata/files/inconsolata-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Inconsolata';font-weight:700;src:url(../../node_modules/@fontsource/inconsolata/files/inconsolata-latin-700-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-weight:400;src:url(../../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-weight:500;src:url(../../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-weight:600;src:url(../../node_modules/@fontsource/inter/files/inter-latin-600-normal.woff2) format('woff2')}
+@font-face{font-family:'Inter';font-weight:700;src:url(../../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2) format('woff2')}
+
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:#000}
+#screen{position:relative;width:1920px;height:1080px;overflow:hidden;font-family:var(--ui)}
+#cam{position:absolute;left:0;top:0;width:1920px;height:1080px;transform-origin:0 0}
+#desktop,#wall{position:absolute;inset:0}
+#icons{position:absolute;inset:0}
+
+/* ---------------- wallpapers: plain gradients, no system artwork ---------------- */
+.os-windows #wall{background:radial-gradient(1200px 700px at 30% 35%,#2f6fb5 0%,transparent 60%),radial-gradient(1000px 800px at 80% 80%,#1b4f86 0%,transparent 65%),linear-gradient(135deg,#0e2a52,#123a6e 55%,#0b2142)}
+.os-mac #wall{background:radial-gradient(1100px 800px at 20% 20%,#6a4c93 0%,transparent 60%),radial-gradient(1100px 900px at 85% 85%,#1f6f8b 0%,transparent 60%),linear-gradient(160deg,#2b2346,#1d2f4a 60%,#14202f)}
+.os-linux #wall{background:radial-gradient(1200px 800px at 75% 30%,#8a3b52 0%,transparent 60%),radial-gradient(900px 700px at 20% 85%,#4a1f45 0%,transparent 65%),linear-gradient(150deg,#2a0f24,#3d1530 60%,#1c0a19)}
+
+/* ---------------- windows ---------------- */
+.win{position:absolute;overflow:hidden;box-shadow:0 18px 60px rgba(0,0,0,.55),0 2px 8px rgba(0,0,0,.35)}
+.win.hidden{display:none}
+svg{fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* window buttons, drawn plainly */
+.wbtns{display:flex;align-items:center;height:100%}
+.wbtns.win10 span{width:46px;height:100%;display:grid;place-items:center;color:#1b1b1b}
+.wbtns.win10 svg{width:11px;height:11px;stroke-width:1.2}
+.wbtns.mac{gap:8px;padding:0 0 0 14px}
+.wbtns.mac span{width:12px;height:12px;border-radius:50%;display:block}
+.wbtns.mac span:nth-child(1){background:#ff5f57}.wbtns.mac span:nth-child(2){background:#febc2e}.wbtns.mac span:nth-child(3){background:#28c840}
+.wbtns.gnome{gap:12px;padding:0 12px}
+.wbtns.gnome span{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.1);display:grid;place-items:center;color:#eee}
+.wbtns.gnome svg{width:10px;height:10px;stroke-width:2}
+
+/* ---- terminal ---- */
+#term .tchrome{display:flex;align-items:center;justify-content:space-between;position:relative}
+#term .ttitle{position:absolute;left:0;right:0;text-align:center;pointer-events:none;white-space:nowrap}
+#term .tbody{position:relative;overflow:hidden}
+#term .rows{position:absolute;white-space:pre;font-family:var(--mono);font-variant-ligatures:none}
+#term .row{height:var(--lh);line-height:var(--lh)}
+#term .cur{display:inline-block;width:var(--cw);height:var(--lh);vertical-align:top}
+#term .addr{position:relative}
+#term .addr::after{content:'example';position:absolute;left:100%;top:50%;transform:translateY(-50%);margin-left:12px;padding:2px 9px;border-radius:999px;background:#f5c518;color:#1a1300;font:700 13px/17px 'Inter',sans-serif;letter-spacing:.06em;text-transform:uppercase;white-space:nowrap}
+#term .sbar{position:absolute;right:0;top:0;bottom:0;display:none}
+
+/* Windows PowerShell 5.1 (console host on Windows 11): white title bar, the blue of PowerShell's shortcut */
+.os-windows #term{border:1px solid #5a7aa8;border-radius:8px}
+.os-windows #term .tchrome{height:32px;background:#fff;color:#1b1b1b;font:400 12px/32px var(--ui)}
+.os-windows #term .ttitle{position:static;text-align:left;padding-left:38px;flex:1}
+.os-windows #term .ttitle::before{content:'>_';position:absolute;left:10px;top:8px;width:17px;height:16px;border-radius:2px;background:#012456;color:#fff;font:700 9px/16px 'Inconsolata',monospace;text-align:center}
+.os-windows #term .tbody{background:#012456;color:#eeedf0}
+.os-windows #term .sbar{display:block;width:17px;background:#e9e9e9;border-left:1px solid #d6d6d6}
+.os-windows #term .sbar i{position:absolute;left:4px;right:4px;bottom:22px;height:56%;background:#bdbdbd;border-radius:4px}
+.os-windows .t-y{color:#f9f1a5}.os-windows .t-r{color:#e74856}.os-windows .t-u{color:#f2f2f2;text-decoration:underline}
+.os-windows .t-pg{color:#16c60c}.os-windows .t-pb{color:#3b78ff}.os-windows .t-cmd{color:#f9f1a5}.os-windows .t-op{color:#a0a0a0}.os-windows .t-str{color:#61d6d6}
+.os-windows #term .cur{background:#eeedf0;height:4px;margin-top:calc(var(--lh) - 6px)}
+
+/* macOS Terminal, Basic profile in dark mode */
+.os-mac #term{border-radius:11px;border:1px solid rgba(255,255,255,.14)}
+.os-mac #term .tchrome{height:30px;background:linear-gradient(#3b3b3d,#323234);border-bottom:1px solid #1a1a1a;color:#cfcfcf;font:600 13px/30px var(--ui)}
+.os-mac #term .tbody{background:#1e1e1e;color:#f2f2f2}
+.os-mac .t-y{color:#e5e510;font-weight:bold}.os-mac .t-r{color:#e85c5c;font-weight:bold}.os-mac .t-u{color:#fff;font-weight:bold;text-decoration:underline}
+.os-mac .t-pg,.os-mac .t-pb{color:inherit}
+.os-mac #term .cur{background:rgba(242,242,242,.75)}
+
+/* the terminal of Ubuntu's desktop: a dark header bar and the aubergine background */
+.os-linux #term{border-radius:12px 12px 0 0;border:1px solid #1a1a1a}
+.os-linux #term .tchrome{height:46px;background:#303030;color:#f0f0f0;font:700 15px/46px var(--ui)}
+.os-linux #term .tbody{background:#300a24;color:#fff}
+.os-linux .t-y{color:#fce94f;font-weight:bold}.os-linux .t-r{color:#ef2929;font-weight:bold}.os-linux .t-u{color:#fff;font-weight:bold;text-decoration:underline}
+.os-linux .t-pg{color:#8ae234;font-weight:bold}.os-linux .t-pb{color:#729fcf;font-weight:bold}
+.os-linux #term .cur{background:#fff}
+.hbtn{width:34px;height:34px;margin:0 6px;border-radius:8px;display:grid;place-items:center;color:#eee}
+.hbtn svg{width:16px;height:16px}
+
+/* ---- browser (generic, dark) ---- */
+#browser{background:#202124;border-radius:10px;border:1px solid #3c3c3c}
+.os-windows #browser{border-radius:8px}
+.os-linux #browser{border-radius:12px 12px 0 0}
+.bchrome{height:84px;background:#202124;color:#e8eaed;font:400 13px var(--ui)}
+.tabs{height:40px;display:flex;align-items:flex-end;padding:0 8px}
+.tablist{display:flex;align-items:flex-end;height:100%}
+.tab{position:relative;width:250px;height:32px;margin-right:2px;padding:0 12px;display:flex;align-items:center;gap:9px;border-radius:9px 9px 0 0;color:#bdc1c6;white-space:nowrap;overflow:hidden}
+.tab.on{background:#35363a;color:#e8eaed}
+.tab img{width:16px;height:16px;flex:none}
+.tab .tt{flex:1;overflow:hidden;text-overflow:ellipsis}
+.tab .x{flex:none;opacity:.8;font-size:15px}
+.newtab{height:32px;width:30px;display:grid;place-items:center;font-size:20px;color:#bdc1c6}
+.tabs .ctl-left,.tabs .ctl-right{height:40px;display:flex;align-items:center}
+.tabs .ctl-right{margin-left:auto;align-self:flex-start}
+.os-windows .tabs .wbtns.win10 span{color:#e8eaed;height:40px}
+.toolbar{height:44px;background:#35363a;display:flex;align-items:center;gap:6px;padding:0 10px}
+.nav{width:32px;height:32px;display:grid;place-items:center;color:#e8eaed}
+.nav.dim{color:#7a7d82}
+.nav svg{width:18px;height:18px}
+.omni{flex:1;height:32px;margin:0 6px;border-radius:16px;background:#202124;display:flex;align-items:center;gap:10px;padding:0 14px;color:#e8eaed;font-size:15px}
+.omni .lock{width:16px;height:16px;color:#bdc1c6}
+.url .host{color:#e8eaed}.url .rest{color:#9aa0a6}
+.page{position:absolute;left:0;right:0;bottom:0;background:#0b0e14;overflow:hidden}
+.page img{position:absolute;left:0;top:0;width:100%;height:100%;opacity:0}
+
+/* ---------------- system bars ---------------- */
+#bars>div{position:absolute}
+/* Windows: a taskbar with plain icons and the clock; no start button */
+.os-windows .taskbar{left:0;right:0;bottom:0;height:48px;background:rgba(28,30,36,.92);border-top:1px solid rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;gap:6px;color:#fff}
+.os-windows .taskbar .clock{position:absolute;right:16px;top:6px;text-align:right;font:400 12px/18px var(--ui)}
+.tbicon{width:40px;height:40px;border-radius:6px;display:grid;place-items:center;position:relative}
+.tbicon.on{background:rgba(255,255,255,.08)}
+.tbicon.on::after{content:'';position:absolute;bottom:2px;left:15px;right:15px;height:3px;border-radius:2px;background:#76b9ed}
+.os-mac .tbicon.on::after{background:#ddd;left:17px;right:17px;height:4px;bottom:-6px;border-radius:50%}
+.os-linux .tbicon.on::after{background:#e95420;left:-8px;right:auto;top:17px;width:4px;height:6px;bottom:auto}
+.glyph{width:28px;height:28px;border-radius:6px;display:grid;place-items:center;font:700 13px 'Inconsolata',monospace}
+.g-term{background:#012456;color:#fff;border:1px solid rgba(255,255,255,.25)}
+.os-mac .g-term{background:#1e1e1e}.os-linux .g-term{background:#300a24}
+.g-web{border-radius:50%;background:radial-gradient(circle at 35% 35%,#7ab8ff,#2b6fd6);color:#fff}
+.g-web svg{width:18px;height:18px;stroke-width:1.6}
+.g-folder{background:linear-gradient(#f3c55a,#e2a52a);border-radius:4px}
+.g-text{background:#f2f2f2;border-radius:4px;position:relative}
+.g-text::after{content:'';position:absolute;left:7px;right:7px;top:8px;height:12px;background:repeating-linear-gradient(#999 0 2px,transparent 2px 5px)}
+.g-gear{border-radius:50%;background:#8a8f98}
+.g-search{color:#fff}.g-search svg{width:20px;height:20px}
+/* macOS: menu bar with the app's name and plain menus, no logo; a dock */
+.os-mac .menubar{left:0;right:0;top:0;height:30px;background:rgba(30,30,34,.78);backdrop-filter:blur(10px);display:flex;align-items:center;gap:20px;padding:0 18px;color:#f2f2f2;font:400 14px/30px var(--ui)}
+.os-mac .menubar b{font-weight:700}
+.os-mac .menubar .clock{margin-left:auto}
+.os-mac .dock{left:50%;bottom:8px;transform:translateX(-50%);height:66px;padding:0 10px;border-radius:20px;background:rgba(60,60,70,.45);border:1px solid rgba(255,255,255,.18);display:flex;align-items:center;gap:10px}
+.os-mac .dock .tbicon{width:50px;height:50px}.os-mac .dock .glyph{width:46px;height:46px;border-radius:11px;font-size:18px}
+/* Ubuntu: a black top bar with the date and time, a dock on the left */
+.os-linux .topbar{left:0;right:0;top:0;height:32px;background:#000;color:#fff;font:600 14px/32px var(--ui);display:flex;align-items:center;justify-content:center}
+.os-linux .topbar .ws{position:absolute;left:14px;top:12px;display:flex;gap:5px}
+.os-linux .topbar .ws i{width:7px;height:7px;border-radius:4px;background:#888}.os-linux .topbar .ws i:first-child{width:22px;background:#fff}
+.os-linux .topbar .sys{position:absolute;right:14px;top:0;display:flex;gap:12px;align-items:center;height:32px}
+.os-linux .topbar .sys svg{width:15px;height:15px}
+.os-linux .dock{left:0;top:32px;bottom:0;width:72px;background:rgba(20,20,20,.72);display:flex;flex-direction:column;align-items:center;gap:10px;padding-top:10px}
+.os-linux .dock .tbicon{width:54px;height:54px}.os-linux .dock .glyph{width:44px;height:44px;border-radius:10px;font-size:17px}
+.os-linux .dock .apps{margin-top:auto;margin-bottom:14px;display:grid;grid-template-columns:repeat(3,6px);gap:5px}
+.os-linux .dock .apps i{width:6px;height:6px;border-radius:50%;background:#ddd}
+
+/* ---------------- pointer ---------------- */
+#cursor{position:absolute;left:0;top:0;width:28px;height:28px;pointer-events:none;z-index:50}
+#cursor svg{width:28px;height:28px;stroke:none}
+#ripple{position:absolute;width:44px;height:44px;margin:-22px 0 0 -22px;border-radius:50%;border:3px solid rgba(255,214,90,.95);opacity:0;z-index:49}
+
+/* ---------------- words added on the video ---------------- */
+#overlay{position:absolute;inset:0;pointer-events:none}
+#caption{position:absolute;left:50%;bottom:72px;transform:translateX(-50%);max-width:1500px;padding:13px 26px;border-radius:14px;background:rgba(12,14,20,.97);border:1px solid rgba(245,165,36,.65);color:#fff;font:600 30px/1.25 'Inter',sans-serif;text-align:center;white-space:nowrap;opacity:0;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+#note{position:absolute;left:50%;top:84px;transform:translateX(-50%);display:flex;align-items:center;gap:14px;padding:12px 24px 12px 18px;border-radius:999px;background:#f5a524;color:#1a1300;font:700 30px/1 'Inter',sans-serif;opacity:0;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+#note .clock{width:30px;height:30px;border-radius:50%;border:3.5px solid #1a1300;position:relative}
+#note .clock::before,#note .clock::after{content:'';position:absolute;left:50%;top:50%;width:3.5px;background:#1a1300;border-radius:2px;transform-origin:50% 0}
+#note .clock::before{height:9px;transform:translate(-50%,0) rotate(180deg)}
+#note .clock::after{height:11px;transform:translate(-50%,0) rotate(var(--hand,250deg))}
+#keys{position:absolute;right:56px;bottom:150px;display:flex;gap:10px;align-items:center}
+.key{min-width:62px;height:62px;padding:0 18px;border-radius:12px;background:linear-gradient(#fafafa,#dcdcdc);border:1px solid #9a9a9a;box-shadow:0 5px 0 #8a8a8a,0 10px 24px rgba(0,0,0,.45);color:#1b1b1b;font:700 26px/62px 'Inter',sans-serif;text-align:center}
+.plus{color:#fff;font:700 30px 'Inter',sans-serif;text-shadow:0 2px 8px rgba(0,0,0,.6)}
+#fade{position:absolute;inset:0;background:#000;opacity:0}
