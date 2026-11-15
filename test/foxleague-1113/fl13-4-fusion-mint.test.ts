@@ -104,16 +104,19 @@ test('FL13-4: live, the executor prepares the fusion with FoxLeague and signs ex
   assert.equal(sent!.value, '0')
 })
 
-test('FL13-4: in a dry run the prepared fusion is simulated, never signed', async () => {
+// The dry run simulated FoxLeague's prepared data until the review of PR #73: since R73A-2 a dry run asks no prepare (a
+// write on FoxLeague), so it has no signed fusionMint to simulate; it checks and counts the fusion and never signs it.
+test('FL13-4: in a dry run the fusion that mints is never signed (since R73A-2 neither prepared nor simulated)', async () => {
   let simulated: { data?: string } | undefined
-  const p = prepared()
+  let prepares = 0
   const m = setup({
     chain: { simulate: async (plain: typeof simulated) => { simulated = plain; return { ok: true, detail: 'success', raw: {} } } },
-    fox: { fusionPrepare: async () => p },
+    fox: { fusionPrepare: async () => { prepares++; return prepared() } },
   })
   const [r] = await m.exec.run(m.agent(), dryWallet, spares(), [{ action: fuse, reason: 'grow' }])
   assert.equal(r!.status, 'dry_run', r!.summary)
-  assert.equal(Buffer.from(simulated!.data!, 'base64').toString(), p.sc_call_data)
+  assert.equal(prepares, 0)
+  assert.equal(simulated, undefined)
 })
 
 test('FL13-4: before the switch the executor keeps the old fusion and never asks for a prepare', async () => {

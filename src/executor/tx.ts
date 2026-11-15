@@ -272,6 +272,26 @@ export function fusionMintTx(agentAddress: string, prep: FusionPrepared, expect:
 }
 
 /**
+ * A fusionMint of these cards before FoxLeague prepared it, only to count its gas (GitHub review of PR #73, R73A-2):
+ * FoxLeague's layout with a zero signature (64 bytes, as in every fusionMint), the new card and the inputs' attributes
+ * each the least (1 byte) or the most (500 bytes) fusionMintTx signs, and a limit at the floor or the ceiling of
+ * FUSION_MINT_GAS, so its fee is the least or the most a fusionMint that fusionMintTx would sign can cost. Never
+ * simulated or signed: the signature in a fusionMint is FoxLeague's, and only its prepared data is ever signed.
+ */
+export function fusionMintBound(agentAddress: string, feeAtomic: bigint, nonces: number[], positionChoice: number, bound: 'least' | 'most', now: Date): TxSpec {
+  const cardData = bound === 'least' ? '00' : 'ff'.repeat(500)
+  /** FoxLeague's number argument (fusionMintTx): 0 is the empty argument. */
+  const num = (n: bigint | number) => (BigInt(n) === 0n ? '' : numberToHex(n))
+  const data = [
+    'MultiESDTNFTTransfer', PLAYERS_HEX, '04', FOXSY_HEX, '00', num(feeAtomic),
+    ...nonces.flatMap(n => [FXLP_HEX, num(n), '01']),
+    hexOfString('fusionMint'), num(positionChoice), num(Math.floor(now.getTime() / 1000) + MINT_EXPIRY.maxAheadS), '00'.repeat(64), cardData,
+    ...nonces.flatMap(n => [num(n), cardData]),
+  ].join('@')
+  return { label: 'fusionMint (counted, not prepared)', receiver: agentAddress, value: 0n, data, gasLimit: BigInt(FUSION_MINT_GAS[bound === 'least' ? 'floor' : 'ceiling']), version: 1 }
+}
+
+/**
  * Fusion waivers (fusionWaivers.ts): the exact FOXSY and the card go to the players contract and the card comes
  * straight back, receiver = the agent itself. args: the nonce, then the match count (match waiver) or the days
  * when only some are bought (cooldown waiver).

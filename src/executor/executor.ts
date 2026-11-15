@@ -23,7 +23,7 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 import { describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
-import { XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
+import { FUSION_UNASKED, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import {
@@ -40,6 +40,7 @@ import {
   toPlain,
   fusionTx,
   fusionMintTx,
+  fusionMintBound,
   auctionBidTx,
   auctionListTx,
   auctionCancelTx,
@@ -83,6 +84,8 @@ interface Built {
   /** USD value of the EGLD or WEGLD a swap sends away, counted against the daily swap allowance. */
   swapUsd?: number
   notes: string[]
+  /** A transaction not built yet whose gas is counted, never simulated or signed (a fusion FoxLeague has not prepared). */
+  counted?: TxSpec[]
 }
 
 /** A live payment booked before it is signed: its spend rows, and whether it may have left the wallet. */
@@ -238,7 +241,7 @@ export class Executor {
         // The win chance this 1v1 was taken at, kept with its result to calibrate the estimate on real matches.
         logExtra.winChance = winChance({ myElo: snap.profile?.elo_rating ?? null, oppElo: ctx.opponent.elo, myStrength: lineupStrength(snap) || null, oppStrength: ctx.opponent.strength ?? null })
       }
-      const verdict = checkAction(a, snap, ctx)
+      let verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
@@ -247,47 +250,65 @@ export class Executor {
       }
 
       const prices = this.valuationPrices(snap.prices)
-      const built = await this.build(a, verdict, snap, wallet, prices)
-      // A created tournament or 1v1 pays its seat after the create call: its gas is counted now.
-      const seat = a.type === 'create_tournament' || a.type === 'create_challenge' ? [joinTournamentTx(1, verdict.foxsy)] : []
-      const fees = [...built.txs, ...seat].reduce((s, t) => s + maxFeeAtomic(t), 0n)
-      const moneyMoves = verdict.foxsy > 0n || built.txs.length > 0 || seat.length > 0
-      if (moneyMoves && !prices) return finish('refused', `${desc}: prices unavailable, refusing to spend without a USD value`)
-      const usd = prices ? costUsd(verdict.foxsy, fees, prices) + built.extraUsd : 0
+      /** Builds what the verdict allows and holds it to the caps, the swap allowances and the wallet's EGLD: its cost, or why not. */
+      const weigh = async (v: Verdict): Promise<{ refusal: string } | { built: Built; seat: TxSpec[]; fees: bigint; usd: number }> => {
+        const built = await this.build(a, v, snap, wallet, prices, dry)
+        // A created tournament or 1v1 pays its seat after the create call: its gas is counted now.
+        const seat = a.type === 'create_tournament' || a.type === 'create_challenge' ? [joinTournamentTx(1, v.foxsy)] : []
+        const gas = [...built.txs, ...(built.counted ?? []), ...seat]
+        const fees = gas.reduce((s, t) => s + maxFeeAtomic(t), 0n)
+        const moneyMoves = v.foxsy > 0n || gas.length > 0
+        if (moneyMoves && !prices) return { refusal: 'prices unavailable, refusing to spend without a USD value' }
+        const usd = prices ? costUsd(v.foxsy, fees, prices) + built.extraUsd : 0
 
-      const view = budgetView(store, agent.index, agent.settings, dry, now, snap.gameDay.resetHourUtc)
-      // A registration fee booked earlier in this ledger while the chain says the fee is NOT paid (a dry run's simulated
-      // registration; a relay that gave no answer, or its 500) is the same one fee as this one, not a second: the
-      // contract takes the fee once per wallet ("Already paid registration", player_nft.rs register_and_pay), so no two
-      // can ever leave. It is left out of this check, or the one-time setup budget would refuse every later
-      // registration for good (audit 2026-11-11, EDGE-3). It is not released here: the earlier transaction may still
-      // execute after this snapshot was read, so its booking goes only once this registration's own booking is kept
-      // (replaceEarlierFees). Refused, unsigned, turned away by a relay guard or reverted, this one's booking goes and
-      // the earlier one stays: from the first signature on, one booking always stands for the fee.
-      if (a.type === 'register' && verdict.foxsy > 0n && snap.registration.feePaidOnChain === false) earlierFees = store.openRegistrationFees(agent.index, dry)
-      const earlierUsd = earlierFees.reduce((sum, r) => sum + r.usd, 0)
-      const cap = capRefusal(earlierUsd > 0 ? withoutRegistrationFees(view, earlierUsd) : view, verdict.category, usd)
-      if (cap) return finish('refused', `${desc}: ${cap}`)
-      if (built.swapUsd) {
-        // EGLD swapped away per game day is bounded like spending: the daily cap (the setup budget before registration).
-        const swapped = store.spentUsd(agent.index, { gameDay: view.gameDay, category: 'swap', dryRun: dry })
-        const allowance = snap.registration.registered ? agent.settings.dailyCapUsd : Math.max(agent.settings.dailyCapUsd, agent.settings.setupBudgetUsd)
-        if (swapped + built.swapUsd > allowance + 1e-9) return finish('refused', `${desc}: daily swap allowance: $${(swapped + built.swapUsd).toFixed(2)} needed, $${swapped.toFixed(2)} of $${allowance.toFixed(2)} already swapped today`)
-        // And per calendar month by the monthly budget (the owner's choice after review finding MM8).
-        const swappedMonth = store.spentUsd(agent.index, { month: view.month, category: 'swap', dryRun: dry })
-        const monthAllowance = snap.registration.registered ? agent.settings.monthlyBudgetUsd : Math.max(agent.settings.monthlyBudgetUsd, agent.settings.setupBudgetUsd)
-        if (swappedMonth + built.swapUsd > monthAllowance + 1e-9) return finish('refused', `${desc}: monthly swap allowance: $${(swappedMonth + built.swapUsd).toFixed(2)} needed, $${swappedMonth.toFixed(2)} of $${monthAllowance.toFixed(2)} already swapped this month`)
-      }
-
-      if (built.txs.length || seat.length) {
-        // The reserve is kept for gas: EGLD sent away (a swap) must leave it in the wallet, fees may draw on it.
-        const reserve = decimalToAtomic(agent.settings.egldGasReserve)
-        const egld = snap.chain?.egld ?? 0n
-        if (built.egldValue > 0n && egld < fees + built.egldValue + reserve) {
-          return finish('refused', `${desc}: needs ${formatAtomic(fees + built.egldValue + reserve, 4)} EGLD (fees + value + ${agent.settings.egldGasReserve} gas reserve), wallet has ${formatAtomic(egld, 4)}`)
+        const view = budgetView(store, agent.index, agent.settings, dry, now, snap.gameDay.resetHourUtc)
+        // A registration fee booked earlier in this ledger while the chain says the fee is NOT paid (a dry run's simulated
+        // registration; a relay that gave no answer, or its 500) is the same one fee as this one, not a second: the
+        // contract takes the fee once per wallet ("Already paid registration", player_nft.rs register_and_pay), so no two
+        // can ever leave. It is left out of this check, or the one-time setup budget would refuse every later
+        // registration for good (audit 2026-11-11, EDGE-3). It is not released here: the earlier transaction may still
+        // execute after this snapshot was read, so its booking goes only once this registration's own booking is kept
+        // (replaceEarlierFees). Refused, unsigned, turned away by a relay guard or reverted, this one's booking goes and
+        // the earlier one stays: from the first signature on, one booking always stands for the fee.
+        if (a.type === 'register' && v.foxsy > 0n && snap.registration.feePaidOnChain === false) earlierFees = store.openRegistrationFees(agent.index, dry)
+        const earlierUsd = earlierFees.reduce((sum, r) => sum + r.usd, 0)
+        const cap = capRefusal(earlierUsd > 0 ? withoutRegistrationFees(view, earlierUsd) : view, v.category, usd)
+        if (cap) return { refusal: cap }
+        if (built.swapUsd) {
+          // EGLD swapped away per game day is bounded like spending: the daily cap (the setup budget before registration).
+          const swapped = store.spentUsd(agent.index, { gameDay: view.gameDay, category: 'swap', dryRun: dry })
+          const allowance = snap.registration.registered ? agent.settings.dailyCapUsd : Math.max(agent.settings.dailyCapUsd, agent.settings.setupBudgetUsd)
+          if (swapped + built.swapUsd > allowance + 1e-9) return { refusal: `daily swap allowance: $${(swapped + built.swapUsd).toFixed(2)} needed, $${swapped.toFixed(2)} of $${allowance.toFixed(2)} already swapped today` }
+          // And per calendar month by the monthly budget (the owner's choice after review finding MM8).
+          const swappedMonth = store.spentUsd(agent.index, { month: view.month, category: 'swap', dryRun: dry })
+          const monthAllowance = snap.registration.registered ? agent.settings.monthlyBudgetUsd : Math.max(agent.settings.monthlyBudgetUsd, agent.settings.setupBudgetUsd)
+          if (swappedMonth + built.swapUsd > monthAllowance + 1e-9) return { refusal: `monthly swap allowance: $${(swappedMonth + built.swapUsd).toFixed(2)} needed, $${swappedMonth.toFixed(2)} of $${monthAllowance.toFixed(2)} already swapped this month` }
         }
-        if (egld < fees) return finish('refused', `${desc}: needs ${formatAtomic(fees, 4)} EGLD for gas, wallet has ${formatAtomic(egld, 4)}`)
+
+        if (gas.length) {
+          // The reserve is kept for gas: EGLD sent away (a swap) must leave it in the wallet, fees may draw on it.
+          const reserve = decimalToAtomic(agent.settings.egldGasReserve)
+          const egld = snap.chain?.egld ?? 0n
+          if (built.egldValue > 0n && egld < fees + built.egldValue + reserve) {
+            return { refusal: `needs ${formatAtomic(fees + built.egldValue + reserve, 4)} EGLD (fees + value + ${agent.settings.egldGasReserve} gas reserve), wallet has ${formatAtomic(egld, 4)}` }
+          }
+          if (egld < fees) return { refusal: `needs ${formatAtomic(fees, 4)} EGLD for gas, wallet has ${formatAtomic(egld, 4)}` }
+        }
+        return { built, seat, fees, usd }
       }
+      let weighed = await weigh(verdict)
+      if ('refusal' in weighed) return finish('refused', `${desc}: ${weighed.refusal}`)
+      if (a.type === 'fuse' && verdict.facts.unprepared && !dry) {
+        // From FoxLeague's fusion switch FoxLeague prepares the fusion (a write on its side, up to 45 s under this wallet's
+        // lock; R73A-2): asked only now that every check of the agent's own passed with the least a fusionMint can cost,
+        // and never in a dry run. Its answer goes through every check again, and only its data is built to be signed.
+        ctx.fusionPrepared = await this.prepareFusion(wallet, a.player_nonces, a.position_of)
+        verdict = checkAction(a, snap, ctx)
+        if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
+        weighed = await weigh(verdict)
+        if ('refusal' in weighed) return finish('refused', `${desc}: ${weighed.refusal}`)
+      }
+      const { built, seat, fees, usd } = weighed
 
       const costText = `cost ~$${usd.toFixed(2)}${verdict.foxsy > 0n ? ` (${formatAtomic(verdict.foxsy, 0)} FOXSY + fees)` : ''}`
       const notes = [...verdict.notes, ...built.notes]
@@ -479,9 +500,10 @@ export class Executor {
     }
     if (a.type === 'fuse') {
       // FoxLeague's fusion switch decides what is asked: from it the fusion is prepared by FoxLeague (its can-fuse refuses
-      // three nonces and its pool is emptied); before it, the old pre-check and the pool stock; closed, nothing.
+      // three nonces and its pool is emptied), but only once every check of the agent's own passed, and only live
+      // (runOneLocked; R73A-2); before it, the old pre-check and the pool stock; closed, nothing.
       const mode = fusionMode(snap.config, now).mode
-      if (mode === 'mint') market.fusionPrepared = await this.prepareFusion(wallet, a.player_nonces, a.position_of)
+      if (mode === 'mint') market.fusionPrepared = FUSION_UNASKED
       if (mode === 'pool') {
         market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
         const first = snap.players.find(p => p.nonce === a.player_nonces[0])
@@ -590,7 +612,7 @@ export class Executor {
     }
   }
 
-  private async build(a: Action, v: Verdict, snap: AgentSnapshot, wallet: AgentWallet, prices: Prices | null): Promise<Built> {
+  private async build(a: Action, v: Verdict, snap: AgentSnapshot, wallet: AgentWallet, prices: Prices | null, dry: boolean): Promise<Built> {
     const none: Built = { txs: [], egldValue: 0n, extraUsd: 0, notes: [] }
     switch (a.type) {
       case 'swap_egld_for_foxsy': {
@@ -640,6 +662,13 @@ export class Executor {
       case 'fuse':
         // From FoxLeague's switch: its prepared fusionMint, checked again here as it is signed (rules.ts mintFusion).
         if (v.facts.prepared) return { ...none, txs: [fusionMintTx(wallet.address, v.facts.prepared as FusionPrepared, { feeAtomic: v.foxsy, nonces: v.facts.nonces as number[], positionChoice: v.facts.positionChoice as number, now: new Date() })] }
+        // From the switch before FoxLeague prepared it (R73A-2): nothing to sign or simulate, its gas only counted. Live, the
+        // least a fusionMint costs (the checks before the prepare refuse only what its answer could not pass); in a dry
+        // run, which never asks the prepare, the most.
+        if (v.facts.unprepared) {
+          const counted = fusionMintBound(wallet.address, v.foxsy, v.facts.nonces as number[], v.facts.positionChoice as number, dry ? 'most' : 'least', new Date())
+          return { ...none, counted: [counted], notes: dry ? ['FoxLeague prepares the new card only for a live fusion: not asked in a dry run, so no fusionMint is simulated (its gas counted at the most one takes)'] : [] }
+        }
         return { ...none, txs: [fusionTx(wallet.address, v.foxsy, v.facts.nonces as number[], v.facts.positionChoice as number)] }
       case 'bid':
         return { ...none, txs: [auctionBidTx(a.nonce, a.foxsy)] }
@@ -717,7 +746,7 @@ export class Executor {
    * no answer (a timeout, a 5xx, an answer that is not its envelope). Its pace refusal (a new signature at most every 2
    * seconds a wallet) is asked once more after the interval, as its own Fusion tab does.
    */
-  private async prepareFusion(wallet: AgentWallet, nonces: number[], positionChoice: number): Promise<RulesContext['fusionPrepared']> {
+  private async prepareFusion(wallet: AgentWallet, nonces: number[], positionChoice: number): Promise<FusionPrepared | { refusal: string } | null> {
     for (let i = 0; i < 2; i++) {
       try {
         return await this.d.fox.fusionPrepare(wallet, nonces, positionChoice)
@@ -1178,7 +1207,9 @@ export class Executor {
         return outcomeResult(hash, outcome)
       }
       case 'fuse': {
-        const { hash, outcome } = await this.sendAndWait(wallet, built.txs[0]!, booking)
+        // Only a built fusion is signed: FoxLeague's checked fusionMint, or the old fusion before the switch (R73A-2).
+        if (!built.txs[0]) throw new Error('no fusion transaction was built (FoxLeague did not prepare it): nothing signed')
+        const { hash, outcome } = await this.sendAndWait(wallet, built.txs[0], booking)
         if (outcome.kind === 'failed' && /new NFT data on sender/i.test(outcome.reason)) {
           return finish('failed', `${desc}: a card was updated moments ago on another shard; nothing was burned, retry in a minute`, this.revert(booking, agent, v, fees, hash, now, snap), hash)
         }

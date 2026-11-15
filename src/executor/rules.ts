@@ -42,9 +42,10 @@ export interface RulesContext {
   fusionPool?: number
   /**
    * From FoxLeague's fusion switch: its prepared fusionMint (POST /api/fusion/prepare), its refusal in its own words, or
-   * null when it gave no answer.
+   * null when it gave no answer. FUSION_UNASKED while the executor has not asked it yet (R73A-2): every other check runs
+   * and the verdict carries no transaction to sign.
    */
-  fusionPrepared?: FusionPrepared | { refusal: string } | null
+  fusionPrepared?: FusionPrepared | { refusal: string } | typeof FUSION_UNASKED | null
   /** The card's live auction (view getAuction), fetched for bid and cancel_listing. */
   auction?: Auction | null
   /** Listing pre-check and the current floor of the card's rarity (0 when none is listed), fetched for list_card; null = unavailable. */
@@ -113,6 +114,16 @@ export interface RulesContext {
   cardLock?: { until: Date | null; injuredUntil?: Date | null; injuryUnread?: boolean } | null
   now: Date
 }
+
+/**
+ * In `fusionPrepared`: FoxLeague's prepare not asked yet (GitHub review of PR #73, R73A-2). The prepare is a write on
+ * FoxLeague (it signs a new card for 10 minutes, at most one every 2 seconds a wallet, up to 45 s), so the executor asks
+ * it only once every check of the agent's own passed, and never in a dry run. With it a fusion that passes every other
+ * check is allowed `unprepared`: the executor then asks the prepare and checks again with its answer, live, or counts
+ * the fusion without simulating it, in a dry run. Only a prepared fusion is ever built to be signed. A symbol, so no
+ * answer read from FoxLeague can ever be taken for it.
+ */
+export const FUSION_UNASKED: unique symbol = Symbol('fusion prepare not asked yet')
 
 const refuse = (refusal: string, category: SpendCategory = 'play'): Verdict => ({ ok: false, refusal, foxsy: 0n, category, facts: {}, notes: [] })
 const allow = (foxsyWhole: number | bigint, facts: Record<string, unknown> = {}, category: SpendCategory = 'play', notes: string[] = []): Verdict => ({
@@ -844,7 +855,8 @@ function canFuseReason(c: CanFuse): string {
  * prepare checked the cards on chain, the wallet spacing, the injuries and the bans before it signed the new card. The agent
  * signs its answer only when it is exactly the fusion planned (fusionMintTx) and pays exactly the fee of the rarity,
  * within the max shop payment (the FOXSY in the wallet is checked by the caller). An unanswered prepare is no "yes";
- * FoxLeague's refusal is its word.
+ * FoxLeague's refusal is its word. Not asked yet (FUSION_UNASKED), the fusion is allowed `unprepared`, with nothing to
+ * sign: the executor asks the prepare only then and checks again with its answer.
  */
 function mintFusion(a: Extract<Action, { type: 'fuse' }>, s: AgentSnapshot, ctx: RulesContext, inputs: PlayerView[]): Verdict {
   const rarity = inputs[0]!.rarity
@@ -852,7 +864,9 @@ function mintFusion(a: Extract<Action, { type: 'fuse' }>, s: AgentSnapshot, ctx:
   const fee = s.config?.fusion_costs_foxsy?.[RARITY_LEVEL[rarity]]
   if (!fee) return refuse(`fusion cost for ${rarity} unknown`)
   if (fee > ctx.settings.maxShopPaymentFoxsy) return refuse(`a fusion fee of ${fee} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy} (Max shop payment)`)
+  const output = `${NEXT_RARITY[RARITY_LEVEL[rarity]]} ${inputs[a.position_of]!.position}`
   const p = ctx.fusionPrepared
+  if (p === FUSION_UNASKED) return allow(fee, { fee, nonces: a.player_nonces, positionChoice: a.position_of, unprepared: true }, 'play', [`2 cards fewer, a new ${output} in their place (minted now, level 1, condition 100)`])
   if (p === null || p === undefined) return refuse("the fusion could not be prepared (FoxLeague's /fusion/prepare gave no answer): not fusing blind")
   if ('refusal' in p) return refuse(`FoxLeague says not now: ${p.refusal}`)
   try {
@@ -860,7 +874,6 @@ function mintFusion(a: Extract<Action, { type: 'fuse' }>, s: AgentSnapshot, ctx:
   } catch (err) {
     return refuse(err instanceof Error ? err.message : String(err))
   }
-  const output = `${NEXT_RARITY[RARITY_LEVEL[rarity]]} ${inputs[a.position_of]!.position}`
   return allow(fee, { fee, nonces: a.player_nonces, positionChoice: a.position_of, prepared: p }, 'play', [`2 cards fewer, ${mintedText(p) ?? `a new ${output}`} in their place (minted now, level 1, condition 100)`])
 }
 

@@ -26,7 +26,7 @@ const ATTRS = [
   '000000074361726420353303000900010000000012110c0e0d0e106400000014000000000000000000',
 ]
 
-export interface Over { nonces?: number[]; argNonces?: number[]; position?: number; argPosition?: string; cost?: bigint; costRaw?: string; expiry?: number; gas?: number; endpoint?: string; receiver?: string; transfers?: string; token?: string; sig?: string; extra?: string[] }
+export interface Over { nonces?: number[]; argNonces?: number[]; position?: number; argPosition?: string; cost?: bigint; costRaw?: string; expiry?: number; gas?: number; endpoint?: string; receiver?: string; transfers?: string; token?: string; sig?: string; output?: string; attrs?: string[]; extra?: string[] }
 export function prepared(o: Over = {}) {
   const nonces = o.nonces ?? [101, 102, 103]
   const position = o.position ?? 0
@@ -35,8 +35,8 @@ export function prepared(o: Over = {}) {
   const data = [
     'MultiESDTNFTTransfer', PLAYERS_HEX, o.transfers ?? '04', hex(o.token ?? MAINNET.foxsyToken), '00', arg(cost),
     ...nonces.flatMap(n => [hex(MAINNET.playerCollection), arg(n), '01']),
-    hex(o.endpoint ?? 'fusionMint'), o.argPosition ?? arg(position), arg(expiry), o.sig ?? SIG, OUTPUT,
-    ...(o.argNonces ?? nonces).flatMap((n, i) => [arg(n), ATTRS[i]!]),
+    hex(o.endpoint ?? 'fusionMint'), o.argPosition ?? arg(position), arg(expiry), o.sig ?? SIG, o.output ?? OUTPUT,
+    ...(o.argNonces ?? nonces).flatMap((n, i) => [arg(n), (o.attrs ?? ATTRS)[i]!]),
     ...(o.extra ?? []),
   ].join('@')
   return {
