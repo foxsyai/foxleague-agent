@@ -67,8 +67,10 @@ rules and the owner's caps before anything is signed. Treat every change to that
 - `cli plan N` and `cli dry-run N` write to the real database and simulate in a separate process; do not read their
   refusals as the running service's behaviour while the platform is LIVE. Use `simulate-as <address>` for a throwaway
   in-memory run.
-- A silent agent is not a broken agent: the actions of a plan run at random moments over 80 percent of the cycle
-  (`service.ts`, `runPlan`), and a running plan blocks the next one. Read the schedule before you restart anything.
+- A silent agent is not a broken agent: the actions of a plan run in its order at random moments over 80 percent of
+  the cycle, an action with a deadline (a join, a leave, a range widened, a bid) at least 5 minutes before it
+  (`service.ts`, `scheduleActions` and `runPlan`), and a running plan blocks the next one. Read the schedule before you
+  restart anything.
 
 ## Where things live
 `src/executor/rules.ts` (rules and limits), `executor.ts` (lock, booking, signing, swap allowance), `tx.ts` (transaction
