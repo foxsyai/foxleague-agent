@@ -89,7 +89,7 @@ function servedPages(source: Record<string, string>, sidebar: string[]): { slug:
 interface Seen { url: string; method: string; headers: Record<string, string>; body: { jsonrpc: string; method: string; params: { name: string; arguments: Record<string, unknown> } } }
 
 /** FoxLeague's MCP route (POST /mcp, JSON answers) for that manual, as a stand-in fetch that keeps every request. */
-function foxleagueMcp(source = SOURCE, sidebar = SIDEBAR, o: { answer?: (call: Seen, n: number) => Response | Promise<Response> | null } = {}) {
+function foxleagueMcp(source = SOURCE, sidebar = SIDEBAR, o: { answer?: (call: Seen, n: number) => Response | Promise<Response | null> | null } = {}) {
   const pages = servedPages(source, sidebar)
   const seen: Seen[] = []
   const fetch: McpFetch = async (url, init) => {
@@ -532,4 +532,52 @@ test('R72A-2 a new copy of the manual brought the same day is checked again, and
   assert.equal(fixed.view(day2).text, null, 'the line about the wrong record is not shown')
   assert.equal((await fixed.today(day2 + 3600_000))?.state, 'current')
   assert.equal(live.seen.length, 3 * set)
+})
+
+test('R72A-3 while the day\'s check runs, the dashboard shows the check before it, never its restart marker', async () => {
+  const fusion = { ...SOURCE, 'mechanics/fusion.mdx': SOURCE['mechanics/fusion.mdx']!.replace('same rarity', 'same rarity, none of them injured') }
+  // FoxLeague holds its answer to the first request of the second day until the test lets it go.
+  let release = () => {}
+  const held = new Promise<void>(r => (release = r))
+  const live = foxleagueMcp(fusion, SIDEBAR, { answer: async (_c, n) => (n === 6 ? (await held, null) : null) })
+  const kv = memoryKv()
+  const record = recorded()
+  const watch = () => Object.assign(new ManualWatch({ enabled: true, base: BASE, zone: 'UTC', kv }), { fetch: live.fetch, readManual: () => MANUAL, readRecord: () => record, gapMs: 0 })
+  const changed = "FoxLeague's manual changed since the agents' copy (pages: mechanics/fusion). The maintainer runs sync-manual."
+  const w = watch()
+  assert.equal((await w.today(Date.parse('2026-11-16T09:00:00Z')))?.state, 'behind')
+  assert.equal(live.seen.length, 5)
+
+  // The next morning's check starts and waits for FoxLeague (a healthy one takes 10 to 90 seconds).
+  const day2 = Date.parse('2026-11-17T09:00:00Z')
+  const running = w.today(day2)
+  await new Promise(r => setImmediate(r))
+  assert.equal(live.seen.length, 6, 'the check is under way')
+  const meanwhile = w.view(day2 + 5_000)
+  assert.doesNotMatch(String(meanwhile.text), /Could not check|did not finish/, 'no failed check is shown while it runs')
+  assert.equal(meanwhile.text, changed, 'the check before it')
+  assert.equal(meanwhile.state, 'behind')
+  assert.equal(meanwhile.day, '2026-11-16')
+  assert.doesNotMatch(String(w.line(day2 + 5_000)), /did not finish/)
+
+  // The marker keeps its meaning where no check runs: a service that restarted while the check was under way.
+  const restarted = watch()
+  assert.equal(restarted.view(day2 + 5_000).text, "Could not check FoxLeague's manual today: the check did not finish.")
+  assert.equal(restarted.line(day2 + 5_000), "Could not check FoxLeague's manual today: the check did not finish.")
+
+  release()
+  assert.equal((await running)?.state, 'behind')
+  assert.equal(w.view(day2 + 60_000).day, '2026-11-17')
+  assert.equal(w.view(day2 + 60_000).text, changed)
+
+  // The very first check: nothing to show while it runs.
+  let releaseFirst = () => {}
+  const heldFirst = new Promise<void>(r => (releaseFirst = r))
+  const first = foxleagueMcp(SOURCE, SIDEBAR, { answer: async () => (await heldFirst, null) })
+  const fresh = Object.assign(new ManualWatch({ enabled: true, base: BASE, zone: 'UTC', kv: memoryKv() }), { fetch: first.fetch, readManual: () => MANUAL, readRecord: () => record, gapMs: 0 })
+  const going = fresh.today(day2)
+  await new Promise(r => setImmediate(r))
+  assert.deepEqual([fresh.view(day2).state, fresh.view(day2).text], [null, null])
+  releaseFirst()
+  assert.equal((await going)?.state, 'current')
 })

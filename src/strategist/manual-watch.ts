@@ -274,6 +274,8 @@ export class ManualWatch {
   readonly enabled: boolean
   private readonly d: ManualWatchDeps
   private running: Promise<ManualCheck> | null = null
+  /** While a check runs: the stored check before it. Its restart marker is not shown meanwhile. */
+  private before: StoredCheck | null = null
   /** Set by a test: where the check reads FoxLeague and the agents' copy; the pause between two requests. */
   fetch: McpFetch | undefined = undefined
   readManual: () => string = () => readFileSync(MANUAL_FILE, 'utf8')
@@ -315,9 +317,13 @@ export class ManualWatch {
     return { manual, record, key: sha256(JSON.stringify([manual, record ?? null])) }
   }
 
-  /** The stored check when it is of the copy installed now; null when there is none or it is of another copy. */
-  private ofThisCopy(): StoredCheck | null {
-    const last = this.last()
+  /**
+   * The check to show: the stored one, or while a check runs the one before it (the stored one is then the marker
+   * "the check did not finish", meant for a check a restart cut short). Null when there is none or it is of another
+   * copy.
+   */
+  private shown(): StoredCheck | null {
+    const last = this.running ? this.before : this.last()
     return last && last.copy === this.copy().key ? last : null
   }
 
@@ -332,6 +338,7 @@ export class ManualWatch {
     const copy = this.copy()
     const last = this.last()
     if (last?.day === day && last.copy === copy.key) return Promise.resolve(last)
+    this.before = last
     const run = async (): Promise<ManualCheck> => {
       // Marked before anything is asked: a check that a restart cuts short is not made again the same day.
       this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key }))
@@ -341,6 +348,7 @@ export class ManualWatch {
     }
     this.running = run().finally(() => {
       this.running = null
+      this.before = null
     })
     return this.running
   }
@@ -348,14 +356,14 @@ export class ManualWatch {
   /** The morning summary's line: today's check; "could not check" when there is none for today of this copy. */
   line(now = Date.now()): string | null {
     if (!this.enabled) return null
-    const last = this.ofThisCopy()
+    const last = this.shown()
     if (!last || last.day !== zoneDate(now, this.d.zone)) return "Could not check FoxLeague's manual today."
     return manualLine(last)
   }
 
   /** For the dashboard: the last check of the copy installed now and its notice. */
   view(now = Date.now()): ManualView {
-    const last = this.enabled ? this.ofThisCopy() : null
+    const last = this.enabled ? this.shown() : null
     if (!last) return { enabled: this.enabled, state: null, pages: [], why: null, synced: null, at: null, day: null, text: null }
     const text = manualLine(last, last.day === zoneDate(now, this.d.zone) ? 'today' : `on ${last.day}`)
     return { enabled: true, state: last.state, pages: last.pages, why: last.why, synced: last.synced, at: last.at, day: last.day, text }
