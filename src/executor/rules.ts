@@ -1342,12 +1342,15 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // FoxLeague refuses a create whose blocking window overlaps any live tournament's: check it first. The first free
       // start is named as the minute itself: whole hours from now would be stale by the next plan and miss a narrow gap.
       // The next plan reads it, so it is searched from 2 hours after the latest moment that plan's create can run
-      // (R74A-1): the 2-hour floor of this moment would be about an hour ahead by then.
+      // (R74A-1): the 2-hour floor of this moment would be about an hour ahead by then. The next plan reads the refusal
+      // cut to 300 characters after the action's description (a title of up to 60): the start comes first, then the
+      // taken window, so a cut takes the window and never the minute (R74A-4).
       const taken = clash(s.market.slots ?? [], blockingWindow(a.format, a.max_teams, Boolean(a.home_and_away), startsAt))
       if (taken) {
         const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
-        return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC); ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it)` : 'no free start the next plan can still create in the next 72 hours'}`)
+        const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
+        return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next 72 hours (${takenWindow})`}`)
       }
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)

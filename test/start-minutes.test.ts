@@ -357,6 +357,38 @@ test('R74A-2 a gap open now that is too short once that room is added is not off
   }
 })
 
+// R74A-4 (the GitHub re-review of PR #74): the next plan reads a refusal only as a line of its activity log, cut to
+// 300 characters (txt in renderPlanRequest). The first free start stood at the end of the clash refusal, after the
+// action's description and the taken window, so a long title cut the minute ("starts_at 2026-11-…"). Seen through the
+// plan request itself, not the summary: it failed on 016bc07 and passes now.
+const LONG_TITLE = 'Evening Cup of the Northern Valley Clubs for Steady Managers'
+
+test('R74A-4 a title of 60 characters: the next plan still reads the whole first free start a clash names, on a public create with an OVR range and on a private groups_knockout', async () => {
+  assert.equal(LONG_TITLE.length, 60, 'the longest title parseAction takes')
+  const eight = { type: 'create_tournament', title: LONG_TITLE, format: 'groups_knockout', tier: 'silver', max_teams: 8, min_teams: 6, entry_fee_foxsy: 1000, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
+  const cases = [
+    // The busy calendar: a 3-team round robin fits from 19:48 to 19:51; 19:47 clashes with T901.
+    { name: 'public round robin of 3 with an OVR range', action: trio({ title: LONG_TITLE, starts_at: `${DAY}T19:47Z`, ovr_min: 60, ovr_max: 80 }), s: busyCalendar() },
+    // Taken until 18:48 and free after it: 8 teams in groups fit from 19:48; 19:47 clashes with T901.
+    { name: 'private groups_knockout of 8', action: { ...eight, starts_at: `${DAY}T19:47Z`, invite_user_ids: [901, 902, 903, 904, 905, 906, 907] }, s: (() => { const s = snapshot(); s.market.slots = [{ id: 901, title: 'Before', start: Date.now() - H, end: at('18:48') }]; return s })() },
+  ]
+  const read: Record<string, string | undefined> = {}
+  const lines: string[] = []
+  for (const c of cases) {
+    const m = setup({ fox: { bestXiOvr: async () => ({ best_xi_ovr: 70 }) } })
+    const [r] = await m.exec.run(m.agent(), dryWallet, c.s, [{ action: parseAction(c.action), reason: '' }])
+    assert.equal(r!.status, 'refused', `${c.name}: ${r!.summary}`)
+    assert.match(r!.summary, /time slot taken by T901/, c.name)
+    const text = renderPlanRequest({ snapshot: c.s, settings: TEST_SETTINGS, budget: budgetView(m.store, 0, TEST_SETTINGS, true, new Date()), recent: m.store.planHistory(0, 20), dryRun: true })
+    const line = text.split('\n').find(l => l.startsWith('- ') && l.includes('[refused]') && l.includes('time slot taken by T901')) ?? ''
+    assert.ok(line, `${c.name}: the refusal is in the recent activity`)
+    read[c.name] = FIRST_FREE.exec(line)?.[1]
+    lines.push(line)
+  }
+  // The whole minute, in the form the parser takes, in both.
+  assert.deepEqual(read, Object.fromEntries(cases.map(c => [c.name, `${DAY}T19:48Z`])), lines.join('\n'))
+})
+
 test('R74A record: the two rows of the GitHub review of PR #74, in its section', () => {
   const review = readFileSync(join(import.meta.dirname, '..', 'docs/SECURITY-REVIEW.md'), 'utf8')
   const start = review.indexOf('\n## A tournament start to the minute (2026-11-15)\n')
