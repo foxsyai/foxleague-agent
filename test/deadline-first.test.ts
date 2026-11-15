@@ -304,3 +304,102 @@ test('R70A-1: a gated match listed before a deadline action keeps the plan\'s or
   assert.deepEqual(r.kept.map(k => +(k.offset / MIN).toFixed(2)), [11, 11.5])
   assert.deepEqual(r.dropped, [])
 })
+
+// R70A-2 (GitHub re-review of PR #70): moving the actions before a deadline action earlier could keep a match that the
+// schedule without deadlines dropped, and that match's gate then held the deadline action past its deadline; or drop
+// one it kept. The drops are now decided as without deadlines first. Each test failed on 90adee0 before the fix.
+
+const seq = (...xs: number[]) => () => xs.shift() ?? 0
+const offsets = (r: ReturnType<typeof scheduleActions>) => r.kept.map(k => +(k.offset / MIN).toFixed(2))
+
+test('R70A-2: a match dropped without deadlines stays dropped, so its gate cannot hold the deadline action after it past its deadline', () => {
+  const first = act({ type: 'play_match', match_type: 'ranked' })
+  const second = act({ type: 'play_match', match_type: 'ranked' })
+  const leave = act({ type: 'leave_tournament', tournament_id: 5976 })
+  const base = { windowMs: 48 * MIN, gapMs: 30_000 }
+  // Without deadlines: the first ranked at its draw (33), the second gated to 49, past the window, so it is dropped;
+  // the leave at its draw (34).
+  const plain = scheduleActions([first, second, leave], { ...base, random: seq(33 / 48, 33 / 48, 34 / 48) })
+  assert.deepEqual(offsets(plain), [33, 34])
+  assert.deepEqual(plain.dropped.map(d => d.p), [second])
+  // The leave's deadline at 39 minutes, so its latest moment is 34. Before the fix the first ranked moved to 31, the
+  // second was kept at 47 and the leave ran at 47.5, 8.5 minutes after its deadline.
+  const r = scheduleActions([first, second, leave], { ...base, random: seq(33 / 48, 33 / 48, 34 / 48), deadlines: [null, null, 39 * MIN] })
+  assert.deepEqual(r.dropped.map(d => d.p), [second], 'the same match dropped as without deadlines')
+  assert.deepEqual(r.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
+  assert.ok(r.kept.at(-1)!.offset <= 34 * MIN, `the leave runs at ${(r.kept.at(-1)!.offset / MIN).toFixed(2)} min; its deadline is at 39, its latest moment at 34`)
+  // The first ranked 90 s before the leave's latest moment (DL-2), the leave at it.
+  assert.deepEqual(r.kept.map(k => k.p), [first, leave])
+  assert.deepEqual(offsets(r), [32.5, 34])
+})
+
+test('R70A-2: a match kept without deadlines stays kept when a deadline action after it moves the actions before it earlier', () => {
+  const first = act({ type: 'play_match', match_type: 'ranked' })
+  const second = act({ type: 'play_match', match_type: 'ranked' })
+  const casual = act({ type: 'play_match', match_type: 'casual' })
+  const leave = act({ type: 'leave_tournament', tournament_id: 5976 })
+  const base = { windowMs: 48 * MIN, gapMs: 30_000 }
+  const draws = [33 / 48, 33 / 48, 33.5 / 48, 34 / 48]
+  // Without deadlines: the second ranked dropped (gated to 49), the casual kept at 46, 13 minutes after the first.
+  const plain = scheduleActions([first, second, casual, leave], { ...base, random: seq(...draws) })
+  assert.deepEqual(plain.dropped.map(d => d.p), [second])
+  assert.deepEqual(offsets(plain), [33, 46, 46.5])
+  // Before the fix the first ranked moved to 29.5, the second was kept at 45.5 and the casual dropped (gated to 58.5).
+  const r = scheduleActions([first, second, casual, leave], { ...base, random: seq(...draws), deadlines: [null, null, null, 39 * MIN] })
+  assert.deepEqual(r.dropped.map(d => d.p), [second], 'the same match dropped as without deadlines')
+  assert.deepEqual(r.kept.map(k => k.p), [first, casual, leave], 'the casual kept as without deadlines')
+  // Each as early as without deadlines or earlier. The casual's gate still holds the leave past its deadline: the
+  // open point "a match listed before a deadline action keeps its gates", 2 minutes sooner than without deadlines.
+  assert.deepEqual(offsets(r), [31, 44, 44.5])
+})
+
+test('R70A-2: over random plans and draws, deadlines drop exactly what the schedule without them drops and never place an action later', () => {
+  // A seeded generator (mulberry32), so every run sees the same 600 cases.
+  let state = 0x70a2
+  const rand = () => {
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), 1 | state)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+  const pick = <T>(xs: T[]): T => xs[Math.floor(rand() * xs.length)]!
+  const kinds: { raw: unknown; deadline: boolean }[] = [
+    { raw: { type: 'play_match', match_type: 'ranked' }, deadline: false },
+    { raw: { type: 'play_match', match_type: 'casual' }, deadline: false },
+    { raw: { type: 'train', player_nonce: 1, attribute: 'speed' }, deadline: false },
+    { raw: { type: 'sync' }, deadline: false },
+    { raw: { type: 'leave_tournament', tournament_id: 5976 }, deadline: true },
+    { raw: { type: 'bid', nonce: 4242, foxsy: 5000 }, deadline: true },
+  ]
+  const failures: string[] = []
+  for (let c = 0; c < 600; c++) {
+    const windowMs = pick([48 * MIN, 48 * MIN, 48 * MIN, 96 * MIN, 24 * MIN, 0])
+    const gapMs = pick([30_000, 30_000, 60_000])
+    const n = 1 + Math.floor(rand() * 7)
+    // Distinct objects, so each action of the plan is told apart in the result.
+    const plan = Array.from({ length: n }, () => pick(kinds))
+    const actions = plan.map(k => act(k.raw))
+    const deadlines = plan.map(k => !k.deadline ? null : rand() < 0.1 ? 'unread' as const : (rand() * (windowMs + 25 * MIN)) - 5 * MIN)
+    const lastMatchMs = rand() < 0.5 ? null : -rand() * 20 * MIN
+    const lastRankedMs = rand() < 0.5 ? null : -rand() * 20 * MIN
+    // Sorted as scheduleActions sorts them, so draws[i] is action i's moment in the failure text.
+    const draws = Array.from({ length: n }, () => rand()).sort((a, b) => a - b)
+    const o = { windowMs, gapMs, lastMatchMs, lastRankedMs }
+    const plain = scheduleActions(actions, { ...o, random: seq(...draws) })
+    const r = scheduleActions(actions, { ...o, random: seq(...draws), deadlines })
+    const at = new Map(plain.kept.map(k => [k.p, k.offset]))
+    const show = () => `case ${c}: ${actions.map((a, i) => `${a.action.type === 'play_match' ? a.action.match_type : a.action.type}@${(draws[i]! * windowMs / MIN).toFixed(1)}${deadlines[i] === null ? '' : `/dl ${deadlines[i] === 'unread' ? 'unread' : (Number(deadlines[i]) / MIN).toFixed(1)}`}`).join(', ')}; window ${windowMs / MIN}, gap ${gapMs / 1000} s, last match ${lastMatchMs === null ? 'none' : (lastMatchMs / MIN).toFixed(1)}, last ranked ${lastRankedMs === null ? 'none' : (lastRankedMs / MIN).toFixed(1)}`
+    const droppedPlain = plain.dropped.map(d => actions.indexOf(d.p))
+    const dropped = r.dropped.map(d => actions.indexOf(d.p))
+    if (JSON.stringify(dropped) !== JSON.stringify(droppedPlain) || JSON.stringify(r.dropped.map(d => d.reason)) !== JSON.stringify(plain.dropped.map(d => d.reason))) {
+      failures.push(`${show()}: dropped ${JSON.stringify(dropped)} with deadlines, ${JSON.stringify(droppedPlain)} without`)
+      continue
+    }
+    const later = r.kept.filter(k => !at.has(k.p) || k.offset > at.get(k.p)!)
+    if (later.length) failures.push(`${show()}: ${later.map(k => `${actions.indexOf(k.p)} at ${(k.offset / MIN).toFixed(2)} (without deadlines ${at.has(k.p) ? (at.get(k.p)! / MIN).toFixed(2) : 'dropped'})`).join(', ')} later with deadlines`)
+    // The plan's order holds, at least the gap apart.
+    const order = r.kept.map(k => actions.indexOf(k.p))
+    if (order.some((x, i) => i > 0 && (x <= order[i - 1]! || r.kept[i]!.offset < r.kept[i - 1]!.offset + gapMs))) failures.push(`${show()}: order or gap broken`)
+  }
+  assert.deepEqual(failures.slice(0, 5), [], `${failures.length} of 600 cases fail`)
+})
