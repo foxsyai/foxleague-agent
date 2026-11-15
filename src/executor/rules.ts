@@ -841,7 +841,7 @@ function canFuseReason(c: CanFuse): string {
 
 /**
  * The fusion that mints its result, from FoxLeague's switch on (the agent's own card checks passed before): FoxLeague's
- * prepare checked the cards on chain, the wallet spacing, the injuries and the bans, and signed the new card. The agent
+ * prepare checked the cards on chain, the wallet spacing, the injuries and the bans before it signed the new card. The agent
  * signs its answer only when it is exactly the fusion planned (fusionMintTx) and pays exactly the fee of the rarity,
  * within the max shop payment (the FOXSY in the wallet is checked by the caller). An unanswered prepare is no "yes";
  * FoxLeague's refusal is its word.
@@ -1504,7 +1504,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (inputs.some(c => c.rarity !== rarity)) return refuse('all three cards must be the same rarity')
       if (rarity === 'Legendary') return refuse('a Legendary cannot be fused')
       // FoxLeague's fusion switch (fusion_mint): the old fusion until it, the fusion that mints its result from it; none
-      // while FoxLeague updates fusion, in the minutes before the switch, or when the switch cannot be read.
+      // while FoxLeague updates fusion, in the minutes before the switch or when the switch cannot be read.
       const mode = fusionMode(cfg, ctx.now)
       if (mode.mode === 'closed') return refuse(mode.why)
       const mint = mode.mode === 'mint'

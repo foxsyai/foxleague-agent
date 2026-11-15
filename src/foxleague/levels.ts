@@ -52,7 +52,7 @@ export const FUSION_SWITCH_MARGIN_MS = 10 * 60_000
  * Which fusion FoxLeague runs now (its `fusion_mint` switch): `pool`, the old fusion, a card drawn from the contract's
  * pool (`liveFrom`: when that ends, null when no switch is set); `mint`, the fusion that mints its result, prepared by
  * FoxLeague (from `live_from` the contract refuses the old one); `closed`, no fusion now (`why`): FoxLeague says fusion
- * is being updated, the switch is less than FUSION_SWITCH_MARGIN_MS away, or the block cannot be read. Unknown is not
+ * is being updated, the switch is less than FUSION_SWITCH_MARGIN_MS away or the block cannot be read. Unknown is not
  * the old fusion: FoxLeague serves the block on mainnet since 2026-11-13, and one that is not exactly it closes fusion.
  */
 export type FusionMode = { mode: 'pool'; liveFrom: string | null } | { mode: 'mint'; liveFrom: string | null } | { mode: 'closed'; why: string }

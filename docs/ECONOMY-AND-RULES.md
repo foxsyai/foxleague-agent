@@ -9,6 +9,8 @@ number comes from and where a client can read the live value.
   per rarity, the per-rarity match waiver, the partial cooldown waiver, the transfer lock of a card moved
   under its gate, ranked pairs once per 24 hours, the removed `GET /api/register/pool-status`.
 - **Updated for FoxLeague `origin/main` at `9ddc0f911`** (2026-10-23, manual `565a902de`): section 19.
+- **Updated for FoxLeague `origin/main` at `56e5b9855`** (2026-11-13, manual `9ebcbc52d`; the players contract's fusionMint
+  upgrade on mainnet 2026-11-13 21:32:50 UTC): sections 8, 9, 10, 14, 17 and 20.
 - **Deployed values can differ from code defaults.** The deploy seeds many registry keys over the code
   defaults and an admin can change any key at runtime. Section 15 lists every value where the code
   default and the mainnet value disagree. When a public endpoint serves a value, read it there.
@@ -197,7 +199,7 @@ What the agent does with it: section 25 of `docs/FOXLEAGUE-INTEGRATION.md`.
 |---|---|---|---|
 | Sync fee | **10 FOXSY per card**; excess refunded; goes to the treasury | EM:52; Manual `mechanics/sync.mdx:37`; CC:24; PNFT:1648-1664, `:1757-1767` | CFG `sync_cost_foxsy`; VIEW `getSyncCost` |
 | What is written | the 7 stats (capped by rarity), level, experience, condition, the competitive count (as `matches_played`), goals, assists | `backend/src/routes/sync.rs:1900-1996`; PNFT:89-112 | |
-| When needed | before fusion or listing (the contract reads on-chain values); matches use the last synced stats, so training counts only after a sync; not needed merely to play | Manual `mechanics/sync.mdx:54-65` | |
+| When needed | before listing; before fusion until FoxLeague's fusion switch (`fusion_mint.live_from`, 2026-11-20 14:00 UTC on mainnet; from it FoxLeague signs the live stats and matches, section 10) (the contract reads on-chain values); matches use the last synced stats, so training counts only after a sync; not needed merely to play | Manual `mechanics/sync.mdx:54-65` | |
 | Signed payload validity | one per wallet at a time, newer than the last sync, at most 1 h old, at most 60 s in the future | PNFT:1618-1636 | VIEW `getLastSyncTimestamp(address)` |
 | What makes a card "dirty" | every training session and every match appearance, even with no synced field changed | `training.rs:667`; `backend/src/db.rs:680-744` | `GET /api/players/{address}` `stats_dirty` |
 
@@ -217,6 +219,7 @@ Every product is paid with `shopPay` into the players contract treasury and conf
 | Reduce Cooldown (transfer waiver) | per day above a **72 h floor**, by rarity: **Common 25, Uncommon 75, Rare 200, Epic 500, Legendary 1,250 FOXSY**; whole days rounded up; all remaining days or nothing. The rate is the 10 percent marketplace fee on the rarity reference price (5,000 / 15,000 / 40,000 / 100,000 / 250,000) spread over 20 days | per card | EM:47; Manual `mechanics/shop.mdx:99-113`; `shop.cooldown_waiver_fee_multiple_pct` 100 (CR:702-703), `shop.cooldown_waiver_floor_hours` 72 (CR:758-759), both SEED:96-97; reference prices CR:1996-2005; `shop.rs:554-612` (SEED:93 `shop.cooldown_waiver_price_per_day 15000` is only the unused flat fallback) | `GET /api/shop/waive-cooldown/quote` (auth) |
 | Medicine (from the injuries' switch, section 6a) | per day saved, by rarity: **Common 100, Uncommon 200, Rare 300, Epic 400, Legendary 500 FOXSY**; whole days only | a third of every injury is always served (1 day of 3, 3 of 9, 9 of 27), so at most 2, 6 or 18 days; only the wallet that holds the card; confirmed on `POST /api/shop/medicine` (not `/shop/confirm`), which quotes again and takes the exact amount | Manual `mechanics/shop.mdx` "Medicine"; `injury_medicine.rs`; `routes/shop.rs` `buy_injury_medicine` | `GET /api/shop/medicine/quote?player_nonce=&days=` (the prices are not in `/api/config`) |
 | Badge re-roll | **1,000 FOXSY** after 3 free | | section 2 | |
+| Purchase confirmations | at most **10 per wallet in 60 s**, shared by `POST /api/shop/confirm`, `/api/shop/medicine`, `/api/shop/ranked-ticket` and `/api/shop/waive-cooldown` (since 2026-11-11, #701); past it HTTP 429, code `tx_pending`: the payment is kept, confirm the same hash again | | Manual `mechanics/economy-map.mdx` "Shop purchase confirmations"; `shop.confirm_max_per_window` 10, `shop.confirm_window_seconds` 60 | |
 | Fusion waivers | 75 FOXSY per day (every day or some); per match Uncommon 20, Rare to Legendary 100, none for Common | | section 10 | section 10 |
 | Automatic refunds | a payment that cannot be delivered is refunded automatically; an unconfirmed settled payment is refunded after **30 min**; at most **10 automatic refunds per wallet per hour** (then by hand); contract cap 1,000,000 FOXSY per day for all refunds | | Manual `legal/terms.md:47`, `mechanics/shop.mdx:142`; `shop.unconfirmed_refund_grace_secs` 1800 (CR:3039-3042); `shop.refund_max_per_wallet_window` 10, `shop.refund_window_secs` 3600 (CR:3051-3057); CC:46-49 `TREASURY_REFUND_DAILY_CAP_FOXSY=1000000` | |
 
@@ -226,7 +229,10 @@ Every product is paid with `shopPay` into the players contract treasury and conf
 
 | Rule | Mainnet value | Sources | Live value from |
 |---|---|---|---|
-| Inputs | 3 cards of the same rarity, synced, in the wallet, not listed; one output of the next rarity from a pre-minted pool (per rarity and position); inputs are burned | EM:38; Manual `mechanics/fusion.mdx:19-26`, `:84`; PNFT:2289-2531 | VIEW `getFusionPoolCount(level, position)` |
+| Fusion switch | until `live_from` the old fusion below (a card drawn from the pool); from it every fusion mints its result (`fusionMint`) and the old one reverts; `paused`: no fusion of either kind can run | Players contract upgrade of 2026-11-13 21:32:50 UTC (code hash `e628771c...`, `getFusionMintVersion` 2); Manual `mechanics/fusion.mdx` (the note at the top) | CFG `fusion_mint {live, live_from, paused}` (`2026-11-20T14:00:00Z` on mainnet, read 2026-11-15); VIEW `getFusionMintLiveFrom` |
+| Inputs | 3 cards of the same rarity, in the wallet, not listed; synced until the switch (from it the game signs the live stats and competitive matches); until the switch one output of the next rarity from a pre-minted pool (per rarity and position); inputs are burned | EM:38; Manual `mechanics/fusion.mdx:19-26`, `:84`; PNFT:2289-2531 | VIEW `getFusionPoolCount(level, position)` (until the switch) |
+| The new card (from the switch) | prepared and signed by FoxLeague (`POST /api/fusion/prepare`, valid 10 minutes), minted in the fusion transaction: each of the 7 stats = (the three inputs' values added up) x the new cap / (3 x the old cap), rounded down, then at least the output rarity's floor (**Uncommon 22, Rare 30, Epic 36, Legendary 40**), at most its cap; level 1, condition 100, no matches; a new face, name and country, a random shirt; an input's injury and ban carry over as before. A stat reaches the new cap only when all three hold it at their cap (Commons at 30, 5 and 5 give 24) | Manual `mechanics/fusion.mdx` "Fusion that makes a new card", "A worked example"; `backend/src/fusion_mint.rs` `mint_stats`; the contract's `fusion_mint_stats` | the prepare's `preview`; VIEW `getFusionMintFloor(level)` |
+| Gas | old fusion **22,800,000**; `fusionMint` the limit served with the prepare (about 33.5M), signed only inside 24.3M to 48.6M | `frontend/src/lib/gasLimits.ts` | the prepare's `gas_limit` |
 | Fee | **Common to Uncommon 100, Uncommon to Rare 200, Rare to Epic 400, Epic to Legendary 800 FOXSY**; at least the fee, excess refunded; returned with the cards if the fusion reverts; Legendary cannot be fused | EM:39; Manual `mechanics/fusion.mdx:44-49`; CC:20-23 `FUSION_COST_0..3` | CFG `fusion_costs_foxsy`; VIEW `getFusionCost(level)` |
 | Competitive matches per input | **The match gate of its rarity** since 2026-10-12: Common **5**, Uncommon **15**, Rare **45**, Epic **135** (Legendary 405, for listing); waived matches count | EM:38; players contract `setRarityMatchGate` rows (deploys.yaml 2026-10-12) | CFG `rarity_match_gate.rarities[].gate`; VIEW `getRarityMatchGate(level)`. The old `fusion_min_matches` (20) is still served but no longer applies |
 | Matches that must really be played | Common **5**, Uncommon **5**, Rare **15**, Epic **45**, Legendary **135** | EM:38; the same rows | CFG `rarity_match_gate.rarities[].floor` |
@@ -304,6 +310,8 @@ squad in 7 days for 100 FOXSY (2 days for 1,000 FOXSY with match waivers); Commo
 |---|---|---|---|
 | Relayed registrations | **3 attempts per wallet per 10 min**; **5,000 per day** platform-wide; past the cap onboarding closes for the day | EM:58; `relayer_v3.rate_limit_per_wallet` 3, window 600 s, `relayer_v3.global_daily_cap` 5000 (CR:2080-2097); `relayer_v3.enabled` SEED:41 | CFG `relays_remaining_today`, `relayer_v3_enabled` |
 | Relay gas ceiling | 12,500,000 default | `relayer_v3.max_gas_limit` (CR:2156-2164) | CFG `relayer_max_gas_limit` |
+| Relays that cannot succeed | refused before anything is sent (since 2026-11-11, #717): a relay of the wallet still in flight or another transaction of the wallet in the pool (HTTP 409), a nonce that is not the account's next or a relayed registration of the wallet that failed on chain in the last 24 h (403), the wallet or its FOXSY balance unreadable (500, nothing sent); 20 wallets failing on chain within an hour switch the relayer off | `backend/src/routes/onboarding.rs` `relay_registration` (G16, G17, G18, G14) | |
+| Free onboarding badges | 5 per wallet for life and **10 per connection per UTC day** (300 a day overall), only for the free draw of a wallet with no team; a registered team's 3 free regenerations are not counted | Manual `getting-started/onboarding.mdx`; `badge.onboarding_per_client_daily` 10 | |
 | EGLD bonus amount | **0.1 EGLD** per wallet | EM:57; Manual `getting-started/onboarding.mdx:74`; `onboarding.bonus_egld_send_wei` default **0.05 EGLD** (CR:2234-2235) but SEED:42 from `BONUS_EGLD_PER_WALLET=0.1` (`deploy/mainnet/inputs.example.env:27`) | not public |
 | Who gets it | the **first 100 wallets** (252 until 2026-09-28) that register through the normal path holding **less than 0.01 EGLD** | EM:57; `onboarding.bonus_egld_max_recipients` default 0 = unlimited (CR:2246-2247), SEED:47 insert-once, set by hand per `seed.sh:44-46` (252 at launch, 100 since 2026-09-28, manual PR #263); `inputs.example.env:28-31`; gate `relayer_v3.bonus_egld_balance_gate_wei` 1e16 (CR:2072-2074); `backend/src/routes/registration.rs:1016-1130` | not public |
 | Daily bonus cap | 100 EGLD per rolling 24 h | `onboarding.bonus_egld_daily_cap_wei` default **5 EGLD** (CR:2242-2248) but SEED:43 from `inputs.example.env:36` | not public |
@@ -377,7 +385,8 @@ Public, raw JSON (no envelope), whole FOXSY unless the field ends in `_wei`
 FOXSY value), `fusion_costs_foxsy[4]`, `fusion_min_matches`, `fusion_cooldown_seconds`,
 `fusion_card_cooldown_seconds`, `fusion_cooldown_waiver_price_per_day` (+ `_wei`),
 `fusion_cooldown_waiver_floor_seconds`, `fusion_match_waiver_price_per_match` (+ `_wei`),
-`fusion_match_waiver_floor`, `rarity_match_gate {rows_live, rules_live, live_from,
+`fusion_match_waiver_floor`, `fusion_mint {live, live_from, paused}` (the fusion switch, since 2026-11-13),
+`rarity_match_gate {rows_live, rules_live, live_from,
 transfer_lock_hours_per_missing_match, rarities[{rarity, level, gate, floor, price_per_match (+ _wei),
 waiver_enabled, row_set}]}` (since 2026-10-12; each row holds what the contract applies),
 `marketplace_fee_percent`, `auction_duration_seconds`,
@@ -486,3 +495,18 @@ among the called-up players by contribution. Nothing of it exists in the code on
   costs up to 3 times the base at 39 and a card over 30 regains half as fast), never while a 1v1 of ours waits for
   an opponent, never while a tournament of ours is under way with no next match listed.
 
+## 20. Changes from 2026-11-10 to 2026-11-13 (FoxLeague `56e5b9855`, manual `9ebcbc52d`)
+
+- **Fusion that mints its result** (#711, #736; section 10). The players contract carries it since its upgrade of
+  2026-11-13 21:32:50 UTC; its switch is `fusion_mint.live_from` (2026-11-20 14:00 UTC on mainnet). From it: no pool, no
+  sync, each stat the average of the three inputs translated to the new rarity, at least the floor. The agent refuses
+  any fusion while the switch cannot be read, while FoxLeague says fusion is being updated and in the 10 minutes before
+  the switch; from it, it signs FoxLeague's prepared `fusionMint` only when it is exactly the fusion planned
+  (`docs/FOXLEAGUE-INTEGRATION.md` section 13.5).
+- **Gas** (the same upgrade): every players-contract call uses about 834,300 more. The agent signs FoxLeague's new
+  limits: fusion 22.8M, waivers 17.5M, shopPay 14M, auction list 17.2M, bid 15.8M, cancel 13.9M; registerAndPay keeps
+  12M (the relay ceiling); a sync's served limit is 18M + 3M a card.
+- **Relay guards** (#717, section 14) and **shop confirmation budget** (#701, section 9).
+- **Manual only:** a forfeit is not broadcast (its result shows at its kickoff); the full replay of a match may be kept
+  on Autonomys; My interests on the marketplace; a wallet that holds 18 cards registers without the fee (section 2,
+  unchanged in the code).

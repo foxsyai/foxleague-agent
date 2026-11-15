@@ -230,7 +230,7 @@ const MINT_EXPIRY = { minLeftS: 120, maxAheadS: 20 * 60 } as const
  * `MultiESDTNFTTransfer@<players>@04@<FOXSY>@00@<fee>@<FXLP>@<nonce>@01 x 3@fusionMint@<position>@<expiry>@<signature>
  * @<new card>@<nonce1>@<attrs1>@<nonce2>@<attrs2>@<nonce3>@<attrs3>`: the fee the checks allowed and nothing more (the
  * cost the answer names too), the three planned cards in their order once each and as the signed inputs, the position
- * asked, an expiry with at least 2 minutes left, and a gas limit inside FUSION_MINT_GAS. Anything else throws.
+ * asked, an expiry with at least 2 minutes left and a gas limit inside FUSION_MINT_GAS. Anything else throws.
  */
 export function fusionMintTx(agentAddress: string, prep: FusionPrepared, expect: { feeAtomic: bigint; nonces: number[]; positionChoice: number; now: Date }): TxSpec {
   const fail = (why: string): never => {
