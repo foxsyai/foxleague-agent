@@ -581,3 +581,48 @@ test('R72A-3 while the day\'s check runs, the dashboard shows the check before i
   releaseFirst()
   assert.equal((await going)?.state, 'current')
 })
+
+test('R72A-4 without Telegram the service runs the day\'s check from the summary hour on, looks every hour and stops looking at stop', async t => {
+  /** A service without Telegram (summary at 09:00 UTC) whose watch notes when it is asked for the day's check. */
+  const build = async (enabled = true) => {
+    const { svc, watch } = await service(foxleagueMcp().fetch)
+    const inner = svc as unknown as { telegram: unknown; armManualCheck: () => void }
+    inner.telegram = undefined
+    Object.assign(svc, { summaryZone: 'UTC', summaryHour: 9 })
+    const asked: string[] = []
+    Object.assign(watch, { enabled, today: () => (asked.push(new Date().toISOString().slice(0, 16)), Promise.resolve(null)) })
+    return { svc, arm: () => inner.armManualCheck(), asked }
+  }
+  const early = await build()
+  const late = await build()
+  const off = await build(false)
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: Date.parse('2026-11-16T05:00:00Z') })
+  const hours = (n: number) => {
+    for (let i = 0; i < n; i++) t.mock.timers.tick(3600_000)
+  }
+
+  // A start at 05:00: the first look three minutes later, then every hour; nothing is asked before 09:00.
+  early.arm()
+  off.arm()
+  t.mock.timers.tick(180_000)
+  hours(3)
+  assert.deepEqual(early.asked, [], 'before the summary hour nothing is asked')
+  hours(1)
+  assert.deepEqual(early.asked, ['2026-11-16T09:03'])
+  hours(2)
+  assert.deepEqual(early.asked, ['2026-11-16T09:03', '2026-11-16T10:03', '2026-11-16T11:03'], 'looked at every hour; the watch itself keeps it to once a day')
+
+  // A start after the summary hour asks at its first look.
+  late.arm()
+  t.mock.timers.tick(180_000)
+  assert.deepEqual(late.asked, ['2026-11-16T11:06'])
+
+  // At stop the timer is cleared: nothing more is asked, the next day either.
+  await early.svc.stop()
+  await late.svc.stop()
+  hours(30)
+  assert.equal(early.asked.length, 3, 'nothing after the stop')
+  assert.equal(late.asked.length, 1, 'nothing after the stop')
+  // Switched off (AGENT_MANUAL_CHECK=0): never asked.
+  assert.deepEqual(off.asked, [])
+})
