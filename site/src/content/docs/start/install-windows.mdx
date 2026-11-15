@@ -8,7 +8,12 @@ banner:
 import { Aside } from '@astrojs/starlight/components';
 import ComingSoon from '../../../components/ComingSoon.astro';
 
-{/* The short install video for Windows goes here, above the first paragraph, once it is made. */}
+<video controls preload="none" poster="/videos/install-windows.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
+  <source src="/videos/install-windows.mp4" type="video/mp4" />
+  <a href="/videos/install-windows.mp4">The install video</a> (54 seconds).
+</video>
+
+*The whole install on Windows in 54 seconds: the line, the questions, the dashboard, an update and the uninstall. The names and the wallet in it are examples.*
 
 On Windows the agent runs inside **Ubuntu**, a Linux that Windows itself runs (WSL 2). One line in PowerShell
 sets that up where it is missing and then starts the same guided installer as on Linux. Your wallet and keys stay

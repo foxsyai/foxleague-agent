@@ -599,9 +599,10 @@ cat <<'KEYS'
 
   2. Telegram, optional (a morning summary of every agent, talk to your manager):
      a. In Telegram, open BotFather:    https://t.me/BotFather
-     b. Send /newbot, pick a name and a username ending in bot.
+     b. Send /newbot, then give your agent's Telegram account a name and a username.
+        Telegram requires the username to end in "bot".
      c. Copy the token it sends you (it looks like 123456789:AAH...).
-     d. The installer then shows a 6-digit code: send it to your new Telegram bot.
+     d. The installer then shows a 6-digit code: send it to your agent's Telegram account.
 
   3. CEX top-up, optional (EGLD top-ups from an exchange, each one approved by you on Telegram).
      The example is Binance:

@@ -5,9 +5,9 @@ stack and look as docs.foxleague.ai (Astro 6 and Starlight 0.38, the FoxLeague b
 
 ```sh
 cd site
-npm install
-npm run dev          # http://localhost:4321 while writing
-npm run build        # static site in dist/
+npm ci --ignore-scripts   # no install script of a package runs on your computer
+npm run dev               # http://localhost:4321 while writing
+npm run build             # static site in dist/
 ```
 
 Pages are in `src/content/docs/`, the sidebar in `astro.config.mjs`. Screenshots of the dashboard come from a
@@ -16,6 +16,10 @@ throwaway demo install with made-up data; retake them after a dashboard change, 
 ```sh
 node --disable-warning=ExperimentalWarning site/scripts/screenshots.ts
 ```
+
+The install videos at the top of the three install pages (`public/videos/`) are drawn by `site/scripts/videos/`
+from the installers' own texts, on example values. When an installer line they show changes, `npm test` says so
+(`test/install-videos.test.ts`) and they are drawn again: `site/scripts/videos/README.md` says how.
 
 `public/og.png` is the link preview (1200×630) and `src/assets/hero.png` the home image, both from the launch
 media canvas.

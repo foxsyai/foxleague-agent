@@ -87,4 +87,4 @@ for one agent, a payment whose outcome is unclear, top-up codes and a League + K
 | `/topup <code> [EGLD]` | Approve it (with a smaller amount after the code, that much instead; more than proposed is refused) |
 | `/help` | The full list |
 
-Your Telegram bot answers only your own chat and ignores everyone else.
+Your agent's Telegram account answers only your own chat and ignores everyone else.

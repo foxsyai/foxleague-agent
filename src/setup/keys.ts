@@ -209,7 +209,7 @@ export async function telegramRecentChats(token: string, sinceMs: number): Promi
       result?: { update_id: number; message?: { chat: { id: number; type: string; username?: string; first_name?: string }; date?: number; text?: string } }[]
     }
     // A refusal (a webhook or another program reads this token's messages) is said, never taken for "no message yet".
-    if (!r.ok) throw new Error(`Telegram did not list the messages sent to your Telegram bot: ${r.description ?? 'unknown'}`)
+    if (!r.ok) throw new Error(`Telegram did not list the messages sent to your agent's Telegram account: ${r.description ?? 'unknown'}`)
     const list = r.result ?? []
     for (const u of list) {
       const m = u.message
@@ -220,7 +220,7 @@ export async function telegramRecentChats(token: string, sinceMs: number): Promi
     const keep = list.find(u => typeof u.message?.date === 'number' && u.message.date >= startedS - READER_LOOKS_BACK_S)
     offset = keep && keep !== list[0] ? keep.update_id : list.at(-1)!.update_id + 1
   }
-  throw new Error('too many messages wait at your Telegram bot to read them in one go: send the 6 digits again, then try once more')
+  throw new Error('too many messages wait at your agent\'s Telegram account to read them in one go: send the 6 digits again, then try once more')
 }
 
 /**
