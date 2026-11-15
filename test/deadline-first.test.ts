@@ -12,6 +12,8 @@ import { Mnemonic } from '@multiversx/sdk-core'
 import type { Config } from '../src/config.ts'
 import { Service, scheduleActions } from '../src/service.ts'
 import { parseAction, type PlannedAction } from '../src/executor/actions.ts'
+import { actionDeadline } from '../src/executor/deadlines.ts'
+import { BUSY_OPENS_MARGIN_S } from '../src/executor/rules.ts'
 import type { MarketListing, Tournament } from '../src/foxleague/types.ts'
 import type { AgentSnapshot } from '../src/snapshot/snapshot.ts'
 import { snapshot } from './fixtures.ts'
@@ -234,4 +236,71 @@ test('DL-7: every action with a time limit reads it from the plan\'s snapshot, w
   assert.equal(await one({ type: 'claim_refund', tournament_id: 5976 }, snapshot()), 47.52)
   assert.equal(await one({ type: 'create_challenge', tier: 'silver', stake_foxsy: 2500, target_user_id: 878, deadline_minutes: 240 }, snapshot()), 47.52)
   assert.equal(await one({ type: 'buy', product: 'xp_booster' }, snapshot()), 47.52)
+})
+
+// R70A-1 (GitHub review of PR #70): three behaviours of the change had no test that failed without them. Each test
+// below was proved by breaking its behaviour in the code for a moment, seeing it fail, then restoring the code.
+
+test('R70A-1: a League + Knockout join whose invitation is not in the snapshot has an unread deadline and runs early', async () => {
+  const t0 = Date.now()
+  const join = act({ type: 'join_tournament', tournament_id: 4122 })
+  // Its tournament is read (registration closes in 3 hours) but not the invitation the executor pays by.
+  const champions = open(4122, t0 + 3 * 60 * MIN, { format: 'league_knockout', max_teams: 36, starts_at: iso(t0 + 4 * 60 * MIN) })
+  const invitation = (id: number) => ({ tournament_id: id, title: 'x', tier: 'gold', entry_fee_foxsy: 5000, wave: 1, expires_at: iso(t0 + 45 * MIN), seats_lock_at: iso(t0 + 2 * 60 * MIN), can_accept: true, refusal: null, prize_atomic: null, tournament: null })
+  const listed = (invitations: ReturnType<typeof invitation>[] | null) => {
+    const s = snapshot()
+    s.market.openStandard = [champions]
+    s.auth!.invitations = invitations
+    return s
+  }
+  // The invitations could not be read, none is pending, or only another tournament's is: unknown, never "no limit"
+  // (by the registration deadline alone it would keep its random moment, hours before the invitation runs out).
+  assert.equal(actionDeadline(join.action, listed(null)), 'unread', 'the invitations could not be read')
+  assert.equal(actionDeadline(join.action, listed([])), 'unread', 'no invitation is pending')
+  assert.equal(actionDeadline(join.action, listed([invitation(4123)])), 'unread', 'only another tournament\'s invitation')
+  // With its own invitation, its expiry less 30 minutes (as in DL-7).
+  assert.equal(actionDeadline(join.action, listed([invitation(4122)])), t0 + 15 * MIN)
+  // Unread runs at the first slot.
+  assert.deepEqual(mins(await runPlanned(t0, [join], listed(null), () => 0.99)), [0])
+})
+
+test('R70A-1: the earliest copy of a tournament sets its deadline, and an entry is free only when every copy says so', () => {
+  const t0 = Date.now()
+  const join = act({ type: 'join_tournament', tournament_id: 5891 })
+  const paid = BUSY_OPENS_MARGIN_S * 1000
+  const far = { starts_at: iso(t0 + 5 * 60 * MIN) }
+  // The same 1v1 in its own tournaments (registration closes in 40 minutes) and among the open ones (in 12): the
+  // earliest counts, whichever list is read first.
+  const twice = snapshot()
+  twice.auth!.myTournaments!.active.push(open(5891, t0 + 40 * MIN, far))
+  twice.market.openChallenges = [open(5891, t0 + 12 * MIN, far)]
+  assert.equal(actionDeadline(join.action, twice), t0 + 12 * MIN - paid)
+  // A free Bronze copy next to a copy that says paid is a paid entry, the stricter margin: a Bronze copy with a fee,
+  // or the same id among the 1v1s aimed at this team.
+  const bronze = (fee: number) => open(5891, t0 + 12 * MIN, { ...far, tier: 'bronze', entry_fee_foxsy: fee, max_teams: 8 })
+  const feeCopy = snapshot()
+  feeCopy.market.openStandard = [bronze(0)]
+  feeCopy.auth!.myTournaments!.active.push(bronze(25))
+  assert.equal(actionDeadline(join.action, feeCopy), t0 + 12 * MIN - paid, 'a Bronze copy with a fee')
+  const forMe = snapshot()
+  forMe.market.openStandard = [bronze(0)]
+  forMe.auth!.challengesForMe = [{ tournament_id: 5891, title: 'x', creator_user_id: 877, creator_team_name: 'Rival', entry_fee_foxsy: 2500, deadline: iso(t0 + 12 * MIN) }]
+  assert.equal(actionDeadline(join.action, forMe), t0 + 12 * MIN - paid, 'a 1v1 aimed at this team')
+  // Every copy a free Bronze: free, no 120 s.
+  const allFree = snapshot()
+  allFree.market.openStandard = [bronze(0)]
+  allFree.auth!.myTournaments!.active.push(bronze(0))
+  assert.equal(actionDeadline(join.action, allFree), t0 + 12 * MIN)
+})
+
+test('R70A-1: a gated match listed before a deadline action keeps the plan\'s order; the deadline action waits behind it', () => {
+  const ranked = act({ type: 'play_match', match_type: 'ranked' })
+  const leave = act({ type: 'leave_tournament', tournament_id: 5976 })
+  // The last ranked start 5 minutes before the plan holds the ranked match to minute 11; the leave's deadline is at
+  // 12, so its latest moment is 7. The order is never changed to pass the match: the leave runs right behind it, at
+  // 11.5, past its latest moment but before its deadline (the executor checks it again when it runs).
+  const r = scheduleActions([ranked, leave], { windowMs: 48 * MIN, gapMs: 30_000, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN, deadlines: [null, 12 * MIN] })
+  assert.deepEqual(r.kept.map(k => k.p.action.type), ['play_match', 'leave_tournament'], 'the plan\'s order')
+  assert.deepEqual(r.kept.map(k => +(k.offset / MIN).toFixed(2)), [11, 11.5])
+  assert.deepEqual(r.dropped, [])
 })
