@@ -161,8 +161,9 @@ test('SM-5 the whole hours still work: parsed as before, created that many hours
   const start = Date.parse(String(created[0]!.starts_at))
   assert.ok(start >= before + 24 * H && start <= Date.now() + 24 * H, `24 hours after the run: ${created[0]!.starts_at}`)
   assert.equal(Date.parse(String(created[0]!.deadline)), start - 60 * MIN)
-  // In the busy calendar: the first free start in the form that lands in the gap.
-  const r = await dry(parseAction(trio({ starts_in_hours: 50 })))
+  // In the busy calendar: the first free start in the form that lands in the gap. 24 hours always falls inside T901
+  // (it runs to 18:48 on DAY, at least 42 hours ahead); 50 hours landed in the gap when run from 17:48 to 17:51 UTC.
+  const r = await dry(parseAction(trio({ starts_in_hours: 24 })))
   assert.equal(r.status, 'refused', r.summary)
   assert.match(r.summary, new RegExp(`the first free start for this format and size is starts_at ${DAY}T19:48Z`))
 })
