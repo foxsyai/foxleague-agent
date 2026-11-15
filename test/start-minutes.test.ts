@@ -17,9 +17,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describeAction, parseAction, type Action } from '../src/executor/actions.ts'
+import { budgetView } from '../src/executor/budget.ts'
 import { actionDeadline } from '../src/executor/deadlines.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
+import { renderPlanRequest } from '../src/strategist/strategist.ts'
 import { TEST_SETTINGS, dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 const H = 3600_000
@@ -260,12 +262,20 @@ const JITTER = TEST_SETTINGS.tickJitterMinutes * MIN
 const WINDOW = 0.8 * TICK
 const CALL = 13 * MIN
 const ceilMin = (ms: number) => Math.ceil(ms / MIN) * MIN
+const floorMin = (ms: number) => Math.floor(ms / MIN) * MIN
 const FIRST_FREE = /the first free start for this format and size is starts_at (\S+)/
 
 /** A dry run of the 3-team create at `start`, with the mocked clock set to `at`. */
 async function createAt(start: string, s: ReturnType<typeof snapshot>, at: number) {
   mock.timers.setTime(at)
   return dry(parseAction(trio({ starts_at: start })), s)
+}
+
+/** The line of the plan request that gives the free gaps, made with the test settings at the mocked clock. */
+function freeLine(s: ReturnType<typeof snapshot>): string {
+  const store = setup().store
+  const text = renderPlanRequest({ snapshot: s, settings: TEST_SETTINGS, budget: budgetView(store, 0, TEST_SETTINGS, true, new Date()), recent: [], dryRun: true })
+  return text.split('\n').find(l => l.startsWith("Free for a new tournament's whole window")) ?? ''
 }
 
 test('R74A-1 a calendar free now: the first free start a clash names is still 2 hours ahead when the next plan creates it, one tick later or at the latest', async () => {
@@ -303,6 +313,44 @@ test('R74A-1 a stretch free now that is too short for that room is not named: th
     assert.equal(FIRST_FREE.exec(r.summary)?.[1], minute(ceilMin(now + 31 * H)), `T951's end plus the hour before a kickoff: ${r.summary}`)
     const ok = await createAt(minute(ceilMin(now + 31 * H)), s, now + WINDOW + TICK + JITTER + CALL + WINDOW)
     assert.equal(ok.status, 'dry_run', ok.summary)
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test("R74A-2 a gap open now: the first start the plan request gives is still 2 hours ahead when the create runs, up to the end of its plan's window", async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  try {
+    const now = Date.now()
+    const s = snapshot()
+    s.market.slots = [{ id: 960, title: 'Later', start: now + 20 * H, end: now + 30 * H }]
+    const line = freeLine(s)
+    // The gap itself stays as it is: from the first minute an hour from now to T960's start.
+    const gap = new RegExp(`${minute(ceilMin(now + H))} to ${minute(floorMin(now + 20 * H))} \\(starts_at from (\\S+) to `).exec(line)
+    assert.ok(gap, `the gap open now is offered: ${line}`)
+    for (const later of [0, CALL, CALL + WINDOW]) {
+      const ok = await createAt(gap[1]!, s, now + later)
+      assert.equal(ok.status, 'dry_run', `${later / MIN} minutes later, ${gap[1]}: ${ok.summary}`)
+    }
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('R74A-2 a gap open now that is too short once that room is added is not offered; a later gap keeps its first start', () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  try {
+    const now = Date.now()
+    const s = snapshot()
+    // Free until 3 h 30 min ahead (a 3-team round robin fits from 2 h to 2 h 21 min ahead, before this plan's create can
+    // run), then from 30 to 33 hours ahead.
+    s.market.slots = [
+      { id: 970, title: 'Soon', start: now + 3.5 * H, end: now + 30 * H },
+      { id: 971, title: 'After', start: now + 33 * H, end: now + 100 * H },
+    ]
+    const line = freeLine(s)
+    assert.doesNotMatch(line, new RegExp(`${minute(ceilMin(now + H))} to `), `the gap open now is left out: ${line}`)
+    assert.match(line, new RegExp(`${minute(ceilMin(now + 30 * H))} to ${minute(floorMin(now + 33 * H))} \\(starts_at from ${minute(ceilMin(now + 30 * H) + H)} to `), line)
   } finally {
     mock.timers.reset()
   }
