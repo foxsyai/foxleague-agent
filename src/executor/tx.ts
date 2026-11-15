@@ -4,6 +4,7 @@
 import { Address, Transaction } from '@multiversx/sdk-core'
 import { GAS, MAINNET } from '../config.ts'
 import type { PlainTx } from '../chain/gateway.ts'
+import type { FusionPrepared } from '../foxleague/types.ts'
 import { hexOfString, numberToHex, u64Hex, wholeToAtomic } from '../util/encoding.ts'
 import { composeTasksEgldToFoxsyData, swapWegldToFoxsyData } from '../chain/xexchange.ts'
 
@@ -210,6 +211,64 @@ export function fusionTx(agentAddress: string, feeAtomic: bigint, nonces: number
     gasLimit: GAS.fusion,
     version: 1,
   }
+}
+
+/**
+ * The band a served fusionMint limit must sit in (FoxLeague's app, gasLimits.ts FUSION_MINT_GAS_FLOOR and _CEILING): at
+ * least the heaviest measured call (24.3M), at most twice it, where MultiversX keeps the whole limit.
+ */
+export const FUSION_MINT_GAS = { floor: 24_300_000, ceiling: 48_600_000 } as const
+
+/** The most and the least time a prepared fusion's signature may have left (FoxLeague signs for 10 minutes). */
+const MINT_EXPIRY = { minLeftS: 120, maxAheadS: 20 * 60 } as const
+
+/**
+ * fusionMint (FoxLeague's fusion from its switch on; FusionTab.tsx signs the answer of POST /api/fusion/prepare): the
+ * data field comes whole from FoxLeague, which signs the new card, and goes from the agent to the agent like the old
+ * fusion, signed with the gas limit served with it. Signed only when it is exactly the fusion planned, checked part by
+ * part against FoxLeague's own layout (backend/src/fusion_mint.rs call_data and call_arguments):
+ * `MultiESDTNFTTransfer@<players>@04@<FOXSY>@00@<fee>@<FXLP>@<nonce>@01 x 3@fusionMint@<position>@<expiry>@<signature>
+ * @<new card>@<nonce1>@<attrs1>@<nonce2>@<attrs2>@<nonce3>@<attrs3>`: the fee the checks allowed and nothing more (the
+ * cost the answer names too), the three planned cards in their order once each and as the signed inputs, the position
+ * asked, an expiry with at least 2 minutes left, and a gas limit inside FUSION_MINT_GAS. Anything else throws.
+ */
+export function fusionMintTx(agentAddress: string, prep: FusionPrepared, expect: { feeAtomic: bigint; nonces: number[]; positionChoice: number; now: Date }): TxSpec {
+  const fail = (why: string): never => {
+    throw new Error(`FoxLeague's prepared fusion is not the fusion planned (${why}): nothing signed`)
+  }
+  if (!prep || typeof prep !== 'object' || typeof prep.sc_call_data !== 'string') fail('no data field')
+  if (prep.receiver !== MAINNET.playersContract) fail(`it targets ${String(prep.receiver)}, not the players contract`)
+  if (prep.foxsy_token_id !== undefined && prep.foxsy_token_id !== MAINNET.foxsyToken) fail(`it pays in ${String(prep.foxsy_token_id)}`)
+  if (expect.nonces.length !== 3 || new Set(expect.nonces).size !== 3) fail('a fusion takes 3 different cards')
+  if (!Array.isArray(prep.nonces) || prep.nonces.join(',') !== expect.nonces.join(',') || prep.position_choice !== expect.positionChoice) fail('other cards or another position than planned')
+  if (prep.cost_raw !== expect.feeAtomic.toString()) fail(`it names a cost of ${String(prep.cost_raw)} atomic FOXSY, the checks allowed ${expect.feeAtomic}`)
+  const gas = prep.gas_limit
+  if (!Number.isSafeInteger(gas) || gas < FUSION_MINT_GAS.floor || gas > FUSION_MINT_GAS.ceiling) fail(`a gas limit of ${String(gas)}, outside ${FUSION_MINT_GAS.floor} to ${FUSION_MINT_GAS.ceiling}`)
+  const parts = prep.sc_call_data.split('@')
+  if (parts.length !== 26) fail(`${parts.length} parts in its data field, a fusionMint has 26`)
+  const evenHex = (x: string | undefined, max: number) => typeof x === 'string' && x.length > 0 && x.length <= max && /^([0-9a-f]{2})+$/.test(x)
+  /** FoxLeague's number argument: minimal even-length hex, 0 the empty argument. */
+  const num = (x: string | undefined): bigint | null => (x === '' ? 0n : typeof x === 'string' && /^([0-9a-f]{2})+$/.test(x) && !x.startsWith('00') ? BigInt(`0x${x}`) : null)
+  if (parts[0] !== 'MultiESDTNFTTransfer' || parts[1]?.toLowerCase() !== PLAYERS_HEX) fail('it does not send to the players contract')
+  if (parts[2] !== '04') fail('it sends more or less than the fee and three cards')
+  if (parts[3] !== FOXSY_HEX || parts[4] !== '00') fail('it does not pay in FOXSY first')
+  if (num(parts[5]) !== expect.feeAtomic) fail(`it pays ${String(parts[5])} (hex) atomic FOXSY, the checks allowed ${expect.feeAtomic}`)
+  for (let i = 0; i < 3; i++) {
+    const [token, nonceHex, amount] = parts.slice(6 + i * 3, 9 + i * 3)
+    if (token !== FXLP_HEX || num(nonceHex) !== BigInt(expect.nonces[i]!) || amount !== '01') fail('it moves other cards than the three planned, or in another order')
+  }
+  if (parts[15] !== hexOfString('fusionMint')) fail('it calls another endpoint than fusionMint')
+  if (num(parts[16]) !== BigInt(expect.positionChoice)) fail('it takes another position than planned')
+  const expiry = num(parts[17])
+  const nowS = Math.floor(expect.now.getTime() / 1000)
+  if (expiry === null || Number(expiry) !== prep.expiry) fail('its expiry differs from the one it names')
+  if (Number(expiry) < nowS + MINT_EXPIRY.minLeftS || Number(expiry) > nowS + MINT_EXPIRY.maxAheadS) fail(`its signature expires at ${String(expiry)}, not between ${MINT_EXPIRY.minLeftS} seconds and ${MINT_EXPIRY.maxAheadS / 60} minutes from now`)
+  if (!/^[0-9a-f]{128}$/.test(parts[18] ?? '')) fail('its signature is not 64 bytes')
+  if (!evenHex(parts[19], 1_000)) fail('its new card is not readable')
+  for (let i = 0; i < 3; i++) {
+    if (num(parts[20 + i * 2]) !== BigInt(expect.nonces[i]!) || !evenHex(parts[21 + i * 2], 1_000)) fail('it signs other cards than the three planned')
+  }
+  return { label: 'fusionMint', receiver: agentAddress, value: 0n, data: prep.sc_call_data, gasLimit: BigInt(gas), version: 1 }
 }
 
 /**

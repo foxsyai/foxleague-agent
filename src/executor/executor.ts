@@ -12,8 +12,8 @@ import { MAINNET, type Config } from '../config.ts'
 import { BroadcastRefused, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
-import type { Tournament, TournamentDetail } from '../foxleague/types.ts'
-import { cardBansLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import type { FusionPrepared, Tournament, TournamentDetail } from '../foxleague/types.ts'
+import { cardBansLive, fusionMode, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { disciplineOf, transferLockEnd, type AgentSnapshot } from '../snapshot/snapshot.ts'
 import type { AgentRow, Store } from '../store/db.ts'
 import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, wholeToAtomic } from '../util/encoding.ts'
@@ -39,6 +39,7 @@ import {
   syncTx,
   toPlain,
   fusionTx,
+  fusionMintTx,
   auctionBidTx,
   auctionListTx,
   auctionCancelTx,
@@ -477,10 +478,16 @@ export class Executor {
       market.medicineDaysThisWeek = days.every(d => typeof d === 'number' && Number.isFinite(d)) ? (days as number[]).reduce((sum, d) => sum + d, 0) : undefined
     }
     if (a.type === 'fuse') {
-      market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
-      const first = snap.players.find(p => p.nonce === a.player_nonces[0])
-      const chosen = snap.players.find(p => p.nonce === a.player_nonces[a.position_of])
-      if (first && chosen && first.rarity !== 'Legendary') market.fusionPool = await fusionPoolCount(this.d.chain, RARITY_LEVEL[first.rarity] + 1, chosen.position)
+      // FoxLeague's fusion switch decides what is asked: from it the fusion is prepared by FoxLeague (its can-fuse refuses
+      // three nonces and its pool is emptied); before it, the old pre-check and the pool stock; closed, nothing.
+      const mode = fusionMode(snap.config, now).mode
+      if (mode === 'mint') market.fusionPrepared = await this.prepareFusion(wallet, a.player_nonces, a.position_of)
+      if (mode === 'pool') {
+        market.canFuse = await soft(() => fox.canFuse(wallet, a.player_nonces))
+        const first = snap.players.find(p => p.nonce === a.player_nonces[0])
+        const chosen = snap.players.find(p => p.nonce === a.player_nonces[a.position_of])
+        if (first && chosen && first.rarity !== 'Legendary') market.fusionPool = await fusionPoolCount(this.d.chain, RARITY_LEVEL[first.rarity] + 1, chosen.position)
+      }
     }
     if (a.type === 'buy' && a.product === 'medicine' && a.player_nonces?.length === 1 && a.quantity) market.medicineQuote = await soft(() => fox.medicineQuote(wallet, a.player_nonces![0]!, a.quantity!))
     if (a.type === 'fusion_cooldown_waiver') market.cooldownQuote = await soft(() => fusionCooldownQuote(this.d.chain, a.nonce))
@@ -631,6 +638,8 @@ export class Executor {
       case 'claim_refund':
         return { ...none, txs: [claimRefundTx(v.facts.scId as number)] }
       case 'fuse':
+        // From FoxLeague's switch: its prepared fusionMint, checked again here as it is signed (rules.ts mintFusion).
+        if (v.facts.prepared) return { ...none, txs: [fusionMintTx(wallet.address, v.facts.prepared as FusionPrepared, { feeAtomic: v.foxsy, nonces: v.facts.nonces as number[], positionChoice: v.facts.positionChoice as number, now: new Date() })] }
         return { ...none, txs: [fusionTx(wallet.address, v.foxsy, v.facts.nonces as number[], v.facts.positionChoice as number)] }
       case 'bid':
         return { ...none, txs: [auctionBidTx(a.nonce, a.foxsy)] }
@@ -701,6 +710,27 @@ export class Executor {
       // An unanswered check is never read as a free name in front of a payment.
       return `the name could not be checked (${err instanceof Error ? err.message : String(err)}); nothing paid, the next plan tries again`
     }
+  }
+
+  /**
+   * FoxLeague's fusionMint of these cards (POST /api/fusion/prepare), its refusal in its own words, or null when it gave
+   * no answer (a timeout, a 5xx, an answer that is not its envelope). Its pace refusal (a new signature at most every 2
+   * seconds a wallet) is asked once more after the interval, as its own Fusion tab does.
+   */
+  private async prepareFusion(wallet: AgentWallet, nonces: number[], positionChoice: number): Promise<RulesContext['fusionPrepared']> {
+    for (let i = 0; i < 2; i++) {
+      try {
+        return await this.d.fox.fusionPrepare(wallet, nonces, positionChoice)
+      } catch (err) {
+        if (err instanceof ApiRefusal && err.code === 'fusion_prepare_pace' && i === 0) {
+          await sleep(2_100)
+          continue
+        }
+        if (err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)) return { refusal: err.message }
+        return null
+      }
+    }
+    return null
   }
 
   /** The sync payload as signed: exactly a sync (syncTx) and never more FOXSY than the caps allowed. */

@@ -118,6 +118,13 @@ export interface FoxConfig {
   fusion_card_cooldown_seconds?: number
   /** FOXSY per day of that wait bought off (75 on mainnet, down to a 3-day floor). */
   fusion_cooldown_waiver_price_per_day?: number
+  /**
+   * The fusion that mints its result (FoxLeague #711 + #736, routes/config.rs FusionMintConfig): from `live_from` the
+   * players contract refuses the old fusion and every fusion is a fusionMint prepared by POST /api/fusion/prepare.
+   * `paused`: the contract speaks another fusion version than FoxLeague's server, so no fusion can run at all. Read by
+   * fusionMode (levels.ts); a block that is not exactly this is unknown, and no fusion is signed.
+   */
+  fusion_mint?: { live: boolean; live_from: string | null; paused: boolean }
   auction_enabled: boolean
   /** The percent a bid must stand over the top bid (the players contract's setting, 1 to 50; 5 when unset). */
   auction_min_increment_percent?: number
@@ -468,12 +475,31 @@ export interface ChallengeForMe {
 export interface CanFuse {
   can_fuse: boolean
   reason?: string
-  cooldown_remaining?: number
+  /** FoxLeague serves the wallet spacing left as text ("0d 19h", routes/marketplace.rs can_fuse); seconds in older answers. */
+  cooldown_remaining?: number | string | null
   cooldown_end?: string
   dirty_players?: number[]
   blocked_players?: number[]
   min_matches_required?: number
   match_floor_required?: number
+}
+
+/**
+ * POST /api/fusion/prepare (auth; FoxLeague routes/fusion_mint.rs FusionPrepareResponse): the fusionMint transaction to
+ * sign from the switch on. `sc_call_data` is the whole data field (a self MultiESDTNFTTransfer to `receiver`, the players
+ * contract), signed with `gas_limit`; FoxLeague's signature in it is accepted until `expiry` (UNIX seconds, 10 minutes).
+ * `preview` is the stats part of the card it mints, exactly as the contract will mint it.
+ */
+export interface FusionPrepared {
+  sc_call_data: string
+  receiver: string
+  gas_limit: number
+  expiry: number
+  cost_raw: string
+  foxsy_token_id: string
+  nonces: number[]
+  position_choice: number
+  preview?: { position: string; rarity: string; ovr: number; stats: { stat: string; value: number; input_values?: number[]; scaled_value?: number }[] }
 }
 
 /** GET /api/marketplace/can-list?nonce= (auth, advisory; docs 14.1). */
