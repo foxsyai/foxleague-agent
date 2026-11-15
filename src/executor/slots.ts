@@ -63,6 +63,40 @@ export function clash(windows: SlotWindow[], w: { start: number; end: number }):
 }
 
 const MINUTE = 60_000
+
+/**
+ * The share of its tick a plan's actions are spread over (runPlan in service.ts): they run up to 0.8 of a tick after
+ * the plan, and the next plan is timed a tick and its jitter after the last of them (scheduleNext).
+ */
+export const PLAN_WINDOW_SHARE = 0.8
+
+/**
+ * Room for a plan's call and the fresh snapshot an action reads before it runs: a plan call at high effort is given up
+ * after 11 min 40 s (deadlineMs of its 32,000 tokens) and a snapshot takes tens of seconds. A longer call (xhigh) is
+ * covered too: the create of a start this far ahead then has its deadline inside the window, and the deadline-first
+ * schedule of PR #70 runs it by that deadline less 5 minutes.
+ */
+export const PLAN_CALL_ROOM_MS = 15 * MINUTE
+
+/**
+ * How long after a snapshot the create of a plan made from it can run, at the latest (R74A-2, 2026-11-15): the plan's
+ * window, where match gates can still hold a create that has a deadline, and the room for its call. The first start the
+ * snapshot gives is at least this long past the 2-hour floor, so the create still finds it 2 hours ahead.
+ */
+export function planLeadMs(tickMinutes: number): number {
+  return tickMinutes * PLAN_WINDOW_SHARE * MINUTE + PLAN_CALL_ROOM_MS
+}
+
+/**
+ * How long after a refusal the create of the next plan can run, at the latest (R74A-1, 2026-11-15): the rest of this
+ * plan's window (the refusal can come at its start), the tick and its jitter before the next plan, then that plan's
+ * own lead. The first free start a refusal names is at least this long past the 2-hour floor, so the next plan still
+ * finds it 2 hours ahead when its create runs.
+ */
+export function nextPlanLeadMs(s: { tickMinutes: number; tickJitterMinutes: number }): number {
+  return (s.tickMinutes * PLAN_WINDOW_SHARE + s.tickMinutes + s.tickJitterMinutes) * MINUTE + planLeadMs(s.tickMinutes)
+}
+
 /** A moment rounded up, or down, to the whole minute. */
 export const ceilMinute = (t: number): number => Math.ceil(t / MINUTE) * MINUTE
 export const floorMinute = (t: number): number => Math.floor(t / MINUTE) * MINUTE
@@ -71,7 +105,9 @@ export const floorMinute = (t: number): number => Math.floor(t / MINUTE) * MINUT
  * The first whole minute from `minAhead` to `maxAhead` after now (the create action's range: 2 to 72 hours) whose
  * window is free, in ms; null when none is. Each window refuses the starts strictly between its start less the new
  * window's length after the kickoff and its end plus the hour before it, so the first free minute is the first one of
- * the range or the first minute at or after such an end (FoxLeague's `free_starts`, tournament_slots.rs).
+ * the range or the first minute at or after such an end (FoxLeague's `free_starts`, tournament_slots.rs). A refusal
+ * asks from 2 hours plus the next plan's lead (nextPlanLeadMs): a free stretch that ends before a start that late fits
+ * is passed over, never named.
  */
 export function firstFreeStart(windows: SlotWindow[], format: string, maxTeams: number, homeAndAway: boolean, now: number, minAhead = 2 * 3600_000, maxAhead = 72 * 3600_000): number | null {
   const lo = ceilMinute(now + minAhead)

@@ -28,6 +28,7 @@ import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
 import { actionDeadline } from './executor/deadlines.ts'
+import { PLAN_WINDOW_SHARE } from './executor/slots.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
@@ -1498,7 +1499,7 @@ export class Service {
       // A cache belongs to one model and effort (Strategist.expectsCallSoon): only the calls of that pair count.
       if (pair && !this.callsOf(a).some(c => c.model === pair.model && c.effort === pair.effort)) continue
       const at = this.nextAt.get(a.index)
-      const next = at !== undefined && at > now ? at : now + (Math.max(MIN_TICK_MINUTES, a.settings.tickMinutes - a.settings.tickJitterMinutes) + a.settings.tickMinutes * 0.8) * 60_000
+      const next = at !== undefined && at > now ? at : now + (Math.max(MIN_TICK_MINUTES, a.settings.tickMinutes - a.settings.tickJitterMinutes) + a.settings.tickMinutes * PLAN_WINDOW_SHARE) * 60_000
       if (next <= horizon && this.inActiveHours(a, new Date(next))) return true
     }
     return false
@@ -1883,7 +1884,8 @@ export class Service {
    */
   private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot): Promise<void> {
     if (!actions.length) return
-    let windowMs = routine ? agent.settings.tickMinutes * 60_000 * 0.8 : 0
+    // The share the starts a snapshot or a refusal suggests leave room for (slots.ts, planLeadMs and nextPlanLeadMs).
+    let windowMs = routine ? agent.settings.tickMinutes * 60_000 * PLAN_WINDOW_SHARE : 0
     // Never spread past our next strategy lock: a sync or a recovery meant for that match must land before it.
     const nextLock = (this.snapshots.get(agent.index)?.auth?.upcoming?.matches ?? [])
       .filter(m => m.phase === 'upcoming')

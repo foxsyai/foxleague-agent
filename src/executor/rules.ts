@@ -2,7 +2,7 @@
 // the final judge; these keep the agent from sending what the interface would refuse, and from
 // paying for something that cannot work). Every number is read live where a public source exists.
 
-import { blockingWindow, ceilMinute, clash, firstFreeStart } from './slots.ts'
+import { blockingWindow, ceilMinute, clash, firstFreeStart, nextPlanLeadMs } from './slots.ts'
 import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { CREATE_START_MAX_MS, CREATE_START_MIN_MS, FORMATION_SLOTS, createStartMs, rangeWords } from './actions.ts'
@@ -1285,11 +1285,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (runningLk) return refuse(`your team is in T${runningLk.id}, a League + Knockout that has started: no other tournament until it is over (1v1s and ranked stay open)`)
       // FoxLeague refuses a create whose blocking window overlaps any live tournament's: check it first. The first free
       // start is named as the minute itself: whole hours from now would be stale by the next plan and miss a narrow gap.
+      // The next plan reads it, so it is searched from 2 hours after the latest moment that plan's create can run
+      // (R74A-1): the 2-hour floor of this moment would be about an hour ahead by then.
       const taken = clash(s.market.slots ?? [], blockingWindow(a.format, a.max_teams, Boolean(a.home_and_away), startsAt))
       if (taken) {
-        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS, CREATE_START_MAX_MS)
+        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
-        return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC); ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z` : 'no free start in the next 72 hours'}`)
+        return refuse(`time slot taken by T${taken.id} (its window ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC); ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it)` : 'no free start the next plan can still create in the next 72 hours'}`)
       }
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)

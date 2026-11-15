@@ -20,7 +20,7 @@ import { describeAction, parseAction, type Action } from '../src/executor/action
 import { actionDeadline } from '../src/executor/deadlines.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
-import { dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
+import { TEST_SETTINGS, dryWallet, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 const H = 3600_000
 const MIN = 60_000
@@ -246,4 +246,64 @@ test('SM-10 the record has its section before the last one, a row for each point
   assert.match(notes, /`starts_at` is any instant: create neither rounds it nor asks for a step/)
   assert.match(notes, /The windows are half-open/)
   assert.match(read('site/src/content/docs/play/how-it-plays.md').replace(/\s+/g, ' '), /It names the start to the minute, 2 to 72 hours ahead/)
+})
+
+// R74A-1 and R74A-2 (the GitHub review of PR #74): both starts the agent suggests (the first free start a clash names
+// and the first start the snapshot gives for a gap) were the 2-hour floor itself, counted from the moment they were
+// made. The create that takes one runs later: a refusal is read by the next plan, the snapshot's start by an action of
+// its own plan. Each test failed on bf2f0c1 and passes now. The delays are the agent's own, at the test settings (a
+// 30-minute tick, 10 minutes of jitter): a plan's actions run over 0.8 of a tick (runPlan), the next plan is timed a
+// tick and its jitter after the last of them (scheduleNext), a plan call at high effort is given up after 11 min 40 s
+// (deadlineMs) and an action reads a fresh snapshot first: 13 minutes for the two.
+const TICK = TEST_SETTINGS.tickMinutes * MIN
+const JITTER = TEST_SETTINGS.tickJitterMinutes * MIN
+const WINDOW = 0.8 * TICK
+const CALL = 13 * MIN
+const ceilMin = (ms: number) => Math.ceil(ms / MIN) * MIN
+const FIRST_FREE = /the first free start for this format and size is starts_at (\S+)/
+
+/** A dry run of the 3-team create at `start`, with the mocked clock set to `at`. */
+async function createAt(start: string, s: ReturnType<typeof snapshot>, at: number) {
+  mock.timers.setTime(at)
+  return dry(parseAction(trio({ starts_at: start })), s)
+}
+
+test('R74A-1 a calendar free now: the first free start a clash names is still 2 hours ahead when the next plan creates it, one tick later or at the latest', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  try {
+    const now = Date.now()
+    const s = snapshot()
+    s.market.slots = [{ id: 950, title: 'Later', start: now + 30 * H, end: now + 40 * H }]
+    const r = await dry(parseAction(trio({ starts_at: minute(ceilMin(now + 35 * H)) })), s)
+    assert.equal(r.status, 'refused', r.summary)
+    assert.match(r.summary, /time slot taken by T950/)
+    const free = FIRST_FREE.exec(r.summary)?.[1] ?? ''
+    assert.ok(Date.parse(free) < now + 30 * H, `a start in the calendar free now, before T950: ${r.summary}`)
+    // One tick later (the next plan and its call), and at the latest: the rest of this plan's window, the tick and its
+    // jitter, the next plan's call and its own window.
+    for (const later of [TICK + CALL, WINDOW + TICK + JITTER + CALL + WINDOW]) {
+      const ok = await createAt(free, s, now + later)
+      assert.equal(ok.status, 'dry_run', `${later / MIN} minutes later, ${free}: ${ok.summary}`)
+    }
+  } finally {
+    mock.timers.reset()
+  }
+})
+
+test('R74A-1 a stretch free now that is too short for that room is not named: the first free start after it is', async () => {
+  mock.timers.enable({ apis: ['Date'], now: Date.now() })
+  try {
+    const now = Date.now()
+    const s = snapshot()
+    // Free until 4 hours ahead: a 3-team round robin fits from 2 h to 2 h 51 min ahead, too soon for the next plan.
+    s.market.slots = [{ id: 951, title: 'Soon', start: now + 4 * H, end: now + 30 * H }]
+    const r = await dry(parseAction(trio({ starts_at: minute(ceilMin(now + 10 * H)) })), s)
+    assert.equal(r.status, 'refused', r.summary)
+    assert.match(r.summary, /time slot taken by T951/)
+    assert.equal(FIRST_FREE.exec(r.summary)?.[1], minute(ceilMin(now + 31 * H)), `T951's end plus the hour before a kickoff: ${r.summary}`)
+    const ok = await createAt(minute(ceilMin(now + 31 * H)), s, now + WINDOW + TICK + JITTER + CALL + WINDOW)
+    assert.equal(ok.status, 'dry_run', ok.summary)
+  } finally {
+    mock.timers.reset()
+  }
 })

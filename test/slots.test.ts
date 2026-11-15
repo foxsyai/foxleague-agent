@@ -3,11 +3,11 @@
 import { test } from 'node:test'
 import { once } from 'node:events'
 import assert from 'node:assert/strict'
-import { blockingWindow, clash, estimateMinutes, firstFreeStart, freeGaps, slotWindows } from '../src/executor/slots.ts'
+import { blockingWindow, clash, estimateMinutes, firstFreeStart, freeGaps, nextPlanLeadMs, slotWindows } from '../src/executor/slots.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
 import type { Tournament } from '../src/foxleague/types.ts'
 import type { PlannedAction } from '../src/executor/actions.ts'
-import { dryWallet, setup, snapshot, tournament } from './fixtures.ts'
+import { TEST_SETTINGS, dryWallet, setup, snapshot, tournament } from './fixtures.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
 
 const H = 3600_000
@@ -67,9 +67,11 @@ test('slots: a create that clashes is refused before FoxLeague is asked, with th
   const [r] = await m.exec.run(m.agent(), dryWallet, s, create(12))
   assert.equal(r!.status, 'refused')
   assert.match(r!.summary, /time slot taken by T65/)
-  // The first free start as the minute itself (whole hours until 2026-11-15): 2 hours from now, rounded up to the minute.
+  // The first free start as the minute itself (whole hours until 2026-11-15): 2 hours from now plus the time until the
+  // next plan's create can run (R74A-1: the floor itself is about an hour ahead by then), rounded up to the minute.
+  const floor = 2 * H + nextPlanLeadMs(TEST_SETTINGS)
   const free = Date.parse(/starts_at (\S+)/.exec(r!.summary)?.[1] ?? '')
-  assert.ok(free % 60_000 === 0 && free >= now + 2 * H && free <= Date.now() + 2 * H + 60_000, `a start well before OTAN fits: ${r!.summary}`)
+  assert.ok(free % 60_000 === 0 && free >= now + floor && free <= Date.now() + floor + 60_000, `a start well before OTAN fits: ${r!.summary}`)
   const [ok] = await m.exec.run(m.agent(), dryWallet, s, create(19))
   assert.equal(ok!.status, 'dry_run', 'after OTAN (window ends at +17 h, ours starts 1 h earlier)')
   assert.match(renderDigest(s), /Tournament time slots taken[\s\S]*T65 "OTAN"/)
