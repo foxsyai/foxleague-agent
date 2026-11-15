@@ -6,6 +6,8 @@
 //
 // Unknown is not "current": a failed read, a missing record or a record of another manual.md says "could not check".
 // Nothing read here reaches a prompt: FoxLeague's slugs go to the owner's summary and the dashboard as plain text.
+// Its slugs are the only text of FoxLeague's that goes anywhere, bounded: at most MAX_SLUG characters each, at most
+// MAX_PAGES of them kept and at most MAX_NAMED in the owner's line. Every reason the check gives is in our own words.
 
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -29,8 +31,17 @@ export const CHECK_DEADLINE_MS = 90_000
  */
 export const MAX_ANSWER_BYTES = 2 * 1024 * 1024
 export const MAX_PAGES = 200
+/**
+ * The longest slug taken (the longest real one has 29 characters): a longer one in FoxLeague's list makes the list
+ * unreadable, so FoxLeague cannot put more of its text into the owner's summary, the dashboard or the stored check.
+ */
+export const MAX_SLUG = 120
+/** The most pages the owner's line names: the rest are counted ("and 12 more"), so the line stays one message. */
+export const MAX_NAMED = 8
 /** What a slug looks like (`mechanics/one-v-one`): anything else in FoxLeague's list makes it unreadable. */
 const SLUG = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}$/
+/** A slug as taken, from FoxLeague's list or from the page record: its length first, then its shape. */
+const isSlug = (s: unknown): s is string => typeof s === 'string' && s.length <= MAX_SLUG && SLUG.test(s)
 /** The kv key of the day's check. */
 const KV = 'manual_check'
 
@@ -121,7 +132,7 @@ function validRecord(r: unknown): ManualRecord | null {
   const { synced, manual, pages } = r as Record<string, unknown>
   if (typeof synced !== 'string' || typeof manual !== 'string' || !/^[0-9a-f]{64}$/.test(manual) || !pages || typeof pages !== 'object' || Array.isArray(pages)) return null
   const entries = Object.entries(pages as Record<string, unknown>)
-  if (!entries.length || entries.some(([slug, print]) => !SLUG.test(slug) || typeof print !== 'string' || !/^[0-9a-f]{64}$/.test(print))) return null
+  if (!entries.length || entries.some(([slug, print]) => !isSlug(slug) || typeof print !== 'string' || !/^[0-9a-f]{64}$/.test(print))) return null
   return { synced, manual, pages: Object.fromEntries(entries) as Record<string, string> }
 }
 
@@ -210,7 +221,7 @@ export async function checkManual(o: CheckOptions): Promise<ManualCheck> {
   try {
     const list = await call('list_manual_pages')
     const slugs = Array.isArray(list) ? list.map(p => (p && typeof p === 'object' ? (p as { slug?: unknown }).slug : undefined)) : []
-    if (!slugs.length || slugs.length > MAX_PAGES || slugs.some(s => typeof s !== 'string' || !SLUG.test(s))) throw new CheckError(UNREADABLE)
+    if (!slugs.length || slugs.length > MAX_PAGES || slugs.some(s => !isSlug(s))) throw new CheckError(UNREADABLE)
     const live = [...new Set(slugs as string[])]
     const differ: string[] = []
     for (const slug of live) {
@@ -237,9 +248,15 @@ export async function checkManual(o: CheckOptions): Promise<ManualCheck> {
   }
 }
 
-/** The owner's line for a check; null when the copy is current. `when`: "today" or "on 2026-11-14" for an older one. */
+/**
+ * The owner's line for a check; null when the copy is current. `when`: "today" or "on 2026-11-14" for an older one.
+ * It names at most MAX_NAMED pages and counts the rest: a manual FoxLeague rebuilt with many pages stays one line.
+ */
 export function manualLine(c: ManualCheck, when = 'today'): string | null {
-  if (c.state === 'behind') return `FoxLeague's manual changed since the agents' copy (pages: ${c.pages.join(', ')}). The maintainer runs sync-manual.`
+  if (c.state === 'behind') {
+    const more = c.pages.length - MAX_NAMED
+    return `FoxLeague's manual changed since the agents' copy (pages: ${c.pages.slice(0, MAX_NAMED).join(', ')}${more > 0 ? ` and ${more} more` : ''}). The maintainer runs sync-manual.`
+  }
   if (c.state === 'unknown') return `Could not check FoxLeague's manual ${when}: ${c.why ?? 'no reason was given'}.`
   return null
 }

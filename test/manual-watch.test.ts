@@ -17,7 +17,7 @@ import { dirname, join } from 'node:path'
 import { Mnemonic } from '@multiversx/sdk-core'
 import type { Config } from '../src/config.ts'
 import { Sessions, hashPassword } from '../src/web/auth.ts'
-import { MAX_ANSWER_BYTES, MAX_PAGES, ManualWatch, checkManual, manualLine, manualRecord, type ManualRecord, type McpFetch } from '../src/strategist/manual-watch.ts'
+import { MAX_ANSWER_BYTES, MAX_NAMED, MAX_PAGES, MAX_SLUG, ManualWatch, checkManual, manualLine, manualRecord, type ManualRecord, type McpFetch } from '../src/strategist/manual-watch.ts'
 import { MAX_ANSWER_BYTES as HTTP_MAX_ANSWER_BYTES } from '../src/util/http.ts'
 import { snapshot } from './fixtures.ts'
 
@@ -714,3 +714,133 @@ test('R72A-1 to R72A-5 the record has their rows in the section of the daily che
   const bubble = html.slice(html.indexOf("\n  manual: ['FoxLeague manual check',"), html.indexOf('`],', html.indexOf("\n  manual: ['FoxLeague manual check',")))
   assert.match(bubble.replace(/\s+/g, ' '), /new copy[^.]*the same day/i)
 })
+
+// ---- the GitHub re-review of PR #72: R72A-6, how much of FoxLeague's text the owner is sent ----
+
+/** The longest slug taken (the longest real one is 29 characters) and the most pages the owner's line names. */
+const SLUG_CAP = 120
+const NAMED = 8
+const UNREADABLE = "FoxLeague's answer could not be read"
+
+/** FoxLeague's MCP route with its list of pages answered by `list` (one entry per slug); every other call as usual. */
+function listing(slugs: string[], entry: (slug: string, i: number) => Record<string, unknown> = slug => ({ slug })) {
+  const rpc = () => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, result: { content: [{ type: 'text', text: JSON.stringify(slugs.map(entry)) }] } }), { status: 200, headers: { 'content-type': 'application/json' } })
+  return foxleagueMcp(SOURCE, SIDEBAR, { answer: call => (call.body.params.name === 'list_manual_pages' ? rpc() : null) })
+}
+
+/** The day's check by a watch with a database of its own: what the summary line, the dashboard and the stored row hold. */
+async function shownBy(fetch: McpFetch, record: unknown = recorded()) {
+  const kv = memoryKv()
+  const w = Object.assign(new ManualWatch({ enabled: true, base: BASE, zone: 'UTC', kv }), { fetch, readManual: () => MANUAL, readRecord: () => record, gapMs: 0 })
+  const now = Date.parse('2026-11-16T09:00:00Z')
+  const c = await w.today(now)
+  return { c, line: w.line(now), view: w.view(now), state: JSON.stringify(w.view(now)), row: kv.m.get('manual_check') ?? '' }
+}
+
+test('R72A-6 a slug longer than 120 characters makes the list unreadable, and a record with one is no record', async () => {
+  const record = recorded()
+  const known = Object.keys(record.pages)
+  const long = (n: number, tail = '') => `extra/${'a'.repeat(n - 6 - tail.length)}${tail}`
+  assert.equal(MAX_SLUG, SLUG_CAP)
+  assert.equal(long(SLUG_CAP).length, SLUG_CAP)
+
+  // At the cap a slug is taken: a new page, named.
+  const at = await check(record, listing([...known, long(SLUG_CAP)]).fetch)
+  assert.equal(at.state, 'behind', JSON.stringify(at).slice(0, 300))
+  assert.deepEqual(at.pages, [`${long(SLUG_CAP)} (new)`])
+
+  // Past it the list is not read: "could not check", nothing asked after it, nothing of it kept or shown. Each of
+  // these answers stays under the 2 MB cap on an answer and the 200 pages cap.
+  const cases: [string, string[]][] = [
+    ['one character over the cap', [...known, long(SLUG_CAP + 1)]],
+    ['one slug of 10,000 characters', [...known, long(10_000)]],
+    ['one slug of 1.9 MB', [...known, long(1_900_000)]],
+    ['196 slugs of 10,000 characters', [...known, ...Array.from({ length: 196 }, (_, i) => long(10_000, `-${String(i).padStart(3, '0')}`))]],
+  ]
+  for (const [name, slugs] of cases) {
+    const live = listing(slugs)
+    const c = await check(record, live.fetch)
+    assert.equal(c.state, 'unknown', `${name}: ${JSON.stringify(c).slice(0, 200)}`)
+    assert.equal(c.why, UNREADABLE, name)
+    assert.deepEqual(c.pages, [], name)
+    assert.equal(live.seen.length, 1, `${name}: no page is read from that list`)
+    const shown = await shownBy(listing(slugs).fetch, record)
+    assert.equal(shown.line, `Could not check FoxLeague's manual today: ${UNREADABLE}.`, name)
+    assert.equal(shown.view.text, shown.line, name)
+    assert.ok(shown.state.length < 1_000, `${name}: /api/state carries ${shown.state.length} characters of the check`)
+    assert.ok(shown.row.length < 1_000, `${name}: the stored row holds ${shown.row.length} characters`)
+  }
+
+  // The same cap on the page record: one with a slug that long is no record, and FoxLeague is not asked.
+  const live = foxleagueMcp()
+  const odd = await check({ ...record, pages: { ...record.pages, [long(10_000)]: 'f'.repeat(64) } }, live.fetch)
+  assert.equal(odd.state, 'unknown', JSON.stringify(odd).slice(0, 200))
+  assert.match(String(odd.why), /no page record/)
+  assert.equal(live.seen.length, 0)
+})
+
+test('R72A-6 many pages: the line names at most eight and says how many more, so the morning summary stays one message', async () => {
+  const record = recorded()
+  const known = Object.keys(record.pages)
+  const news = (n: number) => Array.from({ length: n }, (_, i) => `extra/page-${i}`)
+  const line = (named: string[], more = '') => `FoxLeague's manual changed since the agents' copy (pages: ${named.map(s => `${s} (new)`).join(', ')}${more}). The maintainer runs sync-manual.`
+  assert.equal(MAX_NAMED, NAMED)
+
+  // Eight are all named; from nine on the first eight are named and the rest counted.
+  const eight = await check(record, listing([...known, ...news(NAMED)]).fetch)
+  assert.equal(manualLine(eight), line(news(NAMED)))
+  const nine = await check(record, listing([...known, ...news(NAMED + 1)]).fetch)
+  assert.equal(nine.pages.length, NAMED + 1, 'the check keeps every page it found')
+  assert.equal(manualLine(nine), line(news(NAMED), ' and 1 more'))
+
+  // The most FoxLeague can send: 200 pages, every new one with a slug of the longest length taken.
+  const longest = Array.from({ length: MAX_PAGES - known.length }, (_, i) => `extra/${String(i).padStart(3, '0')}-${'a'.repeat(SLUG_CAP - 10)}`)
+  assert.ok(longest.every(s => s.length === SLUG_CAP))
+  const full = await shownBy(listing([...known, ...longest]).fetch, record)
+  assert.equal(full.c?.state, 'behind')
+  assert.equal(full.c?.pages.length, longest.length)
+  assert.equal(full.line, line(longest.slice(0, NAMED), ` and ${longest.length - NAMED} more`))
+  assert.ok(String(full.line).length < 1_500, `the line has ${String(full.line).length} characters`)
+  assert.equal(full.view.text, full.line, 'the dashboard shows the same line')
+
+  // The morning summary that carries it is one Telegram message (4,000 characters at most).
+  const { sent, morning } = await service(listing([...known, ...longest]).fetch, record)
+  await morning()
+  assert.equal(sent.length, 1)
+  assert.ok(sent[0]!.length < 4_000, `the summary has ${sent[0]!.length} characters`)
+  assert.ok(sent[0]!.includes(`\n${line(longest.slice(0, NAMED), ` and ${longest.length - NAMED} more`)}\n`))
+})
+
+test('R72A-6 an oversized text in FoxLeague\'s answer (an error, a refusal, a title) reaches neither the summary nor the dashboard nor the stored check', async () => {
+  const record = recorded()
+  // Under the 2 MB cap on an answer, so each of them is read whole.
+  const huge = 'x'.repeat(1.5 * MB)
+  const rpc = (body: Record<string, unknown>) => new Response(JSON.stringify({ jsonrpc: '2.0', id: 1, ...body }), { status: 200, headers: { 'content-type': 'application/json' } })
+  const cases: [string, (call: Seen) => Response | Promise<Response> | null, string | null][] = [
+    ['an HTTP error with a long page', () => new Response(huge, { status: 500, headers: { 'content-type': 'text/plain' } }), 'FoxLeague answered HTTP 500'],
+    ['a JSON-RPC error with a long message', () => rpc({ error: { code: -32000, message: huge, data: huge.slice(0, 1000) } }), UNREADABLE],
+    ['a tool refusal with a long text', call => (call.body.params.name === 'get_manual_page' ? rpc({ result: { isError: true, content: [{ type: 'text', text: huge }] } }) : null), UNREADABLE],
+    ['a long text that is not JSON', () => new Response(huge, { status: 200, headers: { 'content-type': 'application/json' } }), UNREADABLE],
+    ['a cut connection with a long message', () => Promise.reject(Object.assign(new TypeError(huge), { cause: new Error(huge) })), 'FoxLeague could not be reached'],
+    ['a long page of another slug', call => (call.body.params.name === 'get_manual_page' ? rpc({ result: { content: [{ type: 'text', text: JSON.stringify({ slug: 'mechanics/shop', text: huge }) }] } }) : null), UNREADABLE],
+    ['a long title in the list', call => (call.body.params.name === 'list_manual_pages' ? rpc({ result: { content: [{ type: 'text', text: JSON.stringify(Object.keys(record.pages).map((slug, i) => ({ slug, title: i ? slug : huge, description: i ? '' : huge.slice(0, 100_000) }))) }] } }) : null), null],
+  ]
+  for (const [name, answer, why] of cases) {
+    const shown = await shownBy(foxleagueMcp(SOURCE, SIDEBAR, { answer }).fetch, record)
+    assert.equal(shown.c?.why ?? null, why, name)
+    assert.equal(shown.line, why === null ? null : `Could not check FoxLeague's manual today: ${why}.`, name)
+    assert.equal(shown.view.text, shown.line, name)
+    for (const [where, text] of [['the summary line', shown.line ?? ''], ['/api/state', shown.state], ['the stored row', shown.row]] as const) {
+      assert.ok(text.length < 1_000, `${name}: ${where} has ${text.length} characters`)
+      assert.ok(!text.includes('x'.repeat(50)), `${name}: ${where} carries FoxLeague's text`)
+    }
+  }
+
+  // And the morning summary itself.
+  const { sent, morning } = await service(foxleagueMcp(SOURCE, SIDEBAR, { answer: () => new Response(huge, { status: 500 }) }).fetch, record)
+  await morning()
+  assert.equal(sent.length, 1)
+  assert.ok(sent[0]!.length < 4_000, `the summary has ${sent[0]!.length} characters`)
+  assert.ok(sent[0]!.includes("\nCould not check FoxLeague's manual today: FoxLeague answered HTTP 500.\n"))
+})
+
