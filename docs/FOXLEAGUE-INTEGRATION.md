@@ -234,18 +234,21 @@ processing part, MultiversX keeps the whole limit (`frontend/src/lib/gasLimits.t
 
 | Transaction | Gas limit | Source |
 |---|---|---|
-| `fusion` (3 NFTs + FOXSY) | 21,000,000 | `gasLimits.ts:17` |
-| `payFusionMatchWaiver`, `payFusionCooldownWaiver` | 15,000,000 | `gasLimits.ts:21` |
-| `shopPay` (every shop product, the transfer-cooldown waiver, the paid badge) | 12,864,100 (12,000,000 before the players contract upgrade, live on mainnet 2026-10-26) | `gasLimits.ts` `SHOP_PAY_GAS_LIMIT` |
+| `fusion` (3 NFTs + FOXSY), the old fusion, only before the fusion switch | 22,800,000 (21,000,000 before the fusionMint upgrade of the players contract, mainnet 2026-11-13) | `gasLimits.ts` `FUSION_GAS_LIMIT` |
+| `fusionMint` (from the fusion switch) | the `gas_limit` served by `POST /api/fusion/prepare` (50,000 + 1,500 a data byte + 1.5 x 21,400,000, about 33.5M), signed only between 24,300,000 and 48,600,000 | `gasLimits.ts` `fusionMintGasLimit`; `backend/src/fusion_mint.rs` `gas_limit` |
+| `payFusionMatchWaiver`, `payFusionCooldownWaiver` | 17,500,000 (15,000,000 before 2026-11-13) | `gasLimits.ts` `FUSION_WAIVER_GAS_LIMIT` |
+| `shopPay` (every shop product, the transfer-cooldown waiver, the paid badge) | 14,000,000 (12,864,100 from the upgrade of 2026-10-26 to 2026-11-13, 12,000,000 before) | `gasLimits.ts` `SHOP_PAY_GAS_LIMIT` |
 | `joinTournament` (every tournament and 1v1 seat) | 8,400,000 (7,000,000 before the League + Knockout upgrade of the contract, live on mainnet 2026-10-24; a mainnet join used at most 7,278,069 after the private fee upgrade of 2026-11-02 and 7,448,067 after the tiered prize upgrade of 2026-11-04) | `gasLimits.ts:32` |
 | `claimRefund` | 6,500,000 | `gasLimits.ts:34` |
-| `auctionList` / `auctionBid` / `auctionSettle` / `auctionCancel` | 15,000,000 / 13,500,000 / 13,500,000 / 12,000,000 | `gasLimits.ts:42-47` |
-| `registerAndPay` (relayed) | `min(12,000,000, relayer_max_gas_limit)` | `gasLimits.ts:51-69` |
-| `syncMyStats` | served by `/api/sync/prepare` as `gas_limit`: 15,000,000 + 3,000,000 per player, at most 600,000,000 | `backend/src/routes/sync.rs:36-38`, `:655` |
+| `auctionList` / `auctionBid` / `auctionSettle` / `auctionCancel` | 17,200,000 / 15,800,000 / 15,000,000 / 13,900,000 (15,000,000 / 13,500,000 / 13,500,000 / 12,000,000 before 2026-11-13) | `gasLimits.ts` `AUCTION_GAS` |
+| `registerAndPay` (relayed) | `min(12,000,000, relayer_max_gas_limit)`: about 1.26x on the fusionMint contract, bound by the relay ceiling (12,500,000 served) | `gasLimits.ts` `registerAndPayGasLimit` |
+| `syncMyStats` | served by `/api/sync/prepare` as `gas_limit`: 18,000,000 + 3,000,000 per player since the fusionMint upgrade (15,000,000 base before), at most 600,000,000; the agent signs at most 20,000,000 + 3,000,000 per player | `backend/src/routes/sync.rs` `SYNC_BASE_GAS` |
 | EGLD path swap (`composeTasks`) / WEGLD path swap | 40,000,000 / 24,000,000 | `frontend/src/lib/xexchangeSwapTx.ts:18-85` |
 
 Every contract upgrade adds about 100 gas per byte of wasm to every call, so these margins shrink
-after an upgrade (`gasLimits.ts:9-11`). The settle limit was sized before any mainnet settle was
+after an upgrade (`gasLimits.ts:9-11`). The players contract's fusionMint upgrade (mainnet 2026-11-13 21:32:50 UTC,
+72,036 bytes, 63,693 before) adds about 834,300 to every players call; the limits above are FoxLeague's for it, each
+about 1.5x of the gas used (`test/foxleague-1113/fl13-2-players-gas.test.ts` holds the agent's inside 1.4x to 1.8x). The settle limit was sized before any mainnet settle was
 measured (`gasLimits.ts:36-41`).
 
 ### 1.8 Where live values come from
@@ -551,6 +554,10 @@ background (`registration.rs:931-957`).
 | 403 | `wallet holds {n} FOXSY but the registration fee is {m} FOXSY` | 2042-2090 |
 | 429 | `G9: rate limit {EM} max {n} relay calls per {s}s per wallet` (default 3 per 600 s) | 2092-2146 |
 | 503 | `G10: relayer daily cap {cap} reached` (default 5,000) | 2148-2193 |
+| 409 | `Your registration payment is already on its way. Nothing new was sent. ...` (G17, a relay of the wallet still in flight; held until it is final, 300 s by default) | #717, `relay_registration` |
+| 409 | `Your wallet has another transaction still being processed. Nothing was sent. ...` (G16, a transaction of the wallet waiting in the pool) | #717 |
+| 403 | `The transaction does not carry your wallet's next transaction number. ...` (G16) and `Your last relayed registration failed on chain, so FoxLeague does not pay the network fee for this wallet for now. ...` (G18, 24 h by default) | #717 |
+| 500 | `Could not check your wallet on chain. Nothing was sent...` (G16 read) and `Could not check your FOXSY balance on chain. Nothing was sent...` (G14 read, which let the relay through before #717) | #717 |
 | 503 / 400 | `relayer pool not configured`, `bad wallet bech32: {e}`, `no relayer loaded for shard {s} (wallet shard)` | 2201-2215 |
 | 503 | `registration fee is misconfigured {EM} relay unavailable` | 2221-2263 |
 | 403 | `G2: tx sender {} != authenticated wallet {}` | 1727 |
@@ -571,8 +578,9 @@ before calling the relay.
 **What the agent keeps booked after the relay** (audit 2026-11-11, INTEG-4, MONEY-3 and EDGE-3; `src/executor/executor.ts`,
 the `register` case). The fee is booked in the one-time setup budget before the signature. After the relay's answer:
 
-- FoxLeague's own refusal (its envelope) with HTTP 403, 429 or 503 is a guard that runs before the broadcast
-  (`routes/onboarding.rs` `relay_registration`): nothing was sent and the booking is released. The client carries the
+- FoxLeague's own refusal (its envelope) with HTTP 403, 409, 429 or 503 is a guard that runs before the broadcast
+  (`routes/onboarding.rs` `relay_registration`; 409 since FoxLeague #717, mainnet 2026-11-11, FL13-1): nothing was sent
+  and the booking is released. Its 400 (the wallet address) stays on the careful side (MONEY-3). The client carries the
   status on the refusal (`ApiRefusal.httpStatus`).
 - Its HTTP 500 is also what a failed broadcast answers (`The registration could not be sent to the network...`), and a
   broadcast that failed for FoxLeague may still have reached the network. That, an answer that is not its envelope and
@@ -1419,6 +1427,9 @@ is recomputed at confirm and must match exactly, so confirm promptly.
 
 ### 13.1 What it does and its gates
 
+**From FoxLeague's fusion switch** (`/api/config` `fusion_mint.live_from`, 2026-11-20 14:00 UTC on mainnet) the
+fusion of 13.1 to 13.3 reverts and every fusion is a `fusionMint` (section 13.5). Before it, everything here holds.
+
 Burns 3 cards of the same rarity plus a FOXSY fee and hands you 1 card of the next rarity: since 2026-10-12
 a **random card** of the pre-minted pool for that rarity and the chosen input's position, drawn by the
 contract (`player_nft.rs:2289-2531`, `:2461-2494`). Choosing the position does not choose the card.
@@ -1452,7 +1463,7 @@ or `{can_fuse:true, ...}`. The binding clock is the view `getLastFusionTimestamp
 ### 13.3 The fusion transaction
 
 As built at `frontend/src/components/FusionTab.tsx:377-420`: **receiver = your own address**, value 0,
-gas 21,000,000, version 1:
+gas 22,800,000 (21,000,000 before 2026-11-13), version 1:
 
 ```
 MultiESDTNFTTransfer@0000000000000000050078fcafca32e94d2f1c49a28cfcadb68ad860363fe2f3@04
@@ -1514,6 +1525,64 @@ result (`backend/src/chain_indexer.rs:3867-3925`). A listed or auctioned card ca
   Do not use the view `getFusionMatchWaiverQuote` from another shard: it answers `(0, price)` there
   (`player_nft.rs:2957-2988`). Reverts: `Fusion match waiver disabled`, `Wrong waiver payment`,
   `Failed to decode NFT`, `Match waiver exceeds the floor`.
+
+### 13.5 From the fusion switch: `fusionMint` (FoxLeague #711 and #736)
+
+The players contract carries `fusionMint` since its upgrade of 2026-11-13 21:32:50 UTC (code hash `e628771c...`,
+`getFusionMintVersion` 2). Its switch is `getFusionMintLiveFrom`, served as `/api/config`
+`fusion_mint: {live, live_from, paused}` (`backend/src/routes/config.rs`): `2026-11-20T14:00:00Z` on mainnet, read
+2026-11-15. From it the old `fusion` and `loadFusionPool` refuse on chain, the pool is emptied (`clearAllFusionPools`)
+and `GET /api/fusion/can-fuse` with nonces answers an error with code `fusion_mint_live` (without nonces:
+`can_fuse:false, reason:"fusion_mint_live"`; the wallet spacing still answers first). `paused: true` is the version
+mismatch of contract and server past the live time: no fusion of either kind can run, `can-fuse` and the prepare answer
+code `fusion_updating`.
+
+**Prepare:** `POST /api/fusion/prepare {nonces: [3], position_choice: 0..2}` (auth, a registered wallet;
+`backend/src/routes/fusion_mint.rs`). It refuses before the live time, then checks the three cards (one rarity, not
+Legendary, not listed, not injured, not suspended, the wallet spacing, each card's fusion cooldown, the match gate and
+floor on the LIVE competitive matches plus credit, a cost set), that the wallet holds them on chain, reserves a new
+face for the chosen position and output rarity, reads the floors (`getFusionMintFloor`), computes the stats and signs
+it all (ed25519, message tag `fusionMint.v2`, valid 10 minutes). It answers `{sc_call_data, receiver, gas_limit, expiry,
+cost_raw, foxsy_token_id, nonces, position_choice, preview: {position, rarity, ovr, stats[{stat, value, input_values,
+scaled_value}]}}`. Asked again with more than 5 minutes left on its signature it answers the same signature; a new one
+at most every 2 s a wallet (refusal code `fusion_prepare_pace`). No sync is needed: the server signs the cards' live
+attributes (the sync encoding).
+
+**The transaction:** receiver = your own address, value 0, version 1, data = `sc_call_data` byte for byte, gas =
+the served `gas_limit` (FoxLeague's app signs nothing outside 24.3M to 48.6M):
+
+```
+MultiESDTNFTTransfer@<players contract hex>@04@<FOXSY hex>@00@<cost>
+  @<FXLP hex>@<nonce1>@01 @<FXLP hex>@<nonce2>@01 @<FXLP hex>@<nonce3>@01
+  @<"fusionMint" hex>@<position_choice>@<expiry>@<signature 64 bytes>@<new card>
+  @<nonce1>@<attrs1>@<nonce2>@<attrs2>@<nonce3>@<attrs3>
+```
+
+(one line; numbers as minimal even-length hex, 0 the empty argument; `fusion_mint.rs` `call_data`, `call_arguments`).
+The FOXSY leg is the fusion cost of the rarity, not signed; `cost_raw` names the same amount.
+
+**The new card:** each of its 7 stats is `(a + b + c) x new cap / (3 x old cap)`, one integer division (caps 30, 55,
+75, 90, 100), then the average floor (0, off) and the per-stat minimum of the output rarity (22, 30, 36, 40), at most
+the new cap (`fusion_mint.rs` `mint_stats`; the contract's `fusion_mint_stats`). Level 1, no XP, condition 100, no
+matches, 0 yellow cards, a new face, name, country and a random shirt; it carries an input's injury and ban as before.
+
+**Confirm:** `POST /api/fusion/confirm {tx_hash, burned_nonces}` as for the old fusion; the indexer learns
+`fusionMint` on its own.
+
+**What the agent does** (`src/foxleague/levels.ts` `fusionMode`, `src/executor/rules.ts` `mintFusion`,
+`src/executor/tx.ts` `fusionMintTx`): reads the switch from the snapshot's config at the action's own time; refuses any
+fusion when the switch cannot be read, while `paused` and in the 10 minutes before `live_from`; before it, the old
+fusion (13.3); from it, asks the prepare (once more after the pace refusal), takes FoxLeague's refusal as its word and
+an unanswered prepare as no "yes"; it signs the served data with the served gas only when it is exactly the fusion
+planned: the fee of the rarity and nothing more (the cost it names too), the three planned cards in their order as
+transfers and as signed inputs, `fusionMint`, the position asked, an expiry 2 to 20 minutes ahead, a 64-byte
+signature, gas inside 24.3M to 48.6M. Its own card checks stay (the gate on the live count, no listing, no transfer
+lock, no fusion cooldown, no injury or ban, outside the 18, 18 cards left); the sync check, can-fuse and the pool are
+not asked from the switch. The prepare is a write on FoxLeague, so the agent asks it only once every check of its own
+has passed: the cards, the fee within Max shop payment and the FOXSY for it, the caps and the EGLD for gas, these two
+counted with the least a fusionMint it would sign can cost (`fusionMintBound`). Its answer then goes through every
+check again. A dry run asks no prepare: it checks the fusion the same way, counts its gas at the most a fusionMint can
+take and simulates nothing, since the signature in it is FoxLeague's (GitHub review of PR #73, R73A-2).
 
 ---
 
@@ -2043,3 +2112,26 @@ manual at `89a1955d7`, which states the same.
 computes a percent and no payment check reads it. The agent pays list prices in exact amounts; when FoxLeague ships
 the Shop side, read how a wallet's price is quoted before that date.
 
+
+## 26. Mainnet of 2026-11-13 (FoxLeague 56e5b9855, manual 9ebcbc52d): the fusion that mints its result and the rest
+
+Read on 2026-11-15 through git only: FoxLeague's `origin/main` from `89a1955d7` to `56e5b9855` (its promotion #742 of
+2026-11-13), and on chain read-only: the players contract was upgraded at 2026-11-13 21:32:50 UTC (tx `486df9ae...e05d`,
+code hash `e628771cda233b50141950e0e79f6819835353bc668ebe8810823b9dce6cacc4`, the canonical fusionMint build of
+72,036 bytes, `getFusionMintVersion` 2), and `/api/config` serves `fusion_mint: {live: false, live_from:
+"2026-11-20T14:00:00Z", paused: false}`. FoxLeague's `contracts/deploys.yaml` on main has no row for that upgrade yet.
+
+| FoxLeague change | Effect on the agent | What the agent does since this sync |
+|---|---|---|
+| #711, #736: fusionMint, a fusion that mints its result (each stat the average of the three, translated to the new rarity, floors 22/30/36/40), no sync needed, from the players contract's switch | Until the switch nothing changes: the old fusion runs (agent 7 fused that way on 13 Nov, confirmed). From it the old `fusion` reverts and can-fuse with nonces is an error, so the agent could never fuse again | Section 13.5: the switch read at the action's time, fusion refused while unread, paused or within 10 minutes of the switch; from it the prepared `fusionMint`, signed only when it is exactly the fusion planned (FL13-3, FL13-4). The snapshot's Fusion line and the prompt give both rules (FL13-6) |
+| The same upgrade: every players call about 834,300 gas more | The agent's limits fell to 1.27x to 1.38x of the gas used (above 1x, under the owner's band) | FoxLeague's new limits (section 1.7, FL13-2) |
+| #731: "Fusion complete" sent when the chain kept the fusion, "Fusion failed" otherwise | Notifications only | Nothing |
+| #717: relay guards before the broadcast (G17 and G16 answer 409, G16's nonce and G18 answer 403, unreadable reads answer 500 before any send), free onboarding badges at 10 a day per connection | A 409 kept the fee booked and said the payment may have gone out. The badge budget counts only the free draw of a wallet with no team; the agent's badge is a regeneration of a registered team (`src/setup/badge.ts`), so many agents on one server are not affected | 409 releases the booking (FL13-1); 400 stays careful (MONEY-3) |
+| #701: the shop confirm proves the payer before any strand alarm; at most 10 confirmations a wallet in 60 s across `/shop/confirm`, `/shop/medicine`, `/shop/ranked-ticket` and `/shop/waive-cooldown` | Past the budget: HTTP 429 with code `tx_pending` ("Your payment is kept"). The agent reads `tx_pending` as "confirm the same hash again", never as refused or refunded; its pending retry asks once a pass | Nothing to change |
+| #730: a forfeit is announced at its kickoff and never airs | Upcoming matches go from `locked` to `finished` at the kickoff for a forfeit; no new phase or status value | Nothing to change |
+| #737: the full replay on Autonomys (ships off), `permanent_replay` on tournament matches | Not read | Nothing |
+| #733: My interests, `GET /api/players/interests/mine` | Not used | Nothing |
+| `docs/manual/openapi.json` (about 900 lines) | No route the agent calls moved or lost a field it reads; `/api/config` gained `fusion_mint` (required); the relay gained 409, the shop confirms 429; tournament matches gained `permanent_replay` | Read as above |
+| can-fuse's wallet spacing is text (`"0d 19h"`), not seconds | The refusal said "NaN h left" | Read as text (FL13-5) |
+
+The game manual copy is synced to `9ebcbc52d` (16 pages, no page left undecided).

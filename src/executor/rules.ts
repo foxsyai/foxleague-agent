@@ -7,12 +7,14 @@ import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
 import { FORMATION_SLOTS, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
-import type { CanFuse, CanList, FoxConfig, MatchWaiverQuote, MedicineQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
+import type { CanFuse, CanList, FoxConfig, FusionPrepared, MatchWaiverQuote, MedicineQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
-import { leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns } from '../foxleague/levels.ts'
+import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns } from '../foxleague/levels.ts'
+import { fusionMintTx } from './tx.ts'
+import { STATS } from '../foxleague/types.ts'
 import type { SpendCategory } from '../store/db.ts'
 
 export interface Verdict {
@@ -35,9 +37,15 @@ export interface RulesContext {
   lastRankedStartAt?: Date | null
   /** Escrow the tournaments contract holds for this wallet (view getEntryAmount), for refund claims. */
   entryAmount?: bigint
-  /** Fusion pre-check (GET /api/fusion/can-fuse) and the pool stock of the output, fetched for fuse. */
+  /** Fusion pre-check (GET /api/fusion/can-fuse) and the pool stock of the output, fetched for the old fuse. */
   canFuse?: CanFuse | null
   fusionPool?: number
+  /**
+   * From FoxLeague's fusion switch: its prepared fusionMint (POST /api/fusion/prepare), its refusal in its own words, or
+   * null when it gave no answer. FUSION_UNASKED while the executor has not asked it yet (R73A-2): every other check runs
+   * and the verdict carries no transaction to sign.
+   */
+  fusionPrepared?: FusionPrepared | { refusal: string } | typeof FUSION_UNASKED | null
   /** The card's live auction (view getAuction), fetched for bid and cancel_listing. */
   auction?: Auction | null
   /** Listing pre-check and the current floor of the card's rarity (0 when none is listed), fetched for list_card; null = unavailable. */
@@ -106,6 +114,16 @@ export interface RulesContext {
   cardLock?: { until: Date | null; injuredUntil?: Date | null; injuryUnread?: boolean } | null
   now: Date
 }
+
+/**
+ * In `fusionPrepared`: FoxLeague's prepare not asked yet (GitHub review of PR #73, R73A-2). The prepare is a write on
+ * FoxLeague (it signs a new card for 10 minutes, at most one every 2 seconds a wallet, up to 45 s), so the executor asks
+ * it only once every check of the agent's own passed, and never in a dry run. With it a fusion that passes every other
+ * check is allowed `unprepared`: the executor then asks the prepare and checks again with its answer, live, or counts
+ * the fusion without simulating it, in a dry run. Only a prepared fusion is ever built to be signed. A symbol, so no
+ * answer read from FoxLeague can ever be taken for it.
+ */
+export const FUSION_UNASKED: unique symbol = Symbol('fusion prepare not asked yet')
 
 const refuse = (refusal: string, category: SpendCategory = 'play'): Verdict => ({ ok: false, refusal, foxsy: 0n, category, facts: {}, notes: [] })
 const allow = (foxsyWhole: number | bigint, facts: Record<string, unknown> = {}, category: SpendCategory = 'play', notes: string[] = []): Verdict => ({
@@ -828,9 +846,47 @@ function inSquad(s: AgentSnapshot, nonce: number): boolean {
 }
 
 function canFuseReason(c: CanFuse): string {
-  if (c.cooldown_remaining) return `wallet fusion cooldown, ${Math.ceil(c.cooldown_remaining / 3600)} h left${c.cooldown_end ? ` (until ${c.cooldown_end})` : ''}`
+  // FoxLeague serves the spacing left as text ("0d 19h"); a number is seconds (an older answer).
+  const left = typeof c.cooldown_remaining === 'number' && Number.isFinite(c.cooldown_remaining) ? `${Math.ceil(c.cooldown_remaining / 3600)} h` : typeof c.cooldown_remaining === 'string' && /^\d+d \d+h$/.test(c.cooldown_remaining) ? c.cooldown_remaining : null
+  if (c.cooldown_remaining) return `wallet fusion cooldown${left ? `, ${left} left` : ''}${c.cooldown_end ? ` (until ${c.cooldown_end})` : ''}`
   const who = (c.dirty_players ?? c.blocked_players ?? []).map(n => `#${n}`).join(', ')
   return `${c.reason ?? 'not fusable'}${who ? ` (${who})` : ''}`
+}
+
+/**
+ * The fusion that mints its result, from FoxLeague's switch on (the agent's own card checks passed before): FoxLeague's
+ * prepare checked the cards on chain, the wallet spacing, the injuries and the bans before it signed the new card. The agent
+ * signs its answer only when it is exactly the fusion planned (fusionMintTx) and pays exactly the fee of the rarity,
+ * within the max shop payment (the FOXSY in the wallet is checked by the caller). An unanswered prepare is no "yes";
+ * FoxLeague's refusal is its word. Not asked yet (FUSION_UNASKED), the fusion is allowed `unprepared`, with nothing to
+ * sign: the executor asks the prepare only then and checks again with its answer.
+ */
+function mintFusion(a: Extract<Action, { type: 'fuse' }>, s: AgentSnapshot, ctx: RulesContext, inputs: PlayerView[]): Verdict {
+  const rarity = inputs[0]!.rarity
+  if (rarity === 'Legendary') return refuse('a Legendary cannot be fused')
+  const fee = s.config?.fusion_costs_foxsy?.[RARITY_LEVEL[rarity]]
+  if (!fee) return refuse(`fusion cost for ${rarity} unknown`)
+  if (fee > ctx.settings.maxShopPaymentFoxsy) return refuse(`a fusion fee of ${fee} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy} (Max shop payment)`)
+  const output = `${NEXT_RARITY[RARITY_LEVEL[rarity]]} ${inputs[a.position_of]!.position}`
+  const p = ctx.fusionPrepared
+  if (p === FUSION_UNASKED) return allow(fee, { fee, nonces: a.player_nonces, positionChoice: a.position_of, unprepared: true }, 'play', [`2 cards fewer, a new ${output} in their place (minted now, level 1, condition 100)`])
+  if (p === null || p === undefined) return refuse("the fusion could not be prepared (FoxLeague's /fusion/prepare gave no answer): not fusing blind")
+  if ('refusal' in p) return refuse(`FoxLeague says not now: ${p.refusal}`)
+  try {
+    fusionMintTx(s.agent.address, p, { feeAtomic: wholeToAtomic(fee), nonces: a.player_nonces, positionChoice: a.position_of, now: ctx.now })
+  } catch (err) {
+    return refuse(err instanceof Error ? err.message : String(err))
+  }
+  return allow(fee, { fee, nonces: a.player_nonces, positionChoice: a.position_of, prepared: p }, 'play', [`2 cards fewer, ${mintedText(p) ?? `a new ${output}`} in their place (minted now, level 1, condition 100)`])
+}
+
+/** What FoxLeague's preview says the fusion mints, from numbers and known words only, or null when it is not readable. */
+function mintedText(p: FusionPrepared): string | null {
+  const v = p.preview
+  const rarities = ['Uncommon', 'Rare', 'Epic', 'Legendary']
+  if (!v || !rarities.includes(v.rarity) || !['GK', 'DEF', 'MID', 'FWD'].includes(v.position) || !Number.isInteger(v.ovr) || !Array.isArray(v.stats)) return null
+  const stats = v.stats.filter(x => (STATS as readonly string[]).includes(x?.stat) && Number.isInteger(x.value)).map(x => `${x.stat} ${x.value}`)
+  return `a new ${v.rarity} ${v.position}, OVR ${v.ovr}${stats.length === 7 ? ` (${stats.join(', ')})` : ''}`
 }
 
 /**
@@ -1463,7 +1519,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const rarity = inputs[0]!.rarity
       if (inputs.some(c => c.rarity !== rarity)) return refuse('all three cards must be the same rarity')
       if (rarity === 'Legendary') return refuse('a Legendary cannot be fused')
+      // FoxLeague's fusion switch (fusion_mint): the old fusion until it, the fusion that mints its result from it; none
+      // while FoxLeague updates fusion, in the minutes before the switch or when the switch cannot be read.
+      const mode = fusionMode(cfg, ctx.now)
+      if (mode.mode === 'closed') return refuse(mode.why)
+      const mint = mode.mode === 'mint'
       // FoxLeague's match gate of the rarity (2026-10-12): Common 5, Uncommon 15, Rare 45, Epic 135, part really played.
+      // From the switch FoxLeague signs the competitive matches the card shows, synced or not.
       const g = matchGate(cfg, rarity)
       for (const c of inputs) {
         if (c.listed) return refuse(`#${c.nonce} is listed for sale`)
@@ -1474,12 +1536,16 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (c.injuredUntil) return refuse(`#${c.nonce} is injured until ${c.injuredUntil}: an injured card cannot be fused`)
         if (c.suspended) return refuse(`#${c.nonce} is suspended (a yellow card ban to serve): a suspended card cannot be fused`)
         if (inSquad(s, c.nonce)) return refuse(`#${c.nonce} is in the lineup or on the bench: set a squad without it first`)
-        if (c.dirty) return refuse(`#${c.nonce} has unsynced stats: sync first (the contract reads the on-chain match count)`)
+        if (c.dirty && !mint) return refuse(`#${c.nonce} has unsynced stats: sync first (the contract reads the on-chain match count)`)
         if (c.competitiveMatches < g.floor) return refuse(`#${c.nonce} has played ${c.competitiveMatches} competitive matches; ${aRarity(rarity)} must really play ${g.floor} of its ${g.gate}`)
         if (c.competitiveMatches + c.fusionMatchCredit < g.gate) return refuse(`#${c.nonce} has ${c.competitiveMatches + c.fusionMatchCredit} of the ${g.gate} competitive matches ${aRarity(rarity)} needs for fusion`)
       }
       const left = s.players.filter(p => !p.listed).length - 2
       if (left < 18) return refuse(`fusion would leave ${left} cards; a match needs 18`)
+      if (mint) {
+        const v = mintFusion(a, s, ctx, inputs)
+        return v.ok ? needFoxsy(Number(v.facts.fee), v) : v
+      }
       // The wallet fusion cooldown and the dirty-card check live in the pre-check: unreadable is no "yes".
       if (ctx.canFuse === null) return refuse('the fusion pre-check is unavailable: not fusing blind')
       if (ctx.canFuse && !ctx.canFuse.can_fuse) return refuse(`FoxLeague says not now: ${canFuseReason(ctx.canFuse)}`)

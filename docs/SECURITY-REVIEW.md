@@ -2325,6 +2325,71 @@ Stays open after the review:
 - The number of pages in the page record has no cap of its own: it is the maintainer's file, built by `sync-manual`
   from a FoxLeague checkout, not read from FoxLeague's server. The line names at most eight of them either way.
 
+## FoxLeague mainnet of 13 Nov: fusion mint and the rest (2026-11-15)
+
+FoxLeague's `origin/main` from `89a1955d7` (the last sync, 2026-11-10) to `56e5b9855` (its promotion #742 of
+2026-11-13, manual `9ebcbc52d`), read through git only. On chain, read only: the players contract was upgraded on
+mainnet at 2026-11-13 21:32:50 UTC to the fusionMint build (72,036 bytes, code hash `e628771c...`,
+`getFusionMintVersion` 2) and `/api/config` serves `fusion_mint: {live: false, live_from: "2026-11-20T14:00:00Z",
+paused: false}`. The agent's fusion was correct and safe on mainnet that day: until the switch the old fusion runs on
+the upgraded contract, the agent's 21M gas was 1.38x of the 15.26M it now uses; from the switch FoxLeague's
+pre-check (`can-fuse` with nonces answers an error) makes the agent refuse every fusion before anything is signed.
+What it lacked: the switch itself (a fusion signed in the minute around it could revert, the gas lost) and the new
+fusion (from the switch it could never fuse again). The fixes are by Claude Opus 5.5, test first: each test under
+`test/foxleague-1113/` failed on `1a3dffb` for the reason given and passes now. `docs/FOXLEAGUE-INTEGRATION.md`
+sections 1.7, 4.5, 13.5 and 26 and `docs/ECONOMY-AND-RULES.md` sections 8, 9, 10, 14, 17 and 20 carry the details.
+R73A-1 and R73A-2 come from the GitHub review of PR #73 (two lows, no other finding). The tests of R73A-2 failed on the
+branch at `f919d43` for the reason given; those of R73A-1 pass there, as the code was right, and each was seen failing
+with the behaviour it pins broken in the source, which was then restored.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| FL13-1 | low (bookkeeping of the registration fee; FoxLeague #717) | FoxLeague's relay answers HTTP 409 in its own envelope for two new guards that run before anything is signed or sent: a relay of the wallet still in flight (G17) and another transaction of the wallet waiting in the pool (G16). The agent knew 403, 429 and 503 only, so a 409 kept the 5,000 FOXSY fee booked in the setup budget and told the owner the payment may have gone out | 409 joins the statuses that release the booking. The relay's 400 (the wallet address) stays on the careful side as MONEY-3 pins it |
+| FL13-2 | low (gas; the players contract upgrade of 13 Nov) | Every call of the upgraded players contract uses about 834,300 gas more. The agent's limits fell to 1.27x to 1.38x of the gas used: still above 1x but under the owner's 1.4x to 1.8x band; the next upgrade adds as much again | FoxLeague's new limits: fusion 22.8M, waivers 17.5M, shopPay 14M, auction list 17.2M, bid 15.8M, cancel 13.9M, each about 1.5x; registerAndPay keeps 12M, bound by the relay ceiling as in FoxLeague's app. The test holds each one inside 1.4x to 1.8x of FoxLeague's measured gas on the 72,036-byte contract; the two tests that pinned the old fusion and shopPay limits pin the new ones |
+| FL13-3 | low (gas only; fails closed) | The agent read none of FoxLeague's fusion switch. A plan's actions run over most of an hour, so a pre-check read just before `live_from` could send an old fusion that reaches the chain after it and reverts (FoxLeague's own pre-check reads its probe once a minute). `paused` (the contract and the server speak different fusion versions) and a config without the switch were no reason to stop | `fusionMode` (`src/foxleague/levels.ts`) reads the switch at the action's own time: no fusion while it cannot be read (a block that is not exactly `{live, live_from, paused}`), while `paused` or in the 10 minutes before `live_from`; the old fusion only before them. The fixture and the market test's config carry the switch as FoxLeague serves it |
+| FL13-4 | medium (game rules; from 2026-11-20 14:00 UTC; nothing unsafe) | From the switch every fusion is FoxLeague's `fusionMint`: the server signs the inputs' live attributes and the new card (`POST /api/fusion/prepare`) and the wallet signs the data it serves with the gas limit it serves. The agent knew only the old fusion: from the switch its pre-check is an error and the pool is empty, so it could never fuse again | From the switch the executor asks the prepare (once more after FoxLeague's 2-second pace), takes its refusal as its word and an unanswered prepare as no "yes"; it signs the served data with the served gas only when it is exactly the fusion planned (`fusionMintTx` in `src/executor/tx.ts`): a self transfer of the fee of the rarity and nothing more (the cost the answer names too), the three planned cards in their order as transfers and as signed inputs, `fusionMint`, the position asked, an expiry 2 to 20 minutes ahead, a 64-byte signature, 26 parts, gas inside 24.3M to 48.6M as in FoxLeague's app. Its own card checks stay; no sync, can-fuse or pool from the switch. The notes name the card FoxLeague says it mints. A dry run simulates the same data |
+| FL13-5 | low (words only) | `GET /api/fusion/can-fuse` serves the wallet spacing left as text (`"0d 19h"`); the agent divided it by 3,600 and its refusal said "NaN h left" | Text of that shape is read as it is, seconds as hours, anything else left out |
+| FL13-6 | low (what the plan knows; from the switch) | The prompt said only that the contract draws a random card from the pool (so the result is never known) and that inputs need synced stats; the snapshot said nothing of the switch. From it the plan would weigh every fusion by a rule that no longer runs | The snapshot's Fusion line says which fusion runs and when it changes, with the rule. The prompt's fusion paragraph gives both fusions and the average rule with its floors and what it means (a stat reaches the new cap only when all three hold it; one trained card does not carry two untrained ones). Only that paragraph of the prompt changes: its rule is wrong from the switch |
+| R73A-1 | low (tests; GitHub review of PR #73) | No test ran the branches of the executor's `prepareFusion`: FL13-4 handed `{ refusal }` and `null` to `checkAction` directly and stubbed only a prepare that answers. An edit that let the error leave `prepareFusion` (every fusion from the switch an executor error) or looped on the pace code (the wallet's lock held while it asks again and again) left every test green | `test/foxleague-1113/r73a-1-fusion-prepare-paths.test.ts` runs them live through the executor with mocked timers: FoxLeague's pace refusal (`fusion_prepare_pace`) is not asked again before 2.1 s, is asked once more at 2.1 s and never a third time, then signs or takes the refusal as FoxLeague's word; its refusal is refused in its words; a timeout, a plain error or an answer that is not its envelope is refused as unprepared. None of them books or signs anything. Seen failing with no retry, a 1-second wait, no bound on the retry, the refusal or the error leaving `prepareFusion` and an answer that is not the envelope read as FoxLeague's word |
+| R73A-2 | low (hygiene, no money; GitHub review of PR #73) | From the switch the executor asked the prepare (`POST /api/fusion/prepare`, a write on FoxLeague: a new card signed for 10 minutes, one every 2 seconds a wallet, up to 45 s) while it read the context, before any check of its own, and in a dry run too. A fuse refused for what the agent already knew (a listed card, a card in its fusion cooldown, one on the bench, short of its gate, the fee above Max shop payment or the FOXSY for it, no prices, the daily cap, the EGLD for gas) still cost a prepare and that time under the wallet's lock; a dry run asked one for every fuse. The test saw a prepare asked for each of those nine, live and in a dry run | Until the executor asks, the rules see `FUSION_UNASKED` and allow a fusion that passes every other check as `unprepared`, with nothing to sign. Live, the caps and the EGLD for gas are then checked with the least a fusionMint that `fusionMintTx` would sign can cost (`fusionMintBound`: the band's floor, the shortest card data), so they refuse only what the served fusion could not pass; only then is the prepare asked (once more after the pace), and its answer goes through the rules, the caps and the EGLD check again. A missing or refused prepare refuses and the served data is checked exactly as before; only a prepared fusion is built to be signed. A dry run asks no prepare and simulates no fusionMint (the signature in it is FoxLeague's): it books the fee and the most a fusionMint's gas can be (the band's ceiling, the longest card data). This replaces the last sentence of FL13-4: a dry run no longer simulates the served data |
+
+Also in this change: the game manual copy is synced to `9ebcbc52d` (16 pages, none left undecided). The rules with
+the manual are now about 105,000 tokens: DOCS-4 asked for the stated size to be restated (the five places and MS-C
+say so; the cost of a plan at the defaults stays about $0.25). The site's "How it plays" says how the agent fuses.
+
+What was checked and needs no change:
+- #701: at most 10 shop confirmations a wallet in 60 s (`/shop/confirm`, `/shop/medicine`, `/shop/ranked-ticket`,
+  `/shop/waive-cooldown`). Past it FoxLeague answers HTTP 429 with code `tx_pending` and "Your payment is kept"; the
+  agent reads `tx_pending` as "confirm the same hash again", never as refused or refunded. The request is unchanged.
+- #717's free onboarding badges (10 a day per connection) count only the free draw of a wallet with no team; the
+  agent's badge is a regeneration of a registered team, so many agents on one server are not affected.
+- #731 (fusion notifications), #730 (a forfeit is not broadcast; no new phase or status), #737 (`permanent_replay`,
+  ships off), #733 (My interests): nothing the agent reads changes.
+- `docs/manual/openapi.json`: no route the agent calls moved or lost a field it reads.
+- A sync's served gas limit is 18M + 3M a card since the upgrade; the agent signs up to 20M + 3M a card.
+
+Stays open:
+- The served fusionMint is checked for everything that moves money or cards. The new card itself (its face, name,
+  country, shirt and stats) and the inputs' signed attributes are FoxLeague's, signed by its game server and checked
+  by the contract, as a sync payload's are; the preview is shown in the notes, not compared with the agent's own sum.
+- FoxLeague's served fusionMint gas is its estimate (21.4M of processing; its contract audit measured 21.2M to 24.3M
+  on the Go VM); the first mainnet fusionMints will show it. The agent signs only inside FoxLeague's band.
+- The plan gets the rule and each card's stats, not a computed result per candidate fusion: the model does the sum.
+- Since R73A-2 a dry run does not hear FoxLeague's own checks of a fusion that mints (the wallet's 20-hour spacing, the
+  cards on chain, a reserved face): it may show a fusion as done that FoxLeague would refuse live. Live, that refusal
+  comes before anything is booked or signed.
+- The relay's 400 stays on the careful side (MONEY-3); FoxLeague's app counts it as refused before the broadcast.
+- The manual now documents that a wallet holding 18 cards registers without the fee (no starter squad). The agent
+  pays the fee as before; a new agent's wallet holds no card, so it never meets the case.
+- The rules and the manual are about 105,000 tokens by the measured ratio, above Haiku 5.5's 100,000-token card.
+- Production was not read: agent 7's confirmed fusion of 13 Nov is from the owner's activity. Until this is deployed,
+  the running agents fuse the old way until the switch and refuse every fusion from it (FoxLeague's pre-check); it has
+  to be live before 2026-11-20 14:00 UTC for them to fuse after it.
+- `sync-manual` and `manual-status` fetch in the FoxLeague checkout they are given. The FoxLeague checkout is read
+  only here, so both ran against a scratch mirror of its `origin/main` at `56e5b9855`; run `manual-status` on the
+  checkout itself before the deploy.
+
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
