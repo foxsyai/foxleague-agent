@@ -1190,11 +1190,15 @@ function Install-FoxLeagueAgent {
         $plan = 'by-hand'
         if ($yes -and $refused -eq '') { $plan = Get-FoxInnerUninstallPlan -Yes $true -Readiness $readiness -Facts $facts }
         $folder = ''
+        $innerDone = $false
         if ($plan -eq 'run' -or $plan -eq 'no-folder' -or $plan -eq 'no-service') { $folder = [string]$facts['dir'] }
         if ($plan -eq 'run') {
             Write-FoxLine ('Running ./install.sh --uninstall in ' + $folder + ' inside Ubuntu:')
             $r = Invoke-FoxLinux -Command @('/bin/bash', ($folder + '/install.sh'), '--uninstall')
-            if ($r['ExitCode'] -eq 0) { Write-FoxLine 'Done: the agent is stopped and its background service in Ubuntu is removed.' }
+            if ($r['ExitCode'] -eq 0) {
+                Write-FoxLine 'Done: the agent is stopped and its background service in Ubuntu is removed.'
+                $innerDone = $true
+            }
             else {
                 Write-FoxLine ('The uninstall inside Ubuntu did not finish (status ' + $r['ExitCode'] + '; what it said is above).')
                 Write-FoxInnerUninstallByHand $folder
@@ -1218,8 +1222,13 @@ function Install-FoxLeagueAgent {
             Write-FoxInnerUninstallByHand ''
         }
         if ($plan -eq 'no-ubuntu') { return }
-        Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu.'
-        Write-FoxLine 'The agent wallets may still hold funds.'
+        # An uninstall inside Ubuntu that ended with 0 has just said, right above, that the folder, the wallet words,
+        # the data and the PEM files stay and that the wallets may still hold funds: not twice (W-18). It cannot know
+        # what stays on the Windows side, which follows in every case.
+        if (-not $innerDone) {
+            Write-FoxLine 'Your folder, your wallet words (.env), your data and your PEM files stay in Ubuntu.'
+            Write-FoxLine 'The agent wallets may still hold funds.'
+        }
         Write-FoxLine 'WSL, Ubuntu and the line systemd=true in Ubuntu''s /etc/wsl.conf are left as they are:'
         Write-FoxLine 'other programs may use them.'
         Write-FoxLine 'Ubuntu stops a short while after its last window closes.'

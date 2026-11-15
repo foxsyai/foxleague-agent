@@ -1015,7 +1015,8 @@ Check 'W-17 -Uninstall asks one question and, with Enter, removes the agent insi
     True ($screen -match 'Removed the scheduled task "FoxLeague Agent \(WSL\)"') $screen
     True ($screen -match 'Done: the agent is stopped and its background service in Ubuntu is removed\.') $screen
     True ($screen -notmatch 'To do it by hand') 'the lines by hand after an uninstall that was done'
-    True ($screen -match 'Your folder, your wallet words \(\.env\), your data and your PEM files stay in Ubuntu\.') $screen
+    # The folder, the wallet words and the funds: said once, by the installer inside Ubuntu (W-18 checks both texts).
+    True ($screen -notmatch 'Your folder, your wallet words') $screen
     True ($screen -match 'Ubuntu stops a short while after its last window closes') $screen
     # Nothing it starts keeps running, so Ubuntu still stops by itself: it waits for every wsl.exe it starts and
     # starts nothing in the background.
@@ -1097,6 +1098,42 @@ Check 'W-17 -Uninstall answered n, without Ubuntu, without the folder or its ser
         True ($line -cmatch '^[\x20-\x7E]*$') ('not plain ASCII: ' + $line)
         True ($line -notmatch ', (and|or) ') ('a comma before and/or: ' + $line)
         True ($line -notmatch '(?i)\bbots?\b') ('the word bot: ' + $line)
+    }
+}
+Check 'W-18 after an uninstall inside Ubuntu that was done, -Uninstall adds only what that installer did not say' {
+    # On the PC of 15 Nov the folder and the funds were said twice, once by each installer, one under the other.
+    New-World -Distros $UbuntuThere -HasUser $true -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    Put-AgentInstall
+    $a = Get-FoxKeepAliveAction 'C:\WINDOWS'
+    $World['Task'] = @{ Execute = $a['Execute']; Arguments = $a['Arguments']; State = 'Running' }
+    Invoke-FoxUninstall
+    True ((LinuxLog) -match 'install\.sh --uninstall ran as fox') (LinuxLog)
+    $screen = Screen
+    $done = 'Done: the agent is stopped and its background service in Ubuntu is removed.'
+    True ($screen.Contains($done)) $screen
+    # After the Done line: WSL, Ubuntu and systemd=true stay, and Ubuntu stops by itself. Nothing else.
+    $after = $screen.Substring($screen.IndexOf($done) + $done.Length)
+    Equal $after ("`nWSL, Ubuntu and the line systemd=true in Ubuntu's /etc/wsl.conf are left as they are:`nother programs may use them." +
+        "`nUbuntu stops a short while after its last window closes.") 'what follows the Done line'
+    True ($screen -notmatch 'Your folder, your wallet words') $screen
+    True ($screen -notmatch 'may still hold funds') $screen
+    # Because the installer inside Ubuntu says both on every uninstall that ends with 0 (it stops with 1 otherwise).
+    $inner = [System.IO.File]::ReadAllText((Join-Path (Split-Path -Parent $Script) 'install.sh'))
+    $part = $inner.Substring($inner.IndexOf('if [ "$MODE" = uninstall ]; then'))
+    $part = $part.Substring(0, $part.IndexOf("`n  exit 0`n"))
+    True ($part.Contains('info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."')) $part
+    True ($part.Contains('info "The agent wallets may still hold funds. Keep the recovery words; delete the folder"')) $part
+    # Every other way keeps the whole text: the installer inside Ubuntu said none of it there.
+    $full = 'Your folder, your wallet words \(\.env\), your data and your PEM files stay in Ubuntu\.\nThe agent wallets may still hold funds\.\nWSL, Ubuntu and the line systemd=true in Ubuntu''s /etc/wsl\.conf are left as they are:\nother programs may use them\.\nUbuntu stops a short while after its last window closes\.$'
+    foreach ($case in @('n', 'failed', 'no-service', 'no-folder', 'unreachable')) {
+        if ($case -eq 'unreachable') { New-World -Distros $UbuntuThere } else { New-World -Distros $UbuntuThere -HasUser $true }
+        if ($case -eq 'failed') { Put-AgentInstall -Exit 1 }
+        elseif ($case -eq 'no-service') { Put-AgentInstall -Service $false }
+        elseif ($case -ne 'no-folder') { Put-AgentInstall }
+        if ($case -eq 'n') { $World['Answers'] = @('n') }
+        Invoke-FoxUninstall
+        True ((Screen) -match $full) ($case + ': ' + (Screen))
+        True ((Screen) -notmatch [regex]::Escape($done)) ($case + ': ' + (Screen))
     }
 }
 Check 'W-12 every line of -Uninstall fits in 100 columns (the PC''s window had 120 and broke words at its edge)' {
