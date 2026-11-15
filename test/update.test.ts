@@ -4,12 +4,12 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync, spawnSync } from 'node:child_process'
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   UpdateError, archiveName, downloadArchive, fetchRelease, isNewer, manifestBytes, parseManifest, signManifest, verifyManifest, type Manifest,
 } from '../src/update/release.ts'
-import { activate, childEnv, confirmStart, detectLayout, selfUpdateRefusal, stage, startNote } from '../src/update/install.ts'
+import { activate, childEnv, confirmStart, detectLayout, run, selfUpdateRefusal, stage, startNote, type Runner } from '../src/update/install.ts'
 import { buildRelease, codeTree, managedInstall, publish, serve, testKey, tmp } from './update-fixtures.ts'
 
 const KEY = testKey()
@@ -211,6 +211,62 @@ test('UPD-8: a release that cannot be prepared, lies about its version or climbs
   const same = buildRelease(tmp(), codeTree(tmp(), '1.1.0'), '1.1.0', KEY.privatePem)
   await assert.rejects(stage(layout, same.manifest, same.archive), /already running/)
   await assert.rejects(stage({ root: inst.code, code: inst.code, managed: false }, failing.manifest, failing.archive), /cannot update itself/)
+})
+
+test('R69A-1: an update that fails on a file call outside its own checks releases its lock and leaves no staging folder; a live lock still refuses, a stale one is taken over', async () => {
+  const inst = managedInstall('1.1.0')
+  const layout = detectLayout(inst.code)
+  const versions = join(inst.root, 'versions')
+  const lock = join(versions, 'update.lock')
+  const staging = join(versions, '.staging-v1.2.0')
+  const left = (): string[] => readdirSync(versions).sort()
+  const built = buildRelease(tmp(), codeTree(tmp(), '1.2.0'), '1.2.0', KEY.privatePem)
+  // The staging folder cannot be made (on a real machine a full disk or a folder without write right): here a plain
+  // file takes its place while the archive is listed, so mkdirSync throws EEXIST, outside fail().
+  const noStaging: Runner = async (cmd, args, o) => {
+    if (args[0] === '-tvzf') writeFileSync(staging, 'in the way')
+    return run(cmd, args, o)
+  }
+  // A lock held by an update that is running refuses, and that lock is not this call's to remove.
+  writeFileSync(lock, 'held')
+  const heldAt = statSync(lock).mtimeMs
+  await assert.rejects(stage(layout, built.manifest, built.archive, { run: noStaging }), /another update is being installed right now/)
+  assert.equal(readFileSync(lock, 'utf8'), 'held', 'the other update keeps its lock')
+  assert.equal(statSync(lock).mtimeMs, heldAt)
+  rmSync(lock)
+  // mkdirSync of the staging folder throws.
+  await assert.rejects(stage(layout, built.manifest, built.archive, { run: noStaging }), /EEXIST/)
+  assert.equal(existsSync(lock), false, 'the lock is released')
+  assert.deepEqual(left(), ['active', 'v1.1.0'], 'nothing is left behind')
+  // A step that throws instead of answering, with the release unpacked in the staging folder.
+  const prepareThrows: Runner = async (cmd, args, o) => {
+    if (cmd === 'bash') throw new Error('spawn bash EAGAIN')
+    return run(cmd, args, o)
+  }
+  await assert.rejects(stage(layout, built.manifest, built.archive, { run: prepareThrows }), /EAGAIN/)
+  assert.equal(existsSync(lock), false, 'the lock is released')
+  assert.deepEqual(left(), ['active', 'v1.1.0'], 'the unpacked release is removed')
+  // renameSync of the staging folder to its place throws (it is gone once the release is prepared).
+  const noRename: Runner = async (cmd, args, o) => {
+    const r = await run(cmd, args, o)
+    if (cmd === 'bash') rmSync(staging, { recursive: true, force: true })
+    return r
+  }
+  await assert.rejects(stage(layout, built.manifest, built.archive, { run: noRename }), /ENOENT/)
+  assert.equal(existsSync(lock), false, 'the lock is released')
+  assert.deepEqual(left(), ['active', 'v1.1.0'])
+  // A lock left by an update that was killed (older than 30 minutes) is taken over, and released when this call fails.
+  writeFileSync(lock, '')
+  const old = new Date(Date.now() - 31 * 60_000)
+  utimesSync(lock, old, old)
+  await assert.rejects(stage(layout, built.manifest, built.archive, { run: noStaging }), /EEXIST/)
+  assert.equal(existsSync(lock), false, 'the lock it took over is released')
+  // The next update is not refused, and on success the lock goes as before.
+  assert.equal(await stage(layout, built.manifest, built.archive), 'v1.2.0')
+  assert.equal(existsSync(lock), false)
+  assert.deepEqual(left(), ['active', 'v1.1.0', 'v1.2.0'])
+  assert.equal(readFileSync(join(versions, 'v1.2.0', '.prepared'), 'utf8').trim(), '--prepare')
+  assert.equal(readFileSync(join(versions, 'active'), 'utf8'), 'v1.1.0\n', 'the running release stays active')
 })
 
 const launch = (root: string): number => spawnSync('bash', [join(root, 'run.sh')], { env: { PATH: process.env.PATH ?? '' }, encoding: 'utf8' }).status ?? -1

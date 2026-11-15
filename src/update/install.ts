@@ -192,7 +192,8 @@ export function windowsHint(distro: string, root: string, home: string | undefin
 /**
  * Unpacks a verified archive into versions/v<version> and has the new release prepare itself (its own
  * `install.sh --prepare`: Node, dependencies, the recovery words check, the launcher). Returns the folder's name.
- * Throws UpdateError and leaves nothing behind when a step fails.
+ * Throws UpdateError when a step fails, or the file system's own error (a full disk, a folder that cannot be
+ * written), and leaves nothing behind either way: no staging folder and no lock (R69A-1).
  */
 export async function stage(layout: Layout, manifest: Manifest, archive: string, o: { run?: Runner; env?: Record<string, string>; /** Left out: wslDistro(). */ wsl?: string | null } = {}): Promise<string> {
   if (!layout.managed) throw new UpdateError('this install cannot update itself')
@@ -218,41 +219,53 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
     if (age < LOCK_STALE_MS) throw new UpdateError('another update is being installed right now')
     writeFileSync(lock, '', { mode: 0o600 }) // left by an update that was killed: taken over
   }
+  // From here the lock is this call's. Every way out releases it (R69A-1): a refusal, a file call that throws (a full
+  // disk, a folder that cannot be written) and success alike. Before, a throw outside the refusals left it, and every
+  // update for the next 30 minutes was refused as "another update is being installed right now".
   const clean = (): void => rmSync(staging, { recursive: true, force: true })
   const fail = (why: string, terminal = false): never => {
-    clean()
-    rmSync(lock, { force: true })
     throw new UpdateError(why, { terminal })
   }
-  clean()
-  const listing = await exec('tar', ['-tzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
-  if (listing.code !== 0) return fail('the archive could not be read')
-  if (!archivePathsSafe(listing.out)) return fail('the archive holds a path outside its own folder')
-  if (listing.out.split('\n').some(l => ownersPath(l.split('/').slice(1).join('/')))) return fail('the archive holds files that belong to an install, not to a release (.env, data, pem, keys, node_modules or .node)')
-  const kinds = await exec('tar', ['-tvzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
-  if (kinds.code !== 0) return fail('the archive could not be read')
-  if (!archiveOnlyFilesAndFolders(kinds.out)) return fail('the archive holds something that is not a plain file or folder (a link or a special file)')
-  mkdirSync(staging, { recursive: true, mode: 0o700 })
-  // In the C language whatever the owner's: tar's reason is read below.
-  const unpack = await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=1'], { cwd: versions, env: { ...env, LC_ALL: 'C' }, timeoutMs: 120_000 })
-  if (unpack.code !== 0) {
-    const why = unpackFailure(unpack, layout.root, o.wsl === undefined ? wslDistro() : o.wsl)
-    return fail(why.message, why.terminal)
-  }
-  let pkg: { name?: unknown; version?: unknown }
   try {
-    pkg = JSON.parse(readFileSync(join(staging, 'package.json'), 'utf8')) as typeof pkg
-  } catch {
-    return fail('the archive is not a foxleague-agent release')
+    clean()
+    const listing = await exec('tar', ['-tzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
+    if (listing.code !== 0) return fail('the archive could not be read')
+    if (!archivePathsSafe(listing.out)) return fail('the archive holds a path outside its own folder')
+    if (listing.out.split('\n').some(l => ownersPath(l.split('/').slice(1).join('/')))) return fail('the archive holds files that belong to an install, not to a release (.env, data, pem, keys, node_modules or .node)')
+    const kinds = await exec('tar', ['-tvzf', archive], { cwd: versions, env, timeoutMs: 60_000 })
+    if (kinds.code !== 0) return fail('the archive could not be read')
+    if (!archiveOnlyFilesAndFolders(kinds.out)) return fail('the archive holds something that is not a plain file or folder (a link or a special file)')
+    mkdirSync(staging, { recursive: true, mode: 0o700 })
+    // In the C language whatever the owner's: tar's reason is read below.
+    const unpack = await exec('tar', ['-xzf', archive, '-C', staging, '--strip-components=1'], { cwd: versions, env: { ...env, LC_ALL: 'C' }, timeoutMs: 120_000 })
+    if (unpack.code !== 0) {
+      const why = unpackFailure(unpack, layout.root, o.wsl === undefined ? wslDistro() : o.wsl)
+      return fail(why.message, why.terminal)
+    }
+    let pkg: { name?: unknown; version?: unknown }
+    try {
+      pkg = JSON.parse(readFileSync(join(staging, 'package.json'), 'utf8')) as typeof pkg
+    } catch {
+      return fail('the archive is not a foxleague-agent release')
+    }
+    if (pkg.name !== RELEASE_NAME || pkg.version !== manifest.version) return fail('the archive holds another version than its signed manifest says')
+    if (!existsSync(join(staging, 'install.sh')) || !existsSync(join(staging, 'src', 'service.ts'))) return fail('the archive is not a foxleague-agent release')
+    const prepared = await exec('bash', [join(staging, 'install.sh'), '--prepare'], { cwd: staging, env, timeoutMs: 15 * 60_000 })
+    if (prepared.code !== 0) return fail(`the new version could not be prepared, nothing was changed${prepared.tail ? `: ${prepared.tail.split('\n').slice(-3).join(' | ')}` : ''}`)
+    rmSync(target, { recursive: true, force: true }) // what an earlier attempt that was undone left there
+    renameSync(staging, target)
+    return name
+  } finally {
+    // After success the staging folder is the release's folder by now, so this finds nothing to remove. A staging
+    // folder that cannot be removed is said in the log, not thrown: the reason the update stopped is the one to tell,
+    // and the lock goes anyway (the next update and confirmStart try the folder again).
+    try {
+      clean()
+    } catch (err) {
+      console.error('the staging folder of the update could not be removed:', err)
+    }
+    rmSync(lock, { force: true })
   }
-  if (pkg.name !== RELEASE_NAME || pkg.version !== manifest.version) return fail('the archive holds another version than its signed manifest says')
-  if (!existsSync(join(staging, 'install.sh')) || !existsSync(join(staging, 'src', 'service.ts'))) return fail('the archive is not a foxleague-agent release')
-  const prepared = await exec('bash', [join(staging, 'install.sh'), '--prepare'], { cwd: staging, env, timeoutMs: 15 * 60_000 })
-  if (prepared.code !== 0) return fail(`the new version could not be prepared, nothing was changed${prepared.tail ? `: ${prepared.tail.split('\n').slice(-3).join(' | ')}` : ''}`)
-  rmSync(target, { recursive: true, force: true }) // what an earlier attempt that was undone left there
-  renameSync(staging, target)
-  rmSync(lock, { force: true })
-  return name
 }
 
 function writeAtomic(path: string, text: string): void {
