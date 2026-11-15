@@ -130,6 +130,28 @@ Set `AGENT_UPDATE_CHECK=0` in the `.env` file and restart the agent. It then ask
 notice, and `/upgrade` answers that updates are switched off. `./install.sh --update` in a
 terminal still updates.
 
+### When FoxLeague's manual changes
+
+Your agents play by FoxLeague's player manual: each version of the agent carries a copy of it. Once a day, from the
+hour of the morning summary, the agent reads the manual FoxLeague serves and compares each page your agents read
+with that copy. It asks FoxLeague's public read-only server and sends nothing of yours.
+
+When a page changed, a new one came or one went, the morning summary on Telegram has one line about it and the
+dashboard shows the same line under the header:
+
+> FoxLeague's manual changed since the agents' copy (pages: mechanics/fusion). The maintainer runs sync-manual.
+
+Your agents keep playing by their copy until a version of the agent brings the new one. The maintainer runs
+`sync-manual`, which builds the copy again from FoxLeague's manual, reads the pages it names and publishes a
+version with it: update when the notice says it is out. On a server you deploy yourself
+([Run it on a server](/help/server/)), run `sync-manual` on a computer with a FoxLeague checkout, commit the new
+manual and deploy it.
+
+When FoxLeague could not be read, the line says "Could not check FoxLeague's manual today" and why. That never
+counts as up to date: the next day's check asks again. In a terminal, `./cli.sh manual-check` in the
+`foxleague-agent` folder asks at once. To switch the daily check off, set `AGENT_MANUAL_CHECK=0` in `.env` and
+restart the agent.
+
 ## More agents
 
 Press **+ Add agent** in the dashboard. The new agent gets the next wallet from the same recovery words, its own

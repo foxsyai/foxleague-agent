@@ -2202,6 +2202,50 @@ Stays open:
   `scripts/release/fresh-install-check.sh` says it needs "`npm ci` done in this folder" (the script itself asks for
   `npm ci --ignore-scripts` when the packages are missing).
 
+## Daily check of FoxLeague's manual (2026-11-15)
+
+On 15 Nov the agents' manual (`src/strategist/manual.md`, synced at FoxLeague's 89a1955d7 of 10 Nov) was five days
+behind the manual FoxLeague serves (its main at 9ebcbc52d of 13 Nov, with a fusion change) and nobody was told:
+`manual-status` needs a FoxLeague checkout and `deploy/deploy.sh` runs it only at a deploy, on the maintainer's
+computer. The live server has no checkout. The owner said yes to a daily check on 15 Nov. It is about what the agents
+know, not what they may pay: the code still checks every action against the game rules and the caps. Built by Claude
+Opus 5.5, test first: each test of the same name in `test/manual-watch.test.ts` failed against a skeleton of the
+module (its shape only: "current" with nothing read, no line, no notice) and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MW-1 | low (the owner, 2026-11-15; game knowledge) | Nothing told the owner that FoxLeague's manual had moved ahead of the agents' copy | `src/strategist/manual-watch.ts` asks FoxLeague's public read-only MCP server (`https://foxleague.ai/mcp`, the tools `list_manual_pages` and `get_manual_page`) for the pages it serves and compares each page the agents take in with the fingerprint sync-manual recorded for it (sha256 of its body as FoxLeague's server builds it, whitespace folded). A changed page, a new one and one that went are named. The signal changes only when the manual changes, not with every FoxLeague deploy. Run once against the live server on 15 Nov: it named the seven pages that changed between 89a1955d7 and FoxLeague's main (players, sync, tournaments, permanent records, marketplace, fusion, economy map) and none of the five pages left out on purpose that changed too; a record built from FoxLeague's main came out current |
+| MW-2 | with MW-1 | The check must not report a difference that is no change of the rules | Pages left out on purpose (`LEFT_OUT` in `manual.ts`: connect-ai, the World Cup preview, the terms and the others) are not compared. A change of line breaks or of a page's title alone is no change. "current" comes only from reading the list and every page compared |
+| MW-3 | with MW-1 (rule 4) | A check that cannot read FoxLeague must never say "current" | Every failure ends the day's check as "unknown" with the reason in our own words, never FoxLeague's text: no network, an HTTP error, an answer that is not JSON-RPC, a tool error, an empty list, a slug that is no slug, a page other than the one asked, a request over 15 seconds or a check over 90. No page record, a record of another `manual.md` or a `manual.md` that cannot be read say so without asking FoxLeague |
+| MW-4 | with MW-1 (polite) | The check must not load FoxLeague or send anything of the install | One request for the list and one per page the agents know (17 today), 0.6 seconds apart (FoxLeague's nginx allows 2 a second on `/mcp`), no retry. Each is a POST of a read-only tool call, the only way the MCP route answers, with a fixed client name and no cookie, key or address |
+| MW-5 | with MW-1 | At most once a day | The day (in the summary's time zone) is written to the database before anything is asked: a second call, a call while one runs, a restart and a failed check ask nothing more that day. `AGENT_MANUAL_CHECK=0` switches it off; a service a test builds asks nobody |
+| MW-6 | with MW-1 | The owner's Telegram is quiet on purpose | No message of its own: the morning summary carries one line, "FoxLeague's manual changed since the agents' copy (pages: ...). The maintainer runs sync-manual." or "Could not check FoxLeague's manual today: ...". It has none while the copy is current. The summary runs the day's check before it is built; `/summary` reads the same check |
+| MW-7 | with MW-1 | Where Telegram is not linked the owner still has to see it | A notice under the dashboard's header with its info bubble, shown only when there is something to tell, set as plain text. Without Telegram the service runs the check from the summary's hour on, looked at every hour |
+| MW-8 | with MW-1 | The comparison needs what the agents' copy was built from | `sync-manual` writes `src/strategist/manual-pages.json` next to `manual.md`: the commit, the sha256 of `manual.md` and a fingerprint per page, read from the same FoxLeague checkout (read only, after its fetch). The test holds that the committed record belongs to the committed `manual.md`. The record on this branch was built from 89a1955d7 without a fetch and matches `manual.md` byte for byte |
+| MW-9 | with MW-1 | The maintainer needs the same answer without a checkout | `manual-check` runs the same check from the command line (`./cli.sh manual-check`, `agentctl.sh manual-check` on a server): exit code 0 current, 2 changed, 1 could not check. It writes nothing |
+| MW-10 | with MW-1 (docs) | The guides must say what the line means and what to do | `docs/SERVER.md`, the Update, Troubleshooting, Safety, Dashboard and Talk pages of the site, README and `.env.example` |
+
+Stays open:
+- The page text is built at sync time by a copy of FoxLeague's `mcp/src/resources.ts` (front matter off, MDX imports
+  and comments off). If FoxLeague changes how its server builds the pages, every page reads as changed and
+  `sync-manual` does not clear the line: `servedBody` and `liveBody` in `manual-watch.ts` then follow FoxLeague's file.
+  The check fails loud there, not silent.
+- FoxLeague's MCP server serves the manual its container was built with. A manual deployed to docs.foxleague.ai
+  without a new MCP server is not seen. On 15 Nov the server served FoxLeague's main.
+- FoxLeague deploys a release branch before it promotes it to main (on 15 Nov `release/mainnet-1.0` held the
+  MetaStaking Shop discount of 1 Dec, not served yet). `sync-manual` reads main, so a page FoxLeague serves before its
+  main has it stays named after a sync until FoxLeague promotes it. The reverse (main ahead of what is served) is
+  named too: the line says that the pages differ, not which side is newer.
+- A page the agents take in that FoxLeague's server does not serve (a draft, a page outside the sidebar) is not
+  compared; once FoxLeague serves it, it is named "(new)" until the next sync.
+- The check runs from the hour of the morning summary: a change FoxLeague makes later that day is told the next
+  morning.
+- FoxLeague's server answers a tool call without an `initialize` first (stateless). If that changes, the line says
+  "could not check" every day until the check sends one.
+- Merge order with the sync branch (`foxleague-sync-1113`): whichever merges second, `sync-manual` runs once more with
+  this code so that `manual-pages.json` follows the new `manual.md`. Until then the daily check says that the record
+  is not the one of `manual.md` and MW-8 fails.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in

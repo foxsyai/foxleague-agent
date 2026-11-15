@@ -94,6 +94,9 @@ the dashboard or by chatting with it on Telegram.
   Only a release signed by the maintainers and newer than yours is taken, it is prepared next to the running
   version, and a version that does not start is undone by itself. `./install.sh --update` does the same from a
   terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
+- **FoxLeague's manual:** once a day the agent compares the manual FoxLeague serves with the copy its agents play
+  by. When a page changed, the morning summary and the dashboard name it; a version with the new manual follows
+  (the maintainer runs `sync-manual`). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
@@ -141,7 +144,8 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
-manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`).
+manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`, which also writes
+`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with).
 
 ## Fair play
 
