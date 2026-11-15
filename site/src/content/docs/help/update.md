@@ -141,6 +141,8 @@ dashboard shows the same line under the header:
 
 > FoxLeague's manual changed since the agents' copy (pages: mechanics/fusion). The maintainer runs sync-manual.
 
+It names up to eight pages; when more changed it names the first eight and says how many more.
+
 Your agents keep playing by their copy until a version of the agent brings the new one. The maintainer runs
 `sync-manual`, which builds the copy again from FoxLeague's manual, reads the pages it names and publishes a
 version with it: update when the notice says it is out. The notice about the old copy goes with the update and the

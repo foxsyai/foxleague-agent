@@ -844,3 +844,32 @@ test('R72A-6 an oversized text in FoxLeague\'s answer (an error, a refusal, a ti
   assert.ok(sent[0]!.includes("\nCould not check FoxLeague's manual today: FoxLeague answered HTTP 500.\n"))
 })
 
+test('R72A-6 the record has its row in the part of the review of PR #72', () => {
+  const review = raw('docs/SECURITY-REVIEW.md')
+  const start = review.indexOf("\n## Daily check of FoxLeague's manual (2026-11-15)\n")
+  const section = review.slice(start, review.indexOf('\n## ', start + 1))
+  const part = section.slice(section.indexOf('\nGitHub review of PR #72 (2026-11-15).'))
+  const rows = part.split('\n').filter(l => /^\| R72A-\d+ \| /.test(l)).map(l => l.slice(2, 8))
+  assert.deepEqual(rows, ['R72A-1', 'R72A-2', 'R72A-3', 'R72A-4', 'R72A-5', 'R72A-6'], 'one table, in order')
+  const row = part.split('\n').find(l => l.startsWith('| R72A-6 | medium (agent re-review of PR #72; '))
+  assert.ok(row, 'R72A-6 is a medium of the re-review')
+  assert.equal(row.split(' | ').length, 4)
+  assert.ok(row.endsWith(' |'))
+  assert.match(row, /120 characters/)
+  assert.match(row, /eight/)
+  assert.match(part, /re-review/)
+  assert.doesNotMatch(part, /—|, and |, or |\bbots?\b/i)
+
+  // The guides and the info bubble say that the line names up to eight pages.
+  for (const f of ['docs/SERVER.md', 'site/src/content/docs/help/update.md', 'site/src/content/docs/use/dashboard.md', 'site/src/content/docs/use/talk-to-your-manager.md']) {
+    const t = flat(f)
+    assert.match(t, /up to eight[^.]*(how many more|counts the rest)/i, f)
+    // The sentence that says it.
+    const at = t.search(/up to eight/i)
+    assert.doesNotMatch(t.slice(t.lastIndexOf('. ', at) + 1, t.indexOf('. ', at)), /—|, and |, or |\bbots?\b/i, f)
+  }
+  const html = raw('src/web/dashboard.html')
+  const bubble = html.slice(html.indexOf("\n  manual: ['FoxLeague manual check',"), html.indexOf('`],', html.indexOf("\n  manual: ['FoxLeague manual check',"))).replace(/\s+/g, ' ')
+  assert.match(bubble, /up to eight[^.]*(how many more|counts the rest)/i)
+  assert.doesNotMatch(bubble, /—|, and |, or |\bbots?\b/i)
+})
