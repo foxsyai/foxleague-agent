@@ -64,9 +64,10 @@ Then:
 ## Draw them again
 
 Needs Node 22, ffmpeg and Google Chrome (or Chromium: `CHROME=/path/to/chrome`). Also this repository with its
-packages (`npm ci --ignore-scripts` at the root) and a built site (`cd site && npm ci && npm run build`; or
-`FOXAGENT_SITE_DIST` names another build whose install pages are current). The script finds the repository from
-where it sits and only reads it.
+packages (`npm ci --ignore-scripts` at the root) and a built site
+(`cd site && npm ci --ignore-scripts && npm run build`; or `FOXAGENT_SITE_DIST` names another build whose install
+pages are current). Every install here skips the packages' install scripts (at the root, in the site and in this
+folder): none of them needs one to work. The script finds the repository from where it sits and only reads it.
 
 The packages of this folder (Playwright's core and two fonts, pinned in `package.json` and `package-lock.json` as
 development packages) are for drawing the videos only. The agent, its releases and the site do not get them: they

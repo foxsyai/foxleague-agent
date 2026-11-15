@@ -5,9 +5,9 @@ stack and look as docs.foxleague.ai (Astro 6 and Starlight 0.38, the FoxLeague b
 
 ```sh
 cd site
-npm install
-npm run dev          # http://localhost:4321 while writing
-npm run build        # static site in dist/
+npm ci --ignore-scripts   # no install script of a package runs on your computer
+npm run dev               # http://localhost:4321 while writing
+npm run build             # static site in dist/
 ```
 
 Pages are in `src/content/docs/`, the sidebar in `astro.config.mjs`. Screenshots of the dashboard come from a
