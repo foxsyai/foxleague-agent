@@ -724,8 +724,10 @@ windows, the ranked cooldown, the previous plan's length, the Zeus tick) the tes
 | MS-C3..C8 | low | Server, FAQ, Update, INSTALL.md, Costs, Troubleshooting, Keys: the server's processor (x86-64), the fourth thing the agents share (a private tournament never invites your other teams), the low-funds warning on Telegram (in the morning summary), a quiet Telegram (the default), the Binance key (it reads too) and the top-up amount (less, the fee comes off it) | Each page says what the code does |
 | R28A-1 | low | Agent review of PR #28: the Costs page still said a Binance key alone brings a top-up proposal | It names Telegram and LIVE and once a day per agent, as the other pages do; the test reads the Costs page too |
 
-Not changed: the Telegram key fields keep Telegram's own name, "bot token". The cost of a single agent at the 2-hour
-tick (MS-C1) is closed by CR1 below.
+Not changed then: the Telegram key fields kept Telegram's own name, "bot token". Changed on 15 Nov 2026 (NO-BOT, the
+owner's rule that no text a user reads says "bot"): the field is "Telegram token" and the account is "your agent's
+Telegram account"; only Telegram's username rule is quoted (`test/no-word-bot.test.ts`). The cost of a single agent
+at the 2-hour tick (MS-C1) is closed by CR1 below.
 
 ## The game manual cached only when it is read again, 2026-10-24
 
