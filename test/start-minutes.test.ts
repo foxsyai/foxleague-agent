@@ -14,6 +14,8 @@
 
 import { mock, test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { describeAction, parseAction, type Action } from '../src/executor/actions.ts'
 import { actionDeadline } from '../src/executor/deadlines.ts'
 import { renderDigest } from '../src/snapshot/digest.ts'
@@ -220,4 +222,28 @@ test('SM-9 whole hours: FoxLeague is sent the start the slot check used, counted
   } finally {
     mock.timers.reset()
   }
+})
+
+test('SM-10 the record has its section before the last one, a row for each point and what stays open; the integration notes say what FoxLeague takes', () => {
+  const read = (f: string) => readFileSync(join(import.meta.dirname, '..', f), 'utf8')
+  const review = read('docs/SECURITY-REVIEW.md')
+  const start = review.indexOf('\n## A tournament start to the minute (2026-11-15)\n')
+  assert.ok(start > review.indexOf('\n## GitHub review of PR #71 (2026-11-15)\n'), 'after the review of PR #71')
+  // Another section may come between it and the last one (test/chat-send.test.ts pins the last).
+  const next = review.indexOf('\n## ', start + 1)
+  assert.ok(next > start && next <= review.indexOf('\n## One manager message at a time (2026-11-13)\n'), 'before the last section')
+  const section = review.slice(start, next)
+  assert.match(section, /\| Id \| Severity \| Finding \| Fix \|\n\|---\|---\|---\|---\|\n\| SM-1 \| /)
+  for (let i = 1; i <= 9; i++) {
+    const row = section.split('\n').find(l => l.startsWith(`| SM-${i} |`))
+    assert.ok(row, `SM-${i} has its row`)
+    assert.equal(row.split(' | ').length, 4, `SM-${i}: four cells`)
+  }
+  assert.ok(section.includes('\nStays open:\n'))
+  assert.match(section, /prompt cache/)
+  assert.doesNotMatch(section, /—|, and |, or |\bbots?\b/i)
+  const notes = read('docs/FOXLEAGUE-INTEGRATION.md').replace(/\s+/g, ' ')
+  assert.match(notes, /`starts_at` is any instant: create neither rounds it nor asks for a step/)
+  assert.match(notes, /The windows are half-open/)
+  assert.match(read('site/src/content/docs/play/how-it-plays.md').replace(/\s+/g, ' '), /It names the start to the minute, 2 to 72 hours ahead/)
 })

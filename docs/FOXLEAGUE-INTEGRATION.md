@@ -1067,10 +1067,19 @@ binaries; out of scope).
 - Schedule: `Deadline must be in the future`, `Tournament must start at least 1 hour from now`,
   `starts_at must be after the registration deadline` (at least 5 min after it),
   `Tournament cannot start more than 90 days from now` (`tournaments.rs:2250-2264`, `:2496-2499`).
+  `starts_at` is any instant: create neither rounds it nor asks for a step; it must be more than 1 hour from now
+  (`tournament_slots.rs` `far_enough`) and at most 90 days ahead (`too_far`). Only the calendar's proposal
+  (`GET /api/tournaments/availability`, `next_free`) is on the quarter hour (release/mainnet-1.0 fb820dd57). The agent
+  sends the start of its action (since 2026-11-15): `starts_at`, a whole UTC minute 2 to 72 hours after the create
+  runs, or the older `starts_in_hours`, whole hours from that moment; the deadline is that start less
+  `registration_closes_minutes_before`. The time slot, the schedule and the organizer quote are checked at that same
+  instant.
 - Round interval 30 to 1,440 minutes: `Round interval must be 30-1440 minutes` (`tournaments.rs:2421`, `:2482-2484`).
 - **Platform-wide slot**: a standard tournament's window (`starts_at - 1 h` to the estimated end + 1 h,
   3 minutes per match) must not overlap any other live tournament's window:
   `Time slot conflicts with tournament #{id} '{title}'. Choose a different time.` (`tournaments.rs:774-827`, `:2295-2358`).
+  The windows are half-open: one that ends exactly where another starts does not overlap it
+  (`tournament_slots.rs` `overlaps`), so a 3-team round robin (9 minutes) fits a gap of exactly 2 h 9 min, at one start.
 - **Creation cap**: at most 1 active tournament you created and play in, plus 1 you only organize
   (1v1s not counted): `You already have an active tournament you are playing in. Complete or cancel it before creating another.`
   / `... you are organizing. ...` (`tournaments.rs:2360-2409`).

@@ -2248,6 +2248,62 @@ Stays open:
   `scripts/release/fresh-install-check.sh` says it needs "`npm ci` done in this folder" (the script itself asks for
   `npm ci --ignore-scripts` when the packages are missing).
 
+## A tournament start to the minute (2026-11-15)
+
+Seen live at 17:09 UTC. Following the owner's new organizer line, agents 7 and 9 (Opus) each planned a public Silver
+round robin in the only free gap of FoxLeague's calendar in the next 72 hours: 17 Nov 18:48 to 21:00 UTC. A tournament
+books 1 hour before its start to 1 hour after its estimate (3 minutes a match), so only a 3-team round robin fits,
+starting from 19:48 to 19:51. Both sent `"starts_in_hours": 50.7` and `parseAction` refused it ("starts_in_hours must
+be an integer in [2, 72]"). No whole number of hours from the moment the create runs lands in a 3-minute window, so
+the organizer feature could not use such a gap. Nothing was paid. The fix is by Claude Opus 5.5, test first: each
+point has a test of the same name in `test/start-minutes.test.ts` that failed on the branch at f9ca5f0 and passes now.
+
+The form chosen is an absolute `starts_at`, a whole UTC minute (`"starts_at":"2026-11-17T19:49Z"`). A plan's actions
+run at moments spread over most of the tick after the plan (up to 48 minutes at 60), so a start counted from the run
+(fractional `starts_in_hours` or a `starts_in_minutes`) moves by that delay and misses a narrow gap; a minute the plan
+names is the minute FoxLeague is sent. The older `starts_in_hours` keeps working (Telegram `/do`, older plans): one of
+the two, never both.
+
+What FoxLeague's create takes (release/mainnet-1.0 fb820dd57, `tournament_slots.rs` and `create_tournament_inner`):
+any instant in RFC 3339, neither rounded nor aligned; more than 1 hour from now; at most 90 days ahead; more than 5
+minutes after the registration deadline; a booking `[start - 1 h, start + estimate + 1 h)` that overlaps no other,
+half-open (one that ends where another starts does not overlap it). Only the calendar's proposal (`next_free`) is on
+the quarter hour.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SM-1 | low (a plan's aim lost; nothing paid: the parser refused it) | The live case: the create took only whole hours from the moment it runs, so the 3-team round robin of agents 7 and 9 could not be placed in the only gap of 72 hours (18:48 to 21:00 UTC two days ahead) | `create_tournament` takes `starts_at`, kept as the ISO minute it names. The rules check that instant against the time slots (the clash check and its blocking window), the schedule (`scheduleRefusal` and its condition at the start) and the squad at the start (`squadLegal`); the organizer quote is asked for it; FoxLeague is sent it, its deadline counted back from it. The test plans 19:49 in that calendar: parsed, through the slot check, FoxLeague and the quote are sent 19:49 |
+| SM-2 | low (a wasted plan; nothing paid) | A clash named the first free start as whole hours from the refusal's moment (`starts_in_hours N`), stale by the next plan an hour later; it said "no free start in the next 72 hours" when only a start to the minute fit: the live calendar gave exactly that refusal in the test | It names `starts_at` of the first free minute (`firstFreeStart` in `slots.ts`: the first minute of the range or the first minute at or after a window's end plus the hour before a kickoff, as FoxLeague's `free_starts`). The test starts at 19:47 and 19:52, is refused by T901 and T902, is told 19:48 and creates there; 19:48 and 19:51 fit (half-open windows) |
+| SM-3 | design | An absolute start is 2 to 72 hours ahead only at a given moment, which the parser does not know | The rules check it when the create runs: less than 2 hours or more than 72 hours from then is refused with its reason, as is a registration that would close within 30 minutes. `starts_in_hours` keeps its bounds at the parser |
+| SM-4 | design (rule 4: unknown is not a value) | A start that is no minute must be refused, never guessed: another zone, seconds, 30 February or 24:00 (`Date.parse` rolls both over), a number or a text, both forms or neither. An action built without the parser and without a readable start ended in an error (a `RangeError` of an invalid date) | The parser takes `YYYY-MM-DDTHH:MMZ` with `:00` or `:00.000` seconds only and checks that the date reads back as written. The rules refuse a start they cannot read ("the start could not be read") before anything is asked or paid; the executor builds the create only from the start the rules checked |
+| SM-5 | design | The older whole hours must keep working | Parsed as before, created that many hours after the run; a clash names the first free start as `starts_at` |
+| SM-6 | low (the executor refuses a late action) | A create at a fixed minute has a time limit, which the schedule of PR #70 did not know: a start chosen a little over 2 hours ahead could run past it at its random moment | `actionDeadline` gives it the start less 2 hours (less its registration close and 30 minutes when that is earlier). Whole hours count from the run and keep no time limit |
+| SM-7 | low (a wasted create; FoxLeague refuses it before any payment) | The snapshot cut each time to its minute: a window that ends at 18:47:30 read "18:47", so the gap seemed to start at 18:47 and a start at 19:47 seemed free. The gaps were given without the year, in another form than any field takes | The gaps are rounded inward to the minute in the form `starts_at` takes, each with the starts that fit it ("starts_at from 19:48 to 20:00 less the estimate"); a gap too short for the smallest tournament (3 matches) is left out. A taken window ends at its minute rounded up, in the list and in the refusal |
+| SM-8 | design | The model must be told the new form | The prompt's create line shows `"starts_at":"YYYY-MM-DDTHH:MMZ"`: a UTC minute 2 to 72 hours after the action runs, its whole window inside one free gap of the snapshot. `src/strategist/prompt.ts` changed in that one line, so the prompt cache is rebuilt once at the deploy |
+| SM-9 | low (an edge start could clash; FoxLeague refuses it before any payment) | With whole hours the slot check counted from the executor's moment but the create counted again from its own clock, after the reads before it (the organizer quote among them): FoxLeague was sent a later start than the one checked, 90 seconds later in the test | The rules hand the executor the instant they checked (`facts.startsAt`) and the create sends exactly that, in both forms; a create without it is not sent |
+
+Changed tests: in `test/slots.test.ts` the two checks of `firstFreeStartHours` (gone) now pin `firstFreeStart` to the
+exact minute (14:51, where whole hours gave 24 h: 15:37); the clash test reads `starts_at` instead of
+`starts_in_hours` and checks the minute 2 hours ahead. The behaviour each one holds is the same, stated to the minute.
+
+What was checked and needs no change:
+- `src/strategist/manual.md` describes FoxLeague's blocking window, not the agent's action: unchanged (FoxLeague's
+  manual is synced on its own). `docs/ECONOMY-AND-RULES.md`: no FoxLeague rule changed.
+
+Stays open:
+- `slotWindows` leaves out a tournament whose status is `simulation_delayed`; FoxLeague keeps its booking since
+  2026-10-01 (`tournament_slots.rs`). A start in such a window is refused by FoxLeague's create, which is asked before
+  the organizer payment and before the seat, so only the action is lost. Not changed here: whether such a status
+  reaches the lists the snapshot reads is FoxLeague's behaviour to confirm.
+- The agent reads the public tournament lists, not FoxLeague's calendar (`GET /api/tournaments/availability`): a slot
+  held by a tournament being created (the one-signature create, off today) is seen only when the create is refused.
+- Another organizer may take the gap between the plan and the run; FoxLeague then refuses the create before any
+  payment.
+- A start chosen a little over 2 hours ahead runs by its deadline less the 5-minute margin, but the actions before it
+  in the plan can still push it late (as for every deadline action of PR #70); the executor then refuses it.
+- The snapshot's last gap ends 72 hours after the snapshot, so its latest start there is on the safe side.
+- A model that still sends whole hours (as in older plans of its activity log) is served as before.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
