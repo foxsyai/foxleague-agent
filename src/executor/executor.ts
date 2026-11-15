@@ -96,12 +96,15 @@ interface Booking {
 
 /**
  * The HTTP statuses of the relay's own refusals that prove it did not broadcast (FoxLeague, routes/onboarding.rs
- * relay_registration): every guard before the broadcast answers 403 (G2 to G13, already paid, not whitelisted, too
- * little FOXSY), 429 (the rate limit) or 503 (the daily cap, no relayer, a fee it cannot read). Its 500 is not among
- * them: it is also what a failed broadcast answers ("could not be sent to the network"), and a broadcast that failed
- * for FoxLeague may still have reached the network.
+ * relay_registration; its app's RELAY_REFUSED_BEFORE_BROADCAST_STATUSES, frontend/src/lib/signingNonce.ts): every guard
+ * before the broadcast answers 403 (G2 to G13, G16's nonce, G18's failed relay, already paid, not whitelisted, too
+ * little FOXSY), 409 (G17, a relay of this wallet still in flight, and G16, another transaction of the wallet waiting in
+ * the pool: FoxLeague #717, mainnet since 2026-11-11), 429 (the rate limit) or 503 (the daily cap, no relayer, a fee it
+ * cannot read). Its 500 is not among them: it is also what a failed broadcast answers ("could not be sent to the
+ * network"), and a broadcast that failed for FoxLeague may still have reached the network. Its 400 (the wallet address)
+ * stays on the careful side too (audit 2026-11-11, MONEY-3): an agent's own address never fails that check.
  */
-const RELAY_REFUSED_BEFORE_BROADCAST = new Set([403, 429, 503])
+const RELAY_REFUSED_BEFORE_BROADCAST = new Set([403, 409, 429, 503])
 
 /** The actions whose rows say `untouched` when they end in an error before FoxLeague was asked or anything was signed. */
 const REACH_TRACKED = new Set<Action['type']>(['create_tournament', 'create_challenge', 'join_tournament'])
