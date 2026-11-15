@@ -12,6 +12,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { zoneDate } from '../summary.ts'
+import { AnswerTooLargeError, readCapped } from '../util/http.ts'
 import { LEFT_OUT, ROOT, undecidedPages } from './manual.ts'
 
 /** The agents' manual and the page record sync-manual writes next to it. */
@@ -22,9 +23,12 @@ export const GAP_MS = 600
 /** How long one request may take and how long the whole check may take. */
 export const REQUEST_TIMEOUT_MS = 15_000
 export const CHECK_DEADLINE_MS = 90_000
-/** An answer larger than this is not read (the longest page is about 60 KB). */
-const MAX_ANSWER_CHARS = 2_000_000
-const MAX_PAGES = 200
+/**
+ * An answer larger than this is not read (the longest page is about 60 KB): it is counted as it streams and cut off
+ * past the cap, one that declares more is refused unread (readCapped, ATTACK-5).
+ */
+export const MAX_ANSWER_BYTES = 2 * 1024 * 1024
+export const MAX_PAGES = 200
 /** What a slug looks like (`mechanics/one-v-one`): anything else in FoxLeague's list makes it unreadable. */
 const SLUG = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}$/
 /** The kv key of the day's check. */
@@ -149,12 +153,14 @@ async function callTool(o: CheckOptions, name: 'list_manual_pages' | 'get_manual
       redirect: 'error',
     })
     if (!res.ok) throw new CheckError(`FoxLeague answered HTTP ${res.status}`)
-    raw = await res.text()
     type = res.headers.get('content-type') ?? ''
+    // Never buffered whole: the process that books and signs reads at most MAX_ANSWER_BYTES of it.
+    raw = await readCapped(res, `${o.base}/mcp`, MAX_ANSWER_BYTES).catch((err: unknown) => {
+      throw err instanceof AnswerTooLargeError ? new CheckError(UNREADABLE) : err
+    })
   } finally {
     limit.clear()
   }
-  if (raw.length > MAX_ANSWER_CHARS) throw new CheckError(UNREADABLE)
   try {
     // A JSON answer or a stream whose last data line holds it.
     const json = /text\/event-stream/.test(type) ? raw.split('\n').filter(l => l.startsWith('data:')).at(-1)?.slice(5) ?? '' : raw

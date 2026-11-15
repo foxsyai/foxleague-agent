@@ -444,3 +444,44 @@ test('MW-10 the guides and the record say what the line means and what the maint
   }
   assert.doesNotMatch(section, /—|\bbots?\b/i)
 })
+
+// ---- the GitHub review of PR #72 (Claude Fable 5.2 at high effort): each test failed first, or was seen biting ----
+
+const MB = 1024 * 1024
+
+/** An answer of `total` bytes of spaces that counts what was pulled from it and whether it was cancelled. */
+function counted(total: number, headers: Record<string, string> = {}) {
+  const s = { pulled: 0, cancelled: false }
+  const response = () => new Response(new ReadableStream<Uint8Array>({
+    pull(ctl) {
+      if (s.pulled >= total) return ctl.close()
+      s.pulled += MB
+      ctl.enqueue(new Uint8Array(MB).fill(0x20))
+    },
+    cancel() {
+      s.cancelled = true
+    },
+  }), { status: 200, headers: { 'content-type': 'application/json', ...headers } })
+  return Object.assign(s, { response })
+}
+
+test('R72A-1 a very large answer is cut off while it streams, never buffered whole by the process that signs', async () => {
+  const record = recorded()
+  // 64 MB that never ends in JSON: the old read took in all of it, then compared its length.
+  const big = counted(64 * MB)
+  const live = foxleagueMcp(SOURCE, SIDEBAR, { answer: () => big.response() })
+  const c = await check(record, live.fetch)
+  assert.equal(c.state, 'unknown')
+  assert.equal(c.why, "FoxLeague's answer could not be read")
+  assert.equal(live.seen.length, 1, 'nothing is asked after it')
+  assert.ok(big.pulled <= 4 * MB, `the read took in ${big.pulled / MB} MB of one answer; the longest page is about 60 KB`)
+  assert.ok(big.cancelled, 'the stream is cancelled, not read to the end')
+
+  // One that declares more than the cap in its content-length is refused before a byte of it is read.
+  const declared = counted(64 * MB, { 'content-length': String(64 * MB) })
+  const d = await check(record, foxleagueMcp(SOURCE, SIDEBAR, { answer: () => declared.response() }).fetch)
+  assert.equal(d.state, 'unknown')
+  assert.equal(d.why, "FoxLeague's answer could not be read")
+  assert.ok(declared.pulled <= MB, `${declared.pulled / MB} MB pulled: only what the stream queued on its own`)
+  assert.ok(declared.cancelled)
+})
