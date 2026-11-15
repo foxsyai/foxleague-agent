@@ -1,6 +1,6 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { cardBansLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { freeGaps } from '../executor/slots.ts'
 import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
@@ -227,6 +227,16 @@ function levelLines(s: AgentSnapshot): string[] {
     const d = b.injury_days_out
     const days = Array.isArray(d) && d.length === 3 && d.every(n => typeof n === 'number' && Number.isFinite(n) && n > 0) ? `one injury in a match keeps a card out ${d[0]} days, two ${d[1]}, three or more ${d[2]}` : 'the days an injury keeps a card out could not be read'
     out.push(`Cards and injuries: ${whenLive(cardBansLive(s.config, now), b.live_from)}: ${known(b.yellow_cards_per_ban)} yellow cards in tournaments of more than 2 teams = out of the team's next tournament match; an injured card plays no match until its injury ends; ${chance}; ${days}`)
+  }
+  // FoxLeague's fusion switch (fusion_mint): which fusion runs now and when it changes. The executor reads the same.
+  if (s.config) {
+    const f = fusionMode(s.config, now)
+    out.push(
+      f.mode === 'closed' ? `Fusion: closed now (${f.why})`
+      : f.mode === 'mint' ? `Fusion: LIVE, a new card is minted: each stat = the three inputs' values added up x the new rarity's cap / (3 x their cap), rounded down, at least the new rarity's floor (Uncommon 22, Rare 30, Epic 36, Legendary 40); no sync needed (FoxLeague signs the live stats and competitive matches); the new card starts at level 1, condition 100 and 0 competitive matches`
+      : f.liveFrom ? `Fusion: until ${f.liveFrom} a card drawn from the fusion pool (inputs synced first); from then a new card is minted instead, each stat the average of the three inputs translated to the new rarity, no sync needed (the executor refuses a fusion in the last 10 minutes before the switch)`
+      : 'Fusion: a card drawn from the fusion pool (inputs synced first)',
+    )
   }
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
