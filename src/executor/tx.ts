@@ -159,7 +159,8 @@ export interface SyncPrep {
  * the MultiESDTNFTTransfer inside targets (sync.rs:83-84); the transaction itself goes from the agent to
  * the agent (Squad.tsx:246-256). The payload is decoded and signed only if it is exactly a sync: one
  * FOXSY transfer of the per-card fee times the cards, the listed cards once each, syncMyStats, and a
- * gas limit within the backend's formula (15M + 3M per card, sync.rs:36-38). Returns the FOXSY it pays.
+ * gas limit within the backend's formula with 2M to spare (18M + 3M per card since the fusionMint upgrade of
+ * 2026-11-13, sync.rs SYNC_BASE_GAS; 15M before). Returns the FOXSY it pays.
  */
 export function syncTx(agentAddress: string, prep: SyncPrep, perCardFoxsy: number): { spec: TxSpec; foxsy: bigint } {
   if (prep.receiver !== MAINNET.playersContract) throw new Error(`sync payload targets ${prep.receiver}, not the players contract`)

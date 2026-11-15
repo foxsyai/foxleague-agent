@@ -14,7 +14,7 @@ import { renderDigest } from '../src/snapshot/digest.ts'
 import { ADDR, dryWallet, snapshot } from './fixtures.ts'
 
 test('a shop payment is signed with FoxLeague\'s gas limit for the upgraded players contract', () => {
-  assert.equal(shopPayTx(10n ** 21n).gasLimit, 12_864_100n)
+  assert.equal(shopPayTx(10n ** 21n).gasLimit, 14_000_000n) // since the fusionMint players contract (2026-11-13): 1.49x of 9,410,367
 })
 
 test('the plan sees each rival\'s best XI OVR, and how many teams the suggested range lets in', () => {

@@ -20,22 +20,28 @@ export const MAINNET = {
   gasPrice: 1_000_000_000n,
 } as const
 
-/** Gas limits the FoxLeague web app signs (frontend/src/lib/gasLimits.ts, xexchangeSwapTx.ts). */
+/**
+ * Gas limits the FoxLeague web app signs (frontend/src/lib/gasLimits.ts, xexchangeSwapTx.ts). The players contract's
+ * fusionMint upgrade (mainnet 2026-11-13 21:32:50 UTC, 72,036 bytes) adds about 834,300 gas to every call of it:
+ * its limits are FoxLeague's for that contract, each about 1.5x of the gas the call uses (test/foxleague-1113).
+ */
 export const GAS = {
-  // FoxLeague's app since the players contract writes each payer's refundable record (live on mainnet 2026-10-26).
-  shopPay: 12_864_100n,
+  // FoxLeague's app for the fusionMint players contract (9,410,367 used: 1.49x).
+  shopPay: 14_000_000n,
   // FoxLeague's app since the League + Knockout upgrade of the tournaments contract (live on mainnet 2026-10-24).
   joinTournament: 8_400_000n,
   claimRefund: 6_500_000n,
+  // Bound by the relay's ceiling (relayer_max_gas_limit, 12.5M served): FoxLeague's app signs the same 12M.
   registerAndPayMax: 12_000_000n,
   registerAndPayLegacy: 9_900_000n,
   swapEgldPath: 40_000_000n,
   swapWegldPath: 24_000_000n,
-  fusion: 21_000_000n,
-  auctionList: 15_000_000n,
-  auctionBid: 13_500_000n,
-  auctionCancel: 12_000_000n,
-  fusionWaiver: 15_000_000n,
+  // The old fusion that draws from the pool, signed only before the fusionMint live time (15,262,575 used: 1.49x).
+  fusion: 22_800_000n,
+  auctionList: 17_200_000n,
+  auctionBid: 15_800_000n,
+  auctionCancel: 13_900_000n,
+  fusionWaiver: 17_500_000n,
 } as const
 
 export interface Config {

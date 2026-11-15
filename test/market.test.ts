@@ -21,7 +21,7 @@ test('fusion and auction transactions match the web app byte for byte', () => {
     f.data,
     `MultiESDTNFTTransfer@${PLAYERS_HEX}@04@464f5853592d356435663365@00@056bc75e2d63100000@46584c502d366632386535@28@01@46584c502d366632386535@29@01@46584c502d366632386535@012c@01@667573696f6e@00@00`,
   )
-  assert.equal(f.gasLimit, 21_000_000n)
+  assert.equal(f.gasLimit, 22_800_000n) // FoxLeague's app for the fusionMint players contract (2026-11-13)
   assert.throws(() => fusionTx(ME, 1n, [1, 2], 0))
   const b = auctionBidTx(300, 1000)
   assert.equal(b.receiver, MAINNET.playersContract)
