@@ -2157,6 +2157,21 @@ Stays open:
 - W-18's fix has not run on the real PC: the checks run it against the stand-in `wsl.exe`.
 - The PowerShell checks run in PowerShell 7 in a container, not in Windows PowerShell 5.1.
 
+## GitHub review of PR #69 (2026-11-15)
+
+The agent review of PR #69 on GitHub (the release candidate, Claude Fable 5.2 at high effort) found one low finding,
+about updates only: nothing about money, keys or signing. The fix is by Claude Opus 5.5, test first: the test
+"R69A-1: ..." in `test/update.test.ts` failed on the branch at 4988b8f for the reason given and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R69A-1 | low (agent review of PR #69; updates only, fails closed) | `stage()` in `src/update/install.ts` released `versions/update.lock` only in its refusals (`fail()`) and on success. A file call that threw outside them (a full disk, a folder that cannot be written) left the lock, and every update for the next 30 minutes was refused as "another update is being installed right now". The running release was untouched. The test made `mkdirSync` of the staging folder throw and saw the lock left behind | Every way out of `stage()` after the lock is taken releases it and removes the staging folder, in a `finally`: a refusal, a file call that throws and success alike. A staging folder that cannot be removed is said in the log and the lock goes anyway (the next update and the next confirmed start try the folder again). A lock held by an update that is running still refuses and is kept; one older than 30 minutes is still taken over. The test covers `mkdirSync` and `renameSync` of the staging folder, a step that throws with the release unpacked, a lock taken over and the next update after them |
+
+Stays open:
+- The lock belongs to the folder and is told by its age alone, as before: an update that runs for more than 30
+  minutes by the clock (a laptop that sleeps in the middle of it) can be taken over by a second one, and whichever
+  ends first removes the lock while the other still runs. Preparing takes at most 15 minutes.
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
