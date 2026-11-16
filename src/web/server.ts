@@ -129,6 +129,31 @@ function foreignLogin(req: IncomingMessage): boolean {
   return host !== req.headers.host
 }
 
+/**
+ * Whether a request names a Host this dashboard is served at (ATK-2). A page the owner visits can point its own name at
+ * this machine (DNS rebinding): for the browser it is then the dashboard's own origin, so the Origin rules above let
+ * its posts through and its wrong passwords lock the owner out. A browser always sends the name it was given, which
+ * such a page cannot choose to be one of these: this machine's own names (localhost), an address written as numbers
+ * (no name to rebind), the address the dashboard listens on (WEB_UI_HOST) and the names in WEB_UI_HOSTNAMES. Behind
+ * nginx (WEB_UI_TRUST_PROXY=1) nginx's server_name is the filter and passes the public name on. A request without a
+ * Host (an HTTP/1.0 client) is no browser and is judged as before.
+ */
+export function servedHost(req: IncomingMessage, bind: string): boolean {
+  if (process.env.WEB_UI_TRUST_PROXY === '1') return true
+  const raw = req.headers.host
+  if (raw === undefined) return true
+  let name: string
+  try {
+    name = new URL(`http://${raw}`).hostname.toLowerCase()
+  } catch {
+    return false
+  }
+  if (name === 'localhost' || name.endsWith('.localhost')) return true
+  if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(name) || /^\[[0-9a-f:.]+\]$/.test(name)) return true
+  const named = [bind, ...(process.env.WEB_UI_HOSTNAMES ?? '').split(',')].map(n => n.trim().toLowerCase()).filter(Boolean)
+  return named.includes(name)
+}
+
 async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
   let size = 0
   const chunks: Buffer[] = []
@@ -417,13 +442,21 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
 
   const server = createServer(async (req, res) => {
     try {
-      const url = new URL(req.url ?? '/', 'http://localhost')
+      let url: URL
+      try {
+        url = new URL(req.url ?? '/', 'http://localhost')
+      } catch {
+        // A request line that is no address ("GET // HTTP/1.1"): the client's error, answered without a log line (ATK-3).
+        throw new HttpFail(400, 'bad request')
+      }
       const path = url.pathname
       const method = req.method ?? 'GET'
       const session = cookies(req)[COOKIE_NAME]
       const user = sessions.verify(session)
 
       if (path === '/healthz') return send(res, 200, 'ok', 'text/plain')
+      // Before anything is read or counted: a page that pointed its own name at this machine is not the dashboard (ATK-2).
+      if (!servedHost(req, host)) return send(res, 421, `This dashboard is not served at that address. Open it at http://localhost:${req.socket.localPort ?? port}, or add the name to WEB_UI_HOSTNAMES.`, 'text/plain; charset=utf-8')
 
       if (path === '/login' && method === 'GET') return user ? send(res, 303, '', 'text/plain', { location: '/' }) : loginPage(res, 200, '')
       if (path === '/login' && method === 'POST') {

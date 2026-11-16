@@ -37,6 +37,9 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
 
 - `AGENT_LIVE_ENABLED=1`: this server may sign real transactions once you press Go LIVE.
 - `WEB_UI_TRUST_PROXY=1`: only behind your own nginx (it passes the client IP in `X-Real-IP`), and there always (step 3).
+- `WEB_UI_HOSTNAMES`: other names you open the dashboard at without nginx, separated by commas. It answers only at
+  localhost, at an address written as numbers and at `WEB_UI_HOST`, so a website cannot point its own name at it
+  (behind nginx the `server_name` does that).
 - `MVX_GATEWAY_URL`: a private MultiversX observing squad if you run one; the public gateway otherwise.
 
 ## Dashboard behind nginx

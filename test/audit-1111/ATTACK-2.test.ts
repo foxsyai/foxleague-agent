@@ -82,6 +82,9 @@ test('ATTACK-2b the same cross-site posts do not block the password re-prompt of
 
 test('ATTACK-2c the dashboard\'s own form keeps working behind nginx (Origin with the public name, Host passed on) and without an Origin; wrong passwords still count', async () => {
   const { url, password, close } = await webService()
+  // Behind nginx, as SERVER.md sets it up: nginx's server_name is what lets the public name in (audit 2026-11-16,
+  // ATK-2: without a proxy the dashboard refuses a Host it is not served at).
+  process.env.WEB_UI_TRUST_PROXY = '1'
   try {
     // nginx passes `Host $host`: the browser's Origin https://agent.example.com meets Host agent.example.com.
     // (fetch does not let a caller set Host, so this one request is written with node:http.)
@@ -104,6 +107,7 @@ test('ATTACK-2c the dashboard\'s own form keeps working behind nginx (Origin wit
     for (let i = 0; i < 6; i++) wrong.push((await login(url, { origin: url }, `guess-${i}`)).status)
     assert.deepEqual(wrong, [401, 401, 401, 401, 401, 429])
   } finally {
+    delete process.env.WEB_UI_TRUST_PROXY
     close()
   }
 })
