@@ -55,7 +55,8 @@ irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
 It is safe to paste it again at any time: each run finds what is already done and goes on from there. Paste one
 line at a time, here and everywhere in this section. To install a given version, set it in PowerShell before the
 line, for example `$env:FOXAGENT_VERSION = 'vX.Y.Z'`. `FOXAGENT_DIR` names another folder, always one inside
-Ubuntu, never a Windows folder.
+Ubuntu, never a Windows folder. Your Linux user has one background service: when it already runs the agent of another folder, the installer
+stops and says how to go on.
 
 #### What you will see, step by step
 
@@ -306,7 +307,9 @@ The line downloads the newest release into `~/foxleague-agent`, checks the downl
 and starts the guided installer. To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
 put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway (the settings and
 limits the newer version added are then not applied). Another folder is named with `FOXAGENT_DIR`; it must be
-empty or hold an install of foxleague-agent. If you prefer git:
+empty or hold an install of foxleague-agent. Your user has one background service: when it already runs the agent of another folder, the installer stops
+before the first question and says how to go on (`./install.sh --uninstall` in that folder first, or
+`./install.sh --no-service` here). If you prefer git:
 `git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`. A git checkout
 follows its branch: `./install.sh --update` pulls it, and that may be code that is in no release yet.
 

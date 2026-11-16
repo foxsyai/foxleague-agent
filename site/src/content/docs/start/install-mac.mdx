@@ -51,7 +51,9 @@ the questions take as long as you need.
 To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older
 version is not put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway
 (the settings and limits the newer version added are then not applied). Another folder is named with
-`FOXAGENT_DIR`; it must be empty or hold an install of foxleague-agent.
+`FOXAGENT_DIR`; it must be empty or hold an install of foxleague-agent. Your user has one background service: when it already runs the agent of another folder, the installer stops
+before the first question and says how to go on (`./install.sh --uninstall` in that folder first, or
+`./install.sh --no-service` here).
 
 ## What you will see, step by step
 

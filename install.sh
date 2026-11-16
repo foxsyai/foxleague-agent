@@ -281,6 +281,26 @@ SHIM
 UNIT="$HOME/.config/systemd/user/$SERVICE.service"
 PLIST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 service_installed() { if [ "$PLATFORM" = linux ]; then [ -f "$UNIT" ]; else [ -f "$PLIST" ]; fi; }
+# The install folder the background service of this user runs (its WorkingDirectory); nothing when it is not known.
+service_folder() {
+  if [ "$PLATFORM" = linux ]; then
+    if [ -f "$UNIT" ]; then sed -n 's/^WorkingDirectory=//p' "$UNIT" 2>/dev/null | head -n 1; fi
+  elif [ -f "$PLIST" ]; then
+    sed -n 's|.*<key>WorkingDirectory</key><string>\([^<]*\)</string>.*|\1|p' "$PLIST" 2>/dev/null | head -n 1
+  fi
+  return 0
+}
+# True when that service runs the agent of another folder that still holds an install. The service has one name per
+# user (the unit, the launchd label), so a second install of the same user would take it from the first (INS-A5).
+service_of_other_install() {
+  local other
+  other=$(service_folder)
+  [ -n "$other" ] && [ -f "$other/run.sh" ] || return 1
+  [ "$(cd "$other" 2>/dev/null && pwd -P)" != "$(cd "$ROOT" && pwd -P)" ]
+}
+other_install_refusal() {
+  die "the background service of $USER_NAME already runs the agent in $(service_folder). A user has one background service, so this install would stop that agent for good. To keep it and set up this folder without a service: cd $ROOT && ./install.sh --no-service   To move the service here instead: cd $(service_folder) && ./install.sh --uninstall   then run this again: cd $ROOT && ./install.sh"
+}
 # macOS: launchd still lists the agent's job (loaded, running or on its way out).
 mac_job_loaded() { launchctl print "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1; }
 # Waits until launchd no longer lists the job, at most $1 seconds; status 1 when it still does.
@@ -331,6 +351,8 @@ install_service() {
   local bash_bin
   bash_bin=$(command -v bash)
   safe_path "$bash_bin"
+  # Asked before the first question too; asked again here, right before the file is written.
+  if service_of_other_install; then other_install_refusal; fi
   install_launcher
   if [ "$PLATFORM" = linux ]; then
     find_user_systemd start || no_user_systemd
@@ -463,6 +485,10 @@ logs_hint() { if [ "$PLATFORM" = linux ]; then echo "journalctl --user -u $SERVI
 # ---- the three modes ----
 if [ "$MODE" = uninstall ]; then
   say "Removing the background service"
+  # The service of another install of this user is not this folder's to remove (INS-A5).
+  if service_of_other_install; then
+    die "the background service of $USER_NAME runs the agent in $(service_folder), not the one in $ROOT: it was left alone. To remove it: cd $(service_folder) && ./install.sh --uninstall"
+  fi
   found=1
   remove_service || found=0
   # Never "Stopped." while the agent of this folder plays (INS-A2): one started with ./run.sh (an install made with
@@ -523,7 +549,7 @@ if [ "$MODE" = update ]; then
   fi
   # An update restarts the background service when there is one and never installs one: an install made with
   # --no-service is started by its owner, and a second agent beside it would use the same wallets.
-  if [ "$NO_SERVICE" = 1 ] || ! service_installed; then
+  if [ "$NO_SERVICE" = 1 ] || ! service_installed || service_of_other_install; then
     info "No background service is installed here: start the agent again to run the new version ($ROOT/run.sh)."
     exit 0
   fi
@@ -551,7 +577,10 @@ install_launcher
 for tool in curl tar; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool is needed and is not installed. Install it (on Ubuntu or Debian: sudo apt install $tool), then run the installer again: cd $ROOT && ./install.sh"
 done
-if [ "$NO_SERVICE" != 1 ]; then find_user_systemd start || no_user_systemd; fi
+if [ "$NO_SERVICE" != 1 ]; then
+  if service_of_other_install; then other_install_refusal; fi
+  find_user_systemd start || no_user_systemd
+fi
 
 say "1/7 Node.js and dependencies"
 ensure_node
