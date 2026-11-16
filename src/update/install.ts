@@ -84,6 +84,12 @@ function currentUser(): string | null {
 
 /** A lock older than this was left by an update that was killed (preparing takes at most 15 minutes). */
 const LOCK_STALE_MS = 30 * 60_000
+/**
+ * Whether a lock made at `mtimeMs` is held by an update that runs now: within LOCK_STALE_MS either side of the clock.
+ * One further in the future was not made on this clock (a machine whose clock ran ahead, set right later) and would
+ * otherwise stay fresh until the clock passed it (audit 2026-11-16, U5 of the final pass).
+ */
+const lockFresh = (mtimeMs: number): boolean => Math.abs(Date.now() - mtimeMs) < LOCK_STALE_MS
 
 export interface RunResult {
   code: number | null
@@ -237,13 +243,13 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
   try {
     closeSync(openSync(lock, 'wx', 0o600))
   } catch {
-    let age = Infinity
+    let fresh = false
     try {
-      age = Date.now() - statSync(lock).mtimeMs
+      fresh = lockFresh(statSync(lock).mtimeMs)
     } catch {
       // gone again: the other update just ended
     }
-    if (age < LOCK_STALE_MS) throw new UpdateError('another update is being installed right now')
+    if (fresh) throw new UpdateError('another update is being installed right now')
     writeFileSync(lock, '', { mode: 0o600 }) // left by an update that was killed: taken over
   }
   // From here the lock is this call's. Every way out releases it (R69A-1): a refusal, a file call that throws (a full
@@ -379,10 +385,10 @@ export function confirmStart(layout: Layout): void {
   }
 }
 
-/** Whether an update holds versions/update.lock now: one younger than LOCK_STALE_MS (an older one was left by a kill). */
+/** Whether an update holds versions/update.lock now: a fresh one (lockFresh; an older one was left by a kill). */
 function updateInFlight(versions: string): boolean {
   try {
-    return Date.now() - statSync(join(versions, 'update.lock')).mtimeMs < LOCK_STALE_MS
+    return lockFresh(statSync(join(versions, 'update.lock')).mtimeMs)
   } catch {
     return false
   }

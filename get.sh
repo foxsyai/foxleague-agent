@@ -153,9 +153,9 @@ main() {
   staging="$DIR/versions/.staging-get"
   # versions/update.lock is held from here until versions/active names the new release, as the agent's own update
   # holds it (stage()): a start of the running agent meanwhile leaves alone the folder this line prepares in and the
-  # release it puts in place (FI-2). Over an install, another update that holds it (younger than 30 minutes, the
-  # agent's rule) stops this line before it changes anything; an older one, or one in a folder this line found empty,
-  # was left by a kill and is taken over.
+  # release it puts in place (FI-2). Over an install, another update that holds it (within 30 minutes of now either
+  # way, the agent's rule) stops this line before it changes anything; any other one, or one in a folder this line
+  # found empty, was left by a kill and is taken over.
   lock="$DIR/versions/update.lock"
   locked=0
   release_lock() { if [ "$locked" = 1 ]; then rm -f "$lock"; locked=0; fi; }
@@ -163,7 +163,8 @@ main() {
     local m
     m=$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null) || return 1
     case "$m" in '' | *[!0-9]*) return 1 ;; esac
-    [ $(($(date +%s) - m)) -lt 1800 ]
+    local age=$(($(date +%s) - m))
+    [ "$age" -lt 1800 ] && [ "$age" -gt -1800 ]
   }
   trap 'rm -rf "$tmp"; release_lock' EXIT
   trap 'exit 130' INT
