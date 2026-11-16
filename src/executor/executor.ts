@@ -1302,6 +1302,11 @@ export class Executor {
           try {
             created = await fox.createTournament(wallet, body, newKey())
             this.unbook(booking.organizer)
+            // FoxLeague asked no organizer payment: what the owner reads names the seat it pays, not 1150 for 1000 (MON-U5).
+            const organizer = wholeToAtomic(Number(v.facts.organizerFoxsy ?? 0))
+            const prices = this.valuationPrices(snap.prices)
+            usd = Math.max(0, usd - (prices ? costUsd(organizer, maxFeeAtomic(built.txs[0]!), prices) : 0))
+            costText = `cost ~$${usd.toFixed(2)} (${formatAtomic(v.foxsy - organizer, 0)} FOXSY + fees; FoxLeague asked no organizer payment)`
           } catch (err) {
             if (!(err instanceof ApiRefusal && err.code === 'organizer_fee_required')) throw err
             // Kept from the signature on, as FoxLeague's own app does: a create that does not use it leaves it for the next one.
