@@ -100,9 +100,14 @@ owner_name() { stat -c %U "$1/." 2>/dev/null || stat -f %Su "$1/." 2>/dev/null |
 # their own folder the owner is told whose it is and to leave sudo out, not to make another user (R2I-3).
 if [ "$MODE" != prepare ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
   who=$(owner_name "$ROOT")
+  uid=$(owner_uid "$ROOT")
+  # GNU stat says UNKNOWN for a user this machine has no name for (a container): the number then.
+  if [ -n "$who" ] && [ "$who" != UNKNOWN ]; then owner=$who as=$who
+  elif [ -n "$uid" ]; then owner="the user with number $uid (no name on this machine)" as="that user"
+  else owner="another user" as="that user"; fi
   asked=''
   [ $# -eq 0 ] || printf -v asked ' %s' "$@"
-  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh$asked"
+  die "this install belongs to $owner, not to root: run it as $as, without sudo: cd $ROOT && ./install.sh$asked"
 fi
 # The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
 # so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)

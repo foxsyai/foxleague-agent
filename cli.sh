@@ -8,14 +8,26 @@ set -u
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # As root (sudo) on a folder another user owns: root's files in data/, versions/ or .env would keep the agent, which
-# runs as that user, from starting again (INS-A8). An install that is root's own still runs.
-# "/." follows a link to the folder: stat does not follow one in the last part (R2I-1).
-if [ "$(id -u)" = 0 ] && [ "$(stat -c %u "$ROOT/." 2>/dev/null || stat -f %u "$ROOT/." 2>/dev/null)" != 0 ]; then
-  who=$(stat -c %U "$ROOT/." 2>/dev/null || stat -f %Su "$ROOT/." 2>/dev/null)
-  asked=''
-  [ $# -eq 0 ] || printf -v asked ' %q' "$@"
-  echo "foxleague-agent: this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./cli.sh$asked" >&2
-  exit 1
+# runs as that user, from starting again (INS-A8). An install that is root's own still runs, and so does one whose
+# agent already runs as root there, its database root's (a container with the host's install mounted, a system unit
+# without User=): the launcher an update puts in place must start it wherever the one it replaces did (R2I-2). "/."
+# follows a link to the folder: stat does not follow one in the last part (R2I-1); the database is asked as it is, so a
+# link to it is its maker's.
+uid_of() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
+if [ "$(id -u)" = 0 ] && [ "$(uid_of "$ROOT/.")" != 0 ]; then
+  db="${AGENT_DATA_DIR:-$ROOT/data}/agent.db"
+  if ! { [ -f "$db" ] && [ ! -L "$db" ] && [ "$(uid_of "$db")" = 0 ]; }; then
+    uid=$(uid_of "$ROOT/.")
+    who=$(stat -c %U "$ROOT/." 2>/dev/null || stat -f %Su "$ROOT/." 2>/dev/null || true)
+    # GNU stat says UNKNOWN for a user this machine has no name for (a container): the number then.
+    if [ -n "$who" ] && [ "$who" != UNKNOWN ]; then owner=$who as=$who
+    elif [ -n "$uid" ]; then owner="the user with number $uid (no name on this machine)" as="that user"
+    else owner="another user" as="that user"; fi
+    asked=''
+    [ $# -eq 0 ] || printf -v asked ' %q' "$@"
+    echo "foxleague-agent: this install belongs to $owner, not to root: run it as $as, without sudo: cd $ROOT && ./cli.sh$asked" >&2
+    exit 1
+  fi
 fi
 V="$ROOT/versions"
 if [ -f "$V/active" ]; then

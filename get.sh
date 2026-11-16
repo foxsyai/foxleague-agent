@@ -43,9 +43,14 @@ main() {
   # check of root below, with or without FOXAGENT_ALLOW_ROOT: on their own folder the owner is told whose it is and to
   # leave sudo out, not to make another user (R2I-3).
   if [ "$(id -u)" = 0 ] && [ -e "$DIR" ] && [ "$(stat -c %u "$DIR/." 2>/dev/null || stat -f %u "$DIR/." 2>/dev/null)" != 0 ]; then
-    local who
+    local who uid owner as
     who=$(stat -c %U "$DIR/." 2>/dev/null || stat -f %Su "$DIR/." 2>/dev/null || true)
-    die "$DIR belongs to ${who:-another user}, not to root: paste the line as ${who:-that user}, without sudo"
+    uid=$(stat -c %u "$DIR/." 2>/dev/null || stat -f %u "$DIR/." 2>/dev/null || true)
+    # GNU stat says UNKNOWN for a user this machine has no name for (a container): the number then.
+    if [ -n "$who" ] && [ "$who" != UNKNOWN ]; then owner=$who as=$who
+    elif [ -n "$uid" ]; then owner="the user with number $uid (no name on this machine)" as="that user"
+    else owner="another user" as="that user"; fi
+    die "$DIR belongs to $owner, not to root: paste the line as $as, without sudo"
   fi
   if [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
     die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."

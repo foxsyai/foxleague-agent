@@ -46,6 +46,7 @@ The Linux commands work from any folder. The commands that start with `./` (`./i
 and `./install.sh --uninstall`) and the Mac's log are typed in the agent's folder: go there first with
 `cd ~/foxleague-agent`. Type them as yourself, without sudo: as root on your folder `./cli.sh`, `./run.sh` and
 `./install.sh` stop before they change anything and say so, because files of root there would keep the agent from
-starting again. On Windows they are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in
+starting again. An agent that already runs as root there (its database is root's, as in a container that mounts your
+install) still starts. On Windows they are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in
 PowerShell. The uninstall on Windows is one line in PowerShell
 ([Install on Windows](/start/install-windows/#uninstalling)).

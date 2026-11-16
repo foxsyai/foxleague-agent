@@ -519,7 +519,8 @@ results, not meeting). What they share is a pooled formation record with no team
 The logs and the restart work from any folder. The other three (`./install.sh --update`, `./cli.sh` and
 `./install.sh --uninstall`) are typed in the agent's folder: go there first with `cd ~/foxleague-agent`.
 Type them as yourself, without sudo: as root on your folder `./cli.sh`, `./run.sh` and `./install.sh` stop before
-they change anything and say so, because files of root there would keep the agent from starting again.
+they change anything and say so, because files of root there would keep the agent from starting again. An agent that
+already runs as root there (its database is root's, as in a container that mounts your install) still starts.
 On Windows they are the Linux ones, typed inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell), and the
 uninstall is one line in PowerShell ([On Windows](#on-windows), "Uninstalling").
 
