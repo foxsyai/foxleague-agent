@@ -17,13 +17,11 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
-import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { refreshLauncher } from '../../src/update/install.ts'
 import { running, sh, stubs, tmp } from '../audit-1111/install-helpers.ts'
 
-const TREE = fileURLToPath(new URL('../..', import.meta.url)).replace(/\/$/, '')
 const AS_ROOT = 'case "$*" in -u) echo 0 ;; -un) echo root ;; *) exec /usr/bin/id "$@" ;; esac'
 // The folder is the host user's (the real stat says so: the test user's own number, not 0). What the agent wrote as
 // root (data/ and what is in it) is root's.
@@ -48,8 +46,9 @@ test('R2I-2: an agent a service manager starts as root on a folder of another us
   // As the container or the unit starts it: root, no sudo, no terminal, and it says that it is started again.
   const env = { HOME: '/root', USER: 'root', PATH: `${s.dir}:${process.env.PATH}`, FOXAGENT_SUPERVISED: '1' }
 
-  // The launcher of the version that runs on the owner's server today (main 955664a) starts the agent there.
-  writeFileSync(join(i.root, 'run.sh'), execFileSync('git', ['-C', TREE, 'show', '955664a:run.sh'], { encoding: 'utf8' }), { mode: 0o755 })
+  // The launcher of the version that runs on the owner's server today (main 955664a) starts the agent there. Kept as a
+  // file beside this test (`git show 955664a:run.sh`): CI checks out one commit, without that history.
+  writeFileSync(join(i.root, 'run.sh'), readFileSync(fileURLToPath(new URL('./fixtures/run-955664a.sh', import.meta.url)), 'utf8'), { mode: 0o755 })
   const before = await sh(join(i.root, 'run.sh'), [], env, { cwd: '/' })
   assert.equal(before.status, 0, before.out)
   assert.equal(ran().length, 1, 'the launcher before this release starts the agent')
