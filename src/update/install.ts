@@ -189,6 +189,16 @@ export function windowsHint(distro: string, root: string, home: string | undefin
   return `On Windows: open PowerShell and type wsl -d ${distro} --cd ~ , then cd ${folder}`
 }
 
+/** A command's output as plain lines for the owner: no terminal colour or other control bytes, no empty lines. */
+function plainLines(text: string): string[] {
+  return text
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+}
+
 /**
  * Unpacks a verified archive into versions/v<version> and has the new release prepare itself (its own
  * `install.sh --prepare`: Node, dependencies, the recovery words check, the launcher). Returns the folder's name.
@@ -251,7 +261,12 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
     if (pkg.name !== RELEASE_NAME || pkg.version !== manifest.version) return fail('the archive holds another version than its signed manifest says')
     if (!existsSync(join(staging, 'install.sh')) || !existsSync(join(staging, 'src', 'service.ts'))) return fail('the archive is not a foxleague-agent release')
     const prepared = await exec('bash', [join(staging, 'install.sh'), '--prepare'], { cwd: staging, env, timeoutMs: 15 * 60_000 })
-    if (prepared.code !== 0) return fail(`the new version could not be prepared, nothing was changed${prepared.tail ? `: ${prepared.tail.split('\n').slice(-3).join(' | ')}` : ''}`)
+    if (prepared.code !== 0) {
+      // The installer's words only (UPD-A6): its die() colours the line for a terminal and puts an empty line before
+      // it, and this reason is read on Telegram and in the dashboard.
+      const said = plainLines(prepared.tail).slice(-3).join(' | ')
+      return fail(`the new version could not be prepared, nothing was changed${said ? `: ${said}` : ''}`)
+    }
     rmSync(target, { recursive: true, force: true }) // what an earlier attempt that was undone left there
     renameSync(staging, target)
     return name
