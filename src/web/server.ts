@@ -456,7 +456,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
 
       if (path === '/healthz') return send(res, 200, 'ok', 'text/plain')
       // Before anything is read or counted: a page that pointed its own name at this machine is not the dashboard (ATK-2).
-      if (!servedHost(req, host)) return send(res, 421, `This dashboard is not served at that address. Open it at http://localhost:${req.socket.localPort ?? port}, or add the name to WEB_UI_HOSTNAMES.`, 'text/plain; charset=utf-8')
+      if (!servedHost(req, host)) return send(res, 421, `This dashboard is not served at that address. Open it at http://localhost:${req.socket.localPort ?? port} or add the name to WEB_UI_HOSTNAMES.`, 'text/plain; charset=utf-8')
 
       if (path === '/login' && method === 'GET') return user ? send(res, 303, '', 'text/plain', { location: '/' }) : loginPage(res, 200, '')
       if (path === '/login' && method === 'POST') {

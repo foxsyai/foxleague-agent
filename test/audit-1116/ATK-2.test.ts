@@ -59,8 +59,8 @@ test('ATK-2c the dashboard answers at this machine\'s names, at numeric addresse
     for (const host of [`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`, `192.168.1.20:${port}`, `agent.localhost:${port}`]) assert.equal((await get(host)).status, 200, host)
     const refused = await get(`evil.example:${port}`)
     assert.equal(refused.status, 421)
-    assert.match(refused.body, /not served at that address\. Open it at http:\/\/localhost:\d+, or add the name to WEB_UI_HOSTNAMES\./)
-    assert.doesNotMatch(refused.body, /—|\bbots?\b/)
+    assert.match(refused.body, /not served at that address\. Open it at http:\/\/localhost:\d+ or add the name to WEB_UI_HOSTNAMES\./)
+    assert.doesNotMatch(refused.body, /—|, and |, or |\bbots?\b/)
     assert.equal((await get('bad host name')).status, 421, 'a Host that is no name')
     // The health check answers whatever the name: it tells nothing and changes nothing.
     assert.equal((await get(`evil.example:${port}`, '/healthz')).status, 200)
