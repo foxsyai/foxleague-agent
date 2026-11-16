@@ -11,6 +11,7 @@ import assert from 'node:assert/strict'
 import { scheduleActions } from '../../src/service.ts'
 import { actionDeadline } from '../../src/executor/deadlines.ts'
 import { parseAction, type PlannedAction } from '../../src/executor/actions.ts'
+import type { Tournament } from '../../src/foxleague/types.ts'
 import { snapshot, tournament } from '../fixtures.ts'
 
 const MIN = 60_000
@@ -20,7 +21,7 @@ test('BEH-10: taking another team\'s open 1v1 runs at the start of the plan: it 
   const s = snapshot()
   s.takenAt = new Date(now).toISOString()
   // T5908 as agent 6 saw it on 14 Nov 12:03 UTC: an open Silver 1v1 of another team, its deadline hours away.
-  const theirs = (tournament(5908, { max_teams: 2, min_teams: 2, creator_user_id: 900, target_user_id: null, entry_fee_foxsy: 1000, deadline: new Date(now + 180 * MIN).toISOString(), starts_at: new Date(now + 185 * MIN).toISOString(), participant_count: 1 }) as { tournament: never }).tournament
+  const theirs = (tournament(5908, { max_teams: 2, min_teams: 2, creator_user_id: 900, target_user_id: null, entry_fee_foxsy: 1000, deadline: new Date(now + 180 * MIN).toISOString(), starts_at: new Date(now + 185 * MIN).toISOString(), participant_count: 1 }) as { tournament: Tournament }).tournament
   s.market.openChallenges = [theirs]
   const plan: PlannedAction[] = [
     { action: parseAction({ type: 'join_tournament', tournament_id: 5908 }), reason: 'Take the open Silver 1v1 against a much weaker team' },
@@ -42,7 +43,7 @@ test('BEH-10: the swap that funds the join still runs before it, both at the sta
   const now = Date.now()
   const s = snapshot()
   s.takenAt = new Date(now).toISOString()
-  const theirs = (tournament(5908, { max_teams: 2, min_teams: 2, creator_user_id: 900, target_user_id: null, entry_fee_foxsy: 1000, deadline: new Date(now + 180 * MIN).toISOString(), starts_at: new Date(now + 185 * MIN).toISOString(), participant_count: 1 }) as { tournament: never }).tournament
+  const theirs = (tournament(5908, { max_teams: 2, min_teams: 2, creator_user_id: 900, target_user_id: null, entry_fee_foxsy: 1000, deadline: new Date(now + 180 * MIN).toISOString(), starts_at: new Date(now + 185 * MIN).toISOString(), participant_count: 1 }) as { tournament: Tournament }).tournament
   s.market.openChallenges = [theirs]
   const plan: PlannedAction[] = [
     { action: parseAction({ type: 'train', player_nonce: 1, attribute: 'speed' }), reason: '' },

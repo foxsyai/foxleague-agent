@@ -12,6 +12,7 @@ import assert from 'node:assert/strict'
 import { scheduleActions } from '../../src/service.ts'
 import { actionDeadline } from '../../src/executor/deadlines.ts'
 import { parseAction, type PlannedAction } from '../../src/executor/actions.ts'
+import type { Tournament } from '../../src/foxleague/types.ts'
 import { snapshot, tournament } from '../fixtures.ts'
 
 const MIN = 60_000
@@ -21,7 +22,7 @@ test('BEH-9: leaving the agent\'s own unanswered 1v1 runs at the start of the pl
   const s = snapshot()
   s.takenAt = new Date(now).toISOString()
   // T5747 as plan 16355 saw it: our own open Silver 1v1, nobody seated against us, two and a half hours to its deadline.
-  const own = (tournament(5747, { max_teams: 2, min_teams: 2, creator_user_id: 100, target_user_id: null, entry_fee_foxsy: 1000, ovr_min: 20, ovr_max: 48, deadline: new Date(now + 150 * MIN).toISOString(), starts_at: new Date(now + 155 * MIN).toISOString(), participant_count: 1 }) as { tournament: never }).tournament
+  const own = (tournament(5747, { max_teams: 2, min_teams: 2, creator_user_id: 100, target_user_id: null, entry_fee_foxsy: 1000, ovr_min: 20, ovr_max: 48, deadline: new Date(now + 150 * MIN).toISOString(), starts_at: new Date(now + 155 * MIN).toISOString(), participant_count: 1 }) as { tournament: Tournament }).tournament
   s.auth!.myTournaments!.active = [own]
   s.market.openChallenges = [own]
   const plan: PlannedAction[] = [
@@ -45,8 +46,8 @@ test('BEH-9: the leave runs first even when the plan lists it last; a seat in an
   const now = Date.now()
   const s = snapshot()
   s.takenAt = new Date(now).toISOString()
-  const own = (tournament(5747, { max_teams: 2, min_teams: 2, creator_user_id: 100, target_user_id: 4495, targeted: true, entry_fee_foxsy: 1000, deadline: new Date(now + 150 * MIN).toISOString(), starts_at: new Date(now + 155 * MIN).toISOString(), participant_count: 1 }) as { tournament: never }).tournament
-  const cup = (tournament(6100, { max_teams: 8, creator_user_id: 900, deadline: new Date(now + 150 * MIN).toISOString() }) as { tournament: never }).tournament
+  const own = (tournament(5747, { max_teams: 2, min_teams: 2, creator_user_id: 100, target_user_id: 4495, targeted: true, entry_fee_foxsy: 1000, deadline: new Date(now + 150 * MIN).toISOString(), starts_at: new Date(now + 155 * MIN).toISOString(), participant_count: 1 }) as { tournament: Tournament }).tournament
+  const cup = (tournament(6100, { max_teams: 8, creator_user_id: 900, deadline: new Date(now + 150 * MIN).toISOString() }) as { tournament: Tournament }).tournament
   s.auth!.myTournaments!.active = [own, cup]
   const plan: PlannedAction[] = [
     { action: parseAction({ type: 'swap_egld_for_foxsy', foxsy: 2500 }), reason: '' },
