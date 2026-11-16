@@ -128,7 +128,8 @@ the normal tick).
   starting on Monday at 14:00 UTC.
 - **Shop prices**: once FoxLeague's MetaStaking discount is on, a wallet with FOXSY in MetaStaking pays less in the
   Shop, and FoxLeague takes only that wallet's own price. The agent pays exactly the price FoxLeague quotes its wallet
-  right before each payment, and pays nothing while it cannot read that price.
+  right before each payment, and pays nothing while it cannot read that price. The plan sees that price next to the
+  list price, so it weighs what the wallet really pays.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen. FoxLeague runs
   one of two fusions and the agent reads which from FoxLeague's settings: a card drawn from FoxLeague's pool, or a new

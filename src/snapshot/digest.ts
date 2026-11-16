@@ -1,11 +1,11 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, shopDiscountLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
 import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { calendarLines } from './calendar.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
-import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, scheduleRefusal, scheduleSpanMinutes, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
+import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, scheduleRefusal, scheduleSpanMinutes, shopPrice, shopRateBp, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { cut } from '../util/text.ts'
 import { agentName } from '../names.ts'
@@ -87,6 +87,35 @@ export function boosterLine(shop: ShopStatus | null | undefined, takenAt: string
   if (!Number.isFinite(until)) return 'XP booster active, expiry unknown (no new one is bought until it is known)'
   const left = Math.max(0, (until - Date.parse(takenAt)) / 3600_000)
   return `XP booster active until ${new Date(until).toISOString()} (${left.toFixed(1)} h left; a new one restarts the 24 h and is refused while more than ${XP_BOOSTER_RENEW_HOURS} h are left)`
+}
+
+/**
+ * The Shop's prices as the executor pays them (MNT-2b): the list prices FoxLeague's config serves and, while its
+ * MetaStaking discount is live, this wallet's own prices and rate next to them (shopRateBp and shopPrice, the rules'
+ * own). While the discount is live and the rate is unread, no price: the executor buys nothing in the Shop then.
+ */
+export function shopPriceLine(s: AgentSnapshot): string | null {
+  const cfg = s.config
+  if (!cfg) return null
+  const now = new Date(s.takenAt)
+  const p = cfg.shop_prices_foxsy
+  const whole = (v: unknown): number | null => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : null)
+  const items: { name: string; list: number | null; unit: string; one: string }[] = [
+    { name: 'XP booster', list: whole(p?.xp_booster), unit: '', one: '' },
+    { name: 'Common pack', list: whole(cfg.common_pack_price_foxsy), unit: '', one: '' },
+    { name: 'training slot', list: whole(p?.training), unit: ' each', one: ' for one' },
+    { name: 'condition recovery', list: whole(p?.condition), unit: " for a card's 100 points", one: " for a card's 100 points" },
+  ]
+  const listed = (i: (typeof items)[number]) => `${i.name} ${i.list ?? 'unknown'}${i.unit}`
+  const live = shopDiscountLive(cfg, now)
+  const bp = shopRateBp(s.auth?.shop?.metastaking_discount_bp, cfg, now)
+  if (!live && bp === 0) return `Shop prices (FOXSY): ${items.map(listed).join(', ')}`
+  if (bp === null) return `Shop prices for this wallet: unknown (FoxLeague's MetaStaking discount is live and this wallet's rate could not be read, so the executor buys nothing in the Shop until it is); list prices: ${items.map(listed).join(', ')}`
+  // The ranked ticket is discounted too (FoxLeague's ticket view); its list price is on the Competition levels line.
+  const ticket = levelsLive(cfg, now) ? whole(cfg.competition_levels?.ranked_ticket_price_foxsy) : null
+  if (ticket !== null) items.push({ name: 'ranked ticket', list: ticket, unit: '', one: '' })
+  const mine = (i: (typeof items)[number]) => (i.list === null ? `${i.name} unknown` : `${i.name} ${shopPrice(i.list, bp)}${i.one} (list ${i.list})`)
+  return `Shop prices for this wallet (FoxLeague's MetaStaking discount${live ? ' is live' : ''}: your rate ${bp} basis points, ${bp / 100} percent off, taken once on each payment's total; the executor pays these, FoxLeague takes no other amount): ${items.map(mine).join(', ')}; medicine at FoxLeague's quote, ${bp / 100} percent off its days' full cost`
 }
 
 /** A rival's formations in its last revealed matches (written by FoxLeague's server, still read as data). */
@@ -320,6 +349,9 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     const resets = typeof a.shop?.common_pack_week_resets_at === 'string' ? Date.parse(a.shop.common_pack_week_resets_at) : NaN
     const again = Number.isFinite(resets) ? `, the week starts again ${new Date(resets).toISOString()}` : ''
     out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}${again}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
+    // What the Shop costs this wallet, as the executor pays it (MNT-2b).
+    const prices = shopPriceLine(s)
+    if (prices) out.push(prices)
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
