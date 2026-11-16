@@ -529,6 +529,15 @@ remove_old_code() {
     rm -rf "${ROOT:?}/$old"
   done
 }
+# True when this user's background service is the one an install made before releases had folders of their own
+# wrote for this folder: it starts <folder>/src/service.ts by that path (R2I-9).
+old_service_runs_here() {
+  local file here
+  if [ "$PLATFORM" = linux ]; then file=$UNIT; else file=$PLIST; fi
+  [ -f "$file" ] && LC_ALL=C grep -a -q -F "$ROOT/src/service.ts" "$file" && [ -n "$(service_folder)" ] || return 1
+  here=$(cd "$ROOT" && pwd -P)
+  [ "$(cd "$(service_folder)" 2>/dev/null && pwd -P)" = "$here" ]
+}
 restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 # After a restart that failed: what runs now, and a command that systemd takes even at the unit's start limit.
 after_failed_restart() {
@@ -824,8 +833,13 @@ info "Each new agent you add in the dashboard gets its own pem/agentN.pem automa
 address=$(cli address 1 | sed -E 's/^agent 1: ([^ ]+).*/\1/')
 if [ "$NO_SERVICE" = 1 ]; then
   say "7/7 Background service: skipped (--no-service)"
-  remove_old_code
-  info "Start the agent yourself with: $ROOT/run.sh"
+  if old_service_runs_here; then
+    # No service of step 7 takes its place: the old one still starts this folder's old code, which stays (R2I-9).
+    info "The background service of the older install in this folder still starts its own code ($ROOT/src/service.ts), so that code stays. Two agents must not play with the same wallets: to start the agent yourself, remove that service first (cd $ROOT && ./install.sh --uninstall), then start it with: $ROOT/run.sh"
+  else
+    remove_old_code
+    info "Start the agent yourself with: $ROOT/run.sh"
+  fi
 else
   say "7/7 Background service"
   install_service
