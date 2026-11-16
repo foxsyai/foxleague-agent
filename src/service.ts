@@ -891,8 +891,9 @@ export class Service {
   private manualTimer: NodeJS.Timeout | undefined
   /**
    * The day's check of FoxLeague's manual for the dashboard, also where no Telegram is linked: from the summary's hour
-   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour and made
-   * at most once a day (manual-watch.ts keeps the day in the database).
+   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour. The
+   * watch decides at each look (manual-watch.ts, kept in the database): again while the copy was current, up to 4
+   * tries a day while it could not tell, not again that day once it is behind (audit 2026-11-16, MNT-5 and MNT-6).
    */
   private armManualCheck(delayMs = 180_000): void {
     clearTimeout(this.manualTimer)

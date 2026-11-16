@@ -44,6 +44,14 @@ const SLUG = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}$/
 const isSlug = (s: unknown): s is string => typeof s === 'string' && s.length <= MAX_SLUG && SLUG.test(s)
 /** The kv key of the day's check. */
 const KV = 'manual_check'
+/**
+ * Through the day (audit 2026-11-16, MNT-5 and MNT-6): a check that found the copy current is made again at the
+ * service's next hourly look once this long has passed, so a manual FoxLeague deploys after the morning is seen within
+ * the hour; one that found it behind stays for the day.
+ */
+export const RECHECK_MS = 55 * 60_000
+/** A check that could not reach FoxLeague is tried again at the next hourly looks, at most this many tries a day. */
+export const MAX_TRIES = 4
 
 export type McpFetch = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string; signal: AbortSignal; redirect: 'error' }) => Promise<Response>
 
@@ -290,10 +298,18 @@ export interface ManualView {
   text: string | null
 }
 
-/** A check as the database keeps it: the day it was made (in the summary's zone) and the copy it compared. */
-type StoredCheck = ManualCheck & { day: string; copy?: string }
+/**
+ * A check as the database keeps it: the day it was made (in the summary's zone), the copy it compared, when it was
+ * started (`tried`, the service's clock) and how many checks in a row that day could not tell (`fails`). A row of the
+ * version before has neither: its `at` stands for `tried`, and it counts as one try.
+ */
+type StoredCheck = ManualCheck & { day: string; copy?: string; tried?: number; fails?: number }
 
-/** The service's side: the check at most once a day, kept in the database so a restart does not ask again. */
+/**
+ * The service's side: the day's check, kept in the database so a restart does not ask again before it is due. A copy
+ * found current is checked again each hour, one found behind stays so for the day, and a check that could not tell
+ * is tried again each hour up to MAX_TRIES a day.
+ */
 export class ManualWatch {
   readonly enabled: boolean
   private readonly d: ManualWatchDeps
@@ -351,9 +367,17 @@ export class ManualWatch {
     return last && last.copy === this.copy().key ? last : null
   }
 
+  /** Whether today's stored check of this copy is to be made again now (see RECHECK_MS and MAX_TRIES). */
+  private due(last: StoredCheck, now: number): boolean {
+    if (last.state === 'behind') return false
+    const tried = typeof last.tried === 'number' ? last.tried : Date.parse(last.at)
+    if (Number.isFinite(tried) && now - tried < RECHECK_MS) return false
+    return last.state === 'current' || (last.fails ?? 1) < MAX_TRIES
+  }
+
   /**
-   * Today's check: the one already made today of the copy installed now, the one running or a new one. Null when
-   * switched off. At most once a day per copy: an update that brings a new manual.md is checked again the same day.
+   * Today's check: the one already made today of the copy installed now while it holds, the one running or a new one.
+   * Null when switched off. An update that brings a new manual.md is checked again the same day.
    */
   today(now = Date.now()): Promise<ManualCheck | null> {
     if (!this.enabled) return Promise.resolve(null)
@@ -361,13 +385,16 @@ export class ManualWatch {
     const day = zoneDate(now, this.d.zone)
     const copy = this.copy()
     const last = this.last()
-    if (last?.day === day && last.copy === copy.key) return Promise.resolve(last)
+    const same = last?.day === day && last.copy === copy.key
+    if (same && !this.due(last, now)) return Promise.resolve(last)
+    // The checks in a row today that could not tell, this one counted from its start.
+    const fails = (same && last.state === 'unknown' ? (last.fails ?? 1) : 0) + 1
     this.before = last
     const run = async (): Promise<ManualCheck> => {
-      // Marked before anything is asked: a check that a restart cuts short is not made again the same day.
-      this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key }))
+      // Marked before anything is asked: a check that a restart cuts short counts as a try that could not tell.
+      this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key, tried: now, fails }))
       const c = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
-      this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key }))
+      this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key, tried: now, fails: c.state === 'unknown' ? fails : 0 }))
       return c
     }
     this.running = run().finally(() => {
