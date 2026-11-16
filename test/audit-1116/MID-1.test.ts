@@ -191,3 +191,28 @@ test('MID-1 the text reaches the plan and the manager chat inside their fences, 
   const shown = JSON.stringify(svc.manualWatch.view()) + String(svc.manualWatch.line()) + told.join('\n')
   assert.ok(!shown.includes('3,000 FOXSY') && !shown.includes('Medicine heals'), shown.slice(0, 300))
 })
+
+test('MID-1 while a later look is still running (the API description is slow), each plan keeps the page texts of the check before it', async () => {
+  const server = mcp()
+  server.state.pages['mechanics/shop'] = NEW_SHOP
+  const w = watch(server)
+  let release!: () => void
+  const slow = new Promise<void>(r => (release = r))
+  let first = true
+  Object.assign(w, {
+    readApiRecord: () => ({ synced: 'x', routes: { 'GET /api/config': 'absent' } }),
+    apiFetch: async () => {
+      if (!first) await slow
+      first = false
+      return new Response('{}', { status: 404 })
+    },
+  })
+  await w.today(AT_0700)
+  assert.ok(JSON.stringify(pagesOf(w)).includes('3,000 FOXSY'))
+  const running = w.today(AT_0700 + HOUR, { force: true })
+  await new Promise(r => setTimeout(r, 20))
+  assert.ok(JSON.stringify(pagesOf(w)).includes('3,000 FOXSY'), 'the plan in between still reads the changed page')
+  release()
+  await running
+  assert.ok(JSON.stringify(pagesOf(w)).includes('3,000 FOXSY'))
+})

@@ -550,13 +550,14 @@ export class ManualWatch {
       // Marked before anything is asked: a check that a restart cuts short counts as a try that could not tell.
       this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key, tried: now, fails }))
       const { texts, ...c } = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
+      // The same look reads FoxLeague's API description (P-W4), before this check is stored: until then the plans keep
+      // reading the check before it with its own page texts. It never fails the check.
+      await this.lookApi(o.quiet).catch((err: unknown) => console.error("the look at FoxLeague's API description failed:", err instanceof Error ? err.message : err))
       // The changed pages' text in a row of its own, tied to this check (MID-1): written first, so the check it
       // belongs to never shows without it. Emptied by any check that did not find the copy behind.
       this.d.kv.set(TEXTS_KV, JSON.stringify({ copy: copy.key, at: c.at, pages: c.state === 'behind' ? (texts ?? []) : [] }))
       this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key, tried: now, fails: c.state === 'unknown' ? fails : 0 }))
       if (c.state !== 'unknown') this.d.kv.set(BEHIND_KV, JSON.stringify({ copy: copy.key, pages: c.state === 'behind' ? c.pages : [] }))
-      // The same look reads FoxLeague's API description (P-W4). It never fails the check.
-      await this.lookApi(o.quiet).catch((err: unknown) => console.error("the look at FoxLeague's API description failed:", err instanceof Error ? err.message : err))
       // Current (or not yet known) to behind, or more pages behind: the owner hears it now, once (P-W3). `quiet`: the
       // caller sends the line itself (the morning summary, /summary), so it is only marked as told.
       if (c.state === 'behind') this.tellOnce(`pages:${copy.key}:${c.pages.join(',')}`, manualTell(c), o.quiet)
@@ -670,7 +671,7 @@ export class ManualWatch {
   /**
    * FoxLeague's current text of the pages that changed since the agents' copy (MID-1), as the check that found the copy
    * behind read it: for the plan request and the manager chat, inside their snapshot fence (page-text.ts). Nothing while
-   * the copy is current, while the check could not tell, or for a check of another copy. Read from the database: no
+   * the copy is current, while the check could not tell or for a check of another copy. Read from the database: no
    * plan asks FoxLeague.
    */
   planPages(): PageText[] {
