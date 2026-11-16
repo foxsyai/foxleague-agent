@@ -7,7 +7,8 @@
 // for byte the one that was signed. Where the bytes come from (GitHub, a redirect, a mirror) is then not trusted.
 
 import { createHash, createPrivateKey, createPublicKey, sign as cryptoSign, verify as cryptoVerify } from 'node:crypto'
-import { createWriteStream, readFileSync, rmSync, statSync } from 'node:fs'
+import { readFileSync, rmSync, statSync } from 'node:fs'
+import { open, type FileHandle } from 'node:fs/promises'
 
 export const RELEASE_NAME = 'foxleague-agent'
 /** Where releases are published. `<base>/latest/download/<file>` is the newest, `<base>/download/v1.2.3/<file>` a given one. */
@@ -187,6 +188,16 @@ export async function fetchRelease(base: string, keys: readonly string[], o: { f
   return { manifest, bytes, signature }
 }
 
+/** Why a file could not be written, in words for the owner, from the file system's error code. */
+function writeProblem(err: unknown): string {
+  const code = (err as { code?: unknown } | null)?.code
+  if (code === 'ENOSPC') return 'the disk is full'
+  if (code === 'EDQUOT') return 'the disk quota is used up'
+  if (code === 'EROFS') return 'the disk is read-only'
+  if (code === 'EACCES' || code === 'EPERM') return 'the agent may not write there'
+  return typeof code === 'string' && /^E[A-Z]+$/.test(code) ? code : 'a file error'
+}
+
 /**
  * Downloads the archive a verified manifest names into `dest`, never more than the signed size, and checks the
  * size and the SHA-256. On any failure the partial file is removed and UpdateError is thrown.
@@ -206,20 +217,37 @@ export async function downloadArchive(base: string, manifest: Manifest, dest: st
   }
   if (!res.ok || !res.body) return fail(`the release server answered ${res.status} for the archive`)
   const hash = createHash('sha256')
-  const out = createWriteStream(dest, { mode: 0o600 })
+  // Written through a file handle, not a stream (UPD-A1): every write that fails (a full disk, a folder that may not
+  // be written to) is a rejection caught below. A write stream without an 'error' listener threw it as an uncaught
+  // exception and ended the whole agent; with one, its 'drain' never came and the download waited for ever.
+  let out: FileHandle
+  try {
+    out = await open(dest, 'w', 0o600)
+  } catch (err) {
+    return fail(`the archive could not be written to the agent's folder (${writeProblem(err)})`)
+  }
   let total = 0
+  let failure: string | null = null
   try {
     for await (const chunk of res.body as unknown as AsyncIterable<Uint8Array>) {
       total += chunk.length
       if (total > manifest.size) throw new UpdateError('the archive is larger than the signed release')
       hash.update(chunk)
-      if (!out.write(chunk)) await new Promise<void>(resolve => out.once('drain', resolve))
+      try {
+        await out.writeFile(chunk)
+      } catch (err) {
+        throw new UpdateError(`the archive could not be written to the agent's folder (${writeProblem(err)})`)
+      }
     }
-    await new Promise<void>((resolve, reject) => out.end((err?: Error | null) => (err ? reject(err) : resolve())))
   } catch (err) {
-    out.destroy()
-    return fail(err instanceof UpdateError ? err.message : 'the download was cut short')
+    failure = err instanceof UpdateError ? err.message : 'the download was cut short'
   }
+  try {
+    await out.close()
+  } catch (err) {
+    failure ??= `the archive could not be written to the agent's folder (${writeProblem(err)})`
+  }
+  if (failure !== null) return fail(failure)
   if (total !== manifest.size || statSync(dest).size !== manifest.size) return fail('the archive is not the size of the signed release')
   if (hash.digest('hex') !== manifest.sha256) return fail('the archive is not the one that was signed (its SHA-256 differs): it was refused')
 }
