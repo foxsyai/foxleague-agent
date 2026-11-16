@@ -191,7 +191,7 @@ export function calendarLines(s: { agent: { index: number | null }; market: { sl
   const minute = (t: number) => `${new Date(t).toISOString().slice(0, 16)}Z`
   const days = CREATE_START_MAX_MS / 86_400_000
   const out = [
-    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, so the other teams your owner runs are offered other minutes; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
+    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, which spreads the starts offered when the calendar has room; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
   ]
   for (const c of cal) {
     const head = `  ${c.format} of ${c.teams} (estimate ${estimateMinutes(c.format, c.teams, false)} min): `
