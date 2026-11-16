@@ -73,6 +73,10 @@ checksum." and "Starting the installer". Then the installer says each step in on
 
 The dashboard address on the last screen is a link: hold Cmd and click it to open it.
 
+macOS shows the agent as "FoxLeague Agent" in System Settings, General, Login Items & Extensions, and switching it
+off there stops the agent. It then stays off: running the installer again or `./install.sh --update` leaves it off
+and says how to switch it on.
+
 <Aside type="caution" title="Your recovery words">
 The words are the only way to recover your agents' wallets. Keep them on paper, offline. Anyone with them controls
 the wallets. Never type them into a website, a chat or a screenshot. To see them again, run
@@ -137,13 +141,14 @@ cd ~/foxleague-agent
 ./install.sh --uninstall
 ```
 
-It stops the background agent and removes its file from `~/Library/LaunchAgents`: no service, no background
-process and no open port of the agent are left. It leaves your folder, wallet and PEM files in place. Everything
-the install added is in that folder, its own Node.js and the download cache of npm included: about 240 MB, and
-about 280 MB once an update has kept the release before it (kept so that the update can be undone). The agent
-wallets may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
-Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
-started yourself with `./run.sh`, for example), it says so and how to stop it.
+It stops the background agent and removes its file from `~/Library/LaunchAgents` and the program it started,
+`FoxLeague Agent` in the agent's folder: no service, no background process and no open port of the agent are left.
+It leaves your folder, wallet and PEM files in place. Everything the install added is in that folder, its own
+Node.js and the download cache of npm included: about 240 MB, and about 280 MB once an update has kept the release
+before it (kept so that the update can be undone). The agent wallets may still hold funds. Keep the recovery
+words, and delete the folder only when the wallets are empty. Type it as yourself, without sudo: with sudo it stops
+and says so. When it cannot stop the agent (one you started yourself with `./run.sh`, for example), it says so and
+how to stop it.
 
 ## If it gets stuck
 

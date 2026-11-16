@@ -32,7 +32,8 @@ by step. Each system has its own guide, step by step, with what to do if it gets
 [Install on Mac](https://agent.foxleague.ai/start/install-mac/) and
 [Install on Linux](https://agent.foxleague.ai/start/install-linux/). The same is in [INSTALL.md](INSTALL.md), with
 everything else. On Windows the agent runs while Ubuntu (WSL) runs (a scheduled task of the Windows installer is
-there to keep Ubuntu running while you are logged in), and on macOS it starts when you log in.
+there to keep Ubuntu running while you are logged in), and on macOS it starts when you log in (macOS lists it as
+"FoxLeague Agent" in System Settings, General, Login Items & Extensions).
 
 You need about 5 EGLD to start (2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
 Anthropic API key for the AI. Telegram and Binance are optional.
