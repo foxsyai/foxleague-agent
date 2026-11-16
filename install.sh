@@ -94,12 +94,14 @@ fi
 # The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
 owner_uid() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
 owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || true; }
-# --update with sudo on another user's install: root put a release in place there that the agent's own user cannot
-# read (versions/, active, pending, data/update), and the agent then never started again (UPD-A4). It stops before
-# it writes anything. An install that itself runs as root (its folder is root's) still updates.
-if [ "$MODE" = update ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
+# --update and --uninstall with sudo on another user's install. --update put a release in place there that the
+# agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
+# (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
+# (INS-A2). Both stop before they write anything. An install that itself runs as root (its folder is root's) still
+# updates and uninstalls.
+if { [ "$MODE" = update ] || [ "$MODE" = uninstall ]; } && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
   who=$(owner_name "$ROOT")
-  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --update"
+  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --$MODE"
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
@@ -398,10 +400,12 @@ EOF
     launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
   fi
 }
+# Stops and removes the background service of this user. Status 1 when this user has none: nothing to stop. Never
+# returns after a service that could not be stopped: "Stopped." would follow and the agent would keep playing.
 remove_service() {
   if [ "$PLATFORM" = linux ]; then
-    # Never "Stopped." for a service that could not be asked to stop: the agent would keep playing.
-    if [ -f "$UNIT" ] && ! find_user_systemd; then
+    [ -f "$UNIT" ] || return 1
+    if ! find_user_systemd; then
       die "the background service cannot be reached from this terminal, so it was not stopped and not removed. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself and run this again: cd $ROOT && ./install.sh --uninstall"
     fi
     systemctl --user disable --now "$SERVICE" >/dev/null 2>&1 || true
@@ -411,9 +415,28 @@ remove_service() {
     rm -f "$UNIT"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   else
-    launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
+    # By its label, also when the plist is gone. Unloaded only when launchd no longer lists the job (INS-A2): the
+    # plist stays while it does, so that the next run can still unload it.
+    [ -f "$PLIST" ] || mac_job_loaded || return 1
+    local rc=0
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || rc=$?
+    # 0: unloaded; 36: on its way out (a busy agent takes up to 150 s to stop, launchd gives it 180).
+    if [ "$rc" = 0 ] || [ "$rc" = 36 ]; then mac_wait_unloaded 185 || true; fi
+    if mac_job_loaded; then
+      die "launchd did not unload the background agent (launchctl bootout ended with $rc), so it was not removed and it keeps playing. Run this as $USER_NAME in a terminal of the Mac itself, without sudo: cd $ROOT && ./install.sh --uninstall"
+    fi
     rm -f "$PLIST"
   fi
+}
+# The agent of this folder while it runs: the process data/service.pid names, alive and running service.ts. One
+# whose command line cannot be read counts too: unknown is not stopped. Prints nothing when it does not run.
+agent_pid() {
+  local pid cmd
+  pid=$(head -n 1 "$DATA_DIR/service.pid" 2>/dev/null || true)
+  case "$pid" in '' | *[!0-9]*) return 0 ;; esac
+  kill -0 "$pid" 2>/dev/null || return 0
+  cmd=$({ tr '\0' ' ' < "/proc/$pid/cmdline"; } 2>/dev/null || ps -p "$pid" -o command= 2>/dev/null || true)
+  case "$cmd" in '' | *service.ts*) printf '%s' "$pid" ;; esac
 }
 # The unit of an install made before 2026-11-14 holds RestrictSUIDSGID=true. Its seccomp filter answers openat2
 # with ENOSYS (it cannot look inside the call), and Ubuntu 26.04's tar resolves every path it unpacks with openat2:
@@ -440,8 +463,20 @@ logs_hint() { if [ "$PLATFORM" = linux ]; then echo "journalctl --user -u $SERVI
 # ---- the three modes ----
 if [ "$MODE" = uninstall ]; then
   say "Removing the background service"
-  remove_service
-  info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
+  found=1
+  remove_service || found=0
+  # Never "Stopped." while the agent of this folder plays (INS-A2): one started with ./run.sh (an install made with
+  # --no-service), under tmux or by a program of the owner's own has no service here to stop.
+  pid=$(agent_pid)
+  if [ -n "$pid" ]; then
+    die "the agent of this folder still runs (process $pid). It was started another way (./run.sh in a terminal, tmux or a program of your own), so this could not stop it. Stop it there (Ctrl-C in its terminal) or with: kill $pid   Then run this again: cd $ROOT && ./install.sh --uninstall"
+  fi
+  if [ "$found" = 1 ]; then
+    info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
+  else
+    info "No background service of $USER_NAME was found: there was nothing to stop."
+    info "Your folder, your wallet words (.env), your data and your PEM files are untouched."
+  fi
   # The balances are not read here: what the wallets hold is not known, so it is not said.
   # Each line fits in 100 columns, also with a user name of 32 characters: a window of 120 broke words (W-12).
   info "The agent wallets may still hold funds. Keep the recovery words; delete the folder"
