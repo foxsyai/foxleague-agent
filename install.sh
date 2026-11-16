@@ -596,15 +596,23 @@ renew_unit() {
 }
 # The plist of a Mac install made before 2026-11-16 starts bash with run.sh, so macOS listed the agent as "bash" in
 # Login Items & Extensions (MAC-1). This prints that plist with only its line of the program on the launcher; status 1
-# (nothing printed) when the plist is not that form: one that starts anything else is not the installer's.
+# (nothing printed) when the plist is not that form: one that starts anything else is not the installer's, nor one
+# with more than one program before run.sh (an owner's caffeinate, nice or env in front of bash, FI-3).
 plist_on_launcher() {
   [ "$PLATFORM" = darwin ] && [ -f "$PLIST" ] || return 1
-  local line text='' found=0
+  local line program text='' found=0
+  local opening="  <key>ProgramArguments</key><array><string>" closing="</string><string>$ROOT/run.sh</string></array>"
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
-      "  <key>ProgramArguments</key><array><string>"*"</string><string>$ROOT/run.sh</string></array>")
-        line="  <key>ProgramArguments</key><array><string>$MAC_LAUNCHER</string></array>"
-        found=1 ;;
+      "$opening"*"$closing")
+        program=${line#"$opening"}
+        program=${program%"$closing"}
+        case "$program" in
+          '' | *'<'*) ;;
+          *)
+            line="  <key>ProgramArguments</key><array><string>$MAC_LAUNCHER</string></array>"
+            found=1 ;;
+        esac ;;
     esac
     text="$text$line"$'\n'
   done < "$PLIST" || return 1
