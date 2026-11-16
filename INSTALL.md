@@ -158,7 +158,10 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
   nothing is changed. Restart the PC and press the setup key while it starts: F2, Del, F10 or Esc, depending on the
   maker (the PC maker's guide tells which). Turn on Intel VT-x (Intel Virtualization Technology), AMD-V or SVM,
   save and restart, then paste the PowerShell line again. `systeminfo` shows "Virtualization Enabled In Firmware:
-  Yes" once it is on; Task Manager shows it too (Performance, CPU).
+  Yes" once it is on. Where a hypervisor already runs (Windows 11 starts one for its own security as soon as
+  virtualization is on) it shows "A hypervisor has been detected. Features required for Hyper-V will not be
+  displayed." instead, which means it is on too. Task Manager shows it too (Performance, CPU, "Virtualization:
+  Enabled").
 - **"Ubuntu and the agent need about 4 GB free on C:":** free some space on C:, then paste the line again.
   Settings, System, Storage shows what takes the room (Storage Sense and Disk Cleanup remove temporary files). The
   hibernation file, `hiberfil.sys`, can take several GB: `powercfg /h off` in a PowerShell opened as administrator
