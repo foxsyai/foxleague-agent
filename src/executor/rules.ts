@@ -12,7 +12,7 @@ import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
-import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive } from '../foxleague/levels.ts'
+import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive, shopDiscountOff } from '../foxleague/levels.ts'
 import { fusionMintTx } from './tx.ts'
 import { STATS } from '../foxleague/types.ts'
 import type { SpendCategory } from '../store/db.ts'
@@ -155,9 +155,11 @@ export function shopPrice(full: number, bp: number): number {
  * The MetaStaking rate FoxLeague serves this wallet (audit 2026-11-16, MNT-2 and CHN-1): from the switch its confirm
  * takes only the wallet's own price, so any other amount is refused and refunded after it settled. A whole number of
  * basis points, 0 to 1,000, is the rate. Anything else is unread: before the switch the list price (the rate is 0 there),
- * once the switch is live or its time has passed null, and nothing is paid.
+ * once the switch is live or its time has passed null, and nothing is paid. The switch is read first: while FoxLeague
+ * serves it off, the list price whatever rate is served, the only amount its confirm takes then (R75A-1).
  */
-function shopRateBp(served: unknown, cfg: FoxConfig, now: Date): number | null {
+export function shopRateBp(served: unknown, cfg: FoxConfig, now: Date): number | null {
+  if (shopDiscountOff(cfg, now)) return 0
   if (typeof served === 'number' && Number.isSafeInteger(served) && served >= 0 && served <= MAX_SHOP_DISCOUNT_BP) return served
   return shopDiscountLive(cfg, now) ? null : 0
 }

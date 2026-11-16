@@ -60,6 +60,18 @@ export function shopDiscountLive(cfg: FoxConfig | null | undefined, now: Date): 
   return typeof c.live_from !== 'string' || !Number.isFinite(Date.parse(c.live_from)) || passed(c.live_from, now)
 }
 
+/**
+ * The MetaStaking switch read and off: the block FoxLeague serves says `live: false` with no time, or a time still ahead.
+ * FoxLeague's confirm then takes the full price only (shop_discount.rs `current`: before the switch the rate is 0), so a
+ * rate served meanwhile is not paid by (R75A-1). No block or one that cannot be read is not this: unknown is not off.
+ */
+export function shopDiscountOff(cfg: FoxConfig | null | undefined, now: Date): boolean {
+  const c = cfg?.metastaking_discount as { live?: unknown; live_from?: unknown } | null | undefined
+  if (!c || typeof c !== 'object' || c.live !== false) return false
+  if (c.live_from === null || c.live_from === undefined) return true
+  return typeof c.live_from === 'string' && Number.isFinite(Date.parse(c.live_from)) && !passed(c.live_from, now)
+}
+
 /** The ELO pair cap governs (FoxLeague's `elo_pair_cap`): a meeting past its number a game day moves no ELO. */
 export function eloPairCapLive(cfg: FoxConfig | null | undefined, now: Date): boolean {
   const c = cfg?.elo_pair_cap
