@@ -210,6 +210,11 @@ export interface AgentSnapshot {
    * the cap, until when a result moves no ELO.
    */
   eloPairs?: { userId: number; meetings: number | null; noEloUntil: string | null }[]
+  /**
+   * Planning snapshots only, while the ELO pair cap is live (MNT-3b): each tournament opponent the upcoming list names
+   * for this game day, with its user id from the tournament's seats (null: unread). Their meetings are in `eloPairs`.
+   */
+  upcomingRivals?: { tournamentId: number; opponent: string; userId: number | null }[]
   warnings: string[]
 }
 
@@ -603,6 +608,35 @@ export function auctionsShown(strongest: MarketListing[] | null, cheapest: Marke
   return out
 }
 
+/** Tournaments whose seats are read for their opponents' user ids, per planning snapshot (MNT-3b). */
+const UPCOMING_RIVAL_TOURNAMENTS = 4
+
+/**
+ * The tournament opponents of this game day with their user ids (MNT-3b): FoxLeague's upcoming list names an opponent by
+ * its team only, and the tournament's public seats (GET /api/tournaments/{id}) give each team's user id with its name,
+ * both from FoxLeague's teams table, whose names are unique (migration 087). A seat list that cannot be read, or no seat
+ * of that name, is unknown (null), never another team. Matches after the game day's reset count on the next day.
+ */
+async function upcomingRivalIds(fox: FoxLeague, upcoming: UpcomingMatches | null, selfId: number | undefined, resetAt: number, now: Date): Promise<NonNullable<AgentSnapshot['upcomingRivals']>> {
+  const today = (upcoming?.matches ?? []).filter(m => {
+    const at = Date.parse(m.scheduled_at)
+    return m.phase !== 'finished' && typeof m.opponent_name === 'string' && m.opponent_name && Number.isFinite(at) && at >= now.getTime() - 3600_000 && at < resetAt
+  })
+  const ids = [...new Set(today.map(m => m.tournament_id))].slice(0, UPCOMING_RIVAL_TOURNAMENTS)
+  const seats = new Map<number, { user_id: number; team_name?: string }[] | null>()
+  for (const id of ids) {
+    const d = await fox.tournament(id).catch(() => null)
+    seats.set(id, d && Array.isArray(d.participants) ? d.participants : null)
+  }
+  const out: NonNullable<AgentSnapshot['upcomingRivals']> = []
+  for (const m of today) {
+    if (out.some(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)) continue
+    const seat = seats.get(m.tournament_id)?.filter(p => p.team_name === m.opponent_name && p.user_id !== selfId)
+    out.push({ tournamentId: m.tournament_id, opponent: m.opponent_name!, userId: seat?.length === 1 && Number.isSafeInteger(seat[0]!.user_id) ? seat[0]!.user_id : null })
+  }
+  return out
+}
+
 /** A targeted 1v1 played this soon after its creation was arranged between the two teams (OP-1). */
 export const ARRANGED_MS = 2 * 60_000
 
@@ -825,10 +859,13 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // The ELO pair cap (MNT-3): for the rivals the plan can challenge, the meetings of this game day that moved ELO, read
   // only while the cap is live. A read that fails is unknown, never 0. Information only: FoxLeague refuses no game.
   let eloPairs: AgentSnapshot['eloPairs']
+  let upcomingRivals: AgentSnapshot['upcomingRivals']
   if (opts.research && wallet && registered && eloPairCapLive(config, now)) {
+    // The tournament opponents of this game day count too (MNT-3b), read first: those meetings are certain.
+    upcomingRivals = await upcomingRivalIds(fox, auth?.upcoming ?? null, profile?.id, Date.parse(gameDay(now, auth?.allowance?.reset_hour_utc ?? 14).nextResetAt), now)
     const openCreators = openAllChallenges.filter(t => !t.targeted && t.target_user_id === null).map(t => t.creator_user_id)
-    const ids = [...(auth?.challengesForMe ?? []).map(c => c.creator_user_id), ...openCreators, ...leaderboardNeighbours.map(u => u.id)]
-      .filter((id, i, all) => typeof id === 'number' && id !== profile?.id && all.indexOf(id) === i)
+    const ids = [...upcomingRivals.map(r => r.userId), ...(auth?.challengesForMe ?? []).map(c => c.creator_user_id), ...openCreators, ...leaderboardNeighbours.map(u => u.id)]
+      .filter((id, i, all): id is number => typeof id === 'number' && id !== profile?.id && all.indexOf(id) === i)
       .slice(0, 16)
     eloPairs = []
     for (const userId of ids) {
@@ -900,6 +937,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     ...(rivalFormations ? { rivalFormations } : {}),
     leaderboardNeighbours,
     ...(eloPairs ? { eloPairs } : {}),
+    ...(upcomingRivals ? { upcomingRivals } : {}),
     warnings,
   }
 }

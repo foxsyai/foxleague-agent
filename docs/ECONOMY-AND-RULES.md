@@ -546,7 +546,8 @@ FoxLeague deployed `origin/release/mainnet-1.0` at `729164194` at about 09:48 UT
 - **The MetaStaking Shop discount** (#744, #749, #765; section 9), switch `metastaking_discount.live_from`, announced
   for Tue 2026-12-01 14:00 UTC (not set on 2026-11-16). The agent pays the wallet's own price (MNT-2, CHN-1).
 - **The ELO pair cap** (#746, #751; section 4), switch `elo_pair_cap.live_from` = 2026-11-20 14:00 UTC. The snapshot
-  tells the plan the rule and, once live, each listed rival's meetings of the game day (MNT-3). No rule refuses a game.
+  tells the plan the rule and, once live, each listed rival's meetings of the game day (MNT-3), and those of each tournament
+  opponent of the game day, found by its seat in the tournament (MNT-3b). No rule refuses a game.
 - **A card in an auction does not play** (#747; sections 11 and 13): a card of the saved 18 in an auction at a lock
   forfeits the match 3-0 (MNT-4).
 - **Ranked earns XP** (#740, texts only; sections 3 and 5): the prompt states the competition levels as the standing

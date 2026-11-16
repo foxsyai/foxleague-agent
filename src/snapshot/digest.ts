@@ -200,6 +200,18 @@ function eloPairNote(s: AgentSnapshot, userId: number | null | undefined): strin
 }
 
 /**
+ * The ELO pair cap against a tournament opponent of this game day (MNT-3b), from its seat's user id and the meetings
+ * read for it. Only on a planning snapshot that read them while the cap is live; one that could not be read is unknown.
+ */
+function upcomingPairNote(s: AgentSnapshot, m: { tournament_id: number; opponent_name: string | null }): string {
+  if (!s.upcomingRivals || !eloPairCapLive(s.config, new Date(s.takenAt))) return ''
+  const r = s.upcomingRivals.find(x => x.tournamentId === m.tournament_id && x.opponent === m.opponent_name)
+  if (!r) return ''
+  if (r.userId === null) return ', ELO meetings today: unknown (the opponent\'s seat could not be read)'
+  return s.eloPairs?.some(p => p.userId === r.userId) ? eloPairNote(s, r.userId) : ', ELO meetings today: unknown'
+}
+
+/**
  * A team with its own open 1v1 (created by it, not accepted yet) cannot accept ours: FoxLeague allows one active 1v1
  * per team, created or joined. Read from the open challenges in the snapshot, until that challenge's deadline.
  */
@@ -296,7 +308,7 @@ function levelLines(s: AgentSnapshot): string[] {
   }
   // The ELO pair cap (FoxLeague's elo_pair_cap, MNT-3): a fact for the plan, no rule of the executor.
   const pc = s.config?.elo_pair_cap
-  if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below show their meetings today once it is live`)
+  if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below and your tournament opponents of the game day show their meetings today once it is live`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   // A switch FoxLeague serves that no rule of the agent reads: its key, state and numbers only (audit 2026-11-16, P-W6).
@@ -355,7 +367,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
-      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
+      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}${upcomingPairNote(s, m)}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && t.participant_count === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}${a.unseatedCreated?.includes(t.id) ? ` (created by you, with no seat of yours: take it with join_tournament${organizerFeesLive(s.config, new Date(s.takenAt)) ? ', or unfilled at its deadline it keeps your organizer deposit' : ''})` : ''}`)
     // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining (only one
