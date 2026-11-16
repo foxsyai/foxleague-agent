@@ -629,9 +629,23 @@ if [ "$MODE" = update ]; then
   if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
   # A service the owner stopped stays stopped (UPD-U5): an update is not the owner's word to start the agent again,
   # which may sign LIVE. One that runs, waits to start again after a failure or cannot be asked is restarted as before.
-  if [ "$PLATFORM" = linux ] && [ "$reachable" = 1 ] && [ "$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)" = inactive ]; then
-    info "The background service is stopped, so it stays stopped: the new version runs from its next start. To start it now: systemctl --user start $SERVICE"
-    exit 0
+  # A stop still under way is waited for (R2I-10): a busy agent finishes what it signs first, and systemd answers
+  # "deactivating" for up to the unit's TimeoutStopSec of 180 s; a restart asked meanwhile would be queued behind the
+  # stop and start the agent again. A stop that ends "failed" (killed at that time) or is still under way after it
+  # stays stopped too.
+  if [ "$PLATFORM" = linux ] && [ "$reachable" = 1 ]; then
+    state=$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)
+    waited=0
+    while [ "$state" = deactivating ] && [ "$waited" -lt 185 ]; do
+      [ "$waited" = 0 ] && info "The background service is stopping: waiting for it to end (up to 3 minutes)."
+      sleep 1
+      waited=$((waited + 1))
+      state=$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)
+    done
+    if [ "$state" = inactive ] || { [ "$waited" -gt 0 ] && { [ "$state" = failed ] || [ "$state" = deactivating ]; }; }; then
+      info "The background service is stopped, so it stays stopped: the new version runs from its next start. To start it now: systemctl --user start $SERVICE"
+      exit 0
+    fi
   fi
   if [ "$PLATFORM" = darwin ] && ! mac_job_loaded; then
     info "The background agent is stopped, so it stays stopped: the new version runs from its next start, at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
