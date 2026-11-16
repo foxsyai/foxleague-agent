@@ -604,6 +604,9 @@ export class Service {
   /** Agents running a plan or an action the owner asked for on Telegram: its plan and results are told at once. */
   private readonly loud = new Set<number>()
 
+  /** Agents whose last tick was a plan with no action: their next plan comes after twice the tick (P6). */
+  private readonly quiet = new Set<number>()
+
   /** Plans failed in a row per agent (reset by a plan that works), and when each account problem was last said. */
   private readonly failStreak = new Map<number, number>()
   private readonly alertedAt = new Map<string, number>()
@@ -1566,6 +1569,14 @@ export class Service {
     const s = row.settings
     const jitter = (Math.random() * 2 - 1) * s.tickJitterMinutes
     let delay = Math.max(MIN_TICK_MINUTES, s.tickMinutes + jitter) * 60_000
+    // After a plan with no action, twice the tick, with its jitter (audit 2026-11-16, P6: the owner's choice; it lowers
+    // spending). Not past the game day's reset: the first plan after it keeps the normal tick, as any plan after one
+    // that acted does.
+    if (this.quiet.has(index)) {
+      const doubled = Math.max(MIN_TICK_MINUTES, 2 * s.tickMinutes + jitter) * 60_000
+      const reset = gameDayStart(new Date(now), this.snapshots.get(index)?.gameDay.resetHourUtc ?? 14).getTime() + 86_400_000
+      if (now + doubled <= reset) delay = doubled
+    }
     // A planning tick about an hour before the first lock of each match session of our own (no lock of
     // ours in the 2 hours before it), so the plan can sync, set the lineup and recover condition in time.
     // Matches close together are covered by the normal ticks. The tick itself still keeps to active hours.
@@ -1725,6 +1736,8 @@ export class Service {
         this.loud.delete(index)
       }
     }
+    // Only a plan with no action makes the next one wait twice the tick: any other outcome of this tick does not.
+    this.quiet.delete(index)
     const refusal = this.tickRefusal(index, ownerRequest)
     if (refusal) return refusal
     const agent = this.store.agent(index)!
@@ -1771,6 +1784,7 @@ export class Service {
         this.store.log({ agentIndex: index, kind: p.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(p.action)}: it could not read FoxLeague's settings, so it did not know the platform fee` })
         return false
       })
+      if (!plan.actions.length) this.quiet.add(index)
       const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.

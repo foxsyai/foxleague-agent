@@ -14,7 +14,9 @@ It also reads what it did lately and its previous plan (summary and actions, up 
 means to do later (ranked games after a 1v1, saving for an entry, a tournament watched until its deadline), so a
 goal carries on for as long as it holds. Where the fresh look says something else, the fresh look wins.
 
-An empty plan is a good answer too: the agent never spends just because budget is left.
+An empty plan is a good answer too: the agent never spends just because budget is left. After one, the next plan
+comes after twice the tick, until a plan acts or the 14:00 UTC game-day reset (the first plan after the reset comes at
+the normal tick).
 
 ## The daily routine
 
