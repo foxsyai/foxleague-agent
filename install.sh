@@ -713,8 +713,13 @@ while :; do
   break
 done
 set_env WEB_UI_PORT "$port"
-# The dashboard listens on this machine only, over plain http, so the cookie cannot require https.
-set_env WEB_UI_INSECURE_COOKIE 1
+# The dashboard listens on this machine only, over plain http, so the cookie cannot require https. A value the owner
+# set is kept (INS-U5): with https of their own in front, 0 sends the login cookie over https only.
+if [ -z "$(get_env WEB_UI_INSECURE_COOKIE)" ]; then
+  set_env WEB_UI_INSECURE_COOKIE 1
+elif [ "$(get_env WEB_UI_INSECURE_COOKIE)" != 1 ]; then
+  info "WEB_UI_INSECURE_COOKIE in .env is kept as you set it (not 1): the login cookie is sent over https only, so log in at your https address."
+fi
 
 say "4/7 Keys (you can skip any of them now and add it later in the dashboard: Getting started, then Keys)"
 cat <<'KEYS'
