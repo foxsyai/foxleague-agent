@@ -555,6 +555,8 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
   let beforeEnd = now.getTime()
   for (const x of mine.active) {
     if (x.id === id || x.max_teams === 2) continue
+    // What a tournament under way still owes is read from the upcoming matches: unread is unknown, never 1 (MON-1).
+    if (x.started_at && !s.auth?.upcoming) return null
     const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize, x.min_teams)
     const xStart = new Date(x.starts_at).getTime()
     const xEnd = xStart + scheduleSpanMinutes(x.format, x.max_teams, Boolean(x.home_and_away), x.round_interval_minutes ?? 30, groupSize) * 60_000
