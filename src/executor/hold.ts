@@ -52,7 +52,7 @@ export function holdRefusal(a: Action, held: readonly string[], oneVOne?: boolea
   const changed = new Set(held.map(p => String(p).replace(/ \((?:new|gone)\)$/, '')))
   const hit = pagesOf(a, oneVOne).filter(p => changed.has(p))
   if (!hit.length) return null
-  return `paused by the owner's choice: FoxLeague changed its manual page ${hit.join(' and ')} since the agents' copy, and the owner pauses the actions of a changed page until the agents are synced (a new version of the agent brings the new copy)`
+  return `paused by the owner's choice: FoxLeague changed its manual page ${hit.join(' and ')} since the agents' copy; the owner pauses the actions of a changed page until the agents are synced (a new version of the agent brings the new copy)`
 }
 
 /** The actions held now, as the dashboard and the plan name them: `buy`, `join_tournament (a 1v1)`. */
