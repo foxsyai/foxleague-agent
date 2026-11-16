@@ -441,7 +441,7 @@ EOF
   <key>StandardErrorPath</key><string>$DATA_DIR/service.log</string>
 </dict></plist>
 EOF
-    # The job that runs is unloaded first, by its label, and given time to go: launchd refuses to load a label it
+    # The job that runs is unloaded first by its label and given time to go: launchd refuses to load a label it
     # still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd answers its
     # bootout with 36, on its way out: then the wait is as long as the uninstall's (INS-U1). A bootstrap it refuses
     # ends here in words, with what to do (INS-A4).

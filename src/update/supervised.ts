@@ -22,7 +22,7 @@ function ownStreams(): string[] {
   return out
 }
 
-/** This process's cgroups as the kernel lists them (`/proc/self/cgroup`), or null where they cannot be read. */
+/** This process's cgroups as the kernel lists them (`/proc/self/cgroup`); null where they cannot be read. */
 function ownCgroup(): string | null {
   try {
     return readFileSync('/proc/self/cgroup', 'utf8')

@@ -365,7 +365,7 @@ export function confirmStart(layout: Layout): void {
   const previous = pending[1] === me && NAME_RE.test(pending[0] ?? '') ? pending[0]! : readLine(join(versions, 'previous'))
   const active = readLine(join(versions, 'active'))
   const waiting = active && active !== me && NAME_RE.test(active) && existsSync(join(versions, active, 'src', 'service.ts')) ? active : null
-  // A note for that switch stays; any other note is this start's own, or one left by a switch that never happened.
+  // A note for that switch stays. Any other note is this start's own or one left by a switch that never happened.
   if (!(waiting && pending[1] === waiting)) rmSync(join(versions, 'pending'), { force: true })
   rmSync(join(versions, 'rolled-back'), { force: true })
   if (previous && previous !== me && NAME_RE.test(previous)) writeAtomic(join(versions, 'previous'), `${previous}\n`)
