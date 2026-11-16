@@ -125,7 +125,9 @@ These show the notice with what to do instead of the button:
   `deploy/deploy.sh` from your computer.
 - **An install from before versions had folders of their own**: paste the install line again once. Later updates
   are one click.
-- **A folder the agent may not write to**: run `./install.sh --update` in a terminal.
+- **A folder the agent may not write to** (another user owns part of it, for example after a command run with
+  `sudo`, or it came back from a backup): make it yours again in a terminal, then update again. The notice gives
+  the command with your folder, for example `sudo chown -R "$USER" ~/foxleague-agent && chmod -R u+rwX ~/foxleague-agent`.
 
 ### Switching the check off
 
