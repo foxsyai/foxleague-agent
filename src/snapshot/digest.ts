@@ -369,7 +369,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     // waits while that top is more than 10 percent above our eleven at today's condition (R54A-1).
     const today = elevenOvrToday(s)
     const eleven = today === null ? '; your eleven today could not be read, so no open challenge' : `; your eleven today: OVR ${today.toFixed(1)} at today's condition, ${today * MAX_1V1_STRENGTH_RATIO < Math.ceil(ovr) ? 'so an open challenge waits until it is within 10 percent of the top' : 'within 10 percent of the top'}`
-    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for your own open tournament: ovr_min ${lo}, ovr_max ${hi}${count}; a targeted challenge or a private tournament takes none; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it) and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
+    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for your own open tournament: ovr_min ${lo}, ovr_max ${hi}${count}; a targeted challenge or a private tournament takes none; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it), no other value (a lower top and FoxLeague refuses you as its creator), and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // Every level is held to the field rule (Zeus only until 2026-11-06).

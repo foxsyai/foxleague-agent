@@ -1515,7 +1515,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!registered || !s.profile) return refuse('not registered')
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const challengeRange = createRangeRefusal(a, ctx)
-      if (challengeRange) return refuse(challengeRange)
+      if (challengeRange) {
+        // An open challenge has one legal top, the best XI OVR rounded up: the refusal names it (audit 2026-11-16, BEH-4).
+        const ovr = ctx.bestXiOvr
+        const legal = a.target_user_id === null && typeof ovr === 'number' && Number.isFinite(ovr) ? `; an open challenge takes ovr_max ${Math.ceil(ovr)}, no other value, and any ovr_min up to ${Math.floor(ovr)}` : ''
+        return refuse(`${challengeRange}${legal}`)
+      }
       if (a.target_user_id === null) {
         // Open, at every level and any configured stake (owner, 2026-11-06, OP-2/OP-3): whoever takes it cannot be read
         // before, so FoxLeague's own range check keeps every stronger team out: its top is the team's best XI OVR,
@@ -1523,7 +1528,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         // createRangeRefusal above has read that OVR and checked the range holds it.
         if (a.ovr_max === undefined) return refuse('an open challenge needs an OVR range up to your best XI OVR (ovr_max, the snapshot gives it): FoxLeague then keeps every stronger team out')
         const top = Math.ceil(ctx.bestXiOvr!)
-        if (a.ovr_max > top) return refuse(`an open challenge takes ovr_max ${top} at most (your best XI OVR ${ctx.bestXiOvr}, rounded up): a higher top lets a stronger team take it`)
+        if (a.ovr_max > top) return refuse(`an open challenge takes ovr_max ${top}, no other value (your best XI OVR ${ctx.bestXiOvr}, rounded up): a higher top lets a stronger team take it, a lower one and FoxLeague refuses you as its creator`)
         // The best XI OVR ignores condition: the strongest team that may take it plays at the range's top at full
         // condition, ours at today's, held to A2's ratio (agent review of PR #54, R54A-1).
         const today = elevenOvrToday(s)

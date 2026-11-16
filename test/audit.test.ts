@@ -190,7 +190,7 @@ test('A2 1v1s: never against a far stronger team, open ones only to teams no str
   const create = async (ovr_max?: number) =>
     (await open.exec.run(open.agent(), dryWallet, snapshot(), act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ...(ovr_max ? { ovr_min: 18, ovr_max } : {}) })))[0]!
   assert.match((await create()).summary, /needs an OVR range/)
-  assert.match((await create(23)).summary, /ovr_max 20 at most/)
+  assert.match((await create(23)).summary, /ovr_max 20, no other value/) // audit 2026-11-16, BEH-4: was "at most"
   assert.equal((await create(20)).status, 'dry_run')
 })
 
