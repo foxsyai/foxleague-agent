@@ -60,7 +60,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. It names the start to the minute, 2 hours to 14 days ahead, so a
+  platform time slot, sized from what recently filled. It names the start to the minute, 2 hours to 30 days ahead, so a
   narrow gap in a busy calendar can still hold a small tournament. It reads the free starts from FoxLeague's own
   calendar. Each of your agents is offered a start of its own, so two of them do not plan the same minute. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
   deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by starting eleven and rating: an eleven more than 10 percent stronger than yours counts as clearly stronger whatever its rating). It
