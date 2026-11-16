@@ -13,7 +13,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { fileURLToPath } from 'node:url'
-import { existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { detectLayout } from '../../src/update/install.ts'
 import { Updater } from '../../src/update/updater.ts'
@@ -81,15 +81,19 @@ test('FI-2: a start of the running agent leaves alone the folder the pasted inst
 test('FI-2: a fresh update.lock of another update stops the pasted line before it changes anything; one left by a kill is taken over', { timeout: 120_000 }, async () => {
   const i = ownedInstall('1.1.0')
   const lock = join(i.dir, 'versions', 'update.lock')
-  // Update now is preparing a release: its lock is a minute old.
+  // Another update is preparing a release: its lock is a minute old. That update may be another pasted line, whose
+  // folder is versions/.staging-get, the one this line would use (R79A-1): it is not this line's to remove.
   writeFileSync(lock, '')
   utimesSync(lock, new Date(Date.now() - 60_000), new Date(Date.now() - 60_000))
+  mkdirSync(join(i.dir, 'versions', '.staging-get'), { recursive: true })
+  writeFileSync(join(i.dir, 'versions', '.staging-get', 'package.json'), '{ "name": "foxleague-agent", "version": "1.3.0" }\n')
   const before = snapshotOf(i.dir)
   const archive = pack(smallTree(tmp(), '1.2.0'))
   const busy = await sh(GET, [], { HOME: i.home, FOXAGENT_NO_RUN: '1', FOXAGENT_SOURCE: archive })
   assert.notEqual(busy.status, 0, busy.out)
   assert.match(busy.out, /another update is being installed right now/, busy.out)
-  assert.deepEqual(snapshotOf(i.dir), before, 'nothing was changed, the other update\'s lock included')
+  assert.deepEqual(snapshotOf(i.dir), before, 'nothing was changed, the other update\'s lock and the other pasted line\'s staging folder included')
+  rmSync(join(i.dir, 'versions', '.staging-get'), { recursive: true, force: true })
   // A lock an hour old was left by an update that was killed: the line takes it over and removes it at the end.
   utimesSync(lock, new Date(Date.now() - 3600_000), new Date(Date.now() - 3600_000))
   const taken = await sh(GET, [], { HOME: i.home, FOXAGENT_NO_RUN: '1', FOXAGENT_SOURCE: archive })

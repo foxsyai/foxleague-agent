@@ -170,9 +170,10 @@ main() {
   trap 'exit 130' INT
   trap 'exit 143' TERM
   trap 'exit 129' HUP
-  # Nothing of this run stays behind when it stops before the release is in place.
+  # Nothing of this run stays behind when it stops before the release is in place. The staging folder is this run's
+  # only while it holds the lock: behind another update's lock it may be another pasted line's (R79A-1).
   give_up() {
-    rm -rf "$staging"
+    if [ "$locked" = 1 ]; then rm -rf "$staging"; fi
     release_lock
     if [ "$made_versions" = 1 ]; then rmdir "$DIR/versions" 2>/dev/null || true; fi
     if [ "$made_dir" = 1 ]; then rmdir "$DIR" 2>/dev/null || true; fi
@@ -183,7 +184,8 @@ main() {
   elif [ "$kind" != empty ] && lock_fresh; then
     give_up "another update is being installed right now (Update now, /upgrade or ./install.sh --update): nothing was changed. Wait a few minutes, then paste the line again."
   else
-    : > "$lock" && locked=1
+    : > "$lock" 2>/dev/null || give_up "$DIR/versions cannot be written (update.lock): nothing was changed."
+    locked=1
   fi
   rm -rf "$staging" && mkdir -p "$staging"
   tar -xzf "$archive" -C "$staging" --strip-components=1 || give_up "the download could not be unpacked"
