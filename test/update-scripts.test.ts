@@ -174,8 +174,9 @@ test('INS-2: ./install.sh --update takes the newest signed release, prepares it,
     assert.equal(readFileSync(join(root, 'versions', 'pending'), 'utf8'), 'v3.1.0 v3.2.0 0\n', 'the launcher can still undo it')
     assert.equal(readFileSync(join(running, 'src', 'service.ts'), 'utf8'), before, 'the release that was running is untouched')
     assert.ok(s.calls().includes(`npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error in ${join(root, 'versions', '.staging-v3.2.0')}`), 'the new release installed its own dependencies before the switch')
-    // The owner's restart: the user's service manager is looked for, the unit's start counter is cleared (FRESH-1), then the restart.
-    assert.deepEqual(s.calls().filter(c => c.startsWith('systemctl')), ['systemctl --user show-environment', 'systemctl --user reset-failed foxleague-agent', 'systemctl --user restart foxleague-agent'])
+    // The owner's restart: the user's service manager is looked for, asked whether the service runs (a stopped one stays
+    // stopped since UPD-U5 of 2026-11-16), the unit's start counter is cleared (FRESH-1), then the restart.
+    assert.deepEqual(s.calls().filter(c => c.startsWith('systemctl')), ['systemctl --user show-environment', 'systemctl --user is-active foxleague-agent', 'systemctl --user reset-failed foxleague-agent', 'systemctl --user restart foxleague-agent'])
     // Again, from the new release: nothing newer, no second restart.
     const again = await sh(join(root, 'versions', 'v3.2.0', 'install.sh'), ['--update'], env(web.base))
     assert.equal(again.status, 0, again.out)

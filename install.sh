@@ -5,7 +5,7 @@
 #   (or: git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh)
 #
 # Re-run it any time: it keeps your wallet, login and keys, and offers your earlier answers as the defaults.
-#   ./install.sh --update      get the newest signed release, prepare it, restart into it
+#   ./install.sh --update      get the newest signed release, prepare it, restart into it (a stopped agent stays stopped)
 #   ./install.sh --uninstall   stop and remove the background service (your files and wallet stay)
 #   ./install.sh --no-service  set everything up but do not install the background service
 # (The dashboard's Update now and Telegram's /upgrade do what --update does, without a terminal.)
@@ -599,10 +599,21 @@ if [ "$MODE" = update ]; then
     exit 0
   fi
   # A terminal opened with su or sudo: find the user's service manager first (see find_user_systemd).
-  find_user_systemd || true
+  reachable=0
+  find_user_systemd && reachable=1
   # The unit of an older install is renewed here, in a terminal, where an update from the dashboard cannot (it
   # runs inside that unit, and --prepare never writes to the service): systemd reads it before the restart.
   if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
+  # A service the owner stopped stays stopped (UPD-U5): an update is not the owner's word to start the agent again,
+  # which may sign LIVE. One that runs, waits to start again after a failure or cannot be asked is restarted as before.
+  if [ "$PLATFORM" = linux ] && [ "$reachable" = 1 ] && [ "$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)" = inactive ]; then
+    info "The background service is stopped, so it stays stopped: the new version runs from its next start. To start it now: systemctl --user start $SERVICE"
+    exit 0
+  fi
+  if [ "$PLATFORM" = darwin ] && ! mac_job_loaded; then
+    info "The background agent is stopped, so it stays stopped: the new version runs from its next start, at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
+    exit 0
+  fi
   service_restart || die "the new version is in place but the background service could not be restarted: $(after_failed_restart)"
   info "Restarted."
   exit 0

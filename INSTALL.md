@@ -537,7 +537,9 @@ by itself after about a minute and a half, and you are told. Your wallet, keys, 
 `./install.sh --update` does the same from a terminal. A git checkout and a server set up by hand show the notice
 with what to do instead of the button. `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 
-An update restarts the background service; when the restart fails it says so and names the command to run. An
+An update restarts the background service; when the restart fails it says so and names the command to run. A
+background service you stopped stays stopped: `./install.sh --update` says so and names the command that starts it
+(`systemctl --user start foxleague-agent`; on a Mac it starts at your next login). An
 install made with `./install.sh --no-service` has no background service and an update does not add one: you start
 the agent with `./run.sh`. Nothing starts such an agent again, so an update does not end it: the new version is put
 in place and the agent keeps playing on the version it runs. The dashboard then says "Version ... is in place and
