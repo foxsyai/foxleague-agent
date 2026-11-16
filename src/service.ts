@@ -125,17 +125,27 @@ const FOLLOW_PLAN_SPREAD_MS = 3 * 60_000
  * begun. Now the first agent of each model and effort (`pair`) that plans now (`plans`) goes at once and the others of
  * its pair follow a few minutes later, never later than their own tick. An agent that does not plan now (paused,
  * outside its hours, waiting for funds) keeps the old moment: its tick asks no model, so it leads nothing.
+ *
+ * With shadow plans on, a plan also asks each shadow model and effort (`shadows`), and that call writes its own cache
+ * (BEH-6b). So the agents go in waves: each in the first wave where every pair of its calls, real or shadow, is either
+ * new (it leads it) or was led in an earlier wave (it reads it). Two agents of different models that share a shadow
+ * model are then never in the same wave. Without shadows this is the stagger above: the first wave at once, the second
+ * 3 to 6 minutes later; a later wave starts 3 minutes after the one before it ends.
  */
-export function firstPlanDelays(agents: { index: number; pair: string; plans: boolean; tickMinutes: number }[], random: () => number): Map<number, number> {
-  const led = new Set<string>()
+export function firstPlanDelays(agents: { index: number; pair: string; shadows?: string[]; plans: boolean; tickMinutes: number }[], random: () => number): Map<number, number> {
+  const ledIn = new Map<string, number>()
   const out = new Map<number, number>()
   for (const a of agents) {
-    if (!a.plans || !led.has(a.pair)) {
-      if (a.plans) led.add(a.pair)
+    if (!a.plans) {
       out.set(a.index, FIRST_PLAN_MS + random() * FIRST_PLAN_SPREAD_MS)
-    } else {
-      out.set(a.index, Math.min(FOLLOW_PLAN_MS + random() * FOLLOW_PLAN_SPREAD_MS, Math.max(MIN_TICK_MINUTES, a.tickMinutes) * 60_000))
+      continue
     }
+    const pairs = [a.pair, ...(a.shadows ?? [])]
+    let wave = 0
+    while (pairs.some(p => (ledIn.get(p) ?? -1) >= wave)) wave++
+    for (const p of pairs) if (!ledIn.has(p)) ledIn.set(p, wave)
+    if (wave === 0) out.set(a.index, FIRST_PLAN_MS + random() * FIRST_PLAN_SPREAD_MS)
+    else out.set(a.index, Math.min(FOLLOW_PLAN_MS + (wave - 1) * (FOLLOW_PLAN_MS + FOLLOW_PLAN_SPREAD_MS) + random() * FOLLOW_PLAN_SPREAD_MS, Math.max(MIN_TICK_MINUTES, a.tickMinutes) * 60_000))
   }
   return out
 }
@@ -164,8 +174,8 @@ export interface ScheduledAction {
  *
  * A deadline of 'now' (another team can make the action pointless at any moment) runs at the start of the window like
  * an unread one. Taking another team's open 1v1 keeps the plan's order, so the swap that funds it still comes first
- * (BEH-10). Leaving the agent's own unanswered 1v1 is the one action moved: it runs first, before anything else of the
- * plan (BEH-9), and the actions after it keep their order.
+ * (BEH-10). Leaving the agent's own unanswered 1v1 (BEH-9) or a tournament it created (ORG-1) is the one action moved:
+ * it runs first, before anything else of the plan, and the actions after it keep their order.
  *
  * The drops are decided first, as without deadlines (R70A-2), and the kept actions are placed with the deadlines after.
  * Placed in one pass, a match moved earlier with a deadline action after it could make room for one that was dropped
@@ -178,7 +188,8 @@ export function scheduleActions(
   o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: Deadline[] },
 ): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
   // Leaving the agent's own unanswered 1v1 runs first, before anything else of the plan (audit 2026-11-16, BEH-9): it
-  // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play.
+  // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play. So does
+  // leaving a tournament it created (ORG-1): until it runs, any team can bring it to its minimum and lock the seats.
   const first = (i: number) => o.deadlines?.[i] === 'now' && planned[i]!.action.type === 'leave_tournament'
   const order = planned.map((_, i) => i).sort((x, y) => Number(first(y)) - Number(first(x)) || x - y)
   const actions = order.map(i => planned[i]!)
@@ -1497,8 +1508,8 @@ export class Service {
     if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870), process.env.WEB_UI_HOST?.trim() || '127.0.0.1')
     else console.log(`web UI off: set it up with \`${this.cfg.isServer ? 'agentctl.sh' : './cli.sh'} set-web-password\``)
     // One first plan per model and effort at once, the others of that pair a few minutes later, so they read the
-    // cache it writes instead of each writing it again (audit 2026-11-16, BEH-6 and P7).
-    const first = firstPlanDelays(agents.map(b => ({ index: b.index, pair: this.pairOf(b), plans: this.plansNow(b), tickMinutes: b.settings.tickMinutes })), Math.random)
+    // cache it writes instead of each writing it again (audit 2026-11-16, BEH-6 and P7); the shadow pairs too (BEH-6b).
+    const first = firstPlanDelays(agents.map(b => ({ index: b.index, pair: this.pairOf(b), shadows: this.callsOf(b).slice(1).map(c => `${c.model}:${c.effort}`), plans: this.plansNow(b), tickMinutes: b.settings.tickMinutes })), Math.random)
     for (const b of agents) {
       this.schedule(b.index, first.get(b.index)!)
       void this.snapshot(b.index).catch(() => undefined)

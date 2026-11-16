@@ -15,6 +15,7 @@ import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { FusionPrepared, Tournament, TournamentDetail } from '../foxleague/types.ts'
 import { cardBansLive, fusionMode, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { disciplineOf, transferLockEnd, type AgentSnapshot } from '../snapshot/snapshot.ts'
+import { CALENDAR_WINDOW_DAYS } from '../snapshot/calendar.ts'
 import type { AgentRow, Store } from '../store/db.ts'
 import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, wholeToAtomic } from '../util/encoding.ts'
 import { sleep } from '../util/http.ts'
@@ -189,6 +190,8 @@ export class Executor {
     const dry = agent.dryRun || !this.liveEnabled
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
+    // A create checked without FoxLeague's calendar (ORG-2): its note goes with FoxLeague's own refusal of a taken slot.
+    let calendarNote = ''
     // The registration fees booked before this registration, which stand for the same one fee (see the cap check).
     let earlierFees: { id: number; usd: number }[] = []
     /** Lets the earlier bookings go once this registration's own is kept (`kept`): never before, so one always stands. */
@@ -243,6 +246,7 @@ export class Executor {
       }
       let verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
+      if (a.type === 'create_tournament') calendarNote = verdict.notes.find(n => n.startsWith("FoxLeague's calendar could not be read")) ?? ''
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
         const taken = await this.nameRefusal(wallet, a.team_name)
@@ -350,7 +354,8 @@ export class Executor {
       if (booking && !booking.sent) this.unbook(booking)
       if (booking?.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
       replaceEarlierFees(Boolean(booking?.sent && booking.ids.length > 0))
-      const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+      const slot = calendarNote && err instanceof ApiRefusal && /time slot/i.test(err.message) ? `; ${calendarNote}` : ''
+      const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}${slot}` : err instanceof Error ? err.message : String(err)
       // A payment signed and maybe sent: its row carries the hash the ledger rows are booked under.
       const maybeSent = booking?.sent || booking?.organizer?.sent ? txHashOf(err) : undefined
       return finish('error', `${desc}: ${msg}`, 0, maybeSent, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
@@ -475,6 +480,12 @@ export class Executor {
           fox.organizerFeeQuote(wallet, { format: a.format, max_teams: a.max_teams, home_and_away: Boolean(a.home_and_away), has_third_place_match: a.format === 'knockout', private: Boolean(a.invite_user_ids?.length), developer_mode: false, starts_at: new Date(start).toISOString() }),
         )
       }
+    }
+    if (a.type === 'create_tournament') {
+      // FoxLeague's calendar for this very start, every booking counted (ORG-2): null when unread, and the clash check
+      // from the public lists decides.
+      const start = createStartMs(a, now.getTime())
+      if (start !== null) market.startCalendar = await soft(() => fox.tournamentAvailability({ format: a.format, teams: a.max_teams, ...(a.home_and_away ? { home_and_away: true } : {}), from: new Date(start).toISOString(), days: CALENDAR_WINDOW_DAYS }))
     }
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
     if (a.type === 'buy' && a.product === 'xp_booster') {
