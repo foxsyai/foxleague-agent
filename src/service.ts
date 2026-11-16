@@ -517,6 +517,8 @@ export class Service {
       notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)),
       // A graceful stop: an action still being prepared signs nothing (one already sent finishes and is booked).
       stopping: () => this.stopping,
+      // The owner's pause of the actions whose rules FoxLeague changed, while the copy is behind (P-W7).
+      held: () => this.manualWatch?.held() ?? [],
     })
     this.topups = new TopUps({
       store: this.store,
@@ -762,6 +764,8 @@ export class Service {
             const s = this.snapshots.get(i)
             return s ? [{ index: i, digest: renderDigest(s) }] : []
           }),
+          // While the agents' copy is behind FoxLeague: the changed pages' current text, framed as data (MID-1).
+          pages: this.manualWatch.planPages(),
         })
       } catch (err) {
         // No answer: the message leaves the box again (below; the web UI gives the text back to retry).
@@ -1866,7 +1870,7 @@ export class Service {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered)
     // While the agents' copy is behind FoxLeague, the plan is told what changed (P-W5).
-    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}), watch: this.manualWatch.planNote() }
+    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}), watch: this.manualWatch.planNote(), watchPages: this.manualWatch.planPages() }
     // Rendered once and kept: a shadow plan, when one is switched on, is asked with these very words.
     const request = renderPlanRequest(input)
     // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the

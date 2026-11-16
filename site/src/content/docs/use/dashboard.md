@@ -34,7 +34,8 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   cannot update itself shows what to do instead of the button ([Update](/help/update/)).
 - **The manual notice** appears under the header when the check found that FoxLeague's manual changed since
   the copy your agents play by (it names up to eight pages and counts the rest) or could not read it (it says why).
-  It also names a setting FoxLeague's game settings gained or lost since that copy.
+  It also names a setting FoxLeague's game settings gained or lost since that copy and a route of FoxLeague's API
+  your agents call whose shape changed.
   Nothing shows while the copy matches. Its **i** says what to do
   ([Update](/help/update/#when-foxleagues-manual-changes)).
 
@@ -54,6 +55,10 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
   not ready. Without the AI key the box is greyed out: it shows the model and effort the agents start on once the
   key is set (Sonnet 5.5 at medium on a new install), and the level's recommended AI is shown next to the level.
+  Under it, **When FoxLeague changes its rules**: **tell me only** (the default) or **also pause the actions whose
+  rules changed until the agents are synced**; while a pause holds something, the line under it names the actions.
+  Pausing is one click; going back to tell me only asks for your password
+  ([Update](/help/update/#pausing-what-changed)).
 
 ## An agent's page
 

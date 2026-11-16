@@ -38,6 +38,30 @@ export function txt(v: unknown, max = 40): string {
   return s.length > max ? `${cut(s, max - 1)}…` : s
 }
 
+/**
+ * A word FoxLeague serves from a list of its own (a tier, a format, a status, a phase, a league, a position, a rarity, a
+ * formation, a match kind): printed as served only with the shape of one (letters, digits, `_`, `-` and `+`, no space),
+ * anything else through txt(). FoxLeague's server is the only one who writes them, but its words sit inside the fence
+ * too (audit 2026-11-16, ATK-5).
+ */
+export function word(v: unknown, max = 24): string {
+  return typeof v === 'string' && v.length <= max && /^[A-Za-z0-9][A-Za-z0-9_+-]*$/.test(v) ? v : txt(v, max)
+}
+
+/**
+ * Our own words that quote FoxLeague's (a refusal of the rules naming a formation or a position): one line, no fence
+ * marker, `#` and quotes kept (ATK-5).
+ */
+function oneLine(v: string, max = 300): string {
+  const s = v.toWellFormed().replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ').replace(/<{2,}/g, '<').replace(/>{2,}/g, '>').replace(/SNAPSHOT/gi, 'snapshot').replace(/\s+/g, ' ').trim()
+  return s.length > max ? `${cut(s, max - 1)}…` : s
+}
+
+/** A time FoxLeague serves (`2026-11-16T14:00:00Z`): printed as served only with the shape of one, else through txt() (ATK-5). */
+export function when(v: unknown): string {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})?$/.test(v) ? v : txt(v, 40)
+}
+
 const SHORT: Record<string, string> = { speed: 'spd', accuracy: 'acc', defense: 'def', power: 'pow', control: 'ctl', vision: 'vis', stamina: 'sta' }
 /** XP a stat's pool needs for +1 (FoxLeague's stat bump), and the pool from which the squad line shows it. */
 export const XP_PER_POINT = 2000
@@ -74,7 +98,7 @@ export function playerLine(p: PlayerView, gate?: MatchGate, perBan?: number): st
     gate && p.competitiveMatches >= gate.floor && p.competitiveMatches + p.fusionMatchCredit >= gate.gate ? 'at-gate' : '',
   ].filter(Boolean)
   const comp = (p.fusionMatchCredit ? `${p.competitiveMatches}+${p.fusionMatchCredit} credit` : `${p.competitiveMatches}`) + (gate ? ` of ${gate.gate}` : '')
-  return `#${p.nonce} ${txt(p.name, 30)} ${p.position} ${p.rarity}(cap ${p.cap}) cond ${p.condition} age ${p.ageYears} comp ${comp} | ${statLine(p)} | tot ${p.syncedTotal} [${tags.join(',')}]`
+  return `#${p.nonce} ${txt(p.name, 30)} ${word(p.position)} ${word(p.rarity)}(cap ${p.cap}) cond ${p.condition} age ${p.ageYears} comp ${comp} | ${statLine(p)} | tot ${p.syncedTotal} [${tags.join(',')}]`
 }
 
 /**
@@ -293,7 +317,7 @@ const known = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? Str
 function levelLines(s: AgentSnapshot): string[] {
   const out: string[] = []
   const now = new Date(s.takenAt)
-  const whenLive = (live: boolean, from: string | null | undefined) => (live ? 'LIVE' : from ? `not live yet, from ${from}` : 'not switched on yet')
+  const whenLive = (live: boolean, from: string | null | undefined) => (live ? 'LIVE' : from ? `not live yet, from ${when(from)}` : 'not switched on yet')
   const c = s.config?.competition_levels
   if (c) {
     const b = s.config?.tournament_fee_bounds
@@ -320,9 +344,9 @@ function levelLines(s: AgentSnapshot): string[] {
   if (s.config) {
     const f = fusionMode(s.config, now)
     out.push(
-      f.mode === 'closed' ? `Fusion: closed now (${f.why})`
+      f.mode === 'closed' ? `Fusion: closed now (${oneLine(f.why)})`
       : f.mode === 'mint' ? `Fusion: LIVE, a new card is minted: each stat = the three inputs' values added up x the new rarity's cap / (3 x their cap), rounded down, at least the new rarity's floor (Uncommon 22, Rare 30, Epic 36, Legendary 40); no sync needed (FoxLeague signs the live stats and competitive matches); the new card starts at level 1, condition 100 and 0 competitive matches`
-      : f.liveFrom ? `Fusion: until ${f.liveFrom} a card drawn from the fusion pool (inputs synced first); from then a new card is minted instead, each stat the average of the three inputs translated to the new rarity, no sync needed (the executor refuses a fusion in the last 10 minutes before the switch)`
+      : f.liveFrom ? `Fusion: until ${when(f.liveFrom)} a card drawn from the fusion pool (inputs synced first); from then a new card is minted instead, each stat the average of the three inputs translated to the new rarity, no sync needed (the executor refuses a fusion in the last 10 minutes before the switch)`
       : 'Fusion: a card drawn from the fusion pool (inputs synced first)',
     )
   }
@@ -363,11 +387,11 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     )
   } else if (s.profile) {
     const p = s.profile
-    out.push(`Team "${txt(p.team_name, 20)}" (user ${p.id}): ELO ${p.elo_rating} ${p.league}, W/D/L ${p.matches_won}/${p.matches_drawn}/${p.matches_lost}, tournament wins ${p.tournament_wins}, ${p.player_count} cards`)
+    out.push(`Team "${txt(p.team_name, 20)}" (user ${p.id}): ELO ${p.elo_rating} ${word(p.league)}, W/D/L ${p.matches_won}/${p.matches_drawn}/${p.matches_lost}, tournament wins ${p.tournament_wins}, ${p.player_count} cards`)
   }
-  if (s.team) out.push(s.team.hidden ? 'Formation and lineup: not public (FoxLeague shows them to the team itself only)' : `Formation ${s.team.formation}; XI ${s.team.lineup.join(',')}; bench ${s.team.substitutes.join(',')}`)
+  if (s.team) out.push(s.team.hidden ? 'Formation and lineup: not public (FoxLeague shows them to the team itself only)' : `Formation ${word(s.team.formation)}; XI ${s.team.lineup.join(',')}; bench ${s.team.substitutes.join(',')}`)
   const misfit = s.team && !s.team.hidden && s.players.length ? lineupPositionsOk(s, s.team.formation, s.team.lineup) : null
-  if (misfit) out.push(`LINEUP DOES NOT FIT ${s.team!.formation} (${misfit}): no match, entry or 1v1 runs until set_formation with lineup and substitutes (or set_lineup) saves one that fits`)
+  if (misfit) out.push(`LINEUP DOES NOT FIT ${word(s.team!.formation)} (${oneLine(misfit)}): no match, entry or 1v1 runs until set_formation with lineup and substitutes (or set_lineup) saves one that fits`)
 
   if (s.auth) {
     const a = s.auth
@@ -384,12 +408,12 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     // What the Shop costs this wallet, as the executor pays it (MNT-2b).
     const prices = shopPriceLine(s)
     if (prices) out.push(prices)
-    if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
+    if (a.activeMatch) out.push(`IN A MATCH: #${word(a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?', 64)} ${word(a.activeMatch.kind)} ${word(a.activeMatch.status)}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
-      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}${upcomingPairNote(s, m)}`)
+      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${when(m.scheduled_at)}, locks ${when(m.strategy_locks_at)} [${word(m.phase)}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}${upcomingPairNote(s, m)}`)
     }
-    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && t.participant_count === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}${a.unseatedCreated?.includes(t.id) ? ` (created by you, with no seat of yours: take it with join_tournament${organizerFeesLive(s.config, new Date(s.takenAt)) ? ', or unfilled at its deadline it keeps your organizer deposit' : ''})` : ''}`)
+    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} ${word(t.format)} ${word(t.status)} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && t.participant_count === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}${a.unseatedCreated?.includes(t.id) ? ` (created by you, with no seat of yours: take it with join_tournament${organizerFeesLive(s.config, new Date(s.takenAt)) ? ', or unfilled at its deadline it keeps your organizer deposit' : ''})` : ''}`)
     // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining (only one
     // this agent created itself: a range the owner set with the same team is the owner's).
     for (const t of a.myTournaments?.active ?? []) {
@@ -397,11 +421,11 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
       // FoxLeague's /tournaments/my carries no seat count; the public list does.
       const listed = [...s.market.openStandard, ...s.market.openChallenges].find(x => x.id === t.id)
       const seated = typeof t.participant_count === 'number' ? t.participant_count : listed?.participant_count ?? '?'
-      out.push(`Your open T${t.id} (${t.max_teams === 2 ? 'a 1v1' : `a ${t.format} of ${t.max_teams}, min ${t.min_teams}`}):${ovrRange(t).slice(1)}, ${seated} of ${t.max_teams} seated, deadline ${t.deadline}: widen_range lets more teams in (only wider)`)
+      out.push(`Your open T${t.id} (${t.max_teams === 2 ? 'a 1v1' : `a ${word(t.format)} of ${t.max_teams}, min ${t.min_teams}`}):${ovrRange(t).slice(1)}, ${seated} of ${t.max_teams} seated, deadline ${when(t.deadline)}: widen_range lets more teams in (only wider)`)
     }
     // Whether each open tournament it created still fits its squad and schedule (ORG-1: src/snapshot/own-tournaments.ts).
     out.push(...ownTournamentLines(s))
-    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}${rivalNote(s, c.creator_user_id)}`)
+    for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${when(c.deadline)}${scout(c.tournament_id)}${rivalNote(s, c.creator_user_id)}`)
   }
 
   out.push(...levelLines(s))
@@ -452,7 +476,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     if (next.length) out.push(`Next formations to test (fewest casual tests first, ones your squad can field): ${next.map(f => `${f.formation} ${f.tests}`).join(', ')}`)
     if (typeof s.casualToday === 'number') out.push(`Casual games today: ${s.casualToday} (casual and ranked share FoxLeague's daily starts)`)
     const why = s.team ? casualCostRefusal(s, [...s.team.lineup, ...s.team.substitutes], new Date(s.takenAt)) : 'your team could not be read'
-    out.push(why ? `Casual game now: not free: ${why}` : 'Casual game now: free for your saved eleven and bench (each back to full condition before your next match that counts)')
+    out.push(why ? `Casual game now: not free: ${oneLine(why)}` : 'Casual game now: free for your saved eleven and bench (each back to full condition before your next match that counts)')
   }
 
   const m = s.market
@@ -477,11 +501,11 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
   let calendarBlind = false
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}${rangeClosed(s, t)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} ${word(t.format)} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${when(t.deadline)} starts ${when(t.starts_at)}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}${rangeClosed(s, t)}`)
     // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
     const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
     if (worn && /could not be read/.test(worn)) calendarBlind = true
-    else if (worn) out.push(`    schedule: the executor refuses this join now: ${worn}`)
+    else if (worn) out.push(`    schedule: the executor refuses this join now: ${oneLine(worn)}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
   }
@@ -506,7 +530,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length && Number.isFinite(lineupStrength(s)) ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a targeted or joined 1v1 is refused when the rival's lineup (the stronger of its synced and live stats, at full condition) is more than 10 percent above it (an open challenge is held to its OVR range instead).` : 'Your lineup strength today: unknown (your roster or a starter\'s stats could not be read); a 1v1 and a tournament entry are refused until it is known.')
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${rangeClosed(s, t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${when(t.deadline)} seated ${t.participant_count ?? '?'}${ovrRange(t)}${rangeClosed(s, t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()
@@ -530,9 +554,9 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   out.push(...calendarLines(s, { now, earliest }))
   if (m.recentStandard.length) {
     out.push('Recent standard tournaments (seated/max, fee, status):')
-    for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${t.tier} ${t.format} ${t.seated}/${t.max_teams} fee ${t.fee} ${t.status} ${t.starts_at.slice(0, 16)}`)
+    for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${word(t.tier)} ${word(t.format)} ${t.seated}/${t.max_teams} fee ${t.fee} ${word(t.status)} ${when(t.starts_at).slice(0, 16)}`)
   }
-  if (m.floors.length) out.push(`Marketplace floors (lowest reserve by rarity): ${m.floors.map(f => `${f.rarity} ${f.floor_price} (${f.count} listed)`).join(', ')}`)
+  if (m.floors.length) out.push(`Marketplace floors (lowest reserve by rarity): ${m.floors.map(f => `${word(f.rarity)} ${f.floor_price} (${f.count} listed)`).join(', ')}`)
   if (m.prices) {
     const known = (r: string) => {
       const p = m.prices![r]
@@ -553,7 +577,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
       const lock = transferLockEnd(l.transferred_at, l.transfer_cooldown_hours, s.config)
       // Own keys only: a rarity named like an inherited property (toString) has no market price (review of PR #21).
       const market = m.prices && Object.hasOwn(m.prices, l.rarity) ? m.prices[l.rarity] : undefined
-      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${l.position} ${l.rarity} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at?.slice(0, 16) ?? '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}${disciplineText(s, l)}`)
+      out.push(`  #${l.nft_nonce} ${txt(l.name, 30)} ${word(l.position)} ${word(l.rarity)} lvl ${l.level} OVR ${ovr} cond ${l.condition} | ${price}${market ? ` (market ${market.price.toLocaleString('en-US')})` : ''} | ends ${l.ends_at ? when(l.ends_at).slice(0, 16) : '?'}${lock && lock > new Date(s.takenAt) ? ` | transfer lock until ${lock.toISOString().slice(0, 16)}` : ''}${disciplineText(s, l)}`)
     }
   }
   // The threshold every level's 1v1s against a known team are held to, next to the chances below.
@@ -562,7 +586,8 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged: a targeted 1v1 it accepted from a team it had not played a 1v1 against before, more than 2 minutes after it was sent; a pair that plays again and again arranges it, and an open challenge a team took from the list is said apart): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged${acceptedText(u.acceptedLast)}` : ', took no 1v1 in 7 days it had not arranged'}${u.openTaken7d ? `, took ${u.openTaken7d} open challenge${u.openTaken7d === 1 ? '' : 's'}` : ''}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
-  return out.join('\n')
+  // The last guard (ATK-5): a FoxLeague value no line above shaped can still never write the fence's markers.
+  return out.join('\n').replace(/<{3,}/g, '<').replace(/>{3,}/g, '>')
 }
 
 /** JSON-safe copy (bigint as decimal strings). */

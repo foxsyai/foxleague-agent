@@ -162,6 +162,30 @@ agent checks the new copy the same day. On a server you deploy yourself
 ([Run it on a server](/help/server/)), run `sync-manual` on a computer with a FoxLeague checkout, commit the new
 manual and deploy it.
 
+#### What a plan reads until then
+
+While the copy is behind, each plan also reads the current text of the pages that changed, as FoxLeague's server
+serves them, so your agents know a new rule within the hour instead of after the next version. The check already reads
+those pages, so plans ask FoxLeague nothing more. The text is FoxLeague's, so it is treated as data, never as
+instructions: it sits inside the game snapshot under a heading that says so, every line of it is set in so none can
+pass for a part of the request; the live values in the snapshot and the refusals of the executor still win. It is
+cut at 24,000 characters a page and 60,000 in all. It never goes to Telegram or the dashboard; the executor never
+reads it. A plan costs a little more only while the copy is behind (one or two changed pages are about 2,000 to 6,000
+tokens); nothing is added while the copy matches or could not be checked.
+
+The same hourly look reads FoxLeague's API description and compares the shape of each route your agents call with the
+one the copy was built against. A changed route is named the same way ("FoxLeague changed the shape of routes the
+agents call since their copy (routes: ...)"). A field the agent cannot read there makes it refuse, never guess.
+
+#### Pausing what changed
+
+In the dashboard's **Strategist · all agents** box, **When FoxLeague changes its rules** is **tell me only** by
+default. With **also pause the actions whose rules changed until the agents are synced**, your agents do not take the
+actions of a changed page until the new copy comes: the Shop page pauses buying, the Marketplace page bids and
+listings, the 1v1 page new challenges and accepting one, the Tournaments page creating and joining a tournament, the
+Fusion page fusions and both waivers. Payments already made are still confirmed, refunds and leaving still run and
+your own requests are never paused. Pausing is one click; going back to tell me only asks for your password.
+
 When FoxLeague could not be read, the line says "Could not check FoxLeague's manual today" and why. That never
 counts as up to date: the agent asks again each hour, up to four times a day, then the next day. In a terminal,
 `./cli.sh manual-check` in the `foxleague-agent` folder asks at once. To switch the check off, set

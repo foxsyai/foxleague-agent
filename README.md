@@ -99,7 +99,11 @@ the dashboard or by chatting with it on Telegram.
   with the copy its agents play by; each snapshot also compares FoxLeague's game settings with the ones that copy was
   built against. When a page or a setting changed, Telegram says so at once, the morning summary and the dashboard
   name it and each plan is told that the live values win over the manual there; a version with the new manual follows
-  (the maintainer runs `sync-manual`). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
+  (the maintainer runs `sync-manual`). Until then each plan also reads the current text of the changed pages as data,
+  inside the game snapshot (cut at 24,000 characters a page and 60,000 in all; never to Telegram, the dashboard or the
+  executor). The same hourly look names a route of FoxLeague's API your agents call whose shape changed. On the
+  dashboard you may also pause the actions whose rules changed until the agents are synced (turning that off asks for
+  your password). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
@@ -148,7 +152,8 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
 manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`, which also writes
-`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with).
+`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with, and
+`src/foxleague/api-shapes.json`, the shapes of the routes listed in `src/foxleague/api-routes.ts`).
 
 ## Fair play
 

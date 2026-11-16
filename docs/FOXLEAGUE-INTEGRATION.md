@@ -259,6 +259,7 @@ measured (`gasLimits.ts:36-41`).
 | Contract views through `POST {gateway}/vm-values/query` with `{"scAddress", "funcName", "args": [hex...]}` | The binding on-chain values: prices, cooldowns, per-card fusion state, auctions, seat escrow | The web app does this for `isRegistrationPaid` (`frontend/src/pages/Onboarding.tsx:370-393`). A result of `"AQ=="` is `true`; an empty list is `false`/0 |
 | `GET /api/shop/status` (auth) | Shop prices, booster state, training quota, pack quota | `backend/src/routes/shop.rs:730-910` |
 | `GET /api/matches/daily-allowance` (auth) | Match count today, cap, reset hour | `backend/src/routes/matches.rs:527-570` |
+| `GET /api/openapi.json` (public, raw JSON) | The API description, an OpenAPI 3.1 document of every route a player uses: paths, parameters, bodies and answers | `backend/src/openapi/mod.rs` (`SPEC_PATH`; served on chain `1` only, 404 elsewhere; cacheable 5 minutes); the same document as `docs/manual/openapi.json`, pinned by `the_committed_spec_is_the_generated_spec`. The agent's hourly look compares the shape of each route it calls (`src/foxleague/api-routes.ts`) with the record `sync-manual` writes (`src/foxleague/api-shapes.json`, audit 2026-11-16, P-W4). `GET /api/whitelist/check`, which the agent calls, is not in it |
 
 Not public anywhere (the K values are 9 ranked, 13 Silver, 17 Gold since 2026-10-30, set by hand on mainnet): ELO K factors, ELO decay parameters, the per-card daily XP cap, the training
 condition cost, the aging multiplier, the match and ranked cooldowns and the tournament strategy-lock

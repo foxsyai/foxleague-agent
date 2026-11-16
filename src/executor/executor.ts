@@ -27,6 +27,7 @@ import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED,
 import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
+import { holdRefusal } from './hold.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -72,6 +73,11 @@ export interface ExecutorDeps {
   notify?: (agentIndex: number, text: string, result?: ExecutionResult) => void
   /** The service is stopping (SIGTERM, a deploy): nothing more is signed; an action already sent finishes. */
   stopping?: () => boolean
+  /**
+   * The manual pages whose actions the owner's pause holds now (P-W7): the pages the agents' copy is behind on while the
+   * owner chose to pause them, else none. Only the agents' own actions are held (hold.ts).
+   */
+  held?: () => readonly string[]
 }
 
 interface Built {
@@ -230,9 +236,20 @@ export class Executor {
       if (!fresh || (fresh.paused && !ownerLeave)) return finish('refused', `${desc}: the agent is paused`)
       if (fresh.dryRun !== queued.dryRun) return finish('refused', `${desc}: the mode changed to ${fresh.dryRun ? 'dry run' : 'live'} while this action waited; the next plan starts fresh`)
       if (wallet.address !== agent.address) return finish('refused', `${desc}: wallet does not match ${agentName(agent.index)}`)
+      // The owner's pause of the actions whose rules FoxLeague changed (P-W7): the agents' own only. A join is judged
+      // once its tournament is read (below), the rest before anything is asked.
+      const held = planned.byOwner ? [] : (this.d.held?.() ?? [])
+      const paused = a.type === 'join_tournament' ? null : holdRefusal(a, held)
+      if (paused) return finish('refused', `${desc}: ${paused}`)
 
       const now = new Date()
       const ctx = await this.context(agent, wallet, snap, a, now, dry)
+      if (a.type === 'join_tournament' && held.length) {
+        // A 1v1 is a tournament of two teams; one whose size could not be read is held by either page.
+        const size = ctx.tournament?.tournament?.max_teams
+        const joinPaused = holdRefusal(a, held, typeof size === 'number' ? size === 2 : undefined)
+        if (joinPaused) return finish('refused', `${desc}: ${joinPaused}`)
+      }
       if (planned.piece) ctx.piece = { index: planned.piece.index, of: planned.piece.of }
       if (planned.byOwner) {
         ctx.byOwner = true

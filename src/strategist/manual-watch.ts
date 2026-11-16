@@ -19,8 +19,12 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { zoneDate } from '../summary.ts'
 import { AnswerTooLargeError, readCapped } from '../util/http.ts'
+import { cut as cutText } from '../util/text.ts'
 import { LEFT_OUT, ROOT, undecidedPages } from './manual.ts'
 import { MAX_KEYS, changedKeys, configPrint, isConfigKey, isoTime, keyDiff, named, unknownSwitches, type RuleSwitch } from '../foxleague/config-watch.ts'
+import { MAX_TEXT_PAGES, PAGES_TEXT_MAX, PAGE_TEXT_MAX, shapePages, type PageText } from './page-text.ts'
+import { heldActions } from '../executor/hold.ts'
+import { API_RECORD_FILE, OPENAPI_PATH, changedRoutes, isChangedRoute, routePrints, validApiRecord } from '../foxleague/api-routes.ts'
 
 /** The agents' manual and the page record sync-manual writes next to it. */
 export const MANUAL_FILE = join(import.meta.dirname, 'manual.md')
@@ -50,6 +54,22 @@ const isSlug = (s: unknown): s is string => typeof s === 'string' && s.length <=
 /** The kv key of the day's check. */
 const KV = 'manual_check'
 /**
+ * The kv key of the text the check read of each changed page (MID-1), apart from the check's own row: the version
+ * before reads that row as it was and never this one.
+ */
+const TEXTS_KV = 'manual_texts'
+/**
+ * The owner's choice when FoxLeague changes its rules (P-W7): '1' pauses the actions of a changed page, anything else
+ * tells only (the default). And the pages the copy installed now was last found behind on, kept until a check finds it
+ * current or another copy comes: a check that could not tell does not end a pause.
+ */
+const HOLD_KV = 'manual_hold'
+const BEHIND_KV = 'manual_behind'
+/** The kv key of the last look at FoxLeague's API description (P-W4), a row of its own. */
+const API_KV = 'api_check'
+/** The largest API description read (mainnet's is about 1 MB): counted as it streams, refused past it. */
+export const MAX_API_BYTES = 4 * 1024 * 1024
+/**
  * Through the day (audit 2026-11-16, MNT-5 and MNT-6): a check that found the copy current is made again at the
  * service's next hourly look once this long has passed, so a manual FoxLeague deploys after the morning is seen within
  * the hour; one that found it behind stays for the day.
@@ -75,6 +95,8 @@ export const KEYS_TELL_GAP_MS = 6 * 3600_000
 export const SOON_MS = 7 * 86_400_000
 
 export type McpFetch = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string; signal: AbortSignal; redirect: 'error' }) => Promise<Response>
+/** A read of FoxLeague's API description (P-W4). */
+export type ApiFetch = (url: string, init: { method: 'GET'; headers: Record<string, string>; signal: AbortSignal; redirect: 'error' }) => Promise<Response>
 
 /** What sync-manual records: the manual.md it wrote, the FoxLeague commit it names and a fingerprint per page. */
 export interface ManualRecord {
@@ -91,6 +113,8 @@ export interface ManualRecord {
 }
 
 export type ManualState = 'current' | 'behind' | 'unknown'
+/** A check with the text it read of the changed pages (MID-1): kept for the plans, never shown or told. */
+export type CheckResult = ManualCheck & { texts?: PageText[] }
 export interface ManualCheck {
   state: ManualState
   /** The pages that differ, in FoxLeague's order: "slug", "slug (new)" or "slug (gone)". */
@@ -249,7 +273,7 @@ export interface CheckOptions {
  * The check: FoxLeague's page list, then each page the agents know that FoxLeague still serves, one at a time with a
  * pause between them. The first failure ends it ("unknown"); nothing is asked again.
  */
-export async function checkManual(o: CheckOptions): Promise<ManualCheck> {
+export async function checkManual(o: CheckOptions): Promise<CheckResult> {
   const at = new Date().toISOString()
   const record = validRecord(o.record)
   const synced = record?.synced ?? null
@@ -271,20 +295,36 @@ export async function checkManual(o: CheckOptions): Promise<ManualCheck> {
     if (!slugs.length || slugs.length > MAX_PAGES || slugs.some(s => !isSlug(s))) throw new CheckError(UNREADABLE)
     const live = [...new Set(slugs as string[])]
     const differ: string[] = []
+    // The text of each changed page the record knows, as served (MID-1), for the plans: the answer the comparison read
+    // anyway, kept within its bounds. Nothing more is asked for it.
+    const texts: PageText[] = []
+    let total = 0
+    const keep = (slug: string, body: string) => {
+      if (texts.length >= MAX_TEXT_PAGES || total >= PAGES_TEXT_MAX) return
+      const [page] = shapePages([{ slug, text: cutText(body, Math.min(PAGE_TEXT_MAX, PAGES_TEXT_MAX - total)), full: body.length }])
+      if (!page) return
+      texts.push(page)
+      total += page.text.length
+    }
     for (const slug of live) {
       if (leftOut(slug)) continue
       const known = record.pages[slug]
       if (known === undefined) {
+        // A page the copy does not know is named only: its text is not read (the record says nothing of it).
         differ.push(`${slug} (new)`)
         continue
       }
       const page = await call('get_manual_page', { slug })
       const text = page && typeof page === 'object' && (page as { slug?: unknown }).slug === slug ? (page as { text?: unknown }).text : undefined
       if (typeof text !== 'string') throw new CheckError(UNREADABLE)
-      if (fingerprint(liveBody(text)) !== known) differ.push(slug)
+      const body = liveBody(text)
+      if (fingerprint(body) !== known) {
+        differ.push(slug)
+        keep(slug, body.trim())
+      }
     }
     for (const slug of Object.keys(record.pages)) if (!live.includes(slug)) differ.push(`${slug} (gone)`)
-    return { state: differ.length ? 'behind' : 'current', pages: differ, why: null, synced, at }
+    return { state: differ.length ? 'behind' : 'current', pages: differ, why: null, synced, at, texts }
   } catch (err) {
     if (err instanceof CheckError) return unknown(err.message)
     if (deadline.aborted) return unknown(`the check took longer than ${Math.round((o.deadlineMs ?? CHECK_DEADLINE_MS) / 1000)} seconds`)
@@ -317,6 +357,50 @@ export function configLine(keys: string[]): string {
 export function manualTell(c: ManualCheck): string {
   return `FoxLeague's manual changed since the agents' copy (pages: ${named(c.pages)}). Until a version of the agent brings the new copy, each plan is told that the snapshot's live values and the executor's refusals win over the manual on those pages. The maintainer runs sync-manual.`
 }
+/** The notice's line about the routes of FoxLeague's API whose shape changed since the agents' copy (P-W4). */
+export function apiLine(routes: string[]): string {
+  return `FoxLeague changed the shape of routes the agents call since their copy (routes: ${named(routes)}). The maintainer runs sync-manual and checks the agent against them.`
+}
+export function apiTell(routes: string[]): string {
+  return `FoxLeague changed the shape of routes the agents call since their copy (routes: ${named(routes)}). A field the agent cannot read there makes it refuse rather than guess; each plan is told. The maintainer runs sync-manual and checks the agent against them.`
+}
+
+export interface ApiCheck {
+  state: 'current' | 'changed' | 'unknown'
+  /** The routes whose shape differs, by our own list: `GET /api/x`, `... (gone)`, `... (new)`. */
+  routes: string[]
+  /** Why it could not be checked, in our own words. */
+  why: string | null
+  at: string
+}
+
+/**
+ * FoxLeague's API description against the shapes recorded for the copy (P-W4): one GET of FOXLEAGUE_URL/api/openapi.json,
+ * read through the bounded reader. Unknown is not "current" and never a change: a missing record asks nothing, a failed
+ * read, an answer too large or one that is no API description says "could not check".
+ */
+export async function checkApi(o: { base: string; record: unknown; fetch: ApiFetch; timeoutMs?: number }): Promise<ApiCheck> {
+  const at = new Date().toISOString()
+  const unknown = (why: string): ApiCheck => ({ state: 'unknown', routes: [], why, at })
+  const record = validApiRecord(o.record)
+  if (!record) return unknown("the agents' copy has no record of FoxLeague's API shapes (src/foxleague/api-shapes.json). The maintainer runs sync-manual")
+  const limit = timeout(o.timeoutMs ?? REQUEST_TIMEOUT_MS)
+  try {
+    const url = `${o.base}${OPENAPI_PATH}`
+    const res = await o.fetch(url, { method: 'GET', headers: { accept: 'application/json', 'user-agent': 'foxleague-agent' }, signal: limit.signal, redirect: 'error' })
+    if (!res.ok) return unknown(`FoxLeague's API description answered HTTP ${res.status}`)
+    const live = routePrints(JSON.parse(await readCapped(res, url, MAX_API_BYTES)) as unknown)
+    if (!live) return unknown("FoxLeague's API description could not be read")
+    const routes = changedRoutes(record.routes, live)
+    return { state: routes.length ? 'changed' : 'current', routes, why: null, at }
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') return unknown(`FoxLeague did not answer within ${Math.round((o.timeoutMs ?? REQUEST_TIMEOUT_MS) / 1000)} seconds`)
+    return unknown(err instanceof SyntaxError || err instanceof AnswerTooLargeError ? "FoxLeague's API description could not be read" : 'FoxLeague could not be reached')
+  } finally {
+    limit.clear()
+  }
+}
+
 export function configTell(keys: string[]): string {
   return `FoxLeague's game settings changed since the agents' copy (keys: ${named(keys)}). Each plan reads the live values and is told of the change, but the agents' rules may not know these keys yet. The maintainer runs sync-manual.`
 }
@@ -347,6 +431,8 @@ export interface ManualView {
   day: string | null
   /** The settings keys changed since the agents' copy: `elo_pair_cap (new)`, `old_key (gone)` (P-W2). */
   keys: string[]
+  /** The routes of FoxLeague's API whose shape changed since the agents' copy (P-W4), by our own list. */
+  routes: string[]
   /** The notice, null when there is nothing to tell. */
   text: string | null
 }
@@ -382,6 +468,12 @@ export class ManualWatch {
   readManual: () => string = () => readFileSync(MANUAL_FILE, 'utf8')
   readRecord: () => unknown = () => JSON.parse(readFileSync(RECORD_FILE, 'utf8')) as unknown
   gapMs = GAP_MS
+  /**
+   * Where the hourly look reads FoxLeague's API description (P-W4) and the shapes recorded for the copy. Unset, it is
+   * the network, unless a test replaced `fetch` above: a watch whose MCP server is a stand-in asks nothing else.
+   */
+  apiFetch: ApiFetch | null | undefined = undefined
+  readApiRecord: () => unknown = () => JSON.parse(readFileSync(API_RECORD_FILE, 'utf8')) as unknown
   /** When a changed fingerprint last ran the check (P-W2), and how many it ran on which day. */
   private forcedAt = Number.NEGATIVE_INFINITY
   private forced = { day: '', count: 0 }
@@ -457,8 +549,15 @@ export class ManualWatch {
     const run = async (): Promise<ManualCheck> => {
       // Marked before anything is asked: a check that a restart cuts short counts as a try that could not tell.
       this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key, tried: now, fails }))
-      const c = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
+      const { texts, ...c } = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
+      // The same look reads FoxLeague's API description (P-W4), before this check is stored: until then the plans keep
+      // reading the check before it with its own page texts. It never fails the check.
+      await this.lookApi(o.quiet).catch((err: unknown) => console.error("the look at FoxLeague's API description failed:", err instanceof Error ? err.message : err))
+      // The changed pages' text in a row of its own, tied to this check (MID-1): written first, so the check it
+      // belongs to never shows without it. Emptied by any check that did not find the copy behind.
+      this.d.kv.set(TEXTS_KV, JSON.stringify({ copy: copy.key, at: c.at, pages: c.state === 'behind' ? (texts ?? []) : [] }))
       this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key, tried: now, fails: c.state === 'unknown' ? fails : 0 }))
+      if (c.state !== 'unknown') this.d.kv.set(BEHIND_KV, JSON.stringify({ copy: copy.key, pages: c.state === 'behind' ? c.pages : [] }))
       // Current (or not yet known) to behind, or more pages behind: the owner hears it now, once (P-W3). `quiet`: the
       // caller sends the line itself (the morning summary, /summary), so it is only marked as told.
       if (c.state === 'behind') this.tellOnce(`pages:${copy.key}:${c.pages.join(',')}`, manualTell(c), o.quiet)
@@ -557,12 +656,103 @@ export class ManualWatch {
   }
 
   /** What the plan request says while the copy is behind (P-W5): the manual pages and the settings keys that changed. */
-  planNote(): { pages: string[]; keys: string[] } | null {
+  planNote(): { pages: string[]; keys: string[]; routes?: string[]; held?: string[] } | null {
     if (!this.enabled) return null
     const last = this.shown()
     const pages = last?.state === 'behind' ? last.pages.filter(p => typeof p === 'string') : []
     const keys = this.changed()
-    return pages.length || keys.length ? { pages, keys } : null
+    // The routes of FoxLeague's API whose shape changed (P-W4).
+    const routes = this.apiRoutes()
+    // The actions the owner's pause holds now (P-W7): the plan proposes none of them.
+    const held = heldActions(this.held())
+    return pages.length || keys.length || routes.length || held.length ? { pages, keys, ...(routes.length ? { routes } : {}), ...(held.length ? { held } : {}) } : null
+  }
+
+  /**
+   * FoxLeague's current text of the pages that changed since the agents' copy (MID-1), as the check that found the copy
+   * behind read it: for the plan request and the manager chat, inside their snapshot fence (page-text.ts). Nothing while
+   * the copy is current, while the check could not tell or for a check of another copy. Read from the database: no
+   * plan asks FoxLeague.
+   */
+  planPages(): PageText[] {
+    if (!this.enabled) return []
+    const last = this.shown()
+    if (last?.state !== 'behind') return []
+    try {
+      const v = JSON.parse(this.d.kv.get(TEXTS_KV) ?? 'null') as { copy?: unknown; at?: unknown; pages?: unknown } | null
+      if (!v || v.copy !== last.copy || v.at !== last.at || !Array.isArray(v.pages)) return []
+      const changed = new Set(last.pages.map(p => String(p).replace(/ \((?:new|gone)\)$/, '')))
+      return shapePages(v.pages.filter(p => changed.has(String((p as { slug?: unknown } | null)?.slug))))
+    } catch {
+      return []
+    }
+  }
+
+  /** The shapes recorded for the copy installed now, as read, and a key for them. */
+  private apiCopy(): { record: unknown; key: string } {
+    let record: unknown = null
+    try {
+      record = this.readApiRecord()
+    } catch {
+      // No record or not JSON: said by the check.
+    }
+    return { record, key: sha256(JSON.stringify(record ?? null)) }
+  }
+
+  /** The look at FoxLeague's API description (P-W4): kept in a row of its own; a change of shape told to the owner once. */
+  private async lookApi(quiet = false): Promise<void> {
+    const fetchApi = this.apiFetch !== undefined ? this.apiFetch : this.fetch === undefined ? (fetch as unknown as ApiFetch) : null
+    if (!fetchApi) return
+    const copy = this.apiCopy()
+    if (!validApiRecord(copy.record)) {
+      this.d.kv.set(API_KV, JSON.stringify({ state: 'unknown', routes: [], why: 'no record', at: new Date().toISOString(), copy: copy.key }))
+      return
+    }
+    const c = await checkApi({ base: this.d.base, record: copy.record, fetch: fetchApi })
+    this.d.kv.set(API_KV, JSON.stringify({ ...c, copy: copy.key }))
+    if (c.state === 'changed') this.tellOnce(`api:${copy.key}:${c.routes.join(',')}`, apiTell(c.routes), quiet)
+  }
+
+  /** The routes whose shape changed since the shapes recorded for the copy installed now (P-W4), as last looked at. */
+  apiRoutes(): string[] {
+    if (!this.enabled) return []
+    try {
+      const v = JSON.parse(this.d.kv.get(API_KV) ?? 'null') as { state?: unknown; routes?: unknown; copy?: unknown } | null
+      if (!v || v.state !== 'changed' || v.copy !== this.apiCopy().key || !Array.isArray(v.routes)) return []
+      return v.routes.filter(isChangedRoute)
+    } catch {
+      return []
+    }
+  }
+
+  /** Whether the owner chose to pause the actions of a changed page (P-W7); off, "tell only", by default. */
+  holdOn(): boolean {
+    return this.d.kv.get(HOLD_KV) === '1'
+  }
+
+  /** The owner's choice (P-W7). Turning it off raises spending: the caller has checked the password. */
+  setHold(on: boolean): void {
+    this.d.kv.set(HOLD_KV, on ? '1' : '0')
+  }
+
+  /**
+   * The pages the copy installed now was last found behind on (P-W7), until a check finds it current or another copy
+   * comes. Not ended by a check that could not tell: an unread manual is no synced copy.
+   */
+  behindPages(): string[] {
+    if (!this.enabled) return []
+    try {
+      const v = JSON.parse(this.d.kv.get(BEHIND_KV) ?? 'null') as { copy?: unknown; pages?: unknown } | null
+      if (!v || v.copy !== this.copy().key || !Array.isArray(v.pages)) return []
+      return v.pages.filter((p): p is string => typeof p === 'string' && isSlug(p.replace(/ \((?:new|gone)\)$/, '')))
+    } catch {
+      return []
+    }
+  }
+
+  /** The pages whose actions the executor holds now (P-W7): none while the owner chose "tell only". */
+  held(): string[] {
+    return this.holdOn() ? this.behindPages() : []
   }
 
   /** The morning summary's line: today's check; "could not check" when there is none for today of this copy. */
@@ -570,18 +760,20 @@ export class ManualWatch {
     if (!this.enabled) return null
     const last = this.shown()
     const keys = this.changed()
+    const routes = this.apiRoutes()
     const manual = !last || last.day !== zoneDate(now, this.d.zone) ? "Could not check FoxLeague's manual today." : manualLine(last)
-    return [manual, keys.length ? configLine(keys) : null].filter(Boolean).join(' ') || null
+    return [manual, keys.length ? configLine(keys) : null, routes.length ? apiLine(routes) : null].filter(Boolean).join(' ') || null
   }
 
   /** For the dashboard: the last check of the copy installed now and its notice. */
   view(now = Date.now()): ManualView {
     const last = this.enabled ? this.shown() : null
     const keys = this.enabled ? this.changed() : []
-    const settings = keys.length ? configLine(keys) : null
-    if (!last) return { enabled: this.enabled, state: null, pages: [], why: null, synced: null, at: null, day: null, keys, text: settings }
+    const routes = this.apiRoutes()
+    const settings = [keys.length ? configLine(keys) : null, routes.length ? apiLine(routes) : null].filter(Boolean).join(' ') || null
+    if (!last) return { enabled: this.enabled, state: null, pages: [], why: null, synced: null, at: null, day: null, keys, routes, text: settings }
     const manual = manualLine(last, last.day === zoneDate(now, this.d.zone) ? 'today' : `on ${last.day}`)
     const text = [manual, settings].filter(Boolean).join(' ') || null
-    return { enabled: true, state: last.state, pages: last.pages, why: last.why, synced: last.synced, at: last.at, day: last.day, keys, text }
+    return { enabled: true, state: last.state, pages: last.pages, why: last.why, synced: last.synced, at: last.at, day: last.day, keys, routes, text }
   }
 }
