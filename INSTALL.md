@@ -254,7 +254,8 @@ your user (`ai.foxleague.agent`). The dashboard address on the last screen is a 
 
 macOS shows the agent as "FoxLeague Agent" in System Settings, General, Login Items & Extensions, and switching it
 off there stops the agent. That is the program the launch agent starts, `FoxLeague Agent` in the agent's folder: it
-starts `run.sh` there.
+starts `run.sh` there. An agent you switched off stays off: `./install.sh` and `./install.sh --update` leave it and
+its file as they are, and say how to switch it on (`launchctl enable`, then `launchctl bootstrap`).
 
 **When it plays.** On macOS the agent starts when you log in, and a sleeping Mac plays nothing. Its timers pause
 while the Mac sleeps: it plans, plays and checks for updates only while the Mac is awake. When the Mac wakes, it

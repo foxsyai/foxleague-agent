@@ -198,30 +198,49 @@ test('MAC-1: running the installer again keeps the launcher and the agent starti
   await assertAgentStarts(i.root, i.code, plistOf(i.home))
 })
 
-/** `./install.sh --update` from 3.1.0 (this code) to 3.2.0 on a Mac whose plist is `plist`; the job loaded or not. */
-async function macUpdate(o: { plist: (root: string) => string; loaded: boolean; launcher?: string }): Promise<{ s: Stubs; home: string; root: string; out: string; before: string }> {
+/**
+ * The launchctl stand-in of install-helpers.ts, which also answers `print-disabled` as launchd does: the jobs switched
+ * off (System Settings, Login Items & Extensions, or `launchctl disable`) and on. `listed` is the agent's own line, such
+ * as `"ai.foxleague.agent" => disabled`; `fails` makes the question fail.
+ */
+function launchctlWith(o: { listed?: string; fails?: boolean } = {}): string {
+  const answer = o.fails ? 'echo "Could not print disabled services: 125: Domain does not support specified action" >&2; exit 125' : `printf 'disabled services = {\\n\\t"com.apple.Siri.agent" => enabled\\n${o.listed ? `\\t${o.listed}\\n` : ''}}\\n'`
+  return `${LAUNCHCTL}\ncase "$1" in print-disabled) ${answer} ;; esac`
+}
+const OFF = `"${LABEL}" => disabled`
+/** What launchctl was asked that changes the job: load, unload, restart or switch on. */
+const jobCalls = (s: Stubs, from = 0): string[] => s.calls().slice(from).filter(c => /^launchctl (kickstart|bootstrap|bootout|enable|load) /.test(c))
+
+/**
+ * `./install.sh --update` from 3.1.0 (this code) on a Mac whose plist is `plist`; the job loaded or not. The newest
+ * release is `to`: 3.2.0, or 3.1.0 when the install runs the newest already.
+ */
+async function macUpdate(o: { plist: (root: string) => string; loaded: boolean; launcher?: string; to?: string; launchctl?: string }): Promise<{ s: Stubs; home: string; root: string; out: string; before: string }> {
+  const to = o.to ?? '3.2.0'
   const s = stubs()
   const i = running(s, { service: false })
   s.stub('uname', MAC)
+  if (o.launchctl) s.stub('launchctl', o.launchctl)
   mkdirSync(join(i.home, 'Library', 'LaunchAgents'), { recursive: true })
   const before = o.plist(i.root)
   writeFileSync(plistPath(i.home), before)
   if (o.launcher !== undefined) writeFileSync(join(i.root, NAME), o.launcher, { mode: 0o755 })
   if (o.loaded) writeFileSync(join(s.dir, 'calls.log.loaded'), '')
   const out = tmp()
-  buildRelease(out, realTree(tmp(), '3.2.0'), '3.2.0', KEY.privatePem)
-  const web = await serve(publish(tmp(), [{ dir: out, version: '3.2.0' }], '3.2.0'))
+  buildRelease(out, realTree(tmp(), to), to, KEY.privatePem)
+  const web = await serve(publish(tmp(), [{ dir: out, version: to }], to))
   try {
     const r = await sh(join(i.root, 'install.sh'), ['--update'], i.env(web.base), { cwd: i.root })
     assert.equal(r.status, 0, r.out)
-    assert.equal(readFileSync(join(i.root, 'versions', 'active'), 'utf8'), 'v3.2.0\n', r.out)
+    assert.equal(readFileSync(join(i.root, 'versions', 'active'), 'utf8'), `v${to}\n`, r.out)
+    if (to === '3.1.0') assert.match(r.out, /You run 3\.1\.0, the newest version\./)
     return { s, home: i.home, root: i.root, out: r.out, before }
   } finally {
     await web.close()
   }
 }
 
-test('MAC-1: ./install.sh --update moves an older Mac install off bash; a loaded agent is restarted as before, a stopped one stays stopped', { timeout: 240_000 }, async () => {
+test('MAC-1: ./install.sh --update moves an older Mac install off bash; a loaded agent is loaded again from it, a stopped one stays stopped', { timeout: 240_000 }, async () => {
   for (const loaded of [true, false]) {
     const u = await macUpdate({ plist: root => plistOf31adfb7(root, bashPath()), loaded })
     const p = plistOf(u.home)
@@ -232,9 +251,12 @@ test('MAC-1: ./install.sh --update moves an older Mac install off bash; a loaded
     const was = u.before.split('\n')
     assert.equal(now.length, was.length)
     assert.deepEqual(now.filter((l, n) => l !== was[n]), [`  <key>ProgramArguments</key><array><string>${join(u.root, NAME)}</string></array>`])
-    const restarts = u.s.calls().filter(c => /^launchctl (kickstart|bootstrap|bootout) /.test(c))
+    const restarts = jobCalls(u.s)
     if (loaded) {
-      assert.deepEqual(restarts, [`launchctl kickstart -k gui/${process.getuid!()}/${LABEL}`], 'restarted as before (UPD-U5)')
+      // A kickstart restarts the job launchd holds, from the plist it read at its load: the new one would wait for the
+      // next login. Unloaded and loaded again (as the guided installer does), the job starts the launcher now, and with
+      // it the new release (R78A-1).
+      assert.deepEqual(restarts, [`launchctl bootout gui/${process.getuid!()}/${LABEL}`, `launchctl bootstrap gui/${process.getuid!()} ${plistPath(u.home)}`], u.out)
       assert.match(u.out, /Restarted\./)
     } else {
       assert.deepEqual(restarts, [], `the stopped agent was started again:\n${u.out}`)
@@ -250,6 +272,7 @@ test('MAC-1: ./install.sh --update leaves a plist alone that is already on the l
   const same = await macUpdate({ plist: root => plistOf31adfb7(root, bashPath()).replace(/<key>ProgramArguments<\/key><array>.*<\/array>/, `<key>ProgramArguments</key><array><string>${join(root, NAME)}</string></array>`), loaded: true, launcher })
   assert.equal(readFileSync(plistPath(same.home), 'utf8'), same.before)
   assert.equal(readFileSync(join(same.root, NAME), 'utf8'), launcher)
+  assert.deepEqual(jobCalls(same.s), [`launchctl kickstart -k gui/${process.getuid!()}/${LABEL}`], 'an unchanged plist: restarted as before (UPD-U5)')
   await assertAgentStarts(same.root, join(same.root, 'versions', 'v3.2.0'), plistOf(same.home))
   // A plist that starts something else (an owner's own edit, the code of a flat install) is not the installer's form.
   const other = await macUpdate({ plist: root => plistOf31adfb7(root, bashPath()).replace(`<string>${root}/run.sh</string>`, `<string>${root}/my-own-start.sh</string>`), loaded: true })
@@ -295,6 +318,128 @@ test('MAC-1: the uninstall removes the launcher with the plist, and keeps both w
   assert.equal(existsSync(plistPath(i.home)), false)
   assert.equal(existsSync(launcher), false, 'the launcher goes with the plist')
   for (const f of ['run.sh', 'cli.sh', 'install.sh']) assert.ok(existsSync(join(i.root, f)), f)
+})
+
+/** The plist as this release writes it: the launcher. */
+const onLauncher = (root: string): string => plistOf31adfb7(root, bashPath()).replace(/<key>ProgramArguments<\/key><array>.*<\/array>/, `<key>ProgramArguments</key><array><string>${join(root, NAME)}</string></array>`)
+const reload = (home: string): string[] => [`launchctl bootout gui/${process.getuid!()}/${LABEL}`, `launchctl bootstrap gui/${process.getuid!()} ${plistPath(home)}`]
+/** The commands that switch the agent on again, as the screen gives them. */
+const switchOn = (home: string): string => `launchctl enable gui/$(id -u)/${LABEL} && launchctl bootstrap gui/$(id -u) ${plistPath(home)}`
+
+// R78A-1 (GitHub review of PR #78): renew_plist came after `if [ "$rc" = 3 ]; then exit 0; fi`. On an install that runs
+// the newest release already (`cli update` ends with 3), `./install.sh --update` ended there and the plist stayed on
+// bash. Right: the plist moves to the launcher then too, after the same service checks; a running agent is loaded again
+// only when the plist really changed, and a stopped one stays stopped.
+test('R78A-1: ./install.sh --update on an install that runs the newest release still moves an older Mac plist off bash', { timeout: 240_000 }, async () => {
+  // Running: the plist changed, so the job is loaded again from it and starts the launcher.
+  const run = await macUpdate({ plist: root => plistOf31adfb7(root, bashPath()), loaded: true, to: '3.1.0' })
+  assertStartsLauncher(plistOf(run.home), run.root)
+  assertRestOfPlist(plistOf(run.home), run.root)
+  assert.deepEqual(jobCalls(run.s), reload(run.home), run.out)
+  assert.match(run.out, /Restarted\./)
+  await assertAgentStarts(run.root, join(run.root, 'versions', 'v3.1.0'), plistOf(run.home))
+  // Stopped: the plist moves, and the agent stays stopped.
+  const stopped = await macUpdate({ plist: root => plistOf31adfb7(root, bashPath()), loaded: false, to: '3.1.0' })
+  assertStartsLauncher(plistOf(stopped.home), stopped.root)
+  assert.deepEqual(jobCalls(stopped.s), [], `the stopped agent was started:\n${stopped.out}`)
+  assert.match(stopped.out, /The background agent is stopped, so it stays stopped/)
+  // Already on the launcher: nothing changed, so nothing is restarted and nothing is said.
+  const same = await macUpdate({ plist: onLauncher, loaded: true, launcher: exported.MAC_LAUNCHER as string, to: '3.1.0' })
+  assert.equal(readFileSync(plistPath(same.home), 'utf8'), same.before)
+  assert.deepEqual(jobCalls(same.s), [], same.out)
+  assert.doesNotMatch(same.out, /Restarted|stopped|switched off/)
+})
+
+// R78A-2 (GitHub review of PR #78, the off switch kept): an owner who switched the "bash" item off (System Settings,
+// General, Login Items & Extensions, or `launchctl disable`) had its plist rewritten to a new program by the guided
+// installer and by --update, and the guided installer loaded it again. To macOS that can look like a new background
+// item, which may start at the next login without the owner's word (LIVE if the database says so). Right: a job that
+// launchd lists as switched off (`launchctl print-disabled`: "=> disabled", "=> true" on older macOS) is left as it
+// is, plist and all, never loaded, restarted or switched on; the screen says so, that it keeps its old name, and how to
+// switch it on. A job launchd lists as on is moved to the launcher as before.
+const OLD = (root: string): string => plistOf31adfb7(root, bashPath())
+
+test('R78A-2: ./install.sh --update leaves a job the owner switched off as it is, starts nothing and says how to switch it on', { timeout: 240_000 }, async () => {
+  const cases: { listed: string; to: string; loaded: boolean }[] = [
+    { listed: OFF, to: '3.2.0', loaded: false },
+    { listed: OFF, to: '3.1.0', loaded: false },
+    { listed: `"${LABEL}" => true`, to: '3.2.0', loaded: false },
+    // `launchctl disable` alone leaves the job that runs loaded: it is not restarted or loaded again either.
+    { listed: OFF, to: '3.2.0', loaded: true },
+  ]
+  for (const c of cases) {
+    const u = await macUpdate({ plist: OLD, loaded: c.loaded, to: c.to, launchctl: launchctlWith({ listed: c.listed }) })
+    const what = `${c.listed}, ${c.to}, ${c.loaded ? 'loaded' : 'not loaded'}`
+    assert.equal(readFileSync(plistPath(u.home), 'utf8'), u.before, `${what}: the plist of a job switched off was rewritten`)
+    assert.equal(existsSync(join(u.root, NAME)), false, what)
+    assert.deepEqual(jobCalls(u.s), [], `${what}: nothing is loaded, restarted or switched on`)
+    assert.match(u.out, /The background agent is switched off/, what)
+    assert.match(u.out, /old name/, what)
+    assert.ok(u.out.includes(switchOn(u.home)), `${what}: the commands that switch it on\n${u.out}`)
+    if (c.to === '3.2.0') assert.match(u.out, /The new version runs from its next start/, what)
+    assert.doesNotMatch(u.out, /Restarted\./, what)
+  }
+})
+
+test('R78A-2: a job launchd lists as switched on is moved to the launcher and loaded again', { timeout: 240_000 }, async () => {
+  const u = await macUpdate({ plist: OLD, loaded: true, launchctl: launchctlWith({ listed: `"${LABEL}" => enabled` }) })
+  assertStartsLauncher(plistOf(u.home), u.root)
+  assert.deepEqual(jobCalls(u.s), reload(u.home), u.out)
+  assert.doesNotMatch(u.out, /switched off/)
+  await assertAgentStarts(u.root, join(u.root, 'versions', 'v3.2.0'), plistOf(u.home))
+})
+
+test('R78A-2: running the installer again leaves a job the owner switched off as it is, plist and all, and says how to switch it on', { timeout: 240_000 }, async () => {
+  const i = freshInstall()
+  await macInstall(i)
+  // The owner switched the "bash" item off in Login Items & Extensions: launchd lists it so and unloaded it.
+  writeFileSync(plistPath(i.home), OLD(i.root))
+  rmSync(join(i.root, NAME), { force: true })
+  i.s.stub('launchctl', launchctlWith({ listed: OFF }))
+  rmSync(join(i.s.dir, 'calls.log.loaded'), { force: true })
+  const before = readFileSync(plistPath(i.home), 'utf8')
+  let from = i.s.calls().length
+  const r = await guided(i, ['', TEST_PORT, 'n', 'n'], { args: [] })
+  assert.equal(r.status, 0, r.out.slice(-1500))
+  assert.equal(readFileSync(plistPath(i.home), 'utf8'), before, 'the plist of a job switched off was rewritten')
+  assert.equal(existsSync(join(i.root, NAME)), false)
+  assert.deepEqual(jobCalls(i.s, from), [], 'nothing is loaded or switched on')
+  assert.match(r.out, /The background agent is switched off/)
+  assert.match(r.out, /old name/)
+  assert.ok(r.out.includes(switchOn(i.home)), r.out)
+  assert.doesNotMatch(r.out, /Running\./)
+  assert.match(r.out, /Done/)
+  // Still switched off after the uninstall took its plist: a new install writes none.
+  rmSync(plistPath(i.home))
+  from = i.s.calls().length
+  const again = await guided(i, ['', TEST_PORT, 'n', 'n'], { args: [] })
+  assert.equal(again.status, 0, again.out.slice(-1500))
+  assert.equal(existsSync(plistPath(i.home)), false, 'a plist was written for a job switched off')
+  assert.deepEqual(jobCalls(i.s, from), [])
+  assert.ok(again.out.includes(`launchctl enable gui/$(id -u)/${LABEL}`), again.out)
+  assert.match(again.out, /cd .* && \.\/install\.sh/)
+})
+
+test('R78A-2: when launchd cannot say whether the job is switched off, no plist is rewritten', { timeout: 240_000 }, async () => {
+  // The guided installer stops in words before it writes anything.
+  const i = freshInstall()
+  await macInstall(i)
+  writeFileSync(plistPath(i.home), OLD(i.root))
+  rmSync(join(i.root, NAME), { force: true })
+  i.s.stub('launchctl', launchctlWith({ fails: true }))
+  const from = i.s.calls().length
+  const r = await guided(i, ['', TEST_PORT, 'n', 'n'], { args: [] })
+  assert.notEqual(r.status, 0, r.out.slice(-1500))
+  assert.match(r.out, /Error: launchd could not be asked whether the background agent is switched off/)
+  assert.match(r.out, /cd .* && \.\/install\.sh/)
+  assert.equal(readFileSync(plistPath(i.home), 'utf8'), OLD(i.root))
+  assert.equal(existsSync(join(i.root, NAME)), false)
+  assert.deepEqual(jobCalls(i.s, from), [])
+  // --update keeps the plist and restarts the agent that runs as before.
+  const u = await macUpdate({ plist: OLD, loaded: true, launchctl: launchctlWith({ fails: true }) })
+  assert.equal(readFileSync(plistPath(u.home), 'utf8'), u.before)
+  assert.deepEqual(jobCalls(u.s), [`launchctl kickstart -k gui/${process.getuid!()}/${LABEL}`], u.out)
+  assert.match(u.out, /Restarted\./)
 })
 
 // A guard: Linux and Windows (WSL is Linux) stay as they were.
