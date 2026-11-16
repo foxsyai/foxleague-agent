@@ -91,6 +91,16 @@ esac
 if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
   die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
 fi
+# The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
+owner_uid() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
+owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || true; }
+# --update with sudo on another user's install: root put a release in place there that the agent's own user cannot
+# read (versions/, active, pending, data/update), and the agent then never started again (UPD-A4). It stops before
+# it writes anything. An install that itself runs as root (its folder is root's) still updates.
+if [ "$MODE" = update ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
+  who=$(owner_name "$ROOT")
+  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --update"
+fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
 # The recovery words live in this file, so set_env never loses a line of it: every line but the key's own is
