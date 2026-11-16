@@ -561,8 +561,14 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
     const xStart = new Date(x.starts_at).getTime()
     const xEnd = xStart + scheduleSpanMinutes(x.format, x.max_teams, Boolean(x.home_and_away), x.round_interval_minutes ?? 30, groupSize) * 60_000
     if (xStart > end || (xEnd < start && xEnd < now.getTime())) continue
-    const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
-    const n = x.started_at ? Math.max(1, left) : total
+    const listed = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id)
+    const left = listed.filter(m => m.phase !== 'finished').length
+    // FoxLeague draws a Swiss round and a knockout round (Groups + Knockout and League + Knockout too) only once the
+    // round before has ended, so a round not drawn yet is still owed (MON-3): the most the format brings less the
+    // finished matches it lists (it lists them for a day only, so this can count more, never less). A round robin lists
+    // every fixture from its start.
+    const undrawn = x.format === 'round_robin' ? 0 : total - (listed.length - left)
+    const n = x.started_at ? Math.max(1, left, undrawn) : total
     // An unreadable start overlaps everything (as before the projection): nothing is moved out of the schedule's count.
     if (xEnd >= start || !Number.isFinite(start)) during += n
     else {
