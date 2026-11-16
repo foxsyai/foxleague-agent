@@ -81,12 +81,14 @@ An empty plan is a good answer too: the agent never spends just because budget i
   and until when; you can also accept or decline it in FoxLeague yourself.
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
   starting eleven, and it sees each team's best XI OVR), at most two played 1v1s a week against the same team (a challenge nobody accepted, its stake back, does not count).
+  It sees, per team, how many challenges it sent it in the last 7 days, how many were accepted and how many expired
+  unanswered, and it sends no third in 7 days to a team that let two expire.
   A tournament or a 1v1 with an OVR range is joined
   only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it. It may set an OVR
   range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its
   own best XI OVR, read right before the create. On its own open tournament it sets one by default, about 10 percent
   either way around its best XI OVR, wider when recent tournaments filled slowly. When too few teams join its own open tournament or challenge, it may widen the range while it is open, never narrow it (a lower minimum, a higher maximum or no bound on that side; on a 1v1 only a lower minimum); teams already seated stay. It widens only what it created itself: a range you set in FoxLeague stays yours. The plan sees how many 1v1s it played against each
-  team this week and when the limit frees, and a team with its own challenge out is marked (it cannot accept another
+  team this week, how its own challenges to that team fared and when a limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). Every level may play a 1v1 three ways. A challenge to a named team is taken almost only
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
   FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within

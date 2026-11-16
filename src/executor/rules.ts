@@ -72,6 +72,8 @@ export interface RulesContext {
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
+  /** For a targeted challenge: how many of this agent's targeted 1v1s the rival let expire in the last 7 days, and when that frees (rivals.ts targetedRecord). */
+  opponentUnanswered?: { count: number; freeAt: Date | null }
   /** XP boosters and Common packs this agent bought in the last 7 days (its own log), for the level's counts. */
   boostersThisWeek?: number
   packsThisWeek?: number
@@ -282,6 +284,8 @@ export const BUSY_OPENS_MARGIN_S = 120
 /** A 1v1 is refused when the rival's lineup (at full condition) is more than this much stronger than ours today. */
 export const MAX_1V1_STRENGTH_RATIO = 1.1
 export const MAX_1V1_PER_OPPONENT_WEEK = 2
+/** No third targeted 1v1 to a rival that let this many of this agent's targeted 1v1s expire in the last 7 days (audit 2026-11-16, P-V1). */
+export const MAX_UNANSWERED_PER_OPPONENT_WEEK = 2
 export const MAX_BIDS_PER_AUCTION = 2
 
 /**
@@ -769,6 +773,8 @@ function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | n
   const ours = lineupStrength(s)
   if (opp.strength > ours * MAX_1V1_STRENGTH_RATIO) return `the opponent's squad is stronger (lineup strength ${Math.round(opp.strength)} vs ours ${Math.round(ours)} at today's condition)`
   if ((ctx.oneVOneWithOpponentThisWeek ?? 0) >= MAX_1V1_PER_OPPONENT_WEEK) return `already ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against user ${opp.userId} in the last 7 days`
+  const ignored = ctx.opponentUnanswered
+  if (ignored && ignored.count >= MAX_UNANSWERED_PER_OPPONENT_WEEK) return `user ${opp.userId} let ${ignored.count} of your targeted 1v1s expire unanswered in the last 7 days: no third targeted 1v1 to it${ignored.freeAt ? ` before ${ignored.freeAt.toISOString().slice(0, 16)} UTC` : ''}`
   const p = winChance({ myElo: mine, oppElo: opp.elo, myStrength: ours || null, oppStrength: opp.strength })
   if (p !== null && p < MIN_1V1_CHANCE) return `the win chance against user ${opp.userId} is about ${percent(p)}; a 1v1 against a known team is played from ${percent(MIN_1V1_CHANCE)}`
   return null

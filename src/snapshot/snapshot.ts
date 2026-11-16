@@ -191,7 +191,11 @@ export interface AgentSnapshot {
    * per rival, the 1v1s this agent played or entered in the last 7 days and, at the weekly limit, when it is free
    * again.
    */
-  oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[] }
+  oneVOnes?: {
+    week: { userId: number; count: number; freeAt: string | null }[]
+    /** Per rival, this agent's targeted 1v1s to it in the last 7 days (rivals.ts targetedRecord); `freeAt` once the rule refuses a third. */
+    targeted?: { userId: number; sent: number; accepted: number; unanswered: number; freeAt: string | null }[]
+  }
   /** The tournaments and 1v1s this agent created itself (its log, added by the service): the ones it may widen. */
   ownCreations?: number[]
   warnings: string[]

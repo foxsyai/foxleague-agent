@@ -29,8 +29,8 @@ import { describeAction, parseAction, type PlannedAction } from './executor/acti
 import { budgetView } from './executor/budget.ts'
 import { actionDeadline, type Deadline } from './executor/deadlines.ts'
 import { PLAN_WINDOW_SHARE } from './executor/slots.ts'
-import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
-import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
+import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './executor/rivals.ts'
+import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, MAX_UNANSWERED_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, agentChoice, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, shadowRuns, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
@@ -1939,7 +1939,10 @@ export class Service {
   private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
     const now = new Date()
     const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
-    return { ...snap, oneVOnes: { week }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
+    // Its own 1v1s another team has taken now count as accepted (BEH-2).
+    const seated = new Set((snap.auth?.myTournaments?.active ?? []).filter(t => t.max_teams === 2 && typeof t.participant_count === 'number' && t.participant_count >= 2).map(t => t.id))
+    const targeted = [...targetedRecord(this.store, agent.index, dry, now, seated)].map(([userId, r]) => ({ userId, sent: r.sent, accepted: r.accepted, unanswered: r.unanswered.length, freeAt: weeklyFreeAt(r.unanswered, MAX_UNANSWERED_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
+    return { ...snap, oneVOnes: { week, targeted }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
   }
 
   /**

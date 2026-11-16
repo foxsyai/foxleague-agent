@@ -669,6 +669,13 @@ export class Store {
       .all(agentIndex) as { tx_hash: string }[]).map(r => String(r.tx_hash)))
   }
 
+  /** The hashes of this agent's seats and stakes closed as played (join:<tournament>:played): the 1v1 or tournament was played. */
+  playedSeatHashes(agentIndex: number): Set<string> {
+    return new Set((this.db
+      .prepare("SELECT tx_hash FROM spend WHERE agent_idx = ? AND action LIKE 'join:%:played' AND tx_hash IS NOT NULL")
+      .all(agentIndex) as { tx_hash: string }[]).map(r => String(r.tx_hash)))
+  }
+
   /** The hashes of this agent's payments tagged so (shop:xp_booster) whose money came back (creditSpend). */
   refundedHashes(agentIndex: number, tag: string): Set<string> {
     return new Set((this.db

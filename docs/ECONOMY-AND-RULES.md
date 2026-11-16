@@ -479,7 +479,9 @@ among the called-up players by contribution. Nothing of it exists in the code on
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
-  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. A join reads the tier
+  2 a week per rival, a 55 percent win chance), no third targeted 1v1 to a rival that let 2 of the agent's own
+  expire unanswered in the last 7 days (audit 2026-11-16, P-V1: the agent's own log only; the plan reads per rival
+  how many it sent, how many were accepted and how many expired), and the 18 strongest cards are never listed. A join reads the tier
   FoxLeague serves: one that is not bronze, silver or gold is refused as unread, and with Gold off (no Gold amounts)
   an entry or stake from `tournament_fee_bounds.gold_min` up is refused whatever the label says, as is every paid
   entry while that bound cannot be read (audit 2026-11-11, MONEY-4). The win chance

@@ -23,8 +23,8 @@ import type { AgentWallet } from '../wallet/wallet.ts'
 import { createStartMs, describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
-import { FUSION_UNASKED, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
-import { oneVOnesThisWeek, ownCreations } from './rivals.ts'
+import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
+import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import {
   buildTransaction,
@@ -444,6 +444,11 @@ export class Executor {
       market.opponent = { userId: opponentId, elo, strength }
       // The count the plan request shows too (src/executor/rivals.ts): this agent's 1v1s against the rival this week.
       market.oneVOneWithOpponentThisWeek = oneVOnesThisWeek(store, agent.index, dry, now).get(opponentId)?.length ?? 0
+      // A targeted challenge: how many of this agent's own the rival let expire this week (P-V1; its own log only).
+      if (a.type === 'create_challenge') {
+        const ignored = targetedRecord(store, agent.index, dry, now).get(opponentId)?.unanswered ?? []
+        market.opponentUnanswered = { count: ignored.length, freeAt: weeklyFreeAt(ignored, MAX_UNANSWERED_PER_OPPONENT_WEEK) }
+      }
     }
     // While an open challenge may still wait (its longest deadline is 4 hours), a change that tires or weakens the eleven
     // is checked against its range; when our tournaments cannot be read, the log says whether one may wait (R54A-3).
