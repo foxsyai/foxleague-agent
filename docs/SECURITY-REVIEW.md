@@ -2808,6 +2808,7 @@ reviewer's word, R2M-4.
 | R2I-U1 | low (unproven INS-U1, proven with the stand-in) | On a Mac a bootout answering 0 or 37 while the job is still listed got 10 s, then the bootstrap failed | The installer waits whenever the job is still listed |
 | R2I-U2 | low (unproven INS-U2, proven in the PowerShell checks) | With several Ubuntu users, `get.ps1` named the first user in passwd | It names the user whose home holds `foxleague-agent` |
 | R76A-1 | low (GitHub review of PR #76) | An answer of `GET /api/tournaments/upcoming-matches` without a readable `X-Total-Count` was taken as the whole list when it held fewer than 200 rows. A server that pages lower would give a part of it; FoxLeague's own answer when its row read and its count both fail (an empty list with no header) read as no fixtures. Owed matches were then counted short and a paid join the schedule rule refuses could pass (rule 4) | Without a readable total the list is unread and the rules refuse. FoxLeague's mainnet code sends the total with every answer whose count it read (`0` with an empty list), so a team with no fixtures still reads its list; it sends none only when that count fails. R2M-3's test of a short page without a total now pins the refusal; its five-page case is served a total |
+| MAC-1 | low (found on the owner's Mac, 16 Nov) | The launchd plist started `<bash> <folder>/run.sh`. macOS names a background item after the program its job starts when no app goes with it, so System Settings (General, Login Items & Extensions) listed the agent as "bash": a user cannot tell it for the agent and may switch it off as unknown | The plist starts `FoxLeague Agent` in the install's folder, a launcher of the agent's own (a plain file, mode 755, `#!/bin/bash`) that execs `/bin/bash run.sh` of its folder; the rest of the plist is unchanged (KeepAlive, RunAtLoad, `FOXAGENT_SUPERVISED`, the label, exit code 75). The installer writes it before the plist; `./install.sh --update` changes only the program's line of an older plist (the agent is restarted or left stopped as before); a confirmed update refreshes it where it is (`refreshLauncher`); the uninstall removes it with the plist. Linux and WSL are unchanged (`test/mac-login-item.test.ts`) |
 
 **Changed tests.** Each one now pins the right behaviour, and its commit message says so.
 - **R2T-4:** MW-5 ("a behind copy stays so for the day").
@@ -2837,6 +2838,16 @@ Stays open:
 - **The TEXT reviewer's other unproven items:**
   - a dotted settings key that Telegram may turn into a link;
   - a request too large for a model's context window.
+- **MAC-1, on a real Mac:**
+  - the name rule is macOS's as described above, checked with the stand-ins only: the owner's Mac shows whether
+    Login Items & Extensions lists "FoxLeague Agent";
+  - whether macOS renames the item as soon as `--update` changes the plist of a loaded job, or at the next login,
+    and whether the old "bash" item stays listed until then;
+  - an install that updates in the app keeps "bash" until its next `./install.sh` or `./install.sh --update`: the
+    in-app update does not write the plist. The first `--update` to this release is run by the installer of the
+    release before it, which does not change the plist either: the next one does, and so does `./install.sh`;
+  - `run.sh` is started with `/bin/bash` now, where the plist named the bash the installer found first on its PATH
+    (Homebrew's, where it comes first). The update's `--prepare` already ran with `/bin/bash` under launchd.
 
 
 ## One manager message at a time (2026-11-13)

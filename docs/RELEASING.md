@@ -93,7 +93,10 @@ the newer version added are then not applied.
   One exception, in a terminal only: `./install.sh --update` takes the line `RestrictSUIDSGID=true`, which the
   installers before 2026-11-14 wrote, out of the unit and leaves the rest of it as it is. Its filter refuses the
   `openat2` that Ubuntu 26.04's tar needs, so an update from the dashboard could not unpack there (W-9). Run
-  `FRESH_UBUNTU=26.04 scripts/release/fresh-install-check.sh` as well as the 24.04 replay before a release.
+  `FRESH_UBUNTU=26.04 scripts/release/fresh-install-check.sh` as well as the 24.04 replay before a release. On a
+  Mac it changes one line of a plist the installers before 2026-11-16 wrote: the program it starts, bash with
+  `run.sh`, becomes the launcher `FoxLeague Agent` in the install's folder, the name Login Items & Extensions shows
+  (MAC-1). launchd reads it at the job's next load.
 - **Exit code 75 keeps its meaning**: the agent put an update in place and asks to be started again.
 - **No secrets and nothing of an install in the tree.** The installer and the agents refuse an archive that holds
   `.env`, `data`, `pem`, `keys`, `node_modules`, `.node` or a PEM file, and anything that is not a plain file or folder.
