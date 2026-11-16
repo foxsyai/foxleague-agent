@@ -6,6 +6,7 @@ import { CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
 import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
+import { cut } from '../util/text.ts'
 import { agentName } from '../names.ts'
 import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
@@ -17,10 +18,12 @@ import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
  * data: control characters and line breaks become spaces, so it can never open a heading or a line of
  * its own in the prompt, and it is cut to a short length. Quotes are swapped so a value cannot close
  * the quotes around it; the snapshot fence (<<<SNAPSHOT, SNAPSHOT>>>) and heading marks cannot be
- * written at all.
+ * written at all. It is cut on whole characters: half of an emoji would make the whole plan request unreadable for
+ * the model's API (audit 2026-11-16, ATK-4).
  */
 export function txt(v: unknown, max = 40): string {
   const s = String(v ?? '')
+    .toWellFormed()
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ')
     .replace(/"/g, "'")
     .replace(/#+/g, '')
@@ -29,7 +32,7 @@ export function txt(v: unknown, max = 40): string {
     .replace(/SNAPSHOT/gi, 'snapshot')
     .replace(/\s+/g, ' ')
     .trim()
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s
+  return s.length > max ? `${cut(s, max - 1)}…` : s
 }
 
 const SHORT: Record<string, string> = { speed: 'spd', accuracy: 'acc', defense: 'def', power: 'pow', control: 'ctl', vision: 'vis', stamina: 'sta' }

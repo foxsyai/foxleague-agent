@@ -47,6 +47,7 @@ import { egldOnBinance, findWithdrawal, travelRuleCountry, whitelisted, withdraw
 import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
 import { sleep } from './util/http.ts'
+import { cut } from './util/text.ts'
 import { numberToIndex, agentName, pemName, whichAgents } from './names.ts'
 import { RELEASE_KEYS } from './update/keys.ts'
 import { detectLayout } from './update/install.ts'
@@ -621,11 +622,11 @@ export class Service {
     const recent = this.chatContext()
     const epoch = this.chatEpoch
     try {
-      const mine = this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets, pending: true })
+      const mine = this.say({ from: 'owner', text: cut(message, 4000), source, agents: targets, pending: true })
       let answer
       try {
         answer = await this.strategist.discuss({
-          message: message.slice(0, 4000),
+          message: cut(message, 4000),
           source,
           defaultAgents: targets,
           agents: agents.map(b => {
@@ -656,7 +657,7 @@ export class Service {
       if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
       delete mine.pending
       const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
-      this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
+      this.say({ from: 'manager', text: cut(answer.reply, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
       return { reply: answer.reply, proposal }
     } finally {
       // Every way out releases the waiting line (agent review of PR #68, R68A-1): a failed answer, and also a database
@@ -1725,7 +1726,7 @@ export class Service {
       `\nmodel cost $${plan.usage.usd.toFixed(4)}${own ? `, ${MODELS[playing.model]?.label ?? playing.model} at ${playing.effort} effort` : ''} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
     // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
     this.addModelUsd(plan.usage.usd)
-    this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
+    this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: cut(text, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
     if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
     else this.report(text)

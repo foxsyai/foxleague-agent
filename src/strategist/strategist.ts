@@ -3,6 +3,7 @@
 // parseAction and the executor's checks.
 
 import { atomicToFloat, decimalToAtomic } from '../util/encoding.ts'
+import { cut } from '../util/text.ts'
 import { readFileSync } from 'node:fs'
 import Anthropic from '@anthropic-ai/sdk'
 import { parseAction, type PlannedAction } from '../executor/actions.ts'
@@ -498,8 +499,11 @@ export class Strategist {
    * effort can take minutes, longer than one plain request may wait. The deadline covers the whole answer; `cancel`
    * ends the request earlier (the service's stop, for a shadow plan).
    */
-  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
+  private async create(asked: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
     const model = this.model
+    // Well-formed Unicode, whatever text reached the request: half of an emoji left by a cut anywhere makes the API
+    // refuse the whole body as invalid JSON, and every plan of every agent with it (audit 2026-11-16, ATK-4).
+    const params = { ...asked, messages: asked.messages.map(m => (typeof m.content === 'string' ? { ...m, content: m.content.toWellFormed() } : m)) }
     const until = (maxTokens: number): AbortSignal => (cancel ? AbortSignal.any([AbortSignal.timeout(deadlineMs(maxTokens)), cancel]) : AbortSignal.timeout(deadlineMs(maxTokens)))
     const send = (body: Anthropic.Beta.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.BetaMessage> =>
       this.client.beta.messages.stream(body, { signal: until(body.max_tokens) }).finalMessage()
@@ -576,21 +580,21 @@ export class Strategist {
     const call = response.content.find((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use' && b.name === 'submit_plan')
     if (!call) {
       const text = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join(' ')
-      return empty('no_call', `no plan submitted${text ? `: ${text.slice(0, 500)}` : ''}`)
+      return empty('no_call', `no plan submitted${text ? `: ${cut(text, 500)}` : ''}`)
     }
     const submitted = call.input as { summary?: unknown; actions?: unknown }
     const actions: PlannedAction[] = []
     const rejected: Plan['rejected'] = []
     for (const item of Array.isArray(submitted.actions) ? submitted.actions : []) {
       const raw = (item as { action?: unknown })?.action
-      const reason = String((item as { reason?: unknown })?.reason ?? '').slice(0, 300)
+      const reason = cut(String((item as { reason?: unknown })?.reason ?? ''), 300)
       try {
         actions.push({ action: parseAction(raw), reason })
       } catch (err) {
         rejected.push({ raw, error: err instanceof Error ? err.message : String(err) })
       }
     }
-    return { plan: { summary: String(submitted.summary ?? '').slice(0, 2000), actions: actions.slice(0, 12), rejected, usage, stopReason: response.stop_reason }, outcome: 'plan' }
+    return { plan: { summary: cut(String(submitted.summary ?? ''), 2000), actions: actions.slice(0, 12), rejected, usage, stopReason: response.stop_reason }, outcome: 'plan' }
   }
 
   /** The owner's advice or question: a reply, and a strategy proposal when the message gives direction. */
@@ -613,7 +617,7 @@ export class Strategist {
     const known = new Set(input.agents.map(b => b.index))
     // The model names agents the way the owner does (agent 1 = index 0).
     const named = (Array.isArray(raw.agents) ? raw.agents : []).filter((n): n is number => Number.isInteger(n)).map(n => n - 1).filter(i => known.has(i))
-    const strategy = String(raw.strategy ?? '').trim().slice(0, 2000)
+    const strategy = cut(String(raw.strategy ?? '').trim(), 2000)
     if (!strategy) return { reply: reply || '(no answer)', proposal: null, usd: cost }
     return { reply, proposal: { agents: [...new Set(named.length ? named : input.defaultAgents)].sort((a, b) => a - b), strategy, changes: String(raw.changes ?? '').trim() }, usd: cost }
   }

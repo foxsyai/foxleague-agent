@@ -10,6 +10,7 @@ import { ApiRefusal, type FoxLeague } from '../foxleague/api.ts'
 import type { Store } from '../store/db.ts'
 import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
+import { cut } from '../util/text.ts'
 
 export interface PendingDeps {
   store: Store
@@ -83,7 +84,7 @@ export function creditShopPayment(store: Store, agentIndex: number, hash: string
 
 /** What the owner is told about a payment given up on: what is known, no promise FoxLeague did not make. */
 function givenUp(agentIndex: number, p: { hash: string; kind: string; payload: unknown }, ageMin: number, last: string): string {
-  const said = `FoxLeague's last answer, ${Math.round(ageMin)} minutes after the payment: "${last.slice(0, 200)}"`
+  const said = `FoxLeague's last answer, ${Math.round(ageMin)} minutes after the payment: "${cut(last, 200)}"`
   if (p.kind === 'shop' || p.kind === 'ranked_ticket') {
     const { product } = p.kind === 'shop' ? (p.payload as { product?: string }) : { product: 'ranked ticket' }
     return `${agentName(agentIndex)}: shop payment ${p.hash} was never confirmed (${product ?? 'unknown product'}). ${said}. FoxLeague returns a shop payment it did not deliver (by itself or through its support team); until the refund is seen its FOXSY keeps counting against the budget.`
