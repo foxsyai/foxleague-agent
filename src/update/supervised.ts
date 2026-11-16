@@ -31,13 +31,18 @@ function ownCgroup(): string | null {
   }
 }
 
-/** The systemd units a cgroup listing names: the last part of each path that ends in .service. */
+/**
+ * The systemd user units a cgroup listing names: the last part of each path that ends in .service, under a user's own
+ * manager (`.../user@1000.service/[app.slice/]x.service`). The installer writes a user unit only: a system unit of the
+ * same name is a unit of the owner's own (R2I-4).
+ */
 function unitsOf(cgroup: string): string[] {
   const units: string[] = []
   for (const line of cgroup.split('\n')) {
     const path = line.slice(line.lastIndexOf(':') + 1).trim()
-    const last = path.split('/').at(-1) ?? ''
-    if (last.endsWith('.service')) units.push(last)
+    const parts = path.split('/')
+    const last = parts.at(-1) ?? ''
+    if (last.endsWith('.service') && parts.slice(0, -1).some(p => /^user@\d+\.service$/.test(p))) units.push(last)
   }
   return units
 }
@@ -47,7 +52,8 @@ function unitsOf(cgroup: string): string[] {
  *   FOXAGENT_SUPERVISED=1  the units the installer writes set it (0: the owner says that nothing restarts it);
  *   XPC_SERVICE_NAME       launchd sets it to the label of the job it started;
  *   INVOCATION_ID with JOURNAL_STREAM naming this process's own output, in the installer's own unit (its cgroup ends in
- *                          foxleague-agent.service): that unit as it was written before it said so itself, which
+ *                          foxleague-agent.service under a user's manager, user@<uid>.service; a system unit of that
+ *                          name is the owner's own, R2I-4): that unit as it was written before it said so itself, which
  *                          restarts the agent after every exit.
  * INVOCATION_ID alone proves nothing: a terminal that a user service of the desktop opened inherits it, with a
  * JOURNAL_STREAM that names that service's output and not the terminal. A unit of the owner's own proves nothing either
