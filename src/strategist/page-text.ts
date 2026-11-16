@@ -9,7 +9,7 @@
 // cannot be written at all. It never reaches the system prompt (byte-stable for the prompt cache), Telegram, the
 // dashboard or the executor.
 
-import { cut } from '../util/text.ts'
+import { asSeen, cut } from '../util/text.ts'
 
 /** The most characters (UTF-16 units) kept of one page: holds every page the agents read but the two longest whole. */
 export const PAGE_TEXT_MAX = 24_000
@@ -57,11 +57,11 @@ export function shapePages(pages: unknown): PageText[] {
 /**
  * A page's text as the request holds it: one line per line of the page, each set in by four spaces; no control or
  * invisible character but the line break; no run of two `<` or `>` (the fence's markers) and no word SNAPSHOT in
- * capitals. The meaning of a rule survives all of it.
+ * capitals, also as a reader sees them (asSeen: fullwidth forms folded, invisible characters left out, R2T-3). The
+ * meaning of a rule survives all of it.
  */
 function setIn(text: string): string {
-  return text
-    .toWellFormed()
+  return asSeen(text)
     .replace(/\r\n?|[\u2028\u2029\u0085]/g, '\n')
     .replace(/\t/g, '  ')
     .replace(/[\p{Cc}\p{Cf}]/gu, c => (c === '\n' ? c : ' '))

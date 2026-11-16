@@ -4,6 +4,17 @@
 // ATK-4: one tournament title stopped every plan). Every cut of text that reaches the model or Telegram goes
 // through `cut`; the request itself is made well-formed once more where it leaves (Strategist.create).
 
+/**
+ * Text as a reader sees it (audit 2026-11-16, R2T-3): well-formed, the compatibility forms folded (NFKC: fullwidth
+ * letters, ligatures) and every character Unicode marks as invisible (Default_Ignorable_Code_Point: joiners, variation
+ * selectors, fillers, tag characters, bidi controls) left out, so a word or a run of brackets cannot hide between them.
+ * Letters, accents, emoji and every script stay as they are. Rival and server text goes through it before it is
+ * checked for the snapshot fence's markers.
+ */
+export function asSeen(s: string): string {
+  return s.toWellFormed().normalize('NFKC').replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+}
+
 /** `s` cut to at most `max` UTF-16 units, never between the two halves of a character; a lone half in `s` becomes U+FFFD. */
 export function cut(s: string, max: number): string {
   const whole = s.toWellFormed()
