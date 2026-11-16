@@ -88,14 +88,20 @@ const PRINT = /^(?:[0-9a-f]{64}|absent)$/
 const PROSE = new Set(['description', 'summary', 'title', 'example', 'examples', 'externalDocs', 'deprecated', 'default', 'xml', 'tags', 'operationId'])
 /**
  * The most the shapes of one whole document may read and write out, all routes together: one for each value and each
- * key read, and the characters of each key, `$ref` and text; a schema named by `$ref` is walked once a route but counted
- * again at every place it is named, since it is written out there again. A document past it is not judged: "could not
- * be read", never "changed" and never "the same" (audit 2026-11-16, R2T-1: a 10 KB document of schemas that each name
- * the next one twice wrote 2^20 values a route and stood the service still for 18 seconds). Mainnet's description of
- * 15 Nov 2026 (1 MB) counts about 86,000 for all the routes; the slowest document the bound lets through takes about
- * 0.2 seconds on the maintainer's machine.
+ * key read, and the characters of each key, `$ref` (at every hop that follows it, FC-1) and text; a schema named by
+ * `$ref` is walked once a route but counted again at every place it is named, since it is written out there again. A
+ * document past it is not judged: "could not be read", never "changed" and never "the same" (audit 2026-11-16, R2T-1:
+ * a 10 KB document of schemas that each name the next one twice wrote 2^20 values a route and stood the service still
+ * for 18 seconds). Mainnet's description of 15 Nov 2026 (1 MB) counts about 86,000 for all the routes; the slowest
+ * document the bound lets through takes about 0.2 seconds on the maintainer's machine.
  */
 export const MAX_WRITTEN = 2_000_000
+/**
+ * The longest `$ref` a description may name: one longer is not judged (audit 2026-11-16, FC-1: one `$ref` of 200,000
+ * characters named from every body and answer held the event loop for tens of seconds). Mainnet's longest of
+ * 15 Nov 2026 is 62 characters.
+ */
+export const MAX_REF = 1_000
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
@@ -144,6 +150,15 @@ function routeShape(doc: Record<string, unknown>, route: string, budget: { left:
     budget.left -= n
     if (budget.left < 0) throw new TooLarge()
   }
+  /**
+   * A `$ref` read: its characters counted wherever it stands and at every hop that follows it, the walk of `canon` and
+   * the request bodies and answers given by reference alike (FC-1); one past MAX_REF is not judged.
+   */
+  const named = (ref: string) => {
+    if (ref.length > MAX_REF) throw new TooLarge()
+    spend(ref.length)
+  }
+  /** The value a `$ref` names; read only after `named`. */
   const resolve = (ref: string): unknown => {
     let at: unknown = doc
     for (const part of ref.slice(2).split('/')) at = isObject(at) ? at[part.replace(/~1/g, '/').replace(/~0/g, '~')] : undefined
@@ -159,7 +174,7 @@ function routeShape(doc: Record<string, unknown>, route: string, budget: { left:
     const ref = v.$ref
     if (typeof ref === 'string' && ref.startsWith('#/')) {
       // The name is read at every place it stands.
-      spend(ref.length)
+      named(ref)
       if (walking.has(ref)) return { $cycle: ref }
       const known = memo.get(ref)
       if (known) {
@@ -183,10 +198,13 @@ function routeShape(doc: Record<string, unknown>, route: string, budget: { left:
     }
     return out
   }
-  /** A request body or an answer given by reference: the object it names. */
+  /** A request body or an answer given by reference: the object it names, each hop counted (FC-1). */
   const deref = (v: unknown): unknown => {
     let x = v
-    for (let i = 0; i < 8 && isObject(x) && typeof x.$ref === 'string' && x.$ref.startsWith('#/'); i++) x = resolve(x.$ref)
+    for (let i = 0; i < 8 && isObject(x) && typeof x.$ref === 'string' && x.$ref.startsWith('#/'); i++) {
+      named(x.$ref)
+      x = resolve(x.$ref)
+    }
     return x
   }
   /** The JSON schema of a body or an answer: what a client sends or reads. */
