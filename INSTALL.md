@@ -256,7 +256,7 @@ MacBook with its lid closed sleeps.
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now; by itself the agent asks about every 10 minutes while
 the Mac is awake. A new version that does not start is undone by itself, and a failed update says why in the
-notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update`.
+notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo).
 
 #### Uninstalling
 
@@ -265,7 +265,8 @@ notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update`.
 folder, wallet and PEM files in place. Everything the install added is in that folder, its own Node.js and the
 download cache of npm included: about 240 MB, and about 280 MB once an update has kept the release before it (kept
 so that the update can be undone). The agent wallets may still hold funds. Keep the recovery words, and delete the
-folder only when the wallets are empty.
+folder only when the wallets are empty. Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
+started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 #### If it gets stuck
 
@@ -335,7 +336,7 @@ for the agent and the dashboard behind nginx, see [docs/SERVER.md](docs/SERVER.m
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now. A new version that does not start is undone by itself
 after about a minute and a half, and a failed update says why in the notice. From a terminal:
-`cd ~/foxleague-agent`, then `./install.sh --update`. When the notice says "this system's tar cannot unpack inside
+`cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo). When the notice says "this system's tar cannot unpack inside
 the agent's background service", an older installer set that service up: run `./install.sh --update` once in a
 terminal, in the agent's folder; later updates are one click again.
 
@@ -347,7 +348,8 @@ download cache of npm included: about 240 MB, and about 280 MB once an update ha
 so that the update can be undone). The agent wallets may still hold funds. Keep the recovery words, and delete the
 folder only when the wallets are empty. The uninstall also leaves linger on, which lets background services of
 your user start without a login, because other services of yours may count on it: `loginctl disable-linger $USER`
-turns it off.
+turns it off. Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
+started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 #### If it gets stuck
 

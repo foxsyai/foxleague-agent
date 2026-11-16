@@ -125,7 +125,7 @@ already says 1 or true.
   back to the version it ran and the notice says so, with **Try again** in place of **Update now**. Nothing has to
   be done.
 - **If an update fails**, the notice says why and the agent keeps running the version it ran.
-- **From a terminal:** `cd ~/foxleague-agent`, then `./install.sh --update`. Pasting the install line again also
+- **From a terminal:** `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo). Pasting the install line again also
   puts the newest version in place.
 - **"this system's tar cannot unpack inside the agent's background service".** An install made by an older
   installer has a background service whose file stops the update. Run `./install.sh --update` once in a terminal,
@@ -147,6 +147,8 @@ It stops the background service, removes it and leaves your folder, wallet and P
 install added is in that folder, its own Node.js and the download cache of npm included: about 240 MB, and about
 280 MB once an update has kept the release before it (kept so that the update can be undone). The agent wallets
 may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
+Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
+started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 The installer turned on linger, which lets background services of your user start without a login. The uninstall
 leaves it on, because other services of yours may count on it, and says so: `loginctl disable-linger $USER` turns
