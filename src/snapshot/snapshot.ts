@@ -84,6 +84,7 @@ export interface PlayerView {
   /** A fused card's own fusion cooldown, while it runs. */
   fusionReadyAt: string | null
   listed: boolean
+  /** While a moved card may not play: when that ends, or 'unknown' when FoxLeague's transfer time could not be read. */
   transferLockedUntil: string | null
   /** While the card is injured (FoxLeague's injured_until, still ahead): out of every match until then. */
   injuredUntil: string | null
@@ -280,7 +281,9 @@ export function playerView(p: PlayerCard, team: Team | null, now: Date, bansLive
   }
   let transferLockedUntil: string | null = null
   const until = transferLockEnd(p.transferred_at, p.transfer_cooldown_hours, config)
-  if (until && until > now) transferLockedUntil = until.toISOString()
+  // A move whose time is no time is unread, never "lock over" (MON-U2): every check that reads the lock refuses.
+  if (until && Number.isNaN(until.getTime())) transferLockedUntil = 'unknown'
+  else if (until && until > now) transferLockedUntil = until.toISOString()
   return {
     nonce: p.nft_nonce,
     name: p.name,
