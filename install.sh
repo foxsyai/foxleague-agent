@@ -226,8 +226,17 @@ ensure_node() {
     rm -rf "$ROOT/.node.old"
     NODE="$ROOT/.node/bin/node"
   fi
-  # The launcher (run.sh) reads which Node to start the agent with.
-  printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
+  # The launcher (run.sh) reads which Node to start the agent with: the first path of .node-path that is there.
+  # For a Node.js of the system the program itself goes first (INS-A6): the path a version manager puts on the
+  # PATH may last one shell only (fnm's folder is gone at the next restart, asdf's shim needs the shell's setup).
+  # The path it was found at follows, for when the program's own folder goes (Homebrew's link outlives an upgrade).
+  local real=''
+  if [ "$NODE" = "$sys" ]; then real=$("$NODE" -p process.execPath 2>/dev/null || true); fi
+  if [ -n "$real" ] && [ "$real" != "$NODE" ] && node_ok "$real"; then
+    printf '%s\n%s\n' "$real" "$NODE" | put_file "$ROOT/.node-path" 644
+  else
+    printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
+  fi
   export PATH="$(dirname "$NODE"):$PATH"
   info "Node.js $("$NODE" --version) at $NODE"
 }
