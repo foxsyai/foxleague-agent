@@ -86,46 +86,99 @@ const PRINT = /^(?:[0-9a-f]{64}|absent)$/
 
 /** The prose of a schema or an operation: left out of a shape. */
 const PROSE = new Set(['description', 'summary', 'title', 'example', 'examples', 'externalDocs', 'deprecated', 'default', 'xml', 'tags', 'operationId'])
-/** The most nodes one route's shape may visit: a document past it is not judged. */
-const MAX_NODES = 200_000
+/**
+ * The most the shapes of one whole document may read and write out, all routes together: one for each value and each
+ * key read, and the characters of each key, `$ref` and text; a schema named by `$ref` is walked once a route but counted
+ * again at every place it is named, since it is written out there again. A document past it is not judged: "could not
+ * be read", never "changed" and never "the same" (audit 2026-11-16, R2T-1: a 10 KB document of schemas that each name
+ * the next one twice wrote 2^20 values a route and stood the service still for 18 seconds). Mainnet's description of
+ * 15 Nov 2026 (1 MB) counts about 86,000 for all the routes; the slowest document the bound lets through takes about
+ * 0.2 seconds on the maintainer's machine.
+ */
+export const MAX_WRITTEN = 2_000_000
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex')
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
 
 class TooLarge extends Error {}
 
-/** The shape of one route of `doc`, as a canonical value; null when the document does not describe it. */
-function routeShape(doc: Record<string, unknown>, route: string): unknown {
+/** The keys of an object a shape keeps, sorted; `spend` counts the keys read. */
+type Sorted = (v: Record<string, unknown>, props: boolean, spend: (n: number) => void) => string[]
+
+/**
+ * The keys of each object listed, filtered and sorted once for the whole document, and counted at every visit: an
+ * object of a million prose keys named by every route is not listed again for each of them.
+ */
+function sortedKeys(): Sorted {
+  const seen = [new WeakMap<object, { n: number; keys: string[] }>(), new WeakMap<object, { n: number; keys: string[] }>()] as const
+  return (v, props, spend) => {
+    const cache = seen[props ? 1 : 0]
+    const known = cache.get(v)
+    if (known) {
+      spend(known.n)
+      return known.keys
+    }
+    const all = Object.keys(v)
+    spend(all.length)
+    // Under `properties` every key is a field name, kept whatever it is called.
+    const keys = (props ? all : all.filter(k => !PROSE.has(k) && !k.startsWith('x-'))).sort()
+    cache.set(v, { n: all.length, keys })
+    return keys
+  }
+}
+
+/**
+ * The shape of one route of `doc`, as a canonical value; null when the document does not describe it. `budget.left`:
+ * what the document may still write out, shared by all its routes (MAX_WRITTEN).
+ */
+function routeShape(doc: Record<string, unknown>, route: string, budget: { left: number }, sorted: Sorted): unknown {
   const [method, path] = route.split(' ') as [string, string]
   const item = isObject(doc.paths) ? doc.paths[path] : undefined
   const op = isObject(item) ? item[method.toLowerCase()] : undefined
   if (!isObject(item) || !isObject(op)) return null
-  const memo = new Map<string, unknown>()
-  const stack: string[] = []
-  let nodes = 0
+  /** Each `$ref` walked once, with what its shape writes out wherever it is named. */
+  const memo = new Map<string, { out: unknown; written: number }>()
+  /** The `$ref`s on the path walked now: one named again inside itself is a cycle. */
+  const walking = new Set<string>()
+  const spend = (n: number) => {
+    budget.left -= n
+    if (budget.left < 0) throw new TooLarge()
+  }
   const resolve = (ref: string): unknown => {
     let at: unknown = doc
     for (const part of ref.slice(2).split('/')) at = isObject(at) ? at[part.replace(/~1/g, '/').replace(/~0/g, '~')] : undefined
     return at
   }
   const canon = (v: unknown, props = false): unknown => {
-    if (++nodes > MAX_NODES) throw new TooLarge()
+    spend(1)
     if (Array.isArray(v)) return v.map(x => canon(x))
-    if (!isObject(v)) return v ?? null
+    if (!isObject(v)) {
+      if (typeof v === 'string') spend(v.length)
+      return v ?? null
+    }
     const ref = v.$ref
     if (typeof ref === 'string' && ref.startsWith('#/')) {
-      if (stack.includes(ref)) return { $cycle: ref }
-      if (memo.has(ref)) return memo.get(ref)
-      stack.push(ref)
+      // The name is read at every place it stands.
+      spend(ref.length)
+      if (walking.has(ref)) return { $cycle: ref }
+      const known = memo.get(ref)
+      if (known) {
+        // Walked once, written out again here: counted again.
+        spend(known.written)
+        return known.out
+      }
+      const before = budget.left
+      walking.add(ref)
       const out = canon(resolve(ref))
-      stack.pop()
-      memo.set(ref, out)
+      walking.delete(ref)
+      memo.set(ref, { out, written: before - budget.left })
       return out
     }
+    // Every key read is counted at every visit, the prose too; the keys kept are listed and sorted once a document.
+    const keys = sorted(v, props, spend)
     const out: Record<string, unknown> = {}
-    for (const k of Object.keys(v).sort()) {
-      // Under `properties` every key is a field name, kept whatever it is called.
-      if (!props && (PROSE.has(k) || k.startsWith('x-'))) continue
+    for (const k of keys) {
+      spend(k.length)
       out[k] = props ? canon(v[k]) : canon(v[k], k === 'properties' || k === 'patternProperties')
     }
     return out
@@ -156,14 +209,16 @@ function routeShape(doc: Record<string, unknown>, route: string): unknown {
 
 /**
  * The fingerprint of each route of API_ROUTES in an API description: a sha256 of its shape, or `absent`. Null for an
- * answer that is not an OpenAPI document, or one too large to judge.
+ * answer that is not an OpenAPI document, or one too large to judge (`maxWritten`, MAX_WRITTEN by default).
  */
-export function routePrints(doc: unknown): Record<string, string> | null {
+export function routePrints(doc: unknown, maxWritten = MAX_WRITTEN): Record<string, string> | null {
   if (!isObject(doc) || typeof doc.openapi !== 'string' || !isObject(doc.paths)) return null
   const out: Record<string, string> = {}
+  const budget = { left: maxWritten }
+  const sorted = sortedKeys()
   try {
     for (const route of API_ROUTES) {
-      const shape = routeShape(doc, route)
+      const shape = routeShape(doc, route, budget, sorted)
       out[route] = shape === null ? 'absent' : sha256(JSON.stringify(shape))
     }
   } catch (err) {

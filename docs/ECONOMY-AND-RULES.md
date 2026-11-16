@@ -452,7 +452,10 @@ calls (`src/foxleague/api-shapes.json`): its parameters, its JSON body and the J
 they refer to, without the prose, so an edited text is no change and a field added, removed or retyped is. The hourly
 look reads the live document (at most 4 MB) and names the routes whose shape changed, by the agent's own list, to the
 owner once on Telegram, on the dashboard, in the summary and in each plan's note. A failed read, an answer that is no
-API description or a copy without the record names nothing. `GET /api/whitelist/check` is not in FoxLeague's
+API description or a copy without the record names nothing. So does a document whose shapes would write out more than
+2,000,000 values and characters for all the routes together (a schema counted again wherever it is named; mainnet's
+counts about 86,000): it is "could not be read", never a change and never the same, and the look stays within a few
+hundred milliseconds (R2T-1). `GET /api/whitelist/check` is not in FoxLeague's
 description and is recorded as absent.
 
 **The owner's pause** (P-W7; `src/executor/hold.ts`): on the dashboard, "When FoxLeague changes its rules" is "tell me
