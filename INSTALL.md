@@ -252,12 +252,12 @@ way.
 your user (`ai.foxleague.agent`). The dashboard address on the last screen is a link: hold Cmd and click it. Then
 "Open the dashboard in your browser now?": Enter opens it.
 
-macOS shows the agent as "FoxLeague Agent" in System Settings, General, Login Items & Extensions, and switching it
+macOS shows the agent as "FoxLeague Agent" in System Settings, General, Login Items & Extensions. Switching it
 off there stops the agent. That is the program the launch agent starts, `FoxLeague Agent` in the agent's folder: it
 starts `run.sh` there. An agent you switched off is never switched on again by `./install.sh` or
 `./install.sh --update`: they leave its file as it is and say how to switch it on (`launchctl enable`, then
 `launchctl bootstrap`). One switched off with `launchctl disable` alone still runs: it does not start at your next
-login, an update restarts it into the new version, and `launchctl enable` alone switches it on again.
+login and an update restarts it into the new version. `launchctl enable` alone switches it on again.
 
 **When it plays.** On macOS the agent starts when you log in, and a sleeping Mac plays nothing. Its timers pause
 while the Mac sleeps: it plans, plays and checks for updates only while the Mac is awake. When the Mac wakes, it

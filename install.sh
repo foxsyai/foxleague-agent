@@ -372,7 +372,7 @@ mac_wait_unloaded() {
   for _ in $(seq 1 "$(($1 * 2))"); do mac_job_loaded || return 0; sleep 0.5; done
   ! mac_job_loaded
 }
-# macOS: whether the owner switched the agent's job off (System Settings, General, Login Items & Extensions, or
+# macOS: whether the owner switched the agent's job off (in System Settings, General, Login Items & Extensions or with
 # launchctl disable). launchd lists the label as `"ai.foxleague.agent" => disabled` (`=> true` on older macOS) for as
 # long as it is off, with or without a plist. Status 0: off; 1: not off; 2: launchd could not be asked. A job that is
 # off is never written to, loaded or switched on by the installer (R78A-2): to macOS a plist that starts a new program
@@ -393,12 +393,12 @@ mac_job_disabled() {
 # put in place (said only of a job that is not loaded: one that runs is restarted into it).
 mac_off_note() {
   if mac_job_loaded; then
-    info "The background agent runs now, but it is switched off (System Settings, General, Login Items & Extensions, or launchctl disable): it will not start at your next login. Its file is not written."
+    info "The background agent runs now, but it is switched off in System Settings (General, Login Items & Extensions) or with launchctl disable: it will not start at your next login. Its file is not written."
     if plist_on_launcher >/dev/null; then info "macOS keeps listing it by its old name (\"bash\") until it is switched on and ./install.sh --update runs again in $ROOT."; fi
     info "To switch it on: launchctl enable gui/\$(id -u)/$PLIST_LABEL"
     return 0
   fi
-  info "The background agent is switched off (System Settings, General, Login Items & Extensions, or launchctl disable), so it stays off: nothing starts it and its file is not written."
+  info "The background agent is switched off in System Settings (General, Login Items & Extensions) or with launchctl disable, so it stays off: nothing starts it and its file is not written."
   if [ "${1:-0}" = 1 ]; then info "The new version runs from its next start."; fi
   if [ -f "$PLIST" ]; then
     if plist_on_launcher >/dev/null; then info "macOS keeps listing it by its old name (\"bash\") until it is switched on and ./install.sh --update runs again in $ROOT."; fi
@@ -651,7 +651,7 @@ mac_after_update() {
     if [ "$newest" = 0 ]; then
       info "The background agent is stopped, so it stays stopped: the new version runs from its next start, at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
     elif [ "$renewed" = 1 ]; then
-      info "The background agent is stopped, so it stays stopped: it starts at your next login, or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
+      info "The background agent is stopped, so it stays stopped: it starts at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
     fi
     exit 0
   fi
