@@ -813,7 +813,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // only while the cap is live. A read that fails is unknown, never 0. Information only: FoxLeague refuses no game.
   let eloPairs: AgentSnapshot['eloPairs']
   if (opts.research && wallet && registered && eloPairCapLive(config, now)) {
-    const ids = [...leaderboardNeighbours.map(u => u.id), ...(auth?.challengesForMe ?? []).map(c => c.creator_user_id)]
+    const openCreators = openAllChallenges.filter(t => !t.targeted && t.target_user_id === null).map(t => t.creator_user_id)
+    const ids = [...(auth?.challengesForMe ?? []).map(c => c.creator_user_id), ...openCreators, ...leaderboardNeighbours.map(u => u.id)]
       .filter((id, i, all) => typeof id === 'number' && id !== profile?.id && all.indexOf(id) === i)
       .slice(0, 16)
     eloPairs = []

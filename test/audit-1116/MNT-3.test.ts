@@ -62,13 +62,15 @@ test('MNT-3 the planning snapshot reads the pair count of each rival it lists on
     user: async () => ({ id: 100, wallet_address: dryWallet.address, team_name: 'Agent', elo_rating: 1200, league: 'Bronze', matches_won: 0, matches_lost: 0, matches_drawn: 0, player_count: 18 }),
     leaderboard: async () => ({ users: [{ id: 100, wallet_address: dryWallet.address, team_name: 'Agent', elo_rating: 1200 }, { id: 901, wallet_address: 'erd1a', team_name: 'Rival', elo_rating: 1210 }], total: 2, limit: 200, offset: 0 }),
     eloPair: async (_w: unknown, id: number) => { asked.push(id); return { live: true, cap: 3, reset_hour_utc: 14, meetings: 2, no_elo: false, opponent_team: 'Rival', no_elo_until: null } },
+    // An open challenge of user 950, whose line the plan reads too.
+    tournaments: async (q: { status?: string }) => (q.status === 'open' ? [{ id: 77, max_teams: 2, min_teams: 2, creator_user_id: 950, target_user_id: null, targeted: false, status: 'open', format: 'knockout', deadline: new Date(Date.now() + 3600_000).toISOString(), starts_at: new Date(Date.now() + 3600_000).toISOString() }] : []),
   }
   // Every other route answers nothing: the snapshot keeps its warnings.
   const proxy = new Proxy(fox, { get: (t, k) => (k in t ? t[k as keyof typeof t] : async () => { throw new Error('not in this test') }) })
   const chain = new Proxy({}, { get: () => async () => { throw new Error('off') } })
   const s = await takeSnapshot({ chain, fox: proxy } as never, { wallet: dryWallet }, new Date(), { research: true })
-  assert.deepEqual(asked, [901])
-  assert.deepEqual(s.eloPairs, [{ userId: 901, meetings: 2, noEloUntil: null }])
+  assert.deepEqual(asked, [950, 901])
+  assert.deepEqual(s.eloPairs, [{ userId: 950, meetings: 2, noEloUntil: null }, { userId: 901, meetings: 2, noEloUntil: null }])
   // Before the switch nothing is asked.
   asked.length = 0
   config.elo_pair_cap = { live: false, live_from: '2099-11-20T14:00:00Z', per_day: 3, reset_hour_utc: 14 }
