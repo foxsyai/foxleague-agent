@@ -411,14 +411,22 @@ mac_off_note() {
 # to load a label it still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd
 # keeps it listed meanwhile, whatever it answered the bootout (36, on its way out, or another status): while it does,
 # the wait is as long as the uninstall's (INS-U1, R2I-U1). A bootstrap it refuses ends here in words, with what to do
-# (INS-A4).
+# (INS-A4). Ctrl-C or a closed window during the wait leaves the job booted out: the screen says so, with how to start
+# it (U3 of the final pass).
 mac_load() {
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
   if mac_job_loaded; then
     info "Waiting for the agent that runs to stop: it finishes what it is doing first (at most 3 minutes)."
+    trap mac_load_cut INT TERM HUP
     mac_wait_unloaded 185 || true
+    trap - INT TERM HUP
   fi
   launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
+}
+mac_load_cut() {
+  printf '\n'
+  info "The update was stopped while the agent was stopping, so the background agent is not running now (a busy one ends its action first) and nothing starts it before your next login. To start it sooner, wait until it has stopped (at most 3 minutes), then: launchctl bootstrap gui/\$(id -u) $PLIST"
+  exit 130
 }
 # The user's own service manager (systemd --user) on Linux. It is reached through the user's runtime folder,
 # /run/user/<uid>. A terminal opened with su or sudo has no XDG_RUNTIME_DIR, so systemctl --user finds nothing
