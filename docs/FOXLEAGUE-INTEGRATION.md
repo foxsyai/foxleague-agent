@@ -922,7 +922,8 @@ until the latest of `rcg_ready_at`, `playback_started_at` and `finished_at` plus
 (`ACTIVE_MATCH_GATE_SQL`, `live_match_predicate`, `broadcast_holds_its_team_sql`; `matches.rs:251`, `:340`, `:411`):
 about 12 to 12.5 minutes after the start's answer, up to about 16 with a slow simulation. Since rc.85 (2026-11-05, #638)
 the broadcast starts by itself when the recording is ready, and `GET /api/matches/active` returns the match, `finished`,
-while it airs (without the gate's 30 s). The agent spaces its casual and ranked starts 13 minutes apart and reads the
+while it airs (without the gate's 30 s). The agent spaces its casual and ranked starts 16 minutes apart (13 was
+refused 7 times in 17 from 9 to 16 Nov, none of 36 from 14.16 minutes up: audit 2026-11-16, BEH-7) and reads the
 active match before each start; after a lost start answer it takes an active match for its own only when it was created
 after the press (R85-1, R85-2).
 

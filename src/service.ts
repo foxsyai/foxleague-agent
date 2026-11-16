@@ -115,11 +115,13 @@ export interface ScheduledAction {
 
 /**
  * When each action of a plan runs, in ms after its start: at random moments of the window, sorted so the plan's order
- * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (13 minutes
+ * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (16 minutes
  * after its start: MATCH_RUNS_MS) and a ranked one until the ranked cooldown after the last ranked start has passed, the agent's last
  * starts before the plan included (`lastMatchMs` and `lastRankedMs`, in ms after the plan's start, so negative). A
- * match pushed past the window is dropped (returned with the reason) and pushes nothing; every other action keeps its
- * random moment unless the action before it now runs later.
+ * match runs no later than the window's end less the gates of the matches after it, so a first match drawn late
+ * leaves the next its room (BEH-5), and the actions before it move earlier with it. A match its gates still push past
+ * the window is dropped (returned with the reason) and pushes nothing; every other action keeps its random moment
+ * unless the action before it now runs later.
  *
  * An action with a deadline (`deadlines`, one per action, in ms after the plan's start: src/executor/deadlines.ts) runs
  * at the latest DEADLINE_MARGIN_MS before it, at once when that is already past and at the start of the window when
@@ -149,26 +151,48 @@ export function scheduleActions(
   const actions = order.map(i => planned[i]!)
   const deadlines = o.deadlines ? order.map(i => o.deadlines![i] ?? null) : undefined
   const raw = actions.map(() => o.random() * o.windowMs).sort((a, b) => a - b)
-  // Without deadlines: what is dropped, and why.
-  const plain = placeActions(actions, raw, actions.map(() => Infinity), o, null)
+  // Without deadlines: what is dropped, and why. Each match has a latest moment that leaves the matches after it their
+  // gates inside the window (audit 2026-11-16, BEH-5): a first match drawn late no longer pushes out a second the
+  // window has room for.
+  const fit = latestMoments(actions, o, undefined, null)
+  const plain = placeActions(actions, raw, fit, o, null)
   const dropped = new Set(plain.dropped.map(d => d.i))
-  // The latest moment of each action kept, from the last one back: its own deadline less the margin (0 for one that
-  // could not be read) and room to run before the next action's latest moment. A dropped action does not run, so it
-  // takes no room.
-  const latest = new Array<number>(actions.length).fill(Infinity)
-  let next = Infinity
-  for (let i = actions.length - 1; i >= 0; i--) {
-    if (dropped.has(i)) continue
-    const d = deadlines?.[i] ?? null
-    const own = d === 'unread' || d === 'now' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
-    latest[i] = Math.min(own, next)
-    next = latest[i]! - Math.max(o.gapMs, ACTION_RUN_MS)
-  }
+  // With deadlines, the kept actions only: each also by its own deadline less the margin (0 for one that could not be
+  // read or that runs at once). Never later than without deadlines, so no gate starts later and no new drop comes.
+  const withDeadlines = deadlines ? latestMoments(actions, o, deadlines, dropped) : fit
+  const latest = fit.map((f, i) => Math.min(f, withDeadlines[i]!))
   const placed = placeActions(actions, raw, latest, o, dropped)
   return {
     kept: placed.kept.map(k => ({ p: actions[k.i]!, offset: k.offset })),
     dropped: plain.dropped.map(d => ({ p: actions[d.i]!, reason: d.reason })),
   }
+}
+
+/**
+ * The latest moment of each action, from the last one back: a match no later than the window's end less the gates of
+ * the matches after it (16 minutes after any match, the ranked spacing after a ranked one), an action with a deadline
+ * (`deadlines`) no later than the deadline less the margin (at once for 'unread' and 'now'), and every action early
+ * enough to leave the next one room to run (ACTION_RUN_MS). The actions in `skip` (dropped) take no room.
+ */
+function latestMoments(actions: PlannedAction[], o: { windowMs: number; gapMs: number }, deadlines: Deadline[] | undefined, skip: Set<number> | null): number[] {
+  const latest = new Array<number>(actions.length).fill(Infinity)
+  let next = Infinity
+  let nextMatch = Infinity
+  let nextRanked = Infinity
+  for (let i = actions.length - 1; i >= 0; i--) {
+    if (skip?.has(i)) continue
+    const a = actions[i]!.action
+    const d = deadlines?.[i] ?? null
+    let own = d === 'unread' || d === 'now' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
+    if (a.type === 'play_match') own = Math.min(own, o.windowMs, nextMatch - PLAN_MATCH_GAP_MS, a.match_type === 'ranked' ? nextRanked - PLAN_RANKED_GAP_MS : Infinity)
+    latest[i] = Math.min(own, next)
+    next = latest[i]! - Math.max(o.gapMs, ACTION_RUN_MS)
+    if (a.type === 'play_match') {
+      nextMatch = latest[i]!
+      if (a.match_type === 'ranked') nextRanked = latest[i]!
+    }
+  }
+  return latest
 }
 
 /**
@@ -197,7 +221,7 @@ function placeActions(
       const spaced = Math.max(at, afterMatch, afterRanked)
       // Dropped only when a gate pushes it out of the window (the 30-second gaps alone never drop an action).
       if (dropped === null && spaced > o.windowMs && spaced > at) {
-        drops.push({ i, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team about 13 minutes)' })
+        drops.push({ i, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team up to about 16 minutes)' })
         return
       }
       at = spaced

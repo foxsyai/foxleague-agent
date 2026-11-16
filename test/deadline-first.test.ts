@@ -176,16 +176,20 @@ test('DL-5: actions without a deadline keep their random moments, and the match 
   const none = (n: number) => new Array<null>(n).fill(null)
   // No deadline: the same moments as without the option (test D1's own cases).
   assert.deepEqual(at(scheduleActions([train, sync, train], { ...base, random: seq(0.1, 0.5, 0.9), deadlines: none(3) })), [4.8, 24, 43.2])
+  // Three ranked fit the window since BEH-5 (audit 2026-11-16): 16, 32 and 48, the same with or without deadlines.
   const three = scheduleActions([ranked, ranked, ranked, sync], { ...base, random: () => 0.5, deadlines: none(4) })
-  assert.deepEqual(at(three), [24, 40, 40.5])
-  assert.deepEqual(three.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
+  assert.deepEqual(at(three), [16, 32, 48, 48.5])
+  assert.deepEqual(three.dropped, [])
+  const five = scheduleActions([ranked, ranked, ranked, ranked, ranked, sync], { ...base, random: () => 0.5, deadlines: none(6) })
+  assert.deepEqual(at(five), [0, 16, 32, 48, 48.5])
+  assert.deepEqual(five.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
   // A deadline beyond the window moves nothing.
   assert.deepEqual(at(scheduleActions([train, leave, sync], { ...base, random: seq(0.1, 0.5, 0.9), deadlines: [null, 3 * 60 * MIN, null] })), [4.8, 24, 43.2])
-  // A leave first in the plan moves to its latest moment; the matches after it keep their draws and their gates, the
-  // third ranked is dropped as before and the sync after them keeps its place.
+  // A leave first in the plan moves to its latest moment; the matches after it keep the moments and gates they have
+  // without deadlines, no match is dropped and the sync after them keeps its place.
   const mixed = scheduleActions([leave, ranked, ranked, ranked, sync], { ...base, random: () => 0.5, deadlines: [12 * MIN, null, null, null, null] })
-  assert.deepEqual(at(mixed), [7, 24, 40, 40.5])
-  assert.deepEqual(mixed.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
+  assert.deepEqual(at(mixed), [7, 16, 32, 48, 48.5])
+  assert.deepEqual(mixed.dropped, [])
   // The agent's last ranked start before the plan still gates the match.
   assert.deepEqual(at(scheduleActions([leave, ranked], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN, deadlines: [12 * MIN, null] })), [0, 11])
   // An owner request (no window) is unchanged too.
@@ -325,41 +329,39 @@ test('R70A-2: a match dropped without deadlines stays dropped, so its gate canno
   const first = act({ type: 'play_match', match_type: 'ranked' })
   const second = act({ type: 'play_match', match_type: 'ranked' })
   const leave = act({ type: 'leave_tournament', tournament_id: 5976 })
-  const base = { windowMs: 48 * MIN, gapMs: 30_000 }
-  // Without deadlines: the first ranked at its draw (33), the second gated to 49, past the window, so it is dropped;
-  // the leave at its draw (34).
-  const plain = scheduleActions([first, second, leave], { ...base, random: seq(33 / 48, 33 / 48, 34 / 48) })
-  assert.deepEqual(offsets(plain), [33, 34])
+  // Since BEH-5 (audit 2026-11-16) a first match moves earlier to leave the next its gate inside the window, so the
+  // drop of this test now comes from the agent's last ranked start, a minute before the plan: the first ranked cannot
+  // start before 15, and a 30-minute window (a 37.5-minute tick) leaves the second no room (31).
+  const base = { windowMs: 30 * MIN, gapMs: 30_000, lastMatchMs: -MIN, lastRankedMs: -MIN }
+  const plain = scheduleActions([first, second, leave], { ...base, random: seq(20 / 30, 20 / 30, 21 / 30) })
+  assert.deepEqual(offsets(plain), [15, 21])
   assert.deepEqual(plain.dropped.map(d => d.p), [second])
-  // The leave's deadline at 39 minutes, so its latest moment is 34. Before the fix the first ranked moved to 31, the
-  // second was kept at 47 and the leave ran at 47.5, 8.5 minutes after its deadline.
-  const r = scheduleActions([first, second, leave], { ...base, random: seq(33 / 48, 33 / 48, 34 / 48), deadlines: [null, null, 39 * MIN] })
+  // The leave's deadline at 24 minutes, so its latest moment is 19.
+  const r = scheduleActions([first, second, leave], { ...base, random: seq(20 / 30, 20 / 30, 21 / 30), deadlines: [null, null, 24 * MIN] })
   assert.deepEqual(r.dropped.map(d => d.p), [second], 'the same match dropped as without deadlines')
   assert.deepEqual(r.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
-  assert.ok(r.kept.at(-1)!.offset <= 34 * MIN, `the leave runs at ${(r.kept.at(-1)!.offset / MIN).toFixed(2)} min; its deadline is at 39, its latest moment at 34`)
-  // The first ranked 90 s before the leave's latest moment (DL-2), the leave at it.
+  assert.ok(r.kept.at(-1)!.offset <= 19 * MIN, `the leave runs at ${(r.kept.at(-1)!.offset / MIN).toFixed(2)} min; its deadline is at 24, its latest moment at 19`)
   assert.deepEqual(r.kept.map(k => k.p), [first, leave])
-  assert.deepEqual(offsets(r), [32.5, 34])
+  assert.deepEqual(offsets(r), [15, 19])
 })
 
 test('R70A-2: a match kept without deadlines stays kept when a deadline action after it moves the actions before it earlier', () => {
-  const first = act({ type: 'play_match', match_type: 'ranked' })
-  const second = act({ type: 'play_match', match_type: 'ranked' })
+  const ranked = act({ type: 'play_match', match_type: 'ranked' })
   const casual = act({ type: 'play_match', match_type: 'casual' })
   const leave = act({ type: 'leave_tournament', tournament_id: 5976 })
-  const base = { windowMs: 48 * MIN, gapMs: 30_000 }
-  const draws = [33 / 48, 33 / 48, 33.5 / 48, 34 / 48]
-  // Without deadlines: the second ranked dropped (gated to 49), the casual kept at 46, 13 minutes after the first.
-  const plain = scheduleActions([first, second, casual, leave], { ...base, random: seq(...draws) })
-  assert.deepEqual(plain.dropped.map(d => d.p), [second])
-  assert.deepEqual(offsets(plain), [33, 46, 46.5])
-  // Before the fix the first ranked moved to 29.5, the second was kept at 45.5 and the casual dropped (gated to 58.5).
-  const r = scheduleActions([first, second, casual, leave], { ...base, random: seq(...draws), deadlines: [null, null, null, 39 * MIN] })
-  assert.deepEqual(r.dropped.map(d => d.p), [second], 'the same match dropped as without deadlines')
-  assert.deepEqual(r.kept.map(k => k.p), [first, casual, leave], 'the casual kept as without deadlines')
-  // Each as early as without deadlines or earlier. The casual's gate still holds the leave past its deadline: the
-  // open point "a match listed before a deadline action keeps its gates", 2 minutes sooner than without deadlines.
-  assert.deepEqual(offsets(r), [31, 44, 44.5])
+  // The agent's last ranked start a minute before the plan: the ranked cannot start before 15.
+  const base = { windowMs: 48 * MIN, gapMs: 30_000, lastMatchMs: -MIN, lastRankedMs: -MIN }
+  const draws = [33 / 48, 33.5 / 48, 34 / 48]
+  // Without deadlines: the ranked at 32 (16 before the window's end, BEH-5), the casual at its gate, 48.
+  const plain = scheduleActions([ranked, casual, leave], { ...base, random: seq(...draws) })
+  assert.deepEqual(plain.dropped, [])
+  assert.deepEqual(offsets(plain), [32, 48, 48.5])
+  // The leave's deadline at 39, so its latest moment is 34: the casual and the ranked move earlier with it, both kept.
+  const r = scheduleActions([ranked, casual, leave], { ...base, random: seq(...draws), deadlines: [null, null, 39 * MIN] })
+  assert.deepEqual(r.dropped, [], 'both matches kept as without deadlines')
+  assert.deepEqual(r.kept.map(k => k.p), [ranked, casual, leave])
+  // Each as early as without deadlines or earlier, the leave by its latest moment.
+  assert.deepEqual(offsets(r), [16.5, 32.5, 34])
 })
 
 test('R70A-2: over random plans and draws, deadlines drop exactly what the schedule without them drops and never place an action later', () => {

@@ -364,10 +364,13 @@ export const RANKED_COOLDOWN_MS = 15.5 * 60_000
 /**
  * A casual or ranked match holds its team until its broadcast has aired, and another start before then is refused
  * ("already in match"): the simulation (about 1.5 minutes, up to 5), the recording (600 s plus stoppage time, 615 s
- * seen) and 30 s (matches.rs live_match_predicate, broadcast_holds_its_team_sql). 11 minutes was too short (FoxLeague's
- * release of 2026-11-05, R85-1); a slower simulation is caught by the active match read before each start.
+ * seen) and 30 s (matches.rs live_match_predicate, broadcast_holds_its_team_sql), so up to about 15.75 minutes. 11
+ * minutes was too short (FoxLeague's release of 2026-11-05, R85-1), and so was 13: from 9 to 16 Nov 7 of 17 second
+ * starts at 13.1 minutes were refused, none of 36 from 14.16 minutes up (audit 2026-11-16, BEH-7). 16 minutes covers
+ * the slowest simulation, as the ranked spacing does; a later one is still caught by the active match read before
+ * each start.
  */
-export const MATCH_RUNS_MS = 13 * 60_000
+export const MATCH_RUNS_MS = 16 * 60_000
 
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72

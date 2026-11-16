@@ -472,8 +472,10 @@ among the called-up players by contribution. Nothing of it exists in the code on
   clearly stronger when its lineup is more than 10 percent above ours whatever its ELO, or more than 5 percent above
   ours with an ELO more than 50 above ours (an unread lineup on its ELO alone), and no entry is paid into a field with
   3 of them (24 of the invited teams for a League + Knockout) (`judgeField`; the lineup alone decides since the audit
-  of 2026-11-11, MONEY-1); a plan spaces its casual and ranked matches 13 minutes
-  apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
+  of 2026-11-11, MONEY-1); a plan spaces any two casual or ranked matches 16 minutes
+  apart (a match holds the team until its broadcast has aired, up to about 16 minutes with a slow simulation; 13 was
+  refused 7 times in 17, audit 2026-11-16, BEH-7), and a first match drawn late in the plan's window moves earlier so
+  the matches after it still fit (BEH-5); a Legendary's match waiver is bought only for a card it would list.
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
