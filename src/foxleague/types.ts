@@ -401,6 +401,19 @@ export interface ShopStatus {
   [key: string]: unknown
 }
 
+/** GET /api/matches/elo-pair/{user_id} (FoxLeague's elo_pair_cap.rs EloPairStatus): this team and that one this game day. */
+export interface EloPairStatus {
+  live: boolean
+  cap: number
+  reset_hour_utc: number
+  /** Meetings that moved ELO this game day (applied results only, counted from the switch). */
+  meetings: number
+  /** A result applied now would move no ELO, until `no_elo_until` (the next daily reset). */
+  no_elo: boolean
+  opponent_team: string | null
+  no_elo_until: string | null
+}
+
 export interface DailyAllowance {
   today_count: number
   daily_limit: number

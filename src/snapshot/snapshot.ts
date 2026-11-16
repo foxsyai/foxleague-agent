@@ -8,7 +8,7 @@ import type { Chain } from '../chain/gateway.ts'
 import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
-import { cardBansLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive } from '../foxleague/levels.ts'
 import { winChance } from './winchance.ts'
 import { LEAGUE_DAYS, LEAGUE_READS_PER_TICK, LEAGUE_TEAMS, LEAGUE_TEAMS_PER_TICK, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueTable } from './formations.ts'
 import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache } from './market.ts'
@@ -194,6 +194,12 @@ export interface AgentSnapshot {
   oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[] }
   /** The tournaments and 1v1s this agent created itself (its log, added by the service): the ones it may widen. */
   ownCreations?: number[]
+  /**
+   * Planning snapshots only, while FoxLeague's ELO pair cap is live (MNT-3): per rival the plan can challenge, its
+   * meetings with this team that moved ELO in the current game day (GET /api/matches/elo-pair; null: unread) and, at
+   * the cap, until when a result moves no ELO.
+   */
+  eloPairs?: { userId: number; meetings: number | null; noEloUntil: string | null }[]
   warnings: string[]
 }
 
@@ -803,6 +809,22 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
   }
 
+  // The ELO pair cap (MNT-3): for the rivals the plan can challenge, the meetings of this game day that moved ELO, read
+  // only while the cap is live. A read that fails is unknown, never 0. Information only: FoxLeague refuses no game.
+  let eloPairs: AgentSnapshot['eloPairs']
+  if (opts.research && wallet && registered && eloPairCapLive(config, now)) {
+    const ids = [...leaderboardNeighbours.map(u => u.id), ...(auth?.challengesForMe ?? []).map(c => c.creator_user_id)]
+      .filter((id, i, all) => typeof id === 'number' && id !== profile?.id && all.indexOf(id) === i)
+      .slice(0, 16)
+    eloPairs = []
+    for (const userId of ids) {
+      const st = await fox.eloPair(wallet, userId).catch(() => null)
+      const meetings = typeof st?.meetings === 'number' && Number.isSafeInteger(st.meetings) && st.meetings >= 0 ? st.meetings : null
+      const until = st?.no_elo === true && typeof st.no_elo_until === 'string' ? Date.parse(st.no_elo_until) : NaN
+      eloPairs.push({ userId, meetings, noEloUntil: Number.isFinite(until) ? new Date(until).toISOString() : null })
+    }
+  }
+
   // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent may join one it
   // is invited to, so only those are kept, with the split their own platform fee pays.
   // A League + Knockout is by invitation only: it shows among the invitations, never as an open tournament.
@@ -859,6 +881,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     ...(record !== undefined ? { formationRecord: record } : {}),
     ...(rivalFormations ? { rivalFormations } : {}),
     leaderboardNeighbours,
+    ...(eloPairs ? { eloPairs } : {}),
     warnings,
   }
 }

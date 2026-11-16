@@ -1,6 +1,6 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
 import { CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
@@ -140,12 +140,23 @@ function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot
  */
 function rivalNote(s: AgentSnapshot, userId: number | null | undefined): string {
   const o = s.oneVOnes
-  if (!o || typeof userId !== 'number') return ''
+  if (!o || typeof userId !== 'number') return eloPairNote(s, userId)
   const notes: string[] = []
   const w = o.week.find(x => x.userId === userId)
   if (w && w.count >= MAX_1V1_PER_OPPONENT_WEEK) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week (the limit), free again ${w.freeAt ? `${w.freeAt.slice(0, 16)} UTC` : 'later'}`)
   else if (w && w.count > 0) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week`)
-  return notes.map(n => `, ${n}`).join('')
+  return notes.map(n => `, ${n}`).join('') + eloPairNote(s, userId)
+}
+
+/** The ELO pair cap against one rival this game day (MNT-3), only while the cap is live and the planning snapshot read it. */
+function eloPairNote(s: AgentSnapshot, userId: number | null | undefined): string {
+  const pair = typeof userId === 'number' ? s.eloPairs?.find(p => p.userId === userId) : undefined
+  if (!pair || !eloPairCapLive(s.config, new Date(s.takenAt))) return ''
+  const cap = s.config?.elo_pair_cap?.per_day
+  if (pair.meetings === null) return ', ELO meetings today: unknown'
+  const at = typeof cap === 'number' && Number.isFinite(cap) ? cap : null
+  const full = at !== null && pair.meetings >= at
+  return `, ${pair.meetings} of ${at ?? 'unknown'} ELO meetings today${full ? `: a game against it moves no ELO until ${pair.noEloUntil ? pair.noEloUntil.slice(0, 16) : 'the next daily reset'}` : ''}`
 }
 
 /**
@@ -243,6 +254,9 @@ function levelLines(s: AgentSnapshot): string[] {
       : 'Fusion: a card drawn from the fusion pool (inputs synced first)',
     )
   }
+  // The ELO pair cap (FoxLeague's elo_pair_cap, MNT-3): a fact for the plan, no rule of the executor.
+  const pc = s.config?.elo_pair_cap
+  if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below show their meetings today once it is live`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   return out
