@@ -26,7 +26,7 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 When FoxLeague changes a page of its manual, each plan reads that page's current text until a version of the agent
 brings the new copy. It is FoxLeague's text, so the same holds: it goes only inside the game snapshot, under a heading
 that says it is data and that the live values and the executor's refusals win; every line of it is set in so it can
-never pass for part of the request or close the snapshot; it is cut at 24,000 characters a page and 60,000 in all; and
+never pass for part of the request or close the snapshot; it is cut at 24,000 bytes a page and 60,000 in all, counted as written into the request; and
 it never reaches the executor, Telegram or the dashboard. The rules the executor checks are code and do not read it.
 If you prefer, the dashboard can also pause the actions whose rules changed until the agents are synced
 ([Update](/help/update/#pausing-what-changed)); turning that pause off again asks for your password.

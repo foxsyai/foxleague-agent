@@ -22,7 +22,7 @@ import { AnswerTooLargeError, readCapped } from '../util/http.ts'
 import { cut as cutText } from '../util/text.ts'
 import { LEFT_OUT, ROOT, undecidedPages } from './manual.ts'
 import { MAX_KEYS, changedKeys, configPrint, isConfigKey, isoTime, keyDiff, named, unknownSwitches, type RuleSwitch } from '../foxleague/config-watch.ts'
-import { MAX_TEXT_PAGES, PAGES_TEXT_MAX, PAGE_TEXT_MAX, shapePages, type PageText } from './page-text.ts'
+import { MAX_TEXT_PAGES, PAGE_TEXT_MAX, shapePages, type PageText } from './page-text.ts'
 import { heldActions } from '../executor/hold.ts'
 import { API_RECORD_FILE, OPENAPI_PATH, changedRoutes, isChangedRoute, routePrints, validApiRecord } from '../foxleague/api-routes.ts'
 
@@ -296,15 +296,11 @@ export async function checkManual(o: CheckOptions): Promise<CheckResult> {
     const live = [...new Set(slugs as string[])]
     const differ: string[] = []
     // The text of each changed page the record knows, as served (MID-1), for the plans: the answer the comparison read
-    // anyway, kept within its bounds. Nothing more is asked for it.
-    const texts: PageText[] = []
-    let total = 0
+    // anyway, kept within its bounds (shapePages, in bytes as written into the request: R2T-2). Nothing more is asked
+    // for it.
+    const read: PageText[] = []
     const keep = (slug: string, body: string) => {
-      if (texts.length >= MAX_TEXT_PAGES || total >= PAGES_TEXT_MAX) return
-      const [page] = shapePages([{ slug, text: cutText(body, Math.min(PAGE_TEXT_MAX, PAGES_TEXT_MAX - total)), full: body.length }])
-      if (!page) return
-      texts.push(page)
-      total += page.text.length
+      if (read.length < MAX_TEXT_PAGES) read.push({ slug, text: cutText(body, PAGE_TEXT_MAX), full: body.length })
     }
     for (const slug of live) {
       if (leftOut(slug)) continue
@@ -324,7 +320,7 @@ export async function checkManual(o: CheckOptions): Promise<CheckResult> {
       }
     }
     for (const slug of Object.keys(record.pages)) if (!live.includes(slug)) differ.push(`${slug} (gone)`)
-    return { state: differ.length ? 'behind' : 'current', pages: differ, why: null, synced, at, texts }
+    return { state: differ.length ? 'behind' : 'current', pages: differ, why: null, synced, at, texts: shapePages(read) }
   } catch (err) {
     if (err instanceof CheckError) return unknown(err.message)
     if (deadline.aborted) return unknown(`the check took longer than ${Math.round((o.deadlineMs ?? CHECK_DEADLINE_MS) / 1000)} seconds`)

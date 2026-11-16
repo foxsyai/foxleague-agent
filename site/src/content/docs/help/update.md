@@ -171,7 +171,7 @@ serves them, so your agents know a new rule within the hour instead of after the
 those pages, so plans ask FoxLeague nothing more. The text is FoxLeague's, so it is treated as data, never as
 instructions: it sits inside the game snapshot under a heading that says so, every line of it is set in so none can
 pass for a part of the request; the live values in the snapshot and the refusals of the executor still win. It is
-cut at 24,000 characters a page and 60,000 in all. It never goes to Telegram or the dashboard; the executor never
+cut at 24,000 bytes a page and 60,000 in all, counted as written into the request. It never goes to Telegram or the dashboard; the executor never
 reads it. A plan costs a little more only while the copy is behind (one or two changed pages are about 2,000 to 6,000
 tokens); nothing is added while the copy matches or could not be checked.
 

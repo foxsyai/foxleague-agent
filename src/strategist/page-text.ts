@@ -11,18 +11,24 @@
 
 import { asSeen, cut } from '../util/text.ts'
 
-/** The most characters (UTF-16 units) kept of one page: holds every page the agents read but the two longest whole. */
+/**
+ * The most one page takes in the request, in bytes of its text as written there (set in, UTF-8): holds every page the
+ * agents read but the two longest whole (audit 2026-11-16, R2T-2: counted on the text as served, a page of short lines
+ * was written three times as long as the limit, and a page of three-byte characters three times as many bytes). A page
+ * is also read at most this many characters long.
+ */
 export const PAGE_TEXT_MAX = 24_000
-/** The most characters kept of all the changed pages together: about 15,000 tokens. */
+/** The most all the changed pages together take in the request, in bytes as written: about 15,000 tokens. */
 export const PAGES_TEXT_MAX = 60_000
 /** The most pages whose text is kept. */
 export const MAX_TEXT_PAGES = 8
 
-/** One changed page as FoxLeague serves it now: its slug, its text (cut at PAGE_TEXT_MAX) and its whole length. */
+/** One changed page as FoxLeague serves it now: its slug, its text (cut to fit PAGE_TEXT_MAX as written) and its whole length. */
 export interface PageText {
   slug: string
+  /** The start of the page as served, on whole characters. */
   text: string
-  /** The length of the page as served, before any cut. */
+  /** The length of the page as served, before any cut, in characters. */
   full: number
 }
 
@@ -34,8 +40,9 @@ const SLUG = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}$/
 export const isPageSlug = (s: unknown): s is string => typeof s === 'string' && s.length <= 120 && SLUG.test(s)
 
 /**
- * The pages as given, shaped: an entry with a slug of the right shape and a text, each text cut to PAGE_TEXT_MAX, all
- * together to PAGES_TEXT_MAX, at most MAX_TEXT_PAGES of them. Anything else is left out.
+ * The pages as given, shaped: an entry with a slug of the right shape and a text, each text cut so that it takes at
+ * most PAGE_TEXT_MAX bytes as written into the request, all together at most PAGES_TEXT_MAX, at most MAX_TEXT_PAGES of
+ * them. Anything else is left out. Shaping shaped pages again changes nothing.
  */
 export function shapePages(pages: unknown): PageText[] {
   if (!Array.isArray(pages)) return []
@@ -46,12 +53,28 @@ export function shapePages(pages: unknown): PageText[] {
     if (!p || typeof p !== 'object') continue
     const { slug, text, full } = p as Record<string, unknown>
     if (!isPageSlug(slug) || typeof text !== 'string' || out.some(o => o.slug === slug)) continue
-    const kept = cut(text, Math.min(PAGE_TEXT_MAX, PAGES_TEXT_MAX - total))
+    const kept = fit(cut(text, PAGE_TEXT_MAX), Math.min(PAGE_TEXT_MAX, PAGES_TEXT_MAX - total))
     if (!kept.trim()) continue
-    total += kept.length
+    total += written(kept)
     out.push({ slug, text: kept, full: typeof full === 'number' && Number.isSafeInteger(full) && full >= kept.length ? full : text.length })
   }
   return out
+}
+
+/** What a page's text takes in the request: its set-in form, in bytes. */
+const written = (text: string): number => Buffer.byteLength(setIn(text))
+
+/** The longest start of `text` (on whole characters, found by halving) whose set-in form takes at most `bytes` bytes. */
+function fit(text: string, bytes: number): string {
+  if (written(text) <= bytes) return text
+  let lo = 0
+  let hi = text.length
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >>> 1
+    if (written(cut(text, mid)) <= bytes) lo = mid
+    else hi = mid
+  }
+  return cut(text, lo)
 }
 
 /**
