@@ -172,6 +172,24 @@ function servedPriceRefusal(served: unknown, mine: number, what: string): string
   return served === mine ? null : `the ${what} price FoxLeague serves this wallet (${String(served).slice(0, 12)}) is not the list price less its MetaStaking discount (${mine}): not paying blind`
 }
 
+/** How close to the moment the contract's waivable days drop by one a cooldown waiver buys one day less (CHN-U4). */
+const WAIVER_DAY_MARGIN_MS = 10 * 60_000
+
+/**
+ * Milliseconds until the contract's quote of a card's waivable cooldown days drops by one: it quotes
+ * ceil((readyAt - now - floor) / 1 day) (player_nft.rs cooldown_waiver_quote). Null when the card's ready time or
+ * FoxLeague's floor (`fusion_cooldown_waiver_floor_seconds`) cannot be read, or when they do not give the days the
+ * contract quoted (the two do not describe the same card): then nothing is moved.
+ */
+function waiverDayDropsInMs(readyAt: string | null, cfg: FoxConfig, quotedDays: number, now: Date): number | null {
+  const ready = Date.parse(readyAt ?? '')
+  const floor = (cfg as Record<string, unknown>).fusion_cooldown_waiver_floor_seconds
+  if (!Number.isFinite(ready) || typeof floor !== 'number' || !Number.isFinite(floor) || floor < 0) return null
+  const above = ready - now.getTime() - floor * 1000
+  if (!(above > 0) || Math.ceil(above / 86_400_000) !== quotedDays) return null
+  return above - (quotedDays - 1) * 86_400_000
+}
+
 /**
  * Unrevealed tournament or 1v1 match of ours within the next hour (the casual and ranked lockout of play_match). The
  * upcoming matches unreadable is no "none": the reason then says so and the caller refuses. FoxLeague's play gate
@@ -1850,7 +1868,15 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (q.days <= 0 || q.costAtomic <= 0n) return refuse(`nothing to waive on #${a.nonce}: its cooldown is at the 3-day floor already`)
         // Since 2026-10-12 some of the days can be bought: the ready time moves that many days earlier.
         if (a.days !== undefined && a.days > q.days) return refuse(`#${a.nonce} has ${q.days} day${q.days > 1 ? 's' : ''} above the 3-day floor to waive, not ${a.days}`)
-        const days = a.days ?? q.days
+        let days = a.days ?? q.days
+        // The contract quotes ceil((readyAt - now - floor) / 1 day) at its block and takes exactly days x price, never
+        // more days than it quotes then: when the quoted days drop by one before the block, all of them revert and the
+        // gas is lost (CHN-U4). So close to that moment one day less is bought, named, which holds on either side of it.
+        const drop = waiverDayDropsInMs(c.fusionReadyAt, cfg, q.days, ctx.now)
+        if (drop !== null && drop <= WAIVER_DAY_MARGIN_MS && days === q.days) {
+          if (q.days <= 1) return refuse(`#${a.nonce}'s last waivable day ends in ${Math.max(1, Math.ceil(drop / 60_000))} minutes: a waiver now could reach the chain after it and revert`)
+          days = q.days - 1
+        }
         costAtomic = (q.costAtomic / BigInt(q.days)) * BigInt(days)
         if (days < q.days) extra.days = days
         notes.push(days === q.days ? `#${a.nonce} ready for fusion ${q.days} day${q.days > 1 ? 's' : ''} sooner (3 days left)` : `#${a.nonce} ready for fusion ${days} of its ${q.days} waivable days sooner`)
