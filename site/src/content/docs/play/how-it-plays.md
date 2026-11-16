@@ -44,6 +44,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   test bench, apart from the formation record, and the agent weighs it with the league table and its own record
   before it changes its formation.
 - **Competition levels**: a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
+- **ELO pair cap**: once FoxLeague switches it on, the same two teams move ELO in only a few games a day (for example 3), ranked, 1v1s and tournaments together; a later game that day still earns its prize and XP but moves no ELO. The agent sees, for each team it could challenge, how many such games the two teams played that day, and weighs a game past the cap for its XP and prize only.
 - **Yellow cards and injuries**: once FoxLeague counts them, a player with enough yellow cards in tournaments (for
   example 3) misses your team's next tournament match, and a foul can injure a player for days (for example 3, 9 or
   27, by how many injuries he takes in one match), more likely the more tired he is (for example 1 percent a foul at
@@ -115,7 +116,11 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Medicine**: shortens an injury by whole days (FoxLeague always keeps a third of it). The agent buys it only for a
   starter it cannot replace who would miss matches that matter, only the days up to that match, at FoxLeague's own
   quote, within your level's medicine days a week, your Max shop payment and your daily cap.
-- **Common packs**: 5 Common cards, the spare cards the first fusion needs.
+- **Common packs**: 5 Common cards, the spare cards the first fusion needs. FoxLeague sells 2 a wallet a week, the week
+  starting on Monday at 14:00 UTC.
+- **Shop prices**: once FoxLeague's MetaStaking discount is on, a wallet with FOXSY in MetaStaking pays less in the
+  Shop, and FoxLeague takes only that wallet's own price. The agent pays exactly the price FoxLeague quotes its wallet
+  right before each payment, and pays nothing while it cannot read that price.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen. FoxLeague runs
   one of two fusions and the agent reads which from FoxLeague's settings: a card drawn from FoxLeague's pool, or a new
@@ -124,7 +129,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   Uncommon 36 there), so it fuses trained cards. For the new card FoxLeague prepares the transaction, and the agent
   signs it only when it is exactly the fusion it planned, for the fee of that rarity and nothing more. It fuses nothing
   while that setting cannot be read, while FoxLeague updates fusion or in the last minutes before it changes.
-- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included.
+- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included. A card in an auction does not play for its 24 hours: if you list one of your saved 18 yourself in FoxLeague's app, the agent's plan is told in capitals to save an 18 without it, and the agent starts no match, 1v1 or entry until then, since a tournament or 1v1 match that locks with it in your 18 is forfeited 3-0.
 
 ## Getting started by itself
 

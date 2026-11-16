@@ -956,11 +956,13 @@ Source: `apply_match_results`, `matches.rs:3074-4040`.
   `competition_levels.rs`, `matches.rs:3589-3645`).
 - **XP** only when the match is XP-eligible: a real opponent, not Bronze, not ranked while
   `xp.ranked_enabled` is 0 (the launch setting) and analyzer stats present (`matches.rs:3448-3451`).
-  In practice **only Silver/Gold tournament and 1v1 matches award XP**. At most 3 XP-earning matches per
-  card per day (`xp.max_matches_per_player_per_day`).
+  At launch **only Silver/Gold tournament and 1v1 matches awarded XP**; since the competition levels of 2026-11-09
+  a ranked game (for the team that started it and paid its ticket) and a paid Bronze earn XP at their share too
+  (`competition_levels.xp_factor_pct`). At most 3 XP-earning matches per card per day
+  (`xp.max_matches_per_player_per_day`).
 - **Competitive counter**: the same test increments `competitive_matches`, which sync writes on chain
   as `matches_played` and which fusion and listing read (`matches.rs:3868-3883`). Casual and ranked
-  never count at launch.
+  never counted at launch; since 2026-11-09 a ranked game the team started and paid for counts, casual never.
 - **Condition**: every player who took the pitch (a substitute who came on too, not the unused bench)
   loses `condition_loss_per_match_ranked` (5) in casual and ranked, **initiator only**, or
   `condition_loss_per_match` (10) in tournaments and 1v1s, both sides; both ramp up to 3x with age
@@ -1015,7 +1017,7 @@ transactions are `joinTournament` (pay a seat) and `claimRefund`.
 
 | Tier | Seat fee (mainnet) | Pool | ELO | XP and competitive count |
 |---|---|---|---|---|
-| `bronze` | free (a fee is refused) | none | none | no |
+| `bronze` | 100 to 999 FOXSY since the competition levels of 2026-11-09 (free before; a free one earns nothing) | yes (a paid one) | K 9 (a paid one) | XP at 50 percent, competitive (a paid one) |
 | `silver` | 1,000 to 4,999 FOXSY | yes | K 13 | yes |
 | `gold` | 5,000 FOXSY and up | yes | K 17 | yes |
 
@@ -1389,8 +1391,10 @@ at most 10 used per day on top of the 5 free sessions (`shop.rs:224-247`, `:501-
 web app caps one purchase at 25 slots; the backend has no upper bound
 (`frontend/src/pages/Marketplace.tsx:4382-4391`). Message: `Extra training slots purchased: +{slots}, balance now {n}`.
 
-**D. Common pack** (`common_pack`): **2,500 FOXSY** for 5 Common cards, exact. At most 2 per wallet per
-rolling 7 days; platform budget 500 cards (100 packs) per epoch on chain; positions drawn 2/6/6/4 like a
+**D. Common pack** (`common_pack`): **2,500 FOXSY** for 5 Common cards, exact (the wallet's own price from the
+MetaStaking discount's switch, section 27). At most 2 per wallet a week, from Monday 14:00 UTC (a rolling 7 days
+before 2026-11-16; `common_pack_week_resets_at` says when the week starts again); platform budget 500 cards (100 packs)
+in any 24 hours on chain; positions drawn 2/6/6/4 like a
 starter squad (`backend/src/routes/shop_pack.rs:25-32`; `deploy/mainnet/chain-config.mainnet.env:50-52`).
 Check `/api/shop/status` `common_pack_available`, `common_pack_remaining_this_week` and
 `common_pack_epoch_remaining` before paying (the agent buys no pack unless `common_pack_remaining_this_week` reads as a
@@ -2117,9 +2121,8 @@ the snapshot's "Cards and injuries" line (`levelLines` in `src/snapshot/digest.t
 days of its own, and numbers the config leaves out are said to be unread. The manual copy is synced to FoxLeague's
 manual at `89a1955d7`, which states the same.
 
-**Left for 1 December 2026** (the MetaStaking discount on Shop prices): on 2026-11-10 `metastaking/discount.rs` only
-computes a percent and no payment check reads it. The agent pays list prices in exact amounts; when FoxLeague ships
-the Shop side, read how a wallet's price is quoted before that date.
+**The MetaStaking discount on Shop prices** (from 1 December 2026): FoxLeague shipped the Shop side on its mainnet of
+2026-11-16 and the agent pays the wallet's own price since then (section 27, MNT-2 and CHN-1).
 
 
 ## 26. Mainnet of 2026-11-13 (FoxLeague 56e5b9855, manual 9ebcbc52d): the fusion that mints its result and the rest
@@ -2144,3 +2147,30 @@ code hash `e628771cda233b50141950e0e79f6819835353bc668ebe8810823b9dce6cacc4`, th
 | can-fuse's wallet spacing is text (`"0d 19h"`), not seconds | The refusal said "NaN h left" | Read as text (FL13-5) |
 
 The game manual copy is synced to `9ebcbc52d` (16 pages, no page left undecided).
+
+
+## 27. Mainnet of 2026-11-16 (FoxLeague 729164194, manual 729164194): the Shop discount, the ELO pair cap and the rest
+
+Read on 2026-11-16 through git only: FoxLeague's `origin/release/mainnet-1.0` at `729164194` (promoted 2026-11-15 20:53
+UTC, deployed about 09:48 UTC on 2026-11-16; its manual is byte-identical to `origin/main` `67d940ad2`), the 15 commits
+after `9ebcbc52d`, and the live `/api/config` of 11:50 UTC. No contract changed and the gas limits equal FoxLeague's app
+(`frontend/src/lib/gasLimits.ts`). No route the agent calls lost a field it reads.
+
+| FoxLeague change | Effect on the agent | What the agent does since this change |
+|---|---|---|
+| #744, #749, #765: the MetaStaking Shop discount, switch `metastaking_discount.live_from` (null on 2026-11-16, announced for 2026-12-01 14:00 UTC). From it a wallet with FOXSY in MetaStaking pays `full - floor(full x bp / 10000)`, once per payment on its total, and the confirm takes only that price (its rate at the payment's chain time or quoted in the 15 minutes before); any other amount, the full price included, is refused and refunded whole | Every Shop payment of a wallet with a rate (an imported team whose owner stakes FOXSY) would be refused and refunded after it settled, the gas lost; every medicine quote of such a wallet was refused locally ("does not match") | The ticket at the ticket view's `discount_bp` (checked against `discounted_price_foxsy`); a booster, a pack, training slots and a recovery at the shop status' `metastaking_discount_bp`, once on the total (checked against `discounted_prices` and `common_pack_discounted_price_foxsy` when served); medicine at the quote's `cost_foxsy` when it is the days' full cost less the quote's `discount_bp`. A rate that cannot be read: nothing is paid once the switch is live, its time has passed or the block cannot be read; the list price while it is off or not set. Fusion fees and the fusion waivers keep the contract's exact price (MNT-2, CHN-1). The executor reads the shop status, the ticket and the medicine quote right before each payment, inside FoxLeague's 15 minutes |
+| #746, #751: the ELO pair cap, switch `elo_pair_cap.live_from` = 2026-11-20 14:00 UTC: the same two teams move ELO in at most `per_day` (3) meetings a game day, ranked, 1v1s and tournaments together; a later one earns everything else; `GET /api/matches/elo-pair/{user_id}` counts this team's meetings with that one | The plan was told nothing and could pay a stake "for ELO" that moves none | The snapshot's rule line; while live, a planning snapshot reads the pair count of the teams to challenge and the challengers (at most 16) and each rival's line says "N of 3 ELO meetings today", at the cap until when a game moves no ELO; unread is "unknown". No refusal (MNT-3) |
+| #757: every daily allowance at 14:00 UTC; the Common pack week from Monday 14:00 UTC (`common_pack_week_resets_at`) | The pack count is FoxLeague's own (`common_pack_remaining_this_week`): nothing refused wrongly; the texts were stale | The prompt and the snapshot's pack line (MNT-4) |
+| #747: a card in an auction is held by the contract and does not play; one of the saved 18 at a lock forfeits the match 3-0 (it was replaced before); injury days are full 24 hours from the result | The agent lists none of its 18 and starts nothing with a listed card in it; the manual copy said the opposite | The snapshot says "LISTED IN YOUR 18: ... forfeits" in capitals when the owner lists one (MNT-4) |
+| #740: ranked earns XP (texts) | The prompt still gave the rules of before the levels | The prompt states the levels as the standing rules, numbers on the snapshot's line (MNT-7) |
+| #745, #750, #753, #760, #761, #766: recordings, Autonomys, the match server's seed; #759: Google login, Send refuses a non-erd1 address | Not used | Nothing |
+
+Found on the way (audit of 2026-11-16, MNT-1): FoxLeague plays ONE match of the whole tournament every round interval,
+in every format (`tournament_engine.rs` `reschedule_sequential`, `place_sequential`, `write_league_matchdays`; its own
+`estimate_duration_minutes` says the real run is matches x interval). The schedule rule counted one round per
+interval: it refused an 18-team home-and-away round robin (306 matches over 12.7 days) and took a running round robin
+for over while its fixtures were still listed. It now counts the real span (all matches less one, times the interval),
+judges every field from the minimum up and counts each listed fixture by its own kickoff; the digest says "one match of
+the whole tournament every N min".
+
+The game manual copy is synced to `729164194` (16 pages, 10 changed, no page left undecided).
