@@ -2,7 +2,8 @@
 
 import { cardBansLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
-import { CREATE_START_MIN_MS } from '../executor/actions.ts'
+import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
+import { calendarLines } from './calendar.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
 import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
@@ -417,11 +418,13 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // plan's create can run (R74A-2): a gap open now begins its starts there, and a gap too short for the smallest
   // tournament (3 matches) from its first start is left out.
   const earliest = ceilMinute(now + CREATE_START_MIN_MS + planLeadMs(o.tickMinutes ?? MAX_TICK_MINUTES))
-  const gaps = freeGaps(slots, now + 3600_000, now + 72 * 3600_000)
+  const gaps = freeGaps(slots, now + 3600_000, now + CREATE_START_MAX_MS)
     .map(g => ({ start: ceilMinute(g.start), end: floorMinute(g.end) }))
     .map(g => ({ ...g, first: Math.max(g.start + 3600_000, earliest) }))
     .filter(g => g.end - g.first >= 3600_000 + SMALLEST_ESTIMATE_MIN * 60_000)
-  if (slots.length) out.push(`Free for a new tournament's whole window (next 72 h; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
+  if (slots.length) out.push(`Free for a new tournament's whole window (next 14 days; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
+  // FoxLeague's own free starts and this agent's own pick among them (P-O1, P-O2: src/snapshot/calendar.ts).
+  out.push(...calendarLines(s, { now, earliest }))
   if (m.recentStandard.length) {
     out.push('Recent standard tournaments (seated/max, fee, status):')
     for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${t.tier} ${t.format} ${t.seated}/${t.max_teams} fee ${t.fee} ${t.status} ${t.starts_at.slice(0, 16)}`)

@@ -35,6 +35,7 @@ import type {
 } from './types.ts'
 import { STATS } from './types.ts'
 import type { MarketSale } from '../snapshot/market.ts'
+import type { AvailabilityQuery, TournamentAvailability } from '../snapshot/calendar.ts'
 
 export class ApiRefusal extends Error {
   readonly code: string | undefined
@@ -248,6 +249,15 @@ export class FoxLeague {
 
   leaderboard(limit = 50, offset = 0): Promise<LeaderboardPage> {
     return this.call<LeaderboardPage>(`/leaderboard?limit=${limit}&offset=${offset}`)
+  }
+
+  /**
+   * FoxLeague's free starts for a new tournament of this format and size, by the rule create applies (public, no
+   * session; tournament_slots.rs). `days` 1 to 14 from `from` (default now). See src/snapshot/calendar.ts.
+   */
+  tournamentAvailability(q: AvailabilityQuery): Promise<TournamentAvailability> {
+    const params = new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]): [string, string] => [k, String(v)]))
+    return this.call<TournamentAvailability>(`/tournaments/availability?${params}`)
   }
 
   async isWhitelisted(address: string): Promise<boolean> {

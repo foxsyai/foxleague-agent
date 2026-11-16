@@ -1078,8 +1078,8 @@ binaries; out of scope).
   `starts_at` is any instant: create neither rounds it nor asks for a step; it must be more than 1 hour from now
   (`tournament_slots.rs` `far_enough`) and at most 90 days ahead (`too_far`). Only the calendar's proposal
   (`GET /api/tournaments/availability`, `next_free`) is on the quarter hour (release/mainnet-1.0 fb820dd57). The agent
-  sends the start of its action (since 2026-11-15): `starts_at`, a whole UTC minute 2 to 72 hours after the create
-  runs, or the older `starts_in_hours`, whole hours from that moment; the deadline is that start less
+  sends the start of its action (since 2026-11-15): `starts_at`, a whole UTC minute 2 hours to 14 days after the create
+  runs (14 days since 2026-11-16, 72 hours before), or the older `starts_in_hours`, whole hours from that moment; the deadline is that start less
   `registration_closes_minutes_before`. The time slot, the schedule and the organizer quote are checked at that same
   instant.
 - Round interval 30 to 1,440 minutes: `Round interval must be 30-1440 minutes` (`tournaments.rs:2421`, `:2482-2484`).
@@ -1088,6 +1088,21 @@ binaries; out of scope).
   `Time slot conflicts with tournament #{id} '{title}'. Choose a different time.` (`tournaments.rs:774-827`, `:2295-2358`).
   The windows are half-open: one that ends exactly where another starts does not overlap it
   (`tournament_slots.rs` `overlaps`), so a 3-team round robin (9 minutes) fits a gap of exactly 2 h 9 min, at one start.
+- **The calendar of free starts** (public, no session, the same answer for every caller):
+  `GET /api/tournaments/availability?format={format}&teams={n}&days=14` (also `home_and_away`, `developer_mode` and
+  `from`, RFC 3339, default now; `days` 1 to 14, default 7). The data is `{from, to, busy: [{tournament_id, title,
+  start, end}], free: [{first, last}], from_refusal, conflict, next_free}`: `free` holds every start from `first` to
+  `last`, both included, where a tournament of that format and size fits, by the rule create refuses a start with
+  (more than 1 hour from now plus a 10-minute margin, at most 90 days, its booking overlapping none). It counts every
+  booking, a tournament being created too, which the public lists do not show: `busy` answers it with a negative
+  `tournament_id` and the title `A tournament being created`. `from_refusal` is `too_soon`, `taken`, `too_far` or
+  null; `next_free` is on the quarter hour. A size the format does not offer is refused (`This format is not offered
+  for that number of teams.`). (`routes/tournaments.rs` `tournament_availability`, `tournament_slots.rs` `availability`,
+  release/mainnet-1.0 729164194.) The agent's planning snapshot reads it for a round robin of 3, a round robin of 8
+  and a Groups + Knockout of 16 over its 14 days (since 2026-11-16). Each agent is offered its own start for each
+  shape: of up to 10 free starts a booking apart, agent n takes the (n mod k)-th, so two agents of one install do not
+  plan the same minute; the pick reads only its own number and this public answer. A failed read is unknown: no start
+  is offered; the agent's own clash check (`slots.ts`, from the public lists) decides at the create.
 - **Creation cap**: at most 1 active tournament you created and play in, plus 1 you only organize
   (1v1s not counted): `You already have an active tournament you are playing in. Complete or cancel it before creating another.`
   / `... you are organizing. ...` (`tournaments.rs:2360-2409`).

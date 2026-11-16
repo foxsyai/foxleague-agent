@@ -249,13 +249,18 @@ function ovrRange(o: Record<string, unknown>): { ovr_min?: number; ovr_max?: num
   return { ...(lo !== undefined ? { ovr_min: lo } : {}), ...(hi !== undefined ? { ovr_max: hi } : {}) }
 }
 
-/** A create's start is at least 2 hours and at most 72 hours after the create runs (the rules check it then). */
+/**
+ * A create's start is at least 2 hours and at most 14 days after the create runs (the rules check it then). FoxLeague
+ * takes a start up to 90 days ahead; 14 days is the owner's choice (16 Nov 2026, P-O1), the most its calendar of free
+ * starts answers in one read.
+ */
 export const CREATE_START_MIN_MS = 2 * 3600_000
-export const CREATE_START_MAX_MS = 72 * 3600_000
+export const CREATE_START_MAX_MS = 14 * 86_400_000
+const CREATE_START_MAX_HOURS = CREATE_START_MAX_MS / 3600_000
 
 /** A whole UTC minute: `2026-11-17T19:49Z`, with `:00` or `:00.000` seconds allowed; no other zone, no other second. */
 const UTC_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::00(?:\.0{1,3})?)?Z$/
-const START_FORM = 'starts_at must be a UTC minute such as 2026-11-17T19:49Z (or starts_in_hours, whole hours 2 to 72)'
+const START_FORM = `starts_at must be a UTC minute such as 2026-11-17T19:49Z (or starts_in_hours, whole hours 2 to ${CREATE_START_MAX_HOURS})`
 
 /** The ms of a UTC minute in that form, or null: a day or an hour Date.parse would roll over (30 February, 24:00) is none. */
 function utcMinuteMs(v: unknown): number | null {
@@ -267,15 +272,15 @@ function utcMinuteMs(v: unknown): number | null {
 /**
  * A create's start, in one of its two forms (A tournament start to the minute, 2026-11-15). `starts_at` names the minute
  * itself, so the start FoxLeague is sent does not move with the moment the action runs (up to most of a tick after the
- * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 to 72 hours ahead depends on when the create
- * runs: the rules check it then. A day or hour Date.parse would roll over (30 February, 24:00) is refused, as is any
- * second but :00. `starts_in_hours` keeps its bounds here, as before.
+ * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 hours to 14 days ahead depends on when the
+ * create runs: the rules check it then. A day or hour Date.parse would roll over (30 February, 24:00) is refused, as is
+ * any second but :00. `starts_in_hours` keeps its bounds here, the same 2 hours to 14 days.
  */
 function createStart(o: Record<string, unknown>): { starts_at: string } | { starts_in_hours: number } {
   const hours = o.starts_in_hours !== undefined && o.starts_in_hours !== null
   const at = o.starts_at !== undefined && o.starts_at !== null
   if (hours && at) throw new ParseError('starts_at or starts_in_hours, not both')
-  if (hours) return { starts_in_hours: int(o, 'starts_in_hours', 2, 72) }
+  if (hours) return { starts_in_hours: int(o, 'starts_in_hours', 2, CREATE_START_MAX_HOURS) }
   const ms = utcMinuteMs(o.starts_at)
   if (ms === null) throw new ParseError(START_FORM)
   return { starts_at: new Date(ms).toISOString() }
