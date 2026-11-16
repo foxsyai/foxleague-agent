@@ -289,7 +289,10 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     out.push(boosterLine(a.shop, s.takenAt))
     // FoxLeague's own count of the wallet's Common packs; unread, no pack is bought (audit 2026-11-11, INTEG-6).
     const packs = a.shop?.common_pack_remaining_this_week
-    out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
+    // The pack week runs from Monday at the daily reset (FoxLeague 2026-11-16): when it starts again, as parsed (MNT-4).
+    const resets = typeof a.shop?.common_pack_week_resets_at === 'string' ? Date.parse(a.shop.common_pack_week_resets_at) : NaN
+    const again = Number.isFinite(resets) ? `, the week starts again ${new Date(resets).toISOString()}` : ''
+    out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}${again}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
@@ -320,6 +323,10 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     const at = new Date(s.takenAt)
     const hurt = s.players.filter(p => p.role === 'starter' && outInjured(p, at))
     if (hurt.length) out.push(`INJURED IN YOUR ELEVEN: ${hurt.map(p => (p.injuredUntil ? `#${p.nonce} until ${p.injuredUntil.slice(0, 16)}` : `#${p.nonce} (its injury could not be read)`)).join(', ')}: no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an eleven without ${hurt.length === 1 ? 'it' : 'them'}`)
+    // A card in an auction is held by the contract and does not play: FoxLeague forfeits a tournament or 1v1 match whose
+    // lineup locks with it in the saved 18 (mainnet 2026-11-16, MNT-4). The agent lists none of its 18; the owner may.
+    const auctioned = s.players.filter(p => p.listed && p.role !== 'reserve')
+    if (auctioned.length) out.push(`LISTED IN YOUR 18: ${auctioned.map(p => `#${p.nonce}`).join(', ')}: a card in an auction does not play, and FoxLeague forfeits (3-0, the full K lost) your next tournament or 1v1 match whose lineup locks with ${auctioned.length === 1 ? 'it' : 'them'} in your 18; no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an 18 without ${auctioned.length === 1 ? 'it' : 'them'}`)
     const banned = s.players.filter(p => p.suspended && p.role !== 'reserve')
     if (banned.length) out.push(`Suspended in your 18: ${banned.map(p => `#${p.nonce}`).join(', ')}: out of your next tournament match of more than 2 teams (a 1v1 or a ranked game never serves a ban and still takes the card)`)
   }
