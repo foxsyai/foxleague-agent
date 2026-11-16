@@ -86,11 +86,6 @@ case "$(uname -m)" in
   *) die "unsupported processor $(uname -m)" ;;
 esac
 [ -f "$APP_DIR/package.json" ] && grep -q '"name": "foxleague-agent"' "$APP_DIR/package.json" || die "run install.sh from inside the foxleague-agent folder"
-# The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
-# so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
-if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
-  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
-fi
 # The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
 # "/." follows a link: stat does not follow one in the last part, and a link root made to a user's install is root's
 # own (R2I-1).
@@ -101,12 +96,18 @@ owner_name() { stat -c %U "$1/." 2>/dev/null || stat -f %Su "$1/." 2>/dev/null |
 # (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
 # (INS-A2). The guided install with FOXAGENT_ALLOW_ROOT=1 wrote root's .env there and a service of root that runs the
 # agent as root (INS-A8). All stop before they write anything. An install that itself runs as root (its folder is
-# root's) still installs, updates and uninstalls.
+# root's) still installs, updates and uninstalls. This comes before the check of a guided install as root below: on
+# their own folder the owner is told whose it is and to leave sudo out, not to make another user (R2I-3).
 if [ "$MODE" != prepare ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
   who=$(owner_name "$ROOT")
   asked=''
   [ $# -eq 0 ] || printf -v asked ' %s' "$@"
   die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh$asked"
+fi
+# The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
+# so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
+if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
+  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----

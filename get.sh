@@ -35,18 +35,20 @@ main() {
     Linux | Darwin) ;;
     *) die "run this on Linux or macOS. On Windows, install WSL2 (Ubuntu) and run it there." ;;
   esac
-  if [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
-    die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."
-  fi
   [ -n "$DIR" ] && [ "$DIR" != / ] || die "FOXAGENT_DIR must name a folder of its own"
   case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
   [ ! -e "$DIR/.git" ] || die "$DIR is a git checkout. Update it there with: git pull && ./install.sh --update"
-  # Root (FOXAGENT_ALLOW_ROOT=1) over a folder another user owns: root's files there would keep that user's agent from
-  # starting again (INS-A8). "/." follows a link to the folder: stat does not follow one in the last part (R2I-1).
+  # Root over a folder another user owns: root's files there would keep that user's agent from starting again
+  # (INS-A8). "/." follows a link to the folder: stat does not follow one in the last part (R2I-1). Told before the
+  # check of root below, with or without FOXAGENT_ALLOW_ROOT: on their own folder the owner is told whose it is and to
+  # leave sudo out, not to make another user (R2I-3).
   if [ "$(id -u)" = 0 ] && [ -e "$DIR" ] && [ "$(stat -c %u "$DIR/." 2>/dev/null || stat -f %u "$DIR/." 2>/dev/null)" != 0 ]; then
     local who
     who=$(stat -c %U "$DIR/." 2>/dev/null || stat -f %Su "$DIR/." 2>/dev/null || true)
     die "$DIR belongs to ${who:-another user}, not to root: paste the line as ${who:-that user}, without sudo"
+  fi
+  if [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
+    die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."
   fi
 
   # A download into a file. curl writes to its output and the shell puts that into the file: a curl that may not
