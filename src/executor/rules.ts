@@ -661,6 +661,16 @@ function matchSquad(s: AgentSnapshot): PlayerView[] {
 }
 
 /**
+ * A team out of a single-leg knockout (MNT-1c): a knockout match of it (no group) FoxLeague lists as finished with our
+ * score below theirs, in a knockout or the knockout phase of a Groups + Knockout. A level score went to penalties the list
+ * does not show, and a League + Knockout plays two legs: neither is read as out. Anything unread is no exit.
+ */
+function knockedOut(x: Tournament, listed: UpcomingMatch[]): boolean {
+  if (x.format !== 'knockout' && x.format !== 'groups_knockout') return false
+  return listed.some(m => m.phase === 'finished' && m.group_name === null && typeof m.is_home === 'boolean' && typeof m.home_score === 'number' && typeof m.away_score === 'number' && (m.is_home ? m.home_score < m.away_score : m.away_score < m.home_score))
+}
+
+/**
  * What the squad's other tournaments (1v1s apart) still bring around a tournament that plays from `start` to `end`:
  * the matches before its start and those whose play overlaps it. Started: each fixture FoxLeague lists by its own time
  * (one after `end` plays after this tournament), and the rounds not drawn yet as overlapping; not started: the most its
@@ -699,6 +709,15 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
     if (!pending.length && (xStart > end || (xEnd < start && xEnd < now.getTime()))) continue
     if (!x.started_at) {
       owe(total, xEnd)
+      continue
+    }
+    // Out of a knockout (MNT-1c): only the fixtures still listed, and a third place match that may follow.
+    if (knockedOut(x, listed)) {
+      for (const m of pending) {
+        const at = Date.parse(m.scheduled_at)
+        if (!(Number.isFinite(at) && Number.isFinite(end) && at > end)) owe(1, at)
+      }
+      owe(x.has_third_place_match === true && !listed.some(m => m.group_name === '3rd Place') ? 1 : 0, xEnd)
       continue
     }
     // Each listed fixture by its kickoff: before the start, during this tournament, or after its last match (none here).

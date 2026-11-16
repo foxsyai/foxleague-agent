@@ -2196,6 +2196,11 @@ in every format (`tournament_engine.rs` `reschedule_sequential`, `place_sequenti
 interval: it refused an 18-team home-and-away round robin (306 matches over 12.7 days) and took a running round robin
 for over while its fixtures were still listed. It now counts the real span (all matches less one, times the interval),
 judges every field from the minimum up and counts each listed fixture by its own kickoff; the digest says "one match of
-the whole tournament every N min".
+the whole tournament every N min". A team out of a knockout owes it nothing more (MNT-1c): a knockout match of it that
+FoxLeague lists as finished with our score below theirs, in a knockout or the knockout phase of a Groups + Knockout,
+ends the count but for a third place match that may follow (one at most). A level score (penalties the list does not
+show), a group match and a League + Knockout leg are no exit. FoxLeague lists a finished match for a day only; after
+that the count is the format's most again, the safe side. Rounds not drawn yet still count as overlapping: spread over
+their span, the Swiss of MON-3 would owe the new tournament none of them, which its test refuses on purpose.
 
 The game manual copy is synced to `729164194` (16 pages, 10 changed, no page left undecided).
