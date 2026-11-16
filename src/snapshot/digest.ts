@@ -118,7 +118,7 @@ export function shopPriceLine(s: AgentSnapshot): string | null {
   return `Shop prices for this wallet (FoxLeague's MetaStaking discount${live ? ' is live' : ''}: your rate ${bp} basis points, ${bp / 100} percent off, taken once on each payment's total; the executor pays these, FoxLeague takes no other amount): ${items.map(mine).join(', ')}; medicine at FoxLeague's quote, ${bp / 100} percent off its days' full cost`
 }
 
-/** A rival's last acceptances of a stranger's targeted 1v1 (P3b): when, to the minute, and how long after it was sent. */
+/** A rival's last acceptances of a stranger's targeted 1v1 (P3b): when to the minute and how long after it was sent. */
 function acceptedText(last: { at: string; afterMin: number | null }[] | undefined): string {
   const at = (iso: string) => (Number.isFinite(Date.parse(iso)) ? `${new Date(Date.parse(iso)).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'unknown time')
   const one = (x: { at: string; afterMin: number | null }) => `${at(x.at)}${typeof x.afterMin === 'number' ? `, ${x.afterMin} min after it was sent` : ''}`
