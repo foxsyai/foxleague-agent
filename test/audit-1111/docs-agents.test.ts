@@ -23,7 +23,7 @@ test('AGENTS.md says how a release reaches users: a tag on main with a signed ma
 })
 
 test('AGENTS.md carries the owner\'s review method in one sentence', () => {
-  assert.match(agents, /An audit or adversarial review is done by Claude Fable 5\.2 at extra-high effort \(read-only reviewers, one area each\), its fixes by Claude Fable 5\.2 at high effort, and a finding counts only with a test that fails before the fix\./)
+  assert.match(agents, /An audit or adversarial review is done by Claude Fable 5\.2 at high effort \(read-only reviewers, one area each\), its fixes by Claude Opus 5\.5 at extra-high effort, and a finding counts only with a test that fails before the fix\./)
 })
 
 test('AGENTS.md says where the updater, the launchers and the release tool live, and each of them exists', () => {

@@ -54,7 +54,7 @@ rules and the owner's caps before anything is signed. Treat every change to that
   `src/strategist/manual.md`. Change the code and these together, or say which one you left.
 - Record an audit or a security-relevant change as a new section of `docs/SECURITY-REVIEW.md`, in the same table format
   (`Id | Severity | Finding | Fix`), and list what stays open. An audit or adversarial review is done by Claude Fable
-  5.2 at extra-high effort (read-only reviewers, one area each), its fixes by Claude Fable 5.2 at high effort, and a
+  5.2 at high effort (read-only reviewers, one area each), its fixes by Claude Opus 5.5 at extra-high effort, and a
   finding counts only with a test that fails before the fix.
 - Do not guess FoxLeague's server behaviour. If a fix depends on it (e.g. what happens after "Do NOT pay again"), say so
   and ask; the integration notes in `docs/FOXLEAGUE-INTEGRATION.md` are the source.
