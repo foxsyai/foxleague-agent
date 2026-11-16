@@ -397,9 +397,27 @@ case "$active" in '' | .* | *[!A-Za-z0-9._-]*) echo "foxleague-agent: versions/a
 FOXAGENT_ROOT="$ROOT" exec bash "$ROOT/versions/$active/install.sh" "$@"
 `
 
+/** The file name of the program the background agent of a Mac starts: macOS lists the agent by it (MAC-1). */
+export const MAC_LAUNCHER_NAME = 'FoxLeague Agent'
+
+/**
+ * What <root>/FoxLeague Agent is on a Mac, the program the launchd job starts; install.sh writes the same text
+ * (mac_launcher_text). macOS names a background item after the program its job starts when no app goes with it: the
+ * plist once started bash, and Login Items & Extensions listed the agent as "bash" (MAC-1).
+ */
+export const MAC_LAUNCHER = `#!/bin/bash
+# foxleague-agent on a Mac: the program its background agent starts (launchd, ai.foxleague.agent in
+# ~/Library/LaunchAgents). macOS names the background item after this file, so System Settings shows it as
+# "FoxLeague Agent" under General, Login Items & Extensions. It starts run.sh of its own folder, in its own process.
+ROOT=$(cd "$(dirname "\${BASH_SOURCE[0]}")" && pwd) || exit 1
+exec /bin/bash "$ROOT/run.sh" "$@"
+`
+
 /**
  * Once a new release is confirmed: its launcher, its command line (cli.sh) and its installer's entry replace the
  * ones in the install's folder. By rename, never in place, so a script that is running keeps reading the file it started from.
+ * On a Mac the program the background agent starts (MAC_LAUNCHER) is refreshed too, where the installer put one: Linux
+ * has none, and a Mac whose plist still starts bash gets it from its next ./install.sh or ./install.sh --update.
  * Returns the names it replaced.
  */
 export function refreshLauncher(layout: Layout): string[] {
@@ -428,5 +446,6 @@ export function refreshLauncher(layout: Layout): string[] {
     }
   }
   put('install.sh', INSTALL_SHIM)
+  if (existsSync(join(layout.root, MAC_LAUNCHER_NAME))) put(MAC_LAUNCHER_NAME, MAC_LAUNCHER)
   return changed
 }

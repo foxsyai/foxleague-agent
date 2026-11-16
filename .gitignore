@@ -12,3 +12,5 @@ deploy/.host
 dist/
 .deps-new/
 .deps-old/
+# What the background agent of a Mac starts: the installer writes it into the install's folder (MAC-1).
+/FoxLeague Agent

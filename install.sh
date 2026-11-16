@@ -320,6 +320,29 @@ SHIM
 # ---- background service: systemd user service on Linux, launchd agent on macOS ----
 UNIT="$HOME/.config/systemd/user/$SERVICE.service"
 PLIST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
+# macOS lists every background item in System Settings (General, Login Items & Extensions) and, when no app goes with
+# it, names it after the program its job starts: a plist that started bash with run.sh was listed as "bash", which no
+# one can tell for the agent (MAC-1). The job starts this launcher of the install's folder instead: its file name says
+# what it is, and it execs run.sh. A file of its own, not a link (a link is named after what it points at).
+# src/update/install.ts holds the same text (MAC_LAUNCHER), for a confirmed update to refresh it.
+MAC_LAUNCHER="$ROOT/FoxLeague Agent"
+mac_launcher_text() {
+  cat <<'LAUNCHER'
+#!/bin/bash
+# foxleague-agent on a Mac: the program its background agent starts (launchd, ai.foxleague.agent in
+# ~/Library/LaunchAgents). macOS names the background item after this file, so System Settings shows it as
+# "FoxLeague Agent" under General, Login Items & Extensions. It starts run.sh of its own folder, in its own process.
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd) || exit 1
+exec /bin/bash "$ROOT/run.sh" "$@"
+LAUNCHER
+}
+# Writes the launcher by rename; status 1 (and nothing left behind) when it could not.
+write_mac_launcher() {
+  local tmp="$MAC_LAUNCHER.new.$$"
+  if mac_launcher_text > "$tmp" && chmod 755 "$tmp" && mv -f "$tmp" "$MAC_LAUNCHER"; then return 0; fi
+  rm -f "$tmp"
+  return 1
+}
 service_installed() { if [ "$PLATFORM" = linux ]; then [ -f "$UNIT" ]; else [ -f "$PLIST" ]; fi; }
 # The install folder the background service of this user runs (its WorkingDirectory); nothing when it is not known.
 service_folder() {
@@ -439,13 +462,15 @@ EOF
     # Keep it running after you log out (may need your password on some systems).
     loginctl enable-linger "$USER_NAME" >/dev/null 2>&1 || info "Note: the agent runs while you are logged in. To keep it running after logout: sudo loginctl enable-linger $USER_NAME"
   else
+    # The program the job starts goes in place first: the plist never names a launcher that is not there.
+    write_mac_launcher || die "the program the background agent starts could not be written to $ROOT, so the background agent was left as it was. Check that the folder is yours and that the disk has room, then run the installer again: cd $ROOT && ./install.sh"
     mkdir -p "$(dirname "$PLIST")"
     cat > "$PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>$PLIST_LABEL</string>
-  <key>ProgramArguments</key><array><string>$bash_bin</string><string>$ROOT/run.sh</string></array>
+  <key>ProgramArguments</key><array><string>$MAC_LAUNCHER</string></array>
   <key>WorkingDirectory</key><string>$ROOT</string>
   <key>EnvironmentVariables</key><dict><key>AGENT_ENV_FILE</key><string>$ENV_FILE</string><key>AGENT_DATA_DIR</key><string>$DATA_DIR</string><key>FOXAGENT_SUPERVISED</key><string>1</string></dict>
   <key>RunAtLoad</key><true/>
@@ -493,7 +518,8 @@ remove_service() {
     if mac_job_loaded; then
       die "launchd did not unload the background agent (launchctl bootout ended with $rc), so it was not removed and it keeps playing. Run this as $USER_NAME in a terminal of the Mac itself, without sudo: cd $ROOT && ./install.sh --uninstall"
     fi
-    rm -f "$PLIST"
+    # The program the job started goes with the plist (MAC-1); run.sh stays for an agent started by hand.
+    rm -f "$PLIST" "$MAC_LAUNCHER"
   fi
 }
 # The agent of this folder while it runs: the process data/service.pid names, alive and running service.ts. One
@@ -515,6 +541,29 @@ renew_unit() {
   [ "$PLATFORM" = linux ] && [ -f "$UNIT" ] || return 1
   LC_ALL=C grep -a -q -x 'RestrictSUIDSGID=true' "$UNIT" || return 1
   LC_ALL=C grep -a -v -x 'RestrictSUIDSGID=true' "$UNIT" | put_file "$UNIT" 644
+}
+# The plist of a Mac install made before 2026-11-16 starts bash with run.sh, so macOS listed the agent as "bash" in
+# Login Items & Extensions (MAC-1). Run by ./install.sh --update in a terminal (the guided install writes the whole
+# plist anew): the launcher goes in place, then only the plist's line of the program is changed, by rename, and the rest
+# of the file stays as it is. launchd reads the file at the job's next load (a login, a bootstrap); the agent that runs
+# now is restarted or left stopped as before. A plist that starts anything else is not the installer's and is left
+# alone. Says nothing; status 0 when it changed the file, 1 when not.
+renew_plist() {
+  [ "$PLATFORM" = darwin ] && [ -f "$PLIST" ] || return 1
+  local line text='' found=0 tmp="$PLIST.new.$$"
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in
+      "  <key>ProgramArguments</key><array><string>"*"</string><string>$ROOT/run.sh</string></array>")
+        line="  <key>ProgramArguments</key><array><string>$MAC_LAUNCHER</string></array>"
+        found=1 ;;
+    esac
+    text="$text$line"$'\n'
+  done < "$PLIST" || return 1
+  [ "$found" = 1 ] || return 1
+  write_mac_launcher || return 1
+  if printf '%s' "$text" > "$tmp" && mv -f "$tmp" "$PLIST"; then return 0; fi
+  rm -f "$tmp"
+  return 1
 }
 # The code of an install made before releases had folders of their own. get.sh leaves it in the folder, because the
 # old background service starts <folder>/src/service.ts by that path; it goes once the service of step 7 is written
@@ -625,6 +674,9 @@ if [ "$MODE" = update ]; then
   # The unit of an older install is renewed here, in a terminal, where an update from the dashboard cannot (it
   # runs inside that unit, and --prepare never writes to the service): systemd reads it before the restart.
   if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
+  # The plist of an older Mac install starts the launcher named for the agent from the job's next load (MAC-1). One
+  # that cannot be changed stays as it is and still starts the agent.
+  renew_plist || true
   # A service the owner stopped stays stopped (UPD-U5): an update is not the owner's word to start the agent again,
   # which may sign LIVE. One that runs, waits to start again after a failure or cannot be asked is restarted as before.
   # A stop still under way is waited for (R2I-10): a busy agent finishes what it signs first, and systemd answers
