@@ -88,7 +88,7 @@ export interface RequestOptions {
   retries?: number
 }
 
-export async function requestJson<T>(limiter: RateLimiter, url: string, opts: RequestOptions = {}): Promise<{ status: number; json: T }> {
+export async function requestJson<T>(limiter: RateLimiter, url: string, opts: RequestOptions = {}): Promise<{ status: number; json: T; headers?: Headers }> {
   const method = opts.method ?? 'GET'
   const retries = opts.retries ?? (method === 'GET' ? 3 : 0)
   let attempt = 0
@@ -130,7 +130,7 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
     } catch {
       throw new HttpError(res.status, text, url)
     }
-    return { status: res.status, json: json as T }
+    return { status: res.status, json: json as T, headers: res.headers }
   }
 }
 

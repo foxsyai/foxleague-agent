@@ -219,8 +219,6 @@ const RUNNING_STATUSES = new Set(['active', 'simulating', 'simulation_delayed'])
 const NOT_STARTED_STATUSES = new Set(['open', 'pending_sc'])
 /** FoxLeague's TOURNAMENT_BUSY_LEAD_HOURS (matches.rs): a team is busy from this long before a kickoff. */
 const BUSY_LEAD_MS = 3600_000
-/** Rows of GET /api/tournaments/upcoming-matches without `limit` (tournaments.rs UPCOMING_DEFAULT_LIMIT). */
-const UPCOMING_PAGE = 50
 
 /**
  * Why FoxLeague would call this team busy with a tournament right now and refuse a 1v1 create or join, or null
@@ -245,8 +243,7 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
   for (const m of upcoming.matches) {
     if (m.phase !== 'finished' && at(m) - t0 <= lead) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
   }
-  // The route is read without a limit: FoxLeague's page of 50, soonest first, the last day's finished games first.
-  if (upcoming.matches.length >= UPCOMING_PAGE) return `your upcoming matches fill FoxLeague's page of ${UPCOMING_PAGE}: a match within the hour may be cut from it`
+  // The list is read whole or not at all (api.ts upcomingMatches, R2M-3): no page of FoxLeague's can cut a match from it.
   for (const t of mine.active) {
     // A 1v1's only match is a row above; another active 1v1 is refused before this check (one at a time).
     if (t.max_teams === 2 || t.status === 'completed' || t.status === 'cancelled') continue
