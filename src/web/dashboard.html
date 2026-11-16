@@ -570,8 +570,8 @@ async function startUpdate() {
   } catch (e) { toast(e.message, true) } finally { $('upBtn').disabled = false }
 }
 
-// The day's check of FoxLeague's manual: shown only when there is something to tell (FoxLeague's manual changed
-// since the agents' copy or it could not be checked). The words are the agent's own; set as plain text.
+// The check of FoxLeague's manual and game settings: shown only when there is something to tell (FoxLeague's manual or
+// settings changed since the agents' copy, or it could not be checked). The words are the agent's own; set as plain text.
 function renderManual() {
   const m = S.instance.manual
   const text = m && m.enabled && m.text ? m.text : ''
@@ -1218,9 +1218,9 @@ const TIPS = {
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
   how: ['How it works', `<p>Opens the manual at agent.foxleague.ai in a new tab: how the agent plays, every setting, the strategy levels, safety and the costs.</p>`],
   guide: ['Getting started', `<p>The checklist to start: your AI key, Telegram, funding the first agent and going live. It opens by itself on a new install and any time from here.</p>`],
-  manual: ['FoxLeague manual check', `<p>Your agents play by FoxLeague's player manual: a copy of it comes with this version of the agent. Once a day, from the hour of the morning summary, the agent reads the manual FoxLeague serves that day and compares each page your agents read with its copy. It asks FoxLeague's public read-only server and sends nothing of yours.</p>
-    <p>When a page changed, a new one came or one went, this notice names the pages (up to eight, then how many more) and the morning summary on Telegram says so in one line. Your agents keep playing by their copy until a version of the agent brings the new manual: the maintainer runs sync-manual, checks the new pages and releases it. On a server you deploy yourself, deploy that version. The notice about the old copy goes with the update and the agent checks the new copy the same day.</p>
-    <p>When FoxLeague could not be read, the notice says that the manual could not be checked and why. That never counts as up to date: the next day's check asks again. Nothing shows while the copy matches. To switch the check off, set AGENT_MANUAL_CHECK=0 in the env file and restart.</p>`],
+  manual: ['FoxLeague manual check', `<p>Your agents play by FoxLeague's player manual: a copy of it comes with this version of the agent. From the hour of the morning summary the agent reads the manual FoxLeague serves and compares each page your agents read with its copy, again every hour while they match. It asks FoxLeague's public read-only server and sends nothing of yours. Each snapshot also compares FoxLeague's game settings with the ones the copy was built against: when FoxLeague adds or removes a setting, the manual is checked at once.</p>
+    <p>When a page changed, a new one came or one went, this notice names the pages (up to eight, then how many more); a changed setting is named the same way. Telegram tells you at once in one line; the morning summary says it again. Until a version of the agent brings the new manual, each plan is told which pages and settings changed and that the live values in its snapshot win over the manual there. The maintainer runs sync-manual, checks the new pages and releases it. On a server you deploy yourself, deploy that version. The notice about the old copy goes with the update and the agent checks the new copy the same day.</p>
+    <p>When FoxLeague could not be read, the notice says that the manual could not be checked and why. That never counts as up to date: the agent asks again each hour, up to four times a day, then the next day. Nothing shows while the copy matches. To switch the check off, set AGENT_MANUAL_CHECK=0 in the env file and restart.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>
     <p><b>Dry run:</b> the agent plans, checks each action against the game rules and your caps, then simulates it on chain. Nothing is signed or sent. The spend goes to a separate dry-run ledger.</p>
     <p><b>Live:</b> actions are signed and sent with real EGLD and FOXSY, inside the same caps.</p>

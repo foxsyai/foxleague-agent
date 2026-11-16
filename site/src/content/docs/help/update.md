@@ -132,18 +132,24 @@ terminal still updates.
 
 ### When FoxLeague's manual changes
 
-Your agents play by FoxLeague's player manual: each version of the agent carries a copy of it. Once a day, from the
-hour of the morning summary, the agent reads the manual FoxLeague serves and compares each page your agents read
-with that copy. It asks FoxLeague's public read-only server and sends nothing of yours.
+Your agents play by FoxLeague's player manual: each version of the agent carries a copy of it. From the hour of the
+morning summary the agent reads the manual FoxLeague serves and compares each page your agents read with that copy,
+again every hour while they match. It asks FoxLeague's public read-only server and sends nothing of yours. Each
+snapshot also compares FoxLeague's game settings with the ones the copy was built against: when FoxLeague adds or
+removes a setting, the manual is checked at once.
 
-When a page changed, a new one came or one went, the morning summary on Telegram has one line about it and the
-dashboard shows the same line under the header:
+When a page changed, a new one came or one went, Telegram tells you at once in one line, the morning summary says it
+again and the dashboard shows the same line under the header:
 
 > FoxLeague's manual changed since the agents' copy (pages: mechanics/fusion). The maintainer runs sync-manual.
 
-It names up to eight pages; when more changed it names the first eight and says how many more.
+It names up to eight pages; when more changed it names the first eight and says how many more. A changed setting is
+named the same way ("FoxLeague's game settings changed since the agents' copy (keys: ...)"). A rule switch your
+agents have no rule for yet is told once its start is a week away or less.
 
-Your agents keep playing by their copy until a version of the agent brings the new one. The maintainer runs
+Your agents keep playing by their copy until a version of the agent brings the new one. Meanwhile each plan is told
+which pages and settings changed and that the live values in its snapshot and the refusals of the executor win over
+the manual there; a switch without a rule shows in the snapshot with its numbers. The maintainer runs
 `sync-manual`, which builds the copy again from FoxLeague's manual, reads the pages it names and publishes a
 version with it: update when the notice says it is out. The notice about the old copy goes with the update and the
 agent checks the new copy the same day. On a server you deploy yourself
@@ -151,9 +157,9 @@ agent checks the new copy the same day. On a server you deploy yourself
 manual and deploy it.
 
 When FoxLeague could not be read, the line says "Could not check FoxLeague's manual today" and why. That never
-counts as up to date: the next day's check asks again. In a terminal, `./cli.sh manual-check` in the
-`foxleague-agent` folder asks at once. To switch the daily check off, set `AGENT_MANUAL_CHECK=0` in `.env` and
-restart the agent.
+counts as up to date: the agent asks again each hour, up to four times a day, then the next day. In a terminal,
+`./cli.sh manual-check` in the `foxleague-agent` folder asks at once. To switch the check off, set
+`AGENT_MANUAL_CHECK=0` in `.env` and restart the agent.
 
 ## More agents
 

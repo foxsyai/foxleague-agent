@@ -63,7 +63,8 @@ wait for it, so many agents never flood your chat; `/updates all` sends every up
 `/updates daily` goes back. A low-funds warning waits for the summary too, unless it comes with a top-up proposal.
 What you ask for yourself (`/do`, `/tick`) answers at once. Urgent messages always come at once: the kill switch, an internal error, a change of
 mode or keys, plans failing for a problem with the AI account (its key, credit or limits) or three times in a row
-for one agent, a payment whose outcome is unclear, top-up codes and a League + Knockout invitation. Any plain message goes to your manager, with the same Apply and Cancel buttons. While the manager is still answering an earlier message, it replies that it is and nothing is paid for: send yours again when the answer is in. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
+for one agent, a payment whose outcome is unclear, top-up codes and a League + Knockout invitation. A change of
+FoxLeague's manual or game settings since your agents' copy comes at once too, each change once. Any plain message goes to your manager, with the same Apply and Cancel buttons. While the manager is still answering an earlier message, it replies that it is and nothing is paid for: send yours again when the answer is in. Commands (agents are numbered from 1: `/pause 2` pauses agent 2):
 
 | Command | What it does |
 |---|---|

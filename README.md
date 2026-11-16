@@ -95,8 +95,10 @@ the dashboard or by chatting with it on Telegram.
   Only a release signed by the maintainers and newer than yours is taken, it is prepared next to the running
   version, and a version that does not start is undone by itself. `./install.sh --update` does the same from a
   terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
-- **FoxLeague's manual:** once a day the agent compares the manual FoxLeague serves with the copy its agents play
-  by. When a page changed, the morning summary and the dashboard name it; a version with the new manual follows
+- **FoxLeague's manual:** every hour from the morning summary's hour the agent compares the manual FoxLeague serves
+  with the copy its agents play by; each snapshot also compares FoxLeague's game settings with the ones that copy was
+  built against. When a page or a setting changed, Telegram says so at once, the morning summary and the dashboard
+  name it and each plan is told that the live values win over the manual there; a version with the new manual follows
   (the maintainer runs `sync-manual`). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
