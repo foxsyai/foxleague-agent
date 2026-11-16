@@ -107,6 +107,38 @@ export function alertKey(msg: string): string {
   return msg.replace(/req_[A-Za-z0-9]+/g, 'req_')
 }
 
+/** The first plans after a start: the first of each model and effort at once (5 to 25 s), as before BEH-6. */
+const FIRST_PLAN_MS = 5_000
+const FIRST_PLAN_SPREAD_MS = 20_000
+/**
+ * The other agents of that model and effort from 3 to 6 minutes after the start: by then the first one's call has
+ * begun its answer (its snapshot took up to a minute and its answer began within 40 s in the week of 9 Nov), so its
+ * one-hour cache write can be read. Spread over 3 minutes, so their snapshots do not all hit FoxLeague at once.
+ */
+const FOLLOW_PLAN_MS = 3 * 60_000
+const FOLLOW_PLAN_SPREAD_MS = 3 * 60_000
+
+/**
+ * When each agent plans first after a start, in ms (audit 2026-11-16, BEH-6 and P7). All at once, every call wrote the
+ * cache of the system prompt and manual again at twice the input price: a write can be read only once its answer has
+ * begun. Now the first agent of each model and effort (`pair`) that plans now (`plans`) goes at once and the others of
+ * its pair follow a few minutes later, never later than their own tick. An agent that does not plan now (paused,
+ * outside its hours, waiting for funds) keeps the old moment: its tick asks no model, so it leads nothing.
+ */
+export function firstPlanDelays(agents: { index: number; pair: string; plans: boolean; tickMinutes: number }[], random: () => number): Map<number, number> {
+  const led = new Set<string>()
+  const out = new Map<number, number>()
+  for (const a of agents) {
+    if (!a.plans || !led.has(a.pair)) {
+      if (a.plans) led.add(a.pair)
+      out.set(a.index, FIRST_PLAN_MS + random() * FIRST_PLAN_SPREAD_MS)
+    } else {
+      out.set(a.index, Math.min(FOLLOW_PLAN_MS + random() * FOLLOW_PLAN_SPREAD_MS, Math.max(MIN_TICK_MINUTES, a.tickMinutes) * 60_000))
+    }
+  }
+  return out
+}
+
 export interface ScheduledAction {
   p: PlannedAction
   /** When it runs, in ms after the plan's start. */
@@ -1432,8 +1464,11 @@ export class Service {
     // binds 0.0.0.0 inside its own network namespace.
     if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870), process.env.WEB_UI_HOST?.trim() || '127.0.0.1')
     else console.log(`web UI off: set it up with \`${this.cfg.isServer ? 'agentctl.sh' : './cli.sh'} set-web-password\``)
+    // One first plan per model and effort at once, the others of that pair a few minutes later, so they read the
+    // cache it writes instead of each writing it again (audit 2026-11-16, BEH-6 and P7).
+    const first = firstPlanDelays(agents.map(b => ({ index: b.index, pair: this.pairOf(b), plans: this.plansNow(b), tickMinutes: b.settings.tickMinutes })), Math.random)
     for (const b of agents) {
-      this.schedule(b.index, 5_000 + Math.random() * 20_000)
+      this.schedule(b.index, first.get(b.index)!)
       void this.snapshot(b.index).catch(() => undefined)
     }
     // Last: a release counts as started only once everything above has come up.
@@ -1569,6 +1604,17 @@ export class Service {
       if (next <= horizon && this.inActiveHours(a, new Date(next))) return true
     }
     return false
+  }
+
+  /** The model and effort of an agent's real plan, the pair its cache belongs to. */
+  private pairOf(agent: AgentRow): string {
+    const ai = this.aiOf(agent)
+    return `${ai.model}:${ai.effort}`
+  }
+
+  /** Whether a tick of this agent would ask the model now: a strategist, no kill switch, not paused, in its hours, funded. */
+  private plansNow(agent: AgentRow): boolean {
+    return Boolean(this.strategist) && !this.store.killSwitch && !agent.paused && this.inActiveHours(agent) && this.store.getKv(`waiting_funds:${agent.index}`) !== '1'
   }
 
   /** The cache rule every strategist of the service is made with: another call of its model at that effort within the hour. */
