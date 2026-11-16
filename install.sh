@@ -269,6 +269,14 @@ SHIM
 UNIT="$HOME/.config/systemd/user/$SERVICE.service"
 PLIST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 service_installed() { if [ "$PLATFORM" = linux ]; then [ -f "$UNIT" ]; else [ -f "$PLIST" ]; fi; }
+# macOS: launchd still lists the agent's job (loaded, running or on its way out).
+mac_job_loaded() { launchctl print "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1; }
+# Waits until launchd no longer lists the job, at most $1 seconds; status 1 when it still does.
+mac_wait_unloaded() {
+  local _
+  for _ in $(seq 1 "$(($1 * 2))"); do mac_job_loaded || return 0; sleep 0.5; done
+  ! mac_job_loaded
+}
 # The user's own service manager (systemd --user) on Linux. It is reached through the user's runtime folder,
 # /run/user/<uid>. A terminal opened with su or sudo has no XDG_RUNTIME_DIR, so systemctl --user finds nothing
 # there although the manager runs, or would run with linger (which the installer turns on at its last step
@@ -373,8 +381,11 @@ EOF
   <key>StandardErrorPath</key><string>$DATA_DIR/service.log</string>
 </dict></plist>
 EOF
-    launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
-    launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    # The job that runs is unloaded first, by its label, and given a moment to go: launchd refuses to load a label
+    # it still lists. A bootstrap it refuses ends here in words, with what to do (INS-A4).
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
+    mac_wait_unloaded 10 || true
+    launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
   fi
 }
 remove_service() {

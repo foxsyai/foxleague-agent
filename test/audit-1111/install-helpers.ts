@@ -26,7 +26,9 @@ export function stubs(o: { node?: boolean; npm?: boolean } = {}): Stubs {
     chmodSync(join(dir, name), 0o755)
   }
   if (o.npm !== false) stub('npm', `printf 'npm %s in %s\\n' "$*" "$PWD" >> "$LOG"\n[ -e node_modules ] || ln -s ${JSON.stringify(join(REPO, 'node_modules'))} node_modules`)
-  for (const name of ['loginctl', 'launchctl']) stub(name, `printf '${name} %s\\n' "$*" >> "$LOG"`)
+  stub('loginctl', `printf 'loginctl %s\\n' "$*" >> "$LOG"`)
+  // As launchd: `print` of the job answers between a bootstrap and a bootout (its status 113: not loaded).
+  stub('launchctl', `printf 'launchctl %s\\n' "$*" >> "$LOG"\ncase "$1" in bootstrap) : > "$LOG.loaded" ;; bootout) rm -f "$LOG.loaded" ;; print) [ -f "$LOG.loaded" ] || exit 113 ;; esac`)
   // As the real one: `is-active` of a service that does not run ends with status 3; everything else goes through.
   stub('systemctl', `printf 'systemctl %s\\n' "$*" >> "$LOG"\ncase "$*" in *is-active*) exit 3 ;; esac`)
   // No stand-in ever lets curl out: a test that needs a download gives its own curl.
