@@ -60,12 +60,17 @@ export const MAX_TRIES = 4
 /** The kv keys of the settings fingerprint (P-W2) and of what the owner was told (P-W3, hashes only). */
 const CONFIG_KV = 'manual_config'
 const TOLD_KV = 'manual_told'
+const KEYS_TOLD_KV = 'manual_keys_told_at'
 const TOLD_KEPT = 64
 /**
  * How soon after the last check a changed key set runs the check again (P-W2): settings that flip between two
  * FoxLeague servers during a deploy ask at most this often. A moved rule number alone waits RECHECK_MS.
  */
 export const FORCE_GAP_MS = 10 * 60_000
+/** The most checks the settings run a day, and how often a change of the settings keys is told at most: settings whose
+ * keys keep changing (a map keyed by ids) neither ask FoxLeague every 10 minutes nor fill the owner's chat. */
+export const MAX_FORCED_A_DAY = 6
+export const KEYS_TELL_GAP_MS = 6 * 3600_000
 /** A switch the agents have no rule for is told when its `live_from` is this close (P-W3). */
 export const SOON_MS = 7 * 86_400_000
 
@@ -377,8 +382,9 @@ export class ManualWatch {
   readManual: () => string = () => readFileSync(MANUAL_FILE, 'utf8')
   readRecord: () => unknown = () => JSON.parse(readFileSync(RECORD_FILE, 'utf8')) as unknown
   gapMs = GAP_MS
-  /** When a changed fingerprint last ran the check (P-W2). */
+  /** When a changed fingerprint last ran the check (P-W2), and how many it ran on which day. */
   private forcedAt = Number.NEGATIVE_INFINITY
+  private forced = { day: '', count: 0 }
 
   constructor(deps: ManualWatchDeps) {
     this.d = deps
@@ -465,9 +471,18 @@ export class ManualWatch {
     return this.running
   }
 
-  /** Each change told once: what was told is kept as hashes, the newest TOLD_KEPT of them. `quiet`: marked, not sent. */
-  private tellOnce(what: string, text: string, quiet = false): void {
-    if (!this.d.tell) return
+  /** How long ago a change of the settings keys was last told. */
+  private keysToldAgo(now: number): number {
+    const at = Number(this.d.kv.get(KEYS_TOLD_KV))
+    return Number.isFinite(at) && at > 0 ? now - at : Number.POSITIVE_INFINITY
+  }
+
+  /**
+   * Each change told once: what was told is kept as hashes, the newest TOLD_KEPT of them. `quiet`: marked, not sent.
+   * True when it was told now.
+   */
+  private tellOnce(what: string, text: string, quiet = false): boolean {
+    if (!this.d.tell) return false
     let told: string[] = []
     try {
       const v = JSON.parse(this.d.kv.get(TOLD_KV) ?? '[]') as unknown
@@ -476,9 +491,10 @@ export class ManualWatch {
       // An unreadable row: start again.
     }
     const id = sha256(what)
-    if (told.includes(id)) return
+    if (told.includes(id)) return false
     this.d.kv.set(TOLD_KV, JSON.stringify([...told, id].slice(-TOLD_KEPT)))
     if (!quiet) this.d.tell(text)
+    return !quiet
   }
 
   private configState(): ConfigState | null {
@@ -519,7 +535,7 @@ export class ManualWatch {
       const keys = changedKeys(keyDiff(base, print.keys))
       const next = JSON.stringify({ copy: copy.key, base: record?.config ? null : base, keysHash: print.keysHash, valuesHash: print.valuesHash, keys } satisfies ConfigState)
       if (this.d.kv.get(CONFIG_KV) !== next) this.d.kv.set(CONFIG_KV, next)
-      if (keys.length) this.tellOnce(`keys:${copy.key}:${keys.join(',')}`, configTell(keys))
+      if (keys.length && this.keysToldAgo(now) >= KEYS_TELL_GAP_MS && this.tellOnce(`keys:${copy.key}:${keys.join(',')}`, configTell(keys))) this.d.kv.set(KEYS_TOLD_KV, String(now))
       for (const sw of unknownSwitches(config).switches) {
         if (sw.from !== null && Number.isFinite(sw.from) && Math.abs(sw.from - now) <= SOON_MS) this.tellOnce(`switch:${sw.key}:${sw.from}`, switchTell(sw))
       }
@@ -527,8 +543,11 @@ export class ManualWatch {
       const valuesMoved = !fresh && st.valuesHash !== print.valuesHash
       if (!keysMoved && !valuesMoved) return null
       const gap = keysMoved ? FORCE_GAP_MS : RECHECK_MS
-      if (this.running || now - this.forcedAt < gap) return null
+      const day = zoneDate(now, this.d.zone)
+      if (this.forced.day !== day) this.forced = { day, count: 0 }
+      if (this.running || now - this.forcedAt < gap || this.forced.count >= MAX_FORCED_A_DAY) return null
       this.forcedAt = now
+      this.forced.count++
       console.log(`[${new Date().toISOString()}] FoxLeague's game settings changed (${keysMoved ? `keys: ${keys.length ? named(keys) : 'not shaped like keys'}` : 'rule values'}): checking its manual now`)
       return this.today(now, { force: true }).catch(() => null)
     } catch (err) {

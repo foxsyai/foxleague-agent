@@ -105,3 +105,21 @@ test('P-W3 the service tells the owner on Telegram at once, even with updates se
   const fn = src.slice(src.indexOf('  private async snapshot(index: number, plan = false)'), src.indexOf('  /**', src.indexOf('  private async snapshot(index: number, plan = false)')))
   assert.match(fn, /this\.manualWatch\.observeConfig\(snap\.config\)/)
 })
+
+test('P-W3 settings whose keys keep changing (a map keyed by ids) tell the owner at most every 6 hours and run at most 6 checks a day', async () => {
+  const server = mcp()
+  const w = watch(server)
+  await observe(w, configOf13Nov(), AT_0700)
+  const asked = server.state.asked
+  // Every 10 minutes from 07:00 to 23:00 UTC, one day of the summary's zone.
+  for (let m = 1; m <= 16 * 6; m++) {
+    const c = configOf13Nov()
+    c.rarity_next = { ...(c.rarity_next as object), [`Room${m}`]: 'x' }
+    await observe(w, c, AT_0700 + m * 10 * MIN)
+  }
+  const day1 = w.told.filter(t => t.startsWith("FoxLeague's game settings changed"))
+  assert.ok(day1.length >= 1 && day1.length <= 3, `told ${day1.length} times in 16 hours`)
+  // Six checks run by the settings a day at most (17 requests each with the real manual), not one every 10 minutes.
+  const checks = (server.state.asked - asked) / 3
+  assert.ok(checks >= 1 && checks <= 6, `${checks} checks in a day`)
+})
