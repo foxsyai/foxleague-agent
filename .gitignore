@@ -10,3 +10,5 @@ pem/
 *.local.md
 deploy/.host
 dist/
+.deps-new/
+.deps-old/

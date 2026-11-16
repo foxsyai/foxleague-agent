@@ -256,8 +256,28 @@ ensure_node() {
 cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 # Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
 # a newcomer reads that notice as something to do. npm's download cache and its logs stay in the install's own
-# folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind.
-deps() { (cd "$APP_DIR" && npm_config_cache="$ROOT/.npm-cache" npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+# folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind. In the folder named
+# (the release's own when none is).
+deps() { (cd "${1:-$APP_DIR}" && npm_config_cache="$ROOT/.npm-cache" npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+# The dependencies of this release. A release that has them may be the one that runs, and npm ci removes
+# node_modules before it installs: cut short (no network, a full disk, Ctrl-C or a closed window while npm is
+# silent), it left the running release without any, and the agent did not start again (INS-A1). So they are
+# installed beside, in .deps-new, and take the place of the old ones only once complete. A release that has none yet
+# (a new one) gets them in place.
+release_deps() {
+  local nm="$APP_DIR/node_modules" new="$APP_DIR/.deps-new" old="$APP_DIR/.deps-old"
+  rm -rf "$new" "$old"
+  if [ ! -e "$nm" ] && [ ! -L "$nm" ]; then
+    deps
+    return
+  fi
+  mkdir -p "$new" && cp "$APP_DIR/package.json" "$APP_DIR/package-lock.json" "$new/" || { rm -rf "$new"; return 1; }
+  deps "$new" || { rm -rf "$new"; return 1; }
+  [ -d "$new/node_modules" ] || { rm -rf "$new"; return 1; }
+  mv "$nm" "$old" || { rm -rf "$new"; return 1; }
+  mv "$new/node_modules" "$nm" || { mv "$old" "$nm"; rm -rf "$new"; return 1; }
+  rm -rf "$old" "$new"
+}
 
 # ---- the launcher (run.sh: what the service starts) and the command line (cli.sh). On an install made by get.sh
 # they sit in ROOT with an install.sh that hands over to the active release; in a git checkout all three are the
@@ -584,7 +604,7 @@ fi
 
 say "1/7 Node.js and dependencies"
 ensure_node
-deps
+release_deps || die "the dependencies could not be installed (npm says why above). What runs now was not changed. Check the connection, then run the installer again: cd $ROOT && ./install.sh"
 install_launcher
 mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 [ -f "$ENV_FILE" ] || install -m 600 /dev/null "$ENV_FILE"
