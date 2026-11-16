@@ -40,4 +40,7 @@ fi
 export FOXAGENT_ROOT="$ROOT"
 export AGENT_ENV_FILE="${AGENT_ENV_FILE:-$ROOT/.env}"
 export AGENT_DATA_DIR="${AGENT_DATA_DIR:-$ROOT/data}"
+# The wallet of this install's .env, as its installer and its service use it: recovery words exported in this terminal
+# would win over .env for Node.js and name another wallet (R2I-6).
+unset AGENT_MNEMONIC
 exec "$NODE" --disable-warning=ExperimentalWarning "$CODE/src/cli.ts" "$@"

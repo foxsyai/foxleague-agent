@@ -64,5 +64,25 @@ fi
 export FOXAGENT_ROOT="$ROOT"
 export AGENT_ENV_FILE="${AGENT_ENV_FILE:-$ROOT/.env}"
 export AGENT_DATA_DIR="${AGENT_DATA_DIR:-$ROOT/data}"
+# Recovery words exported in this terminal win over .env for Node.js: the agent would start with another wallet than
+# the one of this install's .env, the one its installer showed and asked to fund (R2I-6). Node.js compares them and
+# prints nothing; a .env without words (a container that passes them in) takes the words given.
+if [ -n "${AGENT_MNEMONIC:-}" ] && [ -f "$AGENT_ENV_FILE" ]; then
+  rc=0
+  FOXAGENT_GIVEN_WORDS="$AGENT_MNEMONIC" env -u AGENT_MNEMONIC "$NODE" -e '
+    const words = (s) => (s ?? "").trim().split(/\s+/).join(" ")
+    const given = words(process.env.FOXAGENT_GIVEN_WORDS)
+    delete process.env.FOXAGENT_GIVEN_WORDS
+    try { process.loadEnvFile(process.argv[1]) } catch { process.exit(4) }
+    const file = words(process.env.AGENT_MNEMONIC)
+    process.exit(!file || file === given ? 0 : 3)' "$AGENT_ENV_FILE" > /dev/null 2>&1 || rc=$?
+  if [ "$rc" = 3 ]; then
+    echo "foxleague-agent: AGENT_MNEMONIC is set in this terminal and its recovery words are not the ones in $AGENT_ENV_FILE: the agent would start with another wallet than this install's. Remove it (unset AGENT_MNEMONIC), then start again." >&2
+    exit 1
+  elif [ "$rc" != 0 ]; then
+    echo "foxleague-agent: AGENT_MNEMONIC is set in this terminal and could not be compared with the recovery words in $AGENT_ENV_FILE: remove it (unset AGENT_MNEMONIC), then start again." >&2
+    exit 1
+  fi
+fi
 cd "$CODE" || exit 1
 exec "$NODE" --disable-warning=ExperimentalWarning "$CODE/src/service.ts"
