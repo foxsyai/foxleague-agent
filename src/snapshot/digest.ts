@@ -395,14 +395,18 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // Every level is held to the field rule (Zeus only until 2026-11-06).
   if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
+  // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
+  let calendarBlind = false
   for (const t of m.openStandard.slice(0, 30)) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
     // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
-    const worn = s.team ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
-    if (worn) out.push(`    schedule: the executor refuses this join now: ${worn}`)
+    const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
+    if (worn && /could not be read/.test(worn)) calendarBlind = true
+    else if (worn) out.push(`    schedule: the executor refuses this join now: ${worn}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
   }
+  if (calendarBlind) out.push('  (schedule: your current tournaments or their upcoming matches could not be read, so the executor refuses every join until they are)')
   // League + Knockout invitations: accepted with join_tournament, by every level within its limits (owner, 2026-10-24).
   const invitations = s.auth?.invitations ?? []
   if (invitations.length) {

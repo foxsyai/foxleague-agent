@@ -48,3 +48,12 @@ test('BEH-3: a tournament the schedule fits carries no such mark', () => {
   assert.ok(at >= 0)
   assert.ok(!(lines[at + 1] ?? '').includes('schedule'), lines[at + 1])
 })
+
+test('BEH-3: an unread calendar is said once, not under every open tournament', () => {
+  const s = snapshot()
+  s.auth!.myTournaments = null // GET /api/tournaments/my failed
+  s.market.openStandard = [5568, 5569, 5570].map(id => (tournament(id, { format: 'knockout', max_teams: 8, min_teams: 8, round_interval_minutes: 30 }) as TournamentDetail).tournament)
+  const text = renderDigest(s)
+  assert.equal((text.match(/could not be read, so the executor refuses every join/g) ?? []).length, 1, text)
+  assert.doesNotMatch(text, /schedule: the executor refuses this join now/)
+})
