@@ -19,8 +19,10 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { zoneDate } from '../summary.ts'
 import { AnswerTooLargeError, readCapped } from '../util/http.ts'
+import { cut as cutText } from '../util/text.ts'
 import { LEFT_OUT, ROOT, undecidedPages } from './manual.ts'
 import { MAX_KEYS, changedKeys, configPrint, isConfigKey, isoTime, keyDiff, named, unknownSwitches, type RuleSwitch } from '../foxleague/config-watch.ts'
+import { MAX_TEXT_PAGES, PAGES_TEXT_MAX, PAGE_TEXT_MAX, shapePages, type PageText } from './page-text.ts'
 
 /** The agents' manual and the page record sync-manual writes next to it. */
 export const MANUAL_FILE = join(import.meta.dirname, 'manual.md')
@@ -49,6 +51,11 @@ const SLUG = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}$/
 const isSlug = (s: unknown): s is string => typeof s === 'string' && s.length <= MAX_SLUG && SLUG.test(s)
 /** The kv key of the day's check. */
 const KV = 'manual_check'
+/**
+ * The kv key of the text the check read of each changed page (MID-1), apart from the check's own row: the version
+ * before reads that row as it was and never this one.
+ */
+const TEXTS_KV = 'manual_texts'
 /**
  * Through the day (audit 2026-11-16, MNT-5 and MNT-6): a check that found the copy current is made again at the
  * service's next hourly look once this long has passed, so a manual FoxLeague deploys after the morning is seen within
@@ -91,6 +98,8 @@ export interface ManualRecord {
 }
 
 export type ManualState = 'current' | 'behind' | 'unknown'
+/** A check with the text it read of the changed pages (MID-1): kept for the plans, never shown or told. */
+export type CheckResult = ManualCheck & { texts?: PageText[] }
 export interface ManualCheck {
   state: ManualState
   /** The pages that differ, in FoxLeague's order: "slug", "slug (new)" or "slug (gone)". */
@@ -249,7 +258,7 @@ export interface CheckOptions {
  * The check: FoxLeague's page list, then each page the agents know that FoxLeague still serves, one at a time with a
  * pause between them. The first failure ends it ("unknown"); nothing is asked again.
  */
-export async function checkManual(o: CheckOptions): Promise<ManualCheck> {
+export async function checkManual(o: CheckOptions): Promise<CheckResult> {
   const at = new Date().toISOString()
   const record = validRecord(o.record)
   const synced = record?.synced ?? null
@@ -271,20 +280,36 @@ export async function checkManual(o: CheckOptions): Promise<ManualCheck> {
     if (!slugs.length || slugs.length > MAX_PAGES || slugs.some(s => !isSlug(s))) throw new CheckError(UNREADABLE)
     const live = [...new Set(slugs as string[])]
     const differ: string[] = []
+    // The text of each changed page the record knows, as served (MID-1), for the plans: the answer the comparison read
+    // anyway, kept within its bounds. Nothing more is asked for it.
+    const texts: PageText[] = []
+    let total = 0
+    const keep = (slug: string, body: string) => {
+      if (texts.length >= MAX_TEXT_PAGES || total >= PAGES_TEXT_MAX) return
+      const [page] = shapePages([{ slug, text: cutText(body, Math.min(PAGE_TEXT_MAX, PAGES_TEXT_MAX - total)), full: body.length }])
+      if (!page) return
+      texts.push(page)
+      total += page.text.length
+    }
     for (const slug of live) {
       if (leftOut(slug)) continue
       const known = record.pages[slug]
       if (known === undefined) {
+        // A page the copy does not know is named only: its text is not read (the record says nothing of it).
         differ.push(`${slug} (new)`)
         continue
       }
       const page = await call('get_manual_page', { slug })
       const text = page && typeof page === 'object' && (page as { slug?: unknown }).slug === slug ? (page as { text?: unknown }).text : undefined
       if (typeof text !== 'string') throw new CheckError(UNREADABLE)
-      if (fingerprint(liveBody(text)) !== known) differ.push(slug)
+      const body = liveBody(text)
+      if (fingerprint(body) !== known) {
+        differ.push(slug)
+        keep(slug, body.trim())
+      }
     }
     for (const slug of Object.keys(record.pages)) if (!live.includes(slug)) differ.push(`${slug} (gone)`)
-    return { state: differ.length ? 'behind' : 'current', pages: differ, why: null, synced, at }
+    return { state: differ.length ? 'behind' : 'current', pages: differ, why: null, synced, at, texts }
   } catch (err) {
     if (err instanceof CheckError) return unknown(err.message)
     if (deadline.aborted) return unknown(`the check took longer than ${Math.round((o.deadlineMs ?? CHECK_DEADLINE_MS) / 1000)} seconds`)
@@ -457,7 +482,10 @@ export class ManualWatch {
     const run = async (): Promise<ManualCheck> => {
       // Marked before anything is asked: a check that a restart cuts short counts as a try that could not tell.
       this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key, tried: now, fails }))
-      const c = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
+      const { texts, ...c } = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
+      // The changed pages' text in a row of its own, tied to this check (MID-1): written first, so the check it
+      // belongs to never shows without it. Emptied by any check that did not find the copy behind.
+      this.d.kv.set(TEXTS_KV, JSON.stringify({ copy: copy.key, at: c.at, pages: c.state === 'behind' ? (texts ?? []) : [] }))
       this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key, tried: now, fails: c.state === 'unknown' ? fails : 0 }))
       // Current (or not yet known) to behind, or more pages behind: the owner hears it now, once (P-W3). `quiet`: the
       // caller sends the line itself (the morning summary, /summary), so it is only marked as told.
@@ -563,6 +591,26 @@ export class ManualWatch {
     const pages = last?.state === 'behind' ? last.pages.filter(p => typeof p === 'string') : []
     const keys = this.changed()
     return pages.length || keys.length ? { pages, keys } : null
+  }
+
+  /**
+   * FoxLeague's current text of the pages that changed since the agents' copy (MID-1), as the check that found the copy
+   * behind read it: for the plan request and the manager chat, inside their snapshot fence (page-text.ts). Nothing while
+   * the copy is current, while the check could not tell, or for a check of another copy. Read from the database: no
+   * plan asks FoxLeague.
+   */
+  planPages(): PageText[] {
+    if (!this.enabled) return []
+    const last = this.shown()
+    if (last?.state !== 'behind') return []
+    try {
+      const v = JSON.parse(this.d.kv.get(TEXTS_KV) ?? 'null') as { copy?: unknown; at?: unknown; pages?: unknown } | null
+      if (!v || v.copy !== last.copy || v.at !== last.at || !Array.isArray(v.pages)) return []
+      const changed = new Set(last.pages.map(p => String(p).replace(/ \((?:new|gone)\)$/, '')))
+      return shapePages(v.pages.filter(p => changed.has(String((p as { slug?: unknown } | null)?.slug))))
+    } catch {
+      return []
+    }
   }
 
   /** The morning summary's line: today's check; "could not check" when there is none for today of this copy. */
