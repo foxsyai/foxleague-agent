@@ -13,6 +13,8 @@ import type { Tournament } from '../foxleague/types.ts'
 import { leaveLockLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { outInjured, scheduleRefusal } from '../executor/rules.ts'
 import type { AgentSnapshot } from './snapshot.ts'
+// FoxLeague's own words only in the shape of a word or a time (ATK-5); functions only, so the import cycle with the digest is safe.
+import { when, word } from './digest.ts'
 
 /** What the create's checks answer now for a tournament the agent created. */
 export type OwnFit = { fits: true } | { fits: false; why: string } | { unknown: string }
@@ -58,7 +60,7 @@ export function ownTournamentLines(s: AgentSnapshot): string[] {
     const seatedRead = typeof t.participant_count === 'number' ? t.participant_count : listed?.participant_count
     const seated = typeof seatedRead === 'number' && Number.isSafeInteger(seatedRead) ? seatedRead : null
     const start = Date.parse(t.starts_at)
-    const head = `Your own T${t.id} (${t.format} of ${t.max_teams}, min ${t.min_teams}, ${seated ?? '?'} of ${t.max_teams} seated, starts ${Number.isFinite(start) ? at16(start) : t.starts_at}, registration closes ${at16(deadline)})`
+    const head = `Your own T${t.id} (${word(t.format)} of ${t.max_teams}, min ${t.min_teams}, ${seated ?? '?'} of ${t.max_teams} seated, starts ${Number.isFinite(start) ? at16(start) : when(t.starts_at)}, registration closes ${at16(deadline)})`
     const fit = ownTournamentFit(s, t, now)
     if ('unknown' in fit) {
       out.push(`${head}: could not check whether it still fits (${fit.unknown}): unknown, not a fit; the next plan checks again`)
