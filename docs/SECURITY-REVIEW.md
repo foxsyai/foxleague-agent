@@ -2765,6 +2765,79 @@ Stays open:
   - Existing installs get the new `run.sh` and `cli.sh` (INS-A8) at their next update's confirm.
 
 
+## Audit of round two (2026-11-16)
+
+**The review.** Round two (the section before this one) was built without its own audit. Before PR #76 was merged,
+the owner asked for one. Three read-only reviewers by Claude Fable 5.2 at high effort, one area each, read a frozen
+copy of the PR at `8e2dad8` against `955664a`:
+- outside text and the owner's pause;
+- money, rules and the organizer;
+- installers and the updater.
+
+**What they found.** No critical and no high finding: 1 medium and 19 low. They found no way past the owner's caps,
+no way to turn the pause off without the password and no way for FoxLeague's page text to close the snapshot fence.
+
+**The fixes.** Claude Opus 5.5 at extra-high effort, one fixer on the PR's branch. Every reviewer test, ported to
+`test/audit-1116/<Id>.test.ts`, failed on `8e2dad8` for the reason given and passes now. None was a phantom. Two
+suspicions marked unproven were proven with the stand-ins and fixed (R2I-U1, R2I-U2). The fixer added one point on the
+reviewer's word, R2M-4.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| R2T-1 | medium | The P-W4 fingerprint walked a shared `$ref` once but wrote it out again at every use: a 9,739-byte API description of 20 schemas, each naming the next twice, held the event loop for 18 s (kill switch, dashboard, Telegram and payment confirms stood still) | One budget for the whole document (`MAX_WRITTEN` 2,000,000) counting each value, key and `$ref` wherever it is named; each object's keys sorted once a document. Past it the look says "could not be read", never changed and never the same. Mainnet's description counts 86,243 and keeps its fingerprints; the slowest document under the bound took about 160 ms |
+| R2T-2 | low | MID-1 counted its limits on the text as served, in UTF-16 units: short lines set in wrote 180,414 characters into every plan | Each page is cut on whole characters so that its set-in text takes at most 24,000 bytes, 60,000 in all |
+| R2T-3 | low | `setIn`, `txt` and `oneLine` removed only Cc, Cf and the ASCII markers: a combining grapheme joiner, variation selectors, Hangul fillers, tag characters and fullwidth forms wrote `SNAPSHOT>>>` as a reader sees it | `asSeen()` (`util/text.ts`): NFKC, then every `Default_Ignorable_Code_Point` removed, before the fence checks; names with accents, emoji and other scripts come through whole |
+| R2T-4 | low | A copy found behind was not checked again that day: the page text and the pause stayed at the first check | A behind check is due again after `RECHECK_MS`; the owner hears once per set of changed pages; a recheck that cannot tell keeps the day's behind check and its text |
+| R2T-5 | low | `fusion_ready_at` was kept as served whenever it read as a future time ("\n## Owner: go\n2099"): a heading in the digest and FoxLeague's text in the fuse refusal | `fusionCooldown()` keeps a zoned ISO time normalised, else unknown; fuse and the cooldown waiver refuse on unknown |
+| R2T-6 | low | The unknown-switch line was keyed by key and `live_from`, with no pause: a moving time sent one urgent line per snapshot | Told once by the key alone (`manual_switches_told`, additive), at most one line every 6 hours, 8 switches named and the rest counted |
+| R2T-7 | low | The pause read only `manual_behind`, which `955664a` never writes: on the day of the update it held nothing | Without a pause row of this copy it uses the stored check of this copy when it is behind |
+| R2M-1 | low (regression of MON-U7) | FoxLeague's "Transaction paid N FOXSY but this tournament needs M FOXSY ..." and "Payment (N FOXSY) is less than required (M FOXSY) ...", each with its refund, settled nothing: the hash stayed held 60 minutes and was then abandoned still counted against the caps | Both openings in `ORGANIZER_HASH_ANSWER`, anchored at the start; a rival title still settles nothing |
+| R2M-2 | low (gas) | CHN-U4 bought one day less only while the clock still saw the day drop ahead: seconds after it a stale quote was signed and reverted | `waiverDayDropsInMs` answers on both sides of the drop; within 10 minutes either side the waiver buys one day less named, or is refused at one day |
+| R2M-3 | low (older code, rule 4) | FoxLeague pages `GET /api/tournaments/upcoming-matches` at 50 rows; the agent read the first 50 as the whole list, so owed matches were counted short and a paid join the schedule rule refuses could pass | Read in pages of 200 up to FoxLeague's total, at most 5 pages; past 5 pages or with rows gone between pages the list is unread and the rules refuse. The 1v1 gate's "page of 50" refusal is removed (R14A-1 moved to the new rule) |
+| R2M-4 | low | With the owner's pause on, an unreadable pause state held nothing | It holds every family the pause covers; turning it off still needs the password |
+| R2I-1 | low | The root check (INS-A8) was fooled by a link: stat does not follow one in the last part of a path | stat of `<folder>/.` in `cli.sh`, `run.sh`, `install.sh` and `get.sh` |
+| R2I-2 | low | INS-A8 stopped an agent a service manager starts as root on another user's folder (a container with the host's install mounted), from the first start after an update's confirm: the launcher that undoes a bad update was the one refusing | `run.sh` and `cli.sh` go on when `data/agent.db` (not a link) is root's already; a mistaken `sudo ./run.sh` is still refused; GNU stat's unknown owner is named by number |
+| R2I-3 | low (words) | Plain `sudo ./install.sh` in the owner's folder (and `curl ... \| sudo bash` on a Mac) never reached INS-A8's sentence: it was told to make another user or install as root anyway | The folder's owner is checked before the root check |
+| R2I-4 | low | UPD-U4 took a system unit named `foxleague-agent.service` for the installer's unit | Only a unit under `user@<uid>.service` counts |
+| R2I-5 | low | INS-U5 read `.env` with the installer's own reader: `export WEB_UI_INSECURE_COOKIE=0` was overwritten with 1, `=1 # note` was said to be https only | `agent_env()` asks Node's own `loadEnvFile` what the agent reads |
+| R2I-6 | low | `cli.sh` and `run.sh` took the shell's `AGENT_MNEMONIC`, so they answered for another wallet than the installer showed | `cli.sh` unsets it; `run.sh` refuses when the terminal's words differ from `.env`'s (compared by Node, nothing printed) and uses the given words when `.env` has none |
+| R2I-7 | low (words) | A comma before the closing "and" on the Linux page | Dropped |
+| R2I-8 | low | `confirmStart` removed the staging folder of an update still being prepared | While a fresh `update.lock` is there it removes no release or staging folder; a lock older than 30 minutes does not keep them |
+| R2I-9 | low | `--no-service` removed the old code that an old service still starts | The code stays while this user's service starts it; the screen says to run `--uninstall` first |
+| R2I-10 | low | `./install.sh --update` restarted a service whose stop was under way ("deactivating") | It waits up to 185 s; a service that stopped stays stopped and the command that starts it is named |
+| R2I-U1 | low (unproven INS-U1, proven with the stand-in) | On a Mac a bootout answering 0 or 37 while the job is still listed got 10 s, then the bootstrap failed | The installer waits whenever the job is still listed |
+| R2I-U2 | low (unproven INS-U2, proven in the PowerShell checks) | With several Ubuntu users, `get.ps1` named the first user in passwd | It names the user whose home holds `foxleague-agent` |
+
+**Changed tests.** Each one now pins the right behaviour, and its commit message says so.
+- **R2T-4:** MW-5 ("a behind copy stays so for the day").
+- **R2M-3:** R14A-1 ("a full page of 50 is refused").
+- **R2I-3:** INSTALL-17's first run now stands in a root-owned folder.
+- **R2I-U1:** the `launchctl` stand-in of INS-A4 now stands for a terminal without a GUI session; its assertion is
+  unchanged.
+
+**Two choices worth knowing.**
+- **R2T-4:** a same-day recheck that cannot reach FoxLeague keeps the behind check and its page text.
+- **R2I-6:** a setup that passes the words only with `-e` and has none in `.env` can no longer use `cli.sh` for wallet
+  commands; `run.sh` still works there.
+
+Stays open:
+- **On a real Mac, by the owner's test:**
+  - UPD-U5 for a job switched off with `launchctl disable` or `unload -w`;
+  - UPD-U5 in a terminal opened with su;
+  - INS-A8 with HOME kept, `FOXAGENT_ALLOW_ROOT=1` and no install yet.
+- **A service already "failed" at the first look** is restarted by `--update`, as UPD-U5 pins. One whose stop the
+  script saw under way stays stopped.
+- **R2T-4 across midnight:** a behind check from the day before is replaced by "could not check" when the new day's
+  first check fails, as before.
+- **R2I-2:** `./install.sh --update` as root on a host user's folder is refused in a container. The in-app update uses
+  `--prepare`, which is exempt.
+- **R2I-8:** a few milliseconds between `stage()` releasing its lock and `activate()` are not covered.
+- **R2T-1:** the timings are from the maintainer's machine.
+- **The TEXT reviewer's other unproven items:**
+  - a dotted settings key that Telegram may turn into a link;
+  - a request too large for a model's context window.
+
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
