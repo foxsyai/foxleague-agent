@@ -762,17 +762,22 @@ export class ManualWatch {
 
   /**
    * The pages the copy installed now was last found behind on (P-W7), until a check finds it current or another copy
-   * comes. Not ended by a check that could not tell: an unread manual is no synced copy.
+   * comes. Not ended by a check that could not tell: an unread manual is no synced copy. Without a row of this copy
+   * (the day's check was made by the version before, which writes none: R2T-7), the stored check of this copy when it
+   * found it behind.
    */
   behindPages(): string[] {
     if (!this.enabled) return []
+    const pages = (list: unknown[]) => list.filter((p): p is string => typeof p === 'string' && isSlug(p.replace(/ \((?:new|gone)\)$/, '')))
+    const copy = this.copy().key
     try {
       const v = JSON.parse(this.d.kv.get(BEHIND_KV) ?? 'null') as { copy?: unknown; pages?: unknown } | null
-      if (!v || v.copy !== this.copy().key || !Array.isArray(v.pages)) return []
-      return v.pages.filter((p): p is string => typeof p === 'string' && isSlug(p.replace(/ \((?:new|gone)\)$/, '')))
+      if (v && v.copy === copy && Array.isArray(v.pages)) return pages(v.pages)
     } catch {
-      return []
+      // Not a row of this copy: the stored check below.
     }
+    const last = this.shown()
+    return last?.state === 'behind' ? pages(last.pages) : []
   }
 
   /** The pages whose actions the executor holds now (P-W7): none while the owner chose "tell only". */
