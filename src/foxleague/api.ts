@@ -86,8 +86,8 @@ export class FoxLeague {
 
   // ---- plumbing ----
 
-  private async call<T>(path: string, opts: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; wallet?: AgentWallet; timeoutMs?: number; raw?: boolean; headers?: Record<string, string>; seen?: (headers: Headers | undefined) => void } = {}): Promise<T> {
-    const doCall = async (): Promise<{ status: number; json: unknown; headers?: Headers }> => {
+  private async call<T>(path: string, opts: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; wallet?: AgentWallet; timeoutMs?: number; raw?: boolean; headers?: Record<string, string>; seen?: (headers: Headers) => void } = {}): Promise<T> {
+    const doCall = async (): Promise<{ status: number; json: unknown }> => {
       const headers: Record<string, string> = { ...opts.headers }
       if (opts.wallet) headers.authorization = `Bearer ${await this.token(opts.wallet)}`
       try {
@@ -96,6 +96,8 @@ export class FoxLeague {
           body: opts.body,
           headers,
           timeoutMs: opts.timeoutMs,
+          // The headers of the answer read last: a 401 asked again gives those of the second answer.
+          onHeaders: opts.seen,
         })
       } catch (err) {
         // The auth extractor's 401 has a plain-text body, which requestJson reports as HttpError.
@@ -109,7 +111,6 @@ export class FoxLeague {
       res = await doCall()
     }
     if (res.status === 401) throw new ApiRefusal('session rejected (401)')
-    opts.seen?.(res.headers)
     if (opts.raw) {
       // A route answered without the envelope has only its HTTP status to say it failed: an error status with a JSON
       // body (FoxLeague's own, or an edge in front of it) is no answer of the route (audit 2026-11-11, EDGE-6). The
@@ -304,7 +305,7 @@ export class FoxLeague {
       const part = await this.call<UpcomingMatches>(`/tournaments/upcoming-matches?limit=${UPCOMING_LIMIT}&offset=${rows.length}`, {
         wallet: w,
         seen: h => {
-          const t = h?.get('x-total-count')
+          const t = h.get('x-total-count')
           total = t && /^\d{1,9}$/.test(t.trim()) ? Number(t.trim()) : null
         },
       })

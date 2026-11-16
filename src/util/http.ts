@@ -86,9 +86,11 @@ export interface RequestOptions {
    * for a pause of more than a minute (Retry-After) is not retried: its answer comes back at once.
    */
   retries?: number
+  /** Given the headers of the answer returned (FoxLeague's X-Total-Count of a paged list, R2M-3). */
+  onHeaders?: (headers: Headers) => void
 }
 
-export async function requestJson<T>(limiter: RateLimiter, url: string, opts: RequestOptions = {}): Promise<{ status: number; json: T; headers?: Headers }> {
+export async function requestJson<T>(limiter: RateLimiter, url: string, opts: RequestOptions = {}): Promise<{ status: number; json: T }> {
   const method = opts.method ?? 'GET'
   const retries = opts.retries ?? (method === 'GET' ? 3 : 0)
   let attempt = 0
@@ -130,7 +132,8 @@ export async function requestJson<T>(limiter: RateLimiter, url: string, opts: Re
     } catch {
       throw new HttpError(res.status, text, url)
     }
-    return { status: res.status, json: json as T, headers: res.headers }
+    opts.onHeaders?.(res.headers)
+    return { status: res.status, json: json as T }
   }
 }
 
