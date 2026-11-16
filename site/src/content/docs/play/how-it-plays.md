@@ -35,7 +35,7 @@ the normal tick).
   one that does best in the pooled record and the league table, and saves a new formation together with the eleven
   it needs.
 - **Ranked and casual matches**: the daily allowance, never closer than a match holds the team (up to about 16 minutes: the game and its broadcast) or the
-  ranked cooldown (15 minutes in the game), so the plan spaces any two of them 16 minutes apart, counting the last match before the plan. A first match
+  ranked cooldown (15 minutes in the game; the plan spaces ranked games 16 minutes apart to be sure), so any two of them start 16 minutes apart, counting the last match before the plan. A first match
   moves earlier in the plan's window to leave the next one room; a match that still does not fit waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
 - **Casual test bench**: FoxLeague plays a casual game against an AI built at your team's own OVR with a random
@@ -95,10 +95,10 @@ the normal tick).
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
   FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within
   2 minutes of its creation counts as arranged); a challenge to a team that never answers only locks the stake until
-  its deadline. An open challenge is never its default 1v1: it posts one only when the squad needs competitive matches
-  it cannot get from a targeted challenge, a tournament or ranked, since the teams that take one tend to be the strongest
-  its range lets in. Any team inside its OVR range can take it, often within minutes: its range tops out at your team's
-  own best XI OVR and starts about 10 percent under it (both ends, always), so FoxLeague itself keeps every stronger team out, at any of your amounts and as
+  its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
+  out at your team's own best XI OVR and starts about 10 percent under it (both ends, always). The teams that take one
+  tend to be the strongest its range lets in, so it is never the agent's default 1v1: it posts one only when the squad
+  needs competitive matches it cannot get from a targeted challenge, a tournament or ranked. Then FoxLeague itself keeps every stronger team out, and the agent may post one at any of your amounts and as
   often as FoxLeague's one active 1v1 allows; since that rating ignores condition, it waits while a fresh team at the
   top would be more than 10 percent stronger than your starting eleven at today's condition, and while one waits for a
   taker it plays no ranked game, trains no starter and sets no eleven that would break that. And it may take an open challenge another team posted. It can leave its
