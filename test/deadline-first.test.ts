@@ -79,6 +79,15 @@ async function runPlanned(t0: number, actions: PlannedAction[], planSnap: AgentS
   return ran
 }
 
+/**
+ * A seat this team holds in another team's tournament: a leave that has only its deadline. Since BEH-9 (audit
+ * 2026-11-16) leaving the agent's own unanswered 1v1, the T5976 of these tests, runs first whatever its deadline
+ * (test/audit-1116/BEH-9.test.ts), so the deadline rule is shown here on a seat.
+ */
+function seat(id: number, deadline: number | string): Tournament {
+  return open(id, deadline, { max_teams: 8, min_teams: 4, creator_user_id: 900, target_user_id: null })
+}
+
 /** A snapshot whose own tournaments (myTournaments.active) hold these. */
 function holding(...ts: Tournament[]): AgentSnapshot {
   const s = snapshot()
@@ -88,7 +97,7 @@ function holding(...ts: Tournament[]): AgentSnapshot {
 
 test('DL-1: a leave_tournament whose deadline is 12 minutes after the plan\'s start runs at least 5 minutes before it, whatever the random draw', async () => {
   const t0 = Date.now()
-  const ran = await runPlanned(t0, [act({ type: 'leave_tournament', tournament_id: 5976 })], holding(open(5976, t0 + 12 * MIN)), () => 0.99)
+  const ran = await runPlanned(t0, [act({ type: 'leave_tournament', tournament_id: 5976 })], holding(seat(5976, t0 + 12 * MIN)), () => 0.99)
   assert.equal(ran.length, 1)
   // The draw alone put it at 47.5 minutes, 35 minutes after the 1v1 ran out.
   assert.ok(ran[0]!.ms <= 12 * MIN - 5 * MIN, `the leave runs ${(ran[0]!.ms / MIN).toFixed(2)} min after the plan's start; its deadline is at 12`)
@@ -109,7 +118,7 @@ test('DL-2: the plan\'s order holds when a later deadline action moves earlier: 
     act({ type: 'leave_tournament', tournament_id: 5976 }),
     act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 2500, target_user_id: 878, deadline_minutes: 240 }),
   ]
-  const ran = await runPlanned(t0, plan, holding(open(5976, t0 + 12 * MIN)), () => 0.99)
+  const ran = await runPlanned(t0, plan, holding(seat(5976, t0 + 12 * MIN)), () => 0.99)
   assert.deepEqual(ran.map(r => r.type), plan.map(p => p.action.type), 'every action, in the plan\'s order')
   // The ones before it are spaced 90 s back from it (an action's own run: a fresh snapshot, a transaction and its
   // confirmation), so their run time does not push the leave late; the challenge after it keeps its random moment.
@@ -117,23 +126,23 @@ test('DL-2: the plan\'s order holds when a later deadline action moves earlier: 
   // A lineup saved for a match still comes before that match, and both before the leave that follows them.
   const lineup = act({ type: 'set_lineup', lineup: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], substitutes: [12, 13, 14, 15, 16, 17, 18] })
   const match = [lineup, act({ type: 'play_match', match_type: 'casual' }), act({ type: 'leave_tournament', tournament_id: 5976 })]
-  const withMatch = await runPlanned(t0, match, holding(open(5976, t0 + 20 * MIN)), () => 0.99)
+  const withMatch = await runPlanned(t0, match, holding(seat(5976, t0 + 20 * MIN)), () => 0.99)
   assert.deepEqual(withMatch.map(r => r.type), ['set_lineup', 'play_match', 'leave_tournament'])
   assert.deepEqual(mins(withMatch), [12, 13.5, 15])
   // An earlier action whose own draw is earlier keeps it.
   const draws = [0.05, 0.5, 0.9, 0.95]
-  const early = await runPlanned(t0, plan.slice(1), holding(open(5976, t0 + 12 * MIN)), () => draws.shift() ?? 0)
+  const early = await runPlanned(t0, plan.slice(1), holding(seat(5976, t0 + 12 * MIN)), () => draws.shift() ?? 0)
   assert.deepEqual(mins(early), [2.4, 5.5, 7, 45.6])
 })
 
 test('DL-3: a deadline already past or within the margin runs at once, at the first slot', async () => {
   const t0 = Date.now()
   const leave = act({ type: 'leave_tournament', tournament_id: 5976 })
-  assert.deepEqual(mins(await runPlanned(t0, [leave], holding(open(5976, t0 + 3 * MIN)), () => 0.99)), [0], 'deadline in 3 minutes, inside the margin')
-  assert.deepEqual(mins(await runPlanned(t0, [leave], holding(open(5976, t0 - MIN)), () => 0.99)), [0], 'deadline a minute ago: the executor says why it cannot leave, at once')
+  assert.deepEqual(mins(await runPlanned(t0, [leave], holding(seat(5976, t0 + 3 * MIN)), () => 0.99)), [0], 'deadline in 3 minutes, inside the margin')
+  assert.deepEqual(mins(await runPlanned(t0, [leave], holding(seat(5976, t0 - MIN)), () => 0.99)), [0], 'deadline a minute ago: the executor says why it cannot leave, at once')
   // Behind an action of the plan: right after it, at the gap.
   const train = act({ type: 'train', player_nonce: 1, attribute: 'speed' })
-  assert.deepEqual(mins(await runPlanned(t0, [train, leave], holding(open(5976, t0 + 3 * MIN)), () => 0.99)), [0, 0.5])
+  assert.deepEqual(mins(await runPlanned(t0, [train, leave], holding(seat(5976, t0 + 3 * MIN)), () => 0.99)), [0, 0.5])
 })
 
 test('DL-4: a deadline action whose deadline cannot be read runs early, never late', async () => {

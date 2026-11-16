@@ -8,7 +8,8 @@ at everything a player can see: its squad and their condition, its budget, open 
 prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.
 The actions run in the plan's order, spread over the cycle; one with a deadline (joining or leaving before registration
-closes, widening a range or bidding before the auction ends) runs at least 5 minutes before it.
+closes, widening a range or bidding before the auction ends) runs at least 5 minutes before it. Leaving its own 1v1
+that nobody has taken yet and taking another team's open 1v1 run at the start of the plan: any team could take either first.
 It also reads what it did lately and its previous plan (summary and actions, up to 2,000 characters), and each plan says again what the agent still
 means to do later (ranked games after a 1v1, saving for an entry, a tournament watched until its deadline), so a
 goal carries on for as long as it holds. Where the fresh look says something else, the fresh look wins.

@@ -27,7 +27,7 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { actionDeadline } from './executor/deadlines.ts'
+import { actionDeadline, type Deadline } from './executor/deadlines.ts'
 import { PLAN_WINDOW_SHARE } from './executor/slots.ts'
 import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
@@ -127,6 +127,11 @@ export interface ScheduledAction {
  * ACTION_RUN_MS apart, so a lineup still comes before its match and a swap before the bid it funds. A match gate before
  * it still holds it back (the order is never changed to pass a match).
  *
+ * A deadline of 'now' (another team can make the action pointless at any moment) runs at the start of the window like
+ * an unread one. Taking another team's open 1v1 keeps the plan's order, so the swap that funds it still comes first
+ * (BEH-10). Leaving the agent's own unanswered 1v1 is the one action moved: it runs first, before anything else of the
+ * plan (BEH-9), and the actions after it keep their order.
+ *
  * The drops are decided first, as without deadlines (R70A-2), and the kept actions are placed with the deadlines after.
  * Placed in one pass, a match moved earlier with a deadline action after it could make room for one that was dropped
  * without deadlines, whose gate then held the deadline action past its deadline (or push out one that was kept). With
@@ -134,9 +139,15 @@ export interface ScheduledAction {
  * than it would without deadlines.
  */
 export function scheduleActions(
-  actions: PlannedAction[],
-  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: (number | 'unread' | null)[] },
+  planned: PlannedAction[],
+  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: Deadline[] },
 ): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
+  // Leaving the agent's own unanswered 1v1 runs first, before anything else of the plan (audit 2026-11-16, BEH-9): it
+  // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play.
+  const first = (i: number) => o.deadlines?.[i] === 'now' && planned[i]!.action.type === 'leave_tournament'
+  const order = planned.map((_, i) => i).sort((x, y) => Number(first(y)) - Number(first(x)) || x - y)
+  const actions = order.map(i => planned[i]!)
+  const deadlines = o.deadlines ? order.map(i => o.deadlines![i] ?? null) : undefined
   const raw = actions.map(() => o.random() * o.windowMs).sort((a, b) => a - b)
   // Without deadlines: what is dropped, and why.
   const plain = placeActions(actions, raw, actions.map(() => Infinity), o, null)
@@ -148,8 +159,8 @@ export function scheduleActions(
   let next = Infinity
   for (let i = actions.length - 1; i >= 0; i--) {
     if (dropped.has(i)) continue
-    const d = o.deadlines?.[i] ?? null
-    const own = d === 'unread' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
+    const d = deadlines?.[i] ?? null
+    const own = d === 'unread' || d === 'now' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
     latest[i] = Math.min(own, next)
     next = latest[i]! - Math.max(o.gapMs, ACTION_RUN_MS)
   }

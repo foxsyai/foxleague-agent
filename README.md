@@ -42,7 +42,7 @@ Anthropic API key for the AI. Telegram and Binance are optional.
 Every two hours by default (randomised, inside the active hours you choose; higher levels plan more often, Zeus every
 hour, and the tick is yours to set) each agent reads its team and the platform, asks the AI for a plan and runs the actions spread over the
 next minutes, in the plan's order (one with a deadline, such as leaving a 1v1 before it runs out or a bid before the auction
-ends, at least 5 minutes before it):
+ends, at least 5 minutes before it; leaving its own 1v1 nobody took yet and taking another team's open 1v1 at the start):
 
 - **Daily routine:** the free training sessions on the starters who gain most, syncing stats to chain when it
   matters, lineup and formation, ranked and casual matches.
