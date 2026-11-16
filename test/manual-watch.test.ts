@@ -241,9 +241,10 @@ function memoryKv() {
   return { get: (k: string) => m.get(k) ?? null, set: (k: string, v: string) => void m.set(k, v), m }
 }
 
-test('MW-5 through the day: within the hour a second call, a call meanwhile and a restart ask nothing more; a current copy is checked again each hour, a behind one stays so for the day and a failed check is tried again up to 4 times a day', async () => {
+test('MW-5 through the day: within the hour a second call, a call meanwhile and a restart ask nothing more; a current or behind copy is checked again each hour and a failed check is tried again up to 4 times a day', async () => {
   // Until the audit of 2026-11-16 the check was made once a day whatever it found (MNT-5, MNT-6): this test pinned
-  // that. It now holds the check through the day.
+  // that. It now holds the check through the day. Until R2T-4 (round two of that audit) a copy found behind stayed so
+  // for the day, and this test pinned that too: the plans then read only the morning's text of the changed pages.
   const record = recorded()
   const kv = memoryKv()
   const live = foxleagueMcp()
@@ -263,13 +264,15 @@ test('MW-5 through the day: within the hour a second call, a call meanwhile and 
   await w.today(Date.parse('2026-11-17T07:00:00Z'))
   assert.equal(live.seen.length, 3 * set, 'the next day: one more')
 
-  // A copy found behind stays so for the day: nothing more is asked until the next day.
+  // A copy found behind is checked again each hour too (R2T-4), not within the hour.
   const fusion = { ...SOURCE, 'mechanics/fusion.mdx': SOURCE['mechanics/fusion.mdx']!.replace('same rarity', 'same rarity, none of them injured') }
   const newer = foxleagueMcp(fusion)
   const n = watch(newer.fetch, memoryKv())
   assert.equal((await n.today(morning))?.state, 'behind')
+  await n.today(morning + 30 * 60_000)
+  assert.equal(newer.seen.length, set, 'within the hour: no second request set')
   for (let h = 1; h <= 12; h++) assert.equal((await n.today(morning + h * 3600_000))?.state, 'behind')
-  assert.equal(newer.seen.length, set)
+  assert.equal(newer.seen.length, 13 * set, 'a copy found behind is checked again at each hourly look')
 
   // A failed check is tried again at the hourly looks, at most 4 tries a day, and the next day again.
   const down = foxleagueMcp(SOURCE, SIDEBAR, { answer: () => new Response('', { status: 503 }) })

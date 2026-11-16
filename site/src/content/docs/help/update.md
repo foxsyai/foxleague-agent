@@ -142,7 +142,7 @@ terminal still updates.
 
 Your agents play by FoxLeague's player manual: each version of the agent carries a copy of it. From the hour of the
 morning summary the agent reads the manual FoxLeague serves and compares each page your agents read with that copy,
-again every hour while they match. It asks FoxLeague's public read-only server and sends nothing of yours. Each
+again every hour, also once a page differs, so a later change the same day is seen within the hour. It asks FoxLeague's public read-only server and sends nothing of yours. Each
 snapshot also compares FoxLeague's game settings with the ones the copy was built against: when FoxLeague adds or
 removes a setting, the manual is checked at once.
 

@@ -1,6 +1,6 @@
 // Whether FoxLeague's live manual has moved ahead of the agents' copy (manual.md), checked without a FoxLeague
-// checkout, so the server can do it. From the morning summary's hour on, every hour while the copy is current (and up
-// to MAX_TRIES a day while it cannot tell), the service asks FoxLeague's public, read-only MCP server
+// checkout, so the server can do it. From the morning summary's hour on, every hour (up to MAX_TRIES a day in a row
+// while it cannot tell), the service asks FoxLeague's public, read-only MCP server
 // (https://foxleague.ai/mcp) for its manual pages (the tools list_manual_pages and get_manual_page) and compares each
 // page the agents take in with the fingerprint sync-manual recorded for it in manual-pages.json. The pages change
 // only when FoxLeague's manual changes, not with every FoxLeague deploy. FoxLeague's game settings, which every
@@ -70,9 +70,10 @@ const API_KV = 'api_check'
 /** The largest API description read (mainnet's is about 1 MB): counted as it streams, refused past it. */
 export const MAX_API_BYTES = 4 * 1024 * 1024
 /**
- * Through the day (audit 2026-11-16, MNT-5 and MNT-6): a check that found the copy current is made again at the
- * service's next hourly look once this long has passed, so a manual FoxLeague deploys after the morning is seen within
- * the hour; one that found it behind stays for the day.
+ * Through the day (audit 2026-11-16, MNT-5 and MNT-6): a check that found the copy current or behind is made again at
+ * the service's next hourly look once this long has passed, so a manual FoxLeague deploys after the morning is seen
+ * within the hour, also while the copy is already behind: the plans read the text it serves now and the owner's pause
+ * holds the pages changed since (R2T-4). The owner hears of each set of changed pages once.
  */
 export const RECHECK_MS = 55 * 60_000
 /** A check that could not reach FoxLeague is tried again at the next hourly looks, at most this many tries a day. */
@@ -210,6 +211,14 @@ function validRecord(r: unknown): ManualRecord | null {
   const config = (r as Record<string, unknown>).config
   if (config !== undefined && (!Array.isArray(config) || config.length > MAX_KEYS || !config.every(isConfigKey))) return null
   return { synced, manual, pages: Object.fromEntries(entries) as Record<string, string>, ...(config ? { config: config as string[] } : {}) }
+}
+
+/**
+ * The checks in a row today that could not tell, as stored: none after a check that could, one for an unknown row of
+ * the version before (it kept no count).
+ */
+function failsOf(c: StoredCheck): number {
+  return typeof c.fails === 'number' && Number.isFinite(c.fails) ? c.fails : c.state === 'unknown' ? 1 : 0
 }
 
 /** A failure that ends the day's check, in our own words. */
@@ -461,8 +470,8 @@ type StoredCheck = ManualCheck & { day: string; copy?: string; tried?: number; f
 
 /**
  * The service's side: the day's check, kept in the database so a restart does not ask again before it is due. A copy
- * found current is checked again each hour, one found behind stays so for the day, and a check that could not tell
- * is tried again each hour up to MAX_TRIES a day.
+ * found current or behind is checked again each hour, and a check that could not tell is tried again each hour up to
+ * MAX_TRIES in a row a day; one that could not tell after a behind check that day keeps that check.
  */
 export class ManualWatch {
   readonly enabled: boolean
@@ -530,12 +539,14 @@ export class ManualWatch {
     return last && last.copy === this.copy().key ? last : null
   }
 
-  /** Whether today's stored check of this copy is to be made again now (see RECHECK_MS and MAX_TRIES). */
+  /**
+   * Whether today's stored check of this copy is to be made again now (see RECHECK_MS and MAX_TRIES): a current or
+   * behind copy each hour (R2T-4), while the tries today that could not tell stay under MAX_TRIES.
+   */
   private due(last: StoredCheck, now: number): boolean {
-    if (last.state === 'behind') return false
     const tried = typeof last.tried === 'number' ? last.tried : Date.parse(last.at)
     if (Number.isFinite(tried) && now - tried < RECHECK_MS) return false
-    return last.state === 'current' || (last.fails ?? 1) < MAX_TRIES
+    return last.state === 'current' || failsOf(last) < MAX_TRIES
   }
 
   /**
@@ -551,15 +562,20 @@ export class ManualWatch {
     const same = last?.day === day && last.copy === copy.key
     if (same && !o.force && !this.due(last, now)) return Promise.resolve(last)
     // The checks in a row today that could not tell, this one counted from its start.
-    const fails = (same && last.state === 'unknown' ? (last.fails ?? 1) : 0) + 1
+    const fails = (same && last.state !== 'current' ? failsOf(last) : 0) + 1
+    // A copy found behind today is checked again each hour (R2T-4); a recheck that cannot tell keeps the behind check
+    // with its page texts and counts the try, so a passing failure does not take the changed pages from the plans.
+    const behind = same && last.state === 'behind' ? last : null
+    const kept = behind ? { ...behind, tried: now, fails } : null
     this.before = last
     const run = async (): Promise<ManualCheck> => {
       // Marked before anything is asked: a check that a restart cuts short counts as a try that could not tell.
-      this.d.kv.set(KV, JSON.stringify({ state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key, tried: now, fails }))
+      this.d.kv.set(KV, JSON.stringify(kept ?? { state: 'unknown', pages: [], why: 'the check did not finish', synced: null, at: new Date().toISOString(), day, copy: copy.key, tried: now, fails }))
       const { texts, ...c } = await checkManual({ base: this.d.base, manual: copy.manual, record: copy.record, fetch: this.fetch, gapMs: this.gapMs })
       // The same look reads FoxLeague's API description (P-W4), before this check is stored: until then the plans keep
       // reading the check before it with its own page texts. It never fails the check.
       await this.lookApi(o.quiet).catch((err: unknown) => console.error("the look at FoxLeague's API description failed:", err instanceof Error ? err.message : err))
+      if (c.state === 'unknown' && kept) return kept
       // The changed pages' text in a row of its own, tied to this check (MID-1): written first, so the check it
       // belongs to never shows without it. Emptied by any check that did not find the copy behind.
       this.d.kv.set(TEXTS_KV, JSON.stringify({ copy: copy.key, at: c.at, pages: c.state === 'behind' ? (texts ?? []) : [] }))
