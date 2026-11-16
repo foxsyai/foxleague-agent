@@ -179,18 +179,21 @@ function servedPriceRefusal(served: unknown, mine: number, what: string): string
 const WAIVER_DAY_MARGIN_MS = 10 * 60_000
 
 /**
- * Milliseconds until the contract's quote of a card's waivable cooldown days drops by one: it quotes
- * ceil((readyAt - now - floor) / 1 day) (player_nft.rs cooldown_waiver_quote). Null when the card's ready time or
- * FoxLeague's floor (`fusion_cooldown_waiver_floor_seconds`) cannot be read, or when they do not give the days the
- * contract quoted (the two do not describe the same card): then nothing is moved.
+ * Milliseconds from now to the moment the contract's quote of a card's waivable cooldown days drops from the days it
+ * quoted to one less: it quotes ceil((readyAt - now - floor) / 1 day) (player_nft.rs cooldown_waiver_quote). Above
+ * zero while the agent's clock still counts the quoted days; at or below zero once its clock counts one less, the
+ * quote read from a block a little behind it (R2M-2). Null when the card's ready time or FoxLeague's floor
+ * (`fusion_cooldown_waiver_floor_seconds`) cannot be read, or when its clock counts neither (the two do not describe the
+ * same card): then nothing is moved.
  */
 function waiverDayDropsInMs(readyAt: string | null, cfg: FoxConfig, quotedDays: number, now: Date): number | null {
   const ready = Date.parse(readyAt ?? '')
   const floor = (cfg as Record<string, unknown>).fusion_cooldown_waiver_floor_seconds
   if (!Number.isFinite(ready) || typeof floor !== 'number' || !Number.isFinite(floor) || floor < 0) return null
   const above = ready - now.getTime() - floor * 1000
-  if (!(above > 0) || Math.ceil(above / 86_400_000) !== quotedDays) return null
-  return above - (quotedDays - 1) * 86_400_000
+  const drop = above - (quotedDays - 1) * 86_400_000
+  // The clock's count is the quoted days (0 < drop <= a day) or one less (minus a day < drop <= 0).
+  return drop > -86_400_000 && drop <= 86_400_000 ? drop : null
 }
 
 /**
@@ -1899,10 +1902,15 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         let days = a.days ?? q.days
         // The contract quotes ceil((readyAt - now - floor) / 1 day) at its block and takes exactly days x price, never
         // more days than it quotes then: when the quoted days drop by one before the block, all of them revert and the
-        // gas is lost (CHN-U4). So close to that moment one day less is bought, named, which holds on either side of it.
+        // gas is lost (CHN-U4). So close to that moment one day less is bought, named, which holds on either side of it:
+        // before it by the agent's clock, and just after it, when the quote came from a block a little behind (R2M-2).
         const drop = waiverDayDropsInMs(c.fusionReadyAt, cfg, q.days, ctx.now)
-        if (drop !== null && drop <= WAIVER_DAY_MARGIN_MS && days === q.days) {
-          if (q.days <= 1) return refuse(`#${a.nonce}'s last waivable day ends in ${Math.max(1, Math.ceil(drop / 60_000))} minutes: a waiver now could reach the chain after it and revert`)
+        if (drop !== null && Math.abs(drop) <= WAIVER_DAY_MARGIN_MS && days === q.days) {
+          if (q.days <= 1) {
+            return refuse(drop > 0
+              ? `#${a.nonce}'s last waivable day ends in ${Math.max(1, Math.ceil(drop / 60_000))} minutes: a waiver now could reach the chain after it and revert`
+              : `#${a.nonce}'s last waivable day ended by the agent's clock after its quote was read: a waiver now would revert`)
+          }
           days = q.days - 1
         }
         costAtomic = (q.costAtomic / BigInt(q.days)) * BigInt(days)

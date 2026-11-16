@@ -1562,8 +1562,9 @@ result (`backend/src/chain_indexer.rs:3867-3925`). A listed or auctioned card ca
   value (`player_nft.rs:2542-2631`, `:2951-2955`; `fusionWaivers.ts:266-279`). Reverts:
   `Fusion cooldown waiver disabled`, `Wrong waiver payment`, `Caller does not own this NFT`, `Nothing to waive`.
   The quote's days are ceil((readyAt - now - floor) / 1 day) at the block: within 10 minutes of the moment they drop by
-  one the agent buys one day less, named, which the contract takes on either side of that moment; a last day about to
-  end is not bought (audit 2026-11-16, CHN-U4).
+  one, before it or after it by the agent's clock (the quote read from a block a little behind), the agent buys one day
+  less, named, which the contract takes on either side of that moment; a last day about to end or just ended is not
+  bought (audit 2026-11-16, CHN-U4 and R2M-2).
 - **Match waiver** `payFusionMatchWaiver(nonce, matches)`, args `@<nonce hex>@<matches hex>`: since
   2026-10-12 priced by rarity, Uncommon 20 FOXSY per match (at most 10), Rare 100 (30), Epic 100 (90),
   Legendary 100 (270), none for a Common; the gate's floor must really be played. The credit stays on the
