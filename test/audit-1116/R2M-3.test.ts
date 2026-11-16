@@ -78,20 +78,22 @@ async function readWith(serve: (limit: number, offset: number) => { rows: unknow
 }
 const many = (n: number) => Array.from({ length: n }, (_, i) => ({ ...ROWS[0], tournament_match_id: `r${i}`, round_label: `Matchday ${i + 1}` }))
 
-test('R2M-3 a server that pages at less than 200 is read on by its total; without a total a short page ends the list', async () => {
+test('R2M-3 a server that pages at less than 200 is read on by its total; without a total a short page is not read whole', async () => {
   const all = many(250)
   const capped = await readWith((limit, offset) => ({ rows: all.slice(offset, offset + Math.min(limit, 100)), total: all.length }))
   assert.ok(!(capped.got instanceof Error) && capped.got.matches.length === 250, String(capped.got instanceof Error ? capped.got.message : capped.got.matches.length))
   assert.deepEqual(capped.asked, ['?limit=200&offset=0', '?limit=200&offset=100', '?limit=200&offset=200'])
+  // R76A-1: a short page without FoxLeague's total may be a part (a server that pages lower) or a failed read.
   const few = await readWith((limit, offset) => ({ rows: all.slice(offset, offset + Math.min(limit, 12)).slice(0, 12 - offset) }))
-  assert.ok(!(few.got instanceof Error) && few.got.matches.length === 12)
+  assert.ok(few.got instanceof Error && /not read whole/.test(few.got.message), few.got instanceof Error ? few.got.message : `${few.got.matches.length} rows read as the whole list without a total`)
   assert.equal(few.asked.length, 1, 'one request for a short list')
 })
 
 test('R2M-3 rows gone between two pages, or more than five pages, are not read as the whole list', async () => {
   const gone = await readWith((limit, offset) => ({ rows: offset === 0 ? many(200) : [], total: 230 }))
   assert.ok(gone.got instanceof Error, 'rows gone between two pages')
-  const huge = await readWith((limit, offset) => ({ rows: many(limit).map((r, i) => ({ ...r, tournament_match_id: `h${offset + i}` })) }))
+  // With its total (R76A-1: without one the first page is refused already), so the five-page bound is what stops it.
+  const huge = await readWith((limit, offset) => ({ rows: many(limit).map((r, i) => ({ ...r, tournament_match_id: `h${offset + i}` })), total: 5000 }))
   assert.ok(huge.got instanceof Error && /more than 1000 rows/.test(huge.got.message))
 })
 

@@ -1267,8 +1267,10 @@ even when it empties (`tournaments.rs:5464-5468`). Errors:
   snapshot; the opponent is null until the game makes it public and scores are null until the reveal.
   It is paged: 50 rows when no `limit` is asked, at most 200, kickoff first with the last day's finished games at
   the front, the total in the header `X-Total-Count` (`UPCOMING_DEFAULT_LIMIT`, `UPCOMING_MAX_LIMIT`). The agent
-  reads it whole, `limit=200` and `offset` until the total (or a short page without one), at most 5 pages; a list
-  it cannot read whole is unread: every rule that counts owed matches refuses (audit 2026-11-16, R2M-3).
+  reads it whole, `limit=200` and `offset` until the total, at most 5 pages; a list it cannot read whole is unread:
+  every rule that counts owed matches refuses (audit 2026-11-16, R2M-3). FoxLeague sends the total with every answer
+  whose count it read, `0` with an empty list; when that count fails it sends none, and its row read may have failed
+  too and answered an empty list. So an answer without a readable total is not read whole either (R76A-1).
 - Strategy lock and forfeits: section 8.3. Casual and ranked are blocked from 1 h before any of your
   unrevealed tournament or 1v1 matches (section 9.1 gate 5).
 - **Reveal rule.** Results, scores, ELO changes, later knockout pairings and opponents' per-match lineups

@@ -293,7 +293,9 @@ export class FoxLeague {
   /**
    * The team's fixtures, read whole (audit 2026-11-16, R2M-3). FoxLeague pages them (tournaments.rs: 50 rows when no
    * `limit` is asked, at most 200, kickoff first, the last day's finished games at the front, the total in
-   * X-Total-Count): read by pages of UPCOMING_LIMIT until the total, or a short page where FoxLeague sends none. More
+   * X-Total-Count): read by pages of UPCOMING_LIMIT until the total. Only the total tells the whole list from a part:
+   * FoxLeague sends it on every answer whose count it read (0 with an empty list), and none when that count fails,
+   * when its row read may have failed too and answered an empty list (R76A-1). An answer without a readable total, more
    * than UPCOMING_MAX_PAGES pages, rows gone between two pages or an answer without its list throw: the snapshot then
    * keeps the list unread and every rule that counts owed matches refuses (MON-1), never reads a part as the whole.
    */
@@ -310,15 +312,11 @@ export class FoxLeague {
         },
       })
       if (!part || typeof part !== 'object' || !Array.isArray(part.matches)) throw new ApiRefusal('unexpected answer from /tournaments/upcoming-matches (no list of matches)')
+      if (total === null) throw new ApiRefusal('your upcoming matches came without FoxLeague\'s count of them (X-Total-Count): not read whole')
       first ??= part
       rows.push(...part.matches)
-      const whole = { ...first, matches: rows }
-      if (total === null) {
-        if (part.matches.length < UPCOMING_LIMIT) return whole
-      } else {
-        if (rows.length >= total) return whole
-        if (!part.matches.length) throw new ApiRefusal(`your upcoming matches changed while they were read (${rows.length} of ${total}): not read whole`)
-      }
+      if (rows.length >= total) return { ...first, matches: rows }
+      if (!part.matches.length) throw new ApiRefusal(`your upcoming matches changed while they were read (${rows.length} of ${total}): not read whole`)
     }
     throw new ApiRefusal(`your upcoming matches are more than ${UPCOMING_LIMIT * UPCOMING_MAX_PAGES} rows: not read whole`)
   }
