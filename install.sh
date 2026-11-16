@@ -256,7 +256,10 @@ ensure_node() {
   info "Node.js $("$NODE" --version) at $NODE"
 }
 # FOXAGENT_GUIDED=1: the command line leaves out the lines that are written for a server set up by hand.
-cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
+# Without AGENT_MNEMONIC of the shell: Node.js never lets .env replace a variable that is set, so words exported in
+# this terminal were shown, written to pem/ and named as agent 1 instead of the words in .env, which the background
+# service uses (INS-U4).
+cli() { env -u AGENT_MNEMONIC FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 # Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
 # a newcomer reads that notice as something to do. npm's download cache and its logs stay in the install's own
 # folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind. In the folder named
