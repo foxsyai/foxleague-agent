@@ -28,7 +28,10 @@ test('INSTALL-17: the installer run as root stops with one sentence before it do
   assert.deepEqual(i.s.calls(), [], 'no npm, no service manager')
   assert.deepEqual(readdirSync(i.root).sort(), before, 'nothing was written')
   assert.equal(i.wordsShown(), 0)
-  // The owner's explicit word: it goes through.
+  // The owner's explicit word: it goes through, in a folder that is root's own (told by a stand-in stat, as root is
+  // told by the stand-in id). Since INS-A8 of 2026-11-16 root is refused in a folder another user owns, also with
+  // FOXAGENT_ALLOW_ROOT=1: root's .env and a service of root there kept that user's agent from starting.
+  i.s.stub('stat', 'case "$1 $2" in "-c %u") echo 0 ;; "-c %U") echo root ;; *) exec /usr/bin/stat "$@" ;; esac')
   const allowed = await guided(i, ['yes', '', '18997', 'n', 'n'], { env: { FOXAGENT_ALLOW_ROOT: '1' } })
   assert.equal(allowed.status, 0, allowed.out)
   assert.match(allowed.out, /Done/)

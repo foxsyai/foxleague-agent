@@ -15,6 +15,13 @@
 set -u
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# As root (sudo) on a folder another user owns: the agent would write root's files there and could not start again as
+# its user (INS-A8). An install that is root's own still runs.
+if [ "$(id -u)" = 0 ] && [ "$(stat -c %u "$ROOT" 2>/dev/null || stat -f %u "$ROOT" 2>/dev/null)" != 0 ]; then
+  who=$(stat -c %U "$ROOT" 2>/dev/null || stat -f %Su "$ROOT" 2>/dev/null)
+  echo "foxleague-agent: this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./run.sh" >&2
+  exit 1
+fi
 V="$ROOT/versions"
 name_ok() { case "$1" in '' | .* | *[!A-Za-z0-9._-]*) return 1 ;; *) return 0 ;; esac; }
 

@@ -111,8 +111,9 @@ the dashboard or by chatting with it on Telegram.
 
 ## Command line
 
-In the `foxleague-agent` folder (`./cli.sh` uses the Node.js the installer set up, so it needs no npm; alone it
-lists every command):
+In the `foxleague-agent` folder, as yourself and without sudo (`./cli.sh` uses the Node.js the installer set up, so
+it needs no npm; alone it lists every command; as root on your folder it stops and says so, because files of root
+there would keep the agent from starting again):
 
 ```
 ./cli.sh agents               # every agent (numbered from 1) and its address

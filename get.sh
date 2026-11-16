@@ -41,6 +41,13 @@ main() {
   [ -n "$DIR" ] && [ "$DIR" != / ] || die "FOXAGENT_DIR must name a folder of its own"
   case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
   [ ! -e "$DIR/.git" ] || die "$DIR is a git checkout. Update it there with: git pull && ./install.sh --update"
+  # Root (FOXAGENT_ALLOW_ROOT=1) over a folder another user owns: root's files there would keep that user's agent from
+  # starting again (INS-A8).
+  if [ "$(id -u)" = 0 ] && [ -e "$DIR" ] && [ "$(stat -c %u "$DIR" 2>/dev/null || stat -f %u "$DIR" 2>/dev/null)" != 0 ]; then
+    local who
+    who=$(stat -c %U "$DIR" 2>/dev/null || stat -f %Su "$DIR" 2>/dev/null || true)
+    die "$DIR belongs to ${who:-another user}, not to root: paste the line as ${who:-that user}, without sudo"
+  fi
 
   # A download into a file. curl writes to its output and the shell puts that into the file: a curl that may not
   # write where it is told (the one of a snap has a /tmp of its own) still works that way.

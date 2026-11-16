@@ -97,11 +97,14 @@ owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || tr
 # --update and --uninstall with sudo on another user's install. --update put a release in place there that the
 # agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
 # (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
-# (INS-A2). Both stop before they write anything. An install that itself runs as root (its folder is root's) still
-# updates and uninstalls.
-if { [ "$MODE" = update ] || [ "$MODE" = uninstall ]; } && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
+# (INS-A2). The guided install with FOXAGENT_ALLOW_ROOT=1 wrote root's .env there and a service of root that runs the
+# agent as root (INS-A8). All stop before they write anything. An install that itself runs as root (its folder is
+# root's) still installs, updates and uninstalls.
+if [ "$MODE" != prepare ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
   who=$(owner_name "$ROOT")
-  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --$MODE"
+  asked=''
+  [ $# -eq 0 ] || printf -v asked ' %s' "$@"
+  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh$asked"
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
