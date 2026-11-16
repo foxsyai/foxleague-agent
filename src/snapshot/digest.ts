@@ -11,6 +11,7 @@ import { agentName } from '../names.ts'
 import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
+import { unknownSwitchLines } from '../foxleague/config-watch.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
 
 /**
@@ -245,6 +246,8 @@ function levelLines(s: AgentSnapshot): string[] {
   }
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
+  // A switch FoxLeague serves that no rule of the agent reads: its key, state and numbers only (audit 2026-11-16, P-W6).
+  out.push(...unknownSwitchLines(s.config))
   return out
 }
 
