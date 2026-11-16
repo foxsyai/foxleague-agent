@@ -23,7 +23,7 @@ import { cut as cutText } from '../util/text.ts'
 import { LEFT_OUT, ROOT, undecidedPages } from './manual.ts'
 import { MAX_KEYS, changedKeys, configPrint, isConfigKey, isoTime, keyDiff, named, unknownSwitches, type RuleSwitch } from '../foxleague/config-watch.ts'
 import { MAX_TEXT_PAGES, PAGE_TEXT_MAX, shapePages, type PageText } from './page-text.ts'
-import { heldActions } from '../executor/hold.ts'
+import { HOLD_PAGES, heldActions } from '../executor/hold.ts'
 import { API_RECORD_FILE, OPENAPI_PATH, changedRoutes, isChangedRoute, routePrints, validApiRecord } from '../foxleague/api-routes.ts'
 
 /** The agents' manual and the page record sync-manual writes next to it. */
@@ -513,20 +513,23 @@ export class ManualWatch {
    * The agents' copy installed now: manual.md and its page record as read, and a key for the pair. A check of another
    * copy (before an update or a deploy brought this one, or a fixed record) tells nothing about this one.
    */
-  private copy(): { manual: string | null; record: unknown; key: string } {
+  private copy(): { manual: string | null; record: unknown; key: string; read: boolean } {
     let manual: string | null = null
     let record: unknown = null
+    let read = true
     try {
       manual = this.readManual()
     } catch {
       // Said by the check.
+      read = false
     }
     try {
       record = this.readRecord()
     } catch {
       // No record or one that is not JSON: said by the check.
+      read = false
     }
-    return { manual, record, key: sha256(JSON.stringify([manual, record ?? null])) }
+    return { manual, record, key: sha256(JSON.stringify([manual, record ?? null])), read }
   }
 
   /**
@@ -780,25 +783,46 @@ export class ManualWatch {
    * The pages the copy installed now was last found behind on (P-W7), until a check finds it current or another copy
    * comes. Not ended by a check that could not tell: an unread manual is no synced copy. Without a row of this copy
    * (the day's check was made by the version before, which writes none: R2T-7), the stored check of this copy when it
-   * found it behind.
+   * found it behind. 'unread' when that cannot be told (R2M-4): a row that cannot be parsed or is not of its shape, or
+   * a copy whose manual.md or page record cannot be read.
    */
-  behindPages(): string[] {
-    if (!this.enabled) return []
+  private behindState(): string[] | 'unread' {
     const pages = (list: unknown[]) => list.filter((p): p is string => typeof p === 'string' && isSlug(p.replace(/ \((?:new|gone)\)$/, '')))
-    const copy = this.copy().key
-    try {
-      const v = JSON.parse(this.d.kv.get(BEHIND_KV) ?? 'null') as { copy?: unknown; pages?: unknown } | null
-      if (v && v.copy === copy && Array.isArray(v.pages)) return pages(v.pages)
-    } catch {
-      // Not a row of this copy: the stored check below.
+    const copy = this.copy()
+    if (!copy.read) return 'unread'
+    const raw = this.d.kv.get(BEHIND_KV)
+    if (raw !== null) {
+      let v: unknown
+      try {
+        v = JSON.parse(raw)
+      } catch {
+        return 'unread'
+      }
+      if (!v || typeof v !== 'object' || typeof (v as { copy?: unknown }).copy !== 'string' || !Array.isArray((v as { pages?: unknown }).pages)) return 'unread'
+      const row = v as { copy: string; pages: unknown[] }
+      if (row.copy === copy.key) return pages(row.pages)
     }
+    // While a check runs the stored row is its marker: the check before it is the one to read.
+    if (!this.running && this.d.kv.get(KV) !== null && !this.last()) return 'unread'
     const last = this.shown()
     return last?.state === 'behind' ? pages(last.pages) : []
   }
 
-  /** The pages whose actions the executor holds now (P-W7): none while the owner chose "tell only". */
+  /** The pages the copy installed now was last found behind on (P-W7); none when that cannot be read. */
+  behindPages(): string[] {
+    if (!this.enabled) return []
+    const st = this.behindState()
+    return st === 'unread' ? [] : st
+  }
+
+  /**
+   * The pages whose actions the executor holds now (P-W7): none while the owner chose "tell only". With the pause on
+   * and its state unread, every page the pause covers (R2M-4): unknown is not "nothing changed".
+   */
   held(): string[] {
-    return this.holdOn() ? this.behindPages() : []
+    if (!this.holdOn() || !this.enabled) return []
+    const st = this.behindState()
+    return st === 'unread' ? Object.keys(HOLD_PAGES) : st
   }
 
   /** The morning summary's line: today's check; "could not check" when there is none for today of this copy. */

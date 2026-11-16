@@ -471,7 +471,8 @@ of a 1v1; `mechanics/tournaments` holds `create_tournament` and a join of a tour
 `fusion_cooldown_waiver` and `fusion_match_waiver`. A join whose tournament could not be read is held by either page.
 The owner's own requests, pending payments and their confirms, refunds and leaves keep running. The pages stay held
 until a check finds the copy current or another copy is installed; a check that could not read FoxLeague does not end
-the pause. Pausing is one click; going back to "tell me only" needs the owner's password; no Telegram command does it.
+the pause. When the pause's own state cannot be read (its database row or the stored check cannot be parsed, or the
+copy's manual.md or page record cannot be read), every one of these actions is held (R2M-4). Pausing is one click; going back to "tell me only" needs the owner's password; no Telegram command does it.
 
 ---
 

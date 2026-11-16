@@ -186,8 +186,9 @@ In the dashboard's **Strategist · all agents** box, **When FoxLeague changes it
 default. With **also pause the actions whose rules changed until the agents are synced**, your agents do not take the
 actions of a changed page until the new copy comes: the Shop page pauses buying, the Marketplace page bids and
 listings, the 1v1 page new challenges and accepting one, the Tournaments page creating and joining a tournament, the
-Fusion page fusions and both waivers. Payments already made are still confirmed, refunds and leaving still run and
-your own requests are never paused. Pausing is one click; going back to tell me only asks for your password.
+Fusion page fusions and both waivers. If the agent cannot tell which pages changed, it pauses all of these until it
+can. Payments already made are still confirmed, refunds and leaving still run and your own requests are never paused.
+Pausing is one click; going back to tell me only asks for your password.
 
 When FoxLeague could not be read, the line says "Could not check FoxLeague's manual today" and why. That never
 counts as up to date: the agent asks again each hour, up to four times a day, then the next day. In a terminal,
