@@ -369,9 +369,22 @@ export function confirmStart(layout: Layout): void {
   if (!(waiting && pending[1] === waiting)) rmSync(join(versions, 'pending'), { force: true })
   rmSync(join(versions, 'rolled-back'), { force: true })
   if (previous && previous !== me && NAME_RE.test(previous)) writeAtomic(join(versions, 'previous'), `${previous}\n`)
+  // An update in flight (stage() holds versions/update.lock while it unpacks and prepares, a minute or more with npm):
+  // the folder it prepares in and the release it puts in place are not this start's to remove (R2I-8). The next start
+  // removes what is left.
+  if (updateInFlight(versions)) return
   for (const entry of readdirSync(versions, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name === me || entry.name === previous || entry.name === waiting) continue
     if (entry.name.startsWith('v') || entry.name.startsWith('.staging-')) rmSync(join(versions, entry.name), { recursive: true, force: true })
+  }
+}
+
+/** Whether an update holds versions/update.lock now: one younger than LOCK_STALE_MS (an older one was left by a kill). */
+function updateInFlight(versions: string): boolean {
+  try {
+    return Date.now() - statSync(join(versions, 'update.lock')).mtimeMs < LOCK_STALE_MS
+  } catch {
+    return false
   }
 }
 
