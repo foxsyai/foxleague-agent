@@ -1,6 +1,8 @@
 // P-W3 (audit 2026-11-16, MAINNET proposals): the owner is told at the change, in one urgent Telegram line, not in the
 // next morning's summary: when the manual goes from current to behind, when FoxLeague's game settings gain or lose
-// keys, and when a switch the agents have no rule for goes live within 7 days (elo_pair_cap from 20 Nov 14:00 UTC).
+// keys, and when a switch the agents have no rule for goes live within 7 days (elo_pair_cap from 20 Nov 14:00 UTC was
+// one until the RULES fix of the same audit gave it a rule; the example is now a switch of its shape under a key no rule
+// reads, RULED-1).
 // Each is told once; the lines name only shaped slugs and keys, at most eight of each.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
@@ -43,23 +45,25 @@ test('P-W3 new keys in the game settings and a switch the agents do not know, li
   const server = mcp()
   const kv = memoryKv()
   const w = watch(server, { kv })
+  // The settings of 16 Nov with one more switch no rule reads, shaped as elo_pair_cap: live in 4 days.
+  const newer = () => ({ ...liveConfig(), some_new_rule: { live: false, live_from: '2026-11-20T14:00:00Z', per_day: 3, reset_hour_utc: 14 } })
   await observe(w, configOf13Nov(), AT_0700)
   assert.equal(w.told.length, 0)
-  await observe(w, liveConfig(), AT_0700 + 2 * HOUR + 50 * MIN)
+  await observe(w, newer(), AT_0700 + 2 * HOUR + 50 * MIN)
   await w.today(AT_0700 + 2 * HOUR + 51 * MIN)
   const keys = w.told.find(t => t.startsWith("FoxLeague's game settings changed"))
   assert.ok(keys, w.told.join('\n'))
-  assert.match(keys, /\(keys: elo_pair_cap \(new\), metastaking_discount \(new\), player_interest\.reset_hour_utc \(new\)\)/)
+  assert.match(keys, /\(keys: elo_pair_cap \(new\), metastaking_discount \(new\), player_interest\.reset_hour_utc \(new\), some_new_rule \(new\)\)/)
   plain(keys)
   const soon = w.told.filter(t => /rule switch/.test(t))
-  assert.equal(soon.length, 1, 'elo_pair_cap goes live in 4 days; metastaking_discount has no date; fusion_mint has its rule')
-  assert.match(soon[0]!, /elo_pair_cap, live from 2026-11-20 14:00 UTC/)
+  assert.equal(soon.length, 1, 'some_new_rule goes live in 4 days; elo_pair_cap, metastaking_discount and fusion_mint have their rules')
+  assert.match(soon[0]!, /some_new_rule, live from 2026-11-20 14:00 UTC/)
   plain(soon[0]!)
   // Every snapshot after it, and a restart, tell nothing more.
   const told = w.told.length
-  for (let m = 1; m <= 30; m++) await observe(w, liveConfig(), AT_0700 + 3 * HOUR + m * MIN)
+  for (let m = 1; m <= 30; m++) await observe(w, newer(), AT_0700 + 3 * HOUR + m * MIN)
   const again = watch(server, { kv })
-  await observe(again, liveConfig(), AT_0700 + 4 * HOUR)
+  await observe(again, newer(), AT_0700 + 4 * HOUR)
   assert.equal(w.told.length + again.told.length, told)
   // A switch further than 7 days ahead is not told yet.
   const far = liveConfig()
