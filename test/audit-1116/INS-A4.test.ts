@@ -19,8 +19,10 @@ test('INS-A4: on a Mac a launchctl bootstrap that fails ends in the installer\'s
   const i = freshInstall()
   i.s.stub('uname', 'case "${1:-}" in -s | "") echo Darwin ;; -m) /usr/bin/uname -m ;; *) exec /usr/bin/uname "$@" ;; esac')
   i.s.stub('curl', 'exit 7') // nothing answers on the dashboard port
-  // launchd as it answers while the job it was just told to boot out is still there, or without a gui domain.
-  i.s.stub('launchctl', `printf 'launchctl %s\\n' "$*" >> "$LOG"\ncase "$1" in bootstrap) echo "Bootstrap failed: 5: Input/output error" >&2; exit 5 ;; esac\nexit 0`)
+  // launchd as it answers without a gui domain (a terminal over SSH outside the login session): the job is not listed
+  // and its bootstrap fails. (A job still listed after the bootout is waited for first since R2I-U1, up to 185 s: the
+  // stand-in listed it at every print until then, which now only made the installer wait.)
+  i.s.stub('launchctl', `printf 'launchctl %s\\n' "$*" >> "$LOG"\ncase "$1" in print) exit 113 ;; bootstrap) echo "Bootstrap failed: 5: Input/output error" >&2; exit 5 ;; esac\nexit 0`)
   writeFileSync(join(i.root, '.env'), LOGIN_LINES, { mode: 0o600 })
   const r = await guided(i, ['yes', '', '18997', 'n', 'n'], { args: [] })
   const calls = i.s.calls().filter(c => c.startsWith('launchctl'))

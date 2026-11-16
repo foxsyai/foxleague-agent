@@ -456,16 +456,14 @@ EOF
 </dict></plist>
 EOF
     # The job that runs is unloaded first by its label and given time to go: launchd refuses to load a label it
-    # still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd answers its
-    # bootout with 36, on its way out: then the wait is as long as the uninstall's (INS-U1). A bootstrap it refuses
-    # ends here in words, with what to do (INS-A4).
-    local out_rc=0
-    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || out_rc=$?
-    if [ "$out_rc" = 36 ] && mac_job_loaded; then
+    # still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd keeps it
+    # listed meanwhile, whatever it answered the bootout (36, on its way out, or another status): while it does, the
+    # wait is as long as the uninstall's (INS-U1, R2I-U1). A bootstrap it refuses ends here in words, with what to do
+    # (INS-A4).
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
+    if mac_job_loaded; then
       info "Waiting for the agent that runs to stop: it finishes what it is doing first (at most 3 minutes)."
       mac_wait_unloaded 185 || true
-    else
-      mac_wait_unloaded 10 || true
     fi
     launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
   fi
