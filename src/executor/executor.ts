@@ -22,7 +22,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { createStartMs, describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
-import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
+import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
@@ -1358,12 +1358,12 @@ export class Executor {
             // FoxLeague committed the tournament pending on chain with this payment on it ("could not be confirmed yet ...
             // stays pending", tournaments.rs), and its reconcile opens it later: the payment is used, not refunded (grand
             // audit 2026-11-06, INTEG-2). The plan is shown a tournament it created without a seat (OPEN-8).
-            if (err instanceof ApiRefusal && /could not be confirmed yet|stays pending/i.test(err.message)) {
+            if (err instanceof ApiRefusal && CREATE_STILL_PENDING.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
               return finish('error', `${desc}: organizer payment ${organizerHash} made, and FoxLeague may have created it: its creation is still pending on chain (${why}); the payment is on that tournament, not refunded, so the next plan reads your tournaments`, 0, organizerHash)
             }
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
-            if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
+            if (err instanceof ApiRefusal && !err.isTxPending && ORGANIZER_HASH_ANSWER.test(err.message) && SHOP_FINAL.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
               if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
               return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)
