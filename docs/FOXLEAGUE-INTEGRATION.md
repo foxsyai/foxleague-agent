@@ -1262,15 +1262,29 @@ even when it empties (`tournaments.rs:5464-5468`). Errors:
 
 - `GET /api/tournaments/upcoming-matches` (auth): `{lead_minutes, my_team_name, my_team_badge, matches:[...]}`,
   each with `tournament_id, tournament_title, round_label, group_name, is_home, opponent_name,
-  opponent_badge, scheduled_at, strategy_locks_at, locked, formation, phase, match_id, is_watchable,
-  home_score, away_score, my_lineup` (`tournaments.rs:6320-6595`). `my_lineup` is your own per-match
-  snapshot; the opponent is null until the game makes it public and scores are null until the reveal.
+  opponent_badge, scheduled_at, strategy_locks_at, locked, formation, phase, tournament_match_id, is_watchable,
+  home_score, away_score, my_lineup` (`tournaments.rs:6320-6595`). `tournament_match_id` is the match's public id
+  (`tm.public_id`, the row's only handle since 2026-10-07); the row carries no `match_id`. `my_lineup` is your own
+  per-match snapshot; the opponent is null until the game makes it public and scores are null until the reveal.
   It is paged: 50 rows when no `limit` is asked, at most 200, kickoff first with the last day's finished games at
   the front, the total in the header `X-Total-Count` (`UPCOMING_DEFAULT_LIMIT`, `UPCOMING_MAX_LIMIT`). The agent
   reads it whole, `limit=200` and `offset` until the total, at most 5 pages; a list it cannot read whole is unread:
   every rule that counts owed matches refuses (audit 2026-11-16, R2M-3). FoxLeague sends the total with every answer
   whose count it read, `0` with an empty list; when that count fails it sends none, and its row read may have failed
   too and answered an empty list. So an answer without a readable total is not read whole either (R76A-1).
+  FoxLeague reads the rows and the total as two queries with no transaction around them and the list is live (the
+  last day's finished games leave the front as they age out, a tournament going active lists all its fixtures, a
+  knockout's next round is listed when the match before it ends). So the list counts as read whole only when every
+  page carries the same total as the first, no `tournament_match_id` comes twice, the rows are not more than the
+  total and every row of a list of more than one page has a `tournament_match_id`. Anything else is a list that
+  moved while it was read and stays unread (audit 2026-11-16, FC-2). That check takes `tournament_match_id` as
+  unique per row. FoxLeague's server makes it so (read on `release/mainnet-1.0` e3cee147b, 17 Nov 2026):
+  `tournament_matches.public_id` is NOT NULL with a unique index (`migrations/152_tournament_matches_public_id.sql`);
+  the query joins one participant per user and tournament (`UNIQUE(tournament_id, user_id)`, `020_tournaments.sql`)
+  and one team per user (`teams.user_id UNIQUE`, `001_initial.sql`), so it gives one row per match; the handler maps
+  each row to one answer row without adding or dropping any (`upcoming_matches_rows_sql`, `upcoming_matches`).
+  Offsets cannot show a row removed and another added both before a page's edge; the checks above catch every
+  other way a list read in pages moves.
 - Strategy lock and forfeits: section 8.3. Casual and ranked are blocked from 1 h before any of your
   unrevealed tournament or 1v1 matches (section 9.1 gate 5).
 - **Reveal rule.** Results, scores, ELO changes, later knockout pairings and opponents' per-match lineups
