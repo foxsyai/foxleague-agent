@@ -99,6 +99,14 @@ const ACTION_RUN_MS = 90_000
 /** How far ahead a planned call makes the one-hour cache of the game manual worth writing (a margin under the hour). */
 const CACHE_HORIZON_MS = 55 * 60_000
 
+/**
+ * What an alert about a failed plan is remembered by: the error's text without the request ids Anthropic puts in it
+ * (`req_...`, a new one on every call), so one problem is told once an hour however many plans hit it.
+ */
+export function alertKey(msg: string): string {
+  return msg.replace(/req_[A-Za-z0-9]+/g, 'req_')
+}
+
 export interface ScheduledAction {
   p: PlannedAction
   /** When it runs, in ms after the plan's start. */
@@ -540,16 +548,19 @@ export class Service {
   private tickFailed(index: number, err: unknown, msg: string): void {
     const streak = (this.failStreak.get(index) ?? 0) + 1
     this.failStreak.set(index, streak)
+    // Keyed by the problem, not by the call: Anthropic's error text carries a request id that differs on every call
+    // (audit 2026-11-16, BEH-1).
+    const problem = alertKey(msg)
     if (isModelAccountError(err)) {
-      const last = this.alertedAt.get(msg) ?? 0
+      const last = this.alertedAt.get(problem) ?? 0
       if (Date.now() - last >= 3600_000) {
-        this.alertedAt.set(msg, Date.now())
+        this.alertedAt.set(problem, Date.now())
         return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard, or the Anthropic console for credit and limits).`)
       }
       return this.report(`${agentName(index)} tick failed: ${msg}`)
     }
     if (streak === 3) {
-      const key = `streak:${msg}`
+      const key = `streak:${problem}`
       if (Date.now() - (this.alertedAt.get(key) ?? 0) >= 3600_000) {
         this.alertedAt.set(key, Date.now())
         return this.notify(`${agentName(index)}: its last 3 plans failed (${msg}). It keeps trying every cycle; other agents failing the same way within the hour are in the summary.`)
