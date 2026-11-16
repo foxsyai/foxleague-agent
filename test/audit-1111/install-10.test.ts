@@ -63,7 +63,9 @@ const CASES: Case[] = [
     state: (dir, before) => {
       const now = snapshotOf(dir)
       if (JSON.stringify(now) === JSON.stringify(before)) return 'untouched'
-      if (now['versions/active'] === 'v3.1.0\n' && now['versions/v3.1.0/src/service.ts'] === '// the new copy of 3.1.0\n' && now['.env'] === before['.env'] && !('src/service.ts' in now)) return 'complete'
+      // Complete: the release in place and, since INS-U6 of 2026-11-16, the flat code still there for the old service,
+      // which starts it by its path until the installer writes the new one (step 7).
+      if (now['versions/active'] === 'v3.1.0\n' && now['versions/v3.1.0/src/service.ts'] === '// the new copy of 3.1.0\n' && now['.env'] === before['.env'] && now['src/service.ts'] === before['src/service.ts']) return 'complete'
       return `flat code ${'src/service.ts' in now ? 'there' : 'GONE'}; versions/active ${JSON.stringify(now['versions/active'])}`
     },
   },

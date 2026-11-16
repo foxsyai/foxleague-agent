@@ -159,14 +159,14 @@ export const START_SPACING_MS = Math.max(...CALENDAR_SHAPES.map(s => bookingMs(s
  * FoxLeague's free ranges and clear of every window the agent's own calendar sees taken (the executor's clash check
  * reads those), so each start offered passes both.
  */
-export function freeStartsFor(shape: { format: string; teams: number }, free: { first: number; last: number }[], slots: SlotWindow[], from: number, to: number): number[] {
+export function freeStartsFor(shape: { format: string; teams: number; home_and_away?: boolean }, free: { first: number; last: number }[], slots: SlotWindow[], from: number, to: number): number[] {
   const out: number[] = []
   let steps = 0
   for (const r of free) {
     let t = ceilMinute(Math.max(r.first, from))
     const last = Math.min(r.last, to)
     while (t <= last && out.length < OWN_START_CHOICES && steps++ < 1000) {
-      const taken = clash(slots, blockingWindow(shape.format, shape.teams, false, t))
+      const taken = clash(slots, blockingWindow(shape.format, shape.teams, Boolean(shape.home_and_away), t))
       // The first start whose booking begins at or after the end of the one it would overlap.
       if (taken) t = ceilMinute(taken.end + HOUR)
       else {
@@ -191,7 +191,7 @@ export function calendarLines(s: { agent: { index: number | null }; market: { sl
   const minute = (t: number) => `${new Date(t).toISOString().slice(0, 16)}Z`
   const days = CREATE_START_MAX_MS / 86_400_000
   const out = [
-    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, so the other teams your owner runs are offered other minutes; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
+    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, which spreads the starts offered when the calendar has room; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
   ]
   for (const c of cal) {
     const head = `  ${c.format} of ${c.teams} (estimate ${estimateMinutes(c.format, c.teams, false)} min): `
@@ -209,4 +209,49 @@ export function calendarLines(s: { agent: { index: number | null }; market: { sl
     }
   }
   return out
+}
+
+/**
+ * The create's own read of FoxLeague's calendar (ORG-2, after the audit of 16 Nov 2026): GET /api/tournaments/availability
+ * for its shape from its start, 14 days. `from_refusal` judges that very start as create does, with every booking
+ * counted, a tournament being created too (hidden from the public lists the clash check reads). Taken: a refusal that
+ * names the first free start FoxLeague lists after it, from `from` (late enough for the next plan's create) to `to`,
+ * clear of the windows the clash check reads. A failed or malformed read: a note, and the clash check from the public
+ * lists stays the last word (FoxLeague refuses a held start before anything is paid). Free: nothing to add.
+ */
+export function startCalendarVerdict(
+  answer: unknown,
+  shape: { format: string; teams: number; home_and_away?: boolean },
+  slots: SlotWindow[],
+  from: number,
+  to: number,
+): { refusal: string } | { note: string } | null {
+  const unread = { note: "FoxLeague's calendar could not be read for this start: checked against the public lists only; a start held by a tournament being created is refused by FoxLeague at the create, which costs nothing" }
+  if (answer === null || typeof answer !== 'object') return unread
+  const why = (answer as { from_refusal?: unknown }).from_refusal
+  if (why === null || why === 'too_soon' || why === 'too_far') return null
+  if (why !== 'taken') return unread
+  let free: { first: number; last: number }[]
+  try {
+    free = freeRanges(answer)
+  } catch {
+    return unread
+  }
+  const c = (answer as { conflict?: unknown }).conflict
+  const conflict = c !== null && typeof c === 'object' ? (c as { tournament_id?: unknown; start?: unknown; end?: unknown }) : {}
+  const id = conflict.tournament_id
+  // A title is written by a player: never repeated. A negative id is FoxLeague's placeholder for a hold.
+  const held = typeof id === 'number' && id < 0
+  const by = held ? 'time slot held by a tournament being created' : typeof id === 'number' && Number.isSafeInteger(id) && id > 0 ? `time slot taken by T${id}` : 'time slot taken'
+  const at = (v: unknown) => (typeof v === 'string' && Number.isFinite(Date.parse(v)) ? Date.parse(v) : null)
+  const [ws, we] = [at(conflict.start), at(conflict.end)]
+  const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
+  const window = ws !== null && we !== null ? `; the ${held ? 'held' : 'taken'} window is ${iso(ws)} to ${iso(ceilMinute(we))} UTC` : ''
+  // The start first, then the window (the next plan reads a refusal cut to 300 characters, R74A-4).
+  const next = freeStartsFor(shape, free, slots, from, to)[0]
+  return {
+    refusal: next !== undefined
+      ? `${by} (FoxLeague's calendar); the first free start after it for this format and size is starts_at ${iso(next)}Z (late enough for the next plan to create it${window})`
+      : `${by} (FoxLeague's calendar); FoxLeague's calendar lists no free start in the 14 days after it that the next plan can still create${window}`,
+  }
 }

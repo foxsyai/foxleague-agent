@@ -353,6 +353,9 @@ export function startNote(layout: Layout): StartNote {
 /**
  * The running release is up: the update holds. Drops the launcher's note, the undo note it has told and every
  * release folder but this one and the one before it (kept so the next update can still be undone).
+ * A release that was put in place while this one runs (`./install.sh --update` or the pasted line inside the 45
+ * seconds before the confirm, UPD-U1) is not this start's to judge: the folder versions/active names and the note
+ * that goes with it stay for the launcher's next start.
  */
 export function confirmStart(layout: Layout): void {
   if (!layout.managed) return
@@ -360,12 +363,28 @@ export function confirmStart(layout: Layout): void {
   const me = basename(layout.code)
   const pending = readLine(join(versions, 'pending'))?.split(' ') ?? []
   const previous = pending[1] === me && NAME_RE.test(pending[0] ?? '') ? pending[0]! : readLine(join(versions, 'previous'))
-  rmSync(join(versions, 'pending'), { force: true })
+  const active = readLine(join(versions, 'active'))
+  const waiting = active && active !== me && NAME_RE.test(active) && existsSync(join(versions, active, 'src', 'service.ts')) ? active : null
+  // A note for that switch stays. Any other note is this start's own or one left by a switch that never happened.
+  if (!(waiting && pending[1] === waiting)) rmSync(join(versions, 'pending'), { force: true })
   rmSync(join(versions, 'rolled-back'), { force: true })
   if (previous && previous !== me && NAME_RE.test(previous)) writeAtomic(join(versions, 'previous'), `${previous}\n`)
+  // An update in flight (stage() holds versions/update.lock while it unpacks and prepares, a minute or more with npm):
+  // the folder it prepares in and the release it puts in place are not this start's to remove (R2I-8). The next start
+  // removes what is left.
+  if (updateInFlight(versions)) return
   for (const entry of readdirSync(versions, { withFileTypes: true })) {
-    if (!entry.isDirectory() || entry.name === me || entry.name === previous) continue
+    if (!entry.isDirectory() || entry.name === me || entry.name === previous || entry.name === waiting) continue
     if (entry.name.startsWith('v') || entry.name.startsWith('.staging-')) rmSync(join(versions, entry.name), { recursive: true, force: true })
+  }
+}
+
+/** Whether an update holds versions/update.lock now: one younger than LOCK_STALE_MS (an older one was left by a kill). */
+function updateInFlight(versions: string): boolean {
+  try {
+    return Date.now() - statSync(join(versions, 'update.lock')).mtimeMs < LOCK_STALE_MS
+  } catch {
+    return false
   }
 }
 

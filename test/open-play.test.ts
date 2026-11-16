@@ -61,10 +61,13 @@ test('OP-1: a team is counted as taking 1v1s only for the ones it had not arrang
   const chain = { account: async () => { throw new Error('off') }, esdts: async () => { throw new Error('off') }, egldUsd: async () => { throw new Error('off') }, query: async () => { throw new Error('off') } } as never
   const s = await takeSnapshot({ chain, fox }, { wallet: dryWallet })
   const took = Object.fromEntries(s.leaderboardNeighbours.map(u => [u.id, u.accepted7d]))
-  assert.deepEqual([took[40], took[41], took[42]], [0, 1, 1], 'the friend took only arranged 1v1s')
-  assert.deepEqual(s.leaderboardNeighbours.slice(0, 2).map(u => u.id).sort(), [41, 42], 'the teams that take a stranger\'s challenge come first')
+  // Audit 2026-11-16, P3b (the owner's word): an open challenge a team took from the list is no targeted challenge
+  // answered; it is said apart and no longer puts the team first.
+  assert.deepEqual([took[40], took[41], took[42]], [0, 0, 1], 'the friend took only arranged 1v1s, the open taker answered no targeted one')
+  assert.equal(s.leaderboardNeighbours[0]?.id, 42, 'the team that answers a stranger\'s targeted challenge comes first')
   const d = renderDigest(s)
-  assert.match(d, /Open taker \(user 41\) 1200, took 1 1v1 in 7 days it had not arranged/)
+  assert.match(d, /Open taker \(user 41\) 1200, took no 1v1 in 7 days it had not arranged, took 1 open challenge/)
+  assert.match(d, /Late taker \(user 42\) 1200, took 1 1v1 in 7 days it had not arranged \(last: [0-9-]+ [0-9:]+ UTC, 40 min after it was sent\)/)
   assert.match(d, /Friend \(user 40\) 1200, took no 1v1 in 7 days it had not arranged/)
   assert.doesNotMatch(SYSTEM_PROMPT, /Prefer a targeted challenge/)
   assert.match(SYSTEM_PROMPT, /arranged/)

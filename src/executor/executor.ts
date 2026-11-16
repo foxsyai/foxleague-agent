@@ -15,6 +15,7 @@ import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { FusionPrepared, Tournament, TournamentDetail } from '../foxleague/types.ts'
 import { cardBansLive, fusionMode, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { disciplineOf, transferLockEnd, type AgentSnapshot } from '../snapshot/snapshot.ts'
+import { CALENDAR_WINDOW_DAYS } from '../snapshot/calendar.ts'
 import type { AgentRow, Store } from '../store/db.ts'
 import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, wholeToAtomic } from '../util/encoding.ts'
 import { sleep } from '../util/http.ts'
@@ -22,10 +23,11 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { createStartMs, describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
-import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
+import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
+import { holdRefusal } from './hold.ts'
 import {
   buildTransaction,
   claimRefundTx,
@@ -71,6 +73,11 @@ export interface ExecutorDeps {
   notify?: (agentIndex: number, text: string, result?: ExecutionResult) => void
   /** The service is stopping (SIGTERM, a deploy): nothing more is signed; an action already sent finishes. */
   stopping?: () => boolean
+  /**
+   * The manual pages whose actions the owner's pause holds now (P-W7): the pages the agents' copy is behind on while the
+   * owner chose to pause them, else none. Only the agents' own actions are held (hold.ts).
+   */
+  held?: () => readonly string[]
 }
 
 interface Built {
@@ -189,6 +196,8 @@ export class Executor {
     const dry = agent.dryRun || !this.liveEnabled
     const logExtra: Record<string, unknown> = {}
     let booking: Booking | null = null
+    // A create checked without FoxLeague's calendar (ORG-2): its note goes with FoxLeague's own refusal of a taken slot.
+    let calendarNote = ''
     // The registration fees booked before this registration, which stand for the same one fee (see the cap check).
     let earlierFees: { id: number; usd: number }[] = []
     /** Lets the earlier bookings go once this registration's own is kept (`kept`): never before, so one always stands. */
@@ -227,9 +236,20 @@ export class Executor {
       if (!fresh || (fresh.paused && !ownerLeave)) return finish('refused', `${desc}: the agent is paused`)
       if (fresh.dryRun !== queued.dryRun) return finish('refused', `${desc}: the mode changed to ${fresh.dryRun ? 'dry run' : 'live'} while this action waited; the next plan starts fresh`)
       if (wallet.address !== agent.address) return finish('refused', `${desc}: wallet does not match ${agentName(agent.index)}`)
+      // The owner's pause of the actions whose rules FoxLeague changed (P-W7): the agents' own only. A join is judged
+      // once its tournament is read (below), the rest before anything is asked.
+      const held = planned.byOwner ? [] : (this.d.held?.() ?? [])
+      const paused = a.type === 'join_tournament' ? null : holdRefusal(a, held)
+      if (paused) return finish('refused', `${desc}: ${paused}`)
 
       const now = new Date()
       const ctx = await this.context(agent, wallet, snap, a, now, dry)
+      if (a.type === 'join_tournament' && held.length) {
+        // A 1v1 is a tournament of two teams; one whose size could not be read is held by either page.
+        const size = ctx.tournament?.tournament?.max_teams
+        const joinPaused = holdRefusal(a, held, typeof size === 'number' ? size === 2 : undefined)
+        if (joinPaused) return finish('refused', `${desc}: ${joinPaused}`)
+      }
       if (planned.piece) ctx.piece = { index: planned.piece.index, of: planned.piece.of }
       if (planned.byOwner) {
         ctx.byOwner = true
@@ -243,6 +263,7 @@ export class Executor {
       }
       let verdict = checkAction(a, snap, ctx)
       if (!verdict.ok) return finish('refused', `${desc}: ${verdict.refusal}`)
+      if (a.type === 'create_tournament') calendarNote = verdict.notes.find(n => n.startsWith("FoxLeague's calendar could not be read")) ?? ''
       // FoxLeague is asked about the name before the fee is paid: a taken name costs nothing.
       if (a.type === 'register') {
         const taken = await this.nameRefusal(wallet, a.team_name)
@@ -350,7 +371,8 @@ export class Executor {
       if (booking && !booking.sent) this.unbook(booking)
       if (booking?.organizer && !booking.organizer.sent) this.unbook(booking.organizer)
       replaceEarlierFees(Boolean(booking?.sent && booking.ids.length > 0))
-      const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}` : err instanceof Error ? err.message : String(err)
+      const slot = calendarNote && err instanceof ApiRefusal && /time slot/i.test(err.message) ? `; ${calendarNote}` : ''
+      const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}${slot}` : err instanceof Error ? err.message : String(err)
       // A payment signed and maybe sent: its row carries the hash the ledger rows are booked under.
       const maybeSent = booking?.sent || booking?.organizer?.sent ? txHashOf(err) : undefined
       return finish('error', `${desc}: ${msg}`, 0, maybeSent, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
@@ -475,6 +497,12 @@ export class Executor {
           fox.organizerFeeQuote(wallet, { format: a.format, max_teams: a.max_teams, home_and_away: Boolean(a.home_and_away), has_third_place_match: a.format === 'knockout', private: Boolean(a.invite_user_ids?.length), developer_mode: false, starts_at: new Date(start).toISOString() }),
         )
       }
+    }
+    if (a.type === 'create_tournament') {
+      // FoxLeague's calendar for this very start, every booking counted (ORG-2): null when unread, and the clash check
+      // from the public lists decides.
+      const start = createStartMs(a, now.getTime())
+      if (start !== null) market.startCalendar = await soft(() => fox.tournamentAvailability({ format: a.format, teams: a.max_teams, ...(a.home_and_away ? { home_and_away: true } : {}), from: new Date(start).toISOString(), days: CALENDAR_WINDOW_DAYS }))
     }
     if (a.type === 'buy') market.pendingShop = new Set(store.pending(agent.index).filter(p => p.kind === 'shop').map(p => String((p.payload as { product?: string }).product)))
     if (a.type === 'buy' && a.product === 'xp_booster') {
@@ -1302,6 +1330,11 @@ export class Executor {
           try {
             created = await fox.createTournament(wallet, body, newKey())
             this.unbook(booking.organizer)
+            // FoxLeague asked no organizer payment: what the owner reads names the seat it pays, not 1150 for 1000 (MON-U5).
+            const organizer = wholeToAtomic(Number(v.facts.organizerFoxsy ?? 0))
+            const prices = this.valuationPrices(snap.prices)
+            usd = Math.max(0, usd - (prices ? costUsd(organizer, maxFeeAtomic(built.txs[0]!), prices) : 0))
+            costText = `cost ~$${usd.toFixed(2)} (${formatAtomic(v.foxsy - organizer, 0)} FOXSY + fees; FoxLeague asked no organizer payment)`
           } catch (err) {
             if (!(err instanceof ApiRefusal && err.code === 'organizer_fee_required')) throw err
             // Kept from the signature on, as FoxLeague's own app does: a create that does not use it leaves it for the next one.
@@ -1358,12 +1391,12 @@ export class Executor {
             // FoxLeague committed the tournament pending on chain with this payment on it ("could not be confirmed yet ...
             // stays pending", tournaments.rs), and its reconcile opens it later: the payment is used, not refunded (grand
             // audit 2026-11-06, INTEG-2). The plan is shown a tournament it created without a seat (OPEN-8).
-            if (err instanceof ApiRefusal && /could not be confirmed yet|stays pending/i.test(err.message)) {
+            if (err instanceof ApiRefusal && CREATE_STILL_PENDING.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
               return finish('error', `${desc}: organizer payment ${organizerHash} made, and FoxLeague may have created it: its creation is still pending on chain (${why}); the payment is on that tournament, not refunded, so the next plan reads your tournaments`, 0, organizerHash)
             }
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
-            if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
+            if (err instanceof ApiRefusal && !err.isTxPending && ORGANIZER_HASH_ANSWER.test(err.message) && SHOP_FINAL.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
               if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
               return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)

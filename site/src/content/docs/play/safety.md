@@ -23,6 +23,14 @@ The AI sees a snapshot of the game, never your wallet or keys. It cannot build a
 list of actions (train, play, join, buy, bid...), each with checked arguments, and the executor builds and signs
 it. Text written by other players (team names, tournament titles) reaches it only as data, never as instructions.
 
+When FoxLeague changes a page of its manual, each plan reads that page's current text until a version of the agent
+brings the new copy. It is FoxLeague's text, so the same holds: it goes only inside the game snapshot, under a heading
+that says it is data and that the live values and the executor's refusals win; every line of it is set in so it can
+never pass for part of the request or close the snapshot; it is cut at 24,000 bytes a page and 60,000 in all, counted as written into the request; and
+it never reaches the executor, Telegram or the dashboard. The rules the executor checks are code and do not read it.
+If you prefer, the dashboard can also pause the actions whose rules changed until the agents are synced
+([Update](/help/update/#pausing-what-changed)); turning that pause off again asks for your password.
+
 ## You stay in control
 
 - **Dry run first**: a new install only simulates, and an agent you add later follows the current mode. Going
@@ -48,8 +56,8 @@ The agent talks only to the services it needs:
 
 - **FoxLeague and the MultiversX network**: what the player app sends too. It reads public data, logs in as your
   team and sends the transactions it signs. Every hour it also reads the manual pages FoxLeague's public read-only
-  server gives, to see whether the game's manual changed since your agents' copy; that request carries nothing of
-  yours. `AGENT_MANUAL_CHECK=0` in `.env` switches it off.
+  server gives and FoxLeague's API description, to see whether the game's manual or the shape of its routes changed
+  since your agents' copy; those requests carry nothing of yours. `AGENT_MANUAL_CHECK=0` in `.env` switches it off.
 - **Anthropic**: what the AI needs to plan and to answer you. That is the snapshot of the game, your strategy, the
   budget that is left, the recent activity and your conversation with the manager. Never your recovery words or keys.
 - **Telegram and Binance**, only when you set their keys: your messages and the agent's answers, and the top-ups

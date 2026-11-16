@@ -16,6 +16,7 @@ import type {
   Team,
   Tournament,
   TournamentDetail,
+  UpcomingMatch,
   UpcomingMatches,
   UserProfile,
   ChallengeForMe,
@@ -69,6 +70,10 @@ interface Envelope<T> {
 /** How long a Play may take to answer: FoxLeague's slot wait (at most 35 s) and the match start, with room to spare. */
 const PLAY_MATCH_TIMEOUT_MS = 95_000
 
+/** The rows asked for in one page of the upcoming matches (FoxLeague's UPCOMING_MAX_LIMIT), and the most pages read. */
+export const UPCOMING_LIMIT = 200
+export const UPCOMING_MAX_PAGES = 5
+
 export class FoxLeague {
   private readonly base: string
   private readonly limiter: RateLimiter
@@ -81,7 +86,7 @@ export class FoxLeague {
 
   // ---- plumbing ----
 
-  private async call<T>(path: string, opts: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; wallet?: AgentWallet; timeoutMs?: number; raw?: boolean; headers?: Record<string, string> } = {}): Promise<T> {
+  private async call<T>(path: string, opts: { method?: 'GET' | 'POST' | 'PUT'; body?: unknown; wallet?: AgentWallet; timeoutMs?: number; raw?: boolean; headers?: Record<string, string>; seen?: (headers: Headers) => void } = {}): Promise<T> {
     const doCall = async (): Promise<{ status: number; json: unknown }> => {
       const headers: Record<string, string> = { ...opts.headers }
       if (opts.wallet) headers.authorization = `Bearer ${await this.token(opts.wallet)}`
@@ -91,6 +96,8 @@ export class FoxLeague {
           body: opts.body,
           headers,
           timeoutMs: opts.timeoutMs,
+          // The headers of the answer read last: a 401 asked again gives those of the second answer.
+          onHeaders: opts.seen,
         })
       } catch (err) {
         // The auth extractor's 401 has a plain-text body, which requestJson reports as HttpError.
@@ -283,8 +290,37 @@ export class FoxLeague {
     return this.call<MyTournaments>('/tournaments/my', { wallet: w })
   }
 
-  upcomingMatches(w: AgentWallet): Promise<UpcomingMatches> {
-    return this.call<UpcomingMatches>('/tournaments/upcoming-matches', { wallet: w })
+  /**
+   * The team's fixtures, read whole (audit 2026-11-16, R2M-3). FoxLeague pages them (tournaments.rs: 50 rows when no
+   * `limit` is asked, at most 200, kickoff first, the last day's finished games at the front, the total in
+   * X-Total-Count): read by pages of UPCOMING_LIMIT until the total, or a short page where FoxLeague sends none. More
+   * than UPCOMING_MAX_PAGES pages, rows gone between two pages or an answer without its list throw: the snapshot then
+   * keeps the list unread and every rule that counts owed matches refuses (MON-1), never reads a part as the whole.
+   */
+  async upcomingMatches(w: AgentWallet): Promise<UpcomingMatches> {
+    let first: UpcomingMatches | null = null
+    const rows: UpcomingMatch[] = []
+    for (let page = 0; page < UPCOMING_MAX_PAGES; page++) {
+      let total: number | null = null
+      const part = await this.call<UpcomingMatches>(`/tournaments/upcoming-matches?limit=${UPCOMING_LIMIT}&offset=${rows.length}`, {
+        wallet: w,
+        seen: h => {
+          const t = h.get('x-total-count')
+          total = t && /^\d{1,9}$/.test(t.trim()) ? Number(t.trim()) : null
+        },
+      })
+      if (!part || typeof part !== 'object' || !Array.isArray(part.matches)) throw new ApiRefusal('unexpected answer from /tournaments/upcoming-matches (no list of matches)')
+      first ??= part
+      rows.push(...part.matches)
+      const whole = { ...first, matches: rows }
+      if (total === null) {
+        if (part.matches.length < UPCOMING_LIMIT) return whole
+      } else {
+        if (rows.length >= total) return whole
+        if (!part.matches.length) throw new ApiRefusal(`your upcoming matches changed while they were read (${rows.length} of ${total}): not read whole`)
+      }
+    }
+    throw new ApiRefusal(`your upcoming matches are more than ${UPCOMING_LIMIT * UPCOMING_MAX_PAGES} rows: not read whole`)
   }
 
   challengesForMe(w: AgentWallet): Promise<ChallengeForMe[]> {

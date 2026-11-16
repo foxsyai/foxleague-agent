@@ -5,7 +5,7 @@
 #   (or: git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh)
 #
 # Re-run it any time: it keeps your wallet, login and keys, and offers your earlier answers as the defaults.
-#   ./install.sh --update      get the newest signed release, prepare it, restart into it
+#   ./install.sh --update      get the newest signed release, prepare it, restart into it (a stopped agent stays stopped)
 #   ./install.sh --uninstall   stop and remove the background service (your files and wallet stay)
 #   ./install.sh --no-service  set everything up but do not install the background service
 # (The dashboard's Update now and Telegram's /upgrade do what --update does, without a terminal.)
@@ -86,22 +86,33 @@ case "$(uname -m)" in
   *) die "unsupported processor $(uname -m)" ;;
 esac
 [ -f "$APP_DIR/package.json" ] && grep -q '"name": "foxleague-agent"' "$APP_DIR/package.json" || die "run install.sh from inside the foxleague-agent folder"
+# The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
+# "/." follows a link: stat does not follow one in the last part, and a link root made to a user's install is root's
+# own (R2I-1).
+owner_uid() { stat -c %u "$1/." 2>/dev/null || stat -f %u "$1/." 2>/dev/null || true; }
+owner_name() { stat -c %U "$1/." 2>/dev/null || stat -f %Su "$1/." 2>/dev/null || true; }
+# --update and --uninstall with sudo on another user's install. --update put a release in place there that the
+# agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
+# (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
+# (INS-A2). The guided install with FOXAGENT_ALLOW_ROOT=1 wrote root's .env there and a service of root that runs the
+# agent as root (INS-A8). All stop before they write anything. An install that itself runs as root (its folder is
+# root's) still installs, updates and uninstalls. This comes before the check of a guided install as root below: on
+# their own folder the owner is told whose it is and to leave sudo out, not to make another user (R2I-3).
+if [ "$MODE" != prepare ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
+  who=$(owner_name "$ROOT")
+  uid=$(owner_uid "$ROOT")
+  # GNU stat says UNKNOWN for a user this machine has no name for (a container): the number then.
+  if [ -n "$who" ] && [ "$who" != UNKNOWN ]; then owner=$who as=$who
+  elif [ -n "$uid" ]; then owner="the user with number $uid (no name on this machine)" as="that user"
+  else owner="another user" as="that user"; fi
+  asked=''
+  [ $# -eq 0 ] || printf -v asked ' %s' "$@"
+  die "this install belongs to $owner, not to root: run it as $as, without sudo: cd $ROOT && ./install.sh$asked"
+fi
 # The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
 # so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
 if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
   die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
-fi
-# The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
-owner_uid() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
-owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || true; }
-# --update and --uninstall with sudo on another user's install. --update put a release in place there that the
-# agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
-# (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
-# (INS-A2). Both stop before they write anything. An install that itself runs as root (its folder is root's) still
-# updates and uninstalls.
-if { [ "$MODE" = update ] || [ "$MODE" = uninstall ]; } && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
-  who=$(owner_name "$ROOT")
-  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --$MODE"
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
@@ -131,6 +142,12 @@ set_env() {
   if [ "$kept" -ne $((had - gone)) ]; then rm -f "$tmp"; die "lines of $ENV_FILE would be lost: it was left as it is (it holds your recovery words). Check the file, then run the installer again."; fi
   printf '%s="%s"\n' "$1" "$2" >> "$tmp"
   mv "$tmp" "$ENV_FILE"
+}
+# What the agent itself reads for a key from .env: Node.js's own reader (process.loadEnvFile, as src/config.ts), which
+# takes `export` in front, spaces, single quotes and a `# note` after the value, the last line winning; the shell's own
+# value of the key left out. "-" when no line sets it; status 1 when .env cannot be read that way (R2I-5).
+agent_env() {
+  env -u "$1" "$NODE" -e 'try { process.loadEnvFile(process.argv[1]) } catch { process.exit(1) } const v = process.env[process.argv[2]]; process.stdout.write(v === undefined ? "-" : `=${v}`)' "$ENV_FILE" "$1" 2>/dev/null
 }
 # A line saved on Windows ends in CR LF: the CR goes before the quotes, as the agent's own reader drops it (INS-A3).
 get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | tr -d '\r' | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
@@ -253,7 +270,10 @@ ensure_node() {
   info "Node.js $("$NODE" --version) at $NODE"
 }
 # FOXAGENT_GUIDED=1: the command line leaves out the lines that are written for a server set up by hand.
-cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
+# Without AGENT_MNEMONIC of the shell: Node.js never lets .env replace a variable that is set, so words exported in
+# this terminal were shown, written to pem/ and named as agent 1 instead of the words in .env, which the background
+# service uses (INS-U4).
+cli() { env -u AGENT_MNEMONIC FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 # Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
 # a newcomer reads that notice as something to do. npm's download cache and its logs stay in the install's own
 # folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind. In the folder named
@@ -435,10 +455,16 @@ EOF
   <key>StandardErrorPath</key><string>$DATA_DIR/service.log</string>
 </dict></plist>
 EOF
-    # The job that runs is unloaded first, by its label, and given a moment to go: launchd refuses to load a label
-    # it still lists. A bootstrap it refuses ends here in words, with what to do (INS-A4).
+    # The job that runs is unloaded first by its label and given time to go: launchd refuses to load a label it
+    # still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd keeps it
+    # listed meanwhile, whatever it answered the bootout (36, on its way out, or another status): while it does, the
+    # wait is as long as the uninstall's (INS-U1, R2I-U1). A bootstrap it refuses ends here in words, with what to do
+    # (INS-A4).
     launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
-    mac_wait_unloaded 10 || true
+    if mac_job_loaded; then
+      info "Waiting for the agent that runs to stop: it finishes what it is doing first (at most 3 minutes)."
+      mac_wait_unloaded 185 || true
+    fi
     launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
   fi
 }
@@ -489,6 +515,26 @@ renew_unit() {
   [ "$PLATFORM" = linux ] && [ -f "$UNIT" ] || return 1
   LC_ALL=C grep -a -q -x 'RestrictSUIDSGID=true' "$UNIT" || return 1
   LC_ALL=C grep -a -v -x 'RestrictSUIDSGID=true' "$UNIT" | put_file "$UNIT" 644
+}
+# The code of an install made before releases had folders of their own. get.sh leaves it in the folder, because the
+# old background service starts <folder>/src/service.ts by that path; it goes once the service of step 7 is written
+# (INS-U6). Only a managed install's folder whose own package.json names foxleague-agent holds such code: a release's
+# package.json is in versions/<name>. The launcher, cli.sh, install.sh and get.sh of the folder are the new ones.
+remove_old_code() {
+  [ "$MANAGED" = 1 ] && [ -f "$ROOT/package.json" ] && grep -q '"name": "foxleague-agent"' "$ROOT/package.json" || return 0
+  local old
+  for old in src deploy test docs site scripts node_modules .github package.json package-lock.json tsconfig.json README.md INSTALL.md AGENTS.md CLAUDE.md; do
+    rm -rf "${ROOT:?}/$old"
+  done
+}
+# True when this user's background service is the one an install made before releases had folders of their own
+# wrote for this folder: it starts <folder>/src/service.ts by that path (R2I-9).
+old_service_runs_here() {
+  local file here
+  if [ "$PLATFORM" = linux ]; then file=$UNIT; else file=$PLIST; fi
+  [ -f "$file" ] && LC_ALL=C grep -a -q -F "$ROOT/src/service.ts" "$file" && [ -n "$(service_folder)" ] || return 1
+  here=$(cd "$ROOT" && pwd -P)
+  [ "$(cd "$(service_folder)" 2>/dev/null && pwd -P)" = "$here" ]
 }
 restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 # After a restart that failed: what runs now, and a command that systemd takes even at the unit's start limit.
@@ -574,10 +620,35 @@ if [ "$MODE" = update ]; then
     exit 0
   fi
   # A terminal opened with su or sudo: find the user's service manager first (see find_user_systemd).
-  find_user_systemd || true
+  reachable=0
+  find_user_systemd && reachable=1
   # The unit of an older install is renewed here, in a terminal, where an update from the dashboard cannot (it
   # runs inside that unit, and --prepare never writes to the service): systemd reads it before the restart.
   if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
+  # A service the owner stopped stays stopped (UPD-U5): an update is not the owner's word to start the agent again,
+  # which may sign LIVE. One that runs, waits to start again after a failure or cannot be asked is restarted as before.
+  # A stop still under way is waited for (R2I-10): a busy agent finishes what it signs first, and systemd answers
+  # "deactivating" for up to the unit's TimeoutStopSec of 180 s; a restart asked meanwhile would be queued behind the
+  # stop and start the agent again. A stop that ends "failed" (killed at that time) or is still under way after it
+  # stays stopped too.
+  if [ "$PLATFORM" = linux ] && [ "$reachable" = 1 ]; then
+    state=$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)
+    waited=0
+    while [ "$state" = deactivating ] && [ "$waited" -lt 185 ]; do
+      [ "$waited" = 0 ] && info "The background service is stopping: waiting for it to end (up to 3 minutes)."
+      sleep 1
+      waited=$((waited + 1))
+      state=$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)
+    done
+    if [ "$state" = inactive ] || { [ "$waited" -gt 0 ] && { [ "$state" = failed ] || [ "$state" = deactivating ]; }; }; then
+      info "The background service is stopped, so it stays stopped: the new version runs from its next start. To start it now: systemctl --user start $SERVICE"
+      exit 0
+    fi
+  fi
+  if [ "$PLATFORM" = darwin ] && ! mac_job_loaded; then
+    info "The background agent is stopped, so it stays stopped: the new version runs from its next start, at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
+    exit 0
+  fi
   service_restart || die "the new version is in place but the background service could not be restarted: $(after_failed_restart)"
   info "Restarted."
   exit 0
@@ -699,8 +770,16 @@ while :; do
   break
 done
 set_env WEB_UI_PORT "$port"
-# The dashboard listens on this machine only, over plain http, so the cookie cannot require https.
-set_env WEB_UI_INSECURE_COOKIE 1
+# The dashboard listens on this machine only, over plain http, so the cookie cannot require https. A value the owner
+# set is kept (INS-U5): with https of their own in front, 0 sends the login cookie over https only. Decided on what the
+# agent reads, in whatever form the line is written (R2I-5); a .env the agent's reader cannot read is left as it is.
+if cookie=$(agent_env WEB_UI_INSECURE_COOKIE); then
+  case "$cookie" in
+    -) set_env WEB_UI_INSECURE_COOKIE 1 ;;
+    =1) ;;
+    *) info "WEB_UI_INSECURE_COOKIE in .env is kept as you set it (not 1): the login cookie is sent over https only, so log in at your https address." ;;
+  esac
+fi
 
 say "4/7 Keys (you can skip any of them now and add it later in the dashboard: Getting started, then Keys)"
 cat <<'KEYS'
@@ -766,10 +845,17 @@ info "Each new agent you add in the dashboard gets its own pem/agentN.pem automa
 address=$(cli address 1 | sed -E 's/^agent 1: ([^ ]+).*/\1/')
 if [ "$NO_SERVICE" = 1 ]; then
   say "7/7 Background service: skipped (--no-service)"
-  info "Start the agent yourself with: $ROOT/run.sh"
+  if old_service_runs_here; then
+    # No service of step 7 takes its place: the old one still starts this folder's old code, which stays (R2I-9).
+    info "The background service of the older install in this folder still starts its own code ($ROOT/src/service.ts), so that code stays. Two agents must not play with the same wallets: to start the agent yourself, remove that service first (cd $ROOT && ./install.sh --uninstall), then start it with: $ROOT/run.sh"
+  else
+    remove_old_code
+    info "Start the agent yourself with: $ROOT/run.sh"
+  fi
 else
   say "7/7 Background service"
   install_service
+  remove_old_code
   for _ in $(seq 1 30); do
     curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break
     sleep 1

@@ -11,7 +11,8 @@ import { BUSY_OPENS_MARGIN_S, INVITATION_MARGIN_MS } from './rules.ts'
  * An action's deadline: the last moment the executor would still let it through by the plan's snapshot, in ms since
  * the epoch; 'unread' for an action with a time limit the snapshot cannot tell (unknown is not "none": it runs early);
  * 'now' for one that any other team can make pointless at any moment (audit 2026-11-16, BEH-9 and BEH-10): leaving
- * the agent's own unanswered 1v1 (until it runs, any team can take the 1v1 the plan decided not to play) and taking
+ * the agent's own unanswered 1v1 (until it runs, any team can take the 1v1 the plan decided not to play), leaving a
+ * tournament it created (ORG-1: until it runs, any team can bring it to its minimum and lock the seats) and taking
  * another team's open 1v1 (it goes to the first team that takes it); null for an action with no time limit.
  */
 export type Deadline = number | 'unread' | 'now' | null
@@ -47,6 +48,14 @@ interface Copy {
 /** An open 1v1 this team created and nobody has taken yet (a seat count it cannot read counts as not taken: a leave is never late). */
 function ownUnanswered(c: Copy, me: number | undefined): boolean {
   return c.max_teams === 2 && me !== undefined && c.creator_user_id === me && c.status === 'open' && !(typeof c.participant_count === 'number' && c.participant_count >= 2)
+}
+
+/**
+ * An open tournament of more than 2 teams this team created (ORG-1): a plan leaves one that no longer fits, and until the
+ * leave runs any team that joins can bring it to its minimum, which locks the seats (FoxLeague's leave lock).
+ */
+function ownOpenTournament(c: Copy, me: number | undefined): boolean {
+  return typeof c.max_teams === 'number' && c.max_teams > 2 && me !== undefined && c.creator_user_id === me && c.status === 'open' && c.format !== 'league_knockout'
 }
 
 /** An open 1v1 another team posted for anyone: the first team to take it plays it. */
@@ -107,6 +116,8 @@ export function actionDeadline(a: Action, s: AgentSnapshot | null | undefined): 
       if (close === null) return 'unread'
       // Its own 1v1 nobody took yet: the plan decided not to play it, and until the leave runs any team can (BEH-9).
       if (cs.some(c => ownUnanswered(c, s?.profile?.id))) return 'now'
+      // Its own tournament the plan decided to leave: a join can lock its seats at any moment (ORG-1).
+      if (cs.some(c => ownOpenTournament(c, s?.profile?.id))) return 'now'
       const seat = s?.auth?.leagueSeats?.find(x => x.tournamentId === a.tournament_id)
       if (!seat && !cs.some(c => c.format === 'league_knockout')) return close
       const lock = time(seat?.seatsLockAt)

@@ -35,12 +35,26 @@ main() {
     Linux | Darwin) ;;
     *) die "run this on Linux or macOS. On Windows, install WSL2 (Ubuntu) and run it there." ;;
   esac
-  if [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
-    die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."
-  fi
   [ -n "$DIR" ] && [ "$DIR" != / ] || die "FOXAGENT_DIR must name a folder of its own"
   case "$DIR" in /*) ;; *) DIR="$PWD/$DIR" ;; esac
   [ ! -e "$DIR/.git" ] || die "$DIR is a git checkout. Update it there with: git pull && ./install.sh --update"
+  # Root over a folder another user owns: root's files there would keep that user's agent from starting again
+  # (INS-A8). "/." follows a link to the folder: stat does not follow one in the last part (R2I-1). Told before the
+  # check of root below, with or without FOXAGENT_ALLOW_ROOT: on their own folder the owner is told whose it is and to
+  # leave sudo out, not to make another user (R2I-3).
+  if [ "$(id -u)" = 0 ] && [ -e "$DIR" ] && [ "$(stat -c %u "$DIR/." 2>/dev/null || stat -f %u "$DIR/." 2>/dev/null)" != 0 ]; then
+    local who uid owner as
+    who=$(stat -c %U "$DIR/." 2>/dev/null || stat -f %Su "$DIR/." 2>/dev/null || true)
+    uid=$(stat -c %u "$DIR/." 2>/dev/null || stat -f %u "$DIR/." 2>/dev/null || true)
+    # GNU stat says UNKNOWN for a user this machine has no name for (a container): the number then.
+    if [ -n "$who" ] && [ "$who" != UNKNOWN ]; then owner=$who as=$who
+    elif [ -n "$uid" ]; then owner="the user with number $uid (no name on this machine)" as="that user"
+    else owner="another user" as="that user"; fi
+    die "$DIR belongs to $owner, not to root: paste the line as $as, without sudo"
+  fi
+  if [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
+    die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."
+  fi
 
   # A download into a file. curl writes to its output and the shell puts that into the file: a curl that may not
   # write where it is told (the one of a snap has a /tmp of its own) still works that way.
@@ -172,7 +186,7 @@ main() {
   fi
 
   if [ "$kind" = flat ]; then
-    echo "  An older install was found there: its code is replaced, your wallet, keys and data are kept."
+    echo "  An older install was found there: its code is replaced once the installer has set up the new service; your wallet, keys and data are kept."
   elif [ "$kind" = install ]; then
     echo "  An existing install was found there: your wallet, keys and data are kept."
   fi
@@ -192,13 +206,9 @@ main() {
     echo "  Preparing it next to the installed version (Node.js and dependencies)"
     FOXAGENT_ROOT="$DIR" bash "$staging/install.sh" --prepare || give_up "version $got could not be prepared (see the lines above): nothing was changed and the agent runs as before. Check the connection, then paste the line again."
   fi
-  # An install made before releases had their own folders: its code goes, everything of yours stays
-  # (.env, data/, pem/, the private Node in .node/).
-  if [ "$kind" = flat ]; then
-    for old in src deploy test docs site scripts node_modules .github package.json package-lock.json tsconfig.json README.md INSTALL.md AGENTS.md CLAUDE.md install.sh get.sh run.sh cli.sh; do
-      rm -rf "${DIR:?}/$old"
-    done
-  fi
+  # An install made before releases had their own folders keeps its code here for now: its background service starts
+  # <folder>/src/service.ts by that path, until the installer writes the new service at its step 7 and removes the old
+  # code (INS-U6). Cut before that (a closed window at a question), the old service still starts what it names.
 
   if [ -d "$DIR/versions/$name" ]; then
     rm -rf "$DIR/versions/.replaced-get"

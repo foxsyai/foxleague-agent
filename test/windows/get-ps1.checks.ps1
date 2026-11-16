@@ -502,7 +502,8 @@ case "$1" in
         *) echo "stand-in wsl.exe: unexpected $1"; exit 250 ;;
       esac
     done
-    if [ "$exec_mode" = 0 ]; then touch "$W/user"; exit 0; fi   # the first start: Ubuntu makes its user
+    # The first start: Ubuntu makes its user. One whose default user is root on purpose asks nothing (INS-U2).
+    if [ "$exec_mode" = 0 ]; then [ -e "$W/root-on-purpose" ] || touch "$W/user"; exit 0; fi
     if [ "$user" = root ]; then cd /root && exec env HOME=/root USER=root "$@"; fi
     cd "/home/$user" && exec runuser -u "$user" -- env HOME="/home/$user" USER="$user" LOGNAME="$user" "$@" ;;
   *) echo "stand-in wsl.exe: unexpected $1"; exit 250 ;;
@@ -534,7 +535,7 @@ exit "${FOX_INSTALLER_EXIT:-0}"
 $World = @{}
 function New-World {
     param([bool]$VmCompute = $true, [string]$Distros = '', [bool]$HasUser = $false, [string]$Conf = $null, [bool]$SystemdRuns = $false, [bool]$Curl = $true)
-    & bash -c "rm -rf $W/calls.log $W/distros $W/user $W/systemd-runs $W/utf16 $W/*.exit $W/*.out $W/install-fails $W/no-first-user $W/default-version /etc/wsl.conf /etc/wsl.conf.before-foxleague /home/fox/foxleague-agent /home/fox/fox2 /home/fox/.config /usr/local/bin/curl"
+    & bash -c "rm -rf $W/calls.log $W/distros $W/user $W/systemd-runs $W/utf16 $W/*.exit $W/*.out $W/install-fails $W/no-first-user $W/root-on-purpose $W/default-version /etc/wsl.conf /etc/wsl.conf.before-foxleague /home/fox/foxleague-agent /home/fox/fox2 /home/fox/.config /usr/local/bin/curl"
     [System.IO.File]::WriteAllText("$W/version.out", "WSL version: 2.6.1.0`nKernel version: 6.6.87.2-1`n")
     # The Linux user of the stand-in Ubuntu writes its notes here too.
     [System.IO.File]::WriteAllText("$W/linux.log", ''); & chmod 777 $W; & chmod 666 "$W/linux.log"
@@ -878,6 +879,68 @@ Check 'Ubuntu whose first start was never done (its user is root): started here 
     True ((Screen) -match 'Ubuntu has no user of your own yet') (Screen)
     True ((Calls) -match "(?m)^-d`tUbuntu`t--cd`t~$") (Calls)
     True ((LinuxLog) -match 'get\.sh ran as fox') 'the installer ran as the new user, not as root'
+}
+Check 'INS-U2 an Ubuntu whose default user is root on purpose: started once, then how to make a user the default is said' {
+    # Its first start was done long ago with root as its user (or root was made the default since): starting it asks
+    # nothing. It was started eight times with "choose the username and password" and then sent to the Start menu,
+    # where it asks nothing either; what helps (a user of its own, made Ubuntu's default in /etc/wsl.conf) was said
+    # nowhere. The container has the user fox, as such an Ubuntu may have one.
+    New-World -Distros $UbuntuThere -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    [System.IO.File]::WriteAllText("$W/root-on-purpose", '')
+    $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+    $end = Run-Install
+    $starts = @([regex]::Matches((Calls), "(?m)^-d`tUbuntu`t--cd`t~$")).Count
+    True ($starts -le 1) ('Ubuntu was started ' + $starts + ' times although it asks nothing')
+    True ($end -match '^stop: ') $end
+    $said = (Screen) + "`n" + $end
+    True ($said -notmatch 'Open Ubuntu from the Start menu, choose a username') ('sent to the Start menu, which asks nothing either: ' + $said)
+    # This Ubuntu has a user of its own (fox): it is named, and how to make it the default is said. (Without one, how to
+    # make one with adduser is said: the check after this one.)
+    True ($said -match 'It has a user of your own: fox\.') ('the user it has is not named: ' + $said)
+    True ($said -match '\[user\]' -and $said -match 'default=fox') ('how to make that user the default is not said: ' + $said)
+    True ($said -match [regex]::Escape('wsl -d Ubuntu -u root --cd ~')) $said
+    True ($said -match 'wsl --terminate Ubuntu') $said
+    True ((LinuxLog) -notmatch 'get\.sh ran') 'the installer ran as root'
+    True ($null -eq $World['Task']) 'a task without an agent'
+}
+Check 'INS-U2 the Linux users of Ubuntu are read from its passwd: uid 1000 to 59999 with a login shell' {
+    $passwd = "root:x:0:0:root:/root:/bin/bash`nnobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin`nana:x:1000:1000:Ana,,,:/home/ana:/bin/bash`nsvc:x:1001:1001::/home/svc:/usr/sbin/nologin`nbob:x:1002:1002::/home/bob:/bin/zsh`nOdd:x:1003:1003::/home/odd:/bin/bash`nlxd:x:999:100::/var/snap/lxd/common/lxd:/bin/false`n"
+    Equal ((Get-FoxLinuxUsers $passwd) -join ',') 'ana,bob'
+    Equal (Get-FoxLinuxUsers '').Count 0
+    $help = Get-FoxRootUbuntuHelp @()
+    True (($help -join "`n") -match '(?m)^  adduser NAME$') ($help -join "`n")
+    $help = Get-FoxRootUbuntuHelp @('ana', 'bob')
+    True (($help -join "`n") -match 'It has a user of your own: ana and bob\.') ($help -join "`n")
+    True (($help -join "`n") -match 'default=ana') ($help -join "`n")
+    True (($help -join "`n") -notmatch 'adduser') 'a user is there: none to make'
+}
+Check 'R2I-U2 with several users of Ubuntu, the one whose home holds foxleague-agent is the one to start as' {
+    # INSTALL3's unproven item on INS-U2 (round two of the audit of 16 Nov 2026): the help named the first user of
+    # passwd, so an owner whose install is in another user's home was sent to make that first user the default and the
+    # line then made a second install with another wallet.
+    New-World -Distros $UbuntuThere -Conf "[boot]`nsystemd=true`n" -SystemdRuns $true
+    [System.IO.File]::WriteAllText("$W/root-on-purpose", '')
+    & bash -c "id -u ana >/dev/null 2>&1 || useradd -m -s /bin/bash ana; mkdir -p /home/ana/foxleague-agent/versions && chown -R ana:ana /home/ana/foxleague-agent"
+    try {
+        $World['Env'] = @{ FOXAGENT_GET_URL = 'https://example.org/get.sh' }
+        $end = Run-Install
+        $said = (Screen) + "`n" + $end
+        True ($end -match '^stop: ') $end
+        True ($said -match 'It has a user of your own: fox and ana\.') $said
+        True ($said -match 'default=ana') ('the user whose home holds the agent is not the one to start as: ' + $said)
+        True ($said -notmatch 'default=fox') $said
+        True ($said -match 'The agent is already installed in the home of ana') $said
+        True ((LinuxLog) -notmatch 'get\.sh ran') 'the installer ran'
+    } finally {
+        & bash -c "userdel -r ana >/dev/null 2>&1; rm -rf /home/ana"
+    }
+    $help = (Get-FoxRootUbuntuHelp @('ana', 'bob') @('bob')) -join "`n"
+    True ($help -match 'default=bob' -and $help -match 'make bob the user Ubuntu starts as') $help
+    $help = (Get-FoxRootUbuntuHelp @('ana', 'bob') @()) -join "`n"
+    True ($help -match 'default=ana' -and $help -notmatch 'already installed') $help
+    # A name that is no user of the list is not taken.
+    $help = (Get-FoxRootUbuntuHelp @('ana') @('root')) -join "`n"
+    True ($help -match 'default=ana') $help
 }
 Check 'Ubuntu that cannot be installed: what to try is said, and nothing else runs' {
     New-World

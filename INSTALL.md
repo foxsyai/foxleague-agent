@@ -158,7 +158,10 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
   nothing is changed. Restart the PC and press the setup key while it starts: F2, Del, F10 or Esc, depending on the
   maker (the PC maker's guide tells which). Turn on Intel VT-x (Intel Virtualization Technology), AMD-V or SVM,
   save and restart, then paste the PowerShell line again. `systeminfo` shows "Virtualization Enabled In Firmware:
-  Yes" once it is on; Task Manager shows it too (Performance, CPU).
+  Yes" once it is on. Where a hypervisor already runs (Windows 11 starts one for its own security as soon as
+  virtualization is on) it shows "A hypervisor has been detected. Features required for Hyper-V will not be
+  displayed." instead, which means it is on too. Task Manager shows it too (Performance, CPU, "Virtualization:
+  Enabled").
 - **"Ubuntu and the agent need about 4 GB free on C:":** free some space on C:, then paste the line again.
   Settings, System, Storage shows what takes the room (Storage Sense and Disk Cleanup remove temporary files). The
   hibernation file, `hiberfil.sys`, can take several GB: `powercfg /h off` in a PowerShell opened as administrator
@@ -180,6 +183,11 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
 - **"Ubuntu has no user of your own yet":** press Enter and choose the username and password Ubuntu asks for. If
   it asks nothing and shows a prompt at once, type `exit`, open Ubuntu from the Start menu, choose them there and
   paste the line again.
+- **"Ubuntu starts as root":** Ubuntu's first start was done earlier with root as its user (or root was made its
+  default since), so it asks for nothing. The agent is installed as the user Ubuntu starts as, which has to be one of
+  your own. The installer names the user Ubuntu has (of several, the one whose home holds the agent already) or says
+  how to make one (`adduser`). It also says how to make that user the one Ubuntu starts as: the two lines `[user]`
+  and `default=` with its name in `/etc/wsl.conf`, then `wsl --terminate Ubuntu` in PowerShell and the line again.
 - **The browser did not open:** open `http://localhost:8870` in your browser yourself (or the port you chose).
 - **The dashboard does not open at `http://localhost:8870`:** the agent runs inside Ubuntu and Windows passes
   `localhost` on to it. Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again: it
@@ -510,6 +518,9 @@ results, not meeting). What they share is a pooled formation record with no team
 
 The logs and the restart work from any folder. The other three (`./install.sh --update`, `./cli.sh` and
 `./install.sh --uninstall`) are typed in the agent's folder: go there first with `cd ~/foxleague-agent`.
+Type them as yourself, without sudo: as root on your folder `./cli.sh`, `./run.sh` and `./install.sh` stop before
+they change anything and say so, because files of root there would keep the agent from starting again. An agent that
+already runs as root there (its database is root's, as in a container that mounts your install) still starts.
 On Windows they are the Linux ones, typed inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell), and the
 uninstall is one line in PowerShell ([On Windows](#on-windows), "Uninstalling").
 
@@ -527,7 +538,10 @@ by itself after about a minute and a half, and you are told. Your wallet, keys, 
 `./install.sh --update` does the same from a terminal. A git checkout and a server set up by hand show the notice
 with what to do instead of the button. `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 
-An update restarts the background service; when the restart fails it says so and names the command to run. An
+An update restarts the background service; when the restart fails it says so and names the command to run. A
+background service you stopped stays stopped: `./install.sh --update` says so and names the command that starts it
+(`systemctl --user start foxleague-agent`; on a Mac it starts at your next login). One still stopping (a busy agent
+finishes what it signs first, up to three minutes) is waited for, then stays stopped too. An
 install made with `./install.sh --no-service` has no background service and an update does not add one: you start
 the agent with `./run.sh`. Nothing starts such an agent again, so an update does not end it: the new version is put
 in place and the agent keeps playing on the version it runs. The dashboard then says "Version ... is in place and

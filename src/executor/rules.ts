@@ -12,8 +12,9 @@ import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
-import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive } from '../foxleague/levels.ts'
+import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive, shopDiscountOff } from '../foxleague/levels.ts'
 import { fusionMintTx } from './tx.ts'
+import { startCalendarVerdict } from '../snapshot/calendar.ts'
 import { STATS } from '../foxleague/types.ts'
 import type { SpendCategory } from '../store/db.ts'
 
@@ -98,6 +99,8 @@ export interface RulesContext {
   pendingTicket?: boolean
   /** A tournament create once the organizer fees are live: what it owes, null when unread. */
   organizerQuote?: OrganizerFeeQuote | null
+  /** A tournament create: FoxLeague's calendar for its shape from its start (ORG-2), null when unread. */
+  startCalendar?: unknown
   /** An organizer payment no create has used yet: the next create sends this hash, never a second payment. */
   pendingOrganizer?: { hash: string; total: number }
   /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
@@ -155,9 +158,11 @@ export function shopPrice(full: number, bp: number): number {
  * The MetaStaking rate FoxLeague serves this wallet (audit 2026-11-16, MNT-2 and CHN-1): from the switch its confirm
  * takes only the wallet's own price, so any other amount is refused and refunded after it settled. A whole number of
  * basis points, 0 to 1,000, is the rate. Anything else is unread: before the switch the list price (the rate is 0 there),
- * once the switch is live or its time has passed null, and nothing is paid.
+ * once the switch is live or its time has passed null, and nothing is paid. The switch is read first: while FoxLeague
+ * serves it off, the list price whatever rate is served, the only amount its confirm takes then (R75A-1).
  */
-function shopRateBp(served: unknown, cfg: FoxConfig, now: Date): number | null {
+export function shopRateBp(served: unknown, cfg: FoxConfig, now: Date): number | null {
+  if (shopDiscountOff(cfg, now)) return 0
   if (typeof served === 'number' && Number.isSafeInteger(served) && served >= 0 && served <= MAX_SHOP_DISCOUNT_BP) return served
   return shopDiscountLive(cfg, now) ? null : 0
 }
@@ -168,6 +173,27 @@ const SHOP_RATE_UNREAD = "this wallet's Shop price could not be read (FoxLeague'
 function servedPriceRefusal(served: unknown, mine: number, what: string): string | null {
   if (served === undefined || served === null) return null
   return served === mine ? null : `the ${what} price FoxLeague serves this wallet (${String(served).slice(0, 12)}) is not the list price less its MetaStaking discount (${mine}): not paying blind`
+}
+
+/** How close to the moment the contract's waivable days drop by one a cooldown waiver buys one day less (CHN-U4). */
+const WAIVER_DAY_MARGIN_MS = 10 * 60_000
+
+/**
+ * Milliseconds from now to the moment the contract's quote of a card's waivable cooldown days drops from the days it
+ * quoted to one less: it quotes ceil((readyAt - now - floor) / 1 day) (player_nft.rs cooldown_waiver_quote). Above
+ * zero while the agent's clock still counts the quoted days; at or below zero once its clock counts one less, the
+ * quote read from a block a little behind it (R2M-2). Null when the card's ready time or FoxLeague's floor
+ * (`fusion_cooldown_waiver_floor_seconds`) cannot be read, or when its clock counts neither (the two do not describe the
+ * same card): then nothing is moved.
+ */
+function waiverDayDropsInMs(readyAt: string | null, cfg: FoxConfig, quotedDays: number, now: Date): number | null {
+  const ready = Date.parse(readyAt ?? '')
+  const floor = (cfg as Record<string, unknown>).fusion_cooldown_waiver_floor_seconds
+  if (!Number.isFinite(ready) || typeof floor !== 'number' || !Number.isFinite(floor) || floor < 0) return null
+  const above = ready - now.getTime() - floor * 1000
+  const drop = above - (quotedDays - 1) * 86_400_000
+  // The clock's count is the quoted days (0 < drop <= a day) or one less (minus a day < drop <= 0).
+  return drop > -86_400_000 && drop <= 86_400_000 ? drop : null
 }
 
 /**
@@ -193,8 +219,6 @@ const RUNNING_STATUSES = new Set(['active', 'simulating', 'simulation_delayed'])
 const NOT_STARTED_STATUSES = new Set(['open', 'pending_sc'])
 /** FoxLeague's TOURNAMENT_BUSY_LEAD_HOURS (matches.rs): a team is busy from this long before a kickoff. */
 const BUSY_LEAD_MS = 3600_000
-/** Rows of GET /api/tournaments/upcoming-matches without `limit` (tournaments.rs UPCOMING_DEFAULT_LIMIT). */
-const UPCOMING_PAGE = 50
 
 /**
  * Why FoxLeague would call this team busy with a tournament right now and refuse a 1v1 create or join, or null
@@ -219,8 +243,7 @@ function oneVOneBusy(s: AgentSnapshot, now: Date): string | null {
   for (const m of upcoming.matches) {
     if (m.phase !== 'finished' && at(m) - t0 <= lead) return `T${m.tournament_id} match at ${m.scheduled_at} (busy from an hour before kickoff until its broadcast ends)`
   }
-  // The route is read without a limit: FoxLeague's page of 50, soonest first, the last day's finished games first.
-  if (upcoming.matches.length >= UPCOMING_PAGE) return `your upcoming matches fill FoxLeague's page of ${UPCOMING_PAGE}: a match within the hour may be cut from it`
+  // The list is read whole or not at all (api.ts upcomingMatches, R2M-3): no page of FoxLeague's can cut a match from it.
   for (const t of mine.active) {
     // A 1v1's only match is a row above; another active 1v1 is refused before this check (one at a time).
     if (t.max_teams === 2 || t.status === 'completed' || t.status === 'cancelled') continue
@@ -641,6 +664,16 @@ function matchSquad(s: AgentSnapshot): PlayerView[] {
 }
 
 /**
+ * A team out of a single-leg knockout (MNT-1c): a knockout match of it (no group) FoxLeague lists as finished with our
+ * score below theirs, in a knockout or the knockout phase of a Groups + Knockout. A level score went to penalties the list
+ * does not show, and a League + Knockout plays two legs: neither is read as out. Anything unread is no exit.
+ */
+function knockedOut(x: Tournament, listed: UpcomingMatch[]): boolean {
+  if (x.format !== 'knockout' && x.format !== 'groups_knockout') return false
+  return listed.some(m => m.phase === 'finished' && m.group_name === null && typeof m.is_home === 'boolean' && typeof m.home_score === 'number' && typeof m.away_score === 'number' && (m.is_home ? m.home_score < m.away_score : m.away_score < m.home_score))
+}
+
+/**
  * What the squad's other tournaments (1v1s apart) still bring around a tournament that plays from `start` to `end`:
  * the matches before its start and those whose play overlaps it. Started: each fixture FoxLeague lists by its own time
  * (one after `end` plays after this tournament), and the rounds not drawn yet as overlapping; not started: the most its
@@ -679,6 +712,15 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
     if (!pending.length && (xStart > end || (xEnd < start && xEnd < now.getTime()))) continue
     if (!x.started_at) {
       owe(total, xEnd)
+      continue
+    }
+    // Out of a knockout (MNT-1c): only the fixtures still listed, and a third place match that may follow.
+    if (knockedOut(x, listed)) {
+      for (const m of pending) {
+        const at = Date.parse(m.scheduled_at)
+        if (!(Number.isFinite(at) && Number.isFinite(end) && at > end)) owe(1, at)
+      }
+      owe(x.has_third_place_match === true && !listed.some(m => m.group_name === '3rd Place') ? 1 : 0, xEnd)
       continue
     }
     // Each listed fixture by its kickoff: before the start, during this tournament, or after its last match (none here).
@@ -1507,6 +1549,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
         return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next ${CREATE_START_MAX_MS / 86_400_000} days (${takenWindow})`}`)
       }
+      // FoxLeague's own calendar for this start, a tournament being created counted too (ORG-2, src/snapshot/calendar.ts).
+      const held = startCalendarVerdict(ctx.startCalendar, { format: a.format, teams: a.max_teams, home_and_away: Boolean(a.home_and_away) }, s.market.slots ?? [], Math.max(startsAt, ctx.now.getTime() + CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings)), ctx.now.getTime() + CREATE_START_MAX_MS)
+      if (held && 'refusal' in held) return refuse(held.refusal)
       // The executor creates a knockout with its third place match (executor.ts), one match more in its schedule.
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, has_third_place_match: a.format === 'knockout', round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)
@@ -1515,7 +1560,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // What the organizer owes: one payment, once FoxLeague asks for it at the create; nothing on a tournament it exempts.
       let organizerFoxsy = 0
       let organizerHash: string | undefined
-      const organizerNotes: string[] = []
+      const organizerNotes: string[] = held && 'note' in held ? [held.note] : []
       if (organizerFeesLive(cfg, ctx.now)) {
         const q = ctx.organizerQuote
         if (!q) return refuse('what this tournament owes its organizer could not be read: not creating blind')
@@ -1725,6 +1770,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       for (const c of inputs) {
         if (c.listed) return refuse(`#${c.nonce} is listed for sale`)
         if (c.transferLockedUntil) return refuse(`#${c.nonce} is in a transfer cooldown until ${c.transferLockedUntil}`)
+        if (c.fusionReadyAt === 'unknown') return refuse(`#${c.nonce}'s fusion cooldown could not be read: not fusing blind`)
         if (c.fusionReadyAt) return refuse(`#${c.nonce} is in its fusion cooldown until ${c.fusionReadyAt}`)
         // FoxLeague's Fusion tab refuses both; its contract sees neither, and the new card would only inherit them.
         if (c.disciplineUnread) return refuse(`#${c.nonce}'s injury could not be read: not fusing blind`)
@@ -1843,12 +1889,27 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const extra: Record<string, unknown> = {}
       if (a.type === 'fusion_cooldown_waiver') {
         if (!c.fusionReadyAt) return refuse(`#${a.nonce} has no fusion cooldown running`)
+        // The day the quote drops is read from the cooldown's end: unread, the waiver could revert and its gas be lost.
+        if (c.fusionReadyAt === 'unknown') return refuse(`#${a.nonce}'s fusion cooldown could not be read: no waiver bought blind`)
         const q = ctx.cooldownQuote
         if (!q) return refuse(`the cooldown waiver quote for #${a.nonce} could not be read`)
         if (q.days <= 0 || q.costAtomic <= 0n) return refuse(`nothing to waive on #${a.nonce}: its cooldown is at the 3-day floor already`)
         // Since 2026-10-12 some of the days can be bought: the ready time moves that many days earlier.
         if (a.days !== undefined && a.days > q.days) return refuse(`#${a.nonce} has ${q.days} day${q.days > 1 ? 's' : ''} above the 3-day floor to waive, not ${a.days}`)
-        const days = a.days ?? q.days
+        let days = a.days ?? q.days
+        // The contract quotes ceil((readyAt - now - floor) / 1 day) at its block and takes exactly days x price, never
+        // more days than it quotes then: when the quoted days drop by one before the block, all of them revert and the
+        // gas is lost (CHN-U4). So close to that moment one day less is bought, named, which holds on either side of it:
+        // before it by the agent's clock, and just after it, when the quote came from a block a little behind (R2M-2).
+        const drop = waiverDayDropsInMs(c.fusionReadyAt, cfg, q.days, ctx.now)
+        if (drop !== null && Math.abs(drop) <= WAIVER_DAY_MARGIN_MS && days === q.days) {
+          if (q.days <= 1) {
+            return refuse(drop > 0
+              ? `#${a.nonce}'s last waivable day ends in ${Math.max(1, Math.ceil(drop / 60_000))} minutes: a waiver now could reach the chain after it and revert`
+              : `#${a.nonce}'s last waivable day ended by the agent's clock after its quote was read: a waiver now would revert`)
+          }
+          days = q.days - 1
+        }
         costAtomic = (q.costAtomic / BigInt(q.days)) * BigInt(days)
         if (days < q.days) extra.days = days
         notes.push(days === q.days ? `#${a.nonce} ready for fusion ${q.days} day${q.days > 1 ? 's' : ''} sooner (3 days left)` : `#${a.nonce} ready for fusion ${days} of its ${q.days} waivable days sooner`)

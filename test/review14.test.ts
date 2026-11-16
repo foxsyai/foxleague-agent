@@ -117,15 +117,19 @@ test('R14A-1 FoxLeague\'s own answer on the 1v1 (viewer_blocked_tournament_windo
   assert.equal(free.join, 'dry_run', free.summary)
 })
 
-test('R14A-1 a full page of upcoming matches (FoxLeague\'s 50 without a limit) may hide a match within the hour: refused', async () => {
-  // Fifty games of the last day (a completed tournament) fill the page; the next fixture of T213 would be cut from it.
+test('R14A-1 the upcoming matches are read whole: fifty rows are judged on their rows, a list not read whole is refused', async () => {
+  // Until R2M-3 (audit 2026-11-16, round two) the route was read without a limit, FoxLeague's page of 50, and a full
+  // page refused as possibly cut. It is read whole now (api.ts upcomingMatches) or not at all.
   const page = Array.from({ length: 50 }, (_, i) => fixture(212, -24 * 60 + i * 20, 'finished'))
-  const r = await oneVOne(withRows([running(213, 'knockout')], page))
+  const whole = await oneVOne(withRows([running(213, 'knockout')], page))
+  assert.equal(whole.join, 'dry_run', whole.summary)
+  assert.equal(whole.create, 'dry_run', whole.summary)
+  // A list that could not be read whole stays unread (the snapshot's attempt() keeps null): refused.
+  const unread = withRows([running(213, 'knockout')], page)
+  unread.auth!.upcoming = null
+  const r = await oneVOne(unread)
   assert.equal(r.join, 'refused', r.summary)
   assert.equal(r.create, 'refused', r.summary)
-  // Control: 49 rows are the whole list.
-  const whole = await oneVOne(withRows([running(213, 'knockout')], page.slice(1)))
-  assert.equal(whole.join, 'dry_run', whole.summary)
 })
 
 test('R14A-1 control: play_match keeps its pre-match lockout (an own match within the hour)', async () => {

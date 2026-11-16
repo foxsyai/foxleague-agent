@@ -86,7 +86,9 @@ In the `foxleague-agent` folder:
 
 It does what the button does: it looks for the newest release, checks its signature, downloads it, prepares it
 next to the running version and restarts the agent into it. If the restart fails it says so and names the command
-to run. Type it as yourself, without sudo: as root on your install it stops before it changes anything and says
+to run. A background service you stopped stays stopped: the update says so, the new version runs from its next
+start and the line names the command that starts it. One still stopping (a busy agent finishes what it signs first,
+up to three minutes) is waited for, then stays stopped too. Type it as yourself, without sudo: as root on your install it stops before it changes anything and says
 so, because root's files there would keep the agent from starting.
 
 Pasting the install line again also works: it downloads the newest version, checks it against the release's
@@ -108,7 +110,8 @@ nothing more.
 
 If you keep the agent running another way that starts it again after it ends (a service of your own, a container
 that restarts), put `FOXAGENT_SUPERVISED=1` in `.env`: an update then ends the agent with exit code 75 and counts
-on that restart.
+on that restart. Without that line a service of your own counts as started by hand, whatever it says about
+restarts: the agent cannot see that from inside, so the update is put in place and the agent keeps playing.
 
 ### When a release changes the background service
 
@@ -140,7 +143,7 @@ terminal still updates.
 
 Your agents play by FoxLeague's player manual: each version of the agent carries a copy of it. From the hour of the
 morning summary the agent reads the manual FoxLeague serves and compares each page your agents read with that copy,
-again every hour while they match. It asks FoxLeague's public read-only server and sends nothing of yours. Each
+again every hour, also once a page differs, so a later change the same day is seen within the hour. It asks FoxLeague's public read-only server and sends nothing of yours. Each
 snapshot also compares FoxLeague's game settings with the ones the copy was built against: when FoxLeague adds or
 removes a setting, the manual is checked at once.
 
@@ -151,7 +154,8 @@ again and the dashboard shows the same line under the header:
 
 It names up to eight pages; when more changed it names the first eight and says how many more. A changed setting is
 named the same way ("FoxLeague's game settings changed since the agents' copy (keys: ...)"). A rule switch your
-agents have no rule for yet is told once its start is a week away or less.
+agents have no rule for yet is told once its start is a week away or less: each switch once, in one line at most every
+six hours that names up to eight.
 
 Your agents keep playing by their copy until a version of the agent brings the new one. Meanwhile each plan is told
 which pages and settings changed and that the live values in its snapshot and the refusals of the executor win over
@@ -161,6 +165,31 @@ version with it: update when the notice says it is out. The notice about the old
 agent checks the new copy the same day. On a server you deploy yourself
 ([Run it on a server](/help/server/)), run `sync-manual` on a computer with a FoxLeague checkout, commit the new
 manual and deploy it.
+
+#### What a plan reads until then
+
+While the copy is behind, each plan also reads the current text of the pages that changed, as FoxLeague's server
+serves them, so your agents know a new rule within the hour instead of after the next version. The check already reads
+those pages, so plans ask FoxLeague nothing more. The text is FoxLeague's, so it is treated as data, never as
+instructions: it sits inside the game snapshot under a heading that says so, every line of it is set in so none can
+pass for a part of the request; the live values in the snapshot and the refusals of the executor still win. It is
+cut at 24,000 bytes a page and 60,000 in all, counted as written into the request. It never goes to Telegram or the dashboard; the executor never
+reads it. A plan costs a little more only while the copy is behind (one or two changed pages are about 2,000 to 6,000
+tokens); nothing is added while the copy matches or could not be checked.
+
+The same hourly look reads FoxLeague's API description and compares the shape of each route your agents call with the
+one the copy was built against. A changed route is named the same way ("FoxLeague changed the shape of routes the
+agents call since their copy (routes: ...)"). A field the agent cannot read there makes it refuse, never guess.
+
+#### Pausing what changed
+
+In the dashboard's **Strategist · all agents** box, **When FoxLeague changes its rules** is **tell me only** by
+default. With **also pause the actions whose rules changed until the agents are synced**, your agents do not take the
+actions of a changed page until the new copy comes: the Shop page pauses buying, the Marketplace page bids and
+listings, the 1v1 page new challenges and accepting one, the Tournaments page creating and joining a tournament, the
+Fusion page fusions and both waivers. If the agent cannot tell which pages changed, it pauses all of these until it
+can. Payments already made are still confirmed, refunds and leaving still run and your own requests are never paused.
+Pausing is one click; going back to tell me only asks for your password.
 
 When FoxLeague could not be read, the line says "Could not check FoxLeague's manual today" and why. That never
 counts as up to date: the agent asks again each hour, up to four times a day, then the next day. In a terminal,

@@ -99,20 +99,25 @@ the dashboard or by chatting with it on Telegram.
   with the copy its agents play by; each snapshot also compares FoxLeague's game settings with the ones that copy was
   built against. When a page or a setting changed, Telegram says so at once, the morning summary and the dashboard
   name it and each plan is told that the live values win over the manual there; a version with the new manual follows
-  (the maintainer runs `sync-manual`). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
+  (the maintainer runs `sync-manual`). Until then each plan also reads the current text of the changed pages as data,
+  inside the game snapshot (cut at 24,000 bytes a page and 60,000 in all, as written into the request; never to Telegram, the dashboard or the
+  executor). The same hourly look names a route of FoxLeague's API your agents call whose shape changed. On the
+  dashboard you may also pause the actions whose rules changed until the agents are synced (turning that off asks for
+  your password). `AGENT_MANUAL_CHECK=0` in `.env` switches the check off.
 - **More agents:** + Add agent. Each has its own wallet from the same recovery words, its own settings and PEM file.
   Retire parks an agent you no longer use (out of the tabs, restore it any time).
 
 ## What it costs
 
 - **The game:** never more than your caps (defaults $5 a day and $150 a month, plus $20 for the registration).
-- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. Each agent can also have its own model and effort; the cache is shared by the agents on the same model and effort. After a start of the service the first agent of each model and effort plans at once and the others of that pair 3 to 6 minutes later, so they read the cache it wrote instead of each writing it again.
+- **The AI:** about $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. Each agent can also have its own model and effort; the cache is shared by the agents on the same model and effort. After a start of the service the first agent of each model and effort plans at once and the others of that pair 3 to 6 minutes later, so they read the cache it wrote instead of each writing it again. With shadow plans on, the models and efforts of the shadow plans count too, so two agents that share a shadow model do not both write its cache.
 - **Network fees:** a few cents a day.
 
 ## Command line
 
-In the `foxleague-agent` folder (`./cli.sh` uses the Node.js the installer set up, so it needs no npm; alone it
-lists every command):
+In the `foxleague-agent` folder, as yourself and without sudo (`./cli.sh` uses the Node.js the installer set up, so
+it needs no npm; alone it lists every command; as root on your folder it stops and says so, because files of root
+there would keep the agent from starting again):
 
 ```
 ./cli.sh agents               # every agent (numbered from 1) and its address
@@ -148,7 +153,8 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
 manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`, which also writes
-`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with).
+`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with, and
+`src/foxleague/api-shapes.json`, the shapes of the routes listed in `src/foxleague/api-routes.ts`).
 
 ## Fair play
 
