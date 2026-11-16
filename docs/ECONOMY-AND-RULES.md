@@ -441,7 +441,8 @@ snapshot's live values and the executor's refusals win)"); every line of it is s
 for a heading, a fence or a line of the request; no run of two `<` or `>`, no capital SNAPSHOT and no control or
 invisible character is written, also as a reader sees them: fullwidth forms are folded (NFKC) and every character
 Unicode marks as invisible (joiners, variation selectors, fillers) is left out first (R2T-3; rival names and titles
-through `txt()` the same way). At most 24,000 bytes a page (every page the agents read but the tournaments page and
+through `txt()` the same way). A number keeps its value through the folding: a raised or lowered digit and a fraction
+are written apart first (3^4, log_2, 2 1/2), never joined to the digits around them (FC-3). At most 24,000 bytes a page (every page the agents read but the tournaments page and
 the economy map fits whole; those two are cut and the plan is told so) and 60,000 in all, counted on the text as
 written into the request (set in, UTF-8: R2T-2) and cut on whole characters;
 only slugs of their shape that the copy knows. A page new to the copy is named only. Nothing is added while the copy is

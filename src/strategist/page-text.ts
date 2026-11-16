@@ -80,8 +80,8 @@ function fit(text: string, bytes: number): string {
 /**
  * A page's text as the request holds it: one line per line of the page, each set in by four spaces; no control or
  * invisible character but the line break; no run of two `<` or `>` (the fence's markers) and no word SNAPSHOT in
- * capitals, also as a reader sees them (asSeen: fullwidth forms folded, invisible characters left out, R2T-3). The
- * meaning of a rule survives all of it.
+ * capitals, also as a reader sees them (asSeen: fullwidth forms folded, invisible characters left out, R2T-3; a raised
+ * digit or a fraction written apart, 3^4 and 2 1/2, FC-3). The meaning of a rule survives all of it.
  */
 function setIn(text: string): string {
   return asSeen(text)
