@@ -23,7 +23,8 @@ const run = async (m: ReturnType<typeof setup>, action: Action, byOwner = false)
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [{ action, reason: 'test', ...(byOwner ? { byOwner: true as const } : {}) }])
   return r!
 }
-const HOLD = /held|paused/i
+// The pause's own refusal (src/executor/hold.ts); a plain "held" also appears in ORG-2's calendar note on a create.
+const HOLD = /paused by the owner's choice/i
 
 test('P-W7 with the pause on, an agent\'s own action of a changed page is refused by the executor, in plain words', async () => {
   const cases: [string, Action][] = [
