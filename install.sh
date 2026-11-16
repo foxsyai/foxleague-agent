@@ -135,6 +135,12 @@ set_env() {
   printf '%s="%s"\n' "$1" "$2" >> "$tmp"
   mv "$tmp" "$ENV_FILE"
 }
+# What the agent itself reads for a key from .env: Node.js's own reader (process.loadEnvFile, as src/config.ts), which
+# takes `export` in front, spaces, single quotes and a `# note` after the value, the last line winning; the shell's own
+# value of the key left out. "-" when no line sets it; status 1 when .env cannot be read that way (R2I-5).
+agent_env() {
+  env -u "$1" "$NODE" -e 'try { process.loadEnvFile(process.argv[1]) } catch { process.exit(1) } const v = process.env[process.argv[2]]; process.stdout.write(v === undefined ? "-" : `=${v}`)' "$ENV_FILE" "$1" 2>/dev/null
+}
 # A line saved on Windows ends in CR LF: the CR goes before the quotes, as the agent's own reader drops it (INS-A3).
 get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | tr -d '\r' | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
 
@@ -736,11 +742,14 @@ while :; do
 done
 set_env WEB_UI_PORT "$port"
 # The dashboard listens on this machine only, over plain http, so the cookie cannot require https. A value the owner
-# set is kept (INS-U5): with https of their own in front, 0 sends the login cookie over https only.
-if [ -z "$(get_env WEB_UI_INSECURE_COOKIE)" ]; then
-  set_env WEB_UI_INSECURE_COOKIE 1
-elif [ "$(get_env WEB_UI_INSECURE_COOKIE)" != 1 ]; then
-  info "WEB_UI_INSECURE_COOKIE in .env is kept as you set it (not 1): the login cookie is sent over https only, so log in at your https address."
+# set is kept (INS-U5): with https of their own in front, 0 sends the login cookie over https only. Decided on what the
+# agent reads, in whatever form the line is written (R2I-5); a .env the agent's reader cannot read is left as it is.
+if cookie=$(agent_env WEB_UI_INSECURE_COOKIE); then
+  case "$cookie" in
+    -) set_env WEB_UI_INSECURE_COOKIE 1 ;;
+    =1) ;;
+    *) info "WEB_UI_INSECURE_COOKIE in .env is kept as you set it (not 1): the login cookie is sent over https only, so log in at your https address." ;;
+  esac
 fi
 
 say "4/7 Keys (you can skip any of them now and add it later in the dashboard: Getting started, then Keys)"
