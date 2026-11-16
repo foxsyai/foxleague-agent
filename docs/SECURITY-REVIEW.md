@@ -2809,6 +2809,8 @@ reviewer's word, R2M-4.
 | R2I-U2 | low (unproven INS-U2, proven in the PowerShell checks) | With several Ubuntu users, `get.ps1` named the first user in passwd | It names the user whose home holds `foxleague-agent` |
 | R76A-1 | low (GitHub review of PR #76) | An answer of `GET /api/tournaments/upcoming-matches` without a readable `X-Total-Count` was taken as the whole list when it held fewer than 200 rows. A server that pages lower would give a part of it; FoxLeague's own answer when its row read and its count both fail (an empty list with no header) read as no fixtures. Owed matches were then counted short and a paid join the schedule rule refuses could pass (rule 4) | Without a readable total the list is unread and the rules refuse. FoxLeague's mainnet code sends the total with every answer whose count it read (`0` with an empty list), so a team with no fixtures still reads its list; it sends none only when that count fails. R2M-3's test of a short page without a total now pins the refusal; its five-page case is served a total |
 | MAC-1 | low (found on the owner's Mac, 16 Nov) | The launchd plist started `<bash> <folder>/run.sh`. macOS names a background item after the program its job starts when no app goes with it, so System Settings (General, Login Items & Extensions) listed the agent as "bash": a user cannot tell it for the agent and may switch it off as unknown | The plist starts `FoxLeague Agent` in the install's folder, a launcher of the agent's own (a plain file, mode 755, `#!/bin/bash`) that execs `/bin/bash run.sh` of its folder; the rest of the plist is unchanged (KeepAlive, RunAtLoad, `FOXAGENT_SUPERVISED`, the label, exit code 75). The installer writes it before the plist; `./install.sh --update` changes only the program's line of an older plist (the agent is restarted or left stopped as before); a confirmed update refreshes it where it is (`refreshLauncher`); the uninstall removes it with the plist. Linux and WSL are unchanged (`test/mac-login-item.test.ts`) |
+| R78A-1 | low (GitHub review of PR #78) | `renew_plist` came after `if [ "$rc" = 3 ]; then exit 0; fi`: on an install that runs the newest release already, `./install.sh --update` ended there and the plist stayed on bash. And where it did change the plist, a kickstart restarted the job launchd holds, from the plist it read at its load: the new one waited for the next login | The newest release no longer ends the update before the service checks: after `service_installed` and `! service_of_other_install`, a Mac moves an older plist to the launcher in both cases (`mac_after_update`). A job that runs is loaded again from a changed plist (bootout, the wait of R2I-U1, bootstrap, INS-A4's words when it fails); with an unchanged plist it is restarted for a new release (kickstart, as before) and left alone on the newest one; a stopped one stays stopped (UPD-U5). Linux on the newest release does nothing, as before |
+| R78A-2 | low (GitHub review of PR #78, the off switch kept) | An owner who switched the "bash" item off (System Settings, General, Login Items & Extensions, or `launchctl disable`) had its plist rewritten to a new program by `--update` and by the guided installer, which also loaded it again. To macOS that can look like a new background item, which may start at the next login without the owner's word, LIVE if the database says so | `mac_job_disabled` reads `launchctl print-disabled gui/<uid>` (`"ai.foxleague.agent" => disabled`, `=> true` on older macOS). A job that is off is never written to, loaded, restarted or switched on: the guided installer and `--update` leave its plist (and its absence) as they are, and the screen says that it stays off, keeps its old name and how to switch it on (`launchctl enable`, then `launchctl bootstrap`). When launchd cannot be asked, nothing is rewritten: the guided installer stops in words before it writes anything, `--update` keeps the plist and restarts as before. `refreshLauncher` never writes the plist or loads a job and rewrites the launcher only where it is, at the same path, so it needs no such check |
 
 **Changed tests.** Each one now pins the right behaviour, and its commit message says so.
 - **R2T-4:** MW-5 ("a behind copy stays so for the day").
@@ -2816,6 +2818,8 @@ reviewer's word, R2M-4.
 - **R2I-3:** INSTALL-17's first run now stands in a root-owned folder.
 - **R2I-U1:** the `launchctl` stand-in of INS-A4 now stands for a terminal without a GUI session; its assertion is
   unchanged.
+- **R78A-1:** MAC-1's `--update` test: a running job whose plist changed is loaded again (bootout, bootstrap) where
+  it was restarted with kickstart; an unchanged plist still gets the kickstart, now pinned too.
 
 **Two choices worth knowing.**
 - **R2T-4:** a same-day recheck that cannot reach FoxLeague keeps the behind check and its page text.
@@ -2824,7 +2828,8 @@ reviewer's word, R2M-4.
 
 Stays open:
 - **On a real Mac, by the owner's test:**
-  - UPD-U5 for a job switched off with `launchctl disable` or `unload -w`;
+  - UPD-U5 for a job switched off with `launchctl disable` or `unload -w`: since R78A-2 the installer reads launchd's
+    list of jobs switched off and leaves such a job as it is, shown with the stand-in only;
   - UPD-U5 in a terminal opened with su;
   - INS-A8 with HOME kept, `FOXAGENT_ALLOW_ROOT=1` and no install yet.
 - **A service already "failed" at the first look** is restarted by `--update`, as UPD-U5 pins. One whose stop the
@@ -2841,8 +2846,10 @@ Stays open:
 - **MAC-1, on a real Mac:**
   - the name rule is macOS's as described above, checked with the stand-ins only: the owner's Mac shows whether
     Login Items & Extensions lists "FoxLeague Agent";
-  - whether macOS renames the item as soon as `--update` changes the plist of a loaded job, or at the next login,
-    and whether the old "bash" item stays listed until then;
+  - whether Login Items & Extensions shows the new name as soon as `--update` loads the job again from the changed
+    plist (R78A-1), and whether the old "bash" item stays listed;
+  - R78A-2: that the item switched off in Login Items & Extensions is listed by `launchctl print-disabled` as the
+    review says, and that a job switched on again with `launchctl enable` and `launchctl bootstrap` shows as on there;
   - an install that updates in the app keeps "bash" until its next `./install.sh` or `./install.sh --update`: the
     in-app update does not write the plist. The first `--update` to this release is run by the installer of the
     release before it, which does not change the plist either: the next one does, and so does `./install.sh`;
