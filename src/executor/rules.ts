@@ -14,6 +14,7 @@ import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
 import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive } from '../foxleague/levels.ts'
 import { fusionMintTx } from './tx.ts'
+import { startCalendarVerdict } from '../snapshot/calendar.ts'
 import { STATS } from '../foxleague/types.ts'
 import type { SpendCategory } from '../store/db.ts'
 
@@ -98,6 +99,8 @@ export interface RulesContext {
   pendingTicket?: boolean
   /** A tournament create once the organizer fees are live: what it owes, null when unread. */
   organizerQuote?: OrganizerFeeQuote | null
+  /** A tournament create: FoxLeague's calendar for its shape from its start (ORG-2), null when unread. */
+  startCalendar?: unknown
   /** An organizer payment no create has used yet: the next create sends this hash, never a second payment. */
   pendingOrganizer?: { hash: string; total: number }
   /** When this agent last bought an XP booster within 24 h less the renewal margin (its own log), null for none. */
@@ -1507,6 +1510,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
         return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next ${CREATE_START_MAX_MS / 86_400_000} days (${takenWindow})`}`)
       }
+      // FoxLeague's own calendar for this start, a tournament being created counted too (ORG-2, src/snapshot/calendar.ts).
+      const held = startCalendarVerdict(ctx.startCalendar, { format: a.format, teams: a.max_teams, home_and_away: Boolean(a.home_and_away) }, s.market.slots ?? [], Math.max(startsAt, ctx.now.getTime() + CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings)), ctx.now.getTime() + CREATE_START_MAX_MS)
+      if (held && 'refusal' in held) return refuse(held.refusal)
       // The executor creates a knockout with its third place match (executor.ts), one match more in its schedule.
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, has_third_place_match: a.format === 'knockout', round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)
@@ -1515,7 +1521,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // What the organizer owes: one payment, once FoxLeague asks for it at the create; nothing on a tournament it exempts.
       let organizerFoxsy = 0
       let organizerHash: string | undefined
-      const organizerNotes: string[] = []
+      const organizerNotes: string[] = held && 'note' in held ? [held.note] : []
       if (organizerFeesLive(cfg, ctx.now)) {
         const q = ctx.organizerQuote
         if (!q) return refuse('what this tournament owes its organizer could not be read: not creating blind')
