@@ -17,9 +17,9 @@ const CREATED_MS = CREATE_START_MAX_MS + 86_400_000
 /** Activity of the same ledger (dry run or live) the action is judged in. */
 const counted = (dry: boolean, status: string) => (dry ? status === 'dry_run' : status === 'confirmed' || status === 'unconfirmed')
 
-function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string } {
+function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown } } {
   try {
-    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string }
+    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown } }
   } catch {
     return {}
   }
@@ -38,6 +38,48 @@ export function oneVOnesThisWeek(store: Store, agentIndex: number, dry: boolean,
     const opp = detailOf(r).opponentUserId
     if (!counted(dry, r.status) || typeof opp !== 'number' || (r.txHash && refunded.has(r.txHash))) continue
     out.set(opp, [...(out.get(opp) ?? []), new Date(r.at)])
+  }
+  return out
+}
+
+/** This agent's targeted 1v1s to one rival in the last 7 days (targetedRecord). */
+export interface TargetedRecord {
+  sent: number
+  /** Played, or taken by both teams now (`seated`). */
+  accepted: number
+  /** When each one it let expire was sent, newest first: its stake came back and this agent did not leave it itself. */
+  unanswered: Date[]
+}
+
+/**
+ * Per rival (FoxLeague user id): the targeted 1v1s this agent sent it in the last 7 days, from its own log and ledger
+ * only (audit 2026-11-16, BEH-2 and P-V1; no agent reads another's state). One is unanswered when its stake came back
+ * and the agent did not leave it itself (FoxLeague cancelled it unaccepted at its deadline), accepted when its stake
+ * was closed as played or `seated` (the tournaments the snapshot shows taken by two teams) holds it. Since D11 an
+ * unanswered one no longer counts toward the 2 a week, so without this a rival that let five expire read like one
+ * never challenged.
+ */
+export function targetedRecord(store: Store, agentIndex: number, dry: boolean, now: Date, seated: Set<number> = new Set()): Map<number, TargetedRecord> {
+  const out = new Map<number, TargetedRecord>()
+  const since = new Date(now.getTime() - WEEK_MS)
+  const refunded = store.refundedSeatHashes(agentIndex)
+  const played = store.playedSeatHashes(agentIndex)
+  const left = new Set<number>()
+  for (const r of store.activityOf(agentIndex, ['leave_tournament'], since)) {
+    const id = detailOf(r).action?.tournament_id
+    if (counted(dry, r.status) && typeof id === 'number') left.add(id)
+  }
+  for (const r of store.activityOf(agentIndex, ['create_challenge'], since)) {
+    const d = detailOf(r)
+    const opp = d.opponentUserId
+    // The executor names the opponent of a targeted create only: an open challenge has none.
+    if (!counted(dry, r.status) || typeof opp !== 'number') continue
+    const rec = out.get(opp) ?? { sent: 0, accepted: 0, unanswered: [] }
+    rec.sent++
+    const created = typeof d.createdTournamentId === 'number' ? d.createdTournamentId : null
+    if ((r.txHash && played.has(r.txHash)) || (created !== null && seated.has(created))) rec.accepted++
+    else if (r.txHash && refunded.has(r.txHash) && !(created !== null && left.has(created))) rec.unanswered.push(new Date(r.at))
+    out.set(opp, rec)
   }
   return out
 }

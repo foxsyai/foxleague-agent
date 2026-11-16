@@ -147,6 +147,12 @@ function rivalNote(s: AgentSnapshot, userId: number | null | undefined): string 
   const w = o.week.find(x => x.userId === userId)
   if (w && w.count >= MAX_1V1_PER_OPPONENT_WEEK) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week (the limit), free again ${w.freeAt ? `${w.freeAt.slice(0, 16)} UTC` : 'later'}`)
   else if (w && w.count > 0) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week`)
+  // This agent's own targeted 1v1s to it (BEH-2, P-V1): a rival that lets them expire reads so.
+  const t = o.targeted?.find(x => x.userId === userId)
+  if (t && t.sent > 0) {
+    const limit = t.freeAt ? ` (no third targeted 1v1 to it before ${t.freeAt.slice(0, 16)} UTC)` : ''
+    notes.push(`you sent it ${t.sent} targeted 1v1${t.sent === 1 ? '' : 's'} in 7 days: ${t.accepted} accepted, ${t.unanswered} expired unanswered${limit}`)
+  }
   return notes.map(n => `, ${n}`).join('')
 }
 

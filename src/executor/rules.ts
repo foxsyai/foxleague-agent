@@ -72,6 +72,8 @@ export interface RulesContext {
   field?: { userId: number; strength: number | null; elo: number | null }[]
   /** 1v1s this agent already played or entered against that opponent in the last 7 days. */
   oneVOneWithOpponentThisWeek?: number
+  /** For a targeted challenge: how many of this agent's targeted 1v1s the rival let expire in the last 7 days, and when that frees (rivals.ts targetedRecord). */
+  opponentUnanswered?: { count: number; freeAt: Date | null }
   /** XP boosters and Common packs this agent bought in the last 7 days (its own log), for the level's counts. */
   boostersThisWeek?: number
   packsThisWeek?: number
@@ -282,6 +284,8 @@ export const BUSY_OPENS_MARGIN_S = 120
 /** A 1v1 is refused when the rival's lineup (at full condition) is more than this much stronger than ours today. */
 export const MAX_1V1_STRENGTH_RATIO = 1.1
 export const MAX_1V1_PER_OPPONENT_WEEK = 2
+/** No third targeted 1v1 to a rival that let this many of this agent's targeted 1v1s expire in the last 7 days (audit 2026-11-16, P-V1). */
+export const MAX_UNANSWERED_PER_OPPONENT_WEEK = 2
 export const MAX_BIDS_PER_AUCTION = 2
 
 /**
@@ -364,10 +368,13 @@ export const RANKED_COOLDOWN_MS = 15.5 * 60_000
 /**
  * A casual or ranked match holds its team until its broadcast has aired, and another start before then is refused
  * ("already in match"): the simulation (about 1.5 minutes, up to 5), the recording (600 s plus stoppage time, 615 s
- * seen) and 30 s (matches.rs live_match_predicate, broadcast_holds_its_team_sql). 11 minutes was too short (FoxLeague's
- * release of 2026-11-05, R85-1); a slower simulation is caught by the active match read before each start.
+ * seen) and 30 s (matches.rs live_match_predicate, broadcast_holds_its_team_sql), so up to about 15.75 minutes. 11
+ * minutes was too short (FoxLeague's release of 2026-11-05, R85-1), and so was 13: from 9 to 16 Nov 7 of 17 second
+ * starts at 13.1 minutes were refused, none of 36 from 14.16 minutes up (audit 2026-11-16, BEH-7). 16 minutes covers
+ * the slowest simulation, as the ranked spacing does; a later one is still caught by the active match read before
+ * each start.
  */
-export const MATCH_RUNS_MS = 13 * 60_000
+export const MATCH_RUNS_MS = 16 * 60_000
 
 /** Hours of transfer lock a card bought at auction may still carry. */
 export const MAX_INHERITED_LOCK_HOURS = 72
@@ -753,6 +760,20 @@ export function judgeField(field: FieldSeat[], ours: number, myElo: number): { s
   return { stronger, weaker, unread, even: field.length - stronger - weaker - unread, strongestElo: elos.length ? Math.max(...elos) : null, strongestLineup: lineups.length ? Math.max(...lineups) : null }
 }
 
+/**
+ * An open challenge carries an OVR range around the team's best XI OVR, both ends (the owner, 2026-11-16, OPEN-1V1: the
+ * week's open challenges lost more than they won, most taken by the strongest teams their range let in). Refused
+ * without, naming the values that work: the top at the best XI OVR rounded up (no stronger team can take it, and
+ * FoxLeague refuses a creator above its own top) and a bottom about 10 percent under it, as the snapshot suggests.
+ * The best XI OVR the executor read for a range, else the one in the action's own snapshot.
+ */
+function openRangeMissing(a: { target_user_id: number | null; ovr_min?: number; ovr_max?: number }, s: AgentSnapshot, ctx: RulesContext): string | null {
+  if (a.target_user_id !== null || (a.ovr_min !== undefined && a.ovr_max !== undefined)) return null
+  const best = [ctx.bestXiOvr, s.auth?.bestXiOvr].find((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  if (best === undefined) return 'an open challenge needs an OVR range up to your best XI OVR, with both ends (ovr_min and ovr_max, the snapshot gives them)'
+  return `an open challenge needs an OVR range up to your best XI OVR ${best}, with both ends: ovr_max ${Math.ceil(best)} and ovr_min ${Math.max(1, Math.floor(best * 0.9))} (about 10 percent under; any ovr_min up to ${Math.floor(best)} holds your own OVR)`
+}
+
 /** The 1v1 gates both join and create share: a known, not stronger opponent, not farmed every day. */
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
   const opp = ctx.opponent
@@ -766,6 +787,8 @@ function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | n
   const ours = lineupStrength(s)
   if (opp.strength > ours * MAX_1V1_STRENGTH_RATIO) return `the opponent's squad is stronger (lineup strength ${Math.round(opp.strength)} vs ours ${Math.round(ours)} at today's condition)`
   if ((ctx.oneVOneWithOpponentThisWeek ?? 0) >= MAX_1V1_PER_OPPONENT_WEEK) return `already ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against user ${opp.userId} in the last 7 days`
+  const ignored = ctx.opponentUnanswered
+  if (ignored && ignored.count >= MAX_UNANSWERED_PER_OPPONENT_WEEK) return `user ${opp.userId} let ${ignored.count} of your targeted 1v1s expire unanswered in the last 7 days: no third targeted 1v1 to it${ignored.freeAt ? ` before ${ignored.freeAt.toISOString().slice(0, 16)} UTC` : ''}`
   const p = winChance({ myElo: mine, oppElo: opp.elo, myStrength: ours || null, oppStrength: opp.strength })
   if (p !== null && p < MIN_1V1_CHANCE) return `the win chance against user ${opp.userId} is about ${percent(p)}; a 1v1 against a known team is played from ${percent(MIN_1V1_CHANCE)}`
   return null
@@ -1383,6 +1406,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const challengeRange = createRangeRefusal(a, ctx)
       if (challengeRange) return refuse(challengeRange)
+      const unranged = openRangeMissing(a, s, ctx)
+      if (unranged) return refuse(unranged)
       if (a.target_user_id === null) {
         // Open, at every level and any configured stake (owner, 2026-11-06, OP-2/OP-3): whoever takes it cannot be read
         // before, so FoxLeague's own range check keeps every stronger team out: its top is the team's best XI OVR,
@@ -1589,14 +1614,17 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (au.highestBid !== 0n && raise === null) return refuse('the minimum raise over a top bid could not be read: not bidding blind')
       const minAtomic = au.highestBid === 0n ? au.minPrice : [(au.highestBid * BigInt(100 + raise!) + 99n) / 100n, au.highestBid + 1n].reduce((x, y) => (x > y ? x : y))
       const min = ceilWhole(minAtomic)
-      if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + ${raise} percent` : 'the reserve'})`)
-      if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
+      // With a ceiling (P2, audit 2026-11-16): the fresh minimum when it moved past the bid planned, up to the ceiling;
+      // every check below holds the bid actually made.
+      const bid = a.max_foxsy !== undefined && a.foxsy < min && min <= a.max_foxsy ? min : a.foxsy
+      if (bid < min) return refuse(`bid ${bid} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + ${raise} percent` : 'the reserve'})${a.max_foxsy !== undefined ? `, above your ceiling ${a.max_foxsy}` : ''}`)
+      if (bid > ctx.settings.maxBidFoxsy) return refuse(`bid ${bid} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
       // Its limit and the build cost both hang on the rarity: unknown, no bid (agent review of PR #21).
       if (!ctx.cardRarity || !Object.hasOwn(RARITY_LEVEL, ctx.cardRarity)) return refuse(`the rarity of #${a.nonce} could not be read: not bidding blind`)
       const limit = rarityBidLimit(ctx.settings, ctx.cardRarity)
-      if (limit !== null && a.foxsy > limit) return refuse(`bid ${a.foxsy} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
+      if (limit !== null && bid > limit) return refuse(`bid ${bid} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
       const ceiling = ctx.cardRarity ? auctionCeiling(cfg, ctx.cardRarity) : null
-      if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what ${aRarity(ctx.cardRarity)} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
+      if (ceiling !== null && bid > ceiling) return refuse(`bid ${bid} FOXSY is above what ${aRarity(ctx.cardRarity)} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
       if ((ctx.priorBids ?? 0) >= MAX_BIDS_PER_AUCTION) return refuse(`already ${MAX_BIDS_PER_AUCTION} bids on #${a.nonce}: no bidding war`)
       if (ctx.cardLock === null) return refuse(`the details of #${a.nonce} could not be read: not bidding blind`)
       const lock = ctx.cardLock?.until
@@ -1606,9 +1634,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (ctx.cardLock?.injuryUnread) return refuse(`the injury of #${a.nonce} could not be read: not bidding blind`)
       const hurt = ctx.cardLock?.injuredUntil
       const notes = ['refunded at once if outbid; the card arrives when the auction is settled']
+      if (bid > a.foxsy) notes.push(`the minimum moved to ${min} since the plan: bid ${bid}, within your ceiling ${a.max_foxsy}`)
       if (lock && lock > ctx.now) notes.push(`the card carries a transfer lock until ${lock.toISOString()}`)
       if (hurt && hurt > ctx.now) notes.push(`the card is injured until ${hurt.toISOString()}: it plays no match before`)
-      return needFoxsy(a.foxsy, allow(a.foxsy, { nonce: a.nonce, bid: a.foxsy }, 'play', notes))
+      return needFoxsy(bid, allow(bid, { nonce: a.nonce, bid }, 'play', notes))
     }
 
     case 'list_card': {

@@ -294,7 +294,7 @@ squad in 7 days for 100 FOXSY (2 days for 1,000 FOXSY with match waivers); Commo
 |---|---|---|---|
 | Sale format | every sale is a **24 h English auction**; instant listing and buying are disabled on chain | EM:42; Manual `mechanics/marketplace.mdx:11`; CC:39 `AUCTION_DURATION_SECONDS=86400`; PNFT:1825, `:1863`; `marketplace.auction_enabled` SEED:56 | CFG `auction_enabled`, `auction_duration_seconds` |
 | Reserve (minimum list price) | **500 FOXSY** floor, whole FOXSY; the web app caps at 1,000,000 | EM:42; Manual `mechanics/marketplace.mdx:22`; CC:44 `AUCTION_MIN_PRICE_FOXSY=500` (the mainnet deploy set 10,000, `contracts/deploys.yaml:491-495`; lowered to 500 by owner decision, `CHANGELOG.md:639-641`, EM:42 source comment); `frontend/src/pages/Marketplace.tsx:198` | CFG `marketplace_min_list_price_foxsy`; VIEW `getAuctionMinPrice` |
-| Bid increment | at least **5 percent** over the top bid (the contract's setting, 1 to 50 percent, 5 when unset: `amount >= top bid x (100 + percent) / 100`); first bid at least the reserve. The agent reads the percent in force from the config (5 when the answer leaves it out, no raise when it is no whole number from 1 to 50) and its plan is told it | EM:42; CC:40; `player_nft.rs:1006-1008, 2584-2587, 3613-3619` | CFG `auction_min_increment_percent` |
+| Bid increment | at least **5 percent** over the top bid (the contract's setting, 1 to 50 percent, 5 when unset: `amount >= top bid x (100 + percent) / 100`); first bid at least the reserve. The agent reads the percent in force from the config (5 when the answer leaves it out, no raise when it is no whole number from 1 to 50) and its plan is told it. A plan's bid may carry a ceiling (`max_foxsy`): when the minimum has moved past the bid planned by the time it runs, the executor bids the fresh minimum up to the ceiling, every limit checked on that amount (audit 2026-11-16, P2) | EM:42; CC:40; `player_nft.rs:1006-1008, 2584-2587, 3613-3619` | CFG `auction_min_increment_percent` |
 | Anti-snipe | a bid in the last **300 s** extends the end by **300 s**, repeatedly | EM:42; CC:53-54 | CFG `auction_snipe_window_seconds`, `auction_snipe_extension_seconds` |
 | Cancel | only while there are no bids | EM:42; PNFT:2210-2230 | |
 | Fee | **10 percent** of the winning bid, paid by the seller, only on a sale; no royalty | EM:44; CC:25 `MARKETPLACE_FEE_PERCENT=10` (the contract's `init` value is 5, PNFT:183) | CFG `marketplace_fee_percent`; VIEW `getMarketplaceFee` |
@@ -459,7 +459,9 @@ among the called-up players by contribution. Nothing of it exists in the code on
   The agent may set a range on a tournament or an open 1v1 it creates (whole numbers 1 to 100, min <= max), only one
   holding its own best XI OVR (FoxLeague refuses a creator outside their own range), never on a targeted challenge or a
   private tournament. An open challenge must carry one whose maximum is at most its best XI OVR rounded up (owner,
-  2026-11-06), so FoxLeague keeps every team stronger by OVR out, and none while that top is more than 10 percent above
+  2026-11-06), and both ends of it (owner, 2026-11-16, OPEN-1V1: refused without, naming the top and a bottom about 10
+  percent under; the prompt posts one only when the squad needs competitive matches a targeted challenge, a
+  tournament or ranked cannot give), so FoxLeague keeps every team stronger by OVR out, and none while that top is more than 10 percent above
   the eleven at today's condition (each starter's card OVR scaled by its condition; R54A-1), which a ranked start,
   training a starter or a new eleven must keep while it waits (R54A-3); by default (prompt, PR #36) its own open tournament
   carries one about 10 percent either way around its best XI OVR. While a tournament or 1v1 it created itself (never one the owner made) is
@@ -482,12 +484,16 @@ among the called-up players by contribution. Nothing of it exists in the code on
   clearly stronger when its lineup is more than 10 percent above ours whatever its ELO, or more than 5 percent above
   ours with an ELO more than 50 above ours (an unread lineup on its ELO alone), and no entry is paid into a field with
   3 of them (24 of the invited teams for a League + Knockout) (`judgeField`; the lineup alone decides since the audit
-  of 2026-11-11, MONEY-1); a plan spaces its casual and ranked matches 13 minutes
-  apart (a match holds the team until its broadcast has aired) and its ranked matches 16 minutes apart; a Legendary's match waiver is bought only for a card it would list.
+  of 2026-11-11, MONEY-1); a plan spaces any two casual or ranked matches 16 minutes
+  apart (a match holds the team until its broadcast has aired, up to about 16 minutes with a slow simulation; 13 was
+  refused 7 times in 17, audit 2026-11-16, BEH-7), and a first match drawn late in the plan's window moves earlier so
+  the matches after it still fit (BEH-5); a Legendary's match waiver is bought only for a card it would list.
   Every level may use every part of the game (owner, 2026-11-06): open challenges at any configured stake (FoxLeague's
   one active 1v1 is the only count), private tournaments, casual tests; the levels differ in what they pay for and the
   caps. A targeted or joined 1v1 keeps the farming guards (ELO gap under 100, an eleven at most 10 percent stronger,
-  2 a week per rival, a 55 percent win chance), and the 18 strongest cards are never listed. A join reads the tier
+  2 a week per rival, a 55 percent win chance), no third targeted 1v1 to a rival that let 2 of the agent's own
+  expire unanswered in the last 7 days (audit 2026-11-16, P-V1: the agent's own log only; the plan reads per rival
+  how many it sent, how many were accepted and how many expired), and the 18 strongest cards are never listed. A join reads the tier
   FoxLeague serves: one that is not bronze, silver or gold is refused as unread, and with Gold off (no Gold amounts)
   an entry or stake from `tournament_fee_bounds.gold_min` up is refused whatever the label says, as is every paid
   entry while that bound cannot be read (audit 2026-11-11, MONEY-4). The win chance

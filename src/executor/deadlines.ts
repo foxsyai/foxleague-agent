@@ -10,9 +10,11 @@ import { BUSY_OPENS_MARGIN_S, INVITATION_MARGIN_MS } from './rules.ts'
 /**
  * An action's deadline: the last moment the executor would still let it through by the plan's snapshot, in ms since
  * the epoch; 'unread' for an action with a time limit the snapshot cannot tell (unknown is not "none": it runs early);
- * null for an action with no time limit.
+ * 'now' for one that any other team can make pointless at any moment (audit 2026-11-16, BEH-9 and BEH-10): leaving
+ * the agent's own unanswered 1v1 (until it runs, any team can take the 1v1 the plan decided not to play) and taking
+ * another team's open 1v1 (it goes to the first team that takes it); null for an action with no time limit.
  */
-export type Deadline = number | 'unread' | null
+export type Deadline = number | 'unread' | 'now' | null
 
 /** A time FoxLeague served, or null when it is none. */
 function time(v: unknown): number | null {
@@ -33,6 +35,23 @@ interface Copy {
   tier?: unknown
   entry_fee_foxsy?: unknown
   format?: unknown
+  status?: unknown
+  max_teams?: unknown
+  creator_user_id?: unknown
+  target_user_id?: unknown
+  targeted?: unknown
+  targeted_to_you?: unknown
+  participant_count?: unknown
+}
+
+/** An open 1v1 this team created and nobody has taken yet (a seat count it cannot read counts as not taken: a leave is never late). */
+function ownUnanswered(c: Copy, me: number | undefined): boolean {
+  return c.max_teams === 2 && me !== undefined && c.creator_user_id === me && c.status === 'open' && !(typeof c.participant_count === 'number' && c.participant_count >= 2)
+}
+
+/** An open 1v1 another team posted for anyone: the first team to take it plays it. */
+function theirsOpen(c: Copy, me: number | undefined): boolean {
+  return c.max_teams === 2 && me !== undefined && typeof c.creator_user_id === 'number' && c.creator_user_id !== me && c.status === 'open' && c.target_user_id === null && c.targeted !== true && c.targeted_to_you !== true
 }
 
 /**
@@ -77,6 +96,8 @@ export function actionDeadline(a: Action, s: AgentSnapshot | null | undefined): 
       } else if (cs.some(c => c.format === 'league_knockout')) {
         return 'unread'
       }
+      // Another team's open 1v1 goes to whoever takes it first: at once (BEH-10).
+      if (cs.some(c => theirsOpen(c, s?.profile?.id))) return 'now'
       return by
     }
     case 'leave_tournament': {
@@ -84,6 +105,8 @@ export function actionDeadline(a: Action, s: AgentSnapshot | null | undefined): 
       const cs = copies(s, a.tournament_id)
       const close = closes(cs)
       if (close === null) return 'unread'
+      // Its own 1v1 nobody took yet: the plan decided not to play it, and until the leave runs any team can (BEH-9).
+      if (cs.some(c => ownUnanswered(c, s?.profile?.id))) return 'now'
       const seat = s?.auth?.leagueSeats?.find(x => x.tournamentId === a.tournament_id)
       if (!seat && !cs.some(c => c.format === 'league_knockout')) return close
       const lock = time(seat?.seatsLockAt)
