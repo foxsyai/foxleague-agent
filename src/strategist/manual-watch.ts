@@ -83,6 +83,11 @@ const TOLD_KV = 'manual_told'
 const KEYS_TOLD_KV = 'manual_keys_told_at'
 const TOLD_KEPT = 64
 /**
+ * The switches the agents have no rule for that the owner was told of (P-W3), by key alone, and when the last such line
+ * went (R2T-6): a row of its own, so many switches do not push the pages and keys told out of TOLD_KV.
+ */
+const SWITCHES_TOLD_KV = 'manual_switches_told'
+/**
  * How soon after the last check a changed key set runs the check again (P-W2): settings that flip between two
  * FoxLeague servers during a deploy ask at most this often. A moved rule number alone waits RECHECK_MS.
  */
@@ -400,9 +405,15 @@ export async function checkApi(o: { base: string; record: unknown; fetch: ApiFet
 export function configTell(keys: string[]): string {
   return `FoxLeague's game settings changed since the agents' copy (keys: ${named(keys)}). Each plan reads the live values and is told of the change, but the agents' rules may not know these keys yet. The maintainer runs sync-manual.`
 }
-export function switchTell(sw: RuleSwitch): string {
-  const at = isoTime(sw.from ?? 0)
-  return `FoxLeague's game settings carry a rule switch the agents do not know yet: ${sw.key}, ${sw.live === true ? 'live since' : 'live from'} ${at.slice(0, 10)} ${at.slice(11, 16)} UTC. Each plan sees it in the snapshot with its numbers; the maintainer adds the rule.`
+/** The owner's line about switches the agents have no rule for (P-W3): one line, at most MAX_NAMED named and the rest counted (R2T-6). */
+export function switchTell(sws: RuleSwitch[]): string {
+  const when = (sw: RuleSwitch) => {
+    const at = isoTime(sw.from ?? 0)
+    return `${sw.live === true ? 'live since' : 'live from'} ${at.slice(0, 10)} ${at.slice(11, 16)} UTC`
+  }
+  const [one] = sws
+  if (sws.length === 1 && one) return `FoxLeague's game settings carry a rule switch the agents do not know yet: ${one.key}, ${when(one)}. Each plan sees it in the snapshot with its numbers; the maintainer adds the rule.`
+  return `FoxLeague's game settings carry more than one rule switch the agents do not know yet: ${named(sws.map(sw => `${sw.key} (${when(sw)})`))}. Each plan sees them in the snapshot with their numbers; the maintainer adds the rules.`
 }
 
 export interface ManualWatchDeps {
@@ -592,6 +603,26 @@ export class ManualWatch {
     return !quiet
   }
 
+  /**
+   * The switches the agents have no rule for, live within SOON_MS (P-W3): each told once by its key alone, whatever its
+   * `live_from` says from one answer to the next, in one line at most every KEYS_TELL_GAP_MS that names at most
+   * MAX_NAMED and counts the rest (R2T-6). The keys told are kept apart from TOLD_KV, at most MAX_KEYS of them.
+   */
+  private tellSwitches(soon: RuleSwitch[], now: number): void {
+    if (!this.d.tell || !soon.length) return
+    let told: { at: number; keys: string[] } = { at: Number.NEGATIVE_INFINITY, keys: [] }
+    try {
+      const v = JSON.parse(this.d.kv.get(SWITCHES_TOLD_KV) ?? 'null') as { at?: unknown; keys?: unknown } | null
+      if (v && typeof v.at === 'number' && Number.isFinite(v.at) && Array.isArray(v.keys)) told = { at: v.at, keys: v.keys.filter(isConfigKey) }
+    } catch {
+      // An unreadable row: start again.
+    }
+    const fresh = soon.filter(sw => !told.keys.includes(sw.key))
+    if (!fresh.length || now - told.at < KEYS_TELL_GAP_MS) return
+    this.d.kv.set(SWITCHES_TOLD_KV, JSON.stringify({ at: now, keys: [...told.keys, ...fresh.map(sw => sw.key)].slice(-MAX_KEYS) }))
+    this.d.tell(switchTell(fresh))
+  }
+
   private configState(): ConfigState | null {
     try {
       const v = JSON.parse(this.d.kv.get(CONFIG_KV) ?? 'null') as ConfigState | null
@@ -631,9 +662,7 @@ export class ManualWatch {
       const next = JSON.stringify({ copy: copy.key, base: record?.config ? null : base, keysHash: print.keysHash, valuesHash: print.valuesHash, keys } satisfies ConfigState)
       if (this.d.kv.get(CONFIG_KV) !== next) this.d.kv.set(CONFIG_KV, next)
       if (keys.length && this.keysToldAgo(now) >= KEYS_TELL_GAP_MS && this.tellOnce(`keys:${copy.key}:${keys.join(',')}`, configTell(keys))) this.d.kv.set(KEYS_TOLD_KV, String(now))
-      for (const sw of unknownSwitches(config).switches) {
-        if (sw.from !== null && Number.isFinite(sw.from) && Math.abs(sw.from - now) <= SOON_MS) this.tellOnce(`switch:${sw.key}:${sw.from}`, switchTell(sw))
-      }
+      this.tellSwitches(unknownSwitches(config).switches.filter(sw => sw.from !== null && Number.isFinite(sw.from) && Math.abs(sw.from - now) <= SOON_MS), now)
       const keysMoved = fresh ? keys.length > 0 : st.keysHash !== print.keysHash
       const valuesMoved = !fresh && st.valuesHash !== print.valuesHash
       if (!keysMoved && !valuesMoved) return null

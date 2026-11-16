@@ -153,7 +153,8 @@ again and the dashboard shows the same line under the header:
 
 It names up to eight pages; when more changed it names the first eight and says how many more. A changed setting is
 named the same way ("FoxLeague's game settings changed since the agents' copy (keys: ...)"). A rule switch your
-agents have no rule for yet is told once its start is a week away or less.
+agents have no rule for yet is told once its start is a week away or less: each switch once, in one line at most every
+six hours that names up to eight.
 
 Your agents keep playing by their copy until a version of the agent brings the new one. Meanwhile each plan is told
 which pages and settings changed and that the live values in its snapshot and the refusals of the executor win over
