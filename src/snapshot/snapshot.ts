@@ -748,10 +748,13 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     if (league && board) await attempt(warnings, 'league matches', () => takeLeagueTurn(() => collectLeague(fox, facts, league, board.users, profile.id, now)))
   }
 
-  // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse.
+  // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse. Also
+  // while a 1v1 of its own waits for an opponent: the plan may close it for a clearly better one and needs to see which
+  // is (audit 2026-11-16, BEH-8). Not once another team has taken ours: it cannot be left, so no other 1v1 is in reach.
   const openAllChallenges = (openAll ?? []).filter(t => t.max_teams === 2)
   const scouted: { id: number; elo: number | null; strength: number | null }[] = []
-  if (auth && profile && !auth.myTournaments?.active.some(t => t.max_teams === 2)) {
+  const ownTaken = auth?.myTournaments?.active.some(t => t.max_teams === 2 && !(t.creator_user_id === profile?.id && t.status === 'open' && !(typeof t.participant_count === 'number' && t.participant_count >= 2)))
+  if (auth && profile && !ownTaken) {
     const ids = [
       ...auth.challengesForMe.map(c => c.tournament_id),
       // A targeted 1v1 names its target only to the two teams: the ones for this team come in challengesForMe.
