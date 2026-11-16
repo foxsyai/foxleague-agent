@@ -298,18 +298,27 @@ function Install-FoxLeagueAgent {
 
     # What to do when Ubuntu starts as root and asks nothing, also after it was started here once (INS-U2): its first
     # start was done earlier with root as its user, or root was made its default since. The installer runs as Ubuntu's
-    # default user, which has to be one of its own: a user that is there is named, else how to make one is said.
+    # default user, which has to be one of its own: a user that is there is named, else how to make one is said. Of
+    # several, the one whose home holds foxleague-agent already, so the line goes on with that install and its wallet,
+    # not a second one (R2I-U2).
     # [user] default= in /etc/wsl.conf is what every WSL reads; it counts once Ubuntu has restarted.
-    #   $Users  Get-FoxLinuxUsers of that Ubuntu (none when it could not be asked)
+    #   $Users      Get-FoxLinuxUsers of that Ubuntu (none when it could not be asked)
+    #   $WithAgent  those of them whose home holds a foxleague-agent folder
     # Returns the lines to show, in order.
-    function Get-FoxRootUbuntuHelp($Users) {
+    function Get-FoxRootUbuntuHelp($Users, $WithAgent = @()) {
         $list = @($Users)
+        $with = @(@($WithAgent) | Where-Object { $list -contains $_ })
         $name = 'NAME'
         $lines = @()
         if ($list.Count -gt 0) {
             $name = [string]$list[0]
+            if ($with.Count -gt 0) { $name = [string]$with[0] }
             $lines += ('Ubuntu starts as root and asks nothing. It has a user of your own: ' + ($list -join ' and ') + '.')
-            $lines += ('The agent is installed as the user Ubuntu starts as, so make ' + $name + ' that user. In PowerShell type')
+            if ($with.Count -gt 0) {
+                $lines += ('The agent is already installed in the home of ' + $name + ' (its foxleague-agent folder), so make ' + $name + ' the user Ubuntu starts as. In PowerShell type')
+            } else {
+                $lines += ('The agent is installed as the user Ubuntu starts as, so make ' + $name + ' that user. In PowerShell type')
+            }
             $lines += ('  wsl -d ' + $FoxDistro + ' -u root --cd ~')
             $lines += 'then inside Ubuntu'
         } else {
@@ -750,12 +759,21 @@ function Install-FoxLeagueAgent {
         return @{ Readiness = (Get-FoxUbuntuReadiness -Entry $entry -IdExit $idExit -IdText $idText); Distros = $distros; Said = $said }
     }
 
-    # The users of Ubuntu (Get-FoxLinuxUsers), asked as root. None when it cannot be asked.
+    # The users of Ubuntu (Get-FoxLinuxUsers), asked as root, and those of them whose home holds a foxleague-agent
+    # folder (R2I-U2): @{ Users; WithAgent }. None when it cannot be asked.
     function Get-FoxUbuntuUsers {
-        $r = Invoke-FoxLinux -User 'root' -Command @('/bin/sh', '-c', 'getent passwd') -Capture
+        $script = 'p=$(getent passwd) || exit 1; printf "%s\n" "$p"; printf "%s\n" "$p" | while IFS=: read -r n x u g c h s; do if [ -d "$h/foxleague-agent" ]; then echo "+$n"; fi; done'
+        $r = Invoke-FoxLinux -User 'root' -Command @('/bin/sh', '-c', $script) -Capture
         $names = @()
-        if ($r['ExitCode'] -eq 0) { $names = Get-FoxLinuxUsers $r['Text'] }
-        return , $names
+        $with = @()
+        if ($r['ExitCode'] -eq 0) {
+            $names = Get-FoxLinuxUsers $r['Text']
+            foreach ($line in @($r['Text'] -split "`n")) {
+                $l = $line.TrimEnd("`r")
+                if ($l -cmatch '^\+([a-z_][a-z0-9_-]{0,31})$' -and $names -contains $Matches[1]) { $with += $Matches[1] }
+            }
+        }
+        return @{ Users = $names; WithAgent = $with }
     }
 
     # The scheduled task with our name, as @{ Execute; Arguments; State }, or $null when there is none.
@@ -987,7 +1005,7 @@ function Install-FoxLeagueAgent {
                     # Started here once and still root: this Ubuntu asks nothing, and starting it again would not
                     # either (INS-U2). What helps is said instead.
                     $users = Get-FoxUbuntuUsers
-                    $help = Get-FoxRootUbuntuHelp $users
+                    $help = Get-FoxRootUbuntuHelp $users['Users'] $users['WithAgent']
                     foreach ($l in $help) { Write-FoxLine $l }
                     Stop-Fox 'Ubuntu starts as root. Make a user of your own the one it starts as (see above), then paste the line again'
                 }

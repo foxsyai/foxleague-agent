@@ -185,7 +185,8 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
   paste the line again.
 - **"Ubuntu starts as root":** Ubuntu's first start was done earlier with root as its user (or root was made its
   default since), so it asks for nothing. The agent is installed as the user Ubuntu starts as, which has to be one of
-  your own. The installer names the user Ubuntu has or says how to make one (`adduser`). It also says how to make
+  your own. The installer names the user Ubuntu has (of several, the one whose home holds the agent already) or says
+  how to make one (`adduser`). It also says how to make
   that user the one Ubuntu starts as: the two lines `[user]` and `default=` with its name in `/etc/wsl.conf`, then
   `wsl --terminate Ubuntu` in PowerShell and the line again.
 - **The browser did not open:** open `http://localhost:8870` in your browser yourself (or the port you chose).
