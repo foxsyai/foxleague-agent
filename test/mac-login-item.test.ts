@@ -323,6 +323,8 @@ test('MAC-1: the uninstall removes the launcher with the plist, and keeps both w
 /** The plist as this release writes it: the launcher. */
 const onLauncher = (root: string): string => plistOf31adfb7(root, bashPath()).replace(/<key>ProgramArguments<\/key><array>.*<\/array>/, `<key>ProgramArguments</key><array><string>${join(root, NAME)}</string></array>`)
 const reload = (home: string): string[] => [`launchctl bootout gui/${process.getuid!()}/${LABEL}`, `launchctl bootstrap gui/${process.getuid!()} ${plistPath(home)}`]
+/** A line of the screen, whole: nothing after it (a `&& launchctl bootstrap` would be refused for a loaded job). */
+const saysLine = (out: string, line: string): boolean => out.split('\n').some(l => l.trim() === line)
 /** The commands that switch the agent on again, as the screen gives them. */
 const switchOn = (home: string): string => `launchctl enable gui/$(id -u)/${LABEL} && launchctl bootstrap gui/$(id -u) ${plistPath(home)}`
 
@@ -364,8 +366,7 @@ test('R78A-2: ./install.sh --update leaves a job the owner switched off as it is
     { listed: OFF, to: '3.2.0', loaded: false },
     { listed: OFF, to: '3.1.0', loaded: false },
     { listed: `"${LABEL}" => true`, to: '3.2.0', loaded: false },
-    // `launchctl disable` alone leaves the job that runs loaded: it is not restarted or loaded again either.
-    { listed: OFF, to: '3.2.0', loaded: true },
+    // A job switched off that launchd still holds (`launchctl disable` alone) runs: R78A-3 below.
   ]
   for (const c of cases) {
     const u = await macUpdate({ plist: OLD, loaded: c.loaded, to: c.to, launchctl: launchctlWith({ listed: c.listed }) })
@@ -418,6 +419,62 @@ test('R78A-2: running the installer again leaves a job the owner switched off as
   assert.deepEqual(jobCalls(i.s, from), [])
   assert.ok(again.out.includes(`launchctl enable gui/$(id -u)/${LABEL}`), again.out)
   assert.match(again.out, /cd .* && \.\/install\.sh/)
+})
+
+// R78A-3 (GitHub re-review of PR #78): `launchctl disable` alone marks the job off for its next load and leaves the one
+// that runs loaded. For that job the installer and --update said "it stays off: nothing starts it" while the agent
+// played on (LIVE or not, KeepAlive starting it again after every exit), --update no longer restarted it into the new
+// release (it got a kickstart before), and the advised `launchctl bootstrap` is refused for a label launchd still holds.
+// Right: such a job is said to run now and not to start at the next login; --update restarts it into the new release
+// with a kickstart (it writes nothing and switches nothing on); the guided installer says that the port and the live
+// permission just set apply from its next start; the advice to switch it on is `launchctl enable` alone. The plist is
+// never rewritten and the job never switched on (R78A-2).
+test('R78A-3: a job switched off that still runs is not said to be off; --update restarts it into the new release without switching it on', { timeout: 240_000 }, async () => {
+  const enableOnly = `launchctl enable gui/$(id -u)/${LABEL}`
+  // A new release: restarted into it, as before MAC-1, from the plist launchd holds.
+  const u = await macUpdate({ plist: OLD, loaded: true, launchctl: launchctlWith({ listed: OFF }) })
+  assert.equal(readFileSync(plistPath(u.home), 'utf8'), u.before, 'the plist of a job switched off was rewritten')
+  assert.equal(existsSync(join(u.root, NAME)), false)
+  assert.deepEqual(jobCalls(u.s), [`launchctl kickstart -k gui/${process.getuid!()}/${LABEL}`], `restarted into the new release, nothing switched on:\n${u.out}`)
+  assert.doesNotMatch(u.out, /stays off|nothing starts it|runs from its next start/, u.out)
+  assert.match(u.out, /The background agent runs now, but it is switched off/)
+  assert.match(u.out, /it will not start at your next login/)
+  assert.match(u.out, /old name/)
+  assert.ok(saysLine(u.out, `To switch it on: ${enableOnly}`), u.out)
+  assert.ok(!u.out.includes(switchOn(u.home)), 'bootstrap is refused for a label launchd still holds')
+  assert.match(u.out, /Restarted\./)
+  await assertAgentStarts(u.root, join(u.root, 'versions', 'v3.2.0'), plistOf(u.home))
+  // The newest release already: nothing to restart; the same words.
+  const n = await macUpdate({ plist: OLD, loaded: true, to: '3.1.0', launchctl: launchctlWith({ listed: OFF }) })
+  assert.equal(readFileSync(plistPath(n.home), 'utf8'), n.before)
+  assert.deepEqual(jobCalls(n.s), [], n.out)
+  assert.doesNotMatch(n.out, /stays off|nothing starts it|Restarted/, n.out)
+  assert.match(n.out, /The background agent runs now, but it is switched off/)
+  assert.ok(saysLine(n.out, `To switch it on: ${enableOnly}`), n.out)
+})
+
+test('R78A-3: the guided installer says a job switched off that still runs runs, and that the port and the live permission apply from its next start', { timeout: 240_000 }, async () => {
+  const i = freshInstall()
+  await macInstall(i)
+  // `launchctl disable` while the agent runs: launchd still holds the job (the stand-in's loaded mark stays).
+  writeFileSync(plistPath(i.home), OLD(i.root))
+  rmSync(join(i.root, NAME), { force: true })
+  i.s.stub('launchctl', launchctlWith({ listed: OFF }))
+  const before = readFileSync(plistPath(i.home), 'utf8')
+  const from = i.s.calls().length
+  const r = await guided(i, ['', TEST_PORT, 'n', 'n'], { args: [] })
+  assert.equal(r.status, 0, r.out.slice(-1500))
+  assert.equal(readFileSync(plistPath(i.home), 'utf8'), before, 'the plist of a job switched off was rewritten')
+  assert.equal(existsSync(join(i.root, NAME)), false)
+  assert.deepEqual(jobCalls(i.s, from), [], 'nothing is loaded, restarted or switched on')
+  const step7 = r.out.slice(r.out.indexOf('7/7'))
+  assert.doesNotMatch(step7, /stays off|nothing starts it/, step7)
+  assert.match(step7, /The background agent runs now, but it is switched off/)
+  assert.match(step7, /it will not start at your next login/)
+  assert.match(step7, /The port and the live permission you just set apply from its next start/)
+  assert.ok(step7.includes(`launchctl kickstart -k gui/$(id -u)/${LABEL}`), step7)
+  assert.ok(saysLine(step7, `To switch it on: launchctl enable gui/$(id -u)/${LABEL}`), step7)
+  assert.ok(!step7.includes(switchOn(i.home)), 'bootstrap is refused for a label launchd still holds')
 })
 
 test('R78A-2: when launchd cannot say whether the job is switched off, no plist is rewritten', { timeout: 240_000 }, async () => {

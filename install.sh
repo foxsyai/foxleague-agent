@@ -375,8 +375,9 @@ mac_wait_unloaded() {
 # macOS: whether the owner switched the agent's job off (System Settings, General, Login Items & Extensions, or
 # launchctl disable). launchd lists the label as `"ai.foxleague.agent" => disabled` (`=> true` on older macOS) for as
 # long as it is off, with or without a plist. Status 0: off; 1: not off; 2: launchd could not be asked. A job that is
-# off is never written to, loaded, restarted or switched on by the installer (R78A-2): to macOS a plist that starts a
-# new program can look like a new background item, which may start at the next login without the owner's word.
+# off is never written to, loaded or switched on by the installer (R78A-2): to macOS a plist that starts a new program
+# can look like a new background item, which may start at the next login without the owner's word. One that still runs
+# is only restarted into a new release, as before (R78A-3).
 mac_job_disabled() {
   local out
   out=$(launchctl print-disabled "gui/$(id -u)" 2>/dev/null) || return 2
@@ -385,9 +386,18 @@ mac_job_disabled() {
   esac
   return 1
 }
-# What the screen says of a job the owner switched off: it stays off, its file stays as it is, and how to switch it
-# on. $1 is 1 when a new release was put in place.
+# What the screen says of a job the owner switched off, and how to switch it on in the state it is in. `launchctl
+# disable` alone marks the job off for its next load and leaves the one that runs loaded (R78A-3): that one runs now
+# and will not start at the next login, and `launchctl enable` alone switches it on (a bootstrap is refused for a label
+# launchd still holds). One that is not loaded stays off and needs the bootstrap too. $1 is 1 when a new release was
+# put in place (said only of a job that is not loaded: one that runs is restarted into it).
 mac_off_note() {
+  if mac_job_loaded; then
+    info "The background agent runs now, but it is switched off (System Settings, General, Login Items & Extensions, or launchctl disable): it will not start at your next login. Its file is not written."
+    if plist_on_launcher >/dev/null; then info "macOS keeps listing it by its old name (\"bash\") until it is switched on and ./install.sh --update runs again in $ROOT."; fi
+    info "To switch it on: launchctl enable gui/\$(id -u)/$PLIST_LABEL"
+    return 0
+  fi
   info "The background agent is switched off (System Settings, General, Login Items & Extensions, or launchctl disable), so it stays off: nothing starts it and its file is not written."
   if [ "${1:-0}" = 1 ]; then info "The new version runs from its next start."; fi
   if [ -f "$PLIST" ]; then
@@ -506,6 +516,8 @@ EOF
     mac_job_disabled || off=$?
     if [ "$off" = 0 ]; then
       mac_off_note 0
+      # Still running (R78A-3): it read .env at its start, so what this run wrote there waits for its next start.
+      if mac_job_loaded; then info "The port and the live permission you just set apply from its next start. To restart it now: launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi
       SERVICE_OFF=1
       return 0
     fi
@@ -616,7 +628,8 @@ renew_plist() {
 }
 # The end of ./install.sh --update on a Mac, once the service checks passed; $1 is 1 when this install ran the newest
 # release already, 0 when a new one was put in place. A job the owner switched off is left as it is (R78A-2): no
-# plist written, nothing loaded, restarted or switched on; the screen says so when it matters. Otherwise the plist of an
+# plist written, nothing loaded or switched on; the screen says so when it matters, and one that still runs is
+# restarted into a new release with a kickstart, as before (R78A-3). Otherwise the plist of an
 # older install moves to the launcher (MAC-1), also on the newest release (R78A-1). A job that runs is then loaded
 # again from the changed plist, which starts the new release too; with an unchanged plist it is restarted for a new
 # release (kickstart, as before) and left alone on the newest one. A stopped one stays stopped (UPD-U5). Ends the script.
@@ -625,6 +638,12 @@ mac_after_update() {
   mac_job_disabled || off=$?
   if [ "$off" = 0 ]; then
     if [ "$newest" = 0 ] || plist_on_launcher >/dev/null; then mac_off_note "$((1 - newest))"; fi
+    # Switched off but still running (R78A-3): restarted into a new release as before, with a kickstart. It restarts
+    # the job launchd holds, from the plist it read at its load: it writes nothing and switches nothing on.
+    if [ "$newest" = 0 ] && mac_job_loaded; then
+      service_restart || die "the new version is in place but the background service could not be restarted: $(after_failed_restart)"
+      info "Restarted."
+    fi
     exit 0
   fi
   if renew_plist; then renewed=1; fi
