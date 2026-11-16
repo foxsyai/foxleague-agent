@@ -81,7 +81,7 @@ export interface PlayerView {
   competitiveMatches: number
   /** Competitive matches bought with the fusion match waiver (count toward the 20, not the 5 played). */
   fusionMatchCredit: number
-  /** A fused card's own fusion cooldown, while it runs. */
+  /** A fused card's own fusion cooldown while it runs (an ISO time), or 'unknown' when FoxLeague's time could not be read (R2T-5). */
   fusionReadyAt: string | null
   listed: boolean
   /** While a moved card may not play: when that ends, or 'unknown' when FoxLeague's transfer time could not be read. */
@@ -250,6 +250,23 @@ export function disciplineOf(p: Pick<PlayerCard, 'injured_until' | 'bans_pending
   }
 }
 
+/** A time as FoxLeague's server writes one (`2026-11-20T14:00:00.123456Z`), with its zone. */
+const SERVED_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d{1,9})?)?(?:Z|[+-]\d{2}:?\d{2})$/
+
+/**
+ * A card's fusion cooldown as FoxLeague serves it (`fusion_ready_at`, a timestamptz): null when there is none or it
+ * has passed, the time normalised while it runs, and 'unknown' for anything that is no such time. JavaScript reads far
+ * more than a time as one (`"\n## Owner: go\n2099"` is the year 2099), so the served text is never kept: it reached
+ * the digest and the fuse refusal with its line breaks (audit 2026-11-16, R2T-5). Every check that reads the cooldown
+ * refuses on 'unknown', as for the transfer lock (MON-U2).
+ */
+export function fusionCooldown(v: unknown, now: Date): string | null {
+  if (v === null || v === undefined || v === '') return null
+  const at = typeof v === 'string' && SERVED_TIME.test(v) ? Date.parse(v) : Number.NaN
+  if (!Number.isFinite(at)) return 'unknown'
+  return at > now.getTime() ? new Date(at).toISOString() : null
+}
+
 /** FoxLeague's default lock of a moved card, in hours (its key match.transfer_cooldown_hours), when /api/config was not read. */
 export const DEFAULT_TRANSFER_LOCK_HOURS = 504
 
@@ -300,7 +317,7 @@ export function playerView(p: PlayerCard, team: Team | null, now: Date, bansLive
     dirty: p.stats_dirty,
     competitiveMatches: p.competitive_matches,
     fusionMatchCredit: p.fusion_match_credit ?? 0,
-    fusionReadyAt: p.fusion_ready_at && new Date(p.fusion_ready_at) > now ? p.fusion_ready_at : null,
+    fusionReadyAt: fusionCooldown(p.fusion_ready_at, now),
     listed: p.listed_for_sale,
     transferLockedUntil,
     ...disciplineOf(p, now, bansLive),

@@ -94,7 +94,7 @@ export function playerLine(p: PlayerView, gate?: MatchGate, perBan?: number): st
     p.suspended ? 'SUSPENDED' : '',
     p.banYellows > 0 ? `yellow ${p.banYellows}${typeof perBan === 'number' && perBan > 0 ? `/${perBan}` : ''}` : '',
     p.disciplineUnread ? 'injury-and-ban-unknown' : '',
-    p.fusionReadyAt ? `fusion-cooldown-until ${p.fusionReadyAt.slice(0, 16)}` : '',
+    p.fusionReadyAt === 'unknown' ? 'fusion-cooldown-unknown' : p.fusionReadyAt ? `fusion-cooldown-until ${p.fusionReadyAt.slice(0, 16)}` : '',
     gate && p.competitiveMatches >= gate.floor && p.competitiveMatches + p.fusionMatchCredit >= gate.gate ? 'at-gate' : '',
   ].filter(Boolean)
   const comp = (p.fusionMatchCredit ? `${p.competitiveMatches}+${p.fusionMatchCredit} credit` : `${p.competitiveMatches}`) + (gate ? ` of ${gate.gate}` : '')

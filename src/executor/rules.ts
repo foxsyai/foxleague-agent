@@ -1770,6 +1770,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       for (const c of inputs) {
         if (c.listed) return refuse(`#${c.nonce} is listed for sale`)
         if (c.transferLockedUntil) return refuse(`#${c.nonce} is in a transfer cooldown until ${c.transferLockedUntil}`)
+        if (c.fusionReadyAt === 'unknown') return refuse(`#${c.nonce}'s fusion cooldown could not be read: not fusing blind`)
         if (c.fusionReadyAt) return refuse(`#${c.nonce} is in its fusion cooldown until ${c.fusionReadyAt}`)
         // FoxLeague's Fusion tab refuses both; its contract sees neither, and the new card would only inherit them.
         if (c.disciplineUnread) return refuse(`#${c.nonce}'s injury could not be read: not fusing blind`)
@@ -1888,6 +1889,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const extra: Record<string, unknown> = {}
       if (a.type === 'fusion_cooldown_waiver') {
         if (!c.fusionReadyAt) return refuse(`#${a.nonce} has no fusion cooldown running`)
+        // The day the quote drops is read from the cooldown's end: unread, the waiver could revert and its gas be lost.
+        if (c.fusionReadyAt === 'unknown') return refuse(`#${a.nonce}'s fusion cooldown could not be read: no waiver bought blind`)
         const q = ctx.cooldownQuote
         if (!q) return refuse(`the cooldown waiver quote for #${a.nonce} could not be read`)
         if (q.days <= 0 || q.costAtomic <= 0n) return refuse(`nothing to waive on #${a.nonce}: its cooldown is at the 3-day floor already`)
