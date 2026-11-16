@@ -90,7 +90,7 @@ main() {
     for e in "$DIR/versions"/* "$DIR/versions"/.[!.]* "$DIR/versions"/..?*; do
       if [ ! -e "$e" ] && [ ! -L "$e" ]; then continue; fi
       case "${e##*/}" in
-        .staging-get | .replaced-get | active.new) ;;
+        .staging-get | .replaced-get | active.new | update.lock) ;;
         v[0-9]*) if ! named_foxleague "$e/package.json"; then echo other; return 0; fi ;;
         *) echo other; return 0 ;;
       esac
@@ -151,13 +151,39 @@ main() {
   [ -d "$DIR/versions" ] || made_versions=1
   mkdir -p "$DIR/versions"
   staging="$DIR/versions/.staging-get"
+  # versions/update.lock is held from here until versions/active names the new release, as the agent's own update
+  # holds it (stage()): a start of the running agent meanwhile leaves alone the folder this line prepares in and the
+  # release it puts in place (FI-2). Over an install, another update that holds it (younger than 30 minutes, the
+  # agent's rule) stops this line before it changes anything; an older one, or one in a folder this line found empty,
+  # was left by a kill and is taken over.
+  lock="$DIR/versions/update.lock"
+  locked=0
+  release_lock() { if [ "$locked" = 1 ]; then rm -f "$lock"; locked=0; fi; }
+  lock_fresh() {
+    local m
+    m=$(stat -c %Y "$lock" 2>/dev/null || stat -f %m "$lock" 2>/dev/null) || return 1
+    case "$m" in '' | *[!0-9]*) return 1 ;; esac
+    [ $(($(date +%s) - m)) -lt 1800 ]
+  }
+  trap 'rm -rf "$tmp"; release_lock' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  trap 'exit 129' HUP
   # Nothing of this run stays behind when it stops before the release is in place.
   give_up() {
     rm -rf "$staging"
+    release_lock
     if [ "$made_versions" = 1 ]; then rmdir "$DIR/versions" 2>/dev/null || true; fi
     if [ "$made_dir" = 1 ]; then rmdir "$DIR" 2>/dev/null || true; fi
     die "$1"
   }
+  if (set -C; : > "$lock") 2>/dev/null; then
+    locked=1
+  elif [ "$kind" != empty ] && lock_fresh; then
+    give_up "another update is being installed right now (Update now, /upgrade or ./install.sh --update): nothing was changed. Wait a few minutes, then paste the line again."
+  else
+    : > "$lock" && locked=1
+  fi
   rm -rf "$staging" && mkdir -p "$staging"
   tar -xzf "$archive" -C "$staging" --strip-components=1 || give_up "the download could not be unpacked"
   if [ ! -f "$staging/install.sh" ] || [ ! -f "$staging/run.sh" ] || ! named_foxleague "$staging/package.json"; then
@@ -224,6 +250,7 @@ main() {
     printf '%s\n' "$cur" > "$DIR/versions/previous.new" && mv -f "$DIR/versions/previous.new" "$DIR/versions/previous"
   fi
   printf '%s\n' "$name" > "$DIR/versions/active.new" && mv -f "$DIR/versions/active.new" "$DIR/versions/active"
+  release_lock
 
   if [ "${FOXAGENT_NO_RUN:-0}" = 1 ]; then echo "  Downloaded (FOXAGENT_NO_RUN=1: installer not started)."; exit 0; fi
   say "Starting the installer"

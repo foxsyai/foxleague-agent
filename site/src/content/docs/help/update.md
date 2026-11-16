@@ -94,9 +94,10 @@ so, because root's files there would keep the agent from starting.
 Pasting the install line again also works: it downloads the newest version, checks it against the release's
 checksum, prepares it next to the installed one (Node.js and dependencies) and puts it in place only once that
 ended well, then runs the installer, which offers your earlier answers as the defaults. If the preparing fails
-(no network, for example), nothing was changed and the agent runs as before. The installer asks its questions in
-a terminal: over SSH, log in first (or use `ssh -t`). An older version is never put over a newer one unless you
-add `FOXAGENT_ALLOW_DOWNGRADE=1`.
+(no network, for example), nothing was changed and the agent runs as before. While another update is being
+installed (**Update now**, `/upgrade` or `./install.sh --update`) the line says so and changes nothing: paste it
+again a few minutes later. The installer asks its questions in a terminal: over SSH, log in first (or use
+`ssh -t`). An older version is never put over a newer one unless you add `FOXAGENT_ALLOW_DOWNGRADE=1`.
 
 ### Without the background service
 
