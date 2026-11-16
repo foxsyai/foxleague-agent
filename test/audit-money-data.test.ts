@@ -241,8 +241,9 @@ test('C1: a Legendary waiver still needs a card the agent would list (a spare, 1
 // ---- C2: Play waits for FoxLeague's match slot (up to 30 s), and a lost answer is read back ----
 
 test('C2: play_match waits out FoxLeague holding the answer 30 s for a match slot (the app allows 90 s; the agent gave up at 20 s)', async () => {
-  // Every request timeout runs 100 times faster: 20 s is 200 ms, FoxLeague's 30 s wait is 300 ms.
-  const SCALE = 100
+  // Every request timeout runs 20 times faster: the old 20 s give-up is 1 s, FoxLeague's 30 s wait is 1.5 s. (At 100 times
+  // the sign-in before it had 200 ms, too short on a busy machine running the whole suite.)
+  const SCALE = 20
   const realTimeout = AbortSignal.timeout
   AbortSignal.timeout = (ms: number) => realTimeout.call(AbortSignal, Math.ceil(ms / SCALE))
   const server = createServer((req, res) => {
