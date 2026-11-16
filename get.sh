@@ -179,7 +179,7 @@ main() {
   fi
 
   if [ "$kind" = flat ]; then
-    echo "  An older install was found there: its code is replaced, your wallet, keys and data are kept."
+    echo "  An older install was found there: its code is replaced once the installer has set up the new service; your wallet, keys and data are kept."
   elif [ "$kind" = install ]; then
     echo "  An existing install was found there: your wallet, keys and data are kept."
   fi
@@ -199,13 +199,9 @@ main() {
     echo "  Preparing it next to the installed version (Node.js and dependencies)"
     FOXAGENT_ROOT="$DIR" bash "$staging/install.sh" --prepare || give_up "version $got could not be prepared (see the lines above): nothing was changed and the agent runs as before. Check the connection, then paste the line again."
   fi
-  # An install made before releases had their own folders: its code goes, everything of yours stays
-  # (.env, data/, pem/, the private Node in .node/).
-  if [ "$kind" = flat ]; then
-    for old in src deploy test docs site scripts node_modules .github package.json package-lock.json tsconfig.json README.md INSTALL.md AGENTS.md CLAUDE.md install.sh get.sh run.sh cli.sh; do
-      rm -rf "${DIR:?}/$old"
-    done
-  fi
+  # An install made before releases had their own folders keeps its code here for now: its background service starts
+  # <folder>/src/service.ts by that path, until the installer writes the new service at its step 7 and removes the old
+  # code (INS-U6). Cut before that (a closed window at a question), the old service still starts what it names.
 
   if [ -d "$DIR/versions/$name" ]; then
     rm -rf "$DIR/versions/.replaced-get"

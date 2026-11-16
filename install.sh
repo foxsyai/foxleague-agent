@@ -504,6 +504,17 @@ renew_unit() {
   LC_ALL=C grep -a -q -x 'RestrictSUIDSGID=true' "$UNIT" || return 1
   LC_ALL=C grep -a -v -x 'RestrictSUIDSGID=true' "$UNIT" | put_file "$UNIT" 644
 }
+# The code of an install made before releases had folders of their own. get.sh leaves it in the folder, because the
+# old background service starts <folder>/src/service.ts by that path; it goes once the service of step 7 is written
+# (INS-U6). Only a managed install's folder whose own package.json names foxleague-agent holds such code: a release's
+# package.json is in versions/<name>. The launcher, cli.sh, install.sh and get.sh of the folder are the new ones.
+remove_old_code() {
+  [ "$MANAGED" = 1 ] && [ -f "$ROOT/package.json" ] && grep -q '"name": "foxleague-agent"' "$ROOT/package.json" || return 0
+  local old
+  for old in src deploy test docs site scripts node_modules .github package.json package-lock.json tsconfig.json README.md INSTALL.md AGENTS.md CLAUDE.md; do
+    rm -rf "${ROOT:?}/$old"
+  done
+}
 restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 # After a restart that failed: what runs now, and a command that systemd takes even at the unit's start limit.
 after_failed_restart() {
@@ -785,10 +796,12 @@ info "Each new agent you add in the dashboard gets its own pem/agentN.pem automa
 address=$(cli address 1 | sed -E 's/^agent 1: ([^ ]+).*/\1/')
 if [ "$NO_SERVICE" = 1 ]; then
   say "7/7 Background service: skipped (--no-service)"
+  remove_old_code
   info "Start the agent yourself with: $ROOT/run.sh"
 else
   say "7/7 Background service"
   install_service
+  remove_old_code
   for _ in $(seq 1 30); do
     curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break
     sleep 1

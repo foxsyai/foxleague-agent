@@ -103,9 +103,11 @@ test('GET-2: the pasted line over an older install replaces its code and keeps t
   try {
     const r = await sh(join(REPO, 'get.sh'), [], { HOME: home, FOXAGENT_RELEASES: web.base, FOXAGENT_NO_RUN: '1' })
     assert.equal(r.status, 0, r.out)
-    assert.match(r.out, /An older install was found there: its code is replaced, your wallet, keys and data are kept\./)
+    assert.match(r.out, /An older install was found there: its code is replaced once the installer has set up the new service; your wallet, keys and data are kept\./)
     for (const [f, text] of Object.entries(mine)) assert.equal(readFileSync(join(dir, f), 'utf8'), text, `${f} is kept as it was`)
-    for (const gone of ['src', 'deploy', 'test', 'docs', 'node_modules', 'package.json']) assert.equal(existsSync(join(dir, gone)), false, `the old ${gone} is gone`)
+    // Since INS-U6 of 2026-11-16 the old code stays until the installer has written the new service (its old service
+    // starts <folder>/src/service.ts by that path); test/audit-1116/INS-U6.test.ts checks that the installer removes it.
+    for (const kept of ['src/service.ts', 'node_modules', 'package.json']) assert.ok(existsSync(join(dir, kept)), `the old ${kept} stays for the old service until step 7`)
     assert.equal(readFileSync(join(dir, 'versions', 'active'), 'utf8'), 'v3.1.0\n')
   } finally {
     await web.close()
