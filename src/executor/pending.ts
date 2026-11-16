@@ -43,9 +43,12 @@ export const SHOP_FINAL = /already processed|refunded|cannot be used/i
  * FoxLeague's own answer about an organizer payment's hash or its create, at the start of a create refusal (shop.rs
  * record_organizer_payment_locked and the payment gates before it; tournaments.rs for a creation still pending on
  * chain). A create refusal can quote another player's title (a time slot clash, tournament_slots.rs): a word inside
- * it is no answer about the payment, so SHOP_FINAL is read only after these openings (MON-U7, rule 6).
+ * it is no answer about the payment, so SHOP_FINAL is read only after these openings (MON-U7, rule 6). Also the two
+ * answers of shop.rs verify_organizer_payment when the amount paid is not the one the create computes (its fee setting
+ * saved between the quote and the create): "Transaction paid {paid} but this tournament needs {amount} FOXSY." and
+ * "Payment ({paid} FOXSY) is less than required ({expected} FOXSY)", each with its refund's words after it (R2M-1).
  */
-export const ORGANIZER_HASH_ANSWER = /^(?:Transaction already processed|This payment |This transaction was already used|Our support team is handling this payment|Organizer payments are not in force)/i
+export const ORGANIZER_HASH_ANSWER = /^(?:Transaction already processed|This payment |This transaction was already used|Our support team is handling this payment|Organizer payments are not in force|Transaction paid |Payment \()/i
 export const CREATE_STILL_PENDING = /^On-chain tournament creation could not be confirmed yet/i
 
 /** A final answer for a seat's hash: seated, used, refunded, or the tournament closed (a paid entry is refunded). */
