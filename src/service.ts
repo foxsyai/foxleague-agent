@@ -506,6 +506,8 @@ export class Service {
       notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)),
       // A graceful stop: an action still being prepared signs nothing (one already sent finishes and is booked).
       stopping: () => this.stopping,
+      // The owner's pause of the actions whose rules FoxLeague changed, while the copy is behind (P-W7).
+      held: () => this.manualWatch?.held() ?? [],
     })
     this.topups = new TopUps({
       store: this.store,

@@ -21,6 +21,7 @@ import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { agentName, pemName } from '../names.ts'
 import type { ImportInput } from '../wallet/imported.ts'
 import { UpdateError } from '../update/release.ts'
+import { heldActions } from '../executor/hold.ts'
 
 const PAGES = {
   login: readFileSync(join(import.meta.dirname, 'login.html'), 'utf8'),
@@ -371,6 +372,9 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         update: service.updater.view(),
         // The day's check of FoxLeague's manual: the notice when its live manual moved ahead of the agents' copy.
         manual: service.manualWatch.view(),
+        // The owner's choice when FoxLeague changes its rules (P-W7): tell only, or also pause the actions of a changed
+        // page; and the actions it holds now (our own names, none while the copy is current).
+        manualHold: { on: service.manualWatch.holdOn(), held: heldActions(service.manualWatch.held()) },
         // The welcome guide's checklist: which keys are set (never their values) and whether it was hidden.
         setup: {
           ai: Boolean(cfg.anthropicApiKey),
@@ -612,6 +616,20 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         service.store.setKillSwitch(body.on === true)
         service.notify(`kill switch ${body.on === true ? 'ON' : 'off'} (web UI, ${user})`)
         return json(res, 200, { ok: true })
+      }
+      // The owner's pause of the actions whose rules FoxLeague changed (P-W7): pausing lowers spending, one click; ending
+      // the pause lets those actions run again, so it needs the password, like releasing the kill switch.
+      if (method === 'POST' && path === '/api/manual-hold') {
+        const body = JSON.parse((await readBody(req, 4096)) || '{}') as { on?: unknown; password?: unknown }
+        const on = body.on === true
+        if (!on) recheckPassword(req, body.password)
+        service.manualWatch.setHold(on)
+        const text = on
+          ? 'When FoxLeague changes its rules: the actions of a changed page are paused until the agents are synced'
+          : 'When FoxLeague changes its rules: tell only, no action is paused'
+        service.store.log({ agentIndex: null, kind: 'control', status: 'info', summary: `${text} (web UI, ${user})` })
+        service.notify(`${text} (web UI, ${user})`)
+        return json(res, 200, { ok: true, message: text })
       }
       if (method === 'POST' && path === '/api/mode') {
         const body = JSON.parse((await readBody(req)) || '{}') as { live?: unknown; confirm?: unknown; password?: unknown }

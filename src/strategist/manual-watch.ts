@@ -23,6 +23,7 @@ import { cut as cutText } from '../util/text.ts'
 import { LEFT_OUT, ROOT, undecidedPages } from './manual.ts'
 import { MAX_KEYS, changedKeys, configPrint, isConfigKey, isoTime, keyDiff, named, unknownSwitches, type RuleSwitch } from '../foxleague/config-watch.ts'
 import { MAX_TEXT_PAGES, PAGES_TEXT_MAX, PAGE_TEXT_MAX, shapePages, type PageText } from './page-text.ts'
+import { heldActions } from '../executor/hold.ts'
 
 /** The agents' manual and the page record sync-manual writes next to it. */
 export const MANUAL_FILE = join(import.meta.dirname, 'manual.md')
@@ -56,6 +57,13 @@ const KV = 'manual_check'
  * before reads that row as it was and never this one.
  */
 const TEXTS_KV = 'manual_texts'
+/**
+ * The owner's choice when FoxLeague changes its rules (P-W7): '1' pauses the actions of a changed page, anything else
+ * tells only (the default). And the pages the copy installed now was last found behind on, kept until a check finds it
+ * current or another copy comes: a check that could not tell does not end a pause.
+ */
+const HOLD_KV = 'manual_hold'
+const BEHIND_KV = 'manual_behind'
 /**
  * Through the day (audit 2026-11-16, MNT-5 and MNT-6): a check that found the copy current is made again at the
  * service's next hourly look once this long has passed, so a manual FoxLeague deploys after the morning is seen within
@@ -487,6 +495,7 @@ export class ManualWatch {
       // belongs to never shows without it. Emptied by any check that did not find the copy behind.
       this.d.kv.set(TEXTS_KV, JSON.stringify({ copy: copy.key, at: c.at, pages: c.state === 'behind' ? (texts ?? []) : [] }))
       this.d.kv.set(KV, JSON.stringify({ ...c, day, copy: copy.key, tried: now, fails: c.state === 'unknown' ? fails : 0 }))
+      if (c.state !== 'unknown') this.d.kv.set(BEHIND_KV, JSON.stringify({ copy: copy.key, pages: c.state === 'behind' ? c.pages : [] }))
       // Current (or not yet known) to behind, or more pages behind: the owner hears it now, once (P-W3). `quiet`: the
       // caller sends the line itself (the morning summary, /summary), so it is only marked as told.
       if (c.state === 'behind') this.tellOnce(`pages:${copy.key}:${c.pages.join(',')}`, manualTell(c), o.quiet)
@@ -585,12 +594,14 @@ export class ManualWatch {
   }
 
   /** What the plan request says while the copy is behind (P-W5): the manual pages and the settings keys that changed. */
-  planNote(): { pages: string[]; keys: string[] } | null {
+  planNote(): { pages: string[]; keys: string[]; held?: string[] } | null {
     if (!this.enabled) return null
     const last = this.shown()
     const pages = last?.state === 'behind' ? last.pages.filter(p => typeof p === 'string') : []
     const keys = this.changed()
-    return pages.length || keys.length ? { pages, keys } : null
+    // The actions the owner's pause holds now (P-W7): the plan proposes none of them.
+    const held = heldActions(this.held())
+    return pages.length || keys.length || held.length ? { pages, keys, ...(held.length ? { held } : {}) } : null
   }
 
   /**
@@ -611,6 +622,36 @@ export class ManualWatch {
     } catch {
       return []
     }
+  }
+
+  /** Whether the owner chose to pause the actions of a changed page (P-W7); off, "tell only", by default. */
+  holdOn(): boolean {
+    return this.d.kv.get(HOLD_KV) === '1'
+  }
+
+  /** The owner's choice (P-W7). Turning it off raises spending: the caller has checked the password. */
+  setHold(on: boolean): void {
+    this.d.kv.set(HOLD_KV, on ? '1' : '0')
+  }
+
+  /**
+   * The pages the copy installed now was last found behind on (P-W7), until a check finds it current or another copy
+   * comes. Not ended by a check that could not tell: an unread manual is no synced copy.
+   */
+  behindPages(): string[] {
+    if (!this.enabled) return []
+    try {
+      const v = JSON.parse(this.d.kv.get(BEHIND_KV) ?? 'null') as { copy?: unknown; pages?: unknown } | null
+      if (!v || v.copy !== this.copy().key || !Array.isArray(v.pages)) return []
+      return v.pages.filter((p): p is string => typeof p === 'string' && isSlug(p.replace(/ \((?:new|gone)\)$/, '')))
+    } catch {
+      return []
+    }
+  }
+
+  /** The pages whose actions the executor holds now (P-W7): none while the owner chose "tell only". */
+  held(): string[] {
+    return this.holdOn() ? this.behindPages() : []
   }
 
   /** The morning summary's line: today's check; "could not check" when there is none for today of this copy. */

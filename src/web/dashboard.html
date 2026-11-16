@@ -91,6 +91,8 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 .kpi .v{font-size:20px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums}
 .kpi .s{font-size:11px;color:var(--dim);margin-top:2px}
 .kpi .strat{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.kpi .strat.hold{align-items:center}
+.kpi .strat.hold select{max-width:100%}
 #adviceText{width:100%;min-height:76px;padding:8px 10px;background:#0d1119;border:1px solid var(--line);border-radius:8px;color:var(--fg);font:13px/1.4 inherit;font-family:inherit;resize:vertical}
 #adviceText:focus{outline:none;border-color:var(--acc)}
 #speakBox{display:flex;gap:8px;align-items:center}
@@ -297,7 +299,9 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
     <div class="card kpi"><div class="k">Spent today<i class="info" data-tip="k_spent">i</i></div><div class="v" id="kSpent">…</div><div class="s" id="kSpentS"></div></div>
     <div class="card kpi strat-card"><div class="k">Strategist · all agents<i class="info" data-tip="k_strat">i</i></div>
       <div class="strat"><select id="sModel" class="btn sm" aria-label="Model"></select><select id="sEffort" class="btn sm" aria-label="Effort"></select><button id="stratApply" class="btn sm go" hidden>Apply</button></div>
-      <div class="s" id="kModelS"></div></div>
+      <div class="s" id="kModelS"></div>
+      <div class="strat hold"><label for="holdSel" class="s">When FoxLeague changes its rules</label><select id="holdSel" class="btn sm"><option value="tell">tell me only</option><option value="pause">also pause the actions whose rules changed until the agents are synced</option></select><i class="info" data-tip="manual_hold">i</i></div>
+      <div class="s" id="holdNote" hidden></div></div>
   </section>
 
 
@@ -579,10 +583,28 @@ function renderManual() {
   $('manualText').textContent = text
 }
 
+// The owner's choice when FoxLeague changes its rules (P-W7) and what it pauses now: the agent's own words and action names.
+function renderHold() {
+  const h = S.instance.manualHold || { on: false, held: [] }
+  $('holdSel').value = h.on ? 'pause' : 'tell'
+  const note = h.on && h.held.length ? 'Paused now until the agents are synced: ' + h.held.join(', ') : ''
+  $('holdNote').hidden = !note
+  $('holdNote').textContent = note
+}
+// Pausing lowers spending: one click. Ending the pause lets those actions run again: the password.
+$('holdSel').onchange = async () => {
+  const on = $('holdSel').value === 'pause'
+  if (on) return act('Actions of a changed page paused until the agents are synced', () => api('POST', '/api/manual-hold', { on })).then(renderHold)
+  const password = await askPassword('Stop pausing', 'The actions of a page FoxLeague changed run again before the agents are synced. Your password confirms.')
+  if (!password) return renderHold()
+  act('Tell only: no action is paused', () => api('POST', '/api/manual-hold', { on, password })).then(renderHold)
+}
+
 function renderHeader() {
   const i = S.instance
   renderUpdate()
   renderManual()
+  renderHold()
   const live = i.liveMode && i.liveEnabled
   $('modePill').textContent = live ? 'LIVE' : i.liveMode ? 'live blocked by the server' : 'dry run'
   $('modePill').className = 'pill ' + (live ? 'live' : 'dry')
@@ -1221,6 +1243,10 @@ const TIPS = {
   manual: ['FoxLeague manual check', `<p>Your agents play by FoxLeague's player manual: a copy of it comes with this version of the agent. From the hour of the morning summary the agent reads the manual FoxLeague serves and compares each page your agents read with its copy, again every hour while they match. It asks FoxLeague's public read-only server and sends nothing of yours. Each snapshot also compares FoxLeague's game settings with the ones the copy was built against: when FoxLeague adds or removes a setting, the manual is checked at once.</p>
     <p>When a page changed, a new one came or one went, this notice names the pages (up to eight, then how many more); a changed setting is named the same way. Telegram tells you at once in one line; the morning summary says it again. Until a version of the agent brings the new manual, each plan is told which pages and settings changed and that the live values in its snapshot win over the manual there. The maintainer runs sync-manual, checks the new pages and releases it. On a server you deploy yourself, deploy that version. The notice about the old copy goes with the update and the agent checks the new copy the same day.</p>
     <p>When FoxLeague could not be read, the notice says that the manual could not be checked and why. That never counts as up to date: the agent asks again each hour, up to four times a day, then the next day. Nothing shows while the copy matches. To switch the check off, set AGENT_MANUAL_CHECK=0 in the env file and restart.</p>`],
+  manual_hold: ['When FoxLeague changes its rules', `<p>What happens when the manual check finds that FoxLeague changed a page of its manual since your agents' copy.</p>
+    <p><b>Tell me only</b> (the default): Telegram and this page tell you, each plan is told which pages changed and reads their current text as data, and the agents keep playing.</p>
+    <p><b>Also pause the actions whose rules changed</b>: until a version of the agent brings the new copy, your agents do not take the actions of a changed page. The Shop page pauses buying; the Marketplace page bids and listings; the 1v1 page new challenges and accepting one; the Tournaments page creating a tournament and joining one; the Fusion page fusions and both waivers. Payments already made are still confirmed, refunds and leaving still run, and your own requests are never paused. A check that could not read FoxLeague does not end the pause; a check that finds the copy up to date again does.</p>
+    <p>Pausing is one click. Going back to tell only lets those actions run again, so it asks for your password.</p>`],
   mode: ['Dry run or live', `<p>One mode for every agent.</p>
     <p><b>Dry run:</b> the agent plans, checks each action against the game rules and your caps, then simulates it on chain. Nothing is signed or sent. The spend goes to a separate dry-run ledger.</p>
     <p><b>Live:</b> actions are signed and sent with real EGLD and FOXSY, inside the same caps.</p>
