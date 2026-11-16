@@ -118,6 +118,13 @@ export function shopPriceLine(s: AgentSnapshot): string | null {
   return `Shop prices for this wallet (FoxLeague's MetaStaking discount${live ? ' is live' : ''}: your rate ${bp} basis points, ${bp / 100} percent off, taken once on each payment's total; the executor pays these, FoxLeague takes no other amount): ${items.map(mine).join(', ')}; medicine at FoxLeague's quote, ${bp / 100} percent off its days' full cost`
 }
 
+/** A rival's last acceptances of a stranger's targeted 1v1 (P3b): when, to the minute, and how long after it was sent. */
+function acceptedText(last: { at: string; afterMin: number | null }[] | undefined): string {
+  const at = (iso: string) => (Number.isFinite(Date.parse(iso)) ? `${new Date(Date.parse(iso)).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'unknown time')
+  const one = (x: { at: string; afterMin: number | null }) => `${at(x.at)}${typeof x.afterMin === 'number' ? `, ${x.afterMin} min after it was sent` : ''}`
+  return last?.length ? ` (${last.length === 1 ? 'last' : 'last ones'}: ${last.map(one).join('; ')})` : ''
+}
+
 /** A rival's formations in its last revealed matches (written by FoxLeague's server, still read as data). */
 function formationsText(f: string[] | null): string {
   return f?.length ? `their last formations, newest first: ${f.map(x => txt(x, 12)).join(', ')}` : 'their formations: unknown'
@@ -549,7 +556,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // The threshold every level's 1v1s against a known team are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: the ELO expectation and the lineup strength averaged, and never above what the lineups alone give (a rival's low ELO lifts no chance), ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged; a targeted 1v1 played within 2 minutes of its creation counts as arranged): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged` : ', took no 1v1 in 7 days it had not arranged'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
+    out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged: a targeted 1v1 it accepted from a team it had not played a 1v1 against before, more than 2 minutes after it was sent; a pair that plays again and again arranges it, and an open challenge a team took from the list is said apart): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged${acceptedText(u.acceptedLast)}` : ', took no 1v1 in 7 days it had not arranged'}${u.openTaken7d ? `, took ${u.openTaken7d} open challenge${u.openTaken7d === 1 ? '' : 's'}` : ''}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')

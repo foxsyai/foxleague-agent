@@ -175,7 +175,8 @@ export interface AgentSnapshot {
   } | null
   market: MarketSummary
   /**
-   * Teams to challenge: the ones that take 1v1s they had not arranged first (`accepted7d`), then the nearest by ELO. `matches` is the
+   * Teams to challenge: the ones that take 1v1s they had not arranged first (`accepted7d`: targeted 1v1s accepted from a
+   * team never played before, takersOf; `acceptedLast` the newest three, `openTaken7d` open challenges taken apart), then the nearest by ELO. `matches` is the
    * team's record so far (its activity is the change over days); every agent also reads each team's lineup
    * strength and its own win chance against it.
    */
@@ -191,7 +192,7 @@ export interface AgentSnapshot {
   casualToday?: number
   /** For the next upcoming matches: the rival's formations in its last revealed matches, newest first; null when unknown. */
   rivalFormations?: { tournamentId: number; opponent: string; formations: string[] | null; strength?: number | null }[]
-  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null; bestXiOvr?: number | null })[]
+  leaderboardNeighbours: (Pick<UserProfile, 'id' | 'wallet_address' | 'team_name' | 'elo_rating' | 'league'> & { accepted7d: number; acceptedLast?: { at: string; afterMin: number | null }[]; openTaken7d?: number; matches?: number; strength?: number | null; winChance?: number | null; played?: { matches: number; days: number } | null; bestXiOvr?: number | null })[]
   /**
    * Planning only, added by the service from the activity log with the executor's own helpers (src/executor/rivals.ts):
    * per rival, the 1v1s this agent played or entered in the last 7 days and, at the weekly limit, when it is free
@@ -640,6 +641,38 @@ async function upcomingRivalIds(fox: FoxLeague, upcoming: UpcomingMatches | null
 /** A targeted 1v1 played this soon after its creation was arranged between the two teams (OP-1). */
 export const ARRANGED_MS = 2 * 60_000
 
+/**
+ * Who answers a 1v1 a stranger sends it (P3b, the owner's word of 2026-11-16), from FoxLeague's completed 1v1s: per team,
+ * the targeted 1v1s of the last 7 days it accepted from a team it had not played a 1v1 against before in the rows read,
+ * not arranged (ARRANGED_MS), newest first with when it was played and how long after it was sent; and apart, the open
+ * challenges of strangers it took. Why: an open challenge is one a team chose from the list, and says nothing of whether
+ * it answers one sent to it (user 380 took ten open ones in the week to 16 Nov and answered none of nine targeted); and
+ * two teams that play each other again and again arranged it, however long the taker took (OP-1: 281 of 294 targeted
+ * 1v1s accepted, half within 36 seconds), so only their first meeting can count. Older rows are history only.
+ */
+export function takersOf(rows: Tournament[], now: Date): Map<number, { accepted: { at: string; afterMin: number | null }[]; open: number }> {
+  const weekAgo = now.getTime() - 7 * 86_400_000
+  const met = new Set<string>()
+  const out = new Map<number, { accepted: { at: string; afterMin: number | null }[]; open: number }>()
+  const when = (t: Tournament) => Date.parse(t.completed_at ?? '')
+  for (const t of rows.filter(x => x.max_teams === 2 && Number.isFinite(when(x))).sort((a, b) => when(a) - when(b))) {
+    const taker = [t.winner_user_id, t.runner_up_user_id].find(u => typeof u === 'number' && u !== t.creator_user_id)
+    if (typeof taker !== 'number' || typeof t.creator_user_id !== 'number') continue
+    const pair = `${Math.min(taker, t.creator_user_id)}:${Math.max(taker, t.creator_user_id)}`
+    const before = met.has(pair)
+    met.add(pair)
+    if (before || when(t) < weekAgo || arranged(t)) continue
+    const row = out.get(taker) ?? { accepted: [], open: 0 }
+    if (t.targeted || typeof t.target_user_id === 'number') {
+      const started = Date.parse(t.started_at ?? '')
+      const lag = (started - Date.parse(t.created_at)) / 60_000
+      row.accepted.unshift({ at: new Date(Number.isFinite(started) ? started : when(t)).toISOString(), afterMin: Number.isFinite(lag) && lag >= 0 ? Math.round(lag) : null })
+    } else row.open++
+    out.set(taker, row)
+  }
+  return out
+}
+
 /** Whether a completed 1v1 was arranged: targeted and started within ARRANGED_MS of its creation. Unknown times: not arranged. */
 export function arranged(t: Pick<Tournament, 'targeted' | 'target_user_id' | 'created_at' | 'started_at'>): boolean {
   if (!t.targeted && typeof t.target_user_id !== 'number') return false
@@ -821,29 +854,21 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
   }
 
-  // Who accepts 1v1s: the side of a 1v1 completed in the last 7 days that did not create it. A targeted
-  // challenge to a team that never accepts only locks the stake until the deadline. A targeted 1v1 played within
-  // ARRANGED_MS of its creation was arranged between the two teams first, and says nothing of whether that team takes
-  // a stranger's challenge (owner, 2026-11-06, OP-1: 281 of 294 targeted 1v1s accepted, half within 36 seconds, against
-  // 2 of the agents' 233).
-  const weekAgo = now.getTime() - 7 * 86_400_000
-  const accepted = new Map<number, number>()
-  for (const t of doneChallenges ?? []) {
-    if (t.max_teams !== 2 || !t.completed_at || new Date(t.completed_at).getTime() < weekAgo) continue
-    if (arranged(t)) continue
-    const taker = [t.winner_user_id, t.runner_up_user_id].find(u => typeof u === 'number' && u !== t.creator_user_id)
-    if (typeof taker === 'number') accepted.set(taker, (accepted.get(taker) ?? 0) + 1)
-  }
+  // Who answers a targeted 1v1 from a stranger (takersOf): a targeted challenge to a team that never does only locks the
+  // stake and the one 1v1 slot until the deadline.
+  const took = takersOf(doneChallenges ?? [], now)
+  const accepted = new Map([...took].map(([id, t]) => [id, t.accepted.length]))
   const myElo = profile?.elo_rating ?? 1200
   const gap = (u: { elo_rating: number }) => Math.abs(u.elo_rating - myElo)
   const others = (board?.users ?? []).filter(u => u.wallet_address !== address && u.team_name && u.id !== profile?.id)
   const ovrOf = (u: UserProfile) => (typeof u.best_xi_ovr === 'number' && Number.isFinite(u.best_xi_ovr) ? u.best_xi_ovr : null)
-  const boardOvrs = board ? { all: others.map(ovrOf).filter((v): v is number => v !== null), takers: others.filter(u => (accepted.get(u.id) ?? 0) > 0).map(ovrOf).filter((v): v is number => v !== null) } : undefined
+  // A range is weighed against the teams that take a stranger's 1v1, targeted or open.
+  const boardOvrs = board ? { all: others.map(ovrOf).filter((v): v is number => v !== null), takers: others.filter(u => (took.get(u.id)?.accepted.length ?? 0) + (took.get(u.id)?.open ?? 0) > 0).map(ovrOf).filter((v): v is number => v !== null) } : undefined
   // Up to 6 teams that accept 1v1s and are not 100 or more ELO above (the executor refuses those), then the nearest.
   const takers = others.filter(u => (accepted.get(u.id) ?? 0) > 0 && u.elo_rating < myElo + 100).sort((a, b) => gap(a) - gap(b)).slice(0, 6)
   const nearest = others.filter(u => !takers.includes(u)).sort((a, b) => gap(a) - gap(b)).slice(0, 10 - takers.length)
   const leaderboardNeighbours: AgentSnapshot['leaderboardNeighbours'] = [...takers, ...nearest]
-    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0, matches: (u.matches_won ?? 0) + (u.matches_drawn ?? 0) + (u.matches_lost ?? 0), bestXiOvr: typeof u.best_xi_ovr === 'number' && Number.isFinite(u.best_xi_ovr) ? u.best_xi_ovr : null }))
+    .map(u => ({ id: u.id, wallet_address: u.wallet_address, team_name: u.team_name, elo_rating: u.elo_rating, league: u.league, accepted7d: accepted.get(u.id) ?? 0, ...(took.get(u.id)?.accepted.length ? { acceptedLast: took.get(u.id)!.accepted.slice(0, 3) } : {}), ...(took.get(u.id)?.open ? { openTaken7d: took.get(u.id)!.open } : {}), matches: (u.matches_won ?? 0) + (u.matches_drawn ?? 0) + (u.matches_lost ?? 0), bestXiOvr: typeof u.best_xi_ovr === 'number' && Number.isFinite(u.best_xi_ovr) ? u.best_xi_ovr : null }))
   if (opts.research && registered) {
     // Our eleven as the engine sees it today (synced stats scaled by condition), against each rival at full condition.
     const mine = (team?.lineup ?? []).reduce((sum, n) => {

@@ -2010,7 +2010,7 @@ Checked read-only on 2026-10-26, after the owner upgraded mainnet:
   the one the agent uses (the switch only offers `POST /api/tournaments/challenges/authorize` and `createAndJoin`).
 - **One team OVR, the best XI OVR** (#541, #555): every team answer and leaderboard row carries `best_xi_ovr` (and
   `best_xi_formation`); `team_overall` is gone from the team answer (the client keeps it 0). The agent shows each rival's
-  best XI OVR and counts how many leaderboard teams, and how many that took a 1v1 in 7 days they had not arranged (since 2026-11-06), its suggested range lets
+  best XI OVR and counts how many leaderboard teams, and how many that took a 1v1 in 7 days they had not arranged (since 2026-11-06; since 2026-11-16 a stranger's 1v1 only, targeted or open, P3b), its suggested range lets
   in; the import preview shows the best XI OVR.
 - **Widening a range** (#542, `POST /api/tournaments/{id}/ovr-range`, `ovr_range.rs` `widen_refusal`): the creator (or
   an admin) may widen the range of its open tournament or challenge while it is open for joining (status open, not past

@@ -98,9 +98,11 @@ the normal tick).
   team this week, how its own challenges to that team fared and when a limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). Every level may play a 1v1 three ways. A challenge to a named team is taken almost only
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
-  FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within
-  2 minutes of its creation counts as arranged); a challenge to a team that never answers only locks the stake until
-  its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
+  FoxLeague's public results show taking challenges it had not arranged in the last 7 days: a challenge sent to it by a
+  team it had never played a 1v1 against, accepted more than 2 minutes after it was sent (two teams that play each
+  other again and again arranged it; an open challenge a team took from the list is shown apart). The plan sees when
+  that team last accepted one, so it can send its own at that hour. A challenge to a team that never answers only locks
+  the stake until its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
   out at your team's own best XI OVR and starts about 10 percent under it (both ends, always). The teams that take one
   tend to be the strongest its range lets in, so it is never the agent's default 1v1: it posts one only when the squad
   needs competitive matches it cannot get from a targeted challenge, a tournament or ranked. Then FoxLeague itself keeps every stronger team out, and the agent may post one at any of your amounts and as
