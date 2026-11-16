@@ -15,6 +15,7 @@ import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { auctionCeiling } from '../executor/rules.ts'
+import { named as namedList } from '../foxleague/config-watch.ts'
 import { SUBMIT_PLAN_TOOL_DESCRIPTION, SYSTEM_PROMPT } from './prompt.ts'
 
 export interface Plan {
@@ -330,6 +331,27 @@ export interface PlanInput {
   dryRun: boolean
   /** A one-off request from the owner (Telegram /do), planned instead of a routine tick. */
   ownerRequest?: string
+  /** While the agents' copy is behind FoxLeague: the manual pages and settings keys that changed (ManualWatch.planNote). */
+  watch?: { pages: string[]; keys: string[] } | null
+}
+
+/** A page or a key as the watch names them (`mechanics/shop (new)`, `elo_pair_cap (new)`): nothing else is written. */
+const NOTE_PAGE = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}(?: \((?:new|gone)\))?$/
+const NOTE_KEY = /^[A-Za-z0-9_]+(?:\[\])?(?:\.[A-Za-z0-9_]+(?:\[\])?){0,7}(?: \((?:new|gone)\))?$/
+
+/**
+ * While the agents' copy is behind FoxLeague (audit 2026-11-16, P-W5): the plan is told which manual pages and settings
+ * keys changed and that on those topics the snapshot and the executor win over the manual in its instructions. Written
+ * here, in the request, never in the cached system prompt; it names only slugs and keys of their shape, at most eight
+ * of each.
+ */
+function watchNote(w: PlanInput['watch']): string {
+  const shaped = (list: unknown, re: RegExp) => (Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string' && x.length <= 140 && re.test(x)) : [])
+  const pages = shaped(w?.pages, NOTE_PAGE)
+  const keys = shaped(w?.keys, NOTE_KEY)
+  if (!pages.length && !keys.length) return ''
+  const what = [pages.length ? `its manual (pages: ${namedList(pages)})` : '', keys.length ? `its game settings (keys: ${namedList(keys)})` : ''].filter(Boolean).join(' and ')
+  return `## FoxLeague changed since your game manual\nFoxLeague changed ${what} since the copy in your instructions was made. On those topics the snapshot's live values and the executor's refusals win over the manual: plan by the snapshot lines and adapt to a refusal, never to the manual's older text.`
 }
 
 /**
@@ -410,6 +432,7 @@ export function renderPlanRequest(p: PlanInput): string {
     last
       ? `## Your previous plan (${last.at.slice(0, 16)} UTC, in full)\nYour own words from then. The snapshot below is newer: where they differ, the snapshot is right. Carry an intention forward only while it still makes sense, and do not repeat a step the activity above shows as done or refused. An intention for later that still holds (saving for an entry, a fusion when a card arrives, a tournament to watch): say it again in your new summary, so the next plan sees it too.\n${txt(last.summary.replace(/\nmodel cost \$[\s\S]*$/, ''), PREVIOUS_PLAN_CHARS)}`
       : '',
+    watchNote(p.watch),
     SNAPSHOT_HEADING,
     '<<<SNAPSHOT',
     // The agent's tick: the first start of each free gap leaves room for this plan's actions to run (R74A-2).

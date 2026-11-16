@@ -271,11 +271,14 @@ async function main(): Promise<void> {
         console.error(undecidedText(undecided))
         process.exit(2)
       }
+      // The keys of FoxLeague's live game settings go into the record (P-W8): read before anything is written, so a
+      // failed read leaves the copy and its record as they were.
+      const settings = await new FoxLeague(cfg.foxleagueUrl, cfg.foxleagueRps).config()
       const out = join(REPO_ROOT, 'src', 'strategist', 'manual.md')
       writeFileSync(out, text)
-      writeFileSync(RECORD_FILE, `${JSON.stringify(manualRecord(repo, MANUAL_BRANCH, text), null, 2)}\n`)
+      writeFileSync(RECORD_FILE, `${JSON.stringify(manualRecord(repo, MANUAL_BRANCH, text, settings), null, 2)}\n`)
       console.log(`Wrote ${out}: ${pages} pages, ${Math.round(text.length / 1024)} KB (about ${Math.round(text.length / 2.7 / 1000)}k tokens; tables run about 2.7 characters a token), manual at ${commit}.`)
-      console.log(`Wrote ${RECORD_FILE}: the page record the daily check compares FoxLeague's manual with.`)
+      console.log(`Wrote ${RECORD_FILE}: the page record the check compares FoxLeague's manual with, and the keys of its game settings.`)
       console.log('Commit both and deploy them; the strategist reads the manual at start.')
       return
     }

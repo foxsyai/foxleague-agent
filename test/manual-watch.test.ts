@@ -339,7 +339,8 @@ test('MW-7 the dashboard shows the notice with its info bubble', async () => {
   const tips = html.slice(html.indexOf('\nconst TIPS = {'), html.indexOf('\n}\n', html.indexOf('\nconst TIPS = {')))
   const bubble = tips.slice(tips.indexOf("\n  manual: ['FoxLeague manual check',"), tips.indexOf('`],', tips.indexOf("\n  manual: ['FoxLeague manual check',")))
   assert.ok(bubble.length > 100, 'the bubble is in TIPS')
-  assert.match(bubble.replace(/\s+/g, ' '), /once a day/i)
+  // Every hour since the audit of 2026-11-16 (MNT-5): the check runs through the day.
+  assert.match(bubble.replace(/\s+/g, ' '), /every hour/i)
   assert.match(bubble.replace(/\s+/g, ' '), /sync-manual/)
   assert.doesNotMatch(bubble, /—|, and |, or |\bbots?\b/i)
 
@@ -385,7 +386,8 @@ test('MW-7 the dashboard shows the notice with its info bubble', async () => {
 test('MW-8 sync-manual writes the page record next to manual.md, and the committed record belongs to the committed manual.md', () => {
   const cli = raw('src/cli.ts')
   const sync = cli.slice(cli.indexOf("case 'sync-manual': {"), cli.indexOf("case 'snapshot':"))
-  assert.match(sync, /writeFileSync\(out, text\)\n\s+writeFileSync\(RECORD_FILE, `\$\{JSON\.stringify\(manualRecord\(repo, MANUAL_BRANCH, text\), null, 2\)\}\\n`\)/)
+  // Since the audit of 2026-11-16 (P-W8) the record also names the keys of FoxLeague's game settings, read first.
+  assert.match(sync, /writeFileSync\(out, text\)\n\s+writeFileSync\(RECORD_FILE, `\$\{JSON\.stringify\(manualRecord\(repo, MANUAL_BRANCH, text, settings\), null, 2\)\}\\n`\)/)
   const manual = raw('src/strategist/manual.md')
   const record = JSON.parse(raw('src/strategist/manual-pages.json')) as ManualRecord
   assert.equal(record.manual, sha256(manual), 'the record is of this manual.md: after a sync-manual without it, run sync-manual again')
@@ -443,7 +445,7 @@ test('MW-10 the guides and the record say what the line means and what the maint
   assert.match(flat('docs/SERVER.md'), /`AGENT_MANUAL_CHECK=0`/)
   assert.match(raw('.env.example'), /^# AGENT_MANUAL_CHECK=1$/m)
   assert.match(raw('src/config.ts'), /manualCheck: flag\('AGENT_MANUAL_CHECK', true\)/)
-  assert.match(flat('site/src/content/docs/play/safety.md'), /once a day/i)
+  assert.match(flat('site/src/content/docs/play/safety.md'), /every hour/i)
 
   const review = raw('docs/SECURITY-REVIEW.md')
   const start = review.indexOf("\n## Daily check of FoxLeague's manual (2026-11-15)\n")
