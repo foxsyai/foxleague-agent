@@ -66,7 +66,10 @@ the normal tick).
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
   platform time slot, sized from what recently filled. It names the start to the minute, 2 hours to 30 days ahead, so a
   narrow gap in a busy calendar can still hold a small tournament. It reads the free starts from FoxLeague's own
-  calendar. Each of your agents is offered a start of its own, so two of them do not plan the same minute. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
+  calendar. Each of your agents is offered a start of its own, so two of them do not plan the same minute. It reads that
+  calendar again for its own start when it creates, so a start another team is creating at is refused before anything
+  is paid. Until registration closes, each plan checks again whether a tournament it created still fits the squad and
+  its other tournaments; it may leave one that no longer does, and its entry comes back. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
   deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by starting eleven and rating: an eleven more than 10 percent stronger than yours counts as clearly stronger whatever its rating). It
   refuses a schedule that would wear the squad out, counting the largest group a Groups + Knockout can draw, judged on the condition the squad will have at the start (rested
   until then, less what its other tournaments cost before it). FoxLeague plays one match of the whole tournament at a
