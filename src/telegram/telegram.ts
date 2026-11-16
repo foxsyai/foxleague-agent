@@ -210,21 +210,29 @@ export function parseCommand(text: string): { command: string; args: string[]; r
 /**
  * Every message to the owner without invisible characters: a FoxLeague answer can quote a title another player wrote,
  * and a right-to-left override or a zero-width character in it would change what the owner reads (audit of PR #51,
- * R52A-I1). Control and format characters become a space; line breaks stay.
+ * R52A-I1). Control and format characters become a space; line breaks stay. Half of a character (a lone surrogate)
+ * becomes a replacement character: Telegram refuses a message that holds one, and a refusal drops it for good (ATK-4).
  */
 export function forTelegram(text: string): string {
-  return text.replace(/[\p{Cf}\u2028\u2029]+|(?:(?!\n)\p{Cc})+/gu, ' ')
+  return text.toWellFormed().replace(/[\p{Cf}\u2028\u2029]+|(?:(?!\n)\p{Cc})+/gu, ' ')
 }
 
-function split(text: string): string[] {
+/** A message in chunks Telegram takes: at a line break near the limit, else at the limit, never inside a character (ATK-4). */
+export function split(text: string): string[] {
   if (text.length <= MAX_LEN) return [text]
   const out: string[] = []
   let rest = text
   while (rest.length > MAX_LEN) {
-    const cut = rest.lastIndexOf('\n', MAX_LEN) > MAX_LEN / 2 ? rest.lastIndexOf('\n', MAX_LEN) : MAX_LEN
+    const cut = rest.lastIndexOf('\n', MAX_LEN) > MAX_LEN / 2 ? rest.lastIndexOf('\n', MAX_LEN) : whole(rest, MAX_LEN)
     out.push(rest.slice(0, cut))
     rest = rest.slice(cut).replace(/^\n/, '')
   }
   if (rest) out.push(rest)
   return out
+}
+
+/** Where to cut `s` at `at` units or just before, so the two halves of a character stay together. */
+function whole(s: string, at: number): number {
+  const code = s.charCodeAt(at - 1)
+  return code >= 0xd800 && code <= 0xdbff ? at - 1 : at
 }

@@ -241,11 +241,13 @@ function memoryKv() {
   return { get: (k: string) => m.get(k) ?? null, set: (k: string, v: string) => void m.set(k, v), m }
 }
 
-test('MW-5 it runs at most once a day: a second call, a call meanwhile, a restart and a failed check ask nothing more that day', async () => {
+test('MW-5 through the day: within the hour a second call, a call meanwhile and a restart ask nothing more; a current copy is checked again each hour, a behind one stays so for the day and a failed check is tried again up to 4 times a day', async () => {
+  // Until the audit of 2026-11-16 the check was made once a day whatever it found (MNT-5, MNT-6): this test pinned
+  // that. It now holds the check through the day.
   const record = recorded()
   const kv = memoryKv()
   const live = foxleagueMcp()
-  const watch = (fetch: McpFetch) => Object.assign(new ManualWatch({ enabled: true, base: BASE, zone: 'UTC', kv }), { fetch, readManual: () => MANUAL, readRecord: () => record, gapMs: 0 })
+  const watch = (fetch: McpFetch, store = kv) => Object.assign(new ManualWatch({ enabled: true, base: BASE, zone: 'UTC', kv: store }), { fetch, readManual: () => MANUAL, readRecord: () => record, gapMs: 0 })
   const morning = Date.parse('2026-11-16T07:00:00Z')
   const w = watch(live.fetch)
   const [a, b] = await Promise.all([w.today(morning), w.today(morning)])
@@ -253,24 +255,38 @@ test('MW-5 it runs at most once a day: a second call, a call meanwhile, a restar
   assert.deepEqual(a, b)
   const set = live.seen.length
   assert.equal(set, 5)
+  await w.today(morning + 30 * 60_000)
+  await watch(live.fetch).today(morning + 50 * 60_000)
+  assert.equal(live.seen.length, set, 'within the hour: no second request set, also after a restart')
   await w.today(morning + 6 * 3600_000)
-  await watch(live.fetch).today(morning + 12 * 3600_000)
-  assert.equal(live.seen.length, set, 'the same day: no second request set, also after a restart')
+  assert.equal(live.seen.length, 2 * set, 'a copy found current is checked again at a later hourly look')
   await w.today(Date.parse('2026-11-17T07:00:00Z'))
-  assert.equal(live.seen.length, 2 * set, 'the next day: one more')
+  assert.equal(live.seen.length, 3 * set, 'the next day: one more')
 
-  // A failed check is not tried again the same day.
+  // A copy found behind stays so for the day: nothing more is asked until the next day.
+  const fusion = { ...SOURCE, 'mechanics/fusion.mdx': SOURCE['mechanics/fusion.mdx']!.replace('same rarity', 'same rarity, none of them injured') }
+  const newer = foxleagueMcp(fusion)
+  const n = watch(newer.fetch, memoryKv())
+  assert.equal((await n.today(morning))?.state, 'behind')
+  for (let h = 1; h <= 12; h++) assert.equal((await n.today(morning + h * 3600_000))?.state, 'behind')
+  assert.equal(newer.seen.length, set)
+
+  // A failed check is tried again at the hourly looks, at most 4 tries a day, and the next day again.
   const down = foxleagueMcp(SOURCE, SIDEBAR, { answer: () => new Response('', { status: 503 }) })
   const d = watch(down.fetch)
   const day3 = Date.parse('2026-11-18T07:00:00Z')
   assert.equal((await d.today(day3))?.state, 'unknown')
-  assert.equal((await d.today(day3 + 3600_000))?.state, 'unknown')
-  assert.equal(down.seen.length, 1)
+  assert.equal((await d.today(day3 + 30 * 60_000))?.state, 'unknown')
+  assert.equal(down.seen.length, 1, 'not within the hour')
+  for (let h = 1; h <= 8; h++) assert.equal((await d.today(day3 + h * 3600_000))?.state, 'unknown')
+  assert.equal(down.seen.length, 4, 'at most 4 tries a day')
+  await d.today(Date.parse('2026-11-19T07:00:00Z'))
+  assert.equal(down.seen.length, 5, 'the next day: tried again')
   // Switched off (AGENT_MANUAL_CHECK=0): it asks nobody and says nothing.
   const off = Object.assign(new ManualWatch({ enabled: false, base: BASE, zone: 'UTC', kv: memoryKv() }), { fetch: live.fetch })
   assert.equal(await off.today(day3), null)
   assert.equal(off.line(day3), null)
-  assert.equal(live.seen.length, 2 * set)
+  assert.equal(live.seen.length, 3 * set)
 })
 
 function testConfig(dir: string, more: Partial<Config> = {}): Config {
@@ -323,7 +339,8 @@ test('MW-7 the dashboard shows the notice with its info bubble', async () => {
   const tips = html.slice(html.indexOf('\nconst TIPS = {'), html.indexOf('\n}\n', html.indexOf('\nconst TIPS = {')))
   const bubble = tips.slice(tips.indexOf("\n  manual: ['FoxLeague manual check',"), tips.indexOf('`],', tips.indexOf("\n  manual: ['FoxLeague manual check',")))
   assert.ok(bubble.length > 100, 'the bubble is in TIPS')
-  assert.match(bubble.replace(/\s+/g, ' '), /once a day/i)
+  // Every hour since the audit of 2026-11-16 (MNT-5): the check runs through the day.
+  assert.match(bubble.replace(/\s+/g, ' '), /every hour/i)
   assert.match(bubble.replace(/\s+/g, ' '), /sync-manual/)
   assert.doesNotMatch(bubble, /—|, and |, or |\bbots?\b/i)
 
@@ -369,7 +386,8 @@ test('MW-7 the dashboard shows the notice with its info bubble', async () => {
 test('MW-8 sync-manual writes the page record next to manual.md, and the committed record belongs to the committed manual.md', () => {
   const cli = raw('src/cli.ts')
   const sync = cli.slice(cli.indexOf("case 'sync-manual': {"), cli.indexOf("case 'snapshot':"))
-  assert.match(sync, /writeFileSync\(out, text\)\n\s+writeFileSync\(RECORD_FILE, `\$\{JSON\.stringify\(manualRecord\(repo, MANUAL_BRANCH, text\), null, 2\)\}\\n`\)/)
+  // Since the audit of 2026-11-16 (P-W8) the record also names the keys of FoxLeague's game settings, read first.
+  assert.match(sync, /writeFileSync\(out, text\)\n\s+writeFileSync\(RECORD_FILE, `\$\{JSON\.stringify\(manualRecord\(repo, MANUAL_BRANCH, text, settings\), null, 2\)\}\\n`\)/)
   const manual = raw('src/strategist/manual.md')
   const record = JSON.parse(raw('src/strategist/manual-pages.json')) as ManualRecord
   assert.equal(record.manual, sha256(manual), 'the record is of this manual.md: after a sync-manual without it, run sync-manual again')
@@ -427,7 +445,7 @@ test('MW-10 the guides and the record say what the line means and what the maint
   assert.match(flat('docs/SERVER.md'), /`AGENT_MANUAL_CHECK=0`/)
   assert.match(raw('.env.example'), /^# AGENT_MANUAL_CHECK=1$/m)
   assert.match(raw('src/config.ts'), /manualCheck: flag\('AGENT_MANUAL_CHECK', true\)/)
-  assert.match(flat('site/src/content/docs/play/safety.md'), /once a day/i)
+  assert.match(flat('site/src/content/docs/play/safety.md'), /every hour/i)
 
   const review = raw('docs/SECURITY-REVIEW.md')
   const start = review.indexOf("\n## Daily check of FoxLeague's manual (2026-11-15)\n")
@@ -518,21 +536,24 @@ test('R72A-2 a new copy of the manual brought the same day is checked again, and
   assert.equal(b.view(afternoon).text, null)
   assert.equal(b.view(afternoon).state, 'current')
   assert.equal(b.line(afternoon), null, 'the summary is quiet: the new copy matches')
-  // Still at most once a day per copy: another call and a restart on copy B ask nothing more.
-  await b.today(afternoon + 3600_000)
-  await watch(manualB, recordB).today(afternoon + 2 * 3600_000)
+  // Still once within the hour per copy: another call and a restart on copy B ask nothing more (since the audit of
+  // 2026-11-16 a copy found current is checked again an hour later, MNT-5).
+  await b.today(afternoon + 20 * 60_000)
+  await watch(manualB, recordB).today(afternoon + 40 * 60_000)
   assert.equal(live.seen.length, 2 * set)
+  await b.today(afternoon + 2 * 3600_000)
+  assert.equal(live.seen.length, 3 * set, 'an hour on, the current copy is checked again')
 
   // The next day a copy with a record of another manual.md is installed ("could not check" without asking), then the
   // fixed record: the same manual.md, so the record is part of what is compared too.
   const day2 = Date.parse('2026-11-17T09:00:00Z')
   const wrong = watch(manualB, recordA)
   assert.match(String((await wrong.today(day2))?.why), /not the one of the agents' manual/)
-  assert.equal(live.seen.length, 2 * set, 'FoxLeague is not asked without a record of this manual.md')
+  assert.equal(live.seen.length, 3 * set, 'FoxLeague is not asked without a record of this manual.md')
   const fixed = watch(manualB, recordB)
   assert.equal(fixed.view(day2).text, null, 'the line about the wrong record is not shown')
   assert.equal((await fixed.today(day2 + 3600_000))?.state, 'current')
-  assert.equal(live.seen.length, 3 * set)
+  assert.equal(live.seen.length, 4 * set)
 })
 
 test('R72A-3 while the day\'s check runs, the dashboard shows the check before it, never its restart marker', async () => {

@@ -3,6 +3,7 @@
 // parseAction and the executor's checks.
 
 import { atomicToFloat, decimalToAtomic } from '../util/encoding.ts'
+import { cut } from '../util/text.ts'
 import { readFileSync } from 'node:fs'
 import Anthropic from '@anthropic-ai/sdk'
 import { parseAction, type PlannedAction } from '../executor/actions.ts'
@@ -14,6 +15,7 @@ import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { auctionCeiling } from '../executor/rules.ts'
+import { named as namedList } from '../foxleague/config-watch.ts'
 import { SUBMIT_PLAN_TOOL_DESCRIPTION, SYSTEM_PROMPT } from './prompt.ts'
 
 export interface Plan {
@@ -329,6 +331,27 @@ export interface PlanInput {
   dryRun: boolean
   /** A one-off request from the owner (Telegram /do), planned instead of a routine tick. */
   ownerRequest?: string
+  /** While the agents' copy is behind FoxLeague: the manual pages and settings keys that changed (ManualWatch.planNote). */
+  watch?: { pages: string[]; keys: string[] } | null
+}
+
+/** A page or a key as the watch names them (`mechanics/shop (new)`, `elo_pair_cap (new)`): nothing else is written. */
+const NOTE_PAGE = /^[a-z0-9][a-z0-9_-]*(?:\/[a-z0-9][a-z0-9_-]*){0,4}(?: \((?:new|gone)\))?$/
+const NOTE_KEY = /^[A-Za-z0-9_]+(?:\[\])?(?:\.[A-Za-z0-9_]+(?:\[\])?){0,7}(?: \((?:new|gone)\))?$/
+
+/**
+ * While the agents' copy is behind FoxLeague (audit 2026-11-16, P-W5): the plan is told which manual pages and settings
+ * keys changed and that on those topics the snapshot and the executor win over the manual in its instructions. Written
+ * here, in the request, never in the cached system prompt; it names only slugs and keys of their shape, at most eight
+ * of each.
+ */
+function watchNote(w: PlanInput['watch']): string {
+  const shaped = (list: unknown, re: RegExp) => (Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string' && x.length <= 140 && re.test(x)) : [])
+  const pages = shaped(w?.pages, NOTE_PAGE)
+  const keys = shaped(w?.keys, NOTE_KEY)
+  if (!pages.length && !keys.length) return ''
+  const what = [pages.length ? `its manual (pages: ${namedList(pages)})` : '', keys.length ? `its game settings (keys: ${namedList(keys)})` : ''].filter(Boolean).join(' and ')
+  return `## FoxLeague changed since your game manual\nFoxLeague changed ${what} since the copy in your instructions was made. On those topics the snapshot's live values and the executor's refusals win over the manual: plan by the snapshot lines and adapt to a refusal, never to the manual's older text.`
 }
 
 /**
@@ -409,6 +432,7 @@ export function renderPlanRequest(p: PlanInput): string {
     last
       ? `## Your previous plan (${last.at.slice(0, 16)} UTC, in full)\nYour own words from then. The snapshot below is newer: where they differ, the snapshot is right. Carry an intention forward only while it still makes sense, and do not repeat a step the activity above shows as done or refused. An intention for later that still holds (saving for an entry, a fusion when a card arrives, a tournament to watch): say it again in your new summary, so the next plan sees it too.\n${txt(last.summary.replace(/\nmodel cost \$[\s\S]*$/, ''), PREVIOUS_PLAN_CHARS)}`
       : '',
+    watchNote(p.watch),
     SNAPSHOT_HEADING,
     '<<<SNAPSHOT',
     // The agent's tick: the first start of each free gap leaves room for this plan's actions to run (R74A-2).
@@ -498,8 +522,11 @@ export class Strategist {
    * effort can take minutes, longer than one plain request may wait. The deadline covers the whole answer; `cancel`
    * ends the request earlier (the service's stop, for a shadow plan).
    */
-  private async create(params: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
+  private async create(asked: Omit<Anthropic.Beta.MessageCreateParamsNonStreaming, 'model'>, cancel?: AbortSignal): Promise<Anthropic.Beta.BetaMessage> {
     const model = this.model
+    // Well-formed Unicode, whatever text reached the request: half of an emoji left by a cut anywhere makes the API
+    // refuse the whole body as invalid JSON, and every plan of every agent with it (audit 2026-11-16, ATK-4).
+    const params = { ...asked, messages: asked.messages.map(m => (typeof m.content === 'string' ? { ...m, content: m.content.toWellFormed() } : m)) }
     const until = (maxTokens: number): AbortSignal => (cancel ? AbortSignal.any([AbortSignal.timeout(deadlineMs(maxTokens)), cancel]) : AbortSignal.timeout(deadlineMs(maxTokens)))
     const send = (body: Anthropic.Beta.MessageCreateParamsNonStreaming): Promise<Anthropic.Beta.BetaMessage> =>
       this.client.beta.messages.stream(body, { signal: until(body.max_tokens) }).finalMessage()
@@ -576,21 +603,21 @@ export class Strategist {
     const call = response.content.find((b): b is Anthropic.Beta.BetaToolUseBlock => b.type === 'tool_use' && b.name === 'submit_plan')
     if (!call) {
       const text = response.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join(' ')
-      return empty('no_call', `no plan submitted${text ? `: ${text.slice(0, 500)}` : ''}`)
+      return empty('no_call', `no plan submitted${text ? `: ${cut(text, 500)}` : ''}`)
     }
     const submitted = call.input as { summary?: unknown; actions?: unknown }
     const actions: PlannedAction[] = []
     const rejected: Plan['rejected'] = []
     for (const item of Array.isArray(submitted.actions) ? submitted.actions : []) {
       const raw = (item as { action?: unknown })?.action
-      const reason = String((item as { reason?: unknown })?.reason ?? '').slice(0, 300)
+      const reason = cut(String((item as { reason?: unknown })?.reason ?? ''), 300)
       try {
         actions.push({ action: parseAction(raw), reason })
       } catch (err) {
         rejected.push({ raw, error: err instanceof Error ? err.message : String(err) })
       }
     }
-    return { plan: { summary: String(submitted.summary ?? '').slice(0, 2000), actions: actions.slice(0, 12), rejected, usage, stopReason: response.stop_reason }, outcome: 'plan' }
+    return { plan: { summary: cut(String(submitted.summary ?? ''), 2000), actions: actions.slice(0, 12), rejected, usage, stopReason: response.stop_reason }, outcome: 'plan' }
   }
 
   /** The owner's advice or question: a reply, and a strategy proposal when the message gives direction. */
@@ -613,7 +640,7 @@ export class Strategist {
     const known = new Set(input.agents.map(b => b.index))
     // The model names agents the way the owner does (agent 1 = index 0).
     const named = (Array.isArray(raw.agents) ? raw.agents : []).filter((n): n is number => Number.isInteger(n)).map(n => n - 1).filter(i => known.has(i))
-    const strategy = String(raw.strategy ?? '').trim().slice(0, 2000)
+    const strategy = cut(String(raw.strategy ?? '').trim(), 2000)
     if (!strategy) return { reply: reply || '(no answer)', proposal: null, usd: cost }
     return { reply, proposal: { agents: [...new Set(named.length ? named : input.defaultAgents)].sort((a, b) => a - b), strategy, changes: String(raw.changes ?? '').trim() }, usd: cost }
   }

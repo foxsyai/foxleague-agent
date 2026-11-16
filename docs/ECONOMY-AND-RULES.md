@@ -413,6 +413,15 @@ one_v_one_prize_delivery_seconds}`, `training_defaults {xp_threshold_per_level}`
 **Constants**: `rarity_next`, `level_xp_divisor` (200), `nft_bypass_threshold` (18), `foxsy_decimals`
 (18), `foxsy_token_id`, `relayer_addresses`.
 
+**How the agent watches it** (audit 2026-11-16, `src/foxleague/config-watch.ts`): every snapshot fingerprints the
+answer, its keys at every depth and the values of its rules, leaving out what moves with play
+(`relays_remaining_today`, `common_pack_epoch_remaining`, `common_pack_available`, `common_pack_unavailable_reason`,
+`relayer_addresses`). A key added or removed since the agents' copy (`sync-manual` records the key set in
+`src/strategist/manual-pages.json`) runs the manual check at once and is named to the owner and to each plan. A block
+with `live` or `live_from` that no rule of the agent reads (not in `RULED_SWITCHES`) gets a snapshot line with its key,
+its state and its numbers only. On 16 Nov 2026 those were `elo_pair_cap` (from 20 Nov 14:00 UTC) and
+`metastaking_discount` (no date yet); `player_interest` has no switch.
+
 ---
 
 ## 18. World Cup (planned, not live)

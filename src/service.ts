@@ -47,6 +47,7 @@ import { egldOnBinance, findWithdrawal, travelRuleCountry, whitelisted, withdraw
 import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
 import { sleep } from './util/http.ts'
+import { cut } from './util/text.ts'
 import { numberToIndex, agentName, pemName, whichAgents } from './names.ts'
 import { RELEASE_KEYS } from './update/keys.ts'
 import { detectLayout } from './update/install.ts'
@@ -457,6 +458,8 @@ export class Service {
     this.manualWatch = new ManualWatch({
       enabled: cfg.manualCheck === true, base: cfg.foxleagueUrl, zone: this.summaryZone,
       kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
+      // The manual gone behind, the settings keys changed, a switch the agents do not know: told at once (P-W3).
+      tell: text => this.notify(text),
     })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
@@ -621,11 +624,11 @@ export class Service {
     const recent = this.chatContext()
     const epoch = this.chatEpoch
     try {
-      const mine = this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets, pending: true })
+      const mine = this.say({ from: 'owner', text: cut(message, 4000), source, agents: targets, pending: true })
       let answer
       try {
         answer = await this.strategist.discuss({
-          message: message.slice(0, 4000),
+          message: cut(message, 4000),
           source,
           defaultAgents: targets,
           agents: agents.map(b => {
@@ -656,7 +659,7 @@ export class Service {
       if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
       delete mine.pending
       const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
-      this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
+      this.say({ from: 'manager', text: cut(answer.reply, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
       return { reply: answer.reply, proposal }
     } finally {
       // Every way out releases the waiting line (agent review of PR #68, R68A-1): a failed answer, and also a database
@@ -852,9 +855,9 @@ export class Service {
   private async sendDailySummary(): Promise<void> {
     const today = zoneDate(Date.now(), this.summaryZone)
     if (this.store.getKv('summary_sent_day') === today || !this.telegram) return
-    // The day's check of FoxLeague's manual first, so the summary carries its line: at most once a day, ended by its
-    // own time limit; a check that fails is said as such.
-    await this.manualWatch.today().catch(() => null)
+    // The day's check of FoxLeague's manual first, so the summary carries its line (and not a second message with it),
+    // ended by its own time limit; a check that fails is said as such.
+    await this.manualWatch.today(Date.now(), { quiet: true }).catch(() => null)
     if (this.stopping || this.store.getKv('summary_sent_day') === today || !this.telegram) return
     // Built before it is marked sent: a summary that fails to build comes at the next try, not never.
     const text = this.summary(dayBefore(today), { scheduled: true })
@@ -890,8 +893,9 @@ export class Service {
   private manualTimer: NodeJS.Timeout | undefined
   /**
    * The day's check of FoxLeague's manual for the dashboard, also where no Telegram is linked: from the summary's hour
-   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour and made
-   * at most once a day (manual-watch.ts keeps the day in the database).
+   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour. The
+   * watch decides at each look (manual-watch.ts, kept in the database): again while the copy was current, up to 4
+   * tries a day while it could not tell, not again that day once it is behind (audit 2026-11-16, MNT-5 and MNT-6).
    */
   private armManualCheck(delayMs = 180_000): void {
     clearTimeout(this.manualTimer)
@@ -1085,6 +1089,8 @@ export class Service {
       snap.casualToday = casualStartsSince(this.store, index, gameDayStart(new Date(), snap.gameDay.resetHourUtc))
     }
     this.noteTeams(index, snap)
+    // FoxLeague's game settings, fingerprinted: a change runs the manual check at once (audit 2026-11-16, P-W2).
+    void this.manualWatch.observeConfig(snap.config)
     this.snapshots.set(index, snap)
     this.lastRefresh.set(index, Date.now())
     // Every fresh balance is checked, so a paused agent or one outside its active hours warns too.
@@ -1703,7 +1709,8 @@ export class Service {
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered)
-    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) }
+    // While the agents' copy is behind FoxLeague, the plan is told what changed (P-W5).
+    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}), watch: this.manualWatch.planNote() }
     // Rendered once and kept: a shadow plan, when one is switched on, is asked with these very words.
     const request = renderPlanRequest(input)
     // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the
@@ -1725,7 +1732,7 @@ export class Service {
       `\nmodel cost $${plan.usage.usd.toFixed(4)}${own ? `, ${MODELS[playing.model]?.label ?? playing.model} at ${playing.effort} effort` : ''} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
     // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
     this.addModelUsd(plan.usage.usd)
-    this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
+    this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: cut(text, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
     if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
     else this.report(text)
@@ -2169,8 +2176,8 @@ export class Service {
       }
       case 'summary': {
         const today = zoneDate(Date.now(), this.summaryZone)
-        // The day's check of FoxLeague's manual, the one already made today if there is one.
-        await this.manualWatch.today().catch(() => null)
+        // The day's check of FoxLeague's manual, the one already made today if there is one; this reply carries its line.
+        await this.manualWatch.today(Date.now(), { quiet: true }).catch(() => null)
         return args[0] === 'today' ? this.summary(today, { soFar: true }) : this.summary(dayBefore(today))
       }
       case 'updates': {
