@@ -27,10 +27,10 @@ import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/fund
 import { Executor, formatResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { actionDeadline } from './executor/deadlines.ts'
+import { actionDeadline, type Deadline } from './executor/deadlines.ts'
 import { PLAN_WINDOW_SHARE } from './executor/slots.ts'
-import { oneVOnesThisWeek, ownCreations, weeklyFreeAt } from './executor/rivals.ts'
-import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
+import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './executor/rivals.ts'
+import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, MAX_UNANSWERED_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
 import { MODELS, Strategist, agentChoice, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, shadowRuns, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
@@ -47,6 +47,7 @@ import { egldOnBinance, findWithdrawal, travelRuleCountry, whitelisted, withdraw
 import { credentialsFromEnv } from './web/auth.ts'
 import { startWeb } from './web/server.ts'
 import { sleep } from './util/http.ts'
+import { cut } from './util/text.ts'
 import { numberToIndex, agentName, pemName, whichAgents } from './names.ts'
 import { RELEASE_KEYS } from './update/keys.ts'
 import { detectLayout } from './update/install.ts'
@@ -99,6 +100,46 @@ const ACTION_RUN_MS = 90_000
 /** How far ahead a planned call makes the one-hour cache of the game manual worth writing (a margin under the hour). */
 const CACHE_HORIZON_MS = 55 * 60_000
 
+/**
+ * What an alert about a failed plan is remembered by: the error's text without the request ids Anthropic puts in it
+ * (`req_...`, a new one on every call), so one problem is told once an hour however many plans hit it.
+ */
+export function alertKey(msg: string): string {
+  return msg.replace(/req_[A-Za-z0-9]+/g, 'req_')
+}
+
+/** The first plans after a start: the first of each model and effort at once (5 to 25 s), as before BEH-6. */
+const FIRST_PLAN_MS = 5_000
+const FIRST_PLAN_SPREAD_MS = 20_000
+/**
+ * The other agents of that model and effort from 3 to 6 minutes after the start: by then the first one's call has
+ * begun its answer (its snapshot took up to a minute and its answer began within 40 s in the week of 9 Nov), so its
+ * one-hour cache write can be read. Spread over 3 minutes, so their snapshots do not all hit FoxLeague at once.
+ */
+const FOLLOW_PLAN_MS = 3 * 60_000
+const FOLLOW_PLAN_SPREAD_MS = 3 * 60_000
+
+/**
+ * When each agent plans first after a start, in ms (audit 2026-11-16, BEH-6 and P7). All at once, every call wrote the
+ * cache of the system prompt and manual again at twice the input price: a write can be read only once its answer has
+ * begun. Now the first agent of each model and effort (`pair`) that plans now (`plans`) goes at once and the others of
+ * its pair follow a few minutes later, never later than their own tick. An agent that does not plan now (paused,
+ * outside its hours, waiting for funds) keeps the old moment: its tick asks no model, so it leads nothing.
+ */
+export function firstPlanDelays(agents: { index: number; pair: string; plans: boolean; tickMinutes: number }[], random: () => number): Map<number, number> {
+  const led = new Set<string>()
+  const out = new Map<number, number>()
+  for (const a of agents) {
+    if (!a.plans || !led.has(a.pair)) {
+      if (a.plans) led.add(a.pair)
+      out.set(a.index, FIRST_PLAN_MS + random() * FIRST_PLAN_SPREAD_MS)
+    } else {
+      out.set(a.index, Math.min(FOLLOW_PLAN_MS + random() * FOLLOW_PLAN_SPREAD_MS, Math.max(MIN_TICK_MINUTES, a.tickMinutes) * 60_000))
+    }
+  }
+  return out
+}
+
 export interface ScheduledAction {
   p: PlannedAction
   /** When it runs, in ms after the plan's start. */
@@ -107,17 +148,24 @@ export interface ScheduledAction {
 
 /**
  * When each action of a plan runs, in ms after its start: at random moments of the window, sorted so the plan's order
- * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (13 minutes
+ * holds, at least `gapMs` apart. A casual or ranked match also waits until the one before it is over (16 minutes
  * after its start: MATCH_RUNS_MS) and a ranked one until the ranked cooldown after the last ranked start has passed, the agent's last
  * starts before the plan included (`lastMatchMs` and `lastRankedMs`, in ms after the plan's start, so negative). A
- * match pushed past the window is dropped (returned with the reason) and pushes nothing; every other action keeps its
- * random moment unless the action before it now runs later.
+ * match runs no later than the window's end less the gates of the matches after it, so a first match drawn late
+ * leaves the next its room (BEH-5), and the actions before it move earlier with it. A match its gates still push past
+ * the window is dropped (returned with the reason) and pushes nothing; every other action keeps its random moment
+ * unless the action before it now runs later.
  *
  * An action with a deadline (`deadlines`, one per action, in ms after the plan's start: src/executor/deadlines.ts) runs
  * at the latest DEADLINE_MARGIN_MS before it, at once when that is already past and at the start of the window when
  * its deadline could not be read (never late). The plan's order holds: the actions before it move earlier with it,
  * ACTION_RUN_MS apart, so a lineup still comes before its match and a swap before the bid it funds. A match gate before
  * it still holds it back (the order is never changed to pass a match).
+ *
+ * A deadline of 'now' (another team can make the action pointless at any moment) runs at the start of the window like
+ * an unread one. Taking another team's open 1v1 keeps the plan's order, so the swap that funds it still comes first
+ * (BEH-10). Leaving the agent's own unanswered 1v1 is the one action moved: it runs first, before anything else of the
+ * plan (BEH-9), and the actions after it keep their order.
  *
  * The drops are decided first, as without deadlines (R70A-2), and the kept actions are placed with the deadlines after.
  * Placed in one pass, a match moved earlier with a deadline action after it could make room for one that was dropped
@@ -126,30 +174,58 @@ export interface ScheduledAction {
  * than it would without deadlines.
  */
 export function scheduleActions(
-  actions: PlannedAction[],
-  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: (number | 'unread' | null)[] },
+  planned: PlannedAction[],
+  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: Deadline[] },
 ): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
+  // Leaving the agent's own unanswered 1v1 runs first, before anything else of the plan (audit 2026-11-16, BEH-9): it
+  // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play.
+  const first = (i: number) => o.deadlines?.[i] === 'now' && planned[i]!.action.type === 'leave_tournament'
+  const order = planned.map((_, i) => i).sort((x, y) => Number(first(y)) - Number(first(x)) || x - y)
+  const actions = order.map(i => planned[i]!)
+  const deadlines = o.deadlines ? order.map(i => o.deadlines![i] ?? null) : undefined
   const raw = actions.map(() => o.random() * o.windowMs).sort((a, b) => a - b)
-  // Without deadlines: what is dropped, and why.
-  const plain = placeActions(actions, raw, actions.map(() => Infinity), o, null)
+  // Without deadlines: what is dropped, and why. Each match has a latest moment that leaves the matches after it their
+  // gates inside the window (audit 2026-11-16, BEH-5): a first match drawn late no longer pushes out a second the
+  // window has room for.
+  const fit = latestMoments(actions, o, undefined, null)
+  const plain = placeActions(actions, raw, fit, o, null)
   const dropped = new Set(plain.dropped.map(d => d.i))
-  // The latest moment of each action kept, from the last one back: its own deadline less the margin (0 for one that
-  // could not be read) and room to run before the next action's latest moment. A dropped action does not run, so it
-  // takes no room.
-  const latest = new Array<number>(actions.length).fill(Infinity)
-  let next = Infinity
-  for (let i = actions.length - 1; i >= 0; i--) {
-    if (dropped.has(i)) continue
-    const d = o.deadlines?.[i] ?? null
-    const own = d === 'unread' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
-    latest[i] = Math.min(own, next)
-    next = latest[i]! - Math.max(o.gapMs, ACTION_RUN_MS)
-  }
+  // With deadlines, the kept actions only: each also by its own deadline less the margin (0 for one that could not be
+  // read or that runs at once). Never later than without deadlines, so no gate starts later and no new drop comes.
+  const withDeadlines = deadlines ? latestMoments(actions, o, deadlines, dropped) : fit
+  const latest = fit.map((f, i) => Math.min(f, withDeadlines[i]!))
   const placed = placeActions(actions, raw, latest, o, dropped)
   return {
     kept: placed.kept.map(k => ({ p: actions[k.i]!, offset: k.offset })),
     dropped: plain.dropped.map(d => ({ p: actions[d.i]!, reason: d.reason })),
   }
+}
+
+/**
+ * The latest moment of each action, from the last one back: a match no later than the window's end less the gates of
+ * the matches after it (16 minutes after any match, the ranked spacing after a ranked one), an action with a deadline
+ * (`deadlines`) no later than the deadline less the margin (at once for 'unread' and 'now'), and every action early
+ * enough to leave the next one room to run (ACTION_RUN_MS). The actions in `skip` (dropped) take no room.
+ */
+function latestMoments(actions: PlannedAction[], o: { windowMs: number; gapMs: number }, deadlines: Deadline[] | undefined, skip: Set<number> | null): number[] {
+  const latest = new Array<number>(actions.length).fill(Infinity)
+  let next = Infinity
+  let nextMatch = Infinity
+  let nextRanked = Infinity
+  for (let i = actions.length - 1; i >= 0; i--) {
+    if (skip?.has(i)) continue
+    const a = actions[i]!.action
+    const d = deadlines?.[i] ?? null
+    let own = d === 'unread' || d === 'now' ? 0 : d === null ? Infinity : d - DEADLINE_MARGIN_MS
+    if (a.type === 'play_match') own = Math.min(own, o.windowMs, nextMatch - PLAN_MATCH_GAP_MS, a.match_type === 'ranked' ? nextRanked - PLAN_RANKED_GAP_MS : Infinity)
+    latest[i] = Math.min(own, next)
+    next = latest[i]! - Math.max(o.gapMs, ACTION_RUN_MS)
+    if (a.type === 'play_match') {
+      nextMatch = latest[i]!
+      if (a.match_type === 'ranked') nextRanked = latest[i]!
+    }
+  }
+  return latest
 }
 
 /**
@@ -178,7 +254,7 @@ function placeActions(
       const spaced = Math.max(at, afterMatch, afterRanked)
       // Dropped only when a gate pushes it out of the window (the 30-second gaps alone never drop an action).
       if (dropped === null && spaced > o.windowMs && spaced > at) {
-        drops.push({ i, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team about 13 minutes)' })
+        drops.push({ i, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team up to about 16 minutes)' })
         return
       }
       at = spaced
@@ -457,6 +533,8 @@ export class Service {
     this.manualWatch = new ManualWatch({
       enabled: cfg.manualCheck === true, base: cfg.foxleagueUrl, zone: this.summaryZone,
       kv: { get: k => this.store.getKv(k) ?? null, set: (k, v) => this.store.setKv(k, v) },
+      // The manual gone behind, the settings keys changed, a switch the agents do not know: told at once (P-W3).
+      tell: text => this.notify(text),
     })
     try {
       const saved: unknown = JSON.parse(this.store.getKv('chat') ?? '[]')
@@ -529,9 +607,32 @@ export class Service {
   /** Agents running a plan or an action the owner asked for on Telegram: its plan and results are told at once. */
   private readonly loud = new Set<number>()
 
+  /** Agents whose last tick was a plan with no action: their next plan comes after twice the tick (P6). */
+  private readonly quiet = new Set<number>()
+
   /** Plans failed in a row per agent (reset by a plan that works), and when each account problem was last said. */
   private readonly failStreak = new Map<number, number>()
   private readonly alertedAt = new Map<string, number>()
+  /**
+   * While the AI account refuses every plan (a usage or spend limit, the key, billing: isModelAccountError), the agent
+   * that asks again at its own tick and when it last asked; the others skip the snapshot and the call (audit
+   * 2026-11-16, P10). Cleared by a plan that works (said once) or by the asking agent failing for another reason.
+   */
+  private accountStop: { prober: number; askedAt: number } | null = null
+
+  /**
+   * Why this agent's scheduled tick waits instead of asking the model, or null: an account stop another agent is asking
+   * about. A tick the owner starts (Plan now, /tick, /do) always asks. One that has not asked for longer than its tick,
+   * its random window and 5 minutes (paused, retired, outside its hours) hands over to the next agent that ticks.
+   */
+  private accountWait(index: number): string | null {
+    const stop = this.accountStop
+    if (!stop || stop.prober === index) return null
+    const prober = this.store.agent(stop.prober)
+    const window = prober && !prober.retired ? (prober.settings.tickMinutes + prober.settings.tickJitterMinutes + 5) * 60_000 : 0
+    if (Date.now() - stop.askedAt >= window) return null
+    return `the AI account refuses every plan: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+  }
 
   /**
    * A plan that failed. Routine (it waits for the summary) unless it needs the owner: a problem with the AI account
@@ -540,16 +641,22 @@ export class Service {
   private tickFailed(index: number, err: unknown, msg: string): void {
     const streak = (this.failStreak.get(index) ?? 0) + 1
     this.failStreak.set(index, streak)
+    // Keyed by the problem, not by the call: Anthropic's error text carries a request id that differs on every call
+    // (audit 2026-11-16, BEH-1).
+    const problem = alertKey(msg)
+    // An account stop: this agent asked last. A failure of another kind frees the others (it may be this agent's own).
+    if (isModelAccountError(err)) this.accountStop = { prober: index, askedAt: Date.now() }
+    else if (this.accountStop?.prober === index) this.accountStop = null
     if (isModelAccountError(err)) {
-      const last = this.alertedAt.get(msg) ?? 0
+      const last = this.alertedAt.get(problem) ?? 0
       if (Date.now() - last >= 3600_000) {
-        this.alertedAt.set(msg, Date.now())
+        this.alertedAt.set(problem, Date.now())
         return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard, or the Anthropic console for credit and limits).`)
       }
       return this.report(`${agentName(index)} tick failed: ${msg}`)
     }
     if (streak === 3) {
-      const key = `streak:${msg}`
+      const key = `streak:${problem}`
       if (Date.now() - (this.alertedAt.get(key) ?? 0) >= 3600_000) {
         this.alertedAt.set(key, Date.now())
         return this.notify(`${agentName(index)}: its last 3 plans failed (${msg}). It keeps trying every cycle; other agents failing the same way within the hour are in the summary.`)
@@ -621,11 +728,11 @@ export class Service {
     const recent = this.chatContext()
     const epoch = this.chatEpoch
     try {
-      const mine = this.say({ from: 'owner', text: message.slice(0, 4000), source, agents: targets, pending: true })
+      const mine = this.say({ from: 'owner', text: cut(message, 4000), source, agents: targets, pending: true })
       let answer
       try {
         answer = await this.strategist.discuss({
-          message: message.slice(0, 4000),
+          message: cut(message, 4000),
           source,
           defaultAgents: targets,
           agents: agents.map(b => {
@@ -656,7 +763,7 @@ export class Service {
       if (epoch !== this.chatEpoch) return { reply: answer.reply, proposal: null }
       delete mine.pending
       const proposal = answer.proposal ? this.proposals.add({ ...answer.proposal, source }) : null
-      this.say({ from: 'manager', text: answer.reply.slice(0, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
+      this.say({ from: 'manager', text: cut(answer.reply, 4000), ...(proposal ? { agents: proposal.agents, proposal: proposal.id, strategy: proposal.strategy, changes: proposal.changes } : {}) })
       return { reply: answer.reply, proposal }
     } finally {
       // Every way out releases the waiting line (agent review of PR #68, R68A-1): a failed answer, and also a database
@@ -852,9 +959,9 @@ export class Service {
   private async sendDailySummary(): Promise<void> {
     const today = zoneDate(Date.now(), this.summaryZone)
     if (this.store.getKv('summary_sent_day') === today || !this.telegram) return
-    // The day's check of FoxLeague's manual first, so the summary carries its line: at most once a day, ended by its
-    // own time limit; a check that fails is said as such.
-    await this.manualWatch.today().catch(() => null)
+    // The day's check of FoxLeague's manual first, so the summary carries its line (and not a second message with it),
+    // ended by its own time limit; a check that fails is said as such.
+    await this.manualWatch.today(Date.now(), { quiet: true }).catch(() => null)
     if (this.stopping || this.store.getKv('summary_sent_day') === today || !this.telegram) return
     // Built before it is marked sent: a summary that fails to build comes at the next try, not never.
     const text = this.summary(dayBefore(today), { scheduled: true })
@@ -890,8 +997,9 @@ export class Service {
   private manualTimer: NodeJS.Timeout | undefined
   /**
    * The day's check of FoxLeague's manual for the dashboard, also where no Telegram is linked: from the summary's hour
-   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour and made
-   * at most once a day (manual-watch.ts keeps the day in the database).
+   * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour. The
+   * watch decides at each look (manual-watch.ts, kept in the database): again while the copy was current, up to 4
+   * tries a day while it could not tell, not again that day once it is behind (audit 2026-11-16, MNT-5 and MNT-6).
    */
   private armManualCheck(delayMs = 180_000): void {
     clearTimeout(this.manualTimer)
@@ -1085,6 +1193,8 @@ export class Service {
       snap.casualToday = casualStartsSince(this.store, index, gameDayStart(new Date(), snap.gameDay.resetHourUtc))
     }
     this.noteTeams(index, snap)
+    // FoxLeague's game settings, fingerprinted: a change runs the manual check at once (audit 2026-11-16, P-W2).
+    void this.manualWatch.observeConfig(snap.config)
     this.snapshots.set(index, snap)
     this.lastRefresh.set(index, Date.now())
     // Every fresh balance is checked, so a paused agent or one outside its active hours warns too.
@@ -1386,8 +1496,11 @@ export class Service {
     // binds 0.0.0.0 inside its own network namespace.
     if (creds) startWeb(this, creds, Number(process.env.WEB_UI_PORT ?? 8870), process.env.WEB_UI_HOST?.trim() || '127.0.0.1')
     else console.log(`web UI off: set it up with \`${this.cfg.isServer ? 'agentctl.sh' : './cli.sh'} set-web-password\``)
+    // One first plan per model and effort at once, the others of that pair a few minutes later, so they read the
+    // cache it writes instead of each writing it again (audit 2026-11-16, BEH-6 and P7).
+    const first = firstPlanDelays(agents.map(b => ({ index: b.index, pair: this.pairOf(b), plans: this.plansNow(b), tickMinutes: b.settings.tickMinutes })), Math.random)
     for (const b of agents) {
-      this.schedule(b.index, 5_000 + Math.random() * 20_000)
+      this.schedule(b.index, first.get(b.index)!)
       void this.snapshot(b.index).catch(() => undefined)
     }
     // Last: a release counts as started only once everything above has come up.
@@ -1410,7 +1523,7 @@ export class Service {
     clearTimeout(this.timers.get(index))
     if (this.stopping) return
     this.nextAt.set(index, Date.now() + delayMs)
-    this.timers.set(index, setTimeout(() => void this.tick(index).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
+    this.timers.set(index, setTimeout(() => void this.tick(index, undefined, { scheduled: true }).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
   }
 
   /** Sleeps like setTimeout but wakes at once when the service stops. */
@@ -1424,9 +1537,18 @@ export class Service {
   /**
    * Graceful stop (SIGTERM, a deploy): no new tick and no new action; an action already signing or
    * waiting for its outcome finishes (up to 150 s, the unit allows 180) so it is booked, then exit.
+   * Every caller waits for the one stop (UPD-A3): SIGTERM during an update's prepare and the restart for that
+   * update both end the process only once the action in flight is done.
    */
-  async stop(): Promise<void> {
-    if (this.stopping) return
+  stop(): Promise<void> {
+    this.stopRun ??= this.stopOnce()
+    return this.stopRun
+  }
+
+  /** The stop that runs, shared by every caller of stop(). */
+  private stopRun: Promise<void> | null = null
+
+  private async stopOnce(): Promise<void> {
     this.stopping = true
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)
@@ -1462,6 +1584,14 @@ export class Service {
     const s = row.settings
     const jitter = (Math.random() * 2 - 1) * s.tickJitterMinutes
     let delay = Math.max(MIN_TICK_MINUTES, s.tickMinutes + jitter) * 60_000
+    // After a plan with no action, twice the tick, with its jitter (audit 2026-11-16, P6: the owner's choice; it lowers
+    // spending). Not past the game day's reset: the first plan after it keeps the normal tick, as any plan after one
+    // that acted does.
+    if (this.quiet.has(index)) {
+      const doubled = Math.max(MIN_TICK_MINUTES, 2 * s.tickMinutes + jitter) * 60_000
+      const reset = gameDayStart(new Date(now), this.snapshots.get(index)?.gameDay.resetHourUtc ?? 14).getTime() + 86_400_000
+      if (now + doubled <= reset) delay = doubled
+    }
     // A planning tick about an hour before the first lock of each match session of our own (no lock of
     // ours in the 2 hours before it), so the plan can sync, set the lineup and recover condition in time.
     // Matches close together are covered by the normal ticks. The tick itself still keeps to active hours.
@@ -1523,6 +1653,17 @@ export class Service {
       if (next <= horizon && this.inActiveHours(a, new Date(next))) return true
     }
     return false
+  }
+
+  /** The model and effort of an agent's real plan, the pair its cache belongs to. */
+  private pairOf(agent: AgentRow): string {
+    const ai = this.aiOf(agent)
+    return `${ai.model}:${ai.effort}`
+  }
+
+  /** Whether a tick of this agent would ask the model now: a strategist, no kill switch, not paused, in its hours, funded. */
+  private plansNow(agent: AgentRow): boolean {
+    return Boolean(this.strategist) && !this.store.killSwitch && !agent.paused && this.inActiveHours(agent) && this.store.getKv(`waiting_funds:${agent.index}`) !== '1'
   }
 
   /** The cache rule every strategist of the service is made with: another call of its model at that effort within the hour. */
@@ -1601,7 +1742,7 @@ export class Service {
     return null
   }
 
-  async tick(index: number, ownerRequest?: string, o: { loud?: boolean } = {}): Promise<string> {
+  async tick(index: number, ownerRequest?: string, o: { loud?: boolean; scheduled?: boolean } = {}): Promise<string> {
     if (o.loud) {
       this.loud.add(index)
       try {
@@ -1610,6 +1751,8 @@ export class Service {
         this.loud.delete(index)
       }
     }
+    // Only a plan with no action makes the next one wait twice the tick: any other outcome of this tick does not.
+    this.quiet.delete(index)
     const refusal = this.tickRefusal(index, ownerRequest)
     if (refusal) return refusal
     const agent = this.store.agent(index)!
@@ -1618,6 +1761,8 @@ export class Service {
       await this.retryPending(agent)
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
+      const waits = o.scheduled ? this.accountWait(index) : null
+      if (waits) return waits
       const snap = await this.snapshot(index, true)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
@@ -1635,8 +1780,13 @@ export class Service {
         this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: 'snapshot taken; no strategist (ANTHROPIC_API_KEY not set)', detail: { warnings: snap.warnings } })
         return 'snapshot only (no strategist key)'
       }
+      if (this.accountStop) this.accountStop = { prober: index, askedAt: Date.now() }
       const plan = await this.makePlan(agent, snap, ownerRequest)
       this.failStreak.delete(index)
+      if (this.accountStop) {
+        this.accountStop = null
+        this.notify(`Plans work again: ${agentName(index)}'s plan went through. The agents that waited plan at their next tick.`)
+      }
       // What the plan weighed goes with its private creates: each action reads a fresh snapshot, up to 0.8 of a tick later.
       // No private split served: it was told the public one. An unread config told it nothing: no private create from this plan.
       const planFee = (snap.config?.private_tournament_prize_split ?? snap.config?.tournament_prize_split)?.platform_fee_percent
@@ -1649,6 +1799,7 @@ export class Service {
         this.store.log({ agentIndex: index, kind: p.action.type, status: 'info', summary: `dropped from this plan: ${describeAction(p.action)}: it could not read FoxLeague's settings, so it did not know the platform fee` })
         return false
       })
+      if (!plan.actions.length) this.quiet.add(index)
       const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
@@ -1703,7 +1854,8 @@ export class Service {
   private async makePlan(agent: AgentRow, snap: AgentSnapshot, ownerRequest?: string): Promise<Plan> {
     const dry = agent.dryRun || !this.executor.liveEnabled
     const budget = budgetView(this.store, agent.index, agent.settings, dry, new Date(), snap.gameDay.resetHourUtc, snap.registration.registered)
-    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}) }
+    // While the agents' copy is behind FoxLeague, the plan is told what changed (P-W5).
+    const input = { snapshot: this.withOneVOnes(agent, snap, dry), settings: agent.settings, budget, recent: this.store.planHistory(agent.index, 20), dryRun: dry, ...(ownerRequest ? { ownerRequest } : {}), watch: this.manualWatch.planNote() }
     // Rendered once and kept: a shadow plan, when one is switched on, is asked with these very words.
     const request = renderPlanRequest(input)
     // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the
@@ -1725,7 +1877,7 @@ export class Service {
       `\nmodel cost $${plan.usage.usd.toFixed(4)}${own ? `, ${MODELS[playing.model]?.label ?? playing.model} at ${playing.effort} effort` : ''} (cache read ${plan.usage.cacheReadTokens} tokens)${plan.usage.servedBy !== playing.model ? `, served by ${plan.usage.servedBy} (fallback)` : ''}`
     // Counted before the plan is logged: a first count per day rebuilds from the logged plans, never twice.
     this.addModelUsd(plan.usage.usd)
-    this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: text.slice(0, 2000), detail: { plan, stop: plan.stopReason } })
+    this.store.log({ agentIndex: agent.index, kind: 'plan', status: 'info', summary: cut(text, 2000), detail: { plan, stop: plan.stopReason } })
     this.store.setKv(`last_plan_${agent.index}`, text)
     if (ownerRequest || this.loud.has(agent.index)) this.notify(text)
     else this.report(text)
@@ -1893,7 +2045,10 @@ export class Service {
   private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
     const now = new Date()
     const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
-    return { ...snap, oneVOnes: { week }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
+    // Its own 1v1s another team has taken now count as accepted (BEH-2).
+    const seated = new Set((snap.auth?.myTournaments?.active ?? []).filter(t => t.max_teams === 2 && typeof t.participant_count === 'number' && t.participant_count >= 2).map(t => t.id))
+    const targeted = [...targetedRecord(this.store, agent.index, dry, now, seated)].map(([userId, r]) => ({ userId, sent: r.sent, accepted: r.accepted, unanswered: r.unanswered.length, freeAt: weeklyFreeAt(r.unanswered, MAX_UNANSWERED_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
+    return { ...snap, oneVOnes: { week, targeted }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
   }
 
   /**
@@ -2169,8 +2324,8 @@ export class Service {
       }
       case 'summary': {
         const today = zoneDate(Date.now(), this.summaryZone)
-        // The day's check of FoxLeague's manual, the one already made today if there is one.
-        await this.manualWatch.today().catch(() => null)
+        // The day's check of FoxLeague's manual, the one already made today if there is one; this reply carries its line.
+        await this.manualWatch.today(Date.now(), { quiet: true }).catch(() => null)
         return args[0] === 'today' ? this.summary(today, { soFar: true }) : this.summary(dayBefore(today))
       }
       case 'updates': {

@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 9ebcbc52d 2026-11-13.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 729164194 2026-11-15.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -8,7 +8,7 @@ A card's OVR is the average of its seven stats; the stats that matter for its po
 
 This page collects every number that costs you FOXSY, time or a daily allowance, in one table. The values are the **mainnet** values of 28 October 2026. Where a value changes on **Monday 9 November 2026 at 14:00 UTC** (the [competition levels](/mechanics/matches/#competition-levels): a ticket for ranked, an entry fee for Bronze, XP and ELO by level, a daily cap on competitive matches), the row gives both. Where a paid shortcut exists, the last column says what it buys and the floor that money never crosses. Below the table you will find worked paths (how long and how much from A to B) and a short guide to which path fits which kind of manager.
 
-Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours. Daily allowances reset at a fixed **14:00 UTC**, not on a rolling 24 hour window.
+Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours. Every daily allowance of a manager resets at the fixed daily reset at **14:00 UTC**: matches you start, XP matches, training, tournaments you create, interests you send plus free onboarding badges. The weekly Common pack cap starts again on **Monday at 14:00 UTC**. None of them is a rolling window. Two platform-wide limits keep a clock of their own: the platform's pack budget counts any 24 hours (the players contract's own window) and the gas-free registrations count a UTC day.
 
 ## The table
 
@@ -16,7 +16,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 |---|---|---|---|---|
 | **Registration fee** | 5,000 FOXSY | One-time payment that creates your team and mints your starter squad | Paid once per wallet. The relayer pays the network fee for this transaction. One wallet gets one starter squad, enforced on chain | None. Every manager pays the same fee |
 | **Starter squad** | 18 players: 10 Common, 4 Uncommon, 2 Rare, 1 Epic, 1 Legendary | The roster you receive at registration | Spread as 2 GK, 6 DEF, 6 MID, 4 FWD. While the pool allows it, each position gets one special card (a Legendary, an Epic or a Rare) plus one Uncommon; when a position has no card of that rarity left the draw bends and the card lands in any position that still has room. Commons fill the rest | None. Extra players come from the Common pack, the marketplace or fusion |
-| **Common pack** | 2,500 FOXSY for 5 Common players | The only shop item that adds cards to your roster | At most 2 packs per wallet per rolling 7 days. Positions drawn like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD of 18), uniform within a position. Drawn from the pre-minted Common pool. The Shop card reads Sold out when fewer than 5 are free. It reads Daily pack budget spent when the platform's budget is used up: at most 100 packs (500 cards) for all managers together in any 24 hours. Each pack counts against it for 24 to 25 hours, so room comes back hour by hour, not at a fixed time. Delivered by the game server about a minute after payment. The cards arrive with 0 competitive matches and no cooldown | This row is the shortcut. Floor: 2 packs a week, whatever you spend |
+| **Common pack** | 2,500 FOXSY for 5 Common players | The only shop item that adds cards to your roster | At most 2 packs per wallet per week, from Monday 14:00 UTC to the next Monday 14:00 UTC. Positions drawn like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD of 18), uniform within a position. Drawn from the pre-minted Common pool. The Shop card reads Sold out when fewer than 5 are free. It reads Daily pack budget spent when the platform's budget is used up: at most 100 packs (500 cards) for all managers together in any 24 hours. This budget is the players contract's rolling window, not a day from the daily reset: each pack counts against it for 24 to 25 hours, so room comes back hour by hour, not at a fixed time. Delivered by the game server about a minute after payment. The cards arrive with 0 competitive matches and no cooldown | This row is the shortcut. Floor: 2 packs a week, whatever you spend |
 | **Stat caps by rarity** | Common 30, Uncommon 55, Rare 75, Epic 90, Legendary 100 per stat | The ceiling training can reach on each of the 7 stats | XP earned on a capped stat is discarded. Only fusion raises the ceiling | None |
 | **Casual plus ranked matches per day** | 5 | The matches you may start yourself per day, casual and ranked combined | Being drawn in as someone's ranked opponent does not count. Tournament and 1v1 games do not count either | Not for sale |
 | **Match cooldown** | 30 seconds from the start of your previous match; 15 minutes from the start of your last ranked game | Pacing between the matches you start | Both clocks run from the start of the match, not from full time. The ranked cooldown counts from your last ranked game, started or drawn into | Not for sale |
@@ -33,6 +33,7 @@ Every FOXSY value is a whole number of FOXSY. Every duration is in days or hours
 | **Condition cost, matches** | 10 per tournament or 1v1 appearance; 5 per ranked or casual appearance | Condition each player who takes the pitch loses per match | A substitute who comes on pays too; the bench does not. In ranked only the side that started the match pays; from 9 November 2026 a ranked game the AI fills costs no condition. Base values until age 30, then ramps with age to 3x the base at 39: 30 for tournament/1v1, 15 for ranked/casual | Condition recovery (below) |
 | **Condition regeneration** | 48 points per day (2 per hour) until age 30, falling to 24 per day (1 per hour) at age 39 | Passive recovery, slower with age | A young player at 0 is back to 100 in about 2 days, a 39-year-old in about 4 | Condition recovery (next row) |
 | **Condition recovery** | 100 FOXSY for a full 0 to 100 restore, pro-rated per missing point | Instantly restores a player's condition | You pay about 1 FOXSY per missing point; a player at 70 costs 30 FOXSY. Recover All sums every player below 100 | This row is the shortcut. No floor |
+| **MetaStaking Shop discount** | From Tuesday 1 December 2026, 14:00 UTC: 0.1% off for every full 10,000 FOXSY of your 30-day MetaStaking average, up to 10% from 1,000,000 | Lowers what your wallet pays in the Shop. You pay less at once: nothing to claim, nothing paid back later | On Common packs, condition recovery, XP boosters, training slots, Reduce Cooldown, medicine and ranked tickets. The discount is your % of the full price rounded down to a whole FOXSY, taken once per payment: at 10% a pack costs 2,250 and a ranked ticket 23. The average is the total of your last 30 daily snapshots always divided by 30, so it grows over your first 30 days of staking. Not on the fusion cost or the two fusion waivers (the game contract takes their full price), tournament entries, organizer payments, deposits, the marketplace or badge re-rolls | Not for sale. It follows the FOXSY you keep in MetaStaking |
 | **Minimum field condition** | 30 | The match-fit line for tournaments, 1v1s plus training | Below it a player cannot train. In a tournament or 1v1 match a starter below it is auto-substituted by a fit bench player; fewer than 11 fit players forfeits 3-0. Casual and ranked games do not apply it: they refuse only a starter at 0 condition, so a tired starter still plays there with every stat scaled down by condition | Condition recovery brings a player back above it |
 | **Fusion inputs** | 3 players of the same rarity, each at the match gate of its rarity: Common 5 competitive matches, Uncommon 15, Rare 45, Epic 135 | What one fusion burns | Inputs must be synced (until 20 November 2026, 14:00 UTC; from then the game signs their current stats), in your wallet, not listed, not under a transfer cooldown and, from Friday 13 November 2026, 14:00 UTC, not injured or suspended. A fused player inherits the longest remaining transfer cooldown of its inputs, also their injury and their ban to serve. The contract reads the competitive counter plus the waived credit. From 20 November the new card is minted with a new face, each stat the average of the three translated to the new rarity's range (see [Fusion](/mechanics/fusion/)) | Fusion match waiver per missing match: Uncommon 20 FOXSY (at most 10, so 5 really played), Rare 100 (at most 30, 15 played), Epic 100 (at most 90, 45 played). None for Common |
 | **Fusion fee** | Common to Uncommon 100, Uncommon to Rare 200, Rare to Epic 400, Epic to Legendary 800 FOXSY | The fee paid with the three cards | Refunded with the cards if the fusion fails. Legendary cannot be fused further | None |
@@ -107,11 +108,11 @@ The 81 Commons of path (c) bought as Common packs, 5 cards for 2,500 FOXSY at mo
 
 | Route | Days | FOXSY | Arithmetic |
 |---|---|---|---|
-| The packs | 56 | 42,500 | 81 Commons need 17 packs (85 cards, 4 spare) at 2,500 = 42,500. The cap is 2 packs per rolling 7 days: packs 1-2 on day 0, packs 3-4 on day 7, pack 17 on day 7 x 8 = 56 |
-| The fusions | 32.5 at least | 6,500 | 40 fusions need 39 spacing gaps: 39 x 20 h = 780 h = 32.5 days, about 33 days. Fees 27 x 100 + 9 x 200 + 3 x 400 + 1 x 800 = 6,500. The Common fusions start with the first packs, so most of the spacing runs inside the 8 weeks; the last rungs then follow path (c) |
+| The packs | 49 to 56 | 42,500 | 81 Commons need 17 packs (85 cards, 4 spare) at 2,500 = 42,500. The cap is 2 packs a week, the week starting on Monday at 14:00 UTC: 17 packs take 9 pack weeks. Started right after a Monday 14:00 UTC: packs 1-2 on day 0, packs 3-4 on day 7, pack 17 on day 7 x 8 = 56. Packs 1-2 bought just before a Monday 14:00 UTC: packs 3-4 right after it on day 0, pack 17 on day 7 x 7 = 49 |
+| The fusions | 32.5 at least | 6,500 | 40 fusions need 39 spacing gaps: 39 x 20 h = 780 h = 32.5 days, about 33 days. Fees 27 x 100 + 9 x 200 + 3 x 400 + 1 x 800 = 6,500. The Common fusions start with the first packs, so most of the spacing runs inside the 7 to 8 weeks of packs; the last rungs then follow path (c) |
 | The matches, played | included | seat fees | Every input needs the match gate of its rarity and pack cards arrive at 0: 81 Commons x 5 + 27 Uncommons x 15 + 9 Rares x 45 + 3 Epics x 135 = 1,620 matches. Until 9 November 2026 the match counter has no daily cap, only XP has one, so a card plays as often as you can field it; from then it counts at most 3 a day per card |
 | The matches, waived | | up to 59,400 | 27 x 10 x 20 + 9 x 30 x 100 + 3 x 90 x 100 = 59,400 if every card is waived to its floor; 810 matches still have to be really played. Waiving only the last matches of the cards on the critical path costs a fraction of that |
-| Floor that no money removes | 56 | | The 2-packs-a-week cap: 17 packs take 8 weeks (56 days) whatever you spend. The 39 spacing gaps fit inside them |
+| Floor that no money removes | 49 | | The 2-packs-a-week cap: 17 packs take 9 pack weeks, at least 49 days (56 when the first pack comes right after a Monday 14:00 UTC) whatever you spend. The 39 spacing gaps fit inside them |
 
 Extend it to a full Legendary XI (ten more Legendaries, 149 packs) and the arithmetic gives the shape of the game: a manager who buys at the cap is bound by the pack cap alone for about 17 months; the 810 real matches every Legendary lineage needs come on top of that.
 
@@ -160,10 +161,10 @@ The starter squad carries one Legendary. Four ways to a second one, from the day
 |---|---|---|---|
 | Alt wallet, wait | 122.25 | 5,000 | The second wallet's Legendary has 0 competitive matches, so the transfer locks it for 21 days plus 405 x 6 hours. The registration fee is the whole cost |
 | Alt wallet, every match waiver | 54.75 | 32,000 | 5,000 for the second wallet plus 270 match waivers at 100 = 27,000, each 6 hours off the lock, down to 21 days plus the 135 matches still to really play x 6 hours. Reduce Cooldown does not apply to this lock |
-| Packs, wait | about 89 | 10,700 | 3 packs at 2,500 = 7,500 plus 3,200 in fusion fees. The third pack lands on day 7 and its Commons play their 5 matches in 2 days; the 8 Common fusions take 6 days of wallet spacing. The fused Uncommons play their 15 matches inside the 14-day card cooldown, the fused Rares need 15 days for 45 matches and the fused Epics 45 days for 135, because the cooldown does not block play: 7 + 2 + 6 + 14 + 15 + 45 = 89 |
-| Packs, every waiver | about 44 | about 70,000 | The 10,700 above, plus the match waivers of 12 Uncommons x 10 x 20 = 2,400, 6 Rares x 30 x 100 = 18,000 and 3 Epics x 90 x 100 = 27,000, plus 14 fused inputs x 11 waived days x 75 = 11,550, plus about 300 of sync fees at 10 per card. Days: 7 for the packs, 2 for the 5 real matches of the Commons, 14 spacing gaps x 20 h = 12, then the three fused rungs: 3 (the floor), 5 (15 real matches of a Rare) and 15 (45 real matches of an Epic) |
+| Packs, wait | about 82 to 89 | 10,700 | 3 packs at 2,500 = 7,500 plus 3,200 in fusion fees. The third pack lands in the next pack week: on day 7, on day 0 when the first two are bought just before a Monday 14:00 UTC (7 days less). Its Commons play their 5 matches in 2 days; the 8 Common fusions take 6 days of wallet spacing. The fused Uncommons play their 15 matches inside the 14-day card cooldown, the fused Rares need 15 days for 45 matches and the fused Epics 45 days for 135, because the cooldown does not block play: 7 + 2 + 6 + 14 + 15 + 45 = 89 (82 with the third pack on day 0) |
+| Packs, every waiver | about 37 to 44 | about 70,000 | The 10,700 above, plus the match waivers of 12 Uncommons x 10 x 20 = 2,400, 6 Rares x 30 x 100 = 18,000 and 3 Epics x 90 x 100 = 27,000, plus 14 fused inputs x 11 waived days x 75 = 11,550, plus about 300 of sync fees at 10 per card. Days: 7 for the packs (0 with the third pack right after a Monday 14:00 UTC), 2 for the 5 real matches of the Commons, 14 spacing gaps x 20 h = 12, then the three fused rungs: 3 (the floor), 5 (15 real matches of a Rare) and 15 (45 real matches of an Epic) |
 
-Moving a second wallet's Legendary is the slowest route when nothing is paid and still takes about 55 days with every match waiver bought. The pack routes build a Legendary whose inputs have played: about 89 days for 10,700 FOXSY or about 44 days for about 70,000 FOXSY. That is the shape the match gates are there to give.
+Moving a second wallet's Legendary is the slowest route when nothing is paid and still takes about 55 days with every match waiver bought. The pack routes build a Legendary whose inputs have played: about 82 to 89 days for 10,700 FOXSY or about 37 to 44 days for about 70,000 FOXSY. That is the shape the match gates are there to give.
 
 ## Which manager are you?
 
@@ -217,7 +218,7 @@ You create the events other managers play in.
 ## What money cannot buy
 
 - **The floors.** 3 days of every fused card's cooldown, the matches of every gate that must really be played (5 for a Common or an Uncommon, 15 for a Rare, 45 for an Epic, 135 for a Legendary), 3 days of the transfer cooldown of a card moved at its gate (21 days plus 6 hours for every match it still has to really play for a card moved under it), the 20-hour wallet spacing between fusions and the 2 Common packs a week.
-- **The daily caps.** 5 casual and ranked games you start, 3 XP-eligible matches per player, 5 free plus 10 paid training sessions, all resetting at 14:00 UTC.
+- **The daily caps.** 5 casual and ranked games you start, 3 XP-eligible matches per player, 5 free plus 10 paid training sessions, all resetting at 14:00 UTC; the 2 Common packs a week start again on Monday at 14:00 UTC.
 - **Aging.** Every player is 18 at mint and grows a week older every day. From 30 the condition bill rises with every season, the natural recovery slows and nothing reverses it. Paid recovery keeps a veteran playing; it does not make them younger.
 - **Ranked pacing.** 30 seconds between matches, 15 minutes between ranked games and a rating that decays after 10 idle days.
 
@@ -764,6 +765,8 @@ The players contract refuses the listing otherwise, so the Sell form disables th
 
 Right before your wallet opens, the listing reads your squad again. A card that is no longer in your wallet (for example one you sent or listed a moment ago) signs nothing: **This player is no longer in your squad. Nothing was signed or sent now.** With **Batch Mode** on, nothing of the batch is signed: the message names each such card and takes it out of your selection. When your squad cannot be read, nothing is signed either: **Your squad could not be reloaded from the server. Nothing was signed or sent now. Try again in a moment.**
 
+For the 24 hours of the auction the contract holds the card: it is not in your wallet, so it does not play for you. When the card is one of your saved 18 the Sell form says so before you sign: **This player is in your saved 18. During the auction the card is held by the contract, not your wallet: a tournament or 1v1 match that locks before you replace him in your squad is forfeited 3-0.** When one of your matches still has to lock, the warning also names it with its lock time: if he is still in the auction or sold by then and not replaced in your squad, that match is forfeited 3-0. When your team cannot be read the form shows the warning for every card, starting with **Your team could not be read. If this player is in your saved 18**. The listing is never blocked: replace him in Tactics before that lock to keep your squad complete (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)).
+
 ## Bidding on a player
 
 1. **Marketplace** → **Browse** sub-tab
@@ -802,9 +805,9 @@ Like a player you saw in another team's squad (on the Leaderboard or in a tourna
 
 The owner sees your team name, your coach name, your offer, the time and your Telegram username when you share it. Nobody else sees any of it.
 
-**Limits:** you can show interest in **5 players a day** (UTC) and tell the same owner about the **same player once every 7 days**. If the player changes owner, you can tell the new owner at once. You cannot show interest in your own players or in a player already on the market (buy it there). A visitor without a wallet (Scout first) does not see it.
+**Limits:** you can show interest in **5 players a day** (from 14:00 UTC to 14:00 UTC, the daily reset) and tell the same owner about the **same player once every 7 days**. If the player changes owner, you can tell the new owner at once. You cannot show interest in your own players or in a player already on the market (buy it there). A visitor without a wallet (Scout first) does not see it.
 
-**As the owner** you get **one notification per player per day**, however many managers ask. The first one arrives with a push; every later one that day updates the same notification (for example "5 managers are interested in Maximiliano Romero. Best offer 15,000 FOXSY.") and puts it back on top as unread, without a second push. The next day starts a new one. Open it to see every manager with their offer. It carries two buttons:
+**As the owner** you get **one notification per player per day** (the same day, from 14:00 UTC to 14:00 UTC), however many managers ask. The first one arrives with a push; every later one that day updates the same notification (for example "5 managers are interested in Maximiliano Romero. Best offer 15,000 FOXSY.") and puts it back on top as unread, without a second push. The next day starts a new one. Open it to see every manager with their offer. It carries two buttons:
 
 - **List for sale** opens the normal listing of that player with the best offer of the day filled in as the price. You can change it.
 - **Ignore** puts the notification away.
@@ -890,7 +893,7 @@ The **Tactics** page shows a banner for your next match with the same lock count
 
 ## Squad rule
 
-Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. If your squad is short for any reason (for example you sold a player without replacing it) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped automatically for a fit substitute of his own line first, then of the nearest line. A keeper is swapped only for a keeper (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO until Monday 9 November 2026, 14:00 UTC. From then a forfeit, by one team or both, moves no ELO until Friday 13 November 2026, 14:00 UTC. From that moment each team that forfeits loses the most ELO one match of its level can move (9 in Bronze, 13 in Silver, 17 in Gold) while the other team gains none. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
+Your squad must be **complete and fully owned** at lock time: eleven starters plus seven substitutes, all still in your wallet. A card in an auction is held by the contract for the 24 hours of the auction, so it is not in your wallet. If your squad is short for any reason (for example a player in an auction, sold or sent away without being replaced in your 18) that match is **forfeited 3-0**. Starters must also be match-fit: condition of at least 30, not inside a transfer cooldown. An unfit starter is swapped automatically for a fit substitute of his own line first, then of the nearest line. A keeper is swapped only for a keeper (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). If fewer than eleven fit starters remain after those swaps the match is forfeited 3-0 as well. When both teams fail the game is recorded 0-0 as a loss for both sides; in Silver and Gold events both also lose ELO until Monday 9 November 2026, 14:00 UTC. From then a forfeit, by one team or both, moves no ELO until Friday 13 November 2026, 14:00 UTC. From that moment each team that forfeits loses the most ELO one match of its level can move (9 in Bronze, 13 in Silver, 17 in Gold) while the other team gains none. You return to normal play as soon as you complete your squad again. This is the same rule you meet when joining a tournament.
 
 ## Your team name
 
@@ -938,7 +941,7 @@ The competitive mode. ELO points move between you and your opponent based on the
 
 - **Best for**: climbing the leaderboard, qualifying for league promotions
 - **Matchmaking**: a random opponent within 150 ELO of you. The search widens to 300, then 500, if nobody fits; after that an AI team stands in. Your league is not used.
-- **Once a day per opponent**: the same two teams meet in ranked at most once every 24 hours, whoever started the game. A team you played in ranked in the last 24 hours is not drawn again; when no other team fits, the AI stands in. A team whose starting XI is not all match-fit right now (each player at condition 30 or more, none in a transfer cooldown) is not drawn either. A game still being played counts as a meeting; one that failed or was abandoned does not. Should a second ranked game of the same two teams still take place inside the 24 hours, it records the result but moves no rating.
+- **Once a day per opponent**: the same two teams meet in ranked at most once every 24 hours, whoever started the game. A team you played in ranked in the last 24 hours is not drawn again; when no other team fits, the AI stands in. A team whose starting XI is not all match-fit right now (each player at condition 30 or more, none in a transfer cooldown) is not drawn either. A game still being played counts as a meeting; one that failed or was abandoned does not. Should a second ranked game of the same two teams still take place inside the 24 hours, it records the result but moves no rating. From Friday 20 November 2026, 14:00 UTC a ranked game that moves ELO also counts toward the [ELO pair cap](#the-elo-pair-cap). A team you already met in 3 games that moved ELO since the last daily reset at 14:00 UTC (ranked, 1v1 and tournaments together) is not drawn either.
 - **Ranked ticket (from Monday 9 November 2026, 14:00 UTC)**: the team that starts a ranked game pays **25 FOXSY** before the opponent is drawn. **KICK OFF** shows the price with what it buys, then asks your wallet for one payment; the game starts once it is confirmed. One payment is one ticket for one ranked game. Only your team earns XP (a quarter of the Gold rate) and competitive matches. The team drawn in pays nothing, loses no condition and earns neither; its ELO moves like yours. A ranked game that fails before its result gives the ticket back for your next start.
 - **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO. From Monday 9 November 2026, 14:00 UTC it is also free: it takes no ticket, costs no condition and earns no XP, so the ticket you hold stays for your next ranked start.
 - **Condition**: only you, the player who started the match, pay condition. The opponent drawn into your game pays nothing.
@@ -1002,10 +1005,21 @@ From **Monday 9 November 2026, 14:00 UTC** every match that costs FOXSY earns at
 - **Competitive matches**: at most 3 per card per day at every level, in the XP cap's window (reset at 14:00 UTC).
 - **Forfeits earn nothing**: a forfeit (by one team or by both) and a match that could not be played (recorded 0-0) move no XP, no condition and no competitive matches. Only the result counts, in the match history and the tournament standings. A match the server could not play is never a forfeit and never moves ELO.
 - **A forfeit costs ELO from Friday 13 November 2026, 14:00 UTC**: until then a forfeit moves no ELO. From then each team that forfeits a match of a level (a Bronze, Silver or Gold tournament match or 1v1 challenge) loses the most ELO one match of that level can move, its full K: 9 in Bronze, 13 in Silver, 17 in Gold. When both teams forfeit, both lose it. The other team gains no ELO; its win still counts. A match with no level (a Bronze with no entry fee, a developer game) moves no ELO, forfeit or not.
+- **The ELO pair cap (from Friday 20 November 2026, 14:00 UTC)**: see [below](#the-elo-pair-cap).
 - **What earns nothing**: casual games, a ranked game the AI fills (free, it keeps your ticket), a Bronze tournament with no entry fee (one created before the switch) plus developer games.
 - **When the switch applies**: a ranked game started from that moment; a tournament match played from that moment, whenever its tournament was created; a Bronze tournament created from that moment (see [Tournaments](/mechanics/tournaments/#the-three-tiers)).
 
 Until the switch the rules above this section apply as they are written: ranked is free and earns no XP, ranked moves ELO with K = 9, Silver with K = 13, Gold with K = 17, Bronze is free and moves nothing.
+
+## The ELO pair cap
+
+From **Friday 20 November 2026, 14:00 UTC** the same two teams move ELO in at most **3 games per day**, from 14:00 UTC to 14:00 UTC (the daily reset): ranked games, 1v1 challenges and tournament matches of every level count together. It is the same day as for the XP cap and the daily allowances. The 3 is today's value of a game setting; the app always states the number in force.
+
+- **What counts**: a game whose result moves ELO between your two teams. A forfeit (by one team or by both), a match that could not be played, a game against the AI, a casual game, a Bronze with no entry fee and a developer game never count. A forfeit always costs its ELO, at the cap or not.
+- **The 4th game and later**: that day it still counts for everything else, as always: the result, the tournament points and standings, the prizes, XP, competitive matches, yellow cards and injuries. Only ELO does not move, for either team. Its match card shows **0 ELO** with "No ELO: 4th meeting with this team that day".
+- **Which games are first**: games count in the order their results come out (a tournament match at the end of its broadcast), not in the order they kicked off. Results that come out at the same moment count in the order the matches were created. A game belongs to the day its result comes out in: a result at 13:59 UTC is one of the day that ends at 14:00 UTC, a result at 14:05 UTC is the first of a new day. So two teams can play 3 games that move ELO before 14:00 UTC and 3 more after it. A game that did not move ELO because of the cap does not count toward the 3. The count starts at the switch.
+- **Before you pay**: you already played a team in 3 games that moved ELO since the last daily reset? When you create a 1v1 against that team (or accept or join a 1v1 against it) the page says, for example, "No ELO for this game if its result comes before Nov 21, 14:00: you already played that team 3 times today (the day runs from 14:00 UTC to 14:00 UTC, the daily reset)." The time is the next daily reset, written in your own time zone: a result that comes out from then on moves ELO again. You can still play it. Only results already out count, so a match still being played is not in that count.
+- **Ranked**: the ranked rule of once a day per opponent stays as it is (once in any 24 hours). A ranked game that moves ELO is one of the 3. The matchmaker does not draw a team you already reached the cap with that day.
 
 ## Match History
 
@@ -1057,6 +1071,8 @@ The entry fee is written to the tournaments contract when the challenge is creat
 ![Create 1v1 Challenge form (title, description, tier picker, entry fee with live pool calculator, opponent search, deadline buttons)](/screenshots/create-1v1-form.png)
 
 Your synced XI is captured as a **snapshot** at the match's strategy lock, the same way regular tournament matches work. A 1v1 normally kicks off a few minutes after the opponent accepts, so its lineup is captured right then, not when you create the challenge. Training and syncing done before the opponent accepts still count; anything after the lock doesn't.
+
+As in a tournament, your saved 11 starters plus 7 substitutes must all be in your wallet at the lock. A card in an auction is held by the contract for the 24 hours of the auction, so it is not in your wallet: a card of your saved 18 in an auction (or sold or sent away) at the lock makes your squad short, the challenge is forfeited 3-0 and your stake goes with it (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)).
 
 ## Targeted vs open challenges
 
@@ -1163,6 +1179,8 @@ Cancelled or finished challenges don't count. Once your active one resolves (win
 
 1v1 results move ELO at the **tournament K-factor of the challenge's tier**: a Silver challenge uses the Silver K-factor (13), a Gold challenge the Gold K-factor (17). This is intentional as 1v1s are high-stakes and should weigh accordingly in your ranking. From Monday 9 November 2026, 14:00 UTC the [competition levels](/mechanics/matches/#competition-levels) apply: a Silver challenge gives three quarters of the XP, a Gold one the full XP. A forfeit then moves no ELO until **Friday 13 November 2026, 14:00 UTC**. From then the team that forfeits a challenge loses the full K of its level (13 for Silver, 17 for Gold) while the other team gains no ELO.
 
+From **Friday 20 November 2026, 14:00 UTC** the [ELO pair cap](/mechanics/matches/#the-elo-pair-cap) applies: the same two teams move ELO in at most 3 games per day, from 14:00 UTC to 14:00 UTC (the daily reset), ranked, 1v1 and tournaments together. A later challenge against the same team that day still counts for the result, the prize and XP, but moves no ELO. When you create, accept or join a challenge against that team the page tells you first until when its result would not change ELO.
+
 - Win → significant ELO gain
 - Loss → significant ELO loss
 - Draws are impossible in 1v1 (extra time/penalties always resolve)
@@ -1245,7 +1263,7 @@ Equal means the replay you downloaded is, byte for byte, the replay FoxLeague re
 
 For some matches FoxLeague also keeps the full replay file (`.rcg`) on Autonomys Auto Drive, after the record. It is byte for byte the file the record's `replay.download` address serves: the match as the match engine recorded it, with the two team names, the match engine's settings (each player's type included), every position and action of the players and the ball, the referee's decisions and the score. FoxLeague links it only after checking that its size and its SHA-256 equal the record's `replay.bytes` and `replay.sha256`. Like the record, it is permanent and public. It holds no wallet address, no coach name, no e-mail address, no Telegram user id or username, no IP address. Ranked and casual games, developer tournaments and developer challenges get no replay file. The [Privacy Policy](/legal/privacy/) (section 12) says the same.
 
-Which matches get one is FoxLeague's choice within the storage it has on Autonomys: every tournament match and 1v1 challenge whose broadcast ended from a set date, unless FoxLeague keeps only the finals.
+Which matches get one is FoxLeague's choice within the storage it has on Autonomys: every tournament match and 1v1 challenge whose broadcast ended from a set date, unless FoxLeague keeps only the finals. Only a match the updated match engine recorded gets one: it draws its randomness from values the game server picks at random for each match (never from the clock) and writes no date or clock time into the file. A match recorded before that update never gets a replay file.
 
 When a match has one, its page shows **Permanent record and full replay on Autonomys**, with a link on each. The replay link opens the file on the public Autonomys gateway: steps 3 and 4 above check it against the record the same way.
 
@@ -1264,11 +1282,11 @@ Find it at **Marketplace → Shop** tab.
 
 ## Live prices
 
-The Shop panel always shows the **live** price at the top of every item (check there before confirming):
+The Shop panel always shows the **live** price at the top of every item (check there before confirming). The table lists the full prices; from 1 December 2026 your [MetaStaking discount](#from-1-december-2026-the-metastaking-discount) lowers most of them for your wallet:
 
 | Item | Live price | What it does |
 |------|------------|--------------|
-| **Common Pack** | 2,500 FOXSY for 5 Common players | 5 random Common player NFTs delivered to your wallet. At most 2 packs per wallet per rolling 7 days |
+| **Common Pack** | 2,500 FOXSY for 5 Common players | 5 random Common player NFTs delivered to your wallet. At most 2 packs per wallet per week, from Monday 14:00 UTC |
 | **Condition Recovery** | up to 100 FOXSY per player (pro-rated by missing condition) | Instantly restores one player to full condition |
 | **XP Booster** | 2,000 FOXSY | 2× XP on every training session and eligible match for 24h |
 | **Training Slot** | 20 FOXSY per slot | +1 extra training session on today's cap |
@@ -1286,14 +1304,14 @@ The Shop panel always shows the **live** price at the top of every item (check t
 The only Shop item that adds players to your roster. One pack is **5 Common player NFTs for 2,500 FOXSY** (500 per card). It is the way to grow beyond the 18 starter cards without waiting for the marketplace, whether you need spare bodies for rotation or fusion inputs.
 
 - **Balance check**: every FOXSY payment in the app (packs, consumables, fusion waivers, badge re-rolls, tournament entries, bids) compares the price with your FOXSY balance before your wallet opens. When the balance is too low the app says so (with what the item costs) and nothing is signed. If the balance cannot be read at that moment, the purchase is not blocked
-- **Cap**: at most **2 packs per wallet per rolling 7 days**. The Shop card shows how many packs you can still buy this week; the third attempt inside the window is refused before any FOXSY moves
+- **Cap**: at most **2 packs per wallet per week**. The week starts on **Monday at 14:00 UTC** (the daily reset) and runs to the next Monday at 14:00 UTC; it is not a rolling 7 days. The Shop card shows how many packs you can still buy this week and, once both are bought, when the next week starts. A third attempt in the same week is refused before any FOXSY moves. A pack whose delivery failed and was refunded does not count
 - **What you get**: 5 Commons with random positions, weighted like a starter squad (2 GK, 6 DEF, 6 MID, 4 FWD out of 18), so over a few packs you end up with a normal spread. Within a position the card is uniformly random. Stats are the pre-rolled Common stats of the card, inside the Common range
-- **Where they come from**: the pre-minted Common pool the platform also uses for starter squads. The Shop card reads **Sold out** when fewer than 5 Commons are free in the pool. It reads **Daily pack budget spent** when the platform's pack budget is used up: at most 100 packs (500 cards) for all managers together in any 24 hours. The budget has no fixed reset time: each pack delivered counts against it for 24 to 25 hours, so room comes back hour by hour. In both cases the purchase is refused without charging you. Try again once the pool is restocked or the budget has room
+- **Where they come from**: the pre-minted Common pool the platform also uses for starter squads. The Shop card reads **Sold out** when fewer than 5 Commons are free in the pool. It reads **Daily pack budget spent** when the platform's pack budget is used up: at most 100 packs (500 cards) for all managers together in any 24 hours. This budget is the players contract's own rolling window, not your weekly cap: it has no fixed reset time, each pack delivered counts against it for 24 to 25 hours, so room comes back hour by hour. In both cases the purchase is refused without charging you. Try again once the pool is restocked or the budget has room
 - **Delivery**: the game server sends the 5 cards to your wallet about a minute after the payment confirms. The Shop card shows **5 players on the way** until they land in your Squad. If the delivery fails the FOXSY is refunded through the usual refund sweep
 - **What the cards carry**: 0 competitive matches and no cooldown of any kind. They can play at once. They can be fused or auctioned only once they reach the Common match gate: 5 competitive matches, all really played (see [Fusion](/mechanics/fusion/) and [Marketplace](/mechanics/marketplace/))
 
 > **Packs and fusion**
-> Three Commons from one pack are a fusion triplet once each has played 5 competitive matches (a Common has no match waiver). A full Common-to-Legendary lineage needs 81 Commons: 17 packs, 8 weeks (56 days) at 2 packs per rolling week. The worked path is on the [Economy map](/mechanics/economy-map/).
+> Three Commons from one pack are a fusion triplet once each has played 5 competitive matches (a Common has no match waiver). A full Common-to-Legendary lineage needs 81 Commons: 17 packs over 9 pack weeks at 2 packs a week, 49 to 56 days from the first pack (49 when the first 2 are bought just before a Monday 14:00 UTC). The worked path is on the [Economy map](/mechanics/economy-map/).
 
 ---
 
@@ -1399,9 +1417,9 @@ The per-card details, quotes and the exact floors are on the [Fusion](/mechanics
 
 ## From 1 December 2026: the MetaStaking discount
 
-From **Tuesday 1 December 2026, 14:00 UTC** the FOXSY you hold in MultiversX MetaStaking gives you a discount in the Shop. You simply pay less: there is nothing to claim. The % comes from FoxLeague's own daily snapshots of your wallet (see [MetaStaking on your Dashboard](/getting-started/wallet/#metastaking-on-your-dashboard)).
+From **Tuesday 1 December 2026, 14:00 UTC** the FOXSY you hold in MultiversX MetaStaking gives you a discount in the Shop. You simply pay less: there is nothing to claim and nothing comes back later. The % comes from FoxLeague's own daily snapshots of your wallet (see [MetaStaking on your Dashboard](/getting-started/wallet/#metastaking-on-your-dashboard)).
 
-- **1% for every full 100,000 FOXSY** of your 30-day average, up to **10%** from 1,000,000 FOXSY. Under 100,000 there is no discount. 150,000 gives 1%; 999,999 gives 9%.
+- **0.1% for every full 10,000 FOXSY** of your 30-day average, up to **10%** from 1,000,000 FOXSY. Under 10,000 there is no discount. 150,000 gives 1.5%; 999,999 gives 9.9%.
 - **Your 30-day average counts.** It is the total of the daily snapshots of the last 30 days, always divided by 30: the number your Dashboard card shows. A day without a stake counts 0, so a team that exists for fewer days does not get a shorter average. Staking in November counts.
 - **Included:** Common packs, condition recovery, XP boosters, training slots, Reduce Cooldown, medicine and ranked tickets.
 - **Not included:** the fusion cost, the **Fusion Cooldown Waiver**, the **Fusion Match Waiver**, tournament entries, organizer payments or deposits, the marketplace and badge re-rolls (sold from **Settings**).
@@ -1410,19 +1428,32 @@ The fusion cost and the two fusion waivers stay at full price: the players contr
 
 | 30-day average | Discount |
 |----------------|----------|
-| under 100,000 FOXSY | none |
+| under 10,000 FOXSY | none |
+| 10,000 FOXSY | 0.1% |
+| 50,000 FOXSY | 0.5% |
 | 100,000 FOXSY | 1% |
-| 200,000 FOXSY | 2% |
-| 300,000 FOXSY | 3% |
-| 400,000 FOXSY | 4% |
+| 150,000 FOXSY | 1.5% |
+| 250,000 FOXSY | 2.5% |
 | 500,000 FOXSY | 5% |
-| 600,000 FOXSY | 6% |
-| 700,000 FOXSY | 7% |
-| 800,000 FOXSY | 8% |
+| 750,000 FOXSY | 7.5% |
 | 900,000 FOXSY | 9% |
+| 990,000 FOXSY | 9.9% |
 | 1,000,000 FOXSY or more | 10% |
 
-Your Dashboard card shows this same average, always divided by 30. Until 1 December it also shows the % your average gives today and, when keeping today's stake every day gets you to the next % within 30 days, the day you reach it (for example **0% today. Keep today's stake and you reach 1% on 28 November.**). Otherwise it says that keeping today's stake keeps your % or what the next % needs.
+Between two rows the discount grows by 0.1% for every full 10,000 FOXSY: 159,999 still gives 1.5%, 160,000 gives 1.6%.
+
+### What you see and what you pay
+
+From that moment every discounted price in the app shows the price you pay, the full price struck through next to it and **MetaStaking -N%** with your % (for example **MetaStaking -1.5%**). A wallet at 0% sees the prices exactly as before.
+
+- **The price is always whole FOXSY.** The discount is your % of the full price, rounded down to a whole FOXSY: at 10% a Common pack of 2,500 costs **2,250**, an XP booster of 2,000 costs **1,800** and a ranked ticket of 25 costs **23** (10% of 25 is 2.5, which counts as 2). At 1.5% the pack costs **2,463** (1.5% of 2,500 is 37.5, which counts as 37) while the same ticket still costs 25: the discount is under one FOXSY
+- **Once per payment.** When one payment buys several things the discount is taken on its total: 5 training slots at 20 FOXSY are 100, so 90 at 10%. Recover All works the same way on the sum of your players
+- **Reduce Cooldown and medicine** show the cost of the days you chose, then the same discount on that cost
+- **Only your own price is accepted.** Your wallet signs the discounted amount and the game checks it against the price it computed for your wallet itself: no % is ever taken from the app. A payment of any other amount, the full price included, buys nothing and is refunded whole (see the payment flow below)
+- **When your % changes while you pay.** The % usually moves once a day, when the daily snapshot is taken. It can also move later the same day: when a snapshot of your wallet is read again after a failed try, when a day is filled in from your wallet's history and at the start of the discount itself. A price the app showed you stays good for **15 minutes**, so a payment you had already signed is delivered at the price you saw. A payment counts at the moment the chain recorded it: one made before 1 December 2026, 14:00 UTC pays the full price, even when it is confirmed after. Just before your wallet opens the app checks your % again: if it changed, nothing is signed, the new price is shown and you pay again. If the app cannot check it, nothing is signed either: try again in a moment
+- **Condition recovery** buys points with what you paid: with a discount the same FOXSY buys more points. Anything you paid above the price of the points you received comes back automatically, as before
+
+Until 1 December your Dashboard card shows the % your average gives today and, when keeping today's stake every day gets you to the next step of 0.1% within 30 days, the day you reach it (for example **0% today. Keep today's stake and you reach 0.1% on 28 November.**). Otherwise it says that keeping today's stake keeps your % or how much more FOXSY the next step needs. From 1 December the card shows **MetaStaking discount: N% off in the Shop**, the % you pay less today, with the same line about the next step.
 
 ---
 
@@ -1438,7 +1469,7 @@ Every shop purchase is an on-chain FOXSY transaction:
 6. Wait ~10 seconds for confirmation
 7. Effect applies immediately. Booster clock starts, slot added, condition restored. A Common pack is the exception: its 5 cards arrive about a minute later, sent by the game server
 
-No off-chain purchases, no hidden fees beyond the listed price. If a payment lands with the wrong amount or the effect cannot be applied, the FOXSY is refunded automatically: usually within seconds, with a retry sweep every 5 minutes and a cap of 10 automatic refunds per wallet per hour.
+No off-chain purchases, no hidden fees beyond the listed price. From 1 December 2026, 14:00 UTC the listed price is your own: the full price less your [MetaStaking discount](#from-1-december-2026-the-metastaking-discount). If a payment lands with the wrong amount or the effect cannot be applied, the FOXSY is refunded automatically: usually within seconds, with a retry sweep every 5 minutes and a cap of 10 automatic refunds per wallet per hour.
 
 ## Purchase history
 
@@ -1575,7 +1606,7 @@ If you leave a draft unsaved, your saved formation and lineup stay in effect.
 
 **SAVE** commits the formation and its lineup together in one save. If the lineup is refused (a player listed for sale in the meantime, for example) neither changes: your saved formation keeps its **Saved** badge and its lineup. A new formation is always saved together with a lineup that fits it.
 
-**A starter not in your squad.** When a card of your saved eleven is not in your squad when you open Tactics (listed for sale, sold or away for a few seconds during a stats sync), a notice reads **1 starter is not in your squad right now** (or **N starters**) and says your lineup was not changed. Opening the page never saves anything. **Fill from the bench** puts a substitute of the same line in each empty slot and saves; when a line has no substitute, Best XI picks a full eleven. A card away for a stats sync you started in the last 15 minutes stays in your squad, unless the chain shows another wallet holding it, so a sync alone does not show the notice. When the chain shows no holder at all, the card stays only if it is one of the cards that sync carries: a card burned in a fusion has no holder either. In a tournament the lock does it for you: a starter sold to another wallet or listed for sale is replaced by a fit substitute (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)).
+**A starter not in your squad.** When a card of your saved eleven is not in your squad when you open Tactics (listed for sale, sold or away for a few seconds during a stats sync), a notice reads **1 starter is not in your squad right now** (or **N starters**) and says your lineup was not changed. Opening the page never saves anything. **Fill from the bench** puts a substitute of the same line in each empty slot and saves; when a line has no substitute, Best XI picks a full eleven. A card away for a stats sync you started in the last 15 minutes stays in your squad, unless the chain shows another wallet holding it, so a sync alone does not show the notice. When the chain shows no holder at all, the card stays only if it is one of the cards that sync carries: a card burned in a fusion has no holder either. In a tournament or a 1v1 challenge the lock does not do it for you: a card of your saved 18 that is not in your wallet at a match's lock (in an auction, sold or sent away) makes your squad short, so that match is forfeited 3-0. Fill his place and save before the lock (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)).
 
 ## Injured and suspended players
 
@@ -1619,7 +1650,7 @@ Save a lineup with fewer than 7 substitutes and the bench is completed for you *
 
 While one of your 18 is listed for sale, **KICK OFF** stays disabled and the line under it reads **1 player is listed for sale: cancel the listing or swap it out** (with two of them: **2 players are listed for sale: cancel the listing or swap them out**). Below it, **My Listings** opens your listings to cancel one; **Open Tactics** lets you swap the player for a reserve.
 
-A substitute you list for sale stays on your saved bench until you save a change. Tactics shows his seat as **Empty seat: tap a reserve, then this seat**, so you choose who sits there. Any swap you save takes him off the bench and fills his seat from your reserves position for position. A notice says so: *1 substitute listed for sale left your bench. Auto-filled 1 substitute from your reserves…* **Best XI** and a new formation pick a whole new bench without him. With no reserve left to take his seat the save is refused: cancel the listing to keep him on your bench or get one more card.
+A substitute you list for sale stays on your saved bench until you save a change. In a tournament or a 1v1 challenge that seat counts as short: his card is held by the auction contract, not your wallet, so a match that locks before you save the change is forfeited 3-0. Tactics shows his seat as **Empty seat: tap a reserve, then this seat**, so you choose who sits there. Any swap you save takes him off the bench and fills his seat from your reserves position for position. A notice says so: *1 substitute listed for sale left your bench. Auto-filled 1 substitute from your reserves…* **Best XI** and a new formation pick a whole new bench without him. With no reserve left to take his seat the save is refused: cancel the listing to keep him on your bench or get one more card.
 
 Reasons a player might NOT be ready:
 
@@ -1628,7 +1659,7 @@ Reasons a player might NOT be ready:
 Reasons a player can't be fielded even when ready:
 
 - **In transfer cooldown**: 21 days (504h) after a wallet-to-wallet receive, which you can pay to cut to a 3-day floor, every day of it or only some, in **Marketplace → Shop → Reduce Cooldown**. A card moved before its match gate: 21 days plus 6 hours for every missing match, shorter only with match waivers
-- **Listed for sale**: escrowed on the marketplace until you cancel the listing. In a tournament a listed starter is replaced at the lock by a fit substitute; when the bench has none to spare he plays, since a listing alone never forfeits a match. A listed card is never on the bench for the match, so he can never come on during it
+- **Listed for sale**: held by the auction contract for the 24 hours of the auction (or until you cancel a listing with no bids), so he is not in your wallet. In a tournament or a 1v1 challenge a card of your saved 18 in an auction at a match's lock makes your squad short: that match is forfeited 3-0 unless you replaced him in your 18 before the lock
 
 Kickoff can also be blocked at the **account** level: from 1 hour before one of your tournament or 1v1 matches is scheduled until its broadcast ends, casual and ranked play is off.
 
@@ -1896,7 +1927,7 @@ Your team is **not** frozen when you join. Each match captures your team at its 
 A match already past its lock is fixed. Newer syncs, training and lineup changes only affect your **future** matches.
 
 > **Field a complete, owned squad at every lock**
-> At each match's lock your squad must be a legal **11 starters plus 7 substitutes, all still in your wallet**. If it is short (for example you sold a player without replacing it) that match is **forfeited 3-0**. You return to normal as soon as you complete your squad again.
+> At each match's lock your squad must be a legal **11 starters plus 7 substitutes, all still in your wallet**. A card in an auction is held by the contract for the 24 hours of the auction: it is not in your wallet. If a card of your saved 18 is not in your wallet at the lock (in an auction, sold or sent away) your squad is short, so that match is **forfeited 3-0** unless you replaced him in your 18 before the lock. You return to normal as soon as you complete your squad again.
 
 See [Match-day strategy](/mechanics/match-day-strategy/) for the full flow, the Upcoming Games page and the lock countdowns.
 
@@ -1966,15 +1997,15 @@ Champions FoxLeague always plays its 3rd place match, as a single match before t
 
 ## Auto-subs and forfeit
 
-FoxLeague expects you to own a full 18 (11 starters + 7 substitutes) when your next tournament match locks. If a starter is not match-fit at that moment (condition below 30 or in the transfer cooldown), the tournament **automatically substitutes** a fit bench player in.
+FoxLeague expects your full 18 (11 starters + 7 substitutes) in your wallet when your next tournament match locks. If a starter is not match-fit at that moment (condition below 30 or in the transfer cooldown), the tournament **automatically substitutes** a fit bench player in.
 
 - **Who comes on follows the lines of your formation.** Your keeper is replaced only by a fit keeper from the bench. An outfield player is replaced by a fit substitute of his own line first, then of the nearest line (defenders and midfielders are one line apart, as are midfielders and forwards), never by your bench keeper. Between two players equally near, the higher OVR comes on
 - An outfield player goes in goal only when no fit keeper is left on your bench, so your team is not forfeited for want of a keeper
-- A starter **listed for sale** is replaced the same way by a fit substitute. When no fit one is on your bench he plays: a listing alone never forfeits a match. He is replaced last, after every starter who is not match-fit or sits the match out, so he never takes the substitute one of them needs. A listed card is never on your bench for the match (a replaced listed starter does not go to the bench; a listed substitute is left out), so he can never come on during it. Your bench plays one short for each
 - A starter saved in a slot of another line (lineups saved before 28 October 2026 could hold one) is replaced the same way when your bench has a fit player nearer that slot's line. Otherwise he plays there: this alone never forfeits a match
-- Once the match has ended, its card on the tournament page lists the auto-subs of each side under **Lineup changes before kickoff**: who was relieved, who took his place and why (injured, suspended, below the condition floor, listed for sale or saved outside his line). Nothing of it shows before the match has ended
+- Once the match has ended, its card on the tournament page lists the auto-subs of each side under **Lineup changes before kickoff**: who was relieved, who took his place and why (injured, suspended, below the condition floor or saved outside his line). Nothing of it shows before the match has ended
 - A suspended player (3 yellow cards, see [Yellow card bans](/getting-started/players/#yellow-card-bans)) or an injured one (see [Injuries](/getting-started/players/#injuries)) sits the match out. He is replaced the same way. An outfield shirt takes your bench keeper only when no other fit player is left. Your bench plays one short
-- If fewer than 11 match-fit players can be assembled from your 18 (or you no longer own all 18), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
+- A card **in an auction** is not replaced: the contract holds it for the 24 hours of the auction, so it is not in your wallet. A starter or a substitute of your saved 18 in an auction at the lock makes your squad short, so the match is forfeited 3-0 (a 1v1 challenge too). Replace him in your 18 in Tactics before the lock. Or list him only when no match of yours locks during the auction
+- If fewer than 11 match-fit players can be assembled from your 18 (or one of your 18 is not in your wallet: in an auction, sold or sent away), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
 - A forfeited match is not broadcast. Its result and the forfeit reason show at its kickoff
 - If **both** teams forfeit the same match, it is recorded 0-0 as a loss for each side and each loses 1 standings point, so a standings total can go below zero. In a knockout match, where one side must go through, the home side of the fixture advances (in round 1 of a Knockout, the higher seed)
 - From Monday 9 November 2026, 14:00 UTC a forfeit (by one team or by both) moves no ELO. The win, loss or draw and the standings still count it
@@ -2026,7 +2057,7 @@ A free Bronze tournament has no entry fee and therefore no prize pool. It change
 
 ## Tips
 
-- **Plan for the whole run**. You must field a legal 11+7, all owned, at every match's lock or that game is forfeited. Nothing stops you from joining two tournaments that run in the same period, so check both schedules before committing.
+- **Plan for the whole run**. You must field a legal 11+7, all in your wallet, at every match's lock or that game is forfeited. A card in an auction is not in your wallet for its 24 hours. Nothing stops you from joining two tournaments that run in the same period, so check both schedules before committing.
 - **Watch the time between games**. Games are sequential, so the total length is roughly the number of games times the interval. A 30-minute interval with a small bracket wraps up in a few hours. A large field or a 1-day interval spans days. It runs longer still when matches are pushed back to keep a team clear of its other tournament.
 - **Check the tier before committing FOXSY**. Entry fees (Silver, Gold and from Monday 9 November 2026 Bronze) leave your wallet the moment you join. Leaving while registration is still open (before the deadline) refunds the fee on-chain. Once the deadline passes you cannot leave. **From 9 November 2026, 14:00 UTC** you can leave freely until a tournament reaches its minimum number of teams. After that you can leave only while more teams than the minimum are in it, so a tournament that reached its minimum is played. Its organizer cannot delete it then either. Every refund is **exact**, down to the amount the contract holds for your entry. If a tournament is cancelled (or you paid on chain but never took a seat) and the game server cannot push your money back, it stays in the contract. Once the tournament is cancelled or completed you can pull it yourself: the page of a completed tournament shows a **Claim my entry back** button for an entry that never took a seat. You can also call the contract's `claimRefund` endpoint with the tournament id.
 - **Add a third-place match if you can**. Without it the 15% third-place share simply goes to the runner-up; with it a third team gets paid.
@@ -2198,7 +2229,7 @@ The injuries start at the same moment as the bans. From then:
 
 - **Each foul the referee calls can injure the player fouled.** The chance is **1%** at condition 100 and grows evenly to **3%** at condition 30 (below 30 it stays 3%). The condition is the card's at kickoff: at the lineup lock for a tournament match or a 1v1 challenge, when the game starts for a ranked game.
 - **Every called foul is its own chance.** Fouls suffered never add up to an injury. Fouls from before the start never count.
-- **Days out:** 1 injury in a match = **3 days**, 2 = **9 days**, 3 or more = **27 days**, calendar days counted from the end of the match (for a tournament match or a 1v1 challenge, the end of its broadcast). A card injured again while out keeps the later end.
+- **Days out:** 1 injury in a match = **3 days**, 2 = **9 days**, 3 or more = **27 days**. Each day is a full 24 hours counted from the moment the match result counts (the end of the match; for a tournament match or a 1v1 challenge, the end of its broadcast): 3 days end 72 hours after it, not at a daily reset. A card injured again while out keeps the later end.
 - The chance (1% to 3%) and the days out (3, 9 and 27) are game settings. The app shows the ones in force: on the squad card's fouls mark until the injuries start and on the Medicine card in the Shop. If they change, the new numbers count for matches that end after the change. A card already injured keeps its end.
 - **Where:** tournaments and 1v1 challenges for both teams; ranked games only for the team that started them. A team drawn into someone else's ranked game gets no injury. A foul the referee does not call never injures.
 - An injury counts when the match ends, never earlier. The card then shows the red cross with the time it is still out (for example **3d**; hours on its last day). Its profile shows the end of the injury.
@@ -2246,7 +2277,7 @@ After registration the **Marketplace** plus the Shop's **Common pack** are how y
 
 - **Sell** players you don't need on the Marketplace once they reach the match gate of their rarity (from 5 competitive matches for a Common to 405 for a Legendary, a part really played; see [Marketplace](/mechanics/marketplace/)). Competitive matches are the Silver and Gold tournament matches and the 1v1 challenges the card took the pitch in; ranked, casual, Bronze and developer games never count. From Monday 9 November 2026, 14:00 UTC a paid Bronze match counts too, so does a ranked game your team started and paid for, at most 3 a day per card. Example: you have 6 DEF but want a 4-3-3 formation that needs only 4. Every sale is a 24-hour auction with a reserve price
 - **Bid** on players from other team owners on the Marketplace. Listings show on-chain stats, you bid in FOXSY
-- **Buy a Common pack** in the Shop: 5 Common players for 2,500 FOXSY, at most 2 packs per wallet per rolling 7 days. See [Shop](/mechanics/shop/#common-pack)
+- **Buy a Common pack** in the Shop: 5 Common players for 2,500 FOXSY, at most 2 packs per wallet per week (from Monday 14:00 UTC). See [Shop](/mechanics/shop/#common-pack)
 
 You can also **fuse** three same-rarity (plus a FOXSY fee) into one of the next rarity tier. See [Fusion](/mechanics/fusion/) for full mechanics.
 

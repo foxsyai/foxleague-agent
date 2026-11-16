@@ -6,6 +6,7 @@ import { HttpError, RateLimiter, requestJson, sleep } from '../util/http.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import type {
   DailyAllowance,
+  EloPairStatus,
   FoxConfig,
   PlayerCard,
   MatchWaiverQuote,
@@ -35,6 +36,7 @@ import type {
 } from './types.ts'
 import { STATS } from './types.ts'
 import type { MarketSale } from '../snapshot/market.ts'
+import type { AvailabilityQuery, TournamentAvailability } from '../snapshot/calendar.ts'
 
 export class ApiRefusal extends Error {
   readonly code: string | undefined
@@ -250,6 +252,15 @@ export class FoxLeague {
     return this.call<LeaderboardPage>(`/leaderboard?limit=${limit}&offset=${offset}`)
   }
 
+  /**
+   * FoxLeague's free starts for a new tournament of this format and size, by the rule create applies (public, no
+   * session; tournament_slots.rs). `days` 1 to 14 from `from` (default now). See src/snapshot/calendar.ts.
+   */
+  tournamentAvailability(q: AvailabilityQuery): Promise<TournamentAvailability> {
+    const params = new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined).map(([k, v]): [string, string] => [k, String(v)]))
+    return this.call<TournamentAvailability>(`/tournaments/availability?${params}`)
+  }
+
   async isWhitelisted(address: string): Promise<boolean> {
     return (await this.call<{ is_whitelisted: boolean }>(`/whitelist/check?wallet_address=${address}`)).is_whitelisted
   }
@@ -288,6 +299,12 @@ export class FoxLeague {
   /** The team's best XI OVR (what a tournament's or a 1v1's OVR range is checked against at the join). */
   bestXiOvr(w: AgentWallet): Promise<BestXiOvr> {
     return this.call<BestXiOvr>('/teams/best-xi-ovr', { wallet: w })
+  }
+
+  /** GET /api/matches/elo-pair/{user_id}: the ELO pair cap between this team and `userId` in the current game day. */
+  eloPair(w: AgentWallet, userId: number): Promise<EloPairStatus> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) return Promise.reject(new Error(`not a user id: ${userId}`))
+    return this.call<EloPairStatus>(`/matches/elo-pair/${userId}`, { wallet: w })
   }
 
   /** Who a League + Knockout invited (the field an agent judges before accepting). */

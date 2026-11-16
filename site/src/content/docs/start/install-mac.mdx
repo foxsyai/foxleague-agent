@@ -51,7 +51,9 @@ the questions take as long as you need.
 To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older
 version is not put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway
 (the settings and limits the newer version added are then not applied). Another folder is named with
-`FOXAGENT_DIR`; it must be empty or hold an install of foxleague-agent.
+`FOXAGENT_DIR`; it must be empty or hold an install of foxleague-agent. Your user has one background service: when it already runs the agent of another folder, the installer stops
+before the first question and says how to go on (`./install.sh --uninstall` in that folder first, or
+`./install.sh --no-service` here).
 
 ## What you will see, step by step
 
@@ -120,7 +122,7 @@ already says 1 or true.
 - **If the new version does not start**, it is undone by itself: the agent goes back to the version it ran and
   the notice says so, with **Try again** in place of **Update now**. Nothing has to be done.
 - **If an update fails**, the notice says why and the agent keeps running the version it ran.
-- **From a terminal:** `cd ~/foxleague-agent`, then `./install.sh --update`. Pasting the install line again also
+- **From a terminal:** `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo). Pasting the install line again also
   puts the newest version in place.
 
 How an update works and what its signature protects against: [Update](/help/update/).
@@ -139,6 +141,8 @@ process and no open port of the agent are left. It leaves your folder, wallet an
 the install added is in that folder, its own Node.js and the download cache of npm included: about 240 MB, and
 about 280 MB once an update has kept the release before it (kept so that the update can be undone). The agent
 wallets may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
+Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
+started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 ## If it gets stuck
 

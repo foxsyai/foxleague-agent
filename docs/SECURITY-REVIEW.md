@@ -2478,6 +2478,169 @@ Stays open:
   narrow.
 
 
+## Audit of 16 Nov 2026: seven reviewers, five fixers (2026-11-16)
+
+**Why and how.** The owner asked for a big adversarial audit of everything built since the last one: no spending
+outside the owner's caps; nothing an outside actor can use; the update notice and the one-click update on Linux, macOS
+and Windows; agents that follow the latest FoxLeague mainnet and use its rules smartly.
+
+**The review.**
+- Seven read-only reviewers by Claude Fable 5.2 at high effort, one area each: money and caps, outside attackers,
+  the signed updater, the installers on three systems, chain and FoxLeague integration, the mainnet rules and a week
+  of the live agents' own records (923 plans, 1,797 executor rows, read only from the owner's server, 9 to 16 Nov).
+- They read a frozen copy of `a7e5668`, the code that runs on the owner's server since 22:02 UTC on 15 Nov, from
+  `ac8833f` (the last audit) on: 264 files.
+
+**What they found.**
+- No critical and no high finding. No path signs past a daily, monthly, per-action, bid, shop-payment, medicine,
+  stake or tournament cap, past the gas reserve or while dry run should hold. Nothing lets a release in that the
+  owner's key did not sign. Every transaction builder matches FoxLeague's mainnet contracts.
+- 39 findings: 13 medium and 26 low, two of them found twice (CHN-1 is MNT-2, UPD-A5 is INS-A1).
+
+**The fixes.** Claude Opus 5.5 at extra-high effort, five fixers on their own branches, merged into one. The owner's
+rule held for every finding: the reviewer's test, ported to `test/audit-1116/<Id>.test.ts`, failed on the untouched
+branch for the reason given, and passes now. None was a phantom. The proposals the owner took have tests of their own,
+named after them, which failed before and pass now.
+
+**FoxLeague mainnet moved during the audit.** FoxLeague deployed `release/mainnet-1.0` at `729164194` at about 09:48
+UTC on 16 Nov, 15 commits past the agents' copy (`9ebcbc52d`). Ten of the sixteen manual pages the agents read
+changed. The daily check had said "current" at 07:00, before that deploy (MNT-5). The manual is synced to
+`729164194` in this change, and every change on those pages was read against the code (MNT-1 to MNT-4, MNT-7, CHN-1).
+
+**The owner's decisions of 16 Nov.**
+- **Agents play alone: kept.** The audit priced the rule: in the week the owner's agents raised each other on 16
+  cards, 10,208 FOXSY more. Asked whether to allow an exception for auctions or targeted 1v1s, the owner kept the
+  rule as it is (proposals P1, P-F2, P-V5 not built).
+- **Open 1v1s only when really needed, always with an OVR range** (OPEN-1V1).
+- **Fewer plans in dead hours** (P6).
+- **The organizer books up to 30 days ahead, each agent its own start** (P-O1, P-O2). The owner first chose 14
+  days, then 30.
+
+### Money, caps and FoxLeague's rules
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| MON-1 | medium | An unread upcoming-matches list read as 1 fixture left of a tournament under way, so a paid join or create the schedule rule refuses was allowed (rule 4) | `otherMatches` answers null when a started tournament is held and the list is unread; every caller refuses |
+| MON-3 | low | A Swiss or knockout under way owed only its drawn rounds | Owed = at least the format's most matches less the finished ones listed (a round robin lists every fixture) |
+| MON-2 | low | A 1v1 stake sent whose seat is unknown (error, sent) did not count toward 2 a week per rival | Such a row counts; a refunded one still does not |
+| MNT-1 | medium | The schedule rule counted one round per interval; FoxLeague plays one match of the whole tournament per interval. It refused 34-match round robins (12 times in the week) and took a running one for over while its fixtures were listed | Span = all matches less one, times the interval; every field from min_teams up is judged; a tournament with a listed fixture is never over; each listed fixture counts by its own kickoff; the digest says "one match of the whole tournament every N min" |
+| BEH-3 | low | The digest listed tournaments the schedule rule refuses with no mark | A "schedule: the executor refuses this join now: ..." line; an unread calendar is said once |
+| MNT-2, CHN-1 | medium | From the MetaStaking Shop discount's switch (announced for 1 Dec 14:00 UTC) FoxLeague takes only the wallet's own price; the agent paid list prices (refused and refunded, the gas lost) and refused every discounted medicine quote | Pays the list price less the served rate (ticket `discount_bp`, shop status `metastaking_discount_bp`, medicine quote `discount_bp`), once on the total, checked against the served prices; an unread rate refuses once the switch is live or its time has passed; list price while it is off |
+| CHN-2 | low | A relay refusal before broadcast was marked sent, and told to the owner at once as a payment with an unclear outcome | `booking.sent = false` in the guard branch |
+| MNT-3 | low | The ELO pair cap (the same two teams move ELO in at most 3 meetings a game day, from 20 Nov 14:00 UTC) was told nowhere | A snapshot rule line with what a meeting past the cap still earns; while live, each rival's meetings today from GET /api/matches/elo-pair (at most 16 reads a planning snapshot, unread = unknown); no refusal |
+| MNT-4 | low | The manual, prompt and snapshot stated the auction, pack-week and interests-day rules the old way | Manual synced; a capital "LISTED IN YOUR 18 ... forfeits" line; the pack week from Monday 14:00 UTC in the prompt; `common_pack_week_resets_at` on the pack line |
+| MNT-7 | low | The prompt gave the rules from before the competition levels (ranked K 9, no XP, free Bronze) and the levels as "once live" | The live rules are stated; the numbers stay on the snapshot's line |
+| BEH-4 | low | An open 1v1's one legal ovr_max was said as "at most" and the refusal named no value (Haiku sent the same refused action three times) | The refusal and the snapshot line name `ovr_max N, no other value`; the prompt says "exactly" |
+
+### The schedule of a plan, 1v1s and bids
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| BEH-9 | medium | Leaving the agent's own unanswered 1v1 ran at a random moment of the window; on 12 Nov a team took T5747 26 minutes later and agent 7 lost 1,000 FOXSY | `actionDeadline` answers `'now'`; the scheduler moves that leave before everything else in the plan |
+| BEH-10 | low | Taking another team's open 1v1 (first come, first served) ran at a random moment; 4 of 6 were taken by then | `'now'` deadline: runs at the start of the window, keeping the plan's order so a swap that funds it still comes first |
+| BEH-2, P-V1 | medium | An unanswered targeted 1v1 left no trace (D11), so a rival that let five expire read like one never challenged: 158 targeted challenges in the week, 1 played; 89 went past the second unanswered one | `targetedRecord` (the agent's own log and ledger only) gives sent, accepted and expired per rival on the rival's line. New rule: no third targeted 1v1 to a rival that let 2 expire in 7 days; the refusal names when it frees |
+| BEH-8 | low | Open challenges of other teams were not scouted while the agent's own 1v1 waited, yet the prompt says to leave it for a clearly better one | Scouted (4 at most) unless another team has already taken our 1v1 |
+| BEH-7 | low | Matches were spaced 13 minutes apart; 7 of 17 second starts at 13.1 minutes were refused "already in match" | `MATCH_RUNS_MS` is 16 minutes (FoxLeague's slowest simulation is about 15.75; none of 36 starts from 14.16 minutes up was held) |
+| BEH-5 | low | A first match drawn late pushed a second past a window that had room for both (37 matches dropped in 31 plans) | Each match gets a latest moment from the same backward pass as deadlines; drops are still decided before deadlines |
+| BEH-6, P7 | low | After every start all agents planned within 25 s and each wrote the prompt cache again ($23.41 of the week's $190.81) | `firstPlanDelays`: per model and effort the first agent plans at once (5 to 25 s), the rest 3 to 6 minutes later, never later than their tick |
+| BEH-1 | low | "Plans are failing" was keyed by the whole error text, which carries a new request id each time: every failed plan alerted (45 alerts in two API stops) | `alertKey` drops the request ids: one alert an hour per problem |
+| P10 | proposal | During an account stop every agent took a full snapshot and asked the model | The agent that hit the error asks again at its tick; the other scheduled ticks skip the snapshot and the call (pending payments and refunds still run); a tick the owner starts always asks; "Plans work again" is said once |
+| P6 | owner's decision | 392 of 923 plans in the week had no action ($59.23), 264 of them between 06:00 and 14:00 UTC | After a plan with no action the next comes after twice the tick, with its jitter, until a plan acts or the 14:00 UTC reset. Lowers spending only, so no password |
+| P2 | proposal | 52 of 161 bids were refused below a minimum that moved after the snapshot | `bid` takes an optional `max_foxsy`; the executor bids the fresh minimum up to it, never below the amount planned; Max bid, rarity limit, build cost and FOXSY held are checked on that amount, which is what is booked and signed |
+| OPEN-1V1 | owner's decision | Open challenges lost about 4,200 FOXSY in the week (26 played: 11 won, 13 lost, 2 drawn), mostly to stronger teams | The prompt: never the default 1v1, only when the squad needs competitive matches a targeted challenge, tournament or ranked cannot give. Code: an open create without both `ovr_min` and `ovr_max` is refused, naming the legal values |
+
+### The organizer
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| P-O1 | owner's decision | The agents created only up to 72 hours ahead while FoxLeague's calendar was full that far but one gap: on 16 Nov four agents planned that gap and three were refused (at no cost). The agent read the free gaps only from the public lists, which miss a tournament being created | Horizon of 30 days in the parser and the rules. A planning snapshot reads `GET /api/tournaments/availability` (type built from `tournament_slots.rs` at `729164194`, 14 days a request: the next window is read only while fewer than 10 free starts were found) for a round robin of 3, a round robin of 8 and a Groups + Knockout of 16; a failed or malformed answer is unknown with a warning and offers no start. Every create check stays. Own creates are read back far enough for `widen_range` |
+| P-O1b | owner's decision | The first build read 14 days (FoxLeague answers at most 14 days a request): on 16 Nov that held two free gaps, so the 10 agents shared two starts. The owner chose 30 days | `starts_in_hours` 2 to 720, "more than 30 days from now", the clash refusal, the free gaps line, the 31-day read-back of the agent's own creates and the prompt's create line. The calendar is read in up to three windows per shape (0 to 14, 14 to 28, 28 to 30 days), the next only while fewer than 10 starts were found; stretches free across two windows are joined; any failed or malformed window makes the shape unknown, never a partial list. A read on 16 Nov found free stretches on 26, 28 and 30 Nov, 2 to 4, 6 to 7 and 11 to 13 Dec |
+| P-O2 | owner's decision | Every agent was given the same first minute | For each shape the plan reads "your start for this shape: starts_at ...; the next free ones (only if yours is refused): ...": agent n takes the (n mod k)-th of the free starts found. The pick reads only its own number and FoxLeague's public answer |
+
+### Outside attackers and the watch on FoxLeague
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| ATK-4 | medium | `txt()` cut rival text by UTF-16 units: an emoji across the cut of a tournament title left half a character in the plan request, and Anthropic's API refuses such a body whole, so one title any player can write stopped every plan of every install | `cut()` (`src/util/text.ts`) never splits a character; `txt()`, the model's own texts, the chat, the plan log line and FoxLeague's answer in a pending payment use it; `Strategist.create()` makes every message well-formed where it leaves; Telegram's chunks do the same |
+| ATK-1 | medium | The manual check ran a regular expression with three nested runs over FoxLeague's page text: a 9 KB page held the event loop past 15 s (kill switch, dashboard, Telegram, payment confirms) | `liveBody()` takes the title line off, trims the end and drops a last line that starts with the Source address, with no regular expression over the end of the page |
+| ATK-2 | low | DNS rebinding: a page that pointed its own name at 127.0.0.1 could post wrong passwords to /login as the dashboard's own origin and lock the owner out | A request for a Host the dashboard is not served at is answered 421 before anything is read or counted: localhost names, an address in numbers, `WEB_UI_HOST` and the new `WEB_UI_HOSTNAMES`; behind nginx (`WEB_UI_TRUST_PROXY=1`) nginx's server_name is the filter |
+| ATK-3 | low | `new URL()` threw for "GET // HTTP/1.1" and the like: 500 with a stack trace in the log for anyone | Answered 400 without a log line |
+| MNT-5 | low | The manual check answered its stored result all day: a manual FoxLeague deployed after the morning check was told the next morning (16 Nov: current at 07:00, FoxLeague deployed at about 09:48) | A copy found current is checked again at the next hourly look once 55 minutes have passed; one found behind stays so for the day |
+| MNT-6 | low | One failed request left "could not check" for 24 hours | Tried again at the hourly looks, at most 4 tries a day |
+| P-W2 | proposal | `/api/config` was not watched | Every snapshot fingerprints it (the keys at every depth plus the rule values, without the counters that move with play). A key added or removed runs the manual check at once (at most once in 10 minutes, 6 a day) and is named, shaped and bounded like the slugs |
+| P-W3 | proposal | A change waited for the next morning's summary | One urgent Telegram line for each change: the manual gone behind, the settings keys changed (at most every 6 hours), a switch the agents have no rule for with its `live_from` within 7 days |
+| P-W5 | proposal | A plan went on quoting the manual copy while FoxLeague had changed | While behind, the plan request (never `prompt.ts`) carries a note written by the code: the changed slugs and keys only, and that the snapshot's live values and the executor's refusals win there |
+| P-W6 | proposal | A new switch in `/api/config` reached no plan | A snapshot line for each block with `live` or `live_from` that no rule reads (not in `RULED_SWITCHES`): its key, where it stands and its numbers only |
+| P-W8 | proposal | No record of what the copy and the rules were built against | `sync-manual` records the game settings' key set in `manual-pages.json` (`config`); a record without it is read as before |
+| RULED-1 | low (found at the merge) | `elo_pair_cap` and `metastaking_discount` have rules since MNT-3 and MNT-2, but the watch still listed them as switches with no rule: two lines about each in every plan and a "no rule" Telegram line | Both are in `RULED_SWITCHES` |
+
+### Installers and the updater
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| INS-A1, UPD-A5 | medium | Pasting the line over a running install moved `versions/active` to the new release (or swapped the folder of the version that runs) before `npm ci` had run there; running `./install.sh` again ran `npm ci` inside the running release. If npm was cut, or there was no terminal, the agent could not start again and nothing undid it | get.sh first checks that a terminal opens; over an install it runs the new release's own `install.sh --prepare` in a staging folder and changes nothing unless that ended well. The installer installs the dependencies of a release beside it, in `.deps-new`, and swaps them in once complete |
+| INS-A2 | medium | `--uninstall` said "Stopped." for an agent it never stopped (sudo on Linux, a refused Mac bootout, an agent started with `./run.sh`); `sudo --update` said no service was installed | As root on another user's folder, `--uninstall` and `--update` stop with the right command; "No background service of <user> was found"; on a Mac the plist is removed only once launchd no longer lists the job; an agent still running ends the uninstall with how to stop it |
+| UPD-A4 | medium | `sudo ./install.sh --update` wrote root-owned `versions/`, `active`, `pending` and `data/update`; the agent never started again | `--update` refuses when run as root on a folder another user owns, before it writes anything, and names the command without sudo |
+| INS-A5 | medium | A second install for the same user rewrote the one unit or plist and stopped the first agent for good, while saying "Running." | The installer stops before the first question, names the other folder and the two ways on; `--uninstall` and `--update` leave another install's service alone |
+| UPD-A1 | medium | The archive was written through a stream with no error listener: a full disk or an unwritable `data/update` ended the whole agent | Written through a `FileHandle`; every write or close error is an UpdateError with a sentence; the agent stays up |
+| UPD-A2 | low | Two asks for an update while none was known both installed the same archive | The slot is taken before the await and given back on every refusal |
+| UPD-A3 | low | A second `stop()` returned at once, so the restart for an update could exit while the first stop still waited for an action in flight | `stop()` returns one shared promise |
+| UPD-A6 | low | The reason of a failed prepare reached Telegram and the dashboard with terminal colour codes | `stage()` strips control bytes and empty lines |
+| INS-A3 | low | A `.env` with CR LF line ends: Enter at the port looped, Enter at the live permission wrote `AGENT_LIVE_ENABLED="0"` | `get_env` drops the CR |
+| INS-A4 | low | A refused `launchctl bootstrap` ended the Mac install with no next step | Bootout by label, a wait for launchd, a sentence with what to do |
+| INS-A6 | low | `.node-path` kept a per-shell Node.js path (fnm), gone after a reboot | `.node-path` names the program itself first; the launchers take the first path that exists |
+| INS-A7 | low | The owner of an unwritable folder was sent to a command that answered the same sentence | The refusal and the Update page give the `chown` line, then update again |
+
+**Changed tests.** Each one now pins the right behaviour, and its commit message says so.
+- **MNT-1:** "D4 ... forfeit guard", R24A-1, AA3, A9 and the Champions knockout span.
+- **BEH-4:** the OP-4 and AA2 refusal texts.
+- **OPEN-1V1:** one open-challenge case of `create-ovr-range`.
+- **BEH-9 and BEH-5:** DL-1 to DL-3, DL-5 and two R70A-2 cases.
+- **BEH-7:** the D1 spacing.
+- **P-O1:** SM-3, SM-4, SM-8 and SM-10 (72 hours to 30 days).
+- **MNT-5 and MNT-6:** MW-5, R72A-2, MW-7, MW-8 and MW-10.
+- **ATK-2:** `ATTACK-2` (2c) now sets `WEB_UI_TRUST_PROXY=1`, as nginx does.
+- **INS-A2:** the third case of `install-17`.
+- **INS-A6:** `install-14` A and B.
+- **INS-A4:** the `launchctl` stand-in, which now answers `print` only between a bootstrap and a bootout.
+- **RULED-1:** the examples of an unruled switch in P-W3 and P-W6 moved to a key with no rule.
+
+**For a server behind nginx.** The dashboard now answers 421 to a Host name it is not served at.
+`WEB_UI_TRUST_PROXY=1` must be set behind nginx, as `docs/SERVER.md` has asked since review S1. The owner's server
+gets it with this deploy.
+
+Stays open:
+- **The watch.** P-W4 (fingerprints of FoxLeague's OpenAPI document) and P-W7 (holding the actions of a changed page
+  until synced) are not built.
+- **Local processes on the machine.** One can still send any Host header or, with `WEB_UI_TRUST_PROXY=1`, any
+  `X-Real-IP`. ATK-2 stops a rebound browser page only.
+- **FoxLeague words without `txt()`.** `tier`, `format`, `status` and the like are printed raw inside the snapshot
+  fence. Players cannot write them; only FoxLeague's server could.
+- **Mac.** The bootout by label, the waits and the `print` check were proven with stand-ins only, not on a real Mac.
+  Whether bootout returns before the job is gone is unproven.
+- **sudo.** `sudo ./cli.sh` and `sudo ./run.sh` are not refused.
+- **The schedule rule.** MON-3 overcounts on the safe side: a team out of a knockout still counts its span, and
+  FoxLeague lists finished matches for one day only. MNT-1 is still a total over the squad and the span, not match by
+  match; rounds not drawn yet count as overlapping.
+- **The MetaStaking price.** The plan weighs list prices while the executor pays the discounted one (MNT-2).
+- **The pair cap.** Tournament opponents get no pair count: the upcoming list names them without a user id (MNT-3).
+- **The digest.** It does not mark an open challenge whose OVR range shuts the agent out.
+- **The 1v1 "takers" list.** It still counts a team that accepted pre-arranged challenges. A team that took none of
+  the agents' 109 targeted challenges in the week still reads as a taker. This is the owner's call: P3, second half.
+- **The stagger after a start.** It leads by each agent's real model and effort, not by shadow pairs (shadows are off
+  on the owner's server). The 3 to 6 minutes rest on the week's timings. The 16-minute spacing could be 15 by the
+  data.
+- **The organizer.**
+  - A create made far ahead is checked at the create only, not again before its deadline. The plan can still leave
+    before the deadline.
+  - The snapshot taken before an action does not read FoxLeague's calendar, so a hidden hold meets FoxLeague's own
+    refusal, which costs nothing.
+  - With fewer free starts than agents, two agents can share a start; the second is refused at no cost.
+  - `simulation_delayed` in `slotWindows` is unchanged.
+  - FoxLeague's calendar is busy. On 16 Nov it held two free windows in 14 days and several more up to 30 days.
+- **The reviewers' unproven items.** Each report lists its own, kept with the audit's working files.
+
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in

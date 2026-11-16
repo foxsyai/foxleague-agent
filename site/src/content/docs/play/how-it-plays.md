@@ -8,12 +8,15 @@ at everything a player can see: its squad and their condition, its budget, open 
 prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.
 The actions run in the plan's order, spread over the cycle; one with a deadline (joining or leaving before registration
-closes, widening a range or bidding before the auction ends) runs at least 5 minutes before it.
+closes, widening a range or bidding before the auction ends) runs at least 5 minutes before it. Leaving its own 1v1
+that nobody has taken yet and taking another team's open 1v1 run at the start of the plan: any team could take either first.
 It also reads what it did lately and its previous plan (summary and actions, up to 2,000 characters), and each plan says again what the agent still
 means to do later (ranked games after a 1v1, saving for an entry, a tournament watched until its deadline), so a
 goal carries on for as long as it holds. Where the fresh look says something else, the fresh look wins.
 
-An empty plan is a good answer too: the agent never spends just because budget is left.
+An empty plan is a good answer too: the agent never spends just because budget is left. After one, the next plan
+comes after twice the tick, until a plan acts or the 14:00 UTC game-day reset (the first plan after the reset comes at
+the normal tick).
 
 ## The daily routine
 
@@ -31,9 +34,9 @@ An empty plan is a good answer too: the agent never spends just because budget i
   The agent tests another formation in ranked matches when its own record is thin or keeps losing, starting with the
   one that does best in the pooled record and the league table, and saves a new formation together with the eleven
   it needs.
-- **Ranked and casual matches**: the daily allowance, never closer than a match holds the team (about 13 minutes: the game and its broadcast) or the
-  ranked cooldown (15 minutes in the game; the plan spaces ranked games 16 minutes apart to be sure), counting the last match before the plan; a match that no longer
-  fits waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
+- **Ranked and casual matches**: the daily allowance, never closer than a match holds the team (up to about 16 minutes: the game and its broadcast) or the
+  ranked cooldown (15 minutes in the game; the plan spaces ranked games 16 minutes apart to be sure), so any two of them start 16 minutes apart, counting the last match before the plan. A first match
+  moves earlier in the plan's window to leave the next one room; a match that still does not fit waits for the next plan. A ranked match's strength counts in the formation record only when its statistics
   were read within 6 hours of its end (FoxLeague rebuilds them from the cards as they are now).
 - **Casual test bench**: FoxLeague plays a casual game against an AI built at your team's own OVR with a random
   formation, so it is a fair, free test of a formation (no ELO, XP or FOXSY; 5 condition for each player who plays and
@@ -44,6 +47,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   test bench, apart from the formation record, and the agent weighs it with the league table and its own record
   before it changes its formation.
 - **Competition levels**: a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
+- **ELO pair cap**: once FoxLeague switches it on, the same two teams move ELO in only a few games a day (for example 3), ranked, 1v1s and tournaments together; a later game that day still earns its prize and XP but moves no ELO. The agent sees, for each team it could challenge, how many such games the two teams played that day, and weighs a game past the cap for its XP and prize only.
 - **Yellow cards and injuries**: once FoxLeague counts them, a player with enough yellow cards in tournaments (for
   example 3) misses your team's next tournament match, and a foul can injure a player for days (for example 3, 9 or
   27, by how many injuries he takes in one match), more likely the more tired he is (for example 1 percent a foul at
@@ -60,11 +64,15 @@ An empty plan is a good answer too: the agent never spends just because budget i
 ## Competition
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
-  platform time slot, sized from what recently filled. It names the start to the minute, 2 to 72 hours ahead, so a
-  narrow gap in a busy calendar can still hold a small tournament. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
+  platform time slot, sized from what recently filled. It names the start to the minute, 2 hours to 30 days ahead, so a
+  narrow gap in a busy calendar can still hold a small tournament. It reads the free starts from FoxLeague's own
+  calendar. Each of your agents is offered a start of its own, so two of them do not plan the same minute. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
   deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by starting eleven and rating: an eleven more than 10 percent stronger than yours counts as clearly stronger whatever its rating). It
   refuses a schedule that would wear the squad out, counting the largest group a Groups + Knockout can draw, judged on the condition the squad will have at the start (rested
-  until then, less what its other tournaments cost before it). It pays no entry and no 1v1 stake in the last two minutes before a registration deadline: a payment that reaches FoxLeague after the deadline is refunded and its gas is lost. When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. Once FoxLeague charges a private tournament a higher platform fee out of its prize pool (its prize split says so), shared by every team in it, the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
+  until then, less what its other tournaments cost before it). FoxLeague plays one match of the whole tournament at a
+  time, so a team's matches are spread over the whole tournament: the agent counts that span, judges every field from
+  the minimum number of teams up (a small field brings a team's matches faster) and counts each match its other
+  tournaments still owe at its own kickoff time. It pays no entry and no 1v1 stake in the last two minutes before a registration deadline: a payment that reaches FoxLeague after the deadline is refunded and its gas is lost. When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. Once FoxLeague charges a private tournament a higher platform fee out of its prize pool (its prize split says so), shared by every team in it, the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
   level may create a private tournament, inviting the teams it chooses, and joins one your team is invited to when it
   is worth it (only your team's own FoxLeague login sees the invitation).
 - **Champions FoxLeague (League + Knockout)**: FoxLeague invites the top of its leaderboard; the agent accepts an
@@ -80,18 +88,22 @@ An empty plan is a good answer too: the agent never spends just because budget i
   and until when; you can also accept or decline it in FoxLeague yourself.
 - **1v1 challenges**: it accepts or creates 1v1s against teams of similar strength (compared by rating and by the
   starting eleven, and it sees each team's best XI OVR), at most two played 1v1s a week against the same team (a challenge nobody accepted, its stake back, does not count).
+  It sees, per team, how many challenges it sent it in the last 7 days, how many were accepted and how many expired
+  unanswered, and it sends no third in 7 days to a team that let two expire.
   A tournament or a 1v1 with an OVR range is joined
   only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it. It may set an OVR
   range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its
   own best XI OVR, read right before the create. On its own open tournament it sets one by default, about 10 percent
   either way around its best XI OVR, wider when recent tournaments filled slowly. When too few teams join its own open tournament or challenge, it may widen the range while it is open, never narrow it (a lower minimum, a higher maximum or no bound on that side; on a 1v1 only a lower minimum); teams already seated stay. It widens only what it created itself: a range you set in FoxLeague stays yours. The plan sees how many 1v1s it played against each
-  team this week and when the limit frees, and a team with its own challenge out is marked (it cannot accept another
+  team this week, how its own challenges to that team fared and when a limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). Every level may play a 1v1 three ways. A challenge to a named team is taken almost only
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
   FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within
   2 minutes of its creation counts as arranged); a challenge to a team that never answers only locks the stake until
   its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
-  out at your team's own best XI OVR, so FoxLeague itself keeps every stronger team out, at any of your amounts and as
+  out at your team's own best XI OVR and starts about 10 percent under it (both ends, always). The teams that take one
+  tend to be the strongest its range lets in, so it is never the agent's default 1v1: it posts one only when the squad
+  needs competitive matches it cannot get from a targeted challenge, a tournament or ranked. Then FoxLeague itself keeps every stronger team out, and the agent may post one at any of your amounts and as
   often as FoxLeague's one active 1v1 allows; since that rating ignores condition, it waits while a fresh team at the
   top would be more than 10 percent stronger than your starting eleven at today's condition, and while one waits for a
   taker it plays no ranked game, trains no starter and sets no eleven that would break that. And it may take an open challenge another team posted. It can leave its
@@ -112,7 +124,11 @@ An empty plan is a good answer too: the agent never spends just because budget i
 - **Medicine**: shortens an injury by whole days (FoxLeague always keeps a third of it). The agent buys it only for a
   starter it cannot replace who would miss matches that matter, only the days up to that match, at FoxLeague's own
   quote, within your level's medicine days a week, your Max shop payment and your daily cap.
-- **Common packs**: 5 Common cards, the spare cards the first fusion needs.
+- **Common packs**: 5 Common cards, the spare cards the first fusion needs. FoxLeague sells 2 a wallet a week, the week
+  starting on Monday at 14:00 UTC.
+- **Shop prices**: once FoxLeague's MetaStaking discount is on, a wallet with FOXSY in MetaStaking pays less in the
+  Shop, and FoxLeague takes only that wallet's own price. The agent pays exactly the price FoxLeague quotes its wallet
+  right before each payment, and pays nothing while it cannot read that price.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen. FoxLeague runs
   one of two fusions and the agent reads which from FoxLeague's settings: a card drawn from FoxLeague's pool, or a new
@@ -121,7 +137,7 @@ An empty plan is a good answer too: the agent never spends just because budget i
   Uncommon 36 there), so it fuses trained cards. For the new card FoxLeague prepares the transaction, and the agent
   signs it only when it is exactly the fusion it planned, for the fee of that rarity and nothing more. It fuses nothing
   while that setting cannot be read, while FoxLeague updates fusion or in the last minutes before it changes.
-- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included.
+- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included. A bid may carry the most the plan would pay: when another bid has raised the minimum by the time it runs, the agent bids the new minimum up to that amount, never above your limits. A card in an auction does not play for its 24 hours: if you list one of your saved 18 yourself in FoxLeague's app, the agent's plan is told in capitals to save an 18 without it, and the agent starts no match, 1v1 or entry until then, since a tournament or 1v1 match that locks with it in your 18 is forfeited 3-0.
 
 ## Getting started by itself
 

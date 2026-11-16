@@ -47,7 +47,7 @@ it. Text written by other players (team names, tournament titles) reaches it onl
 The agent talks only to the services it needs:
 
 - **FoxLeague and the MultiversX network**: what the player app sends too. It reads public data, logs in as your
-  team and sends the transactions it signs. Once a day it also reads the manual pages FoxLeague's public read-only
+  team and sends the transactions it signs. Every hour it also reads the manual pages FoxLeague's public read-only
   server gives, to see whether the game's manual changed since your agents' copy; that request carries nothing of
   yours. `AGENT_MANUAL_CHECK=0` in `.env` switches it off.
 - **Anthropic**: what the AI needs to plan and to answer you. That is the snapshot of the game, your strategy, the
@@ -90,9 +90,11 @@ abuse. The agent:
   teams are yours, so two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each
   other at auction, by chance (FoxLeague's Fair Play forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests;
 - protects itself from rivals trying to farm it (a 1v1 against a named team or one it joins only when that team is of
-  similar strength, at most two played 1v1s a week against the same team, a challenge nobody accepted not counting; an
-  open challenge, which any team inside its range may take, always carries an OVR range that tops out at your team's
-  own best XI OVR, so FoxLeague itself keeps every stronger team out, and none while your starters are too tired for
+  similar strength, at most two played 1v1s a week against the same team, a challenge nobody accepted not counting, and
+  no third challenge in 7 days to a team that let two of its challenges expire unanswered; an
+  open challenge, which any team inside its range may take, is posted only when the squad needs competitive matches it
+  cannot get otherwise and always carries an OVR range around your team's own best XI OVR, its top at that rating, so
+  FoxLeague itself keeps every stronger team out, and none while your starters are too tired for
   a fresh team of that rating);
 - joins a private tournament only when your team is invited (every level may create one).
 

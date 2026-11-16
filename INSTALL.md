@@ -55,7 +55,8 @@ irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
 It is safe to paste it again at any time: each run finds what is already done and goes on from there. Paste one
 line at a time, here and everywhere in this section. To install a given version, set it in PowerShell before the
 line, for example `$env:FOXAGENT_VERSION = 'vX.Y.Z'`. `FOXAGENT_DIR` names another folder, always one inside
-Ubuntu, never a Windows folder.
+Ubuntu, never a Windows folder. Your Linux user has one background service: when it already runs the agent of another folder, the installer
+stops and says how to go on.
 
 #### What you will see, step by step
 
@@ -255,7 +256,7 @@ MacBook with its lid closed sleeps.
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now; by itself the agent asks about every 10 minutes while
 the Mac is awake. A new version that does not start is undone by itself, and a failed update says why in the
-notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update`.
+notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo).
 
 #### Uninstalling
 
@@ -264,7 +265,8 @@ notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update`.
 folder, wallet and PEM files in place. Everything the install added is in that folder, its own Node.js and the
 download cache of npm included: about 240 MB, and about 280 MB once an update has kept the release before it (kept
 so that the update can be undone). The agent wallets may still hold funds. Keep the recovery words, and delete the
-folder only when the wallets are empty.
+folder only when the wallets are empty. Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
+started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 #### If it gets stuck
 
@@ -306,7 +308,9 @@ The line downloads the newest release into `~/foxleague-agent`, checks the downl
 and starts the guided installer. To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_VERSION=vX.Y.Z bash`. An older version is not
 put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway (the settings and
 limits the newer version added are then not applied). Another folder is named with `FOXAGENT_DIR`; it must be
-empty or hold an install of foxleague-agent. If you prefer git:
+empty or hold an install of foxleague-agent. Your user has one background service: when it already runs the agent of another folder, the installer stops
+before the first question and says how to go on (`./install.sh --uninstall` in that folder first, or
+`./install.sh --no-service` here). If you prefer git:
 `git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`. A git checkout
 follows its branch: `./install.sh --update` pulls it, and that may be code that is in no release yet.
 
@@ -332,7 +336,7 @@ for the agent and the dashboard behind nginx, see [docs/SERVER.md](docs/SERVER.m
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now. A new version that does not start is undone by itself
 after about a minute and a half, and a failed update says why in the notice. From a terminal:
-`cd ~/foxleague-agent`, then `./install.sh --update`. When the notice says "this system's tar cannot unpack inside
+`cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo). When the notice says "this system's tar cannot unpack inside
 the agent's background service", an older installer set that service up: run `./install.sh --update` once in a
 terminal, in the agent's folder; later updates are one click again.
 
@@ -344,7 +348,8 @@ download cache of npm included: about 240 MB, and about 280 MB once an update ha
 so that the update can be undone). The agent wallets may still hold funds. Keep the recovery words, and delete the
 folder only when the wallets are empty. The uninstall also leaves linger on, which lets background services of
 your user start without a login, because other services of yours may count on it: `loginctl disable-linger $USER`
-turns it off.
+turns it off. Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
+started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 #### If it gets stuck
 

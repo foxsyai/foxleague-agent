@@ -8,6 +8,7 @@
 
 import { spawn } from 'node:child_process'
 import { accessSync, chmodSync, closeSync, constants, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { userInfo } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { RELEASE_NAME, UpdateError, parseVersion, type Manifest } from './release.ts'
@@ -60,9 +61,25 @@ export function selfUpdateRefusal(layout: Layout, o: { isServer?: boolean } = {}
   try {
     accessSync(join(layout.root, 'versions'), constants.W_OK)
   } catch {
-    return 'the agent may not write to its own folder: update it in a terminal with ./install.sh --update'
+    // Not "update it in a terminal" (INS-A7): the terminal's update runs as the same user, asks the same question
+    // and answered with this sentence again. What helps is making the folder the user's own again.
+    return `the agent may not write to its own folder: make it yours again in a terminal with ${ownFolderCommand(layout.root)} and then update again`
   }
   return null
+}
+
+/** The command that makes an install's folder its user's own again, writable by them (another owner after sudo, a backup). */
+export function ownFolderCommand(root: string, user: string | null = currentUser()): string {
+  const who = user && /^[A-Za-z0-9._-]+$/.test(user) ? user : '"$USER"'
+  return `sudo chown -R ${who} "${root}" && chmod -R u+rwX "${root}"`
+}
+
+function currentUser(): string | null {
+  try {
+    return userInfo().username
+  } catch {
+    return null
+  }
 }
 
 /** A lock older than this was left by an update that was killed (preparing takes at most 15 minutes). */
@@ -189,6 +206,16 @@ export function windowsHint(distro: string, root: string, home: string | undefin
   return `On Windows: open PowerShell and type wsl -d ${distro} --cd ~ , then cd ${folder}`
 }
 
+/** A command's output as plain lines for the owner: no terminal colour or other control bytes, no empty lines. */
+function plainLines(text: string): string[] {
+  return text
+    .replace(/\x1b\[[0-9;]*[A-Za-z]/g, '')
+    .replace(/[\x00-\x08\x0b-\x1f\x7f]/g, '')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(Boolean)
+}
+
 /**
  * Unpacks a verified archive into versions/v<version> and has the new release prepare itself (its own
  * `install.sh --prepare`: Node, dependencies, the recovery words check, the launcher). Returns the folder's name.
@@ -251,7 +278,12 @@ export async function stage(layout: Layout, manifest: Manifest, archive: string,
     if (pkg.name !== RELEASE_NAME || pkg.version !== manifest.version) return fail('the archive holds another version than its signed manifest says')
     if (!existsSync(join(staging, 'install.sh')) || !existsSync(join(staging, 'src', 'service.ts'))) return fail('the archive is not a foxleague-agent release')
     const prepared = await exec('bash', [join(staging, 'install.sh'), '--prepare'], { cwd: staging, env, timeoutMs: 15 * 60_000 })
-    if (prepared.code !== 0) return fail(`the new version could not be prepared, nothing was changed${prepared.tail ? `: ${prepared.tail.split('\n').slice(-3).join(' | ')}` : ''}`)
+    if (prepared.code !== 0) {
+      // The installer's words only (UPD-A6): its die() colours the line for a terminal and puts an empty line before
+      // it, and this reason is read on Telegram and in the dashboard.
+      const said = plainLines(prepared.tail).slice(-3).join(' | ')
+      return fail(`the new version could not be prepared, nothing was changed${said ? `: ${said}` : ''}`)
+    }
     rmSync(target, { recursive: true, force: true }) // what an earlier attempt that was undone left there
     renameSync(staging, target)
     return name

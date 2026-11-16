@@ -1,15 +1,18 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
-import { CREATE_START_MIN_MS } from '../executor/actions.ts'
+import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
+import { calendarLines } from './calendar.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
-import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
+import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, scheduleRefusal, scheduleSpanMinutes, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
+import { cut } from '../util/text.ts'
 import { agentName } from '../names.ts'
 import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
+import { unknownSwitchLines } from '../foxleague/config-watch.ts'
 import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
 
 /**
@@ -17,10 +20,12 @@ import type { PrizeSplit, ShopStatus, Tournament } from '../foxleague/types.ts'
  * data: control characters and line breaks become spaces, so it can never open a heading or a line of
  * its own in the prompt, and it is cut to a short length. Quotes are swapped so a value cannot close
  * the quotes around it; the snapshot fence (<<<SNAPSHOT, SNAPSHOT>>>) and heading marks cannot be
- * written at all.
+ * written at all. It is cut on whole characters: half of an emoji would make the whole plan request unreadable for
+ * the model's API (audit 2026-11-16, ATK-4).
  */
 export function txt(v: unknown, max = 40): string {
   const s = String(v ?? '')
+    .toWellFormed()
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, ' ')
     .replace(/"/g, "'")
     .replace(/#+/g, '')
@@ -29,7 +34,7 @@ export function txt(v: unknown, max = 40): string {
     .replace(/SNAPSHOT/gi, 'snapshot')
     .replace(/\s+/g, ' ')
     .trim()
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s
+  return s.length > max ? `${cut(s, max - 1)}…` : s
 }
 
 const SHORT: Record<string, string> = { speed: 'spd', accuracy: 'acc', defense: 'def', power: 'pow', control: 'ctl', vision: 'vis', stamina: 'sta' }
@@ -105,12 +110,15 @@ function rivalText(f: string[] | null, strength: number | null | undefined, mine
 
 /**
  * What a seat's schedule brings, as the executor counts it (matchesAtMost, scheduleRefusal): a home-and-away round
- * robin plays every other team twice, and the round interval spaces the matches. Only what FoxLeague says is shown.
+ * robin plays every other team twice, and FoxLeague plays one match of the whole tournament every round interval, so
+ * a team's matches are spread over all of them (MNT-1). Only what FoxLeague says is shown.
  */
-function scheduleText(t: { format: string; max_teams: number; home_and_away?: boolean | null; round_interval_minutes?: number | null }): string {
+function scheduleText(t: { format: string; max_teams: number; home_and_away?: boolean | null; has_third_place_match?: boolean | null; round_interval_minutes?: number | null }, groupSize: number): string {
+  const interval = t.round_interval_minutes
+  const span = typeof interval === 'number' && interval > 0 ? scheduleSpanMinutes(t.format, t.max_teams, t.home_and_away === true, interval, groupSize, t.has_third_place_match === true) : null
   const parts = [
     t.format === 'round_robin' && t.home_and_away === true ? `home and away (2 x ${t.max_teams - 1} matches)` : '',
-    typeof t.round_interval_minutes === 'number' && t.round_interval_minutes > 0 ? `rounds every ${t.round_interval_minutes} min` : '',
+    span !== null && interval ? `one match of the whole tournament every ${interval} min: its ${span / interval + 1} matches with ${t.max_teams} teams take about ${Math.round(span / 60)} h` : '',
   ].filter(Boolean)
   return parts.length ? `, ${parts.join(', ')}` : ''
 }
@@ -137,12 +145,29 @@ function fieldText(s: AgentSnapshot, t: Tournament, f: NonNullable<AgentSnapshot
  */
 function rivalNote(s: AgentSnapshot, userId: number | null | undefined): string {
   const o = s.oneVOnes
-  if (!o || typeof userId !== 'number') return ''
+  if (!o || typeof userId !== 'number') return eloPairNote(s, userId)
   const notes: string[] = []
   const w = o.week.find(x => x.userId === userId)
   if (w && w.count >= MAX_1V1_PER_OPPONENT_WEEK) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week (the limit), free again ${w.freeAt ? `${w.freeAt.slice(0, 16)} UTC` : 'later'}`)
   else if (w && w.count > 0) notes.push(`${w.count} of ${MAX_1V1_PER_OPPONENT_WEEK} 1v1s against it this week`)
-  return notes.map(n => `, ${n}`).join('')
+  // This agent's own targeted 1v1s to it (BEH-2, P-V1): a rival that lets them expire reads so.
+  const t = o.targeted?.find(x => x.userId === userId)
+  if (t && t.sent > 0) {
+    const limit = t.freeAt ? ` (no third targeted 1v1 to it before ${t.freeAt.slice(0, 16)} UTC)` : ''
+    notes.push(`you sent it ${t.sent} targeted 1v1${t.sent === 1 ? '' : 's'} in 7 days: ${t.accepted} accepted, ${t.unanswered} expired unanswered${limit}`)
+  }
+  return notes.map(n => `, ${n}`).join('') + eloPairNote(s, userId)
+}
+
+/** The ELO pair cap against one rival this game day (MNT-3), only while the cap is live and the planning snapshot read it. */
+function eloPairNote(s: AgentSnapshot, userId: number | null | undefined): string {
+  const pair = typeof userId === 'number' ? s.eloPairs?.find(p => p.userId === userId) : undefined
+  if (!pair || !eloPairCapLive(s.config, new Date(s.takenAt))) return ''
+  const cap = s.config?.elo_pair_cap?.per_day
+  if (pair.meetings === null) return ', ELO meetings today: unknown'
+  const at = typeof cap === 'number' && Number.isFinite(cap) ? cap : null
+  const full = at !== null && pair.meetings >= at
+  return `, ${pair.meetings} of ${at ?? 'unknown'} ELO meetings today${full ? `: a game against it moves no ELO until ${pair.noEloUntil ? pair.noEloUntil.slice(0, 16) : 'the next daily reset'}` : ''}`
 }
 
 /**
@@ -240,8 +265,13 @@ function levelLines(s: AgentSnapshot): string[] {
       : 'Fusion: a card drawn from the fusion pool (inputs synced first)',
     )
   }
+  // The ELO pair cap (FoxLeague's elo_pair_cap, MNT-3): a fact for the plan, no rule of the executor.
+  const pc = s.config?.elo_pair_cap
+  if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below show their meetings today once it is live`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
+  // A switch FoxLeague serves that no rule of the agent reads: its key, state and numbers only (audit 2026-11-16, P-W6).
+  out.push(...unknownSwitchLines(s.config))
   return out
 }
 
@@ -286,7 +316,10 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     out.push(boosterLine(a.shop, s.takenAt))
     // FoxLeague's own count of the wallet's Common packs; unread, no pack is bought (audit 2026-11-11, INTEG-6).
     const packs = a.shop?.common_pack_remaining_this_week
-    out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
+    // The pack week runs from Monday at the daily reset (FoxLeague 2026-11-16): when it starts again, as parsed (MNT-4).
+    const resets = typeof a.shop?.common_pack_week_resets_at === 'string' ? Date.parse(a.shop.common_pack_week_resets_at) : NaN
+    const again = Number.isFinite(resets) ? `, the week starts again ${new Date(resets).toISOString()}` : ''
+    out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}${again}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
@@ -317,6 +350,10 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     const at = new Date(s.takenAt)
     const hurt = s.players.filter(p => p.role === 'starter' && outInjured(p, at))
     if (hurt.length) out.push(`INJURED IN YOUR ELEVEN: ${hurt.map(p => (p.injuredUntil ? `#${p.nonce} until ${p.injuredUntil.slice(0, 16)}` : `#${p.nonce} (its injury could not be read)`)).join(', ')}: no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an eleven without ${hurt.length === 1 ? 'it' : 'them'}`)
+    // A card in an auction is held by the contract and does not play: FoxLeague forfeits a tournament or 1v1 match whose
+    // lineup locks with it in the saved 18 (mainnet 2026-11-16, MNT-4). The agent lists none of its 18; the owner may.
+    const auctioned = s.players.filter(p => p.listed && p.role !== 'reserve')
+    if (auctioned.length) out.push(`LISTED IN YOUR 18: ${auctioned.map(p => `#${p.nonce}`).join(', ')}: a card in an auction does not play, and FoxLeague forfeits (3-0, the full K lost) your next tournament or 1v1 match whose lineup locks with ${auctioned.length === 1 ? 'it' : 'them'} in your 18; no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an 18 without ${auctioned.length === 1 ? 'it' : 'them'}`)
     const banned = s.players.filter(p => p.suspended && p.role !== 'reserve')
     if (banned.length) out.push(`Suspended in your 18: ${banned.map(p => `#${p.nonce}`).join(', ')}: out of your next tournament match of more than 2 teams (a 1v1 or a ranked game never serves a ban and still takes the card)`)
   }
@@ -366,16 +403,23 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     // waits while that top is more than 10 percent above our eleven at today's condition (R54A-1).
     const today = elevenOvrToday(s)
     const eleven = today === null ? '; your eleven today could not be read, so no open challenge' : `; your eleven today: OVR ${today.toFixed(1)} at today's condition, ${today * MAX_1V1_STRENGTH_RATIO < Math.ceil(ovr) ? 'so an open challenge waits until it is within 10 percent of the top' : 'within 10 percent of the top'}`
-    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for your own open tournament: ovr_min ${lo}, ovr_max ${hi}${count}; a targeted challenge or a private tournament takes none; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it) and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
+    out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for your own open tournament: ovr_min ${lo}, ovr_max ${hi}${count}; a targeted challenge or a private tournament takes none; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it), no other value (a lower top and FoxLeague refuses you as its creator), and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
   // Every level is held to the field rule (Zeus only until 2026-11-06).
   if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
+  // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
+  let calendarBlind = false
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
+    // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
+    const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
+    if (worn && /could not be read/.test(worn)) calendarBlind = true
+    else if (worn) out.push(`    schedule: the executor refuses this join now: ${worn}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
   }
+  if (calendarBlind) out.push('  (schedule: your current tournaments or their upcoming matches could not be read, so the executor refuses every join until they are)')
   // League + Knockout invitations: accepted with join_tournament, by every level within its limits (owner, 2026-10-24).
   const invitations = s.auth?.invitations ?? []
   if (invitations.length) {
@@ -411,11 +455,13 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // plan's create can run (R74A-2): a gap open now begins its starts there, and a gap too short for the smallest
   // tournament (3 matches) from its first start is left out.
   const earliest = ceilMinute(now + CREATE_START_MIN_MS + planLeadMs(o.tickMinutes ?? MAX_TICK_MINUTES))
-  const gaps = freeGaps(slots, now + 3600_000, now + 72 * 3600_000)
+  const gaps = freeGaps(slots, now + 3600_000, now + CREATE_START_MAX_MS)
     .map(g => ({ start: ceilMinute(g.start), end: floorMinute(g.end) }))
     .map(g => ({ ...g, first: Math.max(g.start + 3600_000, earliest) }))
     .filter(g => g.end - g.first >= 3600_000 + SMALLEST_ESTIMATE_MIN * 60_000)
-  if (slots.length) out.push(`Free for a new tournament's whole window (next 72 h; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
+  if (slots.length) out.push(`Free for a new tournament's whole window (next ${CREATE_START_MAX_MS / 86_400_000} days; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
+  // FoxLeague's own free starts and this agent's own pick among them (P-O1, P-O2: src/snapshot/calendar.ts).
+  out.push(...calendarLines(s, { now, earliest }))
   if (m.recentStandard.length) {
     out.push('Recent standard tournaments (seated/max, fee, status):')
     for (const t of m.recentStandard.slice(0, 10)) out.push(`  T${t.id} ${t.tier} ${t.format} ${t.seated}/${t.max_teams} fee ${t.fee} ${t.status} ${t.starts_at.slice(0, 16)}`)

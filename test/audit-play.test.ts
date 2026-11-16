@@ -67,15 +67,20 @@ test('D1 scheduleActions spaces the matches by their gates, keeps the other acti
   const base = { windowMs: 48 * MIN, gapMs: 30_000 }
   // Two ranked starts on the same random moment: 16 min apart (the 15.5-minute gate and 30 s for the action before).
   assert.deepEqual(at(scheduleActions([ranked, ranked], { ...base, random: () => 0.5 })), [24, 40])
-  // A third no longer fits the 48-minute window: dropped, with the reason, and it pushes nothing.
+  // A third still fits the 48-minute window: the first ones move earlier to leave the later ones their gates (BEH-5,
+  // audit 2026-11-16; before it the third was dropped though 16, 32 and 48 fit). A fifth no longer fits: dropped, with
+  // the reason, and it pushes nothing.
   const three = scheduleActions([ranked, ranked, ranked, sync], { ...base, random: () => 0.5 })
-  assert.deepEqual(at(three), [24, 40, 40.5])
-  assert.deepEqual(three.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
-  // After any match the next waits until it is over (13 min, R85-1); a casual start does not wait the ranked cooldown.
-  assert.deepEqual(at(scheduleActions([casual, ranked, casual], { ...base, random: () => 0 })), [0, 13, 26])
+  assert.deepEqual(at(three), [16, 32, 48, 48.5])
+  assert.deepEqual(three.dropped, [])
+  const five = scheduleActions([ranked, ranked, ranked, ranked, ranked, sync], { ...base, random: () => 0.5 })
+  assert.deepEqual(at(five), [0, 16, 32, 48, 48.5])
+  assert.deepEqual(five.dropped.map(d => d.reason), ['the ranked cooldown (15 min after the last ranked start)'])
+  // After any match the next waits until it is over (16 min since BEH-7, audit 2026-11-16: 13 was refused 7 times in 17).
+  assert.deepEqual(at(scheduleActions([casual, ranked, casual], { ...base, random: () => 0 })), [0, 16, 32])
   // The agent's last ranked start 5 minutes before the plan counts too.
   assert.deepEqual(at(scheduleActions([ranked], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [11])
-  assert.deepEqual(at(scheduleActions([casual], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [8])
+  assert.deepEqual(at(scheduleActions([casual], { ...base, random: () => 0, lastMatchMs: -5 * MIN, lastRankedMs: -5 * MIN })), [11])
   // The other actions keep their random moments; only a match pushed later moves what follows it.
   assert.deepEqual(at(scheduleActions([train, sync, train], { ...base, random: seq(0.1, 0.5, 0.9) })), [4.8, 24, 43.2])
   assert.deepEqual(at(scheduleActions([ranked, train, ranked, sync], { ...base, random: seq(0.2, 0.25, 0.3, 0.9) })), [9.6, 12, 25.6, 43.2])
@@ -313,9 +318,11 @@ test('D4 a tournament a week away is judged on the condition the squad will have
 
 test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable start, matches owed before the start', () => {
   const join = { type: 'join_tournament', tournament_id: 301 } as const
+  // Audit 2026-11-16, MNT-1: FoxLeague plays one match of the whole tournament every interval, so a 14-team round robin
+  // (91 matches, 45 h) is no burst for a squad at 60. The guard is shown at 40, with a field of 4 that starts tonight.
   const tired = () => {
     const s = snapshot()
-    for (const p of s.players) p.condition = 60
+    for (const p of s.players) p.condition = 40
     return s
   }
   // The same 14-team round robin starting in an hour: 2 points of rest per card change nothing.
@@ -324,12 +331,13 @@ test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable 
   // A start that cannot be read is judged at today's condition, never projected.
   const unreadable = tournament(301, { format: 'round_robin', max_teams: 14, min_teams: 3, round_interval_minutes: 30, starts_at: 'soon' }) as TournamentDetail
   assert.match(checkAction(join, tired(), ctx({ field: [], tournament: unreadable })).refusal ?? '', /the schedule would wear the squad down/)
-  // Seated in a 7-match round robin that plays from in 1 h to in 4 h: its matches cost the condition the rest until
-  // a start in 5 h would bring, so a small round robin then is refused; three days later the squad is fresh again.
+  // Seated in an 8-team round robin (7 matches of ours among its 28) that plays from in 1 h to in 14.5 h: its matches
+  // cost the condition the rest until a start in 16 h would bring, so a small round robin then is refused; three days
+  // later the squad is fresh again.
   const busy = tired()
   busy.auth!.myTournaments!.active = [{ ...(tournament(400) as { tournament: Record<string, unknown> }).tournament, format: 'round_robin', max_teams: 8, min_teams: 3, round_interval_minutes: 30, starts_at: hours(1), started_at: null, home_and_away: false } as never]
   const small = (startsIn: number) => tournament(301, { format: 'round_robin', max_teams: 4, min_teams: 3, round_interval_minutes: 30, deadline: hours(startsIn - 0.5), starts_at: hours(startsIn) }) as TournamentDetail
-  assert.match(checkAction(join, busy, ctx({ field: [], tournament: small(5) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
+  assert.match(checkAction(join, busy, ctx({ field: [], tournament: small(16) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
   assert.equal(checkAction(join, busy, ctx({ field: [], tournament: small(72) })).ok, true)
   // The instructions state the rule as it now judges: the squad at the start, rested until then.
   assert.match(SYSTEM_PROMPT, /more condition than it will have above 30 at the start \(rested until then\) plus what it regenerates between rounds/)

@@ -57,7 +57,8 @@ test('INSTALL-14A: a system Node.js without npm beside it is not chosen: the ins
   const whole = nodeSaying('22.22.0', s2, true)
   const ok = await prepare(i, `${whole}:${s2.dir}:${SYS}`)
   assert.equal(ok.status, 0, ok.out)
-  assert.equal(readFileSync(join(i.root, '.node-path'), 'utf8'), `${join(whole, 'node')}\n`)
+  // The program itself first, then the path it was found at (INS-A6 of 2026-11-16: a version manager's path may last one shell only).
+  assert.equal(readFileSync(join(i.root, '.node-path'), 'utf8'), `${process.execPath}\n${join(whole, 'node')}\n`)
   assert.deepEqual(s2.calls(), [`${NPM_CI} in ${i.code}`])
 })
 
@@ -85,7 +86,7 @@ test('INSTALL-14B: a system Node.js is taken only when it is 22 from 22.18, or 2
     const downloads = s.calls().filter(c => c.startsWith('curl '))
     if (ok) {
       assert.equal(r.status, 0, `Node.js ${version} is accepted: ${r.out}`)
-      assert.equal(readFileSync(join(i.root, '.node-path'), 'utf8'), `${join(dir, 'node')}\n`)
+      assert.equal(readFileSync(join(i.root, '.node-path'), 'utf8'), `${process.execPath}\n${join(dir, 'node')}\n`)
       assert.deepEqual(downloads, [], `no private copy is fetched over Node.js ${version}`)
     } else {
       assert.equal(downloads.length, 1, `Node.js ${version} is refused and the private copy is fetched instead (status ${r.status}: ${r.out.trim().split('\n').pop()})`)

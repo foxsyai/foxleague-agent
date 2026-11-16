@@ -27,8 +27,9 @@ test('a create may carry an OVR range of whole numbers 1 to 100, the minimum not
 test('the range must hold the team\'s own best XI OVR, read right before the create; unreadable is no range', () => {
   const s = snapshot()
   const ctx = (bestXiOvr: number | null | undefined) => ({ settings: TEST_SETTINGS, now: new Date(), bestXiOvr } as RulesContext)
-  // The fixture's eleven plays at OVR 20: an open challenge topped above 22 waits (R54A-1).
-  assert.equal(checkAction(parseAction(challenge({ ovr_max: 20 })), s, ctx(19.6)).ok, true, checkAction(parseAction(challenge({ ovr_max: 20 })), s, ctx(19.6)).refusal)
+  // The fixture's eleven plays at OVR 20: an open challenge topped above 22 waits (R54A-1). Both ends since the owner's
+  // OPEN-1V1 of 2026-11-16 (test/audit-1116/OPEN-1V1.test.ts).
+  assert.equal(checkAction(parseAction(challenge({ ovr_min: 17, ovr_max: 20 })), s, ctx(19.6)).ok, true, checkAction(parseAction(challenge({ ovr_min: 17, ovr_max: 20 })), s, ctx(19.6)).refusal)
   assert.match(checkAction(parseAction(challenge({ ovr_max: 30 })), s, ctx(31.4)).refusal!, /your best XI OVR is 31\.4, outside the OVR range you set \(at most 30\): FoxLeague refuses a creator outside their own range/)
   assert.match(checkAction(parseAction(challenge({ ovr_min: 32 })), s, ctx(31.4)).refusal!, /outside the OVR range you set \(at least 32\)/)
   assert.match(checkAction(parseAction(challenge({ ovr_max: 33 })), s, ctx(null)).refusal!, /your best XI OVR could not be read: no OVR range without it/)

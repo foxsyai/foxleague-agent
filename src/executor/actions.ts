@@ -70,7 +70,8 @@ export type Action =
   | { type: 'claim_refund'; tournament_id: number }
   /** Three cards of one rarity into one of the next; the output takes the position of player_nonces[position_of]. */
   | { type: 'fuse'; player_nonces: number[]; position_of: 0 | 1 | 2 }
-  | { type: 'bid'; nonce: number; foxsy: number }
+  /** max_foxsy: a ceiling; when the minimum has moved past `foxsy` since the plan, the executor bids the fresh minimum up to it (P2). */
+  | { type: 'bid'; nonce: number; foxsy: number; max_foxsy?: number }
   | { type: 'list_card'; nonce: number; reserve_foxsy: number }
   | { type: 'cancel_listing'; nonce: number }
   /**
@@ -225,8 +226,11 @@ export function parseAction(raw: unknown): Action {
     }
     case 'fuse':
       return { type: o.type, player_nonces: nonces(o, 'player_nonces', 3, 3), position_of: oneOf(o, 'position_of', [0, 1, 2] as const) }
-    case 'bid':
-      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), foxsy: int(o, 'foxsy', 1, 1_000_000) }
+    case 'bid': {
+      const foxsy = int(o, 'foxsy', 1, 1_000_000)
+      if (o.max_foxsy === undefined || o.max_foxsy === null) return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), foxsy }
+      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), foxsy, max_foxsy: int(o, 'max_foxsy', foxsy, 1_000_000) }
+    }
     case 'list_card':
       return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), reserve_foxsy: int(o, 'reserve_foxsy', 1, 1_000_000) }
     case 'cancel_listing':
@@ -249,13 +253,20 @@ function ovrRange(o: Record<string, unknown>): { ovr_min?: number; ovr_max?: num
   return { ...(lo !== undefined ? { ovr_min: lo } : {}), ...(hi !== undefined ? { ovr_max: hi } : {}) }
 }
 
-/** A create's start is at least 2 hours and at most 72 hours after the create runs (the rules check it then). */
+/**
+ * A create's start is at least 2 hours and at most 30 days after the create runs (the rules check it then). FoxLeague
+ * takes a start up to 90 days ahead; 30 days is the owner's choice (16 Nov 2026, P-O1 and P-O1b), read from its
+ * calendar of free starts in up to three windows (src/snapshot/calendar.ts).
+ */
 export const CREATE_START_MIN_MS = 2 * 3600_000
-export const CREATE_START_MAX_MS = 72 * 3600_000
+export const CREATE_START_MAX_MS = 30 * 86_400_000
+/** The horizon in whole days, as the plan and the refusals name it. */
+export const CREATE_START_MAX_DAYS = CREATE_START_MAX_MS / 86_400_000
+const CREATE_START_MAX_HOURS = CREATE_START_MAX_MS / 3600_000
 
 /** A whole UTC minute: `2026-11-17T19:49Z`, with `:00` or `:00.000` seconds allowed; no other zone, no other second. */
 const UTC_MINUTE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::00(?:\.0{1,3})?)?Z$/
-const START_FORM = 'starts_at must be a UTC minute such as 2026-11-17T19:49Z (or starts_in_hours, whole hours 2 to 72)'
+const START_FORM = `starts_at must be a UTC minute such as 2026-11-17T19:49Z (or starts_in_hours, whole hours 2 to ${CREATE_START_MAX_HOURS})`
 
 /** The ms of a UTC minute in that form, or null: a day or an hour Date.parse would roll over (30 February, 24:00) is none. */
 function utcMinuteMs(v: unknown): number | null {
@@ -267,15 +278,15 @@ function utcMinuteMs(v: unknown): number | null {
 /**
  * A create's start, in one of its two forms (A tournament start to the minute, 2026-11-15). `starts_at` names the minute
  * itself, so the start FoxLeague is sent does not move with the moment the action runs (up to most of a tick after the
- * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 to 72 hours ahead depends on when the create
- * runs: the rules check it then. A day or hour Date.parse would roll over (30 February, 24:00) is refused, as is any
- * second but :00. `starts_in_hours` keeps its bounds here, as before.
+ * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 hours to 30 days ahead depends on when the
+ * create runs: the rules check it then. A day or hour Date.parse would roll over (30 February, 24:00) is refused, as is
+ * any second but :00. `starts_in_hours` keeps its bounds here, the same 2 hours to 30 days.
  */
 function createStart(o: Record<string, unknown>): { starts_at: string } | { starts_in_hours: number } {
   const hours = o.starts_in_hours !== undefined && o.starts_in_hours !== null
   const at = o.starts_at !== undefined && o.starts_at !== null
   if (hours && at) throw new ParseError('starts_at or starts_in_hours, not both')
-  if (hours) return { starts_in_hours: int(o, 'starts_in_hours', 2, 72) }
+  if (hours) return { starts_in_hours: int(o, 'starts_in_hours', 2, CREATE_START_MAX_HOURS) }
   const ms = utcMinuteMs(o.starts_at)
   if (ms === null) throw new ParseError(START_FORM)
   return { starts_at: new Date(ms).toISOString() }
@@ -316,7 +327,7 @@ export function describeAction(a: Action): string {
     case 'buy': return `buy ${a.product}${a.quantity ? ` x${a.quantity}` : ''}${a.player_nonces ? ` for ${a.player_nonces.map(n => `#${n}`).join(',')}` : ''}`
     case 'claim_refund': return `claim refund T${a.tournament_id}`
     case 'fuse': return `fuse ${a.player_nonces.map(n => `#${n}`).join(',')} (position of #${a.player_nonces[a.position_of]})`
-    case 'bid': return `bid ${a.foxsy} FOXSY on #${a.nonce}`
+    case 'bid': return `bid ${a.foxsy} FOXSY${a.max_foxsy !== undefined ? ` (up to ${a.max_foxsy})` : ''} on #${a.nonce}`
     case 'list_card': return `list #${a.nonce} at auction, reserve ${a.reserve_foxsy} FOXSY`
     case 'cancel_listing': return `cancel the auction of #${a.nonce}`
     case 'fusion_cooldown_waiver': return a.days ? `shorten the fusion cooldown of #${a.nonce} by ${a.days} day${a.days > 1 ? 's' : ''}` : `shorten the fusion cooldown of #${a.nonce} to the 3-day floor`

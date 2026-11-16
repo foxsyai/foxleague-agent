@@ -8,10 +8,11 @@ import type { Chain } from '../chain/gateway.ts'
 import { PAIR_PAUSED, poolState } from '../chain/xexchange.ts'
 import { b64ToBigInt } from '../util/encoding.ts'
 import { rivalStrength, type FoxLeague } from '../foxleague/api.ts'
-import { cardBansLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive } from '../foxleague/levels.ts'
 import { winChance } from './winchance.ts'
 import { LEAGUE_DAYS, LEAGUE_READS_PER_TICK, LEAGUE_TEAMS, LEAGUE_TEAMS_PER_TICK, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueTable } from './formations.ts'
 import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache } from './market.ts'
+import { readCalendar, type ShapeCalendar } from './calendar.ts'
 
 /** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
 const rivalSeen = new Map<string, { at: number; strength: number | null }>()
@@ -105,6 +106,11 @@ export interface MarketSummary {
   scouted?: { id: number; elo: number | null; strength: number | null; formations?: string[] | null }[]
   /** Platform-wide time slots a created tournament may not overlap (open and running standard tournaments). */
   slots: SlotWindow[]
+  /**
+   * Planning snapshots only: FoxLeague's own free starts for a new tournament of a few shapes, over the 30 days a create
+   * may be ahead (src/snapshot/calendar.ts); a shape whose read failed is null (unknown, never free).
+   */
+  calendar?: ShapeCalendar[]
   /** Open auctions, never our own: the 10 strongest, then the 3 cheapest of each rarity (auctionsShown); and the reserve floor of each rarity. */
   auctions: MarketListing[]
   /** The best XI OVR of the leaderboard teams read (ours left out), and of those that took a 1v1 in 7 days they had not arranged: how many a range lets in. */
@@ -191,9 +197,19 @@ export interface AgentSnapshot {
    * per rival, the 1v1s this agent played or entered in the last 7 days and, at the weekly limit, when it is free
    * again.
    */
-  oneVOnes?: { week: { userId: number; count: number; freeAt: string | null }[] }
+  oneVOnes?: {
+    week: { userId: number; count: number; freeAt: string | null }[]
+    /** Per rival, this agent's targeted 1v1s to it in the last 7 days (rivals.ts targetedRecord); `freeAt` once the rule refuses a third. */
+    targeted?: { userId: number; sent: number; accepted: number; unanswered: number; freeAt: string | null }[]
+  }
   /** The tournaments and 1v1s this agent created itself (its log, added by the service): the ones it may widen. */
   ownCreations?: number[]
+  /**
+   * Planning snapshots only, while FoxLeague's ELO pair cap is live (MNT-3): per rival the plan can challenge, its
+   * meetings with this team that moved ELO in the current game day (GET /api/matches/elo-pair; null: unread) and, at
+   * the cap, until when a result moves no ELO.
+   */
+  eloPairs?: { userId: number; meetings: number | null; noEloUntil: string | null }[]
   warnings: string[]
 }
 
@@ -744,10 +760,13 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     if (league && board) await attempt(warnings, 'league matches', () => takeLeagueTurn(() => collectLeague(fox, facts, league, board.users, profile.id, now)))
   }
 
-  // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse.
+  // Scouting for the 1v1s the agent could take, so the plan does not propose ones the executor would refuse. Also
+  // while a 1v1 of its own waits for an opponent: the plan may close it for a clearly better one and needs to see which
+  // is (audit 2026-11-16, BEH-8). Not once another team has taken ours: it cannot be left, so no other 1v1 is in reach.
   const openAllChallenges = (openAll ?? []).filter(t => t.max_teams === 2)
   const scouted: { id: number; elo: number | null; strength: number | null }[] = []
-  if (auth && profile && !auth.myTournaments?.active.some(t => t.max_teams === 2)) {
+  const ownTaken = auth?.myTournaments?.active.some(t => t.max_teams === 2 && !(t.creator_user_id === profile?.id && t.status === 'open' && !(typeof t.participant_count === 'number' && t.participant_count >= 2)))
+  if (auth && profile && !ownTaken) {
     const ids = [
       ...auth.challengesForMe.map(c => c.tournament_id),
       // A targeted 1v1 names its target only to the two teams: the ones for this team come in challengesForMe.
@@ -803,6 +822,23 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
     }
   }
 
+  // The ELO pair cap (MNT-3): for the rivals the plan can challenge, the meetings of this game day that moved ELO, read
+  // only while the cap is live. A read that fails is unknown, never 0. Information only: FoxLeague refuses no game.
+  let eloPairs: AgentSnapshot['eloPairs']
+  if (opts.research && wallet && registered && eloPairCapLive(config, now)) {
+    const openCreators = openAllChallenges.filter(t => !t.targeted && t.target_user_id === null).map(t => t.creator_user_id)
+    const ids = [...(auth?.challengesForMe ?? []).map(c => c.creator_user_id), ...openCreators, ...leaderboardNeighbours.map(u => u.id)]
+      .filter((id, i, all) => typeof id === 'number' && id !== profile?.id && all.indexOf(id) === i)
+      .slice(0, 16)
+    eloPairs = []
+    for (const userId of ids) {
+      const st = await fox.eloPair(wallet, userId).catch(() => null)
+      const meetings = typeof st?.meetings === 'number' && Number.isSafeInteger(st.meetings) && st.meetings >= 0 ? st.meetings : null
+      const until = st?.no_elo === true && typeof st.no_elo_until === 'string' ? Date.parse(st.no_elo_until) : NaN
+      eloPairs.push({ userId, meetings, noEloUntil: Number.isFinite(until) ? new Date(until).toISOString() : null })
+    }
+  }
+
   // Private tournaments: FoxLeague tells only a team's own session whether it is invited. The agent may join one it
   // is invited to, so only those are kept, with the split their own platform fee pays.
   // A League + Knockout is by invitation only: it shows among the invitations, never as an open tournament.
@@ -817,6 +853,9 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
 
   // A field the plan can judge before paying (planning snapshots only), with the test the join rule applies.
   const fields = facts && wallet && registered && profile ? await readFields(fox, wallet, openStandard, profile.id, board?.users ?? [], now) : undefined
+  // FoxLeague's own free starts for a create (planning snapshots only, P-O1): a failed read is unknown, never free.
+  // Up to three reads a shape over 30 days, the next only while fewer than 10 starts were found (P-O1b).
+  const calendar = facts && wallet && registered ? await readCalendar(fox, warnings, now.getTime(), slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? [])])) : undefined
 
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null
   // The plan is told, so it does not plan a swap that would only be refused.
@@ -855,10 +894,12 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       floors: floors ?? [],
       ...(prices ? { prices } : {}),
       ...(fields ? { fields } : {}),
+      ...(calendar ? { calendar } : {}),
     },
     ...(record !== undefined ? { formationRecord: record } : {}),
     ...(rivalFormations ? { rivalFormations } : {}),
     leaderboardNeighbours,
+    ...(eloPairs ? { eloPairs } : {}),
     warnings,
   }
 }
