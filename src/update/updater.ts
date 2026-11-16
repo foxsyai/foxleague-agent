@@ -262,11 +262,19 @@ export class Updater {
     const waiting = this.waiting()
     if (waiting) return waiting.message
     const how = selfUpdateRefusal(this.d.layout, { isServer: this.d.isServer })
-    if (!this.available) await this.check()
-    if (!this.available) throw new UpdateError(this.checkError ? `the release server could not be asked: ${this.checkError}` : `you run ${this.d.installed}, the newest version`)
-    if (how !== null) throw new UpdateError(how)
-    const version = this.available.version
+    // The slot is taken before the first await (UPD-A2): a second ask while the release server is asked here is
+    // refused above, instead of starting a second install on the same archive. Every refusal below gives it back.
     this.state = 'downloading'
+    let version: string
+    try {
+      if (!this.available) await this.check()
+      if (!this.available) throw new UpdateError(this.checkError ? `the release server could not be asked: ${this.checkError}` : `you run ${this.d.installed}, the newest version`)
+      if (how !== null) throw new UpdateError(how)
+      version = this.available.version
+    } catch (err) {
+      this.state = 'idle'
+      throw err
+    }
     void this.install(version, by)
     if (!this.restarts) return `Installing ${version}. This takes a minute or two. ${NO_SERVICE}: the new version runs from the next start. Once it is in place, ${this.byHand()}.`
     return `Installing ${version}. This takes a minute or two; the agent then restarts and tells you when it is back.`
