@@ -607,6 +607,26 @@ export class Service {
   /** Plans failed in a row per agent (reset by a plan that works), and when each account problem was last said. */
   private readonly failStreak = new Map<number, number>()
   private readonly alertedAt = new Map<string, number>()
+  /**
+   * While the AI account refuses every plan (a usage or spend limit, the key, billing: isModelAccountError), the agent
+   * that asks again at its own tick and when it last asked; the others skip the snapshot and the call (audit
+   * 2026-11-16, P10). Cleared by a plan that works (said once) or by the asking agent failing for another reason.
+   */
+  private accountStop: { prober: number; askedAt: number } | null = null
+
+  /**
+   * Why this agent's scheduled tick waits instead of asking the model, or null: an account stop another agent is asking
+   * about. A tick the owner starts (Plan now, /tick, /do) always asks. One that has not asked for longer than its tick,
+   * its random window and 5 minutes (paused, retired, outside its hours) hands over to the next agent that ticks.
+   */
+  private accountWait(index: number): string | null {
+    const stop = this.accountStop
+    if (!stop || stop.prober === index) return null
+    const prober = this.store.agent(stop.prober)
+    const window = prober && !prober.retired ? (prober.settings.tickMinutes + prober.settings.tickJitterMinutes + 5) * 60_000 : 0
+    if (Date.now() - stop.askedAt >= window) return null
+    return `the AI account refuses every plan: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+  }
 
   /**
    * A plan that failed. Routine (it waits for the summary) unless it needs the owner: a problem with the AI account
@@ -618,6 +638,9 @@ export class Service {
     // Keyed by the problem, not by the call: Anthropic's error text carries a request id that differs on every call
     // (audit 2026-11-16, BEH-1).
     const problem = alertKey(msg)
+    // An account stop: this agent asked last. A failure of another kind frees the others (it may be this agent's own).
+    if (isModelAccountError(err)) this.accountStop = { prober: index, askedAt: Date.now() }
+    else if (this.accountStop?.prober === index) this.accountStop = null
     if (isModelAccountError(err)) {
       const last = this.alertedAt.get(problem) ?? 0
       if (Date.now() - last >= 3600_000) {
@@ -1491,7 +1514,7 @@ export class Service {
     clearTimeout(this.timers.get(index))
     if (this.stopping) return
     this.nextAt.set(index, Date.now() + delayMs)
-    this.timers.set(index, setTimeout(() => void this.tick(index).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
+    this.timers.set(index, setTimeout(() => void this.tick(index, undefined, { scheduled: true }).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
   }
 
   /** Sleeps like setTimeout but wakes at once when the service stops. */
@@ -1693,7 +1716,7 @@ export class Service {
     return null
   }
 
-  async tick(index: number, ownerRequest?: string, o: { loud?: boolean } = {}): Promise<string> {
+  async tick(index: number, ownerRequest?: string, o: { loud?: boolean; scheduled?: boolean } = {}): Promise<string> {
     if (o.loud) {
       this.loud.add(index)
       try {
@@ -1710,6 +1733,8 @@ export class Service {
       await this.retryPending(agent)
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
       if (n) this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: n === 1 ? '1 refunded bid or seat no longer counts against the budget' : `${n} refunded bids or seats no longer count against the budget` })
+      const waits = o.scheduled ? this.accountWait(index) : null
+      if (waits) return waits
       const snap = await this.snapshot(index, true)
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
@@ -1727,8 +1752,13 @@ export class Service {
         this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: 'snapshot taken; no strategist (ANTHROPIC_API_KEY not set)', detail: { warnings: snap.warnings } })
         return 'snapshot only (no strategist key)'
       }
+      if (this.accountStop) this.accountStop = { prober: index, askedAt: Date.now() }
       const plan = await this.makePlan(agent, snap, ownerRequest)
       this.failStreak.delete(index)
+      if (this.accountStop) {
+        this.accountStop = null
+        this.notify(`Plans work again: ${agentName(index)}'s plan went through. The agents that waited plan at their next tick.`)
+      }
       // What the plan weighed goes with its private creates: each action reads a fresh snapshot, up to 0.8 of a tick later.
       // No private split served: it was told the public one. An unread config told it nothing: no private create from this plan.
       const planFee = (snap.config?.private_tournament_prize_split ?? snap.config?.tournament_prize_split)?.platform_fee_percent
