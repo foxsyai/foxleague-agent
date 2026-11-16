@@ -313,9 +313,11 @@ test('D4 a tournament a week away is judged on the condition the squad will have
 
 test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable start, matches owed before the start', () => {
   const join = { type: 'join_tournament', tournament_id: 301 } as const
+  // Audit 2026-11-16, MNT-1: FoxLeague plays one match of the whole tournament every interval, so a 14-team round robin
+  // (91 matches, 45 h) is no burst for a squad at 60. The guard is shown at 40, with a field of 4 that starts tonight.
   const tired = () => {
     const s = snapshot()
-    for (const p of s.players) p.condition = 60
+    for (const p of s.players) p.condition = 40
     return s
   }
   // The same 14-team round robin starting in an hour: 2 points of rest per card change nothing.
@@ -324,12 +326,13 @@ test('D4 the projection keeps the forfeit guard: a start tonight, an unreadable 
   // A start that cannot be read is judged at today's condition, never projected.
   const unreadable = tournament(301, { format: 'round_robin', max_teams: 14, min_teams: 3, round_interval_minutes: 30, starts_at: 'soon' }) as TournamentDetail
   assert.match(checkAction(join, tired(), ctx({ field: [], tournament: unreadable })).refusal ?? '', /the schedule would wear the squad down/)
-  // Seated in a 7-match round robin that plays from in 1 h to in 4 h: its matches cost the condition the rest until
-  // a start in 5 h would bring, so a small round robin then is refused; three days later the squad is fresh again.
+  // Seated in an 8-team round robin (7 matches of ours among its 28) that plays from in 1 h to in 14.5 h: its matches
+  // cost the condition the rest until a start in 16 h would bring, so a small round robin then is refused; three days
+  // later the squad is fresh again.
   const busy = tired()
   busy.auth!.myTournaments!.active = [{ ...(tournament(400) as { tournament: Record<string, unknown> }).tournament, format: 'round_robin', max_teams: 8, min_teams: 3, round_interval_minutes: 30, starts_at: hours(1), started_at: null, home_and_away: false } as never]
   const small = (startsIn: number) => tournament(301, { format: 'round_robin', max_teams: 4, min_teams: 3, round_interval_minutes: 30, deadline: hours(startsIn - 0.5), starts_at: hours(startsIn) }) as TournamentDetail
-  assert.match(checkAction(join, busy, ctx({ field: [], tournament: small(5) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
+  assert.match(checkAction(join, busy, ctx({ field: [], tournament: small(16) })).refusal ?? '', /the schedule would wear the squad down: up to 3 matches/)
   assert.equal(checkAction(join, busy, ctx({ field: [], tournament: small(72) })).ok, true)
   // The instructions state the rule as it now judges: the squad at the start, rested until then.
   assert.match(SYSTEM_PROMPT, /more condition than it will have above 30 at the start \(rested until then\) plus what it regenerates between rounds/)
