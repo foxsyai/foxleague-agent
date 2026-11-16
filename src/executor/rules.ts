@@ -1598,14 +1598,17 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (au.highestBid !== 0n && raise === null) return refuse('the minimum raise over a top bid could not be read: not bidding blind')
       const minAtomic = au.highestBid === 0n ? au.minPrice : [(au.highestBid * BigInt(100 + raise!) + 99n) / 100n, au.highestBid + 1n].reduce((x, y) => (x > y ? x : y))
       const min = ceilWhole(minAtomic)
-      if (a.foxsy < min) return refuse(`bid ${a.foxsy} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + ${raise} percent` : 'the reserve'})`)
-      if (a.foxsy > ctx.settings.maxBidFoxsy) return refuse(`bid ${a.foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
+      // With a ceiling (P2, audit 2026-11-16): the fresh minimum when it moved past the bid planned, up to the ceiling;
+      // every check below holds the bid actually made.
+      const bid = a.max_foxsy !== undefined && a.foxsy < min && min <= a.max_foxsy ? min : a.foxsy
+      if (bid < min) return refuse(`bid ${bid} FOXSY is below the minimum ${min} (${top ? `top bid ${top} + ${raise} percent` : 'the reserve'})${a.max_foxsy !== undefined ? `, above your ceiling ${a.max_foxsy}` : ''}`)
+      if (bid > ctx.settings.maxBidFoxsy) return refuse(`bid ${bid} FOXSY exceeds the per-action maximum ${ctx.settings.maxBidFoxsy}`)
       // Its limit and the build cost both hang on the rarity: unknown, no bid (agent review of PR #21).
       if (!ctx.cardRarity || !Object.hasOwn(RARITY_LEVEL, ctx.cardRarity)) return refuse(`the rarity of #${a.nonce} could not be read: not bidding blind`)
       const limit = rarityBidLimit(ctx.settings, ctx.cardRarity)
-      if (limit !== null && a.foxsy > limit) return refuse(`bid ${a.foxsy} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
+      if (limit !== null && bid > limit) return refuse(`bid ${bid} FOXSY is above your limit for ${aRarity(ctx.cardRarity!)} (${limit} FOXSY)`)
       const ceiling = ctx.cardRarity ? auctionCeiling(cfg, ctx.cardRarity) : null
-      if (ceiling !== null && a.foxsy > ceiling) return refuse(`bid ${a.foxsy} FOXSY is above what ${aRarity(ctx.cardRarity)} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
+      if (ceiling !== null && bid > ceiling) return refuse(`bid ${bid} FOXSY is above what ${aRarity(ctx.cardRarity)} costs to build yourself (${ceiling} FOXSY: Common packs, fusion fees and the matches and days it takes, at FoxLeague's own prices): building it is cheaper`)
       if ((ctx.priorBids ?? 0) >= MAX_BIDS_PER_AUCTION) return refuse(`already ${MAX_BIDS_PER_AUCTION} bids on #${a.nonce}: no bidding war`)
       if (ctx.cardLock === null) return refuse(`the details of #${a.nonce} could not be read: not bidding blind`)
       const lock = ctx.cardLock?.until
@@ -1615,9 +1618,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (ctx.cardLock?.injuryUnread) return refuse(`the injury of #${a.nonce} could not be read: not bidding blind`)
       const hurt = ctx.cardLock?.injuredUntil
       const notes = ['refunded at once if outbid; the card arrives when the auction is settled']
+      if (bid > a.foxsy) notes.push(`the minimum moved to ${min} since the plan: bid ${bid}, within your ceiling ${a.max_foxsy}`)
       if (lock && lock > ctx.now) notes.push(`the card carries a transfer lock until ${lock.toISOString()}`)
       if (hurt && hurt > ctx.now) notes.push(`the card is injured until ${hurt.toISOString()}: it plays no match before`)
-      return needFoxsy(a.foxsy, allow(a.foxsy, { nonce: a.nonce, bid: a.foxsy }, 'play', notes))
+      return needFoxsy(bid, allow(bid, { nonce: a.nonce, bid }, 'play', notes))
     }
 
     case 'list_card': {

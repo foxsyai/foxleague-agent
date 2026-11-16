@@ -680,7 +680,8 @@ export class Executor {
         }
         return { ...none, txs: [fusionTx(wallet.address, v.foxsy, v.facts.nonces as number[], v.facts.positionChoice as number)] }
       case 'bid':
-        return { ...none, txs: [auctionBidTx(a.nonce, a.foxsy)] }
+        // The amount the rules allowed: the plan's, or the fresh minimum up to its ceiling (P2).
+        return { ...none, txs: [auctionBidTx(a.nonce, Number(v.facts.bid))] }
       case 'list_card':
         return { ...none, txs: [auctionListTx(wallet.address, a.nonce, a.reserve_foxsy)] }
       case 'cancel_listing':

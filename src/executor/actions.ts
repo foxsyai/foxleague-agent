@@ -70,7 +70,8 @@ export type Action =
   | { type: 'claim_refund'; tournament_id: number }
   /** Three cards of one rarity into one of the next; the output takes the position of player_nonces[position_of]. */
   | { type: 'fuse'; player_nonces: number[]; position_of: 0 | 1 | 2 }
-  | { type: 'bid'; nonce: number; foxsy: number }
+  /** max_foxsy: a ceiling; when the minimum has moved past `foxsy` since the plan, the executor bids the fresh minimum up to it (P2). */
+  | { type: 'bid'; nonce: number; foxsy: number; max_foxsy?: number }
   | { type: 'list_card'; nonce: number; reserve_foxsy: number }
   | { type: 'cancel_listing'; nonce: number }
   /**
@@ -225,8 +226,11 @@ export function parseAction(raw: unknown): Action {
     }
     case 'fuse':
       return { type: o.type, player_nonces: nonces(o, 'player_nonces', 3, 3), position_of: oneOf(o, 'position_of', [0, 1, 2] as const) }
-    case 'bid':
-      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), foxsy: int(o, 'foxsy', 1, 1_000_000) }
+    case 'bid': {
+      const foxsy = int(o, 'foxsy', 1, 1_000_000)
+      if (o.max_foxsy === undefined || o.max_foxsy === null) return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), foxsy }
+      return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), foxsy, max_foxsy: int(o, 'max_foxsy', foxsy, 1_000_000) }
+    }
     case 'list_card':
       return { type: o.type, nonce: int(o, 'nonce', 1, 2 ** 40), reserve_foxsy: int(o, 'reserve_foxsy', 1, 1_000_000) }
     case 'cancel_listing':
@@ -316,7 +320,7 @@ export function describeAction(a: Action): string {
     case 'buy': return `buy ${a.product}${a.quantity ? ` x${a.quantity}` : ''}${a.player_nonces ? ` for ${a.player_nonces.map(n => `#${n}`).join(',')}` : ''}`
     case 'claim_refund': return `claim refund T${a.tournament_id}`
     case 'fuse': return `fuse ${a.player_nonces.map(n => `#${n}`).join(',')} (position of #${a.player_nonces[a.position_of]})`
-    case 'bid': return `bid ${a.foxsy} FOXSY on #${a.nonce}`
+    case 'bid': return `bid ${a.foxsy} FOXSY${a.max_foxsy !== undefined ? ` (up to ${a.max_foxsy})` : ''} on #${a.nonce}`
     case 'list_card': return `list #${a.nonce} at auction, reserve ${a.reserve_foxsy} FOXSY`
     case 'cancel_listing': return `cancel the auction of #${a.nonce}`
     case 'fusion_cooldown_waiver': return a.days ? `shorten the fusion cooldown of #${a.nonce} by ${a.days} day${a.days > 1 ? 's' : ''}` : `shorten the fusion cooldown of #${a.nonce} to the 3-day floor`

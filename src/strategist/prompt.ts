@@ -81,7 +81,7 @@ Money: the wallet holds EGLD (for gas and swaps), sometimes WEGLD (for swaps onl
 - {"type":"buy","product":"medicine","player_nonces":[N],"quantity":D} one injured card of yours, D whole days off its injury (1 to the most FoxLeague sells for it: 2 of a 3-day injury, 6 of 9, 18 of 27, less once days are served); the executor reads the price from FoxLeague's quote
 - {"type":"claim_refund","tournament_id":N} escrow left in a cancelled or completed tournament
 - {"type":"fuse","player_nonces":[3 nonces, same rarity],"position_of":0|1|2} the output takes the position of player_nonces[position_of]
-- {"type":"bid","nonce":N,"foxsy":N} whole FOXSY on an open auction
+- {"type":"bid","nonce":N,"foxsy":N,"max_foxsy":N} whole FOXSY on an open auction; max_foxsy (optional, not below foxsy) is the most you would pay: if another bid raised the minimum before it runs, the executor bids the new minimum up to it, within your limits
 - {"type":"list_card","nonce":N,"reserve_foxsy":N} a 24-hour auction of one of your spare cards
 - {"type":"cancel_listing","nonce":N} your own auction, only while it has no bids
 - {"type":"fusion_cooldown_waiver","nonce":N} shortens that card's fusion cooldown to the 3-day floor; add "days":D to buy only D of the waivable days

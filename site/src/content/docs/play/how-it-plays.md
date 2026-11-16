@@ -126,7 +126,7 @@ the normal tick).
   Uncommon 36 there), so it fuses trained cards. For the new card FoxLeague prepares the transaction, and the agent
   signs it only when it is exactly the fusion it planned, for the fee of that rarity and nothing more. It fuses nothing
   while that setting cannot be read, while FoxLeague updates fusion or in the last minutes before it changes.
-- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included.
+- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included. A bid may carry the most the plan would pay: when another bid has raised the minimum by the time it runs, the agent bids the new minimum up to that amount, never above your limits.
 
 ## Getting started by itself
 
