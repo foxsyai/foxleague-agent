@@ -459,7 +459,7 @@ look reads the live document (at most 4 MB) and names the routes whose shape cha
 owner once on Telegram, on the dashboard, in the summary and in each plan's note. A failed read, an answer that is no
 API description or a copy without the record names nothing. So does a document whose shapes would write out more than
 2,000,000 values and characters for all the routes together (a schema counted again wherever it is named; mainnet's
-counts about 86,000): it is "could not be read", never a change and never the same, and the look stays within a few
+counts about 86,000): it is "could not be read", never a change and never the same. The look stays within a few
 hundred milliseconds (R2T-1). `GET /api/whitelist/check` is not in FoxLeague's
 description and is recorded as absent.
 
@@ -471,8 +471,8 @@ of a 1v1; `mechanics/tournaments` holds `create_tournament` and a join of a tour
 `fusion_cooldown_waiver` and `fusion_match_waiver`. A join whose tournament could not be read is held by either page.
 The owner's own requests, pending payments and their confirms, refunds and leaves keep running. The pages stay held
 until a check finds the copy current or another copy is installed; a check that could not read FoxLeague does not end
-the pause. When the pause's own state cannot be read (its database row or the stored check cannot be parsed, or the
-copy's manual.md or page record cannot be read), every one of these actions is held (R2M-4). Pausing is one click; going back to "tell me only" needs the owner's password; no Telegram command does it.
+the pause. When the pause's own state cannot be read (a database row or a stored check that cannot be parsed, a
+manual.md or page record of the copy that cannot be read), every one of these actions is held (R2M-4). Pausing is one click; going back to "tell me only" needs the owner's password; no Telegram command does it.
 
 ---
 
