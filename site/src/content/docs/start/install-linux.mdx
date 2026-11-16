@@ -126,7 +126,7 @@ already says 1 or true.
   be done.
 - **If an update fails**, the notice says why and the agent keeps running the version it ran.
 - **From a terminal:** `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo). Pasting the install line again also
-  puts the newest version in place. A background service you stopped stays stopped: the update says so, and
+  puts the newest version in place. A background service you stopped stays stopped: the update says so and
   `systemctl --user start foxleague-agent` starts it with the new version.
 - **"this system's tar cannot unpack inside the agent's background service".** An install made by an older
   installer has a background service whose file stops the update. Run `./install.sh --update` once in a terminal,
