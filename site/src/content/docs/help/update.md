@@ -86,7 +86,8 @@ In the `foxleague-agent` folder:
 
 It does what the button does: it looks for the newest release, checks its signature, downloads it, prepares it
 next to the running version and restarts the agent into it. If the restart fails it says so and names the command
-to run. Type it as yourself, without sudo: as root on your install it stops before it changes anything and says
+to run. A background service you stopped stays stopped: the update says so, the new version runs from its next
+start and the line names the command that starts it. Type it as yourself, without sudo: as root on your install it stops before it changes anything and says
 so, because root's files there would keep the agent from starting.
 
 Pasting the install line again also works: it downloads the newest version, checks it against the release's
@@ -108,7 +109,8 @@ nothing more.
 
 If you keep the agent running another way that starts it again after it ends (a service of your own, a container
 that restarts), put `FOXAGENT_SUPERVISED=1` in `.env`: an update then ends the agent with exit code 75 and counts
-on that restart.
+on that restart. Without that line a service of your own counts as started by hand, whatever it says about
+restarts: the agent cannot see that from inside, so the update is put in place and the agent keeps playing.
 
 ### When a release changes the background service
 

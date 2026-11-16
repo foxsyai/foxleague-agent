@@ -5,7 +5,7 @@
 #   (or: git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh)
 #
 # Re-run it any time: it keeps your wallet, login and keys, and offers your earlier answers as the defaults.
-#   ./install.sh --update      get the newest signed release, prepare it, restart into it
+#   ./install.sh --update      get the newest signed release, prepare it, restart into it (a stopped agent stays stopped)
 #   ./install.sh --uninstall   stop and remove the background service (your files and wallet stay)
 #   ./install.sh --no-service  set everything up but do not install the background service
 # (The dashboard's Update now and Telegram's /upgrade do what --update does, without a terminal.)
@@ -97,11 +97,14 @@ owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || tr
 # --update and --uninstall with sudo on another user's install. --update put a release in place there that the
 # agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
 # (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
-# (INS-A2). Both stop before they write anything. An install that itself runs as root (its folder is root's) still
-# updates and uninstalls.
-if { [ "$MODE" = update ] || [ "$MODE" = uninstall ]; } && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
+# (INS-A2). The guided install with FOXAGENT_ALLOW_ROOT=1 wrote root's .env there and a service of root that runs the
+# agent as root (INS-A8). All stop before they write anything. An install that itself runs as root (its folder is
+# root's) still installs, updates and uninstalls.
+if [ "$MODE" != prepare ] && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
   who=$(owner_name "$ROOT")
-  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --$MODE"
+  asked=''
+  [ $# -eq 0 ] || printf -v asked ' %s' "$@"
+  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh$asked"
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
@@ -253,7 +256,10 @@ ensure_node() {
   info "Node.js $("$NODE" --version) at $NODE"
 }
 # FOXAGENT_GUIDED=1: the command line leaves out the lines that are written for a server set up by hand.
-cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
+# Without AGENT_MNEMONIC of the shell: Node.js never lets .env replace a variable that is set, so words exported in
+# this terminal were shown, written to pem/ and named as agent 1 instead of the words in .env, which the background
+# service uses (INS-U4).
+cli() { env -u AGENT_MNEMONIC FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 # Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
 # a newcomer reads that notice as something to do. npm's download cache and its logs stay in the install's own
 # folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind. In the folder named
@@ -435,10 +441,18 @@ EOF
   <key>StandardErrorPath</key><string>$DATA_DIR/service.log</string>
 </dict></plist>
 EOF
-    # The job that runs is unloaded first, by its label, and given a moment to go: launchd refuses to load a label
-    # it still lists. A bootstrap it refuses ends here in words, with what to do (INS-A4).
-    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
-    mac_wait_unloaded 10 || true
+    # The job that runs is unloaded first by its label and given time to go: launchd refuses to load a label it
+    # still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd answers its
+    # bootout with 36, on its way out: then the wait is as long as the uninstall's (INS-U1). A bootstrap it refuses
+    # ends here in words, with what to do (INS-A4).
+    local out_rc=0
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || out_rc=$?
+    if [ "$out_rc" = 36 ] && mac_job_loaded; then
+      info "Waiting for the agent that runs to stop: it finishes what it is doing first (at most 3 minutes)."
+      mac_wait_unloaded 185 || true
+    else
+      mac_wait_unloaded 10 || true
+    fi
     launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
   fi
 }
@@ -489,6 +503,17 @@ renew_unit() {
   [ "$PLATFORM" = linux ] && [ -f "$UNIT" ] || return 1
   LC_ALL=C grep -a -q -x 'RestrictSUIDSGID=true' "$UNIT" || return 1
   LC_ALL=C grep -a -v -x 'RestrictSUIDSGID=true' "$UNIT" | put_file "$UNIT" 644
+}
+# The code of an install made before releases had folders of their own. get.sh leaves it in the folder, because the
+# old background service starts <folder>/src/service.ts by that path; it goes once the service of step 7 is written
+# (INS-U6). Only a managed install's folder whose own package.json names foxleague-agent holds such code: a release's
+# package.json is in versions/<name>. The launcher, cli.sh, install.sh and get.sh of the folder are the new ones.
+remove_old_code() {
+  [ "$MANAGED" = 1 ] && [ -f "$ROOT/package.json" ] && grep -q '"name": "foxleague-agent"' "$ROOT/package.json" || return 0
+  local old
+  for old in src deploy test docs site scripts node_modules .github package.json package-lock.json tsconfig.json README.md INSTALL.md AGENTS.md CLAUDE.md; do
+    rm -rf "${ROOT:?}/$old"
+  done
 }
 restart_hint() { if [ "$PLATFORM" = linux ]; then echo "systemctl --user restart $SERVICE"; else echo "launchctl kickstart -k gui/\$(id -u)/$PLIST_LABEL"; fi; }
 # After a restart that failed: what runs now, and a command that systemd takes even at the unit's start limit.
@@ -574,10 +599,21 @@ if [ "$MODE" = update ]; then
     exit 0
   fi
   # A terminal opened with su or sudo: find the user's service manager first (see find_user_systemd).
-  find_user_systemd || true
+  reachable=0
+  find_user_systemd && reachable=1
   # The unit of an older install is renewed here, in a terminal, where an update from the dashboard cannot (it
   # runs inside that unit, and --prepare never writes to the service): systemd reads it before the restart.
   if renew_unit; then systemctl --user daemon-reload >/dev/null 2>&1 || true; fi
+  # A service the owner stopped stays stopped (UPD-U5): an update is not the owner's word to start the agent again,
+  # which may sign LIVE. One that runs, waits to start again after a failure or cannot be asked is restarted as before.
+  if [ "$PLATFORM" = linux ] && [ "$reachable" = 1 ] && [ "$(systemctl --user is-active "$SERVICE" 2>/dev/null || true)" = inactive ]; then
+    info "The background service is stopped, so it stays stopped: the new version runs from its next start. To start it now: systemctl --user start $SERVICE"
+    exit 0
+  fi
+  if [ "$PLATFORM" = darwin ] && ! mac_job_loaded; then
+    info "The background agent is stopped, so it stays stopped: the new version runs from its next start, at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
+    exit 0
+  fi
   service_restart || die "the new version is in place but the background service could not be restarted: $(after_failed_restart)"
   info "Restarted."
   exit 0
@@ -699,8 +735,13 @@ while :; do
   break
 done
 set_env WEB_UI_PORT "$port"
-# The dashboard listens on this machine only, over plain http, so the cookie cannot require https.
-set_env WEB_UI_INSECURE_COOKIE 1
+# The dashboard listens on this machine only, over plain http, so the cookie cannot require https. A value the owner
+# set is kept (INS-U5): with https of their own in front, 0 sends the login cookie over https only.
+if [ -z "$(get_env WEB_UI_INSECURE_COOKIE)" ]; then
+  set_env WEB_UI_INSECURE_COOKIE 1
+elif [ "$(get_env WEB_UI_INSECURE_COOKIE)" != 1 ]; then
+  info "WEB_UI_INSECURE_COOKIE in .env is kept as you set it (not 1): the login cookie is sent over https only, so log in at your https address."
+fi
 
 say "4/7 Keys (you can skip any of them now and add it later in the dashboard: Getting started, then Keys)"
 cat <<'KEYS'
@@ -766,10 +807,12 @@ info "Each new agent you add in the dashboard gets its own pem/agentN.pem automa
 address=$(cli address 1 | sed -E 's/^agent 1: ([^ ]+).*/\1/')
 if [ "$NO_SERVICE" = 1 ]; then
   say "7/7 Background service: skipped (--no-service)"
+  remove_old_code
   info "Start the agent yourself with: $ROOT/run.sh"
 else
   say "7/7 Background service"
   install_service
+  remove_old_code
   for _ in $(seq 1 30); do
     curl -fsS "http://127.0.0.1:$port/healthz" >/dev/null 2>&1 && break
     sleep 1

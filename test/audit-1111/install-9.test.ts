@@ -77,7 +77,8 @@ test('INSTALL-9: an older flat install is recognised by its package.json and kee
   writeFileSync(join(dir, 'src', 'service.ts'), '// old\n')
   const r = await run(home, dir)
   assert.equal(r.status, 0, r.out)
-  assert.match(r.out, /An older install was found there: its code is replaced, your wallet, keys and data are kept\./)
+  // Since INS-U6 of 2026-11-16 its code stays until the installer has written the new service (step 7).
+  assert.match(r.out, /An older install was found there: its code is replaced once the installer has set up the new service; your wallet, keys and data are kept\./)
   for (const [f, text] of Object.entries(mine)) assert.equal(readFileSync(join(dir, f), 'utf8'), text, `${f} is kept`)
   assert.equal(readFileSync(join(dir, 'versions', 'active'), 'utf8'), 'v3.1.0\n')
 })

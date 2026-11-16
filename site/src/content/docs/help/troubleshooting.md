@@ -43,6 +43,8 @@ linger on Linux. This page has what can happen on every system once the agent ru
 
 The Linux commands work from any folder. The commands that start with `./` (`./install.sh --update`, `./cli.sh`
 and `./install.sh --uninstall`) and the Mac's log are typed in the agent's folder: go there first with
-`cd ~/foxleague-agent`. On Windows they are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in
+`cd ~/foxleague-agent`. Type them as yourself, without sudo: as root on your folder `./cli.sh`, `./run.sh` and
+`./install.sh` stop before they change anything and say so, because files of root there would keep the agent from
+starting again. On Windows they are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in
 PowerShell. The uninstall on Windows is one line in PowerShell
 ([Install on Windows](/start/install-windows/#uninstalling)).
