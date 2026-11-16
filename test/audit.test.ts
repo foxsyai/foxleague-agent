@@ -190,7 +190,7 @@ test('A2 1v1s: never against a far stronger team, open ones only to teams no str
   const create = async (ovr_max?: number) =>
     (await open.exec.run(open.agent(), dryWallet, snapshot(), act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ...(ovr_max ? { ovr_min: 18, ovr_max } : {}) })))[0]!
   assert.match((await create()).summary, /needs an OVR range/)
-  assert.match((await create(23)).summary, /ovr_max 20 at most/)
+  assert.match((await create(23)).summary, /ovr_max 20, no other value/) // audit 2026-11-16, BEH-4: was "at most"
   assert.equal((await create(20)).status, 'dry_run')
 })
 
@@ -394,7 +394,9 @@ test('AA3 tournaments that overlap are judged together', async () => {
     statuses.push(r!.status)
     s.auth!.myTournaments!.active.push({ id, max_teams: 32, format: 'knockout', starts_at: start, started_at: null, creator_user_id: 900 } as never)
   }
-  assert.deepEqual(statuses, ['dry_run', 'refused', 'refused'], 'one 32-team knockout fits the squad, three at the same hour do not')
+  // Audit 2026-11-16, MNT-1: FoxLeague plays the 31 matches of a 32-team knockout one every 30 minutes, 15 hours: the
+  // squad at 60 has room for two of them at the same hour (10 matches of ours), not for a third.
+  assert.deepEqual(statuses, ['dry_run', 'dry_run', 'refused'], 'two 32-team knockouts fit the squad, three at the same hour do not')
   const blind = snapshot()
   blind.auth!.myTournaments = null
   const [r] = await m.exec.run(m.agent(), dryWallet, blind, act({ type: 'join_tournament', tournament_id: 604 }))
@@ -790,9 +792,11 @@ test('S13 a request with Origin: null is refused, not a server error', async () 
 test('A9 no tournament whose schedule would wear the squad below the playable condition', async () => {
   const tired = snapshot()
   for (const p of tired.players) p.condition = 40
-  const marathon = setup({ fox: { user: async () => null, tournament: async () => tournament(560, { format: 'round_robin', max_teams: 20, min_teams: 10, home_and_away: true, round_interval_minutes: 30 }) } })
+  // Audit 2026-11-16, MNT-1: FoxLeague plays one match of the whole tournament every 30 minutes, so with 10 teams the
+  // 18 matches of ours take 44.5 hours: too many for a squad at 40 an hour before the start.
+  const marathon = setup({ fox: { user: async () => null, tournament: async () => tournament(560, { format: 'round_robin', max_teams: 20, min_teams: 10, home_and_away: true, round_interval_minutes: 30, deadline: new Date(Date.now() + 1800_000).toISOString(), starts_at: new Date(Date.now() + 3600_000).toISOString() }) } })
   const [r] = await marathon.exec.run(marathon.agent(), dryWallet, tired, act({ type: 'join_tournament', tournament_id: 560 }))
-  assert.equal(r!.status, 'refused', '38 matches every 30 minutes with the squad at 40')
+  assert.equal(r!.status, 'refused', '18 matches in 44.5 hours from a squad at 40, an hour before the start')
   assert.match(r!.summary, /condition/)
   const normal = setup({ fox: { user: async () => null, tournament: async () => tournament(561, { format: 'knockout', max_teams: 8, min_teams: 8, round_interval_minutes: 60 }) } })
   const [n] = await normal.exec.run(normal.agent(), dryWallet, snapshot(), act({ type: 'join_tournament', tournament_id: 561 }))

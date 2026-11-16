@@ -45,6 +45,27 @@ export function cardBansLive(cfg: FoxConfig | null | undefined, now: Date): bool
   return Boolean(c) && (c!.live === true || passed(c!.live_from, now))
 }
 
+/**
+ * The MetaStaking Shop discount (FoxLeague's `metastaking_discount`): from its switch a wallet with FOXSY in MetaStaking
+ * pays less in the Shop and FoxLeague's confirm takes only that wallet's price, so the rate must be read before paying.
+ * No block (an older backend), or one switched off with no time set: every wallet pays the list price. A block that
+ * cannot be read is no "off": unknown is not false.
+ */
+export function shopDiscountLive(cfg: FoxConfig | null | undefined, now: Date): boolean {
+  const c = cfg?.metastaking_discount as { live?: unknown; live_from?: unknown } | null | undefined
+  if (c === undefined || c === null) return false
+  if (typeof c !== 'object' || typeof c.live !== 'boolean') return true
+  if (c.live) return true
+  if (c.live_from === null || c.live_from === undefined) return false
+  return typeof c.live_from !== 'string' || !Number.isFinite(Date.parse(c.live_from)) || passed(c.live_from, now)
+}
+
+/** The ELO pair cap governs (FoxLeague's `elo_pair_cap`): a meeting past its number a game day moves no ELO. */
+export function eloPairCapLive(cfg: FoxConfig | null | undefined, now: Date): boolean {
+  const c = cfg?.elo_pair_cap
+  return Boolean(c) && (c!.live === true || passed(c!.live_from, now))
+}
+
 /** How near FoxLeague's fusion switch the old fusion stops: one sent then could reach the chain after it. */
 export const FUSION_SWITCH_MARGIN_MS = 10 * 60_000
 

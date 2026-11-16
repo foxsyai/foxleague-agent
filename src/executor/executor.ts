@@ -995,6 +995,8 @@ export class Executor {
             // 2026-11-11, INTEG-4 and MONEY-3). The next registration reads the chain and counts the fee once (EDGE-3).
             if (err instanceof ApiRefusal && err.httpStatus !== undefined && RELAY_REFUSED_BEFORE_BROADCAST.has(err.httpStatus)) {
               this.unbook(booking)
+              // Nothing was handed to the network: no payment with an unclear outcome (audit 2026-11-16, CHN-2).
+              booking.sent = false
               throw err
             }
             const why = err instanceof ApiRefusal ? `FoxLeague's relay answered: ${err.message}` : err instanceof Error ? err.message : String(err)

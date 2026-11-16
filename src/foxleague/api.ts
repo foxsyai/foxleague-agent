@@ -6,6 +6,7 @@ import { HttpError, RateLimiter, requestJson, sleep } from '../util/http.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import type {
   DailyAllowance,
+  EloPairStatus,
   FoxConfig,
   PlayerCard,
   MatchWaiverQuote,
@@ -298,6 +299,12 @@ export class FoxLeague {
   /** The team's best XI OVR (what a tournament's or a 1v1's OVR range is checked against at the join). */
   bestXiOvr(w: AgentWallet): Promise<BestXiOvr> {
     return this.call<BestXiOvr>('/teams/best-xi-ovr', { wallet: w })
+  }
+
+  /** GET /api/matches/elo-pair/{user_id}: the ELO pair cap between this team and `userId` in the current game day. */
+  eloPair(w: AgentWallet, userId: number): Promise<EloPairStatus> {
+    if (!Number.isSafeInteger(userId) || userId <= 0) return Promise.reject(new Error(`not a user id: ${userId}`))
+    return this.call<EloPairStatus>(`/matches/elo-pair/${userId}`, { wallet: w })
   }
 
   /** Who a League + Knockout invited (the field an agent judges before accepting). */

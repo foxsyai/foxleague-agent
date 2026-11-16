@@ -91,8 +91,9 @@ test('OP-3: an open challenge at any configured stake, Silver or Gold, and more 
 test('OP-4: an open challenge needs an OVR range whose top is the team\'s own best XI OVR, rounded up to a whole number', () => {
   const plain = parseAction({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 120 })
   assert.match(why(plain, { bestXiOvr: 20 }), /an open challenge needs an OVR range up to your best XI OVR/)
-  assert.match(why(open({ ovr_max: 21 }), { bestXiOvr: 20 }), /ovr_max 20 at most/)
-  assert.match(why(open({ ovr_max: 21 }), { bestXiOvr: 19.4 }), /ovr_max 20 at most/)
+  // Audit 2026-11-16, BEH-4: the one legal top is named as such ("at most" read as "lower is fine").
+  assert.match(why(open({ ovr_max: 21 }), { bestXiOvr: 20 }), /ovr_max 20, no other value/)
+  assert.match(why(open({ ovr_max: 21 }), { bestXiOvr: 19.4 }), /ovr_max 20, no other value/)
   assert.equal(why(open({ ovr_max: 20 }), { bestXiOvr: 19.4 }), '', 'a fractional OVR rounds up: the creator must fit its own range')
   assert.match(why(open(), { bestXiOvr: null }), /best XI OVR could not be read/)
   assert.match(why(open({ ovr_max: 19 }), { bestXiOvr: 19.4 }), /outside the OVR range you set/)

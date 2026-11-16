@@ -12,8 +12,9 @@ test('regeneration wasted at the cap before the earlier matches does not pay for
   const h = (n: number) => new Date(now.getTime() + n * 3600_000).toISOString()
   const s = snapshot()
   for (const p of s.players) p.condition = 90
-  // Another tournament of ours: an 8-team round robin (7 matches) from +20 h, rounds every 30 min, so it ends at +23 h.
-  s.auth!.myTournaments = { active: [{ id: 900, format: 'round_robin', max_teams: 8, starts_at: h(20), round_interval_minutes: 30, home_and_away: false, started_at: null, tier: 'silver', status: 'open' }], completed: [] } as never
+  // Another tournament of ours: an 8-team round robin (7 matches of ours) from +9.5 h. FoxLeague plays its 28 matches
+  // one every 30 min (audit 2026-11-16, MNT-1), so it ends at +23 h.
+  s.auth!.myTournaments = { active: [{ id: 900, format: 'round_robin', max_teams: 8, starts_at: h(9.5), round_interval_minutes: 30, home_and_away: false, started_at: null, tier: 'silver', status: 'open' }], completed: [] } as never
   const at = conditionAtStart(s, { id: 901, starts_at: h(24) }, now)!.at(s.players[0]!)
   // 90 regenerates to the cap (100) by +23 h, the 7 matches take 7 x 11 x 10 / 18 = 42.8 off, then 1 h of rest adds 2.
   assert.equal(Math.round(at), 59, `projected ${at.toFixed(1)}; the old projection said about 95`)

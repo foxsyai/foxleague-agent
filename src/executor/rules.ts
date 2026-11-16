@@ -12,7 +12,7 @@ import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
-import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns } from '../foxleague/levels.ts'
+import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive } from '../foxleague/levels.ts'
 import { fusionMintTx } from './tx.ts'
 import { STATS } from '../foxleague/types.ts'
 import type { SpendCategory } from '../store/db.ts'
@@ -138,6 +138,36 @@ const allow = (foxsyWhole: number | bigint, facts: Record<string, unknown> = {},
 
 function card(s: AgentSnapshot, nonce: number): PlayerView | undefined {
   return s.players.find(p => p.nonce === nonce)
+}
+
+/** FoxLeague's top MetaStaking Shop discount: 1,000 basis points, 10 percent (shop_discount.rs MAX_BP). */
+const MAX_SHOP_DISCOUNT_BP = 1000
+
+/**
+ * FoxLeague's Shop price of `full` whole FOXSY for a wallet at `bp` basis points off (shop_discount.rs discounted_price):
+ * the discount rounded down, so the price is rounded up, taken once on a payment's total.
+ */
+export function shopPrice(full: number, bp: number): number {
+  return full - Math.floor((full * bp) / 10_000)
+}
+
+/**
+ * The MetaStaking rate FoxLeague serves this wallet (audit 2026-11-16, MNT-2 and CHN-1): from the switch its confirm
+ * takes only the wallet's own price, so any other amount is refused and refunded after it settled. A whole number of
+ * basis points, 0 to 1,000, is the rate. Anything else is unread: before the switch the list price (the rate is 0 there),
+ * once the switch is live or its time has passed null, and nothing is paid.
+ */
+function shopRateBp(served: unknown, cfg: FoxConfig, now: Date): number | null {
+  if (typeof served === 'number' && Number.isSafeInteger(served) && served >= 0 && served <= MAX_SHOP_DISCOUNT_BP) return served
+  return shopDiscountLive(cfg, now) ? null : 0
+}
+
+const SHOP_RATE_UNREAD = "this wallet's Shop price could not be read (FoxLeague's MetaStaking discount is on and its confirm takes only the wallet's own price): not paying blind"
+
+/** A price FoxLeague serves next to the rate must be the same price, or neither is known. */
+function servedPriceRefusal(served: unknown, mine: number, what: string): string | null {
+  if (served === undefined || served === null) return null
+  return served === mine ? null : `the ${what} price FoxLeague serves this wallet (${String(served).slice(0, 12)}) is not the list price less its MetaStaking discount (${mine}): not paying blind`
 }
 
 /**
@@ -405,12 +435,75 @@ export const LK_KNOCKOUT_PLACES = 24
 export const INVITATION_MARGIN_MS = 30 * 60_000
 
 /**
- * Minutes from a tournament's first match to its last, at its round interval: one round per interval, except a League
- * + Knockout, whose matches are all played one after another (its league slots, then its 46 knockout matches).
+ * Minutes from a tournament's first match to its last with all its seats taken. FoxLeague plays ONE match of the whole
+ * tournament every round interval, in every format (tournament_engine.rs reschedule_sequential, MNT-1), so its span is
+ * all its matches less one, times the interval. A format the agent cannot count keeps the densest guess: one match of
+ * the team every interval.
  */
-export function scheduleSpanMinutes(format: string, maxTeams: number, homeAndAway: boolean, interval: number, groupSize = 4): number {
-  if (format === 'league_knockout') return (maxTeams * (LK_LEAGUE_MATCHES / 2) + LK_KNOCKOUT_SLOTS - 1) * interval
-  return (matchesAtMost(format, maxTeams, homeAndAway, groupSize) - 1) * interval
+export function scheduleSpanMinutes(format: string, maxTeams: number, homeAndAway: boolean, interval: number, groupSize = 4, thirdPlace = false): number {
+  const shape = fieldShape(format, maxTeams, maxTeams, homeAndAway, groupSize, thirdPlace)
+  return ((shape?.total ?? matchesAtMost(format, maxTeams, homeAndAway, groupSize)) - 1) * interval
+}
+
+/** How many groups a Groups + Knockout of `teams` forms (FoxLeague's flexible_group_count); null: it cannot start with them. */
+function groupCount(teams: number, maxTeams: number, groupSize: number): number | null {
+  if (teams < GROUPS_MIN_TEAMS) return null
+  let groups = Math.max(2, 2 ** Math.ceil(Math.log2(Math.ceil(maxTeams / Math.max(1, groupSize)))))
+  while (groups > 2 && GROUP_MIN_TEAMS * groups > teams) groups /= 2
+  return GROUP_MIN_TEAMS * groups <= teams && Math.ceil(teams / groups) <= Math.max(GROUP_MAX_TEAMS, groupSize) ? groups : null
+}
+
+/**
+ * A tournament that starts with `teams` teams: the most matches one team plays (`own`) and all the matches FoxLeague
+ * plays, one every round interval (`total`). A knockout n - 1 and its third place match; a round robin every pairing,
+ * twice home and away; a Swiss its rounds of floor(n / 2) matches; a Groups + Knockout its group games (groups as even
+ * as FoxLeague deals them) and the knockout of the top 2 of each group; a League + Knockout its league matches and its 46
+ * knockout slots. Null: a field it cannot start with (a knockout plays a full bracket only) or a format not counted here.
+ */
+function fieldShape(format: string, teams: number, maxTeams: number, homeAndAway: boolean, groupSize: number, thirdPlace: boolean): { own: number; total: number } | null {
+  const pairs = (n: number) => (n * (n - 1)) / 2
+  const legs = homeAndAway ? 2 : 1
+  switch (format) {
+    case 'knockout':
+      return teams >= 2 && Number.isInteger(Math.log2(teams)) ? { own: Math.log2(teams), total: teams - 1 + (thirdPlace && teams >= 4 ? 1 : 0) } : null
+    case 'round_robin':
+      return teams >= 2 ? { own: (teams - 1) * legs, total: pairs(teams) * legs } : null
+    case 'swiss': {
+      if (teams < 2) return null
+      const rounds = Math.ceil(Math.log2(teams)) + 1
+      return { own: rounds, total: rounds * Math.floor(teams / 2) }
+    }
+    case 'groups_knockout': {
+      const groups = groupCount(teams, maxTeams, groupSize)
+      if (groups === null) return null
+      const small = Math.floor(teams / groups)
+      const bigger = teams % groups
+      const groupGames = bigger * pairs(small + 1) + (groups - bigger) * pairs(small)
+      return { own: Math.ceil(teams / groups) - 1 + Math.log2(groups * 2), total: groupGames + groups * 2 - 1 + (thirdPlace && groups >= 2 ? 1 : 0) }
+    }
+    case 'league_knockout':
+      return { own: LK_LEAGUE_MATCHES + LK_KNOCKOUT_MATCHES, total: teams * (LK_LEAGUE_MATCHES / 2) + LK_KNOCKOUT_SLOTS }
+    default:
+      return null
+  }
+}
+
+/**
+ * Every field a tournament can start with, the largest first, as `own` and `total` (fieldShape): its matches come
+ * faster for a team in a small field, so each is judged. None countable: the densest guess at its maximum.
+ */
+function possibleFields(format: string, minTeams: number | undefined, maxTeams: number, homeAndAway: boolean, groupSize: number, thirdPlace: boolean): { teams: number; own: number; total: number }[] {
+  const out: { teams: number; own: number; total: number }[] = []
+  // FoxLeague's largest tournament has 64 seats: a size no tournament can have is counted the densest way below.
+  const sane = Number.isInteger(maxTeams) && maxTeams >= 2 && maxTeams <= 256
+  const lo = typeof minTeams === 'number' && Number.isInteger(minTeams) && minTeams >= 2 && minTeams <= maxTeams ? minTeams : maxTeams
+  for (let teams = maxTeams; sane && teams >= lo; teams--) {
+    const shape = fieldShape(format, teams, maxTeams, homeAndAway, groupSize, thirdPlace)
+    if (shape) out.push({ teams, ...shape })
+  }
+  if (out.length) return out
+  const own = matchesAtMost(format, maxTeams, homeAndAway, groupSize, minTeams)
+  return [{ teams: maxTeams, own, total: own }]
 }
 
 /**
@@ -549,8 +642,10 @@ function matchSquad(s: AgentSnapshot): PlayerView[] {
 
 /**
  * What the squad's other tournaments (1v1s apart) still bring around a tournament that plays from `start` to `end`:
- * the matches before its start and those whose play overlaps it. Started: the fixtures still to play; not started:
- * the most its format can bring. One over by now and before the start (as its schedule says) brings nothing. Null: unreadable.
+ * the matches before its start and those whose play overlaps it. Started: each fixture FoxLeague lists by its own time
+ * (one after `end` plays after this tournament), and the rounds not drawn yet as overlapping; not started: the most its
+ * format can bring. One over by now and before the start (as its schedule says) and listing no fixture brings nothing.
+ * Null: unreadable.
  */
 function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, now: Date, start: number, end: number): { before: number; during: number; beforeEnd: number } | null {
   const mine = s.auth?.myTournaments
@@ -560,20 +655,44 @@ function otherMatches(s: AgentSnapshot, cfg: FoxConfig, id: number | undefined, 
   let during = 0
   // When the last of the matches before the start ends: the squad rests up to it, then pays for them.
   let beforeEnd = now.getTime()
+  // Matches whose time is known only as "by `at`": before the start they cost the squad then; otherwise they overlap.
+  // An unreadable start overlaps everything (as before the projection): nothing is moved out of the schedule's count.
+  const owe = (n: number, at: number) => {
+    if (n <= 0) return
+    if (Number.isFinite(start) && Number.isFinite(at) && at < start) {
+      before += n
+      beforeEnd = Math.max(beforeEnd, at)
+    } else during += n
+  }
   for (const x of mine.active) {
     if (x.id === id || x.max_teams === 2) continue
+    // What a tournament under way still owes is read from the upcoming matches: unread is unknown, never 1 (MON-1).
+    if (x.started_at && !s.auth?.upcoming) return null
     const total = matchesAtMost(x.format, x.max_teams, Boolean(x.home_and_away), groupSize, x.min_teams)
+    const listed = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id)
+    const pending = listed.filter(m => m.phase !== 'finished')
     const xStart = new Date(x.starts_at).getTime()
-    const xEnd = xStart + scheduleSpanMinutes(x.format, x.max_teams, Boolean(x.home_and_away), x.round_interval_minutes ?? 30, groupSize) * 60_000
-    if (xStart > end || (xEnd < start && xEnd < now.getTime())) continue
-    const left = (s.auth?.upcoming?.matches ?? []).filter(m => m.tournament_id === x.id && m.phase !== 'finished').length
-    const n = x.started_at ? Math.max(1, left) : total
-    // An unreadable start overlaps everything (as before the projection): nothing is moved out of the schedule's count.
-    if (xEnd >= start || !Number.isFinite(start)) during += n
-    else {
-      before += n
-      beforeEnd = Math.max(beforeEnd, xEnd)
+    // Its play ends after all its matches, one every interval, and never before a fixture FoxLeague still lists for it
+    // (a match moves later when a team is busy elsewhere, never earlier): one still listed is never taken for over (MNT-1).
+    const projected = xStart + scheduleSpanMinutes(x.format, x.max_teams, Boolean(x.home_and_away), x.round_interval_minutes ?? 30, groupSize, x.has_third_place_match === true) * 60_000
+    const xEnd = Math.max(projected, ...pending.map(m => Date.parse(m.scheduled_at)).filter(Number.isFinite))
+    if (!pending.length && (xStart > end || (xEnd < start && xEnd < now.getTime()))) continue
+    if (!x.started_at) {
+      owe(total, xEnd)
+      continue
     }
+    // Each listed fixture by its kickoff: before the start, during this tournament, or after its last match (none here).
+    for (const m of pending) {
+      const at = Date.parse(m.scheduled_at)
+      if (Number.isFinite(at) && Number.isFinite(end) && at > end) continue
+      owe(1, at)
+    }
+    // FoxLeague draws a Swiss round and a knockout round (Groups + Knockout and League + Knockout too) only once the
+    // round before has ended, so a round not drawn yet is still owed (MON-3): the most the format brings less the
+    // finished matches it lists (it lists them for a day only, so this can count more, never less). A round robin lists
+    // every fixture from its start. Their times are unknown: up to its end.
+    const undrawn = x.format === 'round_robin' ? 0 : total - (listed.length - pending.length)
+    owe(Math.max(1, pending.length, undrawn) - pending.length, xEnd)
   }
   return { before, during, beforeEnd }
 }
@@ -603,51 +722,59 @@ export function conditionAtStart(s: AgentSnapshot, t: { id?: number; starts_at: 
  * Refuses a tournament whose schedule would wear the squad below the playable condition: every
  * appearance costs 11 starters the match loss, against the squad's condition above the floor at the
  * start (conditionAtStart: today's plus what it regenerates until then, less what its other tournaments
- * cost before then, at most 100) plus what it regenerates between rounds (half the rate after age 30).
- * Matches the squad already owes to tournaments it sits in, when their play overlaps, count too: two
- * tournaments at the same hour each look fine alone. Needs the snapshot's team and the agent's
- * tournaments (unreadable = refused).
+ * cost before then, at most 100) plus what it regenerates over the tournament's span (half the rate after
+ * age 30). FoxLeague plays one match of the whole tournament every round interval (MNT-1), so a team's
+ * matches are spread over all of them; a small field brings them faster, so every field from its minimum
+ * to its maximum is judged. Matches the squad already owes to tournaments it sits in, when their play
+ * overlaps, count too: two tournaments at the same hour each look fine alone. Needs the snapshot's team
+ * and the agent's tournaments (unreadable = refused).
  */
-function scheduleRefusal(
+export function scheduleRefusal(
   s: AgentSnapshot,
-  t: { id?: number; format: string; max_teams: number; min_teams?: number; home_and_away?: boolean; round_interval_minutes?: number | null; starts_at: string },
+  t: { id?: number; format: string; max_teams: number; min_teams?: number; home_and_away?: boolean; has_third_place_match?: boolean | null; round_interval_minutes?: number | null; starts_at: string },
   now: Date,
 ): string | null {
   const cfg = s.config
   if (!cfg || !s.team) return null
   const groupSize = cfg.tournament_defaults?.groups_knockout_group_size ?? 4
-  const own = matchesAtMost(t.format, t.max_teams, Boolean(t.home_and_away), groupSize, t.min_teams)
   const interval = t.round_interval_minutes ?? 30
   const start = new Date(t.starts_at).getTime()
-  const span = scheduleSpanMinutes(t.format, t.max_teams, Boolean(t.home_and_away), interval, groupSize)
-  const end = start + span * 60_000
-  const atStart = conditionAtStart(s, { id: t.id, starts_at: t.starts_at, end }, now)
-  if (!atStart) return 'your current tournaments could not be read: not taking on another schedule blind'
-  const owed = atStart.during
-  const matches = own + owed
-  if (matches <= 1) return null
-  const hours = span / 60
   const floor = cfg.min_field_condition ?? 30
   const loss = cfg.condition_loss_per_match ?? 10
-  // A card injured past the schedule's end plays none of it: it adds no condition (one out for a part still counts whole).
-  const squad = matchSquad(s).filter(p => !outInjured(p, new Date(end)))
-  const available = squad.reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
-  const needed = matches * 11 * loss
-  if (t.format === 'league_knockout' && needed <= available) {
-    // The binding stretch is the knockout: up to 9 matches within its 46 slots, from the squad as the league phase
-    // leaves it (rested over its slots at most to 100, less an even share of its 8 matches; Fable review of PR #31).
-    const leagueHours = (span - (LK_KNOCKOUT_SLOTS - 1) * interval) / 60
-    const leagueCost = squad.length ? (LK_LEAGUE_MATCHES * 11 * loss) / squad.length : 0
-    const atKnockout = (p: PlayerView) => Math.max(0, Math.min(MAX_CONDITION, atStart.at(p) + regenPerHour(p, cfg) * leagueHours) - leagueCost)
-    const burstHours = ((LK_KNOCKOUT_SLOTS - 1) * interval) / 60
-    const burst = squad.reduce((sum, p) => sum + Math.max(0, atKnockout(p) - floor) + regenPerHour(p, cfg) * burstHours, 0)
-    const burstNeeded = LK_KNOCKOUT_MATCHES * 11 * loss
-    return burstNeeded <= burst ? null : `the knockout would wear the squad down: up to ${LK_KNOCKOUT_MATCHES} matches in about ${Math.round(burstHours)} h need ~${burstNeeded} condition, the squad has ~${Math.round(burst)} above ${floor} with recovery`
+  const about = (h: number) => (h < 10 ? h.toFixed(1) : String(Math.round(h)))
+  for (const field of possibleFields(t.format, t.min_teams, t.max_teams, Boolean(t.home_and_away), groupSize, t.has_third_place_match === true)) {
+    const own = field.own
+    const span = (field.total - 1) * interval
+    const end = start + span * 60_000
+    const atStart = conditionAtStart(s, { id: t.id, starts_at: t.starts_at, end }, now)
+    if (!atStart) return 'your current tournaments could not be read: not taking on another schedule blind'
+    const owed = atStart.during
+    const matches = own + owed
+    if (matches <= 1) continue
+    const hours = span / 60
+    // A card injured past the schedule's end plays none of it: it adds no condition (one out for a part still counts whole).
+    const squad = matchSquad(s).filter(p => !outInjured(p, new Date(end)))
+    const available = squad.reduce((sum, p) => sum + Math.max(0, atStart.at(p) - floor) + regenPerHour(p, cfg) * hours, 0)
+    const needed = matches * 11 * loss
+    if (t.format === 'league_knockout' && needed <= available) {
+      // The binding stretch is the knockout: up to 9 matches within its 46 slots, from the squad as the league phase
+      // leaves it (rested over its slots at most to 100, less an even share of its 8 matches; Fable review of PR #31).
+      const leagueHours = (span - (LK_KNOCKOUT_SLOTS - 1) * interval) / 60
+      const leagueCost = squad.length ? (LK_LEAGUE_MATCHES * 11 * loss) / squad.length : 0
+      const atKnockout = (p: PlayerView) => Math.max(0, Math.min(MAX_CONDITION, atStart.at(p) + regenPerHour(p, cfg) * leagueHours) - leagueCost)
+      const burstHours = ((LK_KNOCKOUT_SLOTS - 1) * interval) / 60
+      const burst = squad.reduce((sum, p) => sum + Math.max(0, atKnockout(p) - floor) + regenPerHour(p, cfg) * burstHours, 0)
+      const burstNeeded = LK_KNOCKOUT_MATCHES * 11 * loss
+      if (burstNeeded > burst) return `the knockout would wear the squad down: up to ${LK_KNOCKOUT_MATCHES} matches in about ${Math.round(burstHours)} h need ~${burstNeeded} condition, the squad has ~${Math.round(burst)} above ${floor} with recovery`
+      continue
+    }
+    if (needed <= available) continue
+    const also = owed ? ` (${own} here plus ${owed} still owed to your other tournaments at the same time)` : ''
+    const size = field.teams < t.max_teams ? ` if it starts with ${field.teams} teams` : ''
+    const when = atStart.hours > 0 ? ` at its start in ${Math.round(atStart.hours)} h` : ''
+    return `the schedule would wear the squad down: up to ${matches} matches${also} in about ${about(hours)} h${size} (FoxLeague plays one match of the tournament every ${interval} min) need ~${needed} condition, the squad has ~${Math.round(available)} above ${floor}${when} with recovery`
   }
-  if (needed <= available) return null
-  const also = owed ? ` (${own} here plus ${owed} still owed to your other tournaments at the same time)` : ''
-  const when = atStart.hours > 0 ? ` at its start in ${Math.round(atStart.hours)} h` : ''
-  return `the schedule would wear the squad down: up to ${matches} matches${also} about every ${interval} min need ~${needed} condition, the squad has ~${Math.round(available)} above ${floor}${when} with recovery`
+  return null
 }
 
 /**
@@ -1147,8 +1274,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const ticket = ctx.rankedTicket
         if (!ticket) return refuse('your ranked tickets could not be read: no ranked start blind')
         if (ticket.tickets > 0) return allow(0, { ticket: 'held' })
-        const price = ticket.price_foxsy
-        if (!Number.isSafeInteger(price) || price <= 0) return refuse('the ranked ticket price could not be read: not paying blind')
+        if (!Number.isSafeInteger(ticket.price_foxsy) || ticket.price_foxsy <= 0) return refuse('the ranked ticket price could not be read: not paying blind')
+        // The wallet's own price, the only amount the sale accepts (MNT-2, CHN-1): its rate and the price after it.
+        const bp = shopRateBp(ticket.discount_bp, cfg, ctx.now)
+        if (bp === null) return refuse(SHOP_RATE_UNREAD)
+        const price = shopPrice(ticket.price_foxsy, bp)
+        const served = servedPriceRefusal(ticket.discounted_price_foxsy, price, 'ranked ticket')
+        if (served) return refuse(served)
         if (price > ctx.settings.maxShopPaymentFoxsy) return refuse(`a ranked ticket of ${price} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy}`)
         return needFoxsy(price, allow(price, { ticket: 'buy' }, 'play', [`a ranked ticket of ${price} FOXSY, once FoxLeague asks for one`]))
       }
@@ -1375,7 +1507,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
         return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next 14 days (${takenWindow})`}`)
       }
-      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
+      // The executor creates a knockout with its third place match (executor.ts), one match more in its schedule.
+      const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, has_third_place_match: a.format === 'knockout', round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)
       const legal = squadLegal(s, new Date(startsAt), ', past the start of your tournament')
       if (legal) return refuse(legal)
@@ -1405,7 +1538,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!registered || !s.profile) return refuse('not registered')
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const challengeRange = createRangeRefusal(a, ctx)
-      if (challengeRange) return refuse(challengeRange)
+      if (challengeRange) {
+        // An open challenge has one legal top, the best XI OVR rounded up: the refusal names it (audit 2026-11-16, BEH-4).
+        const ovr = ctx.bestXiOvr
+        const legal = a.target_user_id === null && typeof ovr === 'number' && Number.isFinite(ovr) ? `; an open challenge takes ovr_max ${Math.ceil(ovr)}, no other value, and any ovr_min up to ${Math.floor(ovr)}` : ''
+        return refuse(`${challengeRange}${legal}`)
+      }
       const unranged = openRangeMissing(a, s, ctx)
       if (unranged) return refuse(unranged)
       if (a.target_user_id === null) {
@@ -1415,7 +1553,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         // createRangeRefusal above has read that OVR and checked the range holds it.
         if (a.ovr_max === undefined) return refuse('an open challenge needs an OVR range up to your best XI OVR (ovr_max, the snapshot gives it): FoxLeague then keeps every stronger team out')
         const top = Math.ceil(ctx.bestXiOvr!)
-        if (a.ovr_max > top) return refuse(`an open challenge takes ovr_max ${top} at most (your best XI OVR ${ctx.bestXiOvr}, rounded up): a higher top lets a stronger team take it`)
+        if (a.ovr_max > top) return refuse(`an open challenge takes ovr_max ${top}, no other value (your best XI OVR ${ctx.bestXiOvr}, rounded up): a higher top lets a stronger team take it, a lower one and FoxLeague refuses you as its creator`)
         // The best XI OVR ignores condition: the strongest team that may take it plays at the range's top at full
         // condition, ours at today's, held to A2's ratio (agent review of PR #54, R54A-1).
         const today = elevenOvrToday(s)
@@ -1449,6 +1587,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const prices = cfg.shop_prices_foxsy
       let amount: number
       const facts: Record<string, unknown> = { product: a.product }
+      // The wallet's MetaStaking rate (MNT-2, CHN-1): FoxLeague's confirm takes only the list price less it, once on the
+      // payment's total. Medicine carries its own rate in its quote.
+      const shop = s.auth?.shop
+      const bp = a.product === 'medicine' ? 0 : shopRateBp(shop?.metastaking_discount_bp, cfg, ctx.now)
+      if (bp === null) return refuse(SHOP_RATE_UNREAD)
+      const servedUnit = (key: string) => (shop?.discounted_prices && typeof shop.discounted_prices === 'object' ? (shop.discounted_prices as Record<string, unknown>)[key] : undefined)
       switch (a.product) {
         case 'condition_recovery': {
           let total = 0
@@ -1458,7 +1602,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
             total += Math.ceil((prices.condition * (100 - p.condition)) / 100)
           }
           if (total <= 0) return refuse('selected cards are already at full condition')
-          amount = total
+          const unit = servedPriceRefusal(servedUnit('condition_recovery'), shopPrice(prices.condition, bp), 'condition recovery')
+          if (unit) return refuse(unit)
+          // FoxLeague's recovery buys the points its payment is worth at the wallet's rate (shop_discount.rs full_value_of).
+          amount = shopPrice(total, bp)
           facts.player_nonces = a.player_nonces
           break
         }
@@ -1484,7 +1631,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (perWeek <= 0) return refuse('no XP booster at this level (Boosters a week is 0)')
           if (typeof ctx.boostersThisWeek !== 'number') return refuse('the XP boosters bought this week could not be counted: not buying blind')
           if (ctx.boostersThisWeek >= perWeek) return refuse(`${perWeek} XP booster${perWeek === 1 ? '' : 's'} a week at this level, ${ctx.boostersThisWeek} bought in the last 7 days`)
-          amount = prices.xp_booster
+          amount = shopPrice(prices.xp_booster, bp)
+          const served = servedPriceRefusal(servedUnit('xp_booster'), amount, 'XP booster')
+          if (served) return refuse(served)
           break
         }
         case 'training_slot': {
@@ -1496,7 +1645,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           const limit = ctx.settings.paidTrainingPerDay
           const paidToday = paidSessionsToday(t)
           if (paidToday + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - paidToday - t.slots_banked)}`)
-          amount = prices.training * more
+          const unit = servedPriceRefusal(servedUnit('training_slot'), shopPrice(prices.training, bp), 'training slot')
+          if (unit) return refuse(unit)
+          amount = shopPrice(prices.training * more, bp)
           facts.quantity = a.quantity
           break
         }
@@ -1520,7 +1671,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!whole(q.max_days) || !whole(q.price_per_day) || !whole(q.cost_foxsy) || !whole(q.days_paid)) return refuse(`the medicine quote for #${n} could not be read: not paying blind`)
           if (q.max_days < 1) return refuse(`no day of #${n}'s injury is left to save: a third of every injury is always served`)
           if (days > q.max_days) return refuse(`medicine saves #${n} ${q.max_days} day${q.max_days === 1 ? '' : 's'} at most (a third of every injury is always served)`)
-          if (q.player_nonce !== n || q.days_paid !== days || q.price_per_day <= 0 || q.cost_foxsy !== q.price_per_day * days) return refuse(`the medicine quote does not match ${days} day${days === 1 ? '' : 's'} at ${q.price_per_day} FOXSY: not paying blind`)
+          // The quote's cost is the days' full cost less the wallet's MetaStaking rate it carries (MNT-2, CHN-1).
+          const rate = shopRateBp(q.discount_bp, cfg, ctx.now)
+          if (rate === null) return refuse(SHOP_RATE_UNREAD)
+          const full = q.price_per_day * days
+          if (q.player_nonce !== n || q.days_paid !== days || q.price_per_day <= 0 || (q.full_cost_foxsy !== undefined && q.full_cost_foxsy !== full) || q.cost_foxsy !== shopPrice(full, rate)) return refuse(`the medicine quote does not match ${days} day${days === 1 ? '' : 's'} at ${q.price_per_day} FOXSY${rate ? ` less ${rate / 100} percent` : ''}: not paying blind`)
           amount = q.cost_foxsy
           facts.player_nonces = [n]
           facts.quantity = days
@@ -1539,7 +1694,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (perWeek <= 0) return refuse('no Common packs at this level (Packs a week is 0)')
           if (typeof ctx.packsThisWeek !== 'number') return refuse('the Common packs bought this week could not be counted: not buying blind')
           if (ctx.packsThisWeek >= perWeek) return refuse(`${perWeek} Common pack${perWeek === 1 ? '' : 's'} a week at this level, ${ctx.packsThisWeek} bought in the last 7 days`)
-          amount = cfg.common_pack_price_foxsy
+          amount = shopPrice(cfg.common_pack_price_foxsy, bp)
+          const served = servedPriceRefusal(shop?.common_pack_discounted_price_foxsy, amount, 'Common pack')
+          if (served) return refuse(served)
           break
         }
       }

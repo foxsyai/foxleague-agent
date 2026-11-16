@@ -30,7 +30,8 @@ const ctx = (more: Partial<RulesContext> = {}): RulesContext => ({ settings: { .
 test('a League + Knockout brings at most 17 matches over 190 slots of its interval', () => {
   assert.equal(matchesAtMost('league_knockout', 36, false), 17, '8 league matches and 9 knockout matches')
   assert.equal(scheduleSpanMinutes('league_knockout', 36, false, 60), 189 * 60, '144 league and 46 knockout matches, one after another')
-  assert.equal(scheduleSpanMinutes('knockout', 8, false, 30), 2 * 30, 'other formats as before: one round per interval')
+  // Audit 2026-11-16, MNT-1: every format plays one match of the tournament every interval, not one round.
+  assert.equal(scheduleSpanMinutes('knockout', 8, false, 30), 6 * 30, 'other formats the same: the 7 matches of a knockout of 8, one after another')
 })
 
 // ---- accepting ----

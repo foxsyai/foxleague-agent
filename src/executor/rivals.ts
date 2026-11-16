@@ -17,9 +17,9 @@ const CREATED_MS = CREATE_START_MAX_MS + 86_400_000
 /** Activity of the same ledger (dry run or live) the action is judged in. */
 const counted = (dry: boolean, status: string) => (dry ? status === 'dry_run' : status === 'confirmed' || status === 'unconfirmed')
 
-function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown } } {
+function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown }; sent?: boolean } {
   try {
-    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown } }
+    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown }; sent?: boolean }
   } catch {
     return {}
   }
@@ -29,14 +29,17 @@ function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentI
  * Per rival (FoxLeague user id): when this agent played or entered a 1v1 against it in the last 7 days, newest first.
  * The rule refuses a third within 7 days (MAX_1V1_PER_OPPONENT_WEEK) on exactly this count. A 1v1 whose stake came back
  * (FoxLeague cancelled it unaccepted, the agent closed it, or it never seated) was never played and does not count
- * (owner, 2026-10-24, audit D11); one still open, played or unknown counts.
+ * (owner, 2026-10-24, audit D11); one still open, played or unknown counts: an error after its stake was signed and sent
+ * (`sent`, FoxLeague's join refused or unanswered) is unknown, never "no 1v1" (audit 2026-11-16, MON-2).
  */
 export function oneVOnesThisWeek(store: Store, agentIndex: number, dry: boolean, now: Date): Map<number, Date[]> {
   const out = new Map<number, Date[]>()
   const refunded = store.refundedSeatHashes(agentIndex)
   for (const r of store.activityOf(agentIndex, ONE_V_ONE_KINDS, new Date(now.getTime() - WEEK_MS))) {
-    const opp = detailOf(r).opponentUserId
-    if (!counted(dry, r.status) || typeof opp !== 'number' || (r.txHash && refunded.has(r.txHash))) continue
+    const d = detailOf(r)
+    const opp = d.opponentUserId
+    const unclear = !dry && r.status === 'error' && d.sent === true
+    if (!(counted(dry, r.status) || unclear) || typeof opp !== 'number' || (r.txHash && refunded.has(r.txHash))) continue
     out.set(opp, [...(out.get(opp) ?? []), new Date(r.at)])
   }
   return out
