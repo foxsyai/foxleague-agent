@@ -1978,6 +1978,8 @@ audit of 2026-10-23. Paths are FoxLeague's at `origin/main`.
   is refused and a paid entry refunded, the gas lost. Not live on mainnet on 2026-10-24 (no open tournament carries the
   fields; the route answers as the team route). The agent reads its best XI OVR right before paying into a ranged
   tournament or 1v1 and joins only inside the range (unreadable refuses); the plan sees each range and its own best XI OVR.
+  An open tournament or challenge whose range shuts the team out says "closed to you: range X to Y, your best XI OVR Z"
+  on its line (audit 2026-11-16, BEH-3b).
 - **Smaller changes**: XP by the shirt worn (the keeper's shirt up to 910), ELO decay "at most once every 20 hours", a
   Fused mark on cards, a 1v1 can be created with an OVR range (the agent sets one only on what it creates, inside its own best XI OVR, since the
   same evening), and an unpaid challenge is

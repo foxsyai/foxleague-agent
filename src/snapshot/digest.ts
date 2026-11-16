@@ -231,6 +231,18 @@ function ovrRange(t: { ovr_min?: number | null; ovr_max?: number | null }): stri
 }
 
 /**
+ * A range that shuts this team out, as the join rule refuses it (BEH-3b): the best XI OVR the snapshot read outside it.
+ * An unread OVR marks nothing: the executor reads its own right before a join and refuses a range it cannot read.
+ */
+function rangeClosed(s: AgentSnapshot, t: { ovr_min?: number | null; ovr_max?: number | null }): string {
+  const lo = typeof t.ovr_min === 'number' ? t.ovr_min : null
+  const hi = typeof t.ovr_max === 'number' ? t.ovr_max : null
+  const ovr = s.auth?.bestXiOvr
+  if ((lo === null && hi === null) || typeof ovr !== 'number' || !Number.isFinite(ovr)) return ''
+  return (lo !== null && ovr < lo) || (hi !== null && ovr > hi) ? `, closed to you: range ${lo ?? 'any'} to ${hi ?? 'any'}, your best XI OVR ${ovr}` : ''
+}
+
+/**
  * A League + Knockout's prize from FoxLeague, in whole FOXSY per team. Tiered (FoxLeague's `prize_tiered`, its
  * TIERED_WEIGHTS): the top 24 by the round reached, 4 / 2 / 1 shares of 56, each floored as the contract pays it.
  * Otherwise the 8 quarter-finalists share it equally.
@@ -455,7 +467,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
   let calendarBlind = false
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}${rangeClosed(s, t)}`)
     // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
     const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
     if (worn && /could not be read/.test(worn)) calendarBlind = true
@@ -484,7 +496,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length && Number.isFinite(lineupStrength(s)) ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a targeted or joined 1v1 is refused when the rival's lineup (the stronger of its synced and live stats, at full condition) is more than 10 percent above it (an open challenge is held to its OVR range instead).` : 'Your lineup strength today: unknown (your roster or a starter\'s stats could not be read); a 1v1 and a tournament entry are refused until it is known.')
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${rangeClosed(s, t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()
