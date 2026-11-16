@@ -459,7 +459,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     .map(g => ({ start: ceilMinute(g.start), end: floorMinute(g.end) }))
     .map(g => ({ ...g, first: Math.max(g.start + 3600_000, earliest) }))
     .filter(g => g.end - g.first >= 3600_000 + SMALLEST_ESTIMATE_MIN * 60_000)
-  if (slots.length) out.push(`Free for a new tournament's whole window (next 14 days; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
+  if (slots.length) out.push(`Free for a new tournament's whole window (next ${CREATE_START_MAX_MS / 86_400_000} days; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
   // FoxLeague's own free starts and this agent's own pick among them (P-O1, P-O2: src/snapshot/calendar.ts).
   out.push(...calendarLines(s, { now, earliest }))
   if (m.recentStandard.length) {

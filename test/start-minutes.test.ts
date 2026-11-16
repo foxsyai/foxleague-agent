@@ -98,9 +98,9 @@ test('SM-2 a start one minute too early (19:47) or too late (19:52) for the gap 
   }
 })
 
-// The horizon was 72 hours until the owner's decision of 16 Nov 2026 ("14 days, own start each", P-O1 of the audit of
-// that day): SM-3, SM-4, SM-8 and SM-10 pin the 14 days now, with the same checks at the new bound.
-test('SM-3 a start less than 2 hours or more than 14 days after the create runs is refused', async () => {
+// The horizon was 72 hours until the owner's decisions of 16 Nov 2026 (14 days in P-O1 of the audit of that day, then 30
+// days in P-O1b): SM-3, SM-4, SM-8 and SM-10 pin the 30 days now, with the same checks at the new bound.
+test('SM-3 a start less than 2 hours or more than 30 days after the create runs is refused', async () => {
   const empty = () => snapshot()
   const now = Date.now()
   const ceil = (ms: number) => Math.ceil(ms / MIN) * MIN
@@ -108,14 +108,14 @@ test('SM-3 a start less than 2 hours or more than 14 days after the create runs 
   const soon = await dry(parseAction(trio({ starts_at: minute(ceil(now) + 119 * MIN) })), empty())
   assert.equal(soon.status, 'refused', soon.summary)
   assert.match(soon.summary, /less than 2 hours/)
-  const far = await dry(parseAction(trio({ starts_at: minute(ceil(now + 14 * 24 * H) + MIN) })), empty())
+  const far = await dry(parseAction(trio({ starts_at: minute(ceil(now + 30 * 24 * H) + MIN) })), empty())
   assert.equal(far.status, 'refused', far.summary)
-  assert.match(far.summary, /more than 14 days/)
+  assert.match(far.summary, /more than 30 days/)
   // Inside the bounds, by a minute or two.
   assert.equal((await dry(parseAction(trio({ starts_at: minute(ceil(now + 2 * H) + 2 * MIN) })), empty())).status, 'dry_run')
-  assert.equal((await dry(parseAction(trio({ starts_at: minute(floor(now + 14 * 24 * H) - 2 * MIN) })), empty())).status, 'dry_run')
+  assert.equal((await dry(parseAction(trio({ starts_at: minute(floor(now + 30 * 24 * H) - 2 * MIN) })), empty())).status, 'dry_run')
   // The whole hours keep their own bounds at the parser.
-  for (const h of [1, 337]) assert.throws(() => parseAction(trio({ starts_in_hours: h })), /starts_in_hours must be an integer in \[2, 336\]/)
+  for (const h of [1, 721]) assert.throws(() => parseAction(trio({ starts_in_hours: h })), /starts_in_hours must be an integer in \[2, 720\]/)
 })
 
 test('SM-4 a start that cannot be read is refused: by the parser for a plan, by the rules for an action built another way', async () => {
@@ -139,7 +139,7 @@ test('SM-4 a start that cannot be read is refused: by the parser for a plan, by 
   assert.throws(() => parseAction(trio({ starts_at: null })), /starts_at must be a UTC minute/)
   assert.throws(() => parseAction(trio({ starts_at: `${DAY}T19:49Z`, starts_in_hours: 50 })), /starts_at or starts_in_hours, not both/)
   // What agents 7 and 9 sent stays refused: a fraction of an hour is no minute.
-  assert.throws(() => parseAction(trio({ starts_in_hours: 50.7 })), /starts_in_hours must be an integer in \[2, 336\]/)
+  assert.throws(() => parseAction(trio({ starts_in_hours: 50.7 })), /starts_in_hours must be an integer in \[2, 720\]/)
   // An action built another way (not through the parser): refused before anything is asked or paid.
   const base = parseAction(trio({ starts_at: `${DAY}T19:49Z` })) as Record<string, unknown>
   for (const start of [{ starts_at: 'tomorrow' }, { starts_at: undefined }, { starts_at: `${DAY}T19:49:00.000Z`, starts_in_hours: 50 }]) {
@@ -200,7 +200,7 @@ test('SM-8 the prompt shows the create with starts_at, a UTC minute', () => {
   const line = SYSTEM_PROMPT.split('\n').find(l => l.startsWith('- {"type":"create_tournament"')) ?? ''
   assert.match(line, /"starts_at":"YYYY-MM-DDTHH:MMZ"/)
   assert.doesNotMatch(line, /starts_in_hours/)
-  assert.match(line, /2 hours to 14 days after the action runs/)
+  assert.match(line, /2 hours to 30 days after the action runs/)
 })
 
 test('SM-9 whole hours: FoxLeague is sent the start the slot check used, counted from the moment the rules ran, not from a later clock', async () => {
@@ -250,7 +250,7 @@ test('SM-10 the record has its section before the last one, a row for each point
   const notes = read('docs/FOXLEAGUE-INTEGRATION.md').replace(/\s+/g, ' ')
   assert.match(notes, /`starts_at` is any instant: create neither rounds it nor asks for a step/)
   assert.match(notes, /The windows are half-open/)
-  assert.match(read('site/src/content/docs/play/how-it-plays.md').replace(/\s+/g, ' '), /It names the start to the minute, 2 hours to 14 days ahead/)
+  assert.match(read('site/src/content/docs/play/how-it-plays.md').replace(/\s+/g, ' '), /It names the start to the minute, 2 hours to 30 days ahead/)
 })
 
 // R74A-1 and R74A-2 (the GitHub review of PR #74): both starts the agent suggests (the first free start a clash names

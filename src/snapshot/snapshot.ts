@@ -107,7 +107,7 @@ export interface MarketSummary {
   /** Platform-wide time slots a created tournament may not overlap (open and running standard tournaments). */
   slots: SlotWindow[]
   /**
-   * Planning snapshots only: FoxLeague's own free starts for a new tournament of a few shapes, over the 14 days a create
+   * Planning snapshots only: FoxLeague's own free starts for a new tournament of a few shapes, over the 30 days a create
    * may be ahead (src/snapshot/calendar.ts); a shape whose read failed is null (unknown, never free).
    */
   calendar?: ShapeCalendar[]
@@ -854,7 +854,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
   // A field the plan can judge before paying (planning snapshots only), with the test the join rule applies.
   const fields = facts && wallet && registered && profile ? await readFields(fox, wallet, openStandard, profile.id, board?.users ?? [], now) : undefined
   // FoxLeague's own free starts for a create (planning snapshots only, P-O1): a failed read is unknown, never free.
-  const calendar = facts && wallet && registered ? await readCalendar(fox, warnings) : undefined
+  // Up to three reads a shape over 30 days, the next only while fewer than 10 starts were found (P-O1b).
+  const calendar = facts && wallet && registered ? await readCalendar(fox, warnings, now.getTime(), slotWindows([...(openAll ?? []), ...(active ?? []), ...(pendingSc ?? [])])) : undefined
 
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null
   // The plan is told, so it does not plan a swap that would only be refused.

@@ -254,12 +254,14 @@ function ovrRange(o: Record<string, unknown>): { ovr_min?: number; ovr_max?: num
 }
 
 /**
- * A create's start is at least 2 hours and at most 14 days after the create runs (the rules check it then). FoxLeague
- * takes a start up to 90 days ahead; 14 days is the owner's choice (16 Nov 2026, P-O1), the most its calendar of free
- * starts answers in one read.
+ * A create's start is at least 2 hours and at most 30 days after the create runs (the rules check it then). FoxLeague
+ * takes a start up to 90 days ahead; 30 days is the owner's choice (16 Nov 2026, P-O1 and P-O1b), read from its
+ * calendar of free starts in up to three windows (src/snapshot/calendar.ts).
  */
 export const CREATE_START_MIN_MS = 2 * 3600_000
-export const CREATE_START_MAX_MS = 14 * 86_400_000
+export const CREATE_START_MAX_MS = 30 * 86_400_000
+/** The horizon in whole days, as the plan and the refusals name it. */
+export const CREATE_START_MAX_DAYS = CREATE_START_MAX_MS / 86_400_000
 const CREATE_START_MAX_HOURS = CREATE_START_MAX_MS / 3600_000
 
 /** A whole UTC minute: `2026-11-17T19:49Z`, with `:00` or `:00.000` seconds allowed; no other zone, no other second. */
@@ -276,9 +278,9 @@ function utcMinuteMs(v: unknown): number | null {
 /**
  * A create's start, in one of its two forms (A tournament start to the minute, 2026-11-15). `starts_at` names the minute
  * itself, so the start FoxLeague is sent does not move with the moment the action runs (up to most of a tick after the
- * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 hours to 14 days ahead depends on when the
+ * plan); FoxLeague takes any instant and rounds nothing. Whether it is 2 hours to 30 days ahead depends on when the
  * create runs: the rules check it then. A day or hour Date.parse would roll over (30 February, 24:00) is refused, as is
- * any second but :00. `starts_in_hours` keeps its bounds here, the same 2 hours to 14 days.
+ * any second but :00. `starts_in_hours` keeps its bounds here, the same 2 hours to 30 days.
  */
 function createStart(o: Record<string, unknown>): { starts_at: string } | { starts_in_hours: number } {
   const hours = o.starts_in_hours !== undefined && o.starts_in_hours !== null

@@ -9,7 +9,7 @@ const ONE_V_ONE_KINDS = ['join_tournament', 'create_challenge']
 const WEEK_MS = 7 * 86_400_000
 
 /**
- * How far back the agent's own creates are read: a tournament starts at most 14 days after it is created (P-O1, 16 Nov
+ * How far back the agent's own creates are read: a tournament starts at most 30 days after it is created (P-O1b, 16 Nov
  * 2026) and its range can be widened until its deadline, before that start; a day more for room.
  */
 const CREATED_MS = CREATE_START_MAX_MS + 86_400_000
@@ -98,7 +98,7 @@ export function weeklyFreeAt(times: Date[], limit: number): Date | null {
 }
 
 /**
- * The tournaments and 1v1s this agent created itself in the last 15 days (CREATED_MS): the id FoxLeague gave a live create (written
+ * The tournaments and 1v1s this agent created itself in the last 31 days (CREATED_MS): the id FoxLeague gave a live create (written
  * by the executor), whatever came after it. One the owner asked for (Telegram /do: byOwner, or an owner reason on a row
  * from before it was kept) or made in FoxLeague is the owner's: the agent never widens its range (agent review of PR #38).
  */

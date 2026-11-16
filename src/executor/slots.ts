@@ -102,14 +102,14 @@ export const ceilMinute = (t: number): number => Math.ceil(t / MINUTE) * MINUTE
 export const floorMinute = (t: number): number => Math.floor(t / MINUTE) * MINUTE
 
 /**
- * The first whole minute from `minAhead` to `maxAhead` after now (the create action's range: 2 hours to 14 days) whose
+ * The first whole minute from `minAhead` to `maxAhead` after now (the create action's range: 2 hours to 30 days) whose
  * window is free, in ms; null when none is. Each window refuses the starts strictly between its start less the new
  * window's length after the kickoff and its end plus the hour before it, so the first free minute is the first one of
  * the range or the first minute at or after such an end (FoxLeague's `free_starts`, tournament_slots.rs). A refusal
  * asks from 2 hours plus the next plan's lead (nextPlanLeadMs): a free stretch that ends before a start that late fits
  * is passed over, never named.
  */
-export function firstFreeStart(windows: SlotWindow[], format: string, maxTeams: number, homeAndAway: boolean, now: number, minAhead = 2 * 3600_000, maxAhead = 14 * 86_400_000): number | null {
+export function firstFreeStart(windows: SlotWindow[], format: string, maxTeams: number, homeAndAway: boolean, now: number, minAhead = 2 * 3600_000, maxAhead = 30 * 86_400_000): number | null {
   const lo = ceilMinute(now + minAhead)
   const hi = now + maxAhead
   const candidates = [lo, ...windows.map(w => ceilMinute(w.end + BOOKING_PAD_MS))].filter(t => t >= lo && t <= hi).sort((a, b) => a - b)
