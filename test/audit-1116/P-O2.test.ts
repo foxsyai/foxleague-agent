@@ -91,4 +91,6 @@ test('P-O2 the plan reads its start and the next free ones in plain words', () =
   assert.match(line, /your start for this shape: starts_at \S+; the next free ones \(only if yours is refused\): \S+Z, \S+Z/)
   assert.match(renderDigest(s), /picked by your agent number/)
   assert.doesNotMatch(renderDigest(s), /—|\bbots?\b/i)
+  const own = renderDigest(s).split('\n').filter(l => l.startsWith('Your own starts') || /^ {2}(round_robin|groups_knockout) of \d+ \(/.test(l)).join('\n')
+  assert.doesNotMatch(own, /, and |, or /, 'no Oxford comma')
 })

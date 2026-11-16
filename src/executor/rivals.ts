@@ -10,7 +10,7 @@ const WEEK_MS = 7 * 86_400_000
 
 /**
  * How far back the agent's own creates are read: a tournament starts at most 14 days after it is created (P-O1, 16 Nov
- * 2026), and its range can be widened until its deadline, before that start; a day more for room.
+ * 2026) and its range can be widened until its deadline, before that start; a day more for room.
  */
 const CREATED_MS = CREATE_START_MAX_MS + 86_400_000
 

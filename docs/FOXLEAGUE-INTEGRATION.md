@@ -1102,7 +1102,7 @@ binaries; out of scope).
   and a Groups + Knockout of 16 over its 14 days (since 2026-11-16). Each agent is offered its own start for each
   shape: of up to 10 free starts a booking apart, agent n takes the (n mod k)-th, so two agents of one install do not
   plan the same minute; the pick reads only its own number and this public answer. A failed read is unknown: no start
-  is offered, and the agent's own clash check (`slots.ts`, from the public lists) decides at the create.
+  is offered; the agent's own clash check (`slots.ts`, from the public lists) decides at the create.
 - **Creation cap**: at most 1 active tournament you created and play in, plus 1 you only organize
   (1v1s not counted): `You already have an active tournament you are playing in. Complete or cancel it before creating another.`
   / `... you are organizing. ...` (`tournaments.rs:2360-2409`).

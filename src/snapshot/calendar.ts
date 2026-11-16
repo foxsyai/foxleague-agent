@@ -1,12 +1,12 @@
-// FoxLeague's own calendar of free tournament starts, and a start of its own for each agent (P-O1 and P-O2 of the
-// audit of 16 Nov 2026; the owner's decision: "14 days, own start each").
+// FoxLeague's own calendar of free tournament starts; a start of its own for each agent (P-O1 and P-O2 of the audit of
+// 16 Nov 2026; the owner's decision: "14 days, own start each").
 //
 // GET /api/tournaments/availability answers, for a format and a size, the starts where a new tournament fits, by the
 // rule create refuses a start with (release/mainnet-1.0 729164194: routes/tournaments.rs `tournament_availability`,
 // tournament_slots.rs `availability` and `TournamentAvailability`). It counts every booking, a tournament being created
 // too (hidden from the public lists, answered with a negative id), needs no session and answers every caller alike.
 // A planning snapshot reads it for a few shapes. A failed or malformed answer is unknown, never free (AGENTS.md rule 4):
-// the plan is told it could not be read and is offered no start, and the executor's own clash check stays the last word.
+// the plan is told it could not be read and is offered no start; the executor's own clash check stays the last word.
 //
 // Each agent is offered, for each shape, the (n mod k)-th of the k free starts listed, n its own agent number, so two
 // agents of one install do not plan the same minute. The pick depends only on that number and FoxLeague's public
@@ -156,7 +156,7 @@ export function calendarLines(s: { agent: { index: number | null }; market: { sl
   const minute = (t: number) => `${new Date(t).toISOString().slice(0, 16)}Z`
   const days = CREATE_START_MAX_MS / 86_400_000
   const out = [
-    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, so the other teams your owner runs are offered other minutes; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart, and a start that fits a shape fits every shape with a shorter estimate):`,
+    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, so the other teams your owner runs are offered other minutes; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
   ]
   for (const c of cal) {
     const head = `  ${c.format} of ${c.teams} (estimate ${estimateMinutes(c.format, c.teams, false)} min): `
