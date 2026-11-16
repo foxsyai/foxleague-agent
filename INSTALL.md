@@ -180,6 +180,11 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
 - **"Ubuntu has no user of your own yet":** press Enter and choose the username and password Ubuntu asks for. If
   it asks nothing and shows a prompt at once, type `exit`, open Ubuntu from the Start menu, choose them there and
   paste the line again.
+- **"Ubuntu starts as root":** Ubuntu's first start was done earlier with root as its user (or root was made its
+  default since), so it asks for nothing. The agent is installed as the user Ubuntu starts as, which has to be one of
+  your own. The installer names the user Ubuntu has, or says how to make one (`adduser`), and how to make it the one
+  Ubuntu starts as: the two lines `[user]` and `default=` with its name in `/etc/wsl.conf`, then
+  `wsl --terminate Ubuntu` in PowerShell and the line again.
 - **The browser did not open:** open `http://localhost:8870` in your browser yourself (or the port you chose).
 - **The dashboard does not open at `http://localhost:8870`:** the agent runs inside Ubuntu and Windows passes
   `localhost` on to it. Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again: it

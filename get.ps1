@@ -279,6 +279,55 @@ function Install-FoxLeagueAgent {
         return 'ready'
     }
 
+    # The Linux users a person logs in as, out of Ubuntu's passwd ("getent passwd"): uid 1000 to 59999, a login shell
+    # (not nologin or false) and a name as Ubuntu makes them. Ubuntu's own first start makes such a user.
+    function Get-FoxLinuxUsers([string]$Passwd) {
+        $names = @()
+        foreach ($line in @($Passwd -split "`n")) {
+            $f = @($line.TrimEnd("`r").Split(':'))
+            if ($f.Count -lt 7) { continue }
+            $uid = 0
+            if (-not [int]::TryParse($f[2], [ref]$uid)) { continue }
+            if ($uid -lt 1000 -or $uid -gt 59999) { continue }
+            if ($f[6] -match '(nologin|false)$') { continue }
+            if ($f[0] -cnotmatch '^[a-z_][a-z0-9_-]{0,31}$') { continue }
+            $names += $f[0]
+        }
+        return , $names
+    }
+
+    # What to do when Ubuntu starts as root and asks nothing, also after it was started here once (INS-U2): its first
+    # start was done earlier with root as its user, or root was made its default since. The installer runs as Ubuntu's
+    # default user, which has to be one of its own: a user that is there is named, else how to make one is said.
+    # [user] default= in /etc/wsl.conf is what every WSL reads; it counts once Ubuntu has restarted.
+    #   $Users  Get-FoxLinuxUsers of that Ubuntu (none when it could not be asked)
+    # Returns the lines to show, in order.
+    function Get-FoxRootUbuntuHelp($Users) {
+        $list = @($Users)
+        $name = 'NAME'
+        $lines = @()
+        if ($list.Count -gt 0) {
+            $name = [string]$list[0]
+            $lines += ('Ubuntu starts as root and asks nothing. It has a user of your own: ' + ($list -join ' and ') + '.')
+            $lines += ('The agent is installed as the user Ubuntu starts as, so make ' + $name + ' that user. In PowerShell type')
+            $lines += ('  wsl -d ' + $FoxDistro + ' -u root --cd ~')
+            $lines += 'then inside Ubuntu'
+        } else {
+            $lines += 'Ubuntu started as root and asked for no username.'
+            $lines += 'If Ubuntu from the Start menu asks for one, choose the username and password there and paste the line again.'
+            $lines += 'If it asks nothing, root is its user and the agent needs one of its own. In PowerShell type'
+            $lines += ('  wsl -d ' + $FoxDistro + ' -u root --cd ~')
+            $lines += 'then inside Ubuntu, one line at a time (NAME is a username of your choice; adduser asks for a password):'
+            $lines += '  adduser NAME'
+            $lines += '  usermod -aG sudo NAME'
+        }
+        $lines += '  nano /etc/wsl.conf'
+        $lines += ('and add the two lines [user] and default=' + $name + ' (if the file has [user] already: set its default= line).')
+        $lines += ('Leave nano with Ctrl-X, then Y and Enter. Type  exit . In PowerShell type  wsl --terminate ' + $FoxDistro)
+        $lines += 'and paste the line again.'
+        return , $lines
+    }
+
     # What to do with /etc/wsl.conf so that systemd starts with Ubuntu. Returns
     #   @{ Changed = $false; Text = <the same text>; What = 'already' }                    or
     #   @{ Changed = $true;  Text = <the new text>;  What = 'added-section' | 'added-line' | 'set-true' }
@@ -701,6 +750,14 @@ function Install-FoxLeagueAgent {
         return @{ Readiness = (Get-FoxUbuntuReadiness -Entry $entry -IdExit $idExit -IdText $idText); Distros = $distros; Said = $said }
     }
 
+    # The users of Ubuntu (Get-FoxLinuxUsers), asked as root. None when it cannot be asked.
+    function Get-FoxUbuntuUsers {
+        $r = Invoke-FoxLinux -User 'root' -Command @('/bin/sh', '-c', 'getent passwd') -Capture
+        $names = @()
+        if ($r['ExitCode'] -eq 0) { $names = Get-FoxLinuxUsers $r['Text'] }
+        return , $names
+    }
+
     # The scheduled task with our name, as @{ Execute; Arguments; State }, or $null when there is none.
     function Get-FoxTask {
         $t = Get-ScheduledTask -TaskName $FoxTaskName -ErrorAction SilentlyContinue
@@ -912,6 +969,7 @@ function Install-FoxLeagueAgent {
         }
 
         # Until Ubuntu is ready: every round names what is missing and what to do. Never more than a few rounds.
+        $startedForUser = $false
         for ($round = 0; $round -lt 8; $round++) {
             $state = $now['Readiness']
             if ($state -eq 'ready') { Write-FoxLine 'Ubuntu is installed and has a user of its own.'; return $fresh }
@@ -925,6 +983,14 @@ function Install-FoxLeagueAgent {
                     Stop-Fox ('Ubuntu could not be moved to WSL 2 (wsl --set-version ended with ' + $r['ExitCode'] + '; what Windows said is above)')
                 }
             } elseif ($state -eq 'no-user') {
+                if ($startedForUser) {
+                    # Started here once and still root: this Ubuntu asks nothing, and starting it again would not
+                    # either (INS-U2). What helps is said instead.
+                    $users = Get-FoxUbuntuUsers
+                    $help = Get-FoxRootUbuntuHelp $users
+                    foreach ($l in $help) { Write-FoxLine $l }
+                    Stop-Fox 'Ubuntu starts as root. Make a user of your own the one it starts as (see above), then paste the line again'
+                }
                 Write-FoxLine 'Ubuntu has no user of your own yet: its first start, where it asks for a username and password, is not done.'
                 Write-FoxLine 'Ubuntu is started here now. Choose the username and password. Then, at its prompt (a line that ends with $ or #),'
                 Write-FoxLine 'type  exit  and press Enter. If it asks nothing and shows a prompt at once, type  exit  and open Ubuntu'
@@ -932,6 +998,7 @@ function Install-FoxLeagueAgent {
                 $answer = (Read-FoxLine 'Press Enter to start Ubuntu here (q stops)').Trim()
                 if ($answer -match '^[Qq]') { Stop-Fox 'Ubuntu has no user yet. Open Ubuntu from the Start menu, choose a username and password, then paste the line again' }
                 [void](Invoke-FoxWsl -Arguments ('-d ' + $FoxDistro + ' --cd ~'))
+                $startedForUser = $true
             } elseif ($state -eq 'not-registered' -or $state -eq 'busy') {
                 Write-FoxLine 'Ubuntu is not ready yet. If it opened in a window of its own, finish there: wait for the download, choose the'
                 Write-FoxLine 'username and password. When its prompt (a line that ends with $) shows, come back to this window.'
