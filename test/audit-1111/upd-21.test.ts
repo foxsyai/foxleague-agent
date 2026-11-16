@@ -53,19 +53,22 @@ test('UPD-21: a service manager started the agent only when its own unit says so
   // A terminal on a Mac has the variable too, with another value.
   assert.equal(supervised({ XPC_SERVICE_NAME: '0' }, none), false)
   assert.equal(supervised({ XPC_SERVICE_NAME: 'application.com.apple.Terminal.1152921500311879940' }, none), false)
-  // A unit written before this version: systemd names the start and connects the output to the journal.
-  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '8:44197' }, () => ['8:44197', '8:44197']), true)
-  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '8:44197' }, () => ['5:5', '8:44197']), true, 'one of the two streams is enough')
+  // The installer's unit as written before this version: systemd names the start and connects the output to the
+  // journal. Since UPD-U4 of 2026-11-16 the unit has to be the installer's own (its cgroup ends in
+  // foxleague-agent.service): a unit of the owner's own may not restart the agent (test/audit-1116/UPD-U4.test.ts).
+  const installerUnit = (): string => '0::/user.slice/user-1000.slice/user@1000.service/app.slice/foxleague-agent.service\n'
+  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '8:44197' }, () => ['8:44197', '8:44197'], installerUnit), true)
+  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '8:44197' }, () => ['5:5', '8:44197'], installerUnit), true, 'one of the two streams is enough')
   // A terminal that a user service of the desktop opened inherits both variables; its output is the terminal.
-  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '8:44197' }, none), false, 'INVOCATION_ID alone proves nothing: desktop terminals inherit it')
+  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '8:44197' }, none, installerUnit), false, 'INVOCATION_ID alone proves nothing: desktop terminals inherit it')
   assert.equal(supervised({ INVOCATION_ID: 'a1b2c3' }, none), false)
   assert.equal(supervised({ JOURNAL_STREAM: '5:5' }, none), false, 'no start of a unit is named')
   // The owner's own word, for an agent they keep running another way (or do not): it decides either way.
   assert.equal(supervised({ FOXAGENT_SUPERVISED: '0', INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: '5:5', XPC_SERVICE_NAME: 'ai.foxleague.agent' }, none), false)
   // The real streams of this process, read the way systemd writes them.
   const mine = fstatSync(2)
-  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: `${mine.dev}:${mine.ino}` }), true)
-  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: `${mine.dev}:0` }), false, 'no stream has inode 0')
+  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: `${mine.dev}:${mine.ino}` }, undefined, installerUnit), true)
+  assert.equal(supervised({ INVOCATION_ID: 'a1b2c3', JOURNAL_STREAM: `${mine.dev}:0` }, undefined, installerUnit), false, 'no stream has inode 0')
 })
 
 test('UPD-21: both service files the installer writes tell the agent that a service manager started it, and the service asks', () => {

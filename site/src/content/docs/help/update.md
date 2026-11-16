@@ -108,7 +108,8 @@ nothing more.
 
 If you keep the agent running another way that starts it again after it ends (a service of your own, a container
 that restarts), put `FOXAGENT_SUPERVISED=1` in `.env`: an update then ends the agent with exit code 75 and counts
-on that restart.
+on that restart. Without that line a service of your own counts as started by hand, whatever it says about
+restarts: the agent cannot see that from inside, so the update is put in place and the agent keeps playing.
 
 ### When a release changes the background service
 
