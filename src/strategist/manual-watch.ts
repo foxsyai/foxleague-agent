@@ -102,9 +102,16 @@ function servedBody(source: string): string | null {
     .trim()
 }
 
-/** The body of a page as the MCP server gives it: without its title heading and the page's address under it. */
+/**
+ * The body of a page as the MCP server gives it: without its title heading and the page's address under it. No
+ * regular expression runs over the end of the page: one with nested runs took the cube of the page's length and
+ * stood the whole service still (audit 2026-11-16, ATK-1). The fingerprint folds whitespace, so the line breaks
+ * before the address need not go.
+ */
 function liveBody(text: string): string {
-  return text.replace(/^# [^\n]*\n/, '').replace(/\n+Source: https:\/\/docs\.foxleague\.ai\/[^\n]*\s*$/, '')
+  const body = text.replace(/^# [^\n]*\n/, '').trimEnd()
+  const at = body.lastIndexOf('\n')
+  return at >= 0 && body.startsWith('Source: https://docs.foxleague.ai/', at + 1) ? body.slice(0, at) : body
 }
 
 /**
