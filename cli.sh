@@ -54,6 +54,18 @@ export FOXAGENT_ROOT="$ROOT"
 export AGENT_ENV_FILE="${AGENT_ENV_FILE:-$ROOT/.env}"
 export AGENT_DATA_DIR="${AGENT_DATA_DIR:-$ROOT/data}"
 # The wallet of this install's .env, as its installer and its service use it: recovery words exported in this terminal
-# would win over .env for Node.js and name another wallet (R2I-6).
-unset AGENT_MNEMONIC
+# would win over .env for Node.js and name another wallet (R2I-6). A .env without words (a container that passes them
+# in) takes the words given, as run.sh does (FI-6): only a .env that has words of its own, or one that cannot be read,
+# drops them. Node.js reads .env as the agent does and prints nothing.
+if [ -n "${AGENT_MNEMONIC:-}" ]; then
+  rc=0
+  if [ -f "$AGENT_ENV_FILE" ]; then
+    env -u AGENT_MNEMONIC "$NODE" -e '
+      try { process.loadEnvFile(process.argv[1]) } catch { process.exit(4) }
+      process.exit((process.env.AGENT_MNEMONIC ?? "").trim() ? 0 : 5)' "$AGENT_ENV_FILE" > /dev/null 2>&1 || rc=$?
+  else
+    rc=5
+  fi
+  [ "$rc" = 5 ] || unset AGENT_MNEMONIC
+fi
 exec "$NODE" --disable-warning=ExperimentalWarning "$CODE/src/cli.ts" "$@"
