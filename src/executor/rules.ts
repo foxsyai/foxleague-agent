@@ -1333,7 +1333,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const startIso = new Date(startsAt).toISOString()
       const ahead = startsAt - ctx.now.getTime()
       if (!(ahead >= CREATE_START_MIN_MS)) return refuse(`starts ${startIso.slice(0, 16)} UTC, less than 2 hours from now: pick a later free start`)
-      if (ahead > CREATE_START_MAX_MS) return refuse(`starts ${startIso.slice(0, 16)} UTC, more than 14 days from now`)
+      if (ahead > CREATE_START_MAX_MS) return refuse(`starts ${startIso.slice(0, 16)} UTC, more than ${CREATE_START_MAX_MS / 86_400_000} days from now`)
       if (a.registration_closes_minutes_before >= ahead / 60_000 - 30) return refuse('registration would close within 30 minutes of now')
       const mine = s.auth?.myTournaments?.active.filter(t => t.creator_user_id === s.profile!.id && t.max_teams > 2) ?? []
       if (mine.length) return refuse(`already running T${mine[0]!.id}: one created tournament at a time`)
@@ -1350,7 +1350,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
         const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
-        return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next 14 days (${takenWindow})`}`)
+        return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next ${CREATE_START_MAX_MS / 86_400_000} days (${takenWindow})`}`)
       }
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)
