@@ -4,6 +4,7 @@ import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, or
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
 import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { calendarLines } from './calendar.ts'
+import { ownTournamentLines } from './own-tournaments.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
 import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, scheduleRefusal, scheduleSpanMinutes, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
@@ -335,6 +336,8 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
       const seated = typeof t.participant_count === 'number' ? t.participant_count : listed?.participant_count ?? '?'
       out.push(`Your open T${t.id} (${t.max_teams === 2 ? 'a 1v1' : `a ${t.format} of ${t.max_teams}, min ${t.min_teams}`}):${ovrRange(t).slice(1)}, ${seated} of ${t.max_teams} seated, deadline ${t.deadline}: widen_range lets more teams in (only wider)`)
     }
+    // Whether each open tournament it created still fits its squad and schedule (ORG-1: src/snapshot/own-tournaments.ts).
+    out.push(...ownTournamentLines(s))
     for (const c of a.challengesForMe) out.push(`Challenge for me: T${c.tournament_id} from ${txt(c.creator_team_name, 20)} (user ${c.creator_user_id}) stake ${c.entry_fee_foxsy} FOXSY, deadline ${c.deadline}${scout(c.tournament_id)}${rivalNote(s, c.creator_user_id)}`)
   }
 
