@@ -174,8 +174,8 @@ export interface ScheduledAction {
  *
  * A deadline of 'now' (another team can make the action pointless at any moment) runs at the start of the window like
  * an unread one. Taking another team's open 1v1 keeps the plan's order, so the swap that funds it still comes first
- * (BEH-10). Leaving the agent's own unanswered 1v1 is the one action moved: it runs first, before anything else of the
- * plan (BEH-9), and the actions after it keep their order.
+ * (BEH-10). Leaving the agent's own unanswered 1v1 (BEH-9) or a tournament it created (ORG-1) is the one action moved:
+ * it runs first, before anything else of the plan, and the actions after it keep their order.
  *
  * The drops are decided first, as without deadlines (R70A-2), and the kept actions are placed with the deadlines after.
  * Placed in one pass, a match moved earlier with a deadline action after it could make room for one that was dropped
@@ -188,7 +188,8 @@ export function scheduleActions(
   o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: Deadline[] },
 ): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
   // Leaving the agent's own unanswered 1v1 runs first, before anything else of the plan (audit 2026-11-16, BEH-9): it
-  // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play.
+  // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play. So does
+  // leaving a tournament it created (ORG-1): until it runs, any team can bring it to its minimum and lock the seats.
   const first = (i: number) => o.deadlines?.[i] === 'now' && planned[i]!.action.type === 'leave_tournament'
   const order = planned.map((_, i) => i).sort((x, y) => Number(first(y)) - Number(first(x)) || x - y)
   const actions = order.map(i => planned[i]!)
