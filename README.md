@@ -47,7 +47,7 @@ ends, at least 5 minutes before it; leaving its own 1v1 nobody took yet and taki
 - **Daily routine:** the free training sessions on the starters who gain most, syncing stats to chain when it
   matters, lineup and formation, ranked and casual matches.
 - **Competition:** joins Silver and Gold tournaments and 1v1 challenges it can win, creates its own (public or
-  private) in a free platform time slot, posts open challenges or challenges a named team, prepares before each match session locks (sync, lineup, condition), leaves or cancels when a
+  private) in a free platform time slot, challenges a named team or, only when the squad needs the competitive matches, posts an open challenge with an OVR range around its own, prepares before each match session locks (sync, lineup, condition), leaves or cancels when a
   better option appears, claims refunds.
 - **Growth:** XP booster and paid training when the numbers say so, Common packs, fusion and both fusion
   waivers, bids and listings on the marketplace.

@@ -449,7 +449,9 @@ among the called-up players by contribution. Nothing of it exists in the code on
   The agent may set a range on a tournament or an open 1v1 it creates (whole numbers 1 to 100, min <= max), only one
   holding its own best XI OVR (FoxLeague refuses a creator outside their own range), never on a targeted challenge or a
   private tournament. An open challenge must carry one whose maximum is at most its best XI OVR rounded up (owner,
-  2026-11-06), so FoxLeague keeps every team stronger by OVR out, and none while that top is more than 10 percent above
+  2026-11-06), and both ends of it (owner, 2026-11-16, OPEN-1V1: refused without, naming the top and a bottom about 10
+  percent under; the prompt posts one only when the squad needs competitive matches a targeted challenge, a
+  tournament or ranked cannot give), so FoxLeague keeps every team stronger by OVR out, and none while that top is more than 10 percent above
   the eleven at today's condition (each starter's card OVR scaled by its condition; R54A-1), which a ranked start,
   training a starter or a new eleven must keep while it waits (R54A-3); by default (prompt, PR #36) its own open tournament
   carries one about 10 percent either way around its best XI OVR. While a tournament or 1v1 it created itself (never one the owner made) is

@@ -760,6 +760,20 @@ export function judgeField(field: FieldSeat[], ours: number, myElo: number): { s
   return { stronger, weaker, unread, even: field.length - stronger - weaker - unread, strongestElo: elos.length ? Math.max(...elos) : null, strongestLineup: lineups.length ? Math.max(...lineups) : null }
 }
 
+/**
+ * An open challenge carries an OVR range around the team's best XI OVR, both ends (the owner, 2026-11-16, OPEN-1V1: the
+ * week's open challenges lost more than they won, most taken by the strongest teams their range let in). Refused
+ * without, naming the values that work: the top at the best XI OVR rounded up (no stronger team can take it, and
+ * FoxLeague refuses a creator above its own top) and a bottom about 10 percent under it, as the snapshot suggests.
+ * The best XI OVR the executor read for a range, else the one in the action's own snapshot.
+ */
+function openRangeMissing(a: { target_user_id: number | null; ovr_min?: number; ovr_max?: number }, s: AgentSnapshot, ctx: RulesContext): string | null {
+  if (a.target_user_id !== null || (a.ovr_min !== undefined && a.ovr_max !== undefined)) return null
+  const best = [ctx.bestXiOvr, s.auth?.bestXiOvr].find((v): v is number => typeof v === 'number' && Number.isFinite(v))
+  if (best === undefined) return 'an open challenge needs an OVR range up to your best XI OVR, with both ends (ovr_min and ovr_max, the snapshot gives them)'
+  return `an open challenge needs an OVR range up to your best XI OVR ${best}, with both ends: ovr_max ${Math.ceil(best)} and ovr_min ${Math.max(1, Math.floor(best * 0.9))} (about 10 percent under; any ovr_min up to ${Math.floor(best)} holds your own OVR)`
+}
+
 /** The 1v1 gates both join and create share: a known, not stronger opponent, not farmed every day. */
 function oneVOneOpponentRefusal(s: AgentSnapshot, ctx: RulesContext): string | null {
   const opp = ctx.opponent
@@ -1392,6 +1406,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.tier === 'gold' && !ctx.settings.entryFeesGold.length) return refuse('Gold is off for this agent: no Gold amounts in its settings')
       const challengeRange = createRangeRefusal(a, ctx)
       if (challengeRange) return refuse(challengeRange)
+      const unranged = openRangeMissing(a, s, ctx)
+      if (unranged) return refuse(unranged)
       if (a.target_user_id === null) {
         // Open, at every level and any configured stake (owner, 2026-11-06, OP-2/OP-3): whoever takes it cannot be read
         // before, so FoxLeague's own range check keeps every stronger team out: its top is the team's best XI OVR,

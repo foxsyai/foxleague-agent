@@ -95,8 +95,10 @@ the normal tick).
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
   FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within
   2 minutes of its creation counts as arranged); a challenge to a team that never answers only locks the stake until
-  its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
-  out at your team's own best XI OVR, so FoxLeague itself keeps every stronger team out, at any of your amounts and as
+  its deadline. An open challenge is never its default 1v1: it posts one only when the squad needs competitive matches
+  it cannot get from a targeted challenge, a tournament or ranked, since the teams that take one tend to be the strongest
+  its range lets in. Any team inside its OVR range can take it, often within minutes: its range tops out at your team's
+  own best XI OVR and starts about 10 percent under it (both ends, always), so FoxLeague itself keeps every stronger team out, at any of your amounts and as
   often as FoxLeague's one active 1v1 allows; since that rating ignores condition, it waits while a fresh team at the
   top would be more than 10 percent stronger than your starting eleven at today's condition, and while one waits for a
   taker it plays no ranked game, trains no starter and sets no eleven that would break that. And it may take an open challenge another team posted. It can leave its
