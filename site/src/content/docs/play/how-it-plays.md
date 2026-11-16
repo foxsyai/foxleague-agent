@@ -47,7 +47,7 @@ the normal tick).
   test bench, apart from the formation record, and the agent weighs it with the league table and its own record
   before it changes its formation.
 - **Competition levels**: a ranked game costs a ticket for the team that starts it. The agent presses start first and pays only when FoxLeague asks for a ticket, within your Max shop payment; a game the AI fills is free and keeps the ticket. Only the team that paid earns XP and a competitive match; the team drawn in pays nothing and only its rating moves. A Bronze tournament has an entry and a prize pool and earns too, so the agent weighs it next to Silver and Gold. Each card counts a limited number of competitive matches a day, and the agent reads the numbers from FoxLeague.
-- **ELO pair cap**: once FoxLeague switches it on, the same two teams move ELO in only a few games a day (for example 3), ranked, 1v1s and tournaments together; a later game that day still earns its prize and XP but moves no ELO. The agent sees, for each team it could challenge, how many such games the two teams played that day, and weighs a game past the cap for its XP and prize only.
+- **ELO pair cap**: once FoxLeague switches it on, the same two teams move ELO in only a few games a day (for example 3), ranked, 1v1s and tournaments together; a later game that day still earns its prize and XP but moves no ELO. The agent sees, for each team it could challenge and each tournament opponent of the day, how many such games the two teams played that day, and weighs a game past the cap for its XP and prize only.
 - **Yellow cards and injuries**: once FoxLeague counts them, a player with enough yellow cards in tournaments (for
   example 3) misses your team's next tournament match, and a foul can injure a player for days (for example 3, 9 or
   27, by how many injuries he takes in one match), more likely the more tired he is (for example 1 percent a foul at
@@ -75,7 +75,7 @@ the normal tick).
   until then, less what its other tournaments cost before it). FoxLeague plays one match of the whole tournament at a
   time, so a team's matches are spread over the whole tournament: the agent counts that span, judges every field from
   the minimum number of teams up (a small field brings a team's matches faster) and counts each match its other
-  tournaments still owe at its own kickoff time. It pays no entry and no 1v1 stake in the last two minutes before a registration deadline: a payment that reaches FoxLeague after the deadline is refunded and its gas is lost. When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. Once FoxLeague charges a private tournament a higher platform fee out of its prize pool (its prize split says so), shared by every team in it, the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
+  tournaments still owe at its own kickoff time. A tournament it is knocked out of owes nothing more. It pays no entry and no 1v1 stake in the last two minutes before a registration deadline: a payment that reaches FoxLeague after the deadline is refunded and its gas is lost. When FoxLeague asks the organizer for a calendar deposit, the agent pays that one payment before the create, within your Max shop payment. The deposit is counted on the maximum number of teams, comes back after the last game and is kept when too few teams join by the deadline, so it sizes what it creates from what recently filled. Once FoxLeague charges a private tournament a higher platform fee out of its prize pool (its prize split says so), shared by every team in it, the agent weighs that before it invites. Once FoxLeague's leave lock is on, the agent cannot leave a tournament that is at its minimum number of teams. Every
   level may create a private tournament, inviting the teams it chooses, and joins one your team is invited to when it
   is worth it (only your team's own FoxLeague login sees the invitation).
 - **Champions FoxLeague (League + Knockout)**: FoxLeague invites the top of its leaderboard; the agent accepts an
@@ -101,9 +101,11 @@ the normal tick).
   team this week, how its own challenges to that team fared and when a limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). Every level may play a 1v1 three ways. A challenge to a named team is taken almost only
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
-  FoxLeague's public results show taking challenges it had not arranged in the last 7 days (a challenge played within
-  2 minutes of its creation counts as arranged); a challenge to a team that never answers only locks the stake until
-  its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
+  FoxLeague's public results show taking challenges it had not arranged in the last 7 days: a challenge sent to it by a
+  team it had never played a 1v1 against, accepted more than 2 minutes after it was sent (two teams that play each
+  other again and again arranged it; an open challenge a team took from the list is shown apart). The plan sees when
+  that team last accepted one, so it can send its own at that hour. A challenge to a team that never answers only locks
+  the stake until its deadline. An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops
   out at your team's own best XI OVR and starts about 10 percent under it (both ends, always). The teams that take one
   tend to be the strongest its range lets in, so it is never the agent's default 1v1: it posts one only when the squad
   needs competitive matches it cannot get from a targeted challenge, a tournament or ranked. Then FoxLeague itself keeps every stronger team out, and the agent may post one at any of your amounts and as
@@ -131,7 +133,8 @@ the normal tick).
   starting on Monday at 14:00 UTC.
 - **Shop prices**: once FoxLeague's MetaStaking discount is on, a wallet with FOXSY in MetaStaking pays less in the
   Shop, and FoxLeague takes only that wallet's own price. The agent pays exactly the price FoxLeague quotes its wallet
-  right before each payment, and pays nothing while it cannot read that price.
+  right before each payment, and pays nothing while it cannot read that price. The plan sees that price next to the
+  list price, so it weighs what the wallet really pays.
 - **Fusion**: three cards of one rarity into one of the next, never leaving fewer than the 18 cards a match needs,
   plus both fusion waivers (a shorter cooldown, bought match credit) when a fusion can really happen. FoxLeague runs
   one of two fusions and the agent reads which from FoxLeague's settings: a card drawn from FoxLeague's pool, or a new

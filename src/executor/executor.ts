@@ -23,7 +23,7 @@ import { agentName } from '../names.ts'
 import type { AgentWallet } from '../wallet/wallet.ts'
 import { createStartMs, describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
-import { SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
+import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
 import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
@@ -1313,6 +1313,11 @@ export class Executor {
           try {
             created = await fox.createTournament(wallet, body, newKey())
             this.unbook(booking.organizer)
+            // FoxLeague asked no organizer payment: what the owner reads names the seat it pays, not 1150 for 1000 (MON-U5).
+            const organizer = wholeToAtomic(Number(v.facts.organizerFoxsy ?? 0))
+            const prices = this.valuationPrices(snap.prices)
+            usd = Math.max(0, usd - (prices ? costUsd(organizer, maxFeeAtomic(built.txs[0]!), prices) : 0))
+            costText = `cost ~$${usd.toFixed(2)} (${formatAtomic(v.foxsy - organizer, 0)} FOXSY + fees; FoxLeague asked no organizer payment)`
           } catch (err) {
             if (!(err instanceof ApiRefusal && err.code === 'organizer_fee_required')) throw err
             // Kept from the signature on, as FoxLeague's own app does: a create that does not use it leaves it for the next one.
@@ -1369,12 +1374,12 @@ export class Executor {
             // FoxLeague committed the tournament pending on chain with this payment on it ("could not be confirmed yet ...
             // stays pending", tournaments.rs), and its reconcile opens it later: the payment is used, not refunded (grand
             // audit 2026-11-06, INTEG-2). The plan is shown a tournament it created without a seat (OPEN-8).
-            if (err instanceof ApiRefusal && /could not be confirmed yet|stays pending/i.test(err.message)) {
+            if (err instanceof ApiRefusal && CREATE_STILL_PENDING.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
               return finish('error', `${desc}: organizer payment ${organizerHash} made, and FoxLeague may have created it: its creation is still pending on chain (${why}); the payment is on that tournament, not refunded, so the next plan reads your tournaments`, 0, organizerHash)
             }
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
-            if (err instanceof ApiRefusal && !err.isTxPending && SHOP_FINAL.test(err.message)) {
+            if (err instanceof ApiRefusal && !err.isTxPending && ORGANIZER_HASH_ANSWER.test(err.message) && SHOP_FINAL.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
               if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
               return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)

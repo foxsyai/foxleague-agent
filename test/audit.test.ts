@@ -238,10 +238,11 @@ test('the snapshot lists teams that accept 1v1s first and only the private tourn
         ? [row(60, { is_private: false }), row(61, { is_private: true }), row(62, { is_private: true })]
         : q.status === 'completed' && q.kind === 'challenge'
           ? [
-              row(70, { max_teams: 2, creator_user_id: 11, winner_user_id: 11, runner_up_user_id: 40, completed_at: recent }),
-              row(71, { max_teams: 2, creator_user_id: 12, winner_user_id: 40, runner_up_user_id: 12, completed_at: recent }),
-              row(72, { max_teams: 2, creator_user_id: 12, winner_user_id: 41, runner_up_user_id: 12, completed_at: recent }),
-              row(73, { max_teams: 2, creator_user_id: 12, winner_user_id: 42, runner_up_user_id: 12, completed_at: old }),
+              // Targeted 1v1s each team accepted from a team it had not played (P3b: an open challenge taken is said apart).
+              row(70, { max_teams: 2, creator_user_id: 11, winner_user_id: 11, runner_up_user_id: 40, completed_at: recent, targeted: true }),
+              row(71, { max_teams: 2, creator_user_id: 12, winner_user_id: 40, runner_up_user_id: 12, completed_at: recent, targeted: true }),
+              row(72, { max_teams: 2, creator_user_id: 12, winner_user_id: 41, runner_up_user_id: 12, completed_at: recent, targeted: true }),
+              row(73, { max_teams: 2, creator_user_id: 12, winner_user_id: 42, runner_up_user_id: 12, completed_at: old, targeted: true }),
             ]
           : [],
     tournament: async (id: number, w?: { address: string }) => (asked.push(w?.address), { ...(tournament(id, { is_private: true }) as object), user_can_join_private: id === 62 }),

@@ -1,12 +1,12 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, shopDiscountLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
 import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { calendarLines } from './calendar.ts'
 import { ownTournamentLines } from './own-tournaments.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
-import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, scheduleRefusal, scheduleSpanMinutes, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
+import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrToday, paidSessionsToday, judgeField, lineupPositionsOk, lineupStrength, outInjured, scheduleRefusal, scheduleSpanMinutes, shopPrice, shopRateBp, LK_KNOCKOUT_MATCHES, LK_KNOCKOUT_PLACES, LK_LEAGUE_MATCHES, MAX_1V1_PER_OPPONENT_WEEK, MAX_1V1_STRENGTH_RATIO, MIN_1V1_CHANCE, XP_BOOSTER_RENEW_HOURS, FIELD_LIMIT, STRONGER_ELO, STRONGER_SQUAD } from '../executor/rules.ts'
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { cut } from '../util/text.ts'
 import { agentName } from '../names.ts'
@@ -88,6 +88,42 @@ export function boosterLine(shop: ShopStatus | null | undefined, takenAt: string
   if (!Number.isFinite(until)) return 'XP booster active, expiry unknown (no new one is bought until it is known)'
   const left = Math.max(0, (until - Date.parse(takenAt)) / 3600_000)
   return `XP booster active until ${new Date(until).toISOString()} (${left.toFixed(1)} h left; a new one restarts the 24 h and is refused while more than ${XP_BOOSTER_RENEW_HOURS} h are left)`
+}
+
+/**
+ * The Shop's prices as the executor pays them (MNT-2b): the list prices FoxLeague's config serves and, while its
+ * MetaStaking discount is live, this wallet's own prices and rate next to them (shopRateBp and shopPrice, the rules'
+ * own). While the discount is live and the rate is unread, no price: the executor buys nothing in the Shop then.
+ */
+export function shopPriceLine(s: AgentSnapshot): string | null {
+  const cfg = s.config
+  if (!cfg) return null
+  const now = new Date(s.takenAt)
+  const p = cfg.shop_prices_foxsy
+  const whole = (v: unknown): number | null => (typeof v === 'number' && Number.isSafeInteger(v) && v > 0 ? v : null)
+  const items: { name: string; list: number | null; unit: string; one: string }[] = [
+    { name: 'XP booster', list: whole(p?.xp_booster), unit: '', one: '' },
+    { name: 'Common pack', list: whole(cfg.common_pack_price_foxsy), unit: '', one: '' },
+    { name: 'training slot', list: whole(p?.training), unit: ' each', one: ' for one' },
+    { name: 'condition recovery', list: whole(p?.condition), unit: " for a card's 100 points", one: " for a card's 100 points" },
+  ]
+  const listed = (i: (typeof items)[number]) => `${i.name} ${i.list ?? 'unknown'}${i.unit}`
+  const live = shopDiscountLive(cfg, now)
+  const bp = shopRateBp(s.auth?.shop?.metastaking_discount_bp, cfg, now)
+  if (!live && bp === 0) return `Shop prices (FOXSY): ${items.map(listed).join(', ')}`
+  if (bp === null) return `Shop prices for this wallet: unknown (FoxLeague's MetaStaking discount is live and this wallet's rate could not be read, so the executor buys nothing in the Shop until it is); list prices: ${items.map(listed).join(', ')}`
+  // The ranked ticket is discounted too (FoxLeague's ticket view); its list price is on the Competition levels line.
+  const ticket = levelsLive(cfg, now) ? whole(cfg.competition_levels?.ranked_ticket_price_foxsy) : null
+  if (ticket !== null) items.push({ name: 'ranked ticket', list: ticket, unit: '', one: '' })
+  const mine = (i: (typeof items)[number]) => (i.list === null ? `${i.name} unknown` : `${i.name} ${shopPrice(i.list, bp)}${i.one} (list ${i.list})`)
+  return `Shop prices for this wallet (FoxLeague's MetaStaking discount${live ? ' is live' : ''}: your rate ${bp} basis points, ${bp / 100} percent off, taken once on each payment's total; the executor pays these, FoxLeague takes no other amount): ${items.map(mine).join(', ')}; medicine at FoxLeague's quote, ${bp / 100} percent off its days' full cost`
+}
+
+/** A rival's last acceptances of a stranger's targeted 1v1 (P3b): when to the minute and how long after it was sent. */
+function acceptedText(last: { at: string; afterMin: number | null }[] | undefined): string {
+  const at = (iso: string) => (Number.isFinite(Date.parse(iso)) ? `${new Date(Date.parse(iso)).toISOString().slice(0, 16).replace('T', ' ')} UTC` : 'unknown time')
+  const one = (x: { at: string; afterMin: number | null }) => `${at(x.at)}${typeof x.afterMin === 'number' ? `, ${x.afterMin} min after it was sent` : ''}`
+  return last?.length ? ` (${last.length === 1 ? 'last' : 'last ones'}: ${last.map(one).join('; ')})` : ''
 }
 
 /** A rival's formations in its last revealed matches (written by FoxLeague's server, still read as data). */
@@ -172,6 +208,18 @@ function eloPairNote(s: AgentSnapshot, userId: number | null | undefined): strin
 }
 
 /**
+ * The ELO pair cap against a tournament opponent of this game day (MNT-3b), from its seat's user id and the meetings
+ * read for it. Only on a planning snapshot that read them while the cap is live; one that could not be read is unknown.
+ */
+function upcomingPairNote(s: AgentSnapshot, m: { tournament_id: number; opponent_name: string | null }): string {
+  if (!s.upcomingRivals || !eloPairCapLive(s.config, new Date(s.takenAt))) return ''
+  const r = s.upcomingRivals.find(x => x.tournamentId === m.tournament_id && x.opponent === m.opponent_name)
+  if (!r) return ''
+  if (r.userId === null) return ', ELO meetings today: unknown (the opponent\'s seat could not be read)'
+  return s.eloPairs?.some(p => p.userId === r.userId) ? eloPairNote(s, r.userId) : ', ELO meetings today: unknown'
+}
+
+/**
  * A team with its own open 1v1 (created by it, not accepted yet) cannot accept ours: FoxLeague allows one active 1v1
  * per team, created or joined. Read from the open challenges in the snapshot, until that challenge's deadline.
  */
@@ -188,6 +236,18 @@ function ovrRange(t: { ovr_min?: number | null; ovr_max?: number | null }): stri
   const lo = typeof t.ovr_min === 'number' ? t.ovr_min : null
   const hi = typeof t.ovr_max === 'number' ? t.ovr_max : null
   return lo === null && hi === null ? '' : `, OVR range ${lo ?? 'any'} to ${hi ?? 'any'}`
+}
+
+/**
+ * A range that shuts this team out, as the join rule refuses it (BEH-3b): the best XI OVR the snapshot read outside it.
+ * An unread OVR marks nothing: the executor reads its own right before a join and refuses a range it cannot read.
+ */
+function rangeClosed(s: AgentSnapshot, t: { ovr_min?: number | null; ovr_max?: number | null }): string {
+  const lo = typeof t.ovr_min === 'number' ? t.ovr_min : null
+  const hi = typeof t.ovr_max === 'number' ? t.ovr_max : null
+  const ovr = s.auth?.bestXiOvr
+  if ((lo === null && hi === null) || typeof ovr !== 'number' || !Number.isFinite(ovr)) return ''
+  return (lo !== null && ovr < lo) || (hi !== null && ovr > hi) ? `, closed to you: range ${lo ?? 'any'} to ${hi ?? 'any'}, your best XI OVR ${ovr}` : ''
 }
 
 /**
@@ -268,7 +328,7 @@ function levelLines(s: AgentSnapshot): string[] {
   }
   // The ELO pair cap (FoxLeague's elo_pair_cap, MNT-3): a fact for the plan, no rule of the executor.
   const pc = s.config?.elo_pair_cap
-  if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below show their meetings today once it is live`)
+  if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below and your tournament opponents of the game day show their meetings today once it is live`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   // A switch FoxLeague serves that no rule of the agent reads: its key, state and numbers only (audit 2026-11-16, P-W6).
@@ -321,10 +381,13 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     const resets = typeof a.shop?.common_pack_week_resets_at === 'string' ? Date.parse(a.shop.common_pack_week_resets_at) : NaN
     const again = Number.isFinite(resets) ? `, the week starts again ${new Date(resets).toISOString()}` : ''
     out.push(typeof packs === 'number' && Number.isFinite(packs) ? `Common packs left this week (FoxLeague's count for this wallet): ${Math.max(0, packs)}${again}` : 'Common packs left this week: unknown (the shop status could not be read; no pack is bought until it is)')
+    // What the Shop costs this wallet, as the executor pays it (MNT-2b).
+    const prices = shopPriceLine(s)
+    if (prices) out.push(prices)
     if (a.activeMatch) out.push(`IN A MATCH: #${a.activeMatch.match_id ?? a.activeMatch.tournament_match_id ?? '?'} ${a.activeMatch.kind} ${a.activeMatch.status}`)
     for (const m of a.upcoming?.matches ?? []) {
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
-      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}`)
+      out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${m.scheduled_at}, locks ${m.strategy_locks_at} [${m.phase}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}${upcomingPairNote(s, m)}`)
     }
     for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.status} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && t.participant_count === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}${a.unseatedCreated?.includes(t.id) ? ` (created by you, with no seat of yours: take it with join_tournament${organizerFeesLive(s.config, new Date(s.takenAt)) ? ', or unfilled at its deadline it keeps your organizer deposit' : ''})` : ''}`)
     // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining (only one
@@ -414,7 +477,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
   let calendarBlind = false
   for (const t of m.openStandard.slice(0, 30)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} ${t.format} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${t.deadline} starts ${t.starts_at}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}${rangeClosed(s, t)}`)
     // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
     const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
     if (worn && /could not be read/.test(worn)) calendarBlind = true
@@ -443,7 +506,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   if (m.scouted?.length || s.leaderboardNeighbours.some(u => typeof u.strength === 'number')) out.push(s.players.length && Number.isFinite(lineupStrength(s)) ? `Your lineup strength today (synced stats x condition): ${Math.round(lineupStrength(s))}; a targeted or joined 1v1 is refused when the rival's lineup (the stronger of its synced and live stats, at full condition) is more than 10 percent above it (an open challenge is held to its OVR range instead).` : 'Your lineup strength today: unknown (your roster or a starter\'s stats could not be read); a 1v1 and a tournament entry are refused until it is known.')
   out.push(`Open 1v1 challenges: ${m.openChallenges.length ? '' : 'none'}`)
   for (const t of m.openChallenges.slice(0, 20)) {
-    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
+    out.push(`  T${t.id} "${txt(t.title, 60)}" ${t.tier} stake ${t.entry_fee_foxsy} creator user ${t.creator_user_id}${t.target_user_id ? ` targets user ${t.target_user_id}` : t.targeted ? ' targets another team' : ' open'} deadline ${t.deadline} seated ${t.participant_count ?? '?'}${ovrRange(t)}${rangeClosed(s, t)}${scout(t.id)}${rivalNote(s, t.creator_user_id)}`)
   }
   // Time slots for creating: every window a new tournament's own window may not overlap, and the gaps.
   const now = Date.now()
@@ -496,7 +559,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   // The threshold every level's 1v1s against a known team are held to, next to the chances below.
   if (s.leaderboardNeighbours.some(u => typeof u.winChance === 'number')) out.push(`Win chances: the ELO expectation and the lineup strength averaged, and never above what the lineups alone give (a rival's low ELO lifts no chance), ours at today's condition, theirs at full condition; a 1v1 against a known team is played from ${Math.round(MIN_1V1_CHANCE * 100)} percent.`)
   if (s.leaderboardNeighbours.length) {
-    out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged; a targeted 1v1 played within 2 minutes of its creation counts as arranged): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged` : ', took no 1v1 in 7 days it had not arranged'}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
+    out.push(`Teams to challenge (first the ones that take 1v1s they had not arranged: a targeted 1v1 it accepted from a team it had not played a 1v1 against before, more than 2 minutes after it was sent; a pair that plays again and again arranges it, and an open challenge a team took from the list is said apart): ${s.leaderboardNeighbours.map(u => `${txt(u.team_name, 20)} (user ${u.id}) ${u.elo_rating}${u.accepted7d ? `, took ${u.accepted7d} 1v1 in 7 days it had not arranged${acceptedText(u.acceptedLast)}` : ', took no 1v1 in 7 days it had not arranged'}${u.openTaken7d ? `, took ${u.openTaken7d} open challenge${u.openTaken7d === 1 ? '' : 's'}` : ''}${typeof u.bestXiOvr === 'number' ? `, best XI OVR ${u.bestXiOvr}` : ''}${u.played ? `, ${u.played.matches} matches in ${u.played.days} days` : ''}${typeof u.strength === 'number' ? `, lineup ${Math.round(u.strength)}` : ''}${typeof u.winChance === 'number' ? `, your win chance ${Math.round(u.winChance * 100)} percent` : ''}${ownChallengeOut(s, u.id)}${rivalNote(s, u.id)}`).join('; ')}`)
   }
   for (const w of s.warnings) out.push(`WARNING ${txt(w, 160)}`)
   return out.join('\n')
