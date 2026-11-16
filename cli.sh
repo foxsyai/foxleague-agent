@@ -9,8 +9,9 @@ set -u
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # As root (sudo) on a folder another user owns: root's files in data/, versions/ or .env would keep the agent, which
 # runs as that user, from starting again (INS-A8). An install that is root's own still runs.
-if [ "$(id -u)" = 0 ] && [ "$(stat -c %u "$ROOT" 2>/dev/null || stat -f %u "$ROOT" 2>/dev/null)" != 0 ]; then
-  who=$(stat -c %U "$ROOT" 2>/dev/null || stat -f %Su "$ROOT" 2>/dev/null)
+# "/." follows a link to the folder: stat does not follow one in the last part (R2I-1).
+if [ "$(id -u)" = 0 ] && [ "$(stat -c %u "$ROOT/." 2>/dev/null || stat -f %u "$ROOT/." 2>/dev/null)" != 0 ]; then
+  who=$(stat -c %U "$ROOT/." 2>/dev/null || stat -f %Su "$ROOT/." 2>/dev/null)
   asked=''
   [ $# -eq 0 ] || printf -v asked ' %q' "$@"
   echo "foxleague-agent: this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./cli.sh$asked" >&2

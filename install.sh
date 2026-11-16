@@ -92,8 +92,10 @@ if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" 
   die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
 fi
 # The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
-owner_uid() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
-owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || true; }
+# "/." follows a link: stat does not follow one in the last part, and a link root made to a user's install is root's
+# own (R2I-1).
+owner_uid() { stat -c %u "$1/." 2>/dev/null || stat -f %u "$1/." 2>/dev/null || true; }
+owner_name() { stat -c %U "$1/." 2>/dev/null || stat -f %Su "$1/." 2>/dev/null || true; }
 # --update and --uninstall with sudo on another user's install. --update put a release in place there that the
 # agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
 # (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
