@@ -12,6 +12,7 @@ import { cardBansLive } from '../foxleague/levels.ts'
 import { winChance } from './winchance.ts'
 import { LEAGUE_DAYS, LEAGUE_READS_PER_TICK, LEAGUE_TEAMS, LEAGUE_TEAMS_PER_TICK, summariseFormations, type FormationMatch, type FormationRecord, type LeagueCache, type LeagueTable } from './formations.ts'
 import { marketPrices, MARKET_WINDOWS, type MarketPrice, type MarketSalesCache } from './market.ts'
+import { readCalendar, type ShapeCalendar } from './calendar.ts'
 
 /** A rival's lineup strength, read at most every 20 minutes (a roster changes slowly; 25 agents share FoxLeague's rate). */
 const rivalSeen = new Map<string, { at: number; strength: number | null }>()
@@ -105,6 +106,11 @@ export interface MarketSummary {
   scouted?: { id: number; elo: number | null; strength: number | null; formations?: string[] | null }[]
   /** Platform-wide time slots a created tournament may not overlap (open and running standard tournaments). */
   slots: SlotWindow[]
+  /**
+   * Planning snapshots only: FoxLeague's own free starts for a new tournament of a few shapes, over the 14 days a create
+   * may be ahead (src/snapshot/calendar.ts); a shape whose read failed is null (unknown, never free).
+   */
+  calendar?: ShapeCalendar[]
   /** Open auctions, never our own: the 10 strongest, then the 3 cheapest of each rarity (auctionsShown); and the reserve floor of each rarity. */
   auctions: MarketListing[]
   /** The best XI OVR of the leaderboard teams read (ours left out), and of those that took a 1v1 in 7 days they had not arranged: how many a range lets in. */
@@ -817,6 +823,8 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
 
   // A field the plan can judge before paying (planning snapshots only), with the test the join rule applies.
   const fields = facts && wallet && registered && profile ? await readFields(fox, wallet, openStandard, profile.id, board?.users ?? [], now) : undefined
+  // FoxLeague's own free starts for a create (planning snapshots only, P-O1): a failed read is unknown, never free.
+  const calendar = facts && wallet && registered ? await readCalendar(fox, warnings) : undefined
 
   const egldPerFoxsy = pool?.spotEgldPerFoxsy ?? null
   // The plan is told, so it does not plan a swap that would only be refused.
@@ -855,6 +863,7 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       floors: floors ?? [],
       ...(prices ? { prices } : {}),
       ...(fields ? { fields } : {}),
+      ...(calendar ? { calendar } : {}),
     },
     ...(record !== undefined ? { formationRecord: record } : {}),
     ...(rivalFormations ? { rivalFormations } : {}),
