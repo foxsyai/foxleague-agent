@@ -5,8 +5,8 @@
 // unless the owner says FOXAGENT_ALLOW_ROOT=1.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { LOGIN_LINES, REPO, freshInstall, guided, pack, realTree, sh, smallTree, stubs, tmp } from './install-helpers.ts'
 
 /** A stand-in `id` that says uid 0: the scripts ask `id -u`. */
@@ -53,12 +53,21 @@ test('INSTALL-17: what an install that already runs as root needs still works: p
   const s = stubs()
   asRoot(s.dir)
   const root = tmp('fox-root-')
+  // The install is root's own: its folder belongs to root (told by a stand-in stat, as root is told by the stand-in
+  // id) and its background service is in root's HOME. Since INS-A2 and UPD-A4 of 2026-11-16, root on a folder of
+  // another user is refused, and an uninstall that finds no service no longer says "Stopped.".
+  s.stub('stat', 'case "$1 $2" in "-c %u") echo 0 ;; "-c %U") echo root ;; *) exec /usr/bin/stat "$@" ;; esac')
+  const home = tmp('fox-home-')
+  const unit = join(home, '.config', 'systemd', 'user', 'foxleague-agent.service')
+  mkdirSync(dirname(unit), { recursive: true })
+  writeFileSync(unit, '[Unit]\n')
   const staged = realTree(join(root, 'versions', '.staging-v3.2.0'), '3.2.0')
   writeFileSync(join(root, 'versions', 'active'), 'v3.1.0\n')
-  const env = { HOME: tmp('fox-home-'), PATH: `${s.dir}:${process.env.PATH}`, FOXAGENT_ROOT: root }
+  const env = { HOME: home, PATH: `${s.dir}:${process.env.PATH}`, FOXAGENT_ROOT: root }
   const prepared = await sh(join(staged, 'install.sh'), ['--prepare'], env)
   assert.equal(prepared.status, 0, prepared.out)
   const removed = await sh(join(staged, 'install.sh'), ['--uninstall'], env)
   assert.equal(removed.status, 0, removed.out)
   assert.match(removed.out, /Stopped\. Your folder, your wallet words/)
+  assert.equal(existsSync(unit), false, 'its service was removed')
 })

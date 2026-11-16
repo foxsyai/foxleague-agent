@@ -1430,9 +1430,18 @@ export class Service {
   /**
    * Graceful stop (SIGTERM, a deploy): no new tick and no new action; an action already signing or
    * waiting for its outcome finishes (up to 150 s, the unit allows 180) so it is booked, then exit.
+   * Every caller waits for the one stop (UPD-A3): SIGTERM during an update's prepare and the restart for that
+   * update both end the process only once the action in flight is done.
    */
-  async stop(): Promise<void> {
-    if (this.stopping) return
+  stop(): Promise<void> {
+    this.stopRun ??= this.stopOnce()
+    return this.stopRun
+  }
+
+  /** The stop that runs, shared by every caller of stop(). */
+  private stopRun: Promise<void> | null = null
+
+  private async stopOnce(): Promise<void> {
     this.stopping = true
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)

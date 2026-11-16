@@ -86,11 +86,15 @@ In the `foxleague-agent` folder:
 
 It does what the button does: it looks for the newest release, checks its signature, downloads it, prepares it
 next to the running version and restarts the agent into it. If the restart fails it says so and names the command
-to run.
+to run. Type it as yourself, without sudo: as root on your install it stops before it changes anything and says
+so, because root's files there would keep the agent from starting.
 
 Pasting the install line again also works: it downloads the newest version, checks it against the release's
-checksum and runs the installer, which offers your earlier answers as the defaults. An older version is never put
-over a newer one unless you add `FOXAGENT_ALLOW_DOWNGRADE=1`.
+checksum, prepares it next to the installed one (Node.js and dependencies) and puts it in place only once that
+ended well, then runs the installer, which offers your earlier answers as the defaults. If the preparing fails
+(no network, for example), nothing was changed and the agent runs as before. The installer asks its questions in
+a terminal: over SSH, log in first (or use `ssh -t`). An older version is never put over a newer one unless you
+add `FOXAGENT_ALLOW_DOWNGRADE=1`.
 
 ### Without the background service
 
@@ -122,7 +126,9 @@ These show the notice with what to do instead of the button:
   `deploy/deploy.sh` from your computer.
 - **An install from before versions had folders of their own**: paste the install line again once. Later updates
   are one click.
-- **A folder the agent may not write to**: run `./install.sh --update` in a terminal.
+- **A folder the agent may not write to** (another user owns part of it, for example after a command run with
+  `sudo`, or it came back from a backup): make it yours again in a terminal, then update again. The notice gives
+  the command with your folder, for example `sudo chown -R "$USER" ~/foxleague-agent && chmod -R u+rwX ~/foxleague-agent`.
 
 ### Switching the check off
 

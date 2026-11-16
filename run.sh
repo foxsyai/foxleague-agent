@@ -43,7 +43,13 @@ fi
 [ -f "$CODE/src/service.ts" ] || { echo "foxleague-agent: no code in $CODE; run the install line again" >&2; exit 1; }
 
 NODE=''
-[ -f "$ROOT/.node-path" ] && NODE=$(head -n 1 "$ROOT/.node-path" 2>/dev/null || true)
+# .node-path names the Node.js to start, one path per line, and the first one that is there wins: the installer
+# writes the program itself, then the path it found it at (a version manager's path may last one shell only).
+if [ -f "$ROOT/.node-path" ]; then
+  while IFS= read -r n || [ -n "$n" ]; do
+    if [ -n "$n" ] && [ -x "$n" ]; then NODE=$n; break; fi
+  done < "$ROOT/.node-path"
+fi
 [ -n "$NODE" ] && [ -x "$NODE" ] || NODE="$ROOT/.node/bin/node"
 [ -x "$NODE" ] || NODE=$(command -v node 2>/dev/null || true)
 [ -n "$NODE" ] && [ -x "$NODE" ] || { echo "foxleague-agent: Node.js was not found; run ./install.sh again" >&2; exit 1; }

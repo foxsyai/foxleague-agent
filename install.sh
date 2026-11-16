@@ -91,6 +91,18 @@ esac
 if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
   die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
 fi
+# The user who owns a folder, as a number and as a name (GNU stat, then the BSD stat of a Mac); nothing when unknown.
+owner_uid() { stat -c %u "$1" 2>/dev/null || stat -f %u "$1" 2>/dev/null || true; }
+owner_name() { stat -c %U "$1" 2>/dev/null || stat -f %Su "$1" 2>/dev/null || true; }
+# --update and --uninstall with sudo on another user's install. --update put a release in place there that the
+# agent's own user cannot read (versions/, active, pending, data/update), and the agent then never started again
+# (UPD-A4); --uninstall looked for root's service, not the owner's, and said "Stopped." while the agent played on
+# (INS-A2). Both stop before they write anything. An install that itself runs as root (its folder is root's) still
+# updates and uninstalls.
+if { [ "$MODE" = update ] || [ "$MODE" = uninstall ]; } && [ "$(id -u)" = 0 ] && [ "$(owner_uid "$ROOT")" != 0 ]; then
+  who=$(owner_name "$ROOT")
+  die "this install belongs to ${who:-another user}, not to root: run it as ${who:-that user}, without sudo: cd $ROOT && ./install.sh --$MODE"
+fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
 # The recovery words live in this file, so set_env never loses a line of it: every line but the key's own is
@@ -120,7 +132,8 @@ set_env() {
   printf '%s="%s"\n' "$1" "$2" >> "$tmp"
   mv "$tmp" "$ENV_FILE"
 }
-get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
+# A line saved on Windows ends in CR LF: the CR goes before the quotes, as the agent's own reader drops it (INS-A3).
+get_env() { LC_ALL=C grep -a -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | tr -d '\r' | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true; }
 
 # The files that hold secrets, readable by the owner only. A folder that was copied to another machine or came
 # back from a backup may have lost its modes; every run of this script puts them back. Nothing is created.
@@ -225,8 +238,17 @@ ensure_node() {
     rm -rf "$ROOT/.node.old"
     NODE="$ROOT/.node/bin/node"
   fi
-  # The launcher (run.sh) reads which Node to start the agent with.
-  printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
+  # The launcher (run.sh) reads which Node to start the agent with: the first path of .node-path that is there.
+  # For a Node.js of the system the program itself goes first (INS-A6): the path a version manager puts on the
+  # PATH may last one shell only (fnm's folder is gone at the next restart, asdf's shim needs the shell's setup).
+  # The path it was found at follows, for when the program's own folder goes (Homebrew's link outlives an upgrade).
+  local real=''
+  if [ "$NODE" = "$sys" ]; then real=$("$NODE" -p process.execPath 2>/dev/null || true); fi
+  if [ -n "$real" ] && [ "$real" != "$NODE" ] && node_ok "$real"; then
+    printf '%s\n%s\n' "$real" "$NODE" | put_file "$ROOT/.node-path" 644
+  else
+    printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
+  fi
   export PATH="$(dirname "$NODE"):$PATH"
   info "Node.js $("$NODE" --version) at $NODE"
 }
@@ -234,8 +256,28 @@ ensure_node() {
 cli() { FOXAGENT_GUIDED=1 AGENT_ENV_FILE="$ENV_FILE" AGENT_DATA_DIR="$DATA_DIR" "$NODE" --disable-warning=ExperimentalWarning "$APP_DIR/src/cli.ts" "$@"; }
 # Without npm's own chatter (its spinner and its "new version of npm available, to update run ..." notice):
 # a newcomer reads that notice as something to do. npm's download cache and its logs stay in the install's own
-# folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind.
-deps() { (cd "$APP_DIR" && npm_config_cache="$ROOT/.npm-cache" npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+# folder (.npm-cache), not in ~/.npm, so deleting the folder leaves nothing of the agent behind. In the folder named
+# (the release's own when none is).
+deps() { (cd "${1:-$APP_DIR}" && npm_config_cache="$ROOT/.npm-cache" npm_config_update_notifier=false npm_config_progress=false npm ci --omit=dev --ignore-scripts --no-audit --no-fund --loglevel=error); }
+# The dependencies of this release. A release that has them may be the one that runs, and npm ci removes
+# node_modules before it installs: cut short (no network, a full disk, Ctrl-C or a closed window while npm is
+# silent), it left the running release without any, and the agent did not start again (INS-A1). So they are
+# installed beside, in .deps-new, and take the place of the old ones only once complete. A release that has none yet
+# (a new one) gets them in place.
+release_deps() {
+  local nm="$APP_DIR/node_modules" new="$APP_DIR/.deps-new" old="$APP_DIR/.deps-old"
+  rm -rf "$new" "$old"
+  if [ ! -e "$nm" ] && [ ! -L "$nm" ]; then
+    deps
+    return
+  fi
+  mkdir -p "$new" && cp "$APP_DIR/package.json" "$APP_DIR/package-lock.json" "$new/" || { rm -rf "$new"; return 1; }
+  deps "$new" || { rm -rf "$new"; return 1; }
+  [ -d "$new/node_modules" ] || { rm -rf "$new"; return 1; }
+  mv "$nm" "$old" || { rm -rf "$new"; return 1; }
+  mv "$new/node_modules" "$nm" || { mv "$old" "$nm"; rm -rf "$new"; return 1; }
+  rm -rf "$old" "$new"
+}
 
 # ---- the launcher (run.sh: what the service starts) and the command line (cli.sh). On an install made by get.sh
 # they sit in ROOT with an install.sh that hands over to the active release; in a git checkout all three are the
@@ -259,6 +301,34 @@ SHIM
 UNIT="$HOME/.config/systemd/user/$SERVICE.service"
 PLIST="$HOME/Library/LaunchAgents/$PLIST_LABEL.plist"
 service_installed() { if [ "$PLATFORM" = linux ]; then [ -f "$UNIT" ]; else [ -f "$PLIST" ]; fi; }
+# The install folder the background service of this user runs (its WorkingDirectory); nothing when it is not known.
+service_folder() {
+  if [ "$PLATFORM" = linux ]; then
+    if [ -f "$UNIT" ]; then sed -n 's/^WorkingDirectory=//p' "$UNIT" 2>/dev/null | head -n 1; fi
+  elif [ -f "$PLIST" ]; then
+    sed -n 's|.*<key>WorkingDirectory</key><string>\([^<]*\)</string>.*|\1|p' "$PLIST" 2>/dev/null | head -n 1
+  fi
+  return 0
+}
+# True when that service runs the agent of another folder that still holds an install. The service has one name per
+# user (the unit, the launchd label), so a second install of the same user would take it from the first (INS-A5).
+service_of_other_install() {
+  local other
+  other=$(service_folder)
+  [ -n "$other" ] && [ -f "$other/run.sh" ] || return 1
+  [ "$(cd "$other" 2>/dev/null && pwd -P)" != "$(cd "$ROOT" && pwd -P)" ]
+}
+other_install_refusal() {
+  die "the background service of $USER_NAME already runs the agent in $(service_folder). A user has one background service, so this install would stop that agent for good. To keep it and set up this folder without a service: cd $ROOT && ./install.sh --no-service   To move the service here instead: cd $(service_folder) && ./install.sh --uninstall   then run this again: cd $ROOT && ./install.sh"
+}
+# macOS: launchd still lists the agent's job (loaded, running or on its way out).
+mac_job_loaded() { launchctl print "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1; }
+# Waits until launchd no longer lists the job, at most $1 seconds; status 1 when it still does.
+mac_wait_unloaded() {
+  local _
+  for _ in $(seq 1 "$(($1 * 2))"); do mac_job_loaded || return 0; sleep 0.5; done
+  ! mac_job_loaded
+}
 # The user's own service manager (systemd --user) on Linux. It is reached through the user's runtime folder,
 # /run/user/<uid>. A terminal opened with su or sudo has no XDG_RUNTIME_DIR, so systemctl --user finds nothing
 # there although the manager runs, or would run with linger (which the installer turns on at its last step
@@ -301,6 +371,8 @@ install_service() {
   local bash_bin
   bash_bin=$(command -v bash)
   safe_path "$bash_bin"
+  # Asked before the first question too; asked again here, right before the file is written.
+  if service_of_other_install; then other_install_refusal; fi
   install_launcher
   if [ "$PLATFORM" = linux ]; then
     find_user_systemd start || no_user_systemd
@@ -363,14 +435,19 @@ EOF
   <key>StandardErrorPath</key><string>$DATA_DIR/service.log</string>
 </dict></plist>
 EOF
-    launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
-    launchctl bootstrap "gui/$(id -u)" "$PLIST"
+    # The job that runs is unloaded first, by its label, and given a moment to go: launchd refuses to load a label
+    # it still lists. A bootstrap it refuses ends here in words, with what to do (INS-A4).
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
+    mac_wait_unloaded 10 || true
+    launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
   fi
 }
+# Stops and removes the background service of this user. Status 1 when this user has none: nothing to stop. Never
+# returns after a service that could not be stopped: "Stopped." would follow and the agent would keep playing.
 remove_service() {
   if [ "$PLATFORM" = linux ]; then
-    # Never "Stopped." for a service that could not be asked to stop: the agent would keep playing.
-    if [ -f "$UNIT" ] && ! find_user_systemd; then
+    [ -f "$UNIT" ] || return 1
+    if ! find_user_systemd; then
       die "the background service cannot be reached from this terminal, so it was not stopped and not removed. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself and run this again: cd $ROOT && ./install.sh --uninstall"
     fi
     systemctl --user disable --now "$SERVICE" >/dev/null 2>&1 || true
@@ -380,9 +457,28 @@ remove_service() {
     rm -f "$UNIT"
     systemctl --user daemon-reload >/dev/null 2>&1 || true
   else
-    launchctl bootout "gui/$(id -u)" "$PLIST" >/dev/null 2>&1 || true
+    # By its label, also when the plist is gone. Unloaded only when launchd no longer lists the job (INS-A2): the
+    # plist stays while it does, so that the next run can still unload it.
+    [ -f "$PLIST" ] || mac_job_loaded || return 1
+    local rc=0
+    launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || rc=$?
+    # 0: unloaded; 36: on its way out (a busy agent takes up to 150 s to stop, launchd gives it 180).
+    if [ "$rc" = 0 ] || [ "$rc" = 36 ]; then mac_wait_unloaded 185 || true; fi
+    if mac_job_loaded; then
+      die "launchd did not unload the background agent (launchctl bootout ended with $rc), so it was not removed and it keeps playing. Run this as $USER_NAME in a terminal of the Mac itself, without sudo: cd $ROOT && ./install.sh --uninstall"
+    fi
     rm -f "$PLIST"
   fi
+}
+# The agent of this folder while it runs: the process data/service.pid names, alive and running service.ts. One
+# whose command line cannot be read counts too: unknown is not stopped. Prints nothing when it does not run.
+agent_pid() {
+  local pid cmd
+  pid=$(head -n 1 "$DATA_DIR/service.pid" 2>/dev/null || true)
+  case "$pid" in '' | *[!0-9]*) return 0 ;; esac
+  kill -0 "$pid" 2>/dev/null || return 0
+  cmd=$({ tr '\0' ' ' < "/proc/$pid/cmdline"; } 2>/dev/null || ps -p "$pid" -o command= 2>/dev/null || true)
+  case "$cmd" in '' | *service.ts*) printf '%s' "$pid" ;; esac
 }
 # The unit of an install made before 2026-11-14 holds RestrictSUIDSGID=true. Its seccomp filter answers openat2
 # with ENOSYS (it cannot look inside the call), and Ubuntu 26.04's tar resolves every path it unpacks with openat2:
@@ -409,8 +505,24 @@ logs_hint() { if [ "$PLATFORM" = linux ]; then echo "journalctl --user -u $SERVI
 # ---- the three modes ----
 if [ "$MODE" = uninstall ]; then
   say "Removing the background service"
-  remove_service
-  info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
+  # The service of another install of this user is not this folder's to remove (INS-A5).
+  if service_of_other_install; then
+    die "the background service of $USER_NAME runs the agent in $(service_folder), not the one in $ROOT: it was left alone. To remove it: cd $(service_folder) && ./install.sh --uninstall"
+  fi
+  found=1
+  remove_service || found=0
+  # Never "Stopped." while the agent of this folder plays (INS-A2): one started with ./run.sh (an install made with
+  # --no-service), under tmux or by a program of the owner's own has no service here to stop.
+  pid=$(agent_pid)
+  if [ -n "$pid" ]; then
+    die "the agent of this folder still runs (process $pid). It was started another way (./run.sh in a terminal, tmux or a program of your own), so this could not stop it. Stop it there (Ctrl-C in its terminal) or with: kill $pid   Then run this again: cd $ROOT && ./install.sh --uninstall"
+  fi
+  if [ "$found" = 1 ]; then
+    info "Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched."
+  else
+    info "No background service of $USER_NAME was found: there was nothing to stop."
+    info "Your folder, your wallet words (.env), your data and your PEM files are untouched."
+  fi
   # The balances are not read here: what the wallets hold is not known, so it is not said.
   # Each line fits in 100 columns, also with a user name of 32 characters: a window of 120 broke words (W-12).
   info "The agent wallets may still hold funds. Keep the recovery words; delete the folder"
@@ -457,7 +569,7 @@ if [ "$MODE" = update ]; then
   fi
   # An update restarts the background service when there is one and never installs one: an install made with
   # --no-service is started by its owner, and a second agent beside it would use the same wallets.
-  if [ "$NO_SERVICE" = 1 ] || ! service_installed; then
+  if [ "$NO_SERVICE" = 1 ] || ! service_installed || service_of_other_install; then
     info "No background service is installed here: start the agent again to run the new version ($ROOT/run.sh)."
     exit 0
   fi
@@ -485,11 +597,14 @@ install_launcher
 for tool in curl tar; do
   command -v "$tool" >/dev/null 2>&1 || die "$tool is needed and is not installed. Install it (on Ubuntu or Debian: sudo apt install $tool), then run the installer again: cd $ROOT && ./install.sh"
 done
-if [ "$NO_SERVICE" != 1 ]; then find_user_systemd start || no_user_systemd; fi
+if [ "$NO_SERVICE" != 1 ]; then
+  if service_of_other_install; then other_install_refusal; fi
+  find_user_systemd start || no_user_systemd
+fi
 
 say "1/7 Node.js and dependencies"
 ensure_node
-deps
+release_deps || die "the dependencies could not be installed (npm says why above). What runs now was not changed. Check the connection, then run the installer again: cd $ROOT && ./install.sh"
 install_launcher
 mkdir -p "$DATA_DIR" && chmod 700 "$DATA_DIR"
 [ -f "$ENV_FILE" ] || install -m 600 /dev/null "$ENV_FILE"

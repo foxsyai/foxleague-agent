@@ -171,15 +171,33 @@ main() {
     echo "  Settings and limits that $installed added are not applied by $got."
   fi
 
+  if [ "$kind" = flat ]; then
+    echo "  An older install was found there: its code is replaced, your wallet, keys and data are kept."
+  elif [ "$kind" = install ]; then
+    echo "  An existing install was found there: your wallet, keys and data are kept."
+  fi
+  # The installer asks its questions in a terminal. Without one (the line run over ssh without -t, or by a scheduled
+  # job) it never ran, after the release it had no dependencies for was switched to (INS-A1): asked before anything
+  # is changed.
+  if [ "${FOXAGENT_NO_RUN:-0}" != 1 ] && ! { : < /dev/tty; } 2>/dev/null; then
+    give_up "the installer asks its questions in a terminal and this line runs without one (over ssh without -t, or from a scheduled job): nothing was changed. Paste the line in a terminal (over SSH: log in first, or use ssh -t)."
+  fi
+  # Over an install, whose agent may be running, the new release gets Node.js and its dependencies here, in its
+  # staging folder (its own install.sh --prepare, as an update from the dashboard does), and only a release that is
+  # ready is put in place: a cut while npm runs (no network, a full disk, Ctrl-C, a closed window) leaves the agent as
+  # it was (INS-A1, UPD-A5). The same holds for the version that runs: the line also repairs a damaged release folder,
+  # so it is replaced, but only by a copy that has its dependencies. (A release from before the one-click update has
+  # no --prepare: it is put in place as before and its installer gets the dependencies.)
+  if [ "$kind" != empty ] && grep -q -e '--prepare)' "$staging/install.sh"; then
+    echo "  Preparing it next to the installed version (Node.js and dependencies)"
+    FOXAGENT_ROOT="$DIR" bash "$staging/install.sh" --prepare || give_up "version $got could not be prepared (see the lines above): nothing was changed and the agent runs as before. Check the connection, then paste the line again."
+  fi
   # An install made before releases had their own folders: its code goes, everything of yours stays
   # (.env, data/, pem/, the private Node in .node/).
   if [ "$kind" = flat ]; then
-    echo "  An older install was found there: its code is replaced, your wallet, keys and data are kept."
     for old in src deploy test docs site scripts node_modules .github package.json package-lock.json tsconfig.json README.md INSTALL.md AGENTS.md CLAUDE.md install.sh get.sh run.sh cli.sh; do
       rm -rf "${DIR:?}/$old"
     done
-  elif [ "$kind" = install ]; then
-    echo "  An existing install was found there: your wallet, keys and data are kept."
   fi
 
   if [ -d "$DIR/versions/$name" ]; then
