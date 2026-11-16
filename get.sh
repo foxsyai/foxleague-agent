@@ -186,8 +186,9 @@ main() {
   # staging folder (its own install.sh --prepare, as an update from the dashboard does), and only a release that is
   # ready is put in place: a cut while npm runs (no network, a full disk, Ctrl-C, a closed window) leaves the agent as
   # it was (INS-A1, UPD-A5). The same holds for the version that runs: the line also repairs a damaged release folder,
-  # so it is replaced, but only by a copy that has its dependencies.
-  if [ "$kind" != empty ]; then
+  # so it is replaced, but only by a copy that has its dependencies. (A release from before the one-click update has
+  # no --prepare: it is put in place as before and its installer gets the dependencies.)
+  if [ "$kind" != empty ] && grep -q -e '--prepare)' "$staging/install.sh"; then
     echo "  Preparing it next to the installed version (Node.js and dependencies)"
     FOXAGENT_ROOT="$DIR" bash "$staging/install.sh" --prepare || give_up "version $got could not be prepared (see the lines above): nothing was changed and the agent runs as before. Check the connection, then paste the line again."
   fi
