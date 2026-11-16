@@ -42,8 +42,12 @@ export interface OrganizerFees {
 export interface RankedTicketView {
   live: boolean
   live_from?: string | null
+  /** The full price; `discounted_price_foxsy` is what this wallet pays, the only amount the sale accepts. */
   price_foxsy: number
   tickets: number
+  /** The MetaStaking Shop discount of this wallet (FoxLeague 2026-11-16): basis points off, 0 to 1,000. An older answer leaves them out. */
+  discount_bp?: number
+  discounted_price_foxsy?: number
 }
 
 /** POST /api/tournaments/organizer-fee/quote: what a tournament of this shape owes its organizer, before anything is signed. */
@@ -125,6 +129,17 @@ export interface FoxConfig {
    * fusionMode (levels.ts); a block that is not exactly this is unknown, and no fusion is signed.
    */
   fusion_mint?: { live: boolean; live_from: string | null; paused: boolean }
+  /**
+   * The MetaStaking Shop discount (FoxLeague #744, #765, routes/config.rs): from `live_from` a wallet with FOXSY in
+   * MetaStaking pays less in the Shop, and FoxLeague's confirm takes only that wallet's price (shopDiscountLive).
+   */
+  metastaking_discount?: { live: boolean; live_from: string | null; foxsy_per_step?: number; bp_per_step?: number; max_bp?: number; quote_valid_seconds?: number }
+  /**
+   * The ELO pair cap (FoxLeague #746, #751, routes/config.rs): from `live_from` the same two teams move ELO in at most
+   * `per_day` meetings a game day (from `reset_hour_utc`), ranked, 1v1s and tournaments together; a later meeting that day
+   * moves no ELO for either team and earns everything else.
+   */
+  elo_pair_cap?: { live: boolean; live_from: string | null; per_day: number; reset_hour_utc: number }
   auction_enabled: boolean
   /** The percent a bid must stand over the top bid (the players contract's setting, 1 to 50; 5 when unset). */
   auction_min_increment_percent?: number
@@ -340,7 +355,10 @@ export interface MedicineQuote {
   price_per_day: number
   max_days: number
   days_paid: number
+  /** What to pay: the days' cost less the wallet's MetaStaking discount (FoxLeague 2026-11-16), next to the full cost and the rate. */
   cost_foxsy: number
+  full_cost_foxsy?: number
+  discount_bp?: number
 }
 
 /** GET /api/players/nonce/{nonce}/match-waiver-quote (your own card). */
@@ -369,7 +387,17 @@ export interface ShopStatus {
   xp_booster_expires_at?: string | null
   common_pack_available?: boolean
   common_pack_remaining_this_week?: number
+  /** When the pack week starts again: the next Monday at the daily reset (FoxLeague 2026-11-16; it was a rolling 7 days). */
+  common_pack_week_resets_at?: string
   common_pack_epoch_remaining?: number
+  /**
+   * The MetaStaking Shop discount (FoxLeague 2026-11-16, shop_discount.rs): the basis points off every Shop price for this
+   * wallet now (0 before the switch and under 10,000 FOXSY of 30-day MetaStaking average), the prices after it (one unit
+   * each; several units take the discount once, on their total) and the pack's. FoxLeague's confirm takes only this price.
+   */
+  metastaking_discount_bp?: number
+  discounted_prices?: Record<string, number>
+  common_pack_discounted_price_foxsy?: number
   [key: string]: unknown
 }
 

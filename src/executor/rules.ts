@@ -12,7 +12,7 @@ import { aRarity, matchGate } from '../foxleague/gate.ts'
 import { RARITY_LEVEL, type Auction } from '../chain/players.ts'
 import type { AgentSettings } from '../store/settings.ts'
 import { wholeToAtomic } from '../util/encoding.ts'
-import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns } from '../foxleague/levels.ts'
+import { fusionMode, leaveLockLive, levelsLive, organizerFeesLive, paidBronzeEarns, shopDiscountLive } from '../foxleague/levels.ts'
 import { fusionMintTx } from './tx.ts'
 import { STATS } from '../foxleague/types.ts'
 import type { SpendCategory } from '../store/db.ts'
@@ -136,6 +136,36 @@ const allow = (foxsyWhole: number | bigint, facts: Record<string, unknown> = {},
 
 function card(s: AgentSnapshot, nonce: number): PlayerView | undefined {
   return s.players.find(p => p.nonce === nonce)
+}
+
+/** FoxLeague's top MetaStaking Shop discount: 1,000 basis points, 10 percent (shop_discount.rs MAX_BP). */
+const MAX_SHOP_DISCOUNT_BP = 1000
+
+/**
+ * FoxLeague's Shop price of `full` whole FOXSY for a wallet at `bp` basis points off (shop_discount.rs discounted_price):
+ * the discount rounded down, so the price is rounded up, taken once on a payment's total.
+ */
+export function shopPrice(full: number, bp: number): number {
+  return full - Math.floor((full * bp) / 10_000)
+}
+
+/**
+ * The MetaStaking rate FoxLeague serves this wallet (audit 2026-11-16, MNT-2 and CHN-1): from the switch its confirm
+ * takes only the wallet's own price, so any other amount is refused and refunded after it settled. A whole number of
+ * basis points, 0 to 1,000, is the rate. Anything else is unread: before the switch the list price (the rate is 0 there),
+ * once the switch is live or its time has passed null, and nothing is paid.
+ */
+function shopRateBp(served: unknown, cfg: FoxConfig, now: Date): number | null {
+  if (typeof served === 'number' && Number.isSafeInteger(served) && served >= 0 && served <= MAX_SHOP_DISCOUNT_BP) return served
+  return shopDiscountLive(cfg, now) ? null : 0
+}
+
+const SHOP_RATE_UNREAD = "this wallet's Shop price could not be read (FoxLeague's MetaStaking discount is on and its confirm takes only the wallet's own price): not paying blind"
+
+/** A price FoxLeague serves next to the rate must be the same price, or neither is known. */
+function servedPriceRefusal(served: unknown, mine: number, what: string): string | null {
+  if (served === undefined || served === null) return null
+  return served === mine ? null : `the ${what} price FoxLeague serves this wallet (${String(served).slice(0, 12)}) is not the list price less its MetaStaking discount (${mine}): not paying blind`
 }
 
 /**
@@ -1221,8 +1251,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         const ticket = ctx.rankedTicket
         if (!ticket) return refuse('your ranked tickets could not be read: no ranked start blind')
         if (ticket.tickets > 0) return allow(0, { ticket: 'held' })
-        const price = ticket.price_foxsy
-        if (!Number.isSafeInteger(price) || price <= 0) return refuse('the ranked ticket price could not be read: not paying blind')
+        if (!Number.isSafeInteger(ticket.price_foxsy) || ticket.price_foxsy <= 0) return refuse('the ranked ticket price could not be read: not paying blind')
+        // The wallet's own price, the only amount the sale accepts (MNT-2, CHN-1): its rate and the price after it.
+        const bp = shopRateBp(ticket.discount_bp, cfg, ctx.now)
+        if (bp === null) return refuse(SHOP_RATE_UNREAD)
+        const price = shopPrice(ticket.price_foxsy, bp)
+        const served = servedPriceRefusal(ticket.discounted_price_foxsy, price, 'ranked ticket')
+        if (served) return refuse(served)
         if (price > ctx.settings.maxShopPaymentFoxsy) return refuse(`a ranked ticket of ${price} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy}`)
         return needFoxsy(price, allow(price, { ticket: 'buy' }, 'play', [`a ranked ticket of ${price} FOXSY, once FoxLeague asks for one`]))
       }
@@ -1522,6 +1557,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const prices = cfg.shop_prices_foxsy
       let amount: number
       const facts: Record<string, unknown> = { product: a.product }
+      // The wallet's MetaStaking rate (MNT-2, CHN-1): FoxLeague's confirm takes only the list price less it, once on the
+      // payment's total. Medicine carries its own rate in its quote.
+      const shop = s.auth?.shop
+      const bp = a.product === 'medicine' ? 0 : shopRateBp(shop?.metastaking_discount_bp, cfg, ctx.now)
+      if (bp === null) return refuse(SHOP_RATE_UNREAD)
+      const servedUnit = (key: string) => (shop?.discounted_prices && typeof shop.discounted_prices === 'object' ? (shop.discounted_prices as Record<string, unknown>)[key] : undefined)
       switch (a.product) {
         case 'condition_recovery': {
           let total = 0
@@ -1531,7 +1572,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
             total += Math.ceil((prices.condition * (100 - p.condition)) / 100)
           }
           if (total <= 0) return refuse('selected cards are already at full condition')
-          amount = total
+          const unit = servedPriceRefusal(servedUnit('condition_recovery'), shopPrice(prices.condition, bp), 'condition recovery')
+          if (unit) return refuse(unit)
+          // FoxLeague's recovery buys the points its payment is worth at the wallet's rate (shop_discount.rs full_value_of).
+          amount = shopPrice(total, bp)
           facts.player_nonces = a.player_nonces
           break
         }
@@ -1557,7 +1601,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (perWeek <= 0) return refuse('no XP booster at this level (Boosters a week is 0)')
           if (typeof ctx.boostersThisWeek !== 'number') return refuse('the XP boosters bought this week could not be counted: not buying blind')
           if (ctx.boostersThisWeek >= perWeek) return refuse(`${perWeek} XP booster${perWeek === 1 ? '' : 's'} a week at this level, ${ctx.boostersThisWeek} bought in the last 7 days`)
-          amount = prices.xp_booster
+          amount = shopPrice(prices.xp_booster, bp)
+          const served = servedPriceRefusal(servedUnit('xp_booster'), amount, 'XP booster')
+          if (served) return refuse(served)
           break
         }
         case 'training_slot': {
@@ -1569,7 +1615,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           const limit = ctx.settings.paidTrainingPerDay
           const paidToday = paidSessionsToday(t)
           if (paidToday + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - paidToday - t.slots_banked)}`)
-          amount = prices.training * more
+          const unit = servedPriceRefusal(servedUnit('training_slot'), shopPrice(prices.training, bp), 'training slot')
+          if (unit) return refuse(unit)
+          amount = shopPrice(prices.training * more, bp)
           facts.quantity = a.quantity
           break
         }
@@ -1593,7 +1641,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!whole(q.max_days) || !whole(q.price_per_day) || !whole(q.cost_foxsy) || !whole(q.days_paid)) return refuse(`the medicine quote for #${n} could not be read: not paying blind`)
           if (q.max_days < 1) return refuse(`no day of #${n}'s injury is left to save: a third of every injury is always served`)
           if (days > q.max_days) return refuse(`medicine saves #${n} ${q.max_days} day${q.max_days === 1 ? '' : 's'} at most (a third of every injury is always served)`)
-          if (q.player_nonce !== n || q.days_paid !== days || q.price_per_day <= 0 || q.cost_foxsy !== q.price_per_day * days) return refuse(`the medicine quote does not match ${days} day${days === 1 ? '' : 's'} at ${q.price_per_day} FOXSY: not paying blind`)
+          // The quote's cost is the days' full cost less the wallet's MetaStaking rate it carries (MNT-2, CHN-1).
+          const rate = shopRateBp(q.discount_bp, cfg, ctx.now)
+          if (rate === null) return refuse(SHOP_RATE_UNREAD)
+          const full = q.price_per_day * days
+          if (q.player_nonce !== n || q.days_paid !== days || q.price_per_day <= 0 || (q.full_cost_foxsy !== undefined && q.full_cost_foxsy !== full) || q.cost_foxsy !== shopPrice(full, rate)) return refuse(`the medicine quote does not match ${days} day${days === 1 ? '' : 's'} at ${q.price_per_day} FOXSY${rate ? ` less ${rate / 100} percent` : ''}: not paying blind`)
           amount = q.cost_foxsy
           facts.player_nonces = [n]
           facts.quantity = days
@@ -1612,7 +1664,9 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (perWeek <= 0) return refuse('no Common packs at this level (Packs a week is 0)')
           if (typeof ctx.packsThisWeek !== 'number') return refuse('the Common packs bought this week could not be counted: not buying blind')
           if (ctx.packsThisWeek >= perWeek) return refuse(`${perWeek} Common pack${perWeek === 1 ? '' : 's'} a week at this level, ${ctx.packsThisWeek} bought in the last 7 days`)
-          amount = cfg.common_pack_price_foxsy
+          amount = shopPrice(cfg.common_pack_price_foxsy, bp)
+          const served = servedPriceRefusal(shop?.common_pack_discounted_price_foxsy, amount, 'Common pack')
+          if (served) return refuse(served)
           break
         }
       }
