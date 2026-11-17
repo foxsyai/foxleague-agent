@@ -295,13 +295,21 @@ export class FoxLeague {
    * `limit` is asked, at most 200, kickoff first, the last day's finished games at the front, the total in
    * X-Total-Count): read by pages of UPCOMING_LIMIT until the total. Only the total tells the whole list from a part:
    * FoxLeague sends it on every answer whose count it read (0 with an empty list), and none when that count fails,
-   * when its row read may have failed too and answered an empty list (R76A-1). An answer without a readable total, more
-   * than UPCOMING_MAX_PAGES pages, rows gone between two pages or an answer without its list throw: the snapshot then
-   * keeps the list unread and every rule that counts owed matches refuses (MON-1), never reads a part as the whole.
+   * when its row read may have failed too and answered an empty list (R76A-1). FoxLeague reads the rows and the total
+   * as two queries, and the list is live (finished games age out at the front, a tournament going active lists all its
+   * fixtures), so a list that moved while it was read is not read whole either (FC-2): a later page with another total
+   * than the first, a fixture listed twice (by its tournament_match_id), rows past the total, or a list of more than
+   * one page with a row that has no id to tell. An answer without a readable total, more than UPCOMING_MAX_PAGES pages,
+   * rows gone between two pages or an answer without its list throw too: the snapshot then keeps the list unread and
+   * every rule that counts owed matches refuses (MON-1), never reads a part as the whole.
    */
   async upcomingMatches(w: AgentWallet): Promise<UpcomingMatches> {
+    const moved = (why: string) => new ApiRefusal(`your upcoming matches changed while they were read (${why}): not read whole`)
     let first: UpcomingMatches | null = null
+    let firstTotal: number | null = null
     const rows: UpcomingMatch[] = []
+    const ids = new Set<string>()
+    let unnamed = 0
     for (let page = 0; page < UPCOMING_MAX_PAGES; page++) {
       let total: number | null = null
       const part = await this.call<UpcomingMatches>(`/tournaments/upcoming-matches?limit=${UPCOMING_LIMIT}&offset=${rows.length}`, {
@@ -313,10 +321,22 @@ export class FoxLeague {
       })
       if (!part || typeof part !== 'object' || !Array.isArray(part.matches)) throw new ApiRefusal('unexpected answer from /tournaments/upcoming-matches (no list of matches)')
       if (total === null) throw new ApiRefusal('your upcoming matches came without FoxLeague\'s count of them (X-Total-Count): not read whole')
+      if (firstTotal !== null && total !== firstTotal) throw moved(`a count of ${firstTotal}, then ${total}`)
+      firstTotal ??= total
       first ??= part
+      for (const m of part.matches as unknown[]) {
+        const id = m && typeof m === 'object' ? (m as { tournament_match_id?: unknown }).tournament_match_id : undefined
+        if (typeof id !== 'string' || !id) unnamed++
+        else if (ids.has(id)) throw moved('a fixture listed twice')
+        else ids.add(id)
+      }
       rows.push(...part.matches)
-      if (rows.length >= total) return { ...first, matches: rows }
-      if (!part.matches.length) throw new ApiRefusal(`your upcoming matches changed while they were read (${rows.length} of ${total}): not read whole`)
+      if (rows.length > total) throw moved(`${rows.length} rows for a count of ${total}`)
+      if (rows.length === total) {
+        if (page > 0 && unnamed) throw new ApiRefusal(`your upcoming matches came in ${page + 1} pages with ${unnamed} rows that have no id to tell a row read twice: not read whole`)
+        return { ...first, matches: rows }
+      }
+      if (!part.matches.length) throw moved(`${rows.length} of ${total}`)
     }
     throw new ApiRefusal(`your upcoming matches are more than ${UPCOMING_LIMIT * UPCOMING_MAX_PAGES} rows: not read whole`)
   }

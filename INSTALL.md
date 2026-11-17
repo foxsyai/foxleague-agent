@@ -252,12 +252,12 @@ way.
 your user (`ai.foxleague.agent`). The dashboard address on the last screen is a link: hold Cmd and click it. Then
 "Open the dashboard in your browser now?": Enter opens it.
 
-macOS shows the agent as "FoxLeague Agent" in System Settings, General, Login Items & Extensions, and switching it
+macOS shows the agent as "FoxLeague Agent" in System Settings, General, Login Items & Extensions. Switching it
 off there stops the agent. That is the program the launch agent starts, `FoxLeague Agent` in the agent's folder: it
 starts `run.sh` there. An agent you switched off is never switched on again by `./install.sh` or
 `./install.sh --update`: they leave its file as it is and say how to switch it on (`launchctl enable`, then
 `launchctl bootstrap`). One switched off with `launchctl disable` alone still runs: it does not start at your next
-login, an update restarts it into the new version, and `launchctl enable` alone switches it on again.
+login and an update restarts it into the new version. `launchctl enable` alone switches it on again.
 
 **When it plays.** On macOS the agent starts when you log in, and a sleeping Mac plays nothing. Its timers pause
 while the Mac sleeps: it plans, plays and checks for updates only while the Mac is awake. When the Mac wakes, it
@@ -528,7 +528,9 @@ The logs and the restart work from any folder. The other three (`./install.sh --
 `./install.sh --uninstall`) are typed in the agent's folder: go there first with `cd ~/foxleague-agent`.
 Type them as yourself, without sudo: as root on your folder `./cli.sh`, `./run.sh` and `./install.sh` stop before
 they change anything and say so, because files of root there would keep the agent from starting again. An agent that
-already runs as root there (its database is root's, as in a container that mounts your install) still starts.
+a container or a service of your own starts as root there (one that mounts your install, a system unit without
+`User=`) still starts when it says `FOXAGENT_SUPERVISED=1` (in `.env` or in its environment) and runs with no
+terminal. One whose own update already ran there as root starts too.
 On Windows they are the Linux ones, typed inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell), and the
 uninstall is one line in PowerShell ([On Windows](#on-windows), "Uninstalling").
 

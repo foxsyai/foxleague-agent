@@ -372,7 +372,7 @@ mac_wait_unloaded() {
   for _ in $(seq 1 "$(($1 * 2))"); do mac_job_loaded || return 0; sleep 0.5; done
   ! mac_job_loaded
 }
-# macOS: whether the owner switched the agent's job off (System Settings, General, Login Items & Extensions, or
+# macOS: whether the owner switched the agent's job off (in System Settings, General, Login Items & Extensions or with
 # launchctl disable). launchd lists the label as `"ai.foxleague.agent" => disabled` (`=> true` on older macOS) for as
 # long as it is off, with or without a plist. Status 0: off; 1: not off; 2: launchd could not be asked. A job that is
 # off is never written to, loaded or switched on by the installer (R78A-2): to macOS a plist that starts a new program
@@ -393,12 +393,12 @@ mac_job_disabled() {
 # put in place (said only of a job that is not loaded: one that runs is restarted into it).
 mac_off_note() {
   if mac_job_loaded; then
-    info "The background agent runs now, but it is switched off (System Settings, General, Login Items & Extensions, or launchctl disable): it will not start at your next login. Its file is not written."
+    info "The background agent runs now, but it is switched off in System Settings (General, Login Items & Extensions) or with launchctl disable: it will not start at your next login. Its file is not written."
     if plist_on_launcher >/dev/null; then info "macOS keeps listing it by its old name (\"bash\") until it is switched on and ./install.sh --update runs again in $ROOT."; fi
     info "To switch it on: launchctl enable gui/\$(id -u)/$PLIST_LABEL"
     return 0
   fi
-  info "The background agent is switched off (System Settings, General, Login Items & Extensions, or launchctl disable), so it stays off: nothing starts it and its file is not written."
+  info "The background agent is switched off in System Settings (General, Login Items & Extensions) or with launchctl disable, so it stays off: nothing starts it and its file is not written."
   if [ "${1:-0}" = 1 ]; then info "The new version runs from its next start."; fi
   if [ -f "$PLIST" ]; then
     if plist_on_launcher >/dev/null; then info "macOS keeps listing it by its old name (\"bash\") until it is switched on and ./install.sh --update runs again in $ROOT."; fi
@@ -411,14 +411,22 @@ mac_off_note() {
 # to load a label it still lists. A busy agent finishes an action first (up to 150 s; launchd gives it 180) and launchd
 # keeps it listed meanwhile, whatever it answered the bootout (36, on its way out, or another status): while it does,
 # the wait is as long as the uninstall's (INS-U1, R2I-U1). A bootstrap it refuses ends here in words, with what to do
-# (INS-A4).
+# (INS-A4). Ctrl-C or a closed window during the wait leaves the job booted out: the screen says so, with how to start
+# it (U3 of the final pass).
 mac_load() {
   launchctl bootout "gui/$(id -u)/$PLIST_LABEL" >/dev/null 2>&1 || true
   if mac_job_loaded; then
     info "Waiting for the agent that runs to stop: it finishes what it is doing first (at most 3 minutes)."
+    trap mac_load_cut INT TERM HUP
     mac_wait_unloaded 185 || true
+    trap - INT TERM HUP
   fi
   launchctl bootstrap "gui/$(id -u)" "$PLIST" || die "launchd did not start the background agent (its answer is on the line above), so the agent is not running now. Over SSH, log in at the Mac's own screen first: the agent runs in your login session. If the agent was busy, it may still be stopping: wait two minutes. Then run the installer again: cd $ROOT && ./install.sh"
+}
+mac_load_cut() {
+  printf '\n'
+  info "The update was stopped while the agent was stopping, so the background agent is not running now (a busy one ends its action first) and nothing starts it before your next login. To start it sooner, wait until it has stopped (at most 3 minutes), then: launchctl bootstrap gui/\$(id -u) $PLIST"
+  exit 130
 }
 # The user's own service manager (systemd --user) on Linux. It is reached through the user's runtime folder,
 # /run/user/<uid>. A terminal opened with su or sudo has no XDG_RUNTIME_DIR, so systemctl --user finds nothing
@@ -594,17 +602,50 @@ renew_unit() {
   LC_ALL=C grep -a -q -x 'RestrictSUIDSGID=true' "$UNIT" || return 1
   LC_ALL=C grep -a -v -x 'RestrictSUIDSGID=true' "$UNIT" | put_file "$UNIT" 644
 }
+# The agent is stopping now: its stop wrote data/service.stopping with its pid when it began and removes it with
+# data/service.pid when it ends (FI-4). Only a marker that names the live agent of service.pid counts.
+stop_under_way() {
+  local pid marker
+  pid=$(agent_pid)
+  [ -n "$pid" ] || return 1
+  marker=$(head -n 1 "$DATA_DIR/service.stopping" 2>/dev/null || true)
+  [ "$marker" = "$pid" ]
+}
+# A stop under way on a Mac (the owner's launchctl bootout, a restart) is waited for before anything reads whether the
+# job runs: launchd lists a job on its way out as it lists one that runs, and a load or a kickstart meanwhile would
+# start the agent the owner is stopping (FI-4, as R2I-10 waits on Linux). Once the agent has ended, launchd still
+# lists a job it starts again and lets go of one that was booted out: the rest of the update reads that. One still
+# stopping after the wait is left as it is.
+mac_wait_for_stop() {
+  local _
+  stop_under_way || return 0
+  info "Waiting for the agent that is stopping to end: it finishes what it is doing first (at most 3 minutes)."
+  for _ in $(seq 1 370); do stop_under_way || break; sleep 0.5; done
+  if stop_under_way; then
+    info "The background agent is still stopping, so it is left as it is: the new version runs from its next start."
+    exit 0
+  fi
+  mac_wait_unloaded 5 || true
+}
 # The plist of a Mac install made before 2026-11-16 starts bash with run.sh, so macOS listed the agent as "bash" in
 # Login Items & Extensions (MAC-1). This prints that plist with only its line of the program on the launcher; status 1
-# (nothing printed) when the plist is not that form: one that starts anything else is not the installer's.
+# (nothing printed) when the plist is not that form: one that starts anything else is not the installer's, nor one
+# with more than one program before run.sh (an owner's caffeinate, nice or env in front of bash, FI-3).
 plist_on_launcher() {
   [ "$PLATFORM" = darwin ] && [ -f "$PLIST" ] || return 1
-  local line text='' found=0
+  local line program text='' found=0
+  local opening="  <key>ProgramArguments</key><array><string>" closing="</string><string>$ROOT/run.sh</string></array>"
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in
-      "  <key>ProgramArguments</key><array><string>"*"</string><string>$ROOT/run.sh</string></array>")
-        line="  <key>ProgramArguments</key><array><string>$MAC_LAUNCHER</string></array>"
-        found=1 ;;
+      "$opening"*"$closing")
+        program=${line#"$opening"}
+        program=${program%"$closing"}
+        case "$program" in
+          '' | *'<'*) ;;
+          *)
+            line="  <key>ProgramArguments</key><array><string>$MAC_LAUNCHER</string></array>"
+            found=1 ;;
+        esac ;;
     esac
     text="$text$line"$'\n'
   done < "$PLIST" || return 1
@@ -632,9 +673,11 @@ renew_plist() {
 # restarted into a new release with a kickstart, as before (R78A-3). Otherwise the plist of an
 # older install moves to the launcher (MAC-1), also on the newest release (R78A-1). A job that runs is then loaded
 # again from the changed plist, which starts the new release too; with an unchanged plist it is restarted for a new
-# release (kickstart, as before) and left alone on the newest one. A stopped one stays stopped (UPD-U5). Ends the script.
+# release (kickstart, as before) and left alone on the newest one. A stopped one stays stopped (UPD-U5), and one that is
+# stopping is waited for first (FI-4). Ends the script.
 mac_after_update() {
   local newest=$1 off=0 renewed=0
+  mac_wait_for_stop
   mac_job_disabled || off=$?
   if [ "$off" = 0 ]; then
     if [ "$newest" = 0 ] || plist_on_launcher >/dev/null; then mac_off_note "$((1 - newest))"; fi
@@ -651,7 +694,7 @@ mac_after_update() {
     if [ "$newest" = 0 ]; then
       info "The background agent is stopped, so it stays stopped: the new version runs from its next start, at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
     elif [ "$renewed" = 1 ]; then
-      info "The background agent is stopped, so it stays stopped: it starts at your next login, or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
+      info "The background agent is stopped, so it stays stopped: it starts at your next login or now with: launchctl bootstrap gui/\$(id -u) $PLIST"
     fi
     exit 0
   fi

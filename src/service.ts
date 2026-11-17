@@ -67,6 +67,11 @@ export const VERSION = (() => {
 })()
 
 const SERVICE_PID_FILE = 'service.pid'
+/**
+ * Written with the pid when a graceful stop begins, removed with the pid file when it ends: a stop under way, which
+ * `./install.sh --update` waits for on a Mac, where launchd lists a job on its way out as it lists one that runs (FI-4).
+ */
+const SERVICE_STOPPING_FILE = 'service.stopping'
 /** How long before a strategy lock the preparation tick runs (its actions are spread over the next ~24 minutes). */
 const PREP_BEFORE_LOCK_MS = 60 * 60_000
 /** Locks closer than this to the previous one belong to the same match session (one preparation tick). */
@@ -1013,8 +1018,9 @@ export class Service {
   /**
    * The day's check of FoxLeague's manual for the dashboard, also where no Telegram is linked: from the summary's hour
    * on (so the morning summary, which runs it itself when it is due, reads a fresh one), looked at every hour. The
-   * watch decides at each look (manual-watch.ts, kept in the database): again while the copy was current, up to 4
-   * tries a day while it could not tell, not again that day once it is behind (audit 2026-11-16, MNT-5 and MNT-6).
+   * watch decides at each look (manual-watch.ts, kept in the database): again each hour while the copy was current or
+   * behind, so a page FoxLeague changes later that day reaches the plans within the hour (R2T-4), and up to 4 tries in
+   * a row a day while it could not tell (audit 2026-11-16, MNT-5 and MNT-6).
    */
   private armManualCheck(delayMs = 180_000): void {
     clearTimeout(this.manualTimer)
@@ -1487,6 +1493,8 @@ export class Service {
     // time (the per-agent lock, the busy set and the schedule live in one process) and take the file (EDGE-8).
     const other = otherServiceRunning(this.cfg.dataDir)
     if (other !== null) throw new AlreadyRunningError(other, join(this.cfg.dataDir, SERVICE_PID_FILE))
+    // A stop marker left by an agent that was killed while it stopped says nothing of this one.
+    rmSync(join(this.cfg.dataDir, SERVICE_STOPPING_FILE), { force: true })
     writeFileSync(join(this.cfg.dataDir, SERVICE_PID_FILE), String(process.pid), { mode: 0o600 })
     const agents = this.ensureAgents()
     const local = await loadExtensions().catch(err => [`local extension failed to load: ${err instanceof Error ? err.message : String(err)}`])
@@ -1565,6 +1573,16 @@ export class Service {
 
   private async stopOnce(): Promise<void> {
     this.stopping = true
+    const pidFile = join(this.cfg.dataDir, SERVICE_PID_FILE)
+    const stoppingFile = join(this.cfg.dataDir, SERVICE_STOPPING_FILE)
+    // Said only by the service that holds the pid file; a marker that cannot be written leaves the stop as it was.
+    if (serviceRunning(this.cfg.dataDir) === process.pid) {
+      try {
+        writeFileSync(stoppingFile, String(process.pid), { mode: 0o600 })
+      } catch {
+        // the stop goes on without it
+      }
+    }
     this.stopSignal.abort()
     for (const t of this.timers.values()) clearTimeout(t)
     clearTimeout(this.summaryTimer)
@@ -1576,8 +1594,10 @@ export class Service {
     // Plans (busy), single actions from Telegram /do or the web (the executor's per-agent locks) and a top-up
     // being sent to Binance, so its outcome is stored before the process ends.
     while ((this.busy.size || !this.executor.idle || !this.topups.idle) && Date.now() < until) await sleep(500)
-    const pidFile = join(this.cfg.dataDir, SERVICE_PID_FILE)
-    if (serviceRunning(this.cfg.dataDir) === process.pid) rmSync(pidFile, { force: true })
+    if (serviceRunning(this.cfg.dataDir) === process.pid) {
+      rmSync(stoppingFile, { force: true })
+      rmSync(pidFile, { force: true })
+    }
   }
 
   /** An error nothing caught: stop every agent (kill switch) rather than crash and re-plan after a restart. */

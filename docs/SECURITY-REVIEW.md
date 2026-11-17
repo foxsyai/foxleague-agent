@@ -2864,6 +2864,62 @@ Stays open:
     (Homebrew's, where it comes first). The update's `--prepare` already ran with `/bin/bash` under launchd.
 
 
+## Final pass before the public release (2026-11-16)
+
+**The review.** Before the repository goes public, the owner asked for one more short audit of everything no team of
+reviewers had audited yet.
+- **Who:** two read-only reviewers by Claude Fable 5.2 at high effort, one on the code and one on the installers and
+  the updater.
+- **What they read:** a frozen copy of main at `227ccdc` (live since PR #78), from `8e2dad8`, the copy audited in
+  "Audit of round two". That is the fixes of round two's findings, R76A-1 (PR #77) and MAC-1 with R78A-1 to R78A-3
+  (PR #78).
+- **Result:** no critical and no high finding: 1 medium and 8 low.
+  - No way past the owner's caps and no path from text to a signature.
+  - The snapshot fence cannot be written.
+  - The recovery words do not leak through R2I-6's compare.
+
+**The fixes.** Claude Opus 5.5 at extra-high effort. Every reviewer test, ported to `test/audit-1116/<Id>.test.ts`,
+failed on `227ccdc` for the reason given and passes now. Two of the installer reviewer's unproven items were proven
+and fixed (FI-U3, FI-U5). No existing test changed.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| FC-1 | medium | `deref` and `resolve` (`src/foxleague/api-routes.ts`) followed a request body and every 2xx answer by `$ref`, up to 8 hops each, and spent nothing from R2T-1's budget: one `$ref` of 200,000 characters named from every body and answer held the event loop 79 s on a 418 KB document, and fingerprints still came back | Every `$ref` read spends its length, in `canon` and at each hop of `deref`; a `$ref` longer than `MAX_REF` (1,000 characters; mainnet's longest is 62) leaves the document not judged ("could not be read"). Mainnet's description at `729164194` still gives exactly the fingerprints `api-shapes.json` records |
+| FC-2 | low | `upcomingMatches` took the list as whole once it held as many rows as the last page's total. FoxLeague reads the rows and the count as two queries on a live list: a tournament going active between them, or a finished game leaving between two pages, gave some fixtures twice and lost others. A kickoff 40 minutes away let a 1,000 FOXSY 1v1 pass the busy gate | The list is not read whole when a later page's total differs from the first page's, when a `tournament_match_id` repeats, when the rows pass the total or when a list of more than one page has a row with no id. A list that stands still reads as before |
+| FC-3 | low (words) | `asSeen` folded every compatibility form (NFKC) and `setIn` wrote the folded text into the plan: FoxLeague's "3⁴ = 81 Commons" read "34 = 81 Commons", "25¹" read 251, "2½" read 21⁄2; `txt()` and `oneLine()` the same ("Team²" became Team2) | Before the folding, a raised run is written after `^` (3^4), a lowered one after `_` (log_2), a fraction with a plain slash and a character that folds to a digit is set off by a space from a number beside it (2 1/2). The fence checks still run on the folded text (R2T-3 holds) |
+| FI-1 | low | R2I-2's sign (`data/agent.db` owned by root) never shows on an installer-made install: the installer creates the database as its user and root writing into it never changes its owner. A container or system unit without `User=` starting such an install as root still stopped at the first start after an update's confirm, while the guides said it "still starts" | `run.sh` and `cli.sh` go on as root on another user's folder when the database is root's, when `versions/active` is root's (the agent's own update writes it by rename; a link does not count) or when the start says `FOXAGENT_SUPERVISED=1` with no `SUDO_*` variable and no terminal. A mistaken `sudo ./run.sh` or `sudo ./cli.sh` and a root terminal are still refused. INSTALL.md and the troubleshooting page say when such an agent starts |
+| FI-2 | low | The pasted line prepared in `versions/.staging-get` without `update.lock`; `confirmStart` runs at every agent start and removes every `.staging-*` folder, so a start during the paste's npm run removed the folder npm worked in. Between moving the folder into place and writing `versions/active` a start could also remove the new release (U4) | `get.sh` holds `versions/update.lock` from before it unpacks until `versions/active` names the new release, and releases it on every way out (give up, an error, INT, TERM, HUP); a fresh lock of another update stops the line before it changes anything; `update.lock` counts as a leftover in `folder_kind` |
+| FI-3 | low | `plist_on_launcher` let its `*` span several `<string>` elements: a program line the owner extended (`caffeinate -i`, `nice`, `arch`, `env` before bash) was taken for the installer's and replaced by the launcher alone | Taken only when what `*` matched is not empty and holds no `<`; any other plist is left as it is |
+| FI-4 | low (an agent the owner is stopping started again) | R2I-10's wait existed only on Linux. On a Mac launchd lists a job on its way out like a running one, so `./install.sh --update` after the owner's `launchctl bootout` loaded the job again or kickstarted it | The service writes `data/service.stopping` with its pid when its graceful stop begins and removes it with `data/service.pid` when the stop ends. `mac_after_update` first waits while that marker names the live agent (about 185 s at most), then reads launchd: a job launchd no longer lists stays stopped with UPD-U5's line |
+| FI-5 | low (words) | PR #78's Mac screen lines and guide sentences had a comma before a closing "and" or "or" | Reworded: "switched off in System Settings (General, Login Items & Extensions) or with launchctl disable", "at your next login or now with" |
+| FI-6 | low | `cli.sh` always dropped the environment's `AGENT_MNEMONIC`: where the words are given only by the environment, every wallet command said "run ./cli.sh setup first", setup wrote new words and `run.sh` then refused every start | `cli.sh` keeps the given words when `.env` has none, and drops them when `.env` has words (R2I-6 holds) or cannot be read |
+| FI-U3 | low (the installer reviewer's unproven U3, proven) | Ctrl-C or a closed window during `mac_load`'s wait ended `--update` without a word, leaving the job booted out until the next login | A trap during the wait says the agent is not running now and gives the `launchctl bootstrap` that starts it, then exits with 130 |
+| FI-U5 | low (unproven U5, proven) | An `update.lock` with a time in the future counted as fresh until the clock passed it, refusing every update meanwhile | A lock is fresh only within 30 minutes either side of now (`lockFresh`, `lock_fresh`); one further ahead is taken over like an old one |
+| R79A-1 | medium (GitHub review of PR #79) | FI-2's `give_up` in `get.sh` began with `rm -rf "$staging"`. A pasted line that gave up behind another update's fresh `update.lock` removed `versions/.staging-get`, which is the other run's folder when that update is another pasted line: the other run then failed ("could not be prepared" or "mv: cannot stat") while this one said "nothing was changed" | `give_up` removes the staging folder only while this run holds the lock (`locked = 1`); a lock that cannot be taken over ends in words before anything is unpacked. FI-2's test keeps another run's `.staging-get` in the case of another update's fresh lock and checks that nothing of it changed (it fails on `d636f83`) |
+| R79A-2 | low (documents, GitHub review of PR #79) | `docs/FOXLEAGUE-INTEGRATION.md` section 10.8 did not say what FC-2 made true and named a `match_id` that the rows of upcoming-matches do not carry | Section 10.8 names `tournament_match_id` and says when the list counts as read whole: the same total on every page, no `tournament_match_id` twice, no more rows than the total, no row without an id on a list of more than one page. It also says why the check may take `tournament_match_id` as unique per row, as read on FoxLeague's `release/mainnet-1.0` (`e3cee147b`): `tournament_matches.public_id` is NOT NULL with a unique index (migration 152); the query joins one participant per user and tournament and one team per user; the handler maps each row to one answer row |
+
+`src/service.ts`'s comment on the manual check now says what R2T-4 made true (a copy found behind is looked at again
+each hour).
+
+Stays open:
+- **On a real Mac (first thing at the next machine test).** Since macOS 13 the switch in System Settings (General,
+  Login Items & Extensions) may be kept by Background Task Management (`sfltool dumpbtm`), not in
+  `launchctl print-disabled`. If so, `mac_job_disabled` does not see that switch and R78A-2's protection covers only
+  `launchctl disable`.
+- **FI-4 starts working one update late.** The running agent writes the stop marker only from this release on, so
+  the one update that brings it behaves as before on a Mac. It relies on the agent's own marker (not on launchd's
+  `print` text) and on launchd letting go of a booted-out job within 5 seconds.
+- **FC-2:** asking each later page one row early (to see a removal and an addition both before a page's edge) was
+  not done; it changes the offsets R2M-3's test pins.
+- **FI-1:** shown with stand-ins for `id` and `stat`, not as real root. The reviewer's container script is the way to
+  check it.
+- **Not taken up:**
+  - U2: `mac_load` says "not running now" on any failed bootstrap.
+  - U6: an owner's own user unit named `foxleague-agent.service` still counts as the installer's.
+  - The code reviewer's unproven items: confusable letters are not folded; the digest grows with the list R2M-3 now
+    reads whole; the pause with the manual check switched off.
+
+
 ## One manager message at a time (2026-11-13)
 
 What stayed open after PR #67, fixed on the owner's word. Each finding has a test of the same name in
