@@ -13,6 +13,9 @@ number comes from and where a client can read the live value.
   upgrade on mainnet 2026-11-13 21:32:50 UTC): sections 8, 9, 10, 14, 17 and 20.
 - **Updated for FoxLeague's mainnet of 2026-11-16** (`origin/release/mainnet-1.0` at `729164194`, deployed about 09:48
   UTC; manual `729164194`, the same as `origin/main` `67d940ad2`): sections 3, 4, 5, 6a, 9, 11, 13 and 21.
+- **Updated for FoxLeague of 2026-11-18** (`origin/main` at `6f9c969ac`, promoted from `origin/release/mainnet-1.0`;
+  the release branch at `a546f7279` differs only on manual pages the agents leave out; manual `99c47a4e6`): sections 2,
+  17 and 22.
 - **Deployed values can differ from code defaults.** The deploy seeds many registry keys over the code
   defaults and an admin can change any key at runtime. Section 15 lists every value where the code
   default and the mainnet value disagree. When a public endpoint serves a value, read it there.
@@ -63,6 +66,7 @@ Source priority used by the manual itself (EM:13): SEED > CC > CR defaults > con
 | Free registration by holding cards | a wallet holding 18 or more `FXLP` cards that never paid registers free (no draw, no bonus) | `registration.rs:88`, `:413-667` | CFG `nft_bypass_threshold` (18); `GET /api/onboarding/check-eligibility` |
 | Team name | 3 to 15 bytes, letters, digits, space, hyphen; unique ignoring case, spaces and hyphens; rename free | `registration.rs:341-395`; `backend/migrations/087_team_name_normalized_unique.sql:13-14`; `backend/src/routes/teams.rs:459-541`; Manual `getting-started/onboarding.mdx:86` | |
 | Badge | first badge free; after registration 3 free re-rolls, then **1,000 FOXSY** each; 3 generations per 10 min | EM:53; Manual `mechanics/shop.mdx:28`; `badge.free_regens` 3 (CR:1747-1748), `badge.regen_cost_foxsy` 1000 (CR:1753-1754), not seeded | the generate route answers `payment_required` with `cost_foxsy` |
+| Invitation (Invite Friends, from 2026-11-20 14:00 UTC) | a new team that pays its registration with a team's invite code gets free ranked tickets (5 today); the inviting team earns in-game credits only (a Recover All and 5 ranked tickets for each invited team that plays 5 matches against other teams within 30 days; an XP booster at 3 and a Common pack at 5 such teams), never FOXSY; each team has one link with a limited number of places (5 today); an existing team cannot use one; inviting yourself with a second wallet or arranging matches to qualify is abuse under Fair Play. **The agents take no part** (owner, 2026-11-19): they register without an invitation, share or use no link and use no credit; the owner's teams never invite one another | Manual `mechanics/invite-friends.mdx`, `legal/terms.md` (referral programme); `backend/src/referral.rs`, `referral_qualify.rs` (#755; #777 and #779 on `release/mainnet-1.0` since) | CFG `referral {live, live_from}`; `POST /api/referral/claim`, `GET /api/referral/invites`, `POST /api/referral/credits/{id}/use` (the agent calls none of them) |
 | Whitelist | code default: required; planned to be switched off for launch | `registration.whitelist_required` default `"true"` (CR:1835-1839), not seeded; `CHANGELOG.md:627-629` | `GET /api/whitelist/check?wallet_address=` |
 
 ---
@@ -414,7 +418,7 @@ swiss_min_participants, groups_knockout_group_size, one_v_one_max_active_per_use
 one_v_one_prize_delivery_seconds}`, `training_defaults {xp_threshold_per_level}`,
 `prematch_slide_durations_ms`, `relayer_v3_enabled`, `relayer_max_gas_limit`,
 `registration_fee_foxsy_wei`, `relays_remaining_today`, `dex_swap_enabled`, `dex_swap_slippage_bps`,
-`dex_swap_max_foxsy`.
+`dex_swap_max_foxsy`, `referral {live, live_from}` (Invite Friends, since 2026-11-18).
 
 **Constants**: `rarity_next`, `level_xp_divisor` (200), `nft_bypass_threshold` (18), `foxsy_decimals`
 (18), `foxsy_token_id`, `relayer_addresses`.
@@ -426,7 +430,8 @@ answer, its keys at every depth and the values of its rules, leaving out what mo
 `src/strategist/manual-pages.json`) runs the manual check at once and is named to the owner and to each plan. A block
 with `live` or `live_from` that no rule of the agent reads (not in `RULED_SWITCHES`) gets a snapshot line with its key,
 its state and its numbers only. On 16 Nov 2026 those were `elo_pair_cap` (from 20 Nov 14:00 UTC) and
-`metastaking_discount` (no date yet); `player_interest` has no switch.
+`metastaking_discount` (no date yet), both ruled since RULED-1; on 18 Nov `referral` (from 20 Nov 14:00 UTC), ruled
+since FL20-1 (the agents take no part). On 19 Nov no switch is left without a rule; `player_interest` has no switch.
 
 **What a plan reads while the copy is behind** (the owner's middle way of 16 Nov 2026, MID-1;
 `src/strategist/page-text.ts`): the hourly check already reads each manual page the copy knows from FoxLeague's MCP
@@ -604,3 +609,23 @@ FoxLeague deployed `origin/release/mainnet-1.0` at `729164194` at about 09:48 UT
   that refuses a non-erd1 address, interests counted from 14:00 UTC.
 - **Older, found by the audit of 2026-11-16 (MNT-1):** FoxLeague plays one match of the whole tournament every round
   interval in every format (section 11, "Schedule"); the agent's schedule rule now counts the real span.
+
+## 22. Changes from 2026-11-16 to 2026-11-18 (FoxLeague `origin/main` `6f9c969ac`, manual `99c47a4e6`)
+
+FoxLeague promoted `origin/release/mainnet-1.0` into `origin/main` on 2026-11-17 (`6f9c969ac`); the release branch
+went on to `a546f7279` (2026-11-19). The manual copy is synced to `origin/main`: the two differ only on two pages the
+agents leave out (Invite Friends and the FAQ), and the shapes of the 54 routes the agent calls are the same at both
+and in mainnet's live API description. No contract changed.
+
+- **Invite Friends, the referral programme** (#755, issue #429; #777 and #779 follow on the release branch; section 2), switch `referral.live_from` =
+  2026-11-20 14:00 UTC. The agents take no part (owner, 2026-11-19): the snapshot's Referral line says the programme
+  exists and the rule (FL20-1), the agent calls no `/api/referral/*` route and its manual leaves the page out (FL20-2).
+  A rival's free ranked tickets change nothing the agent reads.
+- **The network halt** (#778, #780; on `release/mainnet-1.0`, not on `origin/main` on 2026-11-19): every FoxLeague
+  chain write waits while its chain is not ready and goes on by itself once the network is back; matches, lineups,
+  training, casual games and free tournaments go on. `GET /api/chain-status` `{ready, paused_since}` answers 404 on
+  mainnet on 2026-11-19; the agent does not read it. The agent checks the chain itself before each signature: nothing
+  is signed while the metachain, its own shard or the contracts' shard 1 has produced no block for 60 s, or while that
+  cannot be read (HALT; `docs/FOXLEAGUE-INTEGRATION.md` section 1.5).
+- **Not used by the agent:** Continue with Google "coming soon" (with buying EGLD by card or bank); the replay file's
+  kickoff minute (#769); the Terms' referral paragraph.
