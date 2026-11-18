@@ -129,9 +129,9 @@ export function liveSigningAllowed(): boolean {
 /**
  * The shards every signature waits on besides the signing wallet's own (HALT, owner's rule after the MultiversX halt
  * of 17 Nov 2026): the metachain, which notarizes the blocks of every shard (a payment that crosses shards needs it
- * and so does the finality the executor waits for), and the shard of the contracts the agent pays, where each payment executes
- * (FoxLeague's players and tournaments contracts, xExchange's pair and its composable tasks contract: all on shard 1
- * today). The wallet's own shard takes its nonce, its gas and the FOXSY it sends.
+ * and so does the finality the executor waits for), and the shard of the contracts the agent pays, where each payment
+ * executes (FoxLeague's players and tournaments contracts, xExchange's pair and its composable tasks contract: all on
+ * shard 1 today). The wallet's own shard takes its nonce, its gas and the FOXSY it sends.
  */
 const SIGNING_SHARDS = [METACHAIN, ...new Set([MAINNET.playersContract, MAINNET.tournamentsContract, MAINNET.composableTasks, MAINNET.foxsyWegldPair].map(shardOf))]
 
