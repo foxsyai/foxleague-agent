@@ -6,7 +6,9 @@
 // in its own line, and `referral` is a ruled switch.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { unknownSwitches } from '../../src/foxleague/config-watch.ts'
+import { API_ROUTES } from '../../src/foxleague/api-routes.ts'
 import { renderDigest } from '../../src/snapshot/digest.ts'
 import { snapshot } from '../fixtures.ts'
 import { HOUR, MIN, liveConfig, mcp, watch } from '../audit-1116/watch-helpers.ts'
@@ -33,7 +35,7 @@ test('FL20-1 the plan reads the referral rule in its own line, never the generic
   const line = digest.split('\n').find(l => l.startsWith('Referral programme'))
   assert.ok(line, digest)
   assert.match(line, /^Referral programme \(Invite Friends\): not live yet, from 2026-11-20T14:00:00Z: /)
-  assert.match(line, /You take no part in it: never register with an invitation, never share or use an invite link, never use a referral credit, and the owner's teams never invite one another \(Fair Play\)/)
+  assert.match(line, /You take no part in it: never register with an invitation, never share or use an invite link and never use a referral credit; the owner's teams never invite one another \(Fair Play\)/)
   assert.match(line, /never FOXSY/)
   assert.match(line, /It changes nothing in how you play/)
   // Live from its time: the same rule.
@@ -46,4 +48,9 @@ test('FL20-1 the owner is not told that the agents have no rule for the referral
   await (w as unknown as Observing).observeConfig(liveConfig(), AT_19NOV)
   await (w as unknown as Observing).observeConfig(configOf19Nov(), AT_19NOV + 2 * HOUR + 50 * MIN)
   assert.deepEqual(w.told.filter(t => /rule switch the agents do not know/.test(t)), [], w.told.join('\n'))
+})
+
+test('FL20-1 (control) the agent calls no route of the referral programme: no claim, no invite list, no credit', () => {
+  assert.deepEqual(API_ROUTES.filter(r => /referral|invite/i.test(r)), [])
+  assert.doesNotMatch(readFileSync(new URL('../../src/foxleague/api.ts', import.meta.url), 'utf8'), /\/referral/)
 })
