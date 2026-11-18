@@ -37,7 +37,7 @@ export const MOVING = new Set(['relays_remaining_today', 'common_pack_epoch_rema
  * `live` or `live_from` that is not here gets the generic snapshot line (P-W6). Whoever adds a rule for a new switch
  * adds its key here, so the plan reads one line about it, not two.
  */
-export const RULED_SWITCHES = new Set(['rarity_match_gate', 'competition_levels', 'organizer_fees', 'card_bans', 'fusion_mint', 'elo_pair_cap', 'metastaking_discount'])
+export const RULED_SWITCHES = new Set(['rarity_match_gate', 'competition_levels', 'organizer_fees', 'card_bans', 'fusion_mint', 'elo_pair_cap', 'metastaking_discount', 'referral'])
 
 export interface ConfigPrint {
   /** The key paths with the shape of a key, sorted. */

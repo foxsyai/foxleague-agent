@@ -140,6 +140,12 @@ export interface FoxConfig {
    * moves no ELO for either team and earns everything else.
    */
   elo_pair_cap?: { live: boolean; live_from: string | null; per_day: number; reset_hour_utc: number }
+  /**
+   * FoxLeague's referral programme, Invite Friends (FoxLeague #755, #779, routes/config.rs): open from `live_from`. The
+   * agents take no part in it (owner, 2026-11-19): the snapshot's Referral line says so, and no request of the agent
+   * carries an invitation (FoxLeague.register sends the team name and the wallet only).
+   */
+  referral?: { live: boolean; live_from: string | null }
   auction_enabled: boolean
   /** The percent a bid must stand over the top bid (the players contract's setting, 1 to 50; 5 when unset). */
   auction_min_increment_percent?: number

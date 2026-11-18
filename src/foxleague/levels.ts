@@ -78,6 +78,15 @@ export function eloPairCapLive(cfg: FoxConfig | null | undefined, now: Date): bo
   return Boolean(c) && (c!.live === true || passed(c!.live_from, now))
 }
 
+/**
+ * FoxLeague's referral programme is open (its `referral` switch, Invite Friends): a fact for the plan only. The agents
+ * take no part in it whatever it says (owner, 2026-11-19), so nothing of the executor reads it.
+ */
+export function referralLive(cfg: FoxConfig | null | undefined, now: Date): boolean {
+  const c = cfg?.referral
+  return Boolean(c) && (c!.live === true || passed(c!.live_from, now))
+}
+
 /** How near FoxLeague's fusion switch the old fusion stops: one sent then could reach the chain after it. */
 export const FUSION_SWITCH_MARGIN_MS = 10 * 60_000
 

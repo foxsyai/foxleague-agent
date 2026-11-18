@@ -1,6 +1,6 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, shopDiscountLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, referralLive, shopDiscountLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
 import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { calendarLines } from './calendar.ts'
@@ -353,6 +353,10 @@ function levelLines(s: AgentSnapshot): string[] {
   // The ELO pair cap (FoxLeague's elo_pair_cap, MNT-3): a fact for the plan, no rule of the executor.
   const pc = s.config?.elo_pair_cap
   if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below and your tournament opponents of the game day show their meetings today once it is live`)
+  // FoxLeague's referral programme (its referral switch, Invite Friends): the owner's rule, the agents take no part in it
+  // (2026-11-19). No action of the agent can take part either: the line keeps the plan from weighing it.
+  const rf = s.config?.referral
+  if (rf) out.push(`Referral programme (Invite Friends): ${whenLive(referralLive(s.config, now), rf.live_from)}: a team shares one invite link with a limited number of places; a new team that pays its registration with it gets free ranked tickets and the inviting team earns in-game credits only (Recover All, an XP booster, a Common pack), never FOXSY; an existing team cannot use an invitation, and inviting yourself with a second wallet or arranging matches to qualify is abuse under Fair Play. You take no part in it: never register with an invitation, never share or use an invite link, never use a referral credit, and the owner's teams never invite one another (Fair Play). It changes nothing in how you play`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   // A switch FoxLeague serves that no rule of the agent reads: its key, state and numbers only (audit 2026-11-16, P-W6).
