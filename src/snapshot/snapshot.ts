@@ -557,13 +557,22 @@ export const FIELD_TOURNAMENTS = 4
 export const FIELD_SEATS = 16
 
 /**
- * The seated teams of the open Silver and Gold tournaments the agent could join (a supported format, before the
- * deadline, a seat free, someone seated, not in it already): each team's ELO (the leaderboard, else its profile) and
- * lineup strength at full condition, as the executor reads them for the join rule. A failed read is unknown.
+ * An open tournament whose seated field the join rule judges, and so one readFields would read: Silver, Gold or a paid
+ * Bronze, a supported format, before its deadline, a seat free and someone seated. The digest says of one that this
+ * snapshot did not read (FLD-1).
+ */
+export function fieldJudged(t: Tournament, now: Date): boolean {
+  return (t.tier === 'silver' || t.tier === 'gold' || (t.tier === 'bronze' && t.entry_fee_foxsy > 0)) && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams
+}
+
+/**
+ * The seated teams of the open tournaments the agent could join (fieldJudged, not in it already), FIELD_TOURNAMENTS of
+ * them by the nearest deadline: each team's ELO (the leaderboard, else its profile) and lineup strength at full
+ * condition, as the executor reads them for the join rule. A failed read is unknown.
  */
 async function readFields(fox: FoxLeague, wallet: AgentWallet, open: Tournament[], myId: number, board: UserProfile[], now: Date): Promise<NonNullable<MarketSummary['fields']>> {
   const joinable = open
-    .filter(t => (t.tier === 'silver' || t.tier === 'gold' || (t.tier === 'bronze' && t.entry_fee_foxsy > 0)) && t.status === 'open' && supportedFormat(t.format) && Date.parse(t.deadline) > now.getTime() && (t.participant_count ?? 0) > 0 && (t.participant_count ?? 0) < t.max_teams)
+    .filter(t => fieldJudged(t, now))
     .sort((a, b) => a.deadline.localeCompare(b.deadline))
     .slice(0, FIELD_TOURNAMENTS)
   const out: NonNullable<MarketSummary['fields']> = []

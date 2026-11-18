@@ -10,7 +10,7 @@ import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrT
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { asSeen, cut } from '../util/text.ts'
 import { agentName } from '../names.ts'
-import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
+import { disciplineOf, fieldJudged, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import { unknownSwitchLines } from '../foxleague/config-watch.ts'
@@ -500,11 +500,18 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for your own open tournament: ovr_min ${lo}, ovr_max ${hi}${count}; a targeted challenge or a private tournament takes none; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it), no other value (a lower top and FoxLeague refuses you as its creator), and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
+  // A planning snapshot reads the field of FIELD_TOURNAMENTS of them (readFields): every other one the field rule judges
+  // at the join says that its field was not read (FLD-1), so "not read" never looks like "nothing to say". Not of one
+  // this team already sits in. A snapshot that read no field at all (before each action, the CLI) says nothing of it.
+  const takenAt = new Date(s.takenAt)
+  const seatedIn = new Set((s.auth?.myTournaments?.active ?? []).map(t => t.id))
+  const unreadField = (t: (typeof m.openStandard)[number]) => Boolean(m.fields) && !m.fields!.some(f => f.id === t.id) && fieldJudged(t, takenAt) && !seatedIn.has(t.id)
+  const listed = m.openStandard.slice(0, 30)
   // Every level is held to the field rule (Zeus only until 2026-11-06).
-  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
+  if (m.fields?.length || listed.some(unreadField)) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
   // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
   let calendarBlind = false
-  for (const t of m.openStandard.slice(0, 30)) {
+  for (const t of listed) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} ${word(t.format)} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${when(t.deadline)} starts ${when(t.starts_at)}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}${rangeClosed(s, t)}`)
     // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
     const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
@@ -512,6 +519,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     else if (worn) out.push(`    schedule: the executor refuses this join now: ${oneLine(worn)}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
+    else if (unreadField(t)) out.push(`    field: not read in this snapshot; the executor reads it at the join and refuses it with ${FIELD_LIMIT} or more clearly stronger teams`)
   }
   if (calendarBlind) out.push('  (schedule: your current tournaments or their upcoming matches could not be read, so the executor refuses every join until they are)')
   // League + Knockout invitations: accepted with join_tournament, by every level within its limits (owner, 2026-10-24).
