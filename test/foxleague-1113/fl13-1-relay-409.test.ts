@@ -16,7 +16,7 @@ import { FoxLeague } from '../../src/foxleague/api.ts'
 import { Store } from '../../src/store/db.ts'
 import type { Chain } from '../../src/chain/gateway.ts'
 import type { Config } from '../../src/config.ts'
-import { ADDR, TEST_SETTINGS, liveWallet, snapshot, withLive } from '../fixtures.ts'
+import { ADDR, TEST_SETTINGS, liveWallet, producingBlocks, snapshot, withLive } from '../fixtures.ts'
 
 async function relayAnswers(status: number, body: string): Promise<{ booked: number; summary: string }> {
   const server = createServer((req, res) => {
@@ -35,7 +35,7 @@ async function relayAnswers(status: number, body: string): Promise<{ booked: num
     const store = new Store('', ':memory:')
     store.addAgent(0, ADDR)
     store.updateSettings(0, TEST_SETTINGS)
-    const chain = { account: async () => ({ nonce: 7, balance: 10n ** 19n }), simulate: async () => ({ ok: true, detail: 'success', raw: {} }) } as unknown as Chain
+    const chain = { ...producingBlocks, account: async () => ({ nonce: 7, balance: 10n ** 19n }), simulate: async () => ({ ok: true, detail: 'success', raw: {} }) } as unknown as Chain
     const exec = new Executor({ cfg: {} as Config, chain, fox, store })
     const s = snapshot()
     s.registration = { ...s.registration, registered: false, feePaidOnChain: false }
