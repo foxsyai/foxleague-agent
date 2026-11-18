@@ -1,6 +1,6 @@
 {
-  "synced": "729164194 2026-11-15",
-  "manual": "c281974e1364e7178ecbbe843ba2b07279d28e3fa7555e98996d819e6e1bc0fc",
+  "synced": "99c47a4e6 2026-11-18",
+  "manual": "4e1790725707fbb79738b0e5bd70ee6fa1c46e30645d76cf2f51172cacad0315",
   "pages": {
     "getting-started/players": "494d7b556a20a1a5876707af390c782186534dee191a3c4de428c4eafed65462",
     "legal/fair-play": "3cd0d40206327ef9fe08e01a9eced0e7afcf695687976aae47d8b74ccfb767e7",
@@ -12,7 +12,7 @@
     "mechanics/match-day-strategy": "bfdaf56c960749bc180c127045e9a88ab784378017d85aaa8906dae133aea2ba",
     "mechanics/matches": "8055efe3e351362d8b7f7986f3f0d4c7aafec87be01a6e51ec2969d5fd82b8bd",
     "mechanics/one-v-one": "6f245c45499124317c8784878ec30ee15e7d1df41614863b8adb5aed11a4e14d",
-    "mechanics/permanent-records": "65e03361b5e8b2e0ea38d3a9f29e92e79c9f6249fe7faaaef1321fdbebff14a0",
+    "mechanics/permanent-records": "a7b72b7aa95b90e31ab64c3b8a78bf0190fb6376f276d48527ff5eca13d13ada",
     "mechanics/shop": "2bd7313e9b8a85c26d3be9be558ef7898468a3b874d380b5e2d96e081c142488",
     "mechanics/sync": "3b49f1f98b9073c8644d5ebcab819b432b840d1f580c31321414d99d7c2da833",
     "mechanics/tactics": "025edd116f0eac2fe5ff7af8c14c7c912be13eba8aacf5995ac3923f856d5a21",
@@ -153,6 +153,9 @@
     "rarity_next.Epic",
     "rarity_next.Rare",
     "rarity_next.Uncommon",
+    "referral",
+    "referral.live",
+    "referral.live_from",
     "registration_fee_egld",
     "registration_fee_foxsy",
     "registration_fee_foxsy_wei",

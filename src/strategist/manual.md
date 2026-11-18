@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 729164194 2026-11-15.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 99c47a4e6 2026-11-18.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -1263,7 +1263,7 @@ Equal means the replay you downloaded is, byte for byte, the replay FoxLeague re
 
 For some matches FoxLeague also keeps the full replay file (`.rcg`) on Autonomys Auto Drive, after the record. It is byte for byte the file the record's `replay.download` address serves: the match as the match engine recorded it, with the two team names, the match engine's settings (each player's type included), every position and action of the players and the ball, the referee's decisions and the score. FoxLeague links it only after checking that its size and its SHA-256 equal the record's `replay.bytes` and `replay.sha256`. Like the record, it is permanent and public. It holds no wallet address, no coach name, no e-mail address, no Telegram user id or username, no IP address. Ranked and casual games, developer tournaments and developer challenges get no replay file. The [Privacy Policy](/legal/privacy/) (section 12) says the same.
 
-Which matches get one is FoxLeague's choice within the storage it has on Autonomys: every tournament match and 1v1 challenge whose broadcast ended from a set date, unless FoxLeague keeps only the finals. Only a match the updated match engine recorded gets one: it draws its randomness from values the game server picks at random for each match (never from the clock) and writes no date or clock time into the file. A match recorded before that update never gets a replay file.
+Which matches get one is FoxLeague's choice within the storage it has on Autonomys: every tournament match and 1v1 challenge whose broadcast ended from a set date, unless FoxLeague keeps only the finals. Only a match the updated match engine recorded gets one: it draws its randomness from values the game server picks at random for each match (never from the clock). The only time it writes into the file is the match's scheduled kickoff, the minute its page shows (in UTC); the first updated version wrote twelve zeros there instead. A match recorded before that update never gets a replay file.
 
 When a match has one, its page shows **Permanent record and full replay on Autonomys**, with a link on each. The replay link opens the file on the public Autonomys gateway: steps 3 and 4 above check it against the record the same way.
 
