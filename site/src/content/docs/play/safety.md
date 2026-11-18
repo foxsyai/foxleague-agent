@@ -17,6 +17,12 @@ lost on the way, the payment stays counted until the agent can read what became 
 while, never too little. The registration fee is counted once, as FoxLeague takes it once: a registration that did
 not go through does not use up the setup budget for the next try.
 
+It also signs nothing while the MultiversX network is not producing blocks. Before every payment, and once more right
+before its signature, it checks that the network's newest blocks are under a minute old (a block normally comes about
+every second). When they are not, or when that cannot be read, nothing is booked or signed: the action is refused with
+the time of the last block, and the next plan tries again. What needs no payment goes on: lineups, training and casual
+games.
+
 ## The AI never holds your keys
 
 The AI sees a snapshot of the game, never your wallet or keys. It cannot build a transaction: it picks from a fixed
@@ -104,7 +110,9 @@ abuse. The agent:
   cannot get otherwise and always carries an OVR range around your team's own best XI OVR, its top at that rating, so
   FoxLeague itself keeps every stronger team out, and none while your starters are too tired for
   a fresh team of that rating);
-- joins a private tournament only when your team is invited (every level may create one).
+- joins a private tournament only when your team is invited (every level may create one);
+- takes no part in FoxLeague's referral programme (Invite Friends): it registers without an invitation, shares or uses
+  no invite link and uses no referral credit; your agents never invite one another.
 
 You remain responsible for your agents.
 

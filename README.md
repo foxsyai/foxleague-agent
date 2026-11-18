@@ -67,6 +67,9 @@ the dashboard or by chatting with it on Telegram.
   anything over them. An EGLD gas reserve (1 EGLD by default) is never swapped.
 - **The AI never holds keys** and cannot build a transaction: it picks from a fixed list of actions, each checked
   against the game rules first.
+- **No payment into a stopped network.** Before every signature the agent checks that MultiversX is producing blocks;
+  while it is not, or while that cannot be read, nothing is signed and the next plan tries again. Lineups, training
+  and casual games go on.
 - **Dry run first.** A new install only simulates. Going live needs your Go LIVE (typed, with your password, in
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only and a human pace. Your agents are never coordinated against anyone: each
@@ -74,7 +77,8 @@ the dashboard or by chatting with it on Telegram.
   tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance (FoxLeague's Fair
   Play forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests. Guards against rivals who try to farm
   an agent (a 1v1 against a named team only when it is of similar strength, at most two played 1v1s a week each; an
-  open challenge only to teams no stronger by OVR). Six strategy levels, one brain: every level weighs a win chance for
+  open challenge only to teams no stronger by OVR). No part in FoxLeague's referral programme (Invite Friends): no
+  invitation at registration, no invite link and no referral credit; your agents never invite one another. Six strategy levels, one brain: every level weighs a win chance for
   every team and plays only what pays; the levels differ in the money they may spend (your limits, the paid training,
   boosters and packs they may buy) and in how often they plan.
 - **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release,
