@@ -204,6 +204,21 @@ refund checks can still read what became of it (an outbid bid in `src/executor/r
 returned in `src/executor/pending.ts`). A row is credited only on the chain's or FoxLeague's own word about that
 hash, once; the gateway's own definite refusal of a transaction it does not know releases the booking as before.
 
+**Is the chain producing blocks?** (HALT, the owner's rule after the MultiversX mainnet halt of 2026-11-17, 09:01 to
+about 15:00 UTC.) `GET {gateway}/network/status/{shard}` answers `data.status.erd_block_timestamp_ms` (and
+`erd_block_timestamp` in seconds): the time of that shard's newest block. Rounds last 600 ms on mainnet
+(`GET {gateway}/network/config` `erd_round_duration`), so it is about a second old in normal running; the public gateway
+and a MultiversX proxy both serve it (the metachain is shard `4294967295`). Before the agent signs anything it reads the
+metachain, the signing wallet's shard and shard 1 (FoxLeague's players and tournaments contracts, xExchange's pair and
+its composable tasks contract), at once, each kept 10 s (`Chain.newestBlockMs` and `chainHalt` in `src/chain/gateway.ts`). It signs nothing
+while one of them has no block for more than 60 s (100 rounds), while one cannot be read or while one is dated more than
+60 s ahead of the computer's clock, and says so ("the MultiversX network has produced no block since ... : nothing is
+signed, the next plan tries again"). The check runs in the executor before anything is booked or prepared (a dry run
+too) and once more right before each signature (`send`, the registration relay), where a refusal releases the booking.
+An action that signs nothing (lineups, training, a casual game, a free seat) does not wait on the chain. FoxLeague's
+own `GET /api/chain-status` (`{ready, paused_since}`, on `release/mainnet-1.0` since #780) answers 404 on mainnet on
+2026-11-19 and is not read.
+
 ### 1.6 Deciding whether a transaction succeeded
 
 This is load-bearing; the web app learned it through incidents (`frontend/src/lib/txFinality.ts:270-400`).
@@ -2238,3 +2253,25 @@ that the count is the format's most again, the safe side. Rounds not drawn yet s
 their span, the Swiss of MON-3 would owe the new tournament none of them, which its test refuses on purpose.
 
 The game manual copy is synced to `729164194` (16 pages, 10 changed, no page left undecided).
+
+## 28. FoxLeague of 2026-11-18 (origin/main 6f9c969ac, release a546f7279, manual 99c47a4e6): Invite Friends and the network halt
+
+Read on 2026-11-19 through git only (a scratch mirror of FoxLeague's repository) and FoxLeague's live `/api/config` and
+`/api/openapi.json`. FoxLeague promoted `origin/release/mainnet-1.0` into `origin/main` on 2026-11-17 (`6f9c969ac`, its
+#774); the release branch went on to `a546f7279`. `sync-manual` reads `origin/main`: the two differ only on two pages
+the agents leave out (Invite Friends and the FAQ), and the shapes of the 54 routes the agent calls are the same at both
+and in mainnet's live API description. No contract changed. FoxLeague's MCP server still served the manual of
+`729164194` on 2026-11-19 (no Invite Friends page, the old Permanent Match Records sentence).
+
+| FoxLeague change | Effect on the agent | What the agent does since this change |
+|---|---|---|
+| #755 (issue #429; #777 and #779 on the release branch since): Invite Friends, the referral programme. `/api/config` `referral {live, live_from}` (`live_from` 2026-11-20 14:00 UTC); `POST /api/referral/claim` stores an invitation code before a paid registration; `GET /api/referral/invites`; `POST /api/referral/credits/{id}/use`. A new team that pays its registration with a code gets free ranked tickets; the inviting team earns in-game credits only (a Recover All, an XP booster, a Common pack), never FOXSY; an existing team cannot use one; inviting yourself with a second wallet or arranging matches to qualify is abuse under Fair Play | The running agent told the owner of a new settings key and of a switch the agents do not know, and each plan read "a FoxLeague rule your instructions do not cover yet" | The owner's rule: the agents take no part. `referral` is in `RULED_SWITCHES`; the snapshot's Referral line says the programme exists, in short, and the rule (FL20-1). The agent calls no `/api/referral/*` route and `POST /api/register` carries the team name and the wallet only (`/api/register` takes no code: the code is claimed before it). The manual page is left out on purpose (FL20-2) |
+| #778, #780 (on the release branch only on 2026-11-19): every FoxLeague chain write waits while its chain is not ready (a deadline cancel's refunds and close too) and goes on by itself once the network is back; `GET /api/chain-status` `{ready, paused_since}`; a banner after two minutes | FoxLeague's hold covers its own writes, not the agent's signatures. `GET /api/chain-status` answers 404 on mainnet on 2026-11-19 | The agent checks the chain itself before each signature (HALT, section 1.5) and does not depend on FoxLeague's route |
+| #771: Continue with Google "coming soon", with buying EGLD by card or bank; #769: the replay file's kickoff minute; the Terms' referral paragraph | Not used | Nothing |
+
+Found on the way (agent 1, 2026-11-18, FLD-1): a planning snapshot reads the seated field of only the 4 joinable
+tournaments with the nearest deadlines. Every other tournament the field rule judges now says in the digest that its
+field was not read and that the executor reads it at the join; `FIELD_TOURNAMENTS` stays 4 (a field costs up to 16
+seats x 2 or 3 FoxLeague reads a tournament, cached 20 minutes).
+
+The game manual copy is synced to `99c47a4e6` (16 pages, one sentence changed, Invite Friends left out).

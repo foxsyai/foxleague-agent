@@ -11,7 +11,7 @@ import type { FoxLeague } from '../src/foxleague/api.ts'
 import type { Config } from '../src/config.ts'
 import type { AgentWallet } from '../src/wallet/wallet.ts'
 import { decimalToAtomic, hexOfString, numberToHex, wholeToAtomic } from '../src/util/encoding.ts'
-import { liveWallet, withLive, withFixture } from './fixtures.ts'
+import { liveWallet, producingBlocks, withLive, withFixture } from './fixtures.ts'
 
 const ADDR = 'erd1fdp7wx5sspwft8jqhp44wlgjyqgjyj229yzfukdpas3g7gkhh32qcr4rpl'
 const wallet: AgentWallet = { index: 0, address: ADDR, pubkeyHex: '00', shard: 0, signTransaction: () => assert.fail('must not sign in dry run'), signMessage: () => assert.fail('must not sign') }
@@ -63,7 +63,7 @@ function snapshot(): AgentSnapshot {
 function setup() {
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
-  const chain = { simulate: async () => ({ ok: true, detail: 'success', raw: {} }) } as unknown as Chain
+  const chain = { ...producingBlocks, simulate: async () => ({ ok: true, detail: 'success', raw: {} }) } as unknown as Chain
   const fox = { user: async () => null, tournament: async () => { throw new Error('no network in tests') } } as unknown as FoxLeague
   const exec = new Executor({ cfg: {} as Config, chain, fox, store })
   return { store, exec, agent: () => store.agent(0)! }
@@ -153,7 +153,7 @@ test('registration: FoxLeague is asked about the name before the fee; a taken, r
     store.addAgent(0, ADDR)
     const asked: string[] = []
     let simulated = 0
-    const chain = { simulate: async () => (simulated++, { ok: true, detail: 'success', raw: {} }) } as unknown as Chain
+    const chain = { ...producingBlocks, simulate: async () => (simulated++, { ok: true, detail: 'success', raw: {} }) } as unknown as Chain
     const fox = { user: async () => null, nameAvailable: async (_w: unknown, name: string) => (asked.push(name), answer()) } as unknown as FoxLeague
     const [r] = await new Executor({ cfg: {} as Config, chain, fox, store }).run(store.agent(0)!, wallet, s, [register])
     return { r: r!, asked, simulated, spent: store.spentUsd(0, { category: 'setup', dryRun: true }) }
@@ -199,6 +199,7 @@ test('gas reserve: fees may use it, a swap may not dip into it', async () => {
     getAmountIn: [b64(wholeToAtomic(1) / 2n)],
   }
   ;(exec as unknown as { d: { chain: unknown } }).d.chain = {
+    ...producingBlocks,
     simulate: async () => ({ ok: true, detail: 'success', raw: {} }),
     query: async (_sc: string, fn: string) => answers[fn] ?? assert.fail(`unexpected query ${fn}`),
   }
@@ -224,6 +225,7 @@ test('WEGLD in the wallet is spent first, with no reserve, when it covers the wh
   }
   const sent: { receiver: string; value: string; data: string; gasLimit: number }[] = []
   ;(exec as unknown as { d: { chain: unknown } }).d.chain = {
+    ...producingBlocks,
     simulate: async (tx: { receiver: string; value: string; data: string; gasLimit: number }) => (sent.push(tx), { ok: true, detail: 'success', raw: {} }),
     query: async (_sc: string, fn: string) => answers[fn] ?? assert.fail(`unexpected query ${fn}`),
   }
@@ -321,7 +323,7 @@ test('sync: the payload targets the players contract, the transaction goes to th
   const sent: { receiver: string; data: string }[] = []
   let prep = { sc_call_data: `MultiESDTNFTTransfer@${playersHex}@02@464f5853592d356435663365@00@8ac7230489e80000@46584c502d366632386535@02@01@73796e634d795374617473@${'00'.repeat(8)}`, receiver: MAINNET.playersContract as string, gas_limit: 18_000_000, foxsy_cost: '10000000000000000000', nonces: [2], player_count: 1, wait_seconds: 0 }
   const d = exec as unknown as { d: { chain: unknown; fox: unknown } }
-  d.d.chain = { simulate: async (tx: { receiver: string; data: string }) => (sent.push(tx), { ok: true, detail: 'success', raw: {} }) }
+  d.d.chain = { ...producingBlocks, simulate: async (tx: { receiver: string; data: string }) => (sent.push(tx), { ok: true, detail: 'success', raw: {} }) }
   d.d.fox = { user: async () => null, syncPrepare: async () => prep }
   const [ok] = await exec.run(agent(), wallet, s, [{ action: { type: 'sync' }, reason: '' }])
   assert.equal(ok!.status, 'dry_run')

@@ -2919,6 +2919,82 @@ Stays open:
   - The code reviewer's unproven items: confusable letters are not folded; the digest grows with the list R2M-3 now
     reads whole; the pause with the manual check switched off.
 
+## A chain check before every signature, Invite Friends and the unread field (2026-11-19)
+
+Three changes the owner approved for one pull request, to be live before FoxLeague's referral programme, the ELO pair
+cap and the fusion that mints its result go live (Fri 2026-11-20 14:00 UTC). The facts:
+- **The network halt.** MultiversX mainnet produced no block on 2026-11-17 from 09:01 to about 15:00 UTC (FoxLeague's
+  `ef2d402a3`, #778, names it). The agents sent nothing into it only because the EGLD price read failed at the same
+  time ("prices unavailable"). The agent had no check of its own that the chain produces blocks: with a price still
+  cached or readable it would have signed payments into a chain that confirmed nothing.
+- **FoxLeague of 2026-11-18.** `origin/main` `6f9c969ac` (release `a546f7279`) serves a new switch, `referral` (Invite
+  Friends, from 2026-11-20 14:00 UTC), and a new manual page. The running agent told the owner of a new settings key
+  and of a switch the agents do not know (P-W2, P-W3), and each plan read the generic "a FoxLeague rule your
+  instructions do not cover yet" line (P-W6).
+- **Agent 1 (Haiku), 2026-11-18.** It planned to join two paid Bronze round robins (T5567, T5571, 18 teams each) and the
+  executor refused both: "3 (4) seated teams are clearly stronger ... no real chance of the top three". The plan could
+  not know: its snapshot read the field of only the 4 joinable tournaments with the nearest deadlines and said nothing
+  of the others.
+
+The fixes are by Claude Opus 5.5, test first: each test under `test/sync-1118/` named after its Id failed on `b853edb`
+for the reason given and passes now (HALT-1 and HALT-2 because the read did not exist; HALT-10 and FL20-1's last test
+are controls that pass on both). The existing tests that build a chain of their own gain the new read
+(`producingBlocks` in `test/fixtures.ts`, a newest block under a second old) and nothing else: without it they meet
+the check and are refused, which is the point of it.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| HALT-1 | medium (money; with HALT-3) | The agent read nothing that says whether MultiversX produces blocks | `Chain.newestBlockMs(shard)` (`src/chain/gateway.ts`) reads `GET {gateway}/network/status/{shard}`: `erd_block_timestamp_ms`, or `erd_block_timestamp` in seconds from a gateway that serves only those, kept 10 s. Two values that disagree by a second or more, a time before 2020, anything that is not a whole positive number, the gateway's error or no answer is a failed read, never a time, and a failed read is not kept. One more try at most, 10 s each |
+| HALT-2 | medium (money; with HALT-3) | No rule said when the chain counts as halted | `chainHalt` reads the shards at once and refuses while one has no block for more than 60 s, while one cannot be read or while one is dated more than 60 s ahead of the computer's clock (the clock or the answer is wrong, so a halt cannot be told). The threshold: a round is 600 ms, so a shard's newest block is normally under a second old; 60 s is 100 rounds, far past a few missed rounds, an observer a little behind or a clock a few seconds off, and a halt (minutes to hours; six hours on 17 Nov) is seen within a minute. A kept reading can make a block look at most 10 s older, never fresher. The refusal says when the last block came, on which shard, how long ago, that nothing is signed and that the next plan tries again |
+| HALT-3 | medium (money: payments signed into a chain that confirms nothing; they may execute hours later (after a deadline or an auction's end) or stay booked) | Every path that signs (`send` behind every payment and the registration relay) signed whatever the chain was doing. Only the price read stood in the way, by chance | Before anything is booked or prepared, every action that will sign (a transaction built, a seat to pay after a create, a fusion FoxLeague has still to prepare) reads the metachain, the signing wallet's shard and shard 1 and is refused on a halt. Which shards: the metachain notarizes every shard's blocks, so a payment that crosses shards and the finality the executor waits for need it; the wallet's own shard takes the nonce, the gas and the FOXSY; shard 1 is where every contract the agent pays executes (FoxLeague's players and tournaments contracts, xExchange's pair and its composable tasks contract, computed from `MAINNET`). Nothing is booked, asked or signed |
+| HALT-4 | medium (money; rule 3) | A halt that begins between the check before the booking and the signature | `send` checks once more right before `signTransaction`, after the nonce is read and before the kill switch's last look; a halt throws, nothing is signed, and the caller's catch releases the booking (nothing pending is kept) |
+| HALT-5 | medium (rules 4 and 5) | Unknown must not read as "producing blocks" | A status that cannot be read on any of the three shards refuses, and so does a chain client without the read at all |
+| HALT-6 | (the rule's other side) | A healthy chain must not be refused | A fresh block on the three shards lets the payment through; the check asks exactly the metachain, the wallet's shard and shard 1 |
+| HALT-7 | medium (money; rule 3) | The registration relay signs outside `send` | The same last check right before its signature: a halt releases the 5,000 FOXSY fee booked before it and nothing goes to the relay |
+| HALT-8 | (coverage) | The owner's own actions | Telegram `/do`, the dashboard's actions and the owner's leave go through the same `Executor.run`, so the same check holds; a leave signs nothing and does not wait |
+| HALT-9 | low (what a dry run tells) | A dry run would show "would pay" on a halted chain while live refuses | A dry run takes the same check before anything is booked, as it takes the same prices: it refuses as live would. It never reaches `send`, so the last check is live only |
+| HALT-10 | (control) | An action that signs nothing must not wait on the chain | Lineups, training, casual games and a free seat read no network status (FoxLeague: matches go on during a halt) |
+| FL20-1 | low (what the plan and the owner are told; no money) | FoxLeague's `referral` switch had no rule: the plan read the generic line and the owner was told the agents do not know it | The owner's rule: the agents take no part in Invite Friends (no invitation at registration, no invite link shared or used, no referral credit, the owner's teams never invite one another; it changes nothing in how they play). `referral` is in `RULED_SWITCHES`; the snapshot's Referral line says the programme exists, in short, and the rule. The agent calls no `/api/referral/*` route (a control pins it) and `POST /api/register` carries the team name and the wallet only |
+| FL20-2 | low (cost of every plan) | FoxLeague's new page `mechanics/invite-friends` sits in the mechanics folder, so `sync-manual` would take it in whole: about 3,000 tokens of rules for a programme the agents take no part in, and each edit FoxLeague makes to it (a second one came the same day, #779) would make the copy behind | Left out on purpose in `LEFT_OUT` (`src/strategist/manual.ts`), with its reason; FL20-1's line gives the programme in short |
+| FLD-1 | low (what the plan knows; the executor already refused) | A planning snapshot reads the seated field of only the `FIELD_TOURNAMENTS` (4) joinable tournaments with the nearest deadlines; the digest printed a field line for those only, so "not read" and "nothing to say" looked the same | Every other open tournament the field rule judges (the same filter, `fieldJudged` in `src/snapshot/snapshot.ts`), and that the team does not sit in, gets one short line: "field: not read in this snapshot; the executor reads it at the join and refuses it with 3 or more clearly stronger teams" (`FIELD_LIMIT`). A snapshot that reads no field (before each action, the CLI) adds none. `FIELD_TOURNAMENTS` stays 4: a field costs up to 16 seats of 2 or 3 FoxLeague reads each (cached 20 minutes), for every agent's plan |
+
+Also in this change: the game manual copy is synced to FoxLeague's `origin/main` `6f9c969ac` (manual `99c47a4e6`; 16
+pages, one sentence of Permanent Match Records changed), the settings record names `referral`, and the route record
+(`src/foxleague/api-shapes.json`) was rewritten by the sync: of the 54 routes the agent calls only `GET /api/config`
+changed shape (the `referral` block), and mainnet's live API description of 2026-11-19 gives exactly the recorded
+fingerprints. `docs/ECONOMY-AND-RULES.md` sections 2, 17 and 22 and `docs/FOXLEAGUE-INTEGRATION.md` sections 1.5 and 28
+carry the details; the site and the README say what the agent does during a halt and of the referral programme.
+
+What was checked and needs no change:
+- `signTransaction` is called in two places only, `send` and the registration relay, both in `src/executor/executor.ts`.
+  The pending-payment confirms, the refund checks and the badge sign nothing. The install's private split extension
+  (`src/local`, not in the repository) only splits an action into pieces that each run through the executor.
+- Binance top-ups (`src/topup.ts`) are a withdrawal the exchange sends, not a signature of the agent: left out. On a
+  halted chain Binance holds its own withdrawals.
+- FoxLeague's own writes wait while its chain is not ready since #778 and #780, on `release/mainnet-1.0` only on
+  2026-11-19; `GET /api/chain-status` answers 404 on mainnet. The agent depends on neither.
+
+Stays open:
+- **The window of a minute.** A transaction signed in the first 60 s of a halt still goes out; it waits in the pool or
+  is dropped, and its booking stands as for any payment whose outcome is unclear (the pending retry confirms it once the
+  chain is back, never paying again).
+- **Other shards.** A halt of a shard that is neither the metachain, the wallet's own nor shard 1 is not seen. No
+  payment of the agent executes there today; a contract of FoxLeague's moved to another shard would need its address in
+  `MAINNET`, which the check reads.
+- **The computer's clock.** A clock more than 60 s off refuses every signature until it is put right (behind: "ahead
+  of this computer's clock"; ahead: "no block since"). The refusal names both times. A WSL clock after the host slept
+  is the likely case.
+- **The owner's gateway.** The check reads `MVX_GATEWAY_URL`. A proxy whose observers fall more than a minute behind
+  refuses too, the safe side: its nonce and its broadcast would be as stale.
+- **No snapshot line.** The planning snapshot does not say that the chain is halted (the optional part of the brief):
+  each paid action of a plan is refused with the halt's words and the next plan reads them. A line would save the
+  model's choices during a halt, not money.
+- **The manual check after the deploy.** FoxLeague's MCP server still served the manual of `729164194` on 2026-11-19,
+  so until FoxLeague deploys its manual the hourly check sees `mechanics/permanent-records` differ (the copy is ahead).
+  The owner hears of one changed page; no action is held by it (it is no page of `HOLD_PAGES`).
+- **`sync-manual` reads `origin/main`**, not `release/mainnet-1.0`: the header names `99c47a4e6`. The pages the agents
+  take in and the route shapes are the same at `a546f7279`; the next sync after FoxLeague's next promotion moves it.
+- Production was not read and nothing was deployed.
 
 ## One manager message at a time (2026-11-13)
 

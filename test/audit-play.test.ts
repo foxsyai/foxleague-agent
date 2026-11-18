@@ -18,7 +18,7 @@ import { takeSnapshot } from '../src/snapshot/snapshot.ts'
 import { playerLine, renderDigest } from '../src/snapshot/digest.ts'
 import type { Store } from '../src/store/db.ts'
 import { wholeToAtomic } from '../src/util/encoding.ts'
-import { ADDR, OTHER, TEST_SETTINGS, dryWallet, rivalSquad, setup, snapshot, tournament } from './fixtures.ts'
+import { ADDR, OTHER, TEST_SETTINGS, dryWallet, producingBlocks, rivalSquad, setup, snapshot, tournament } from './fixtures.ts'
 
 function testConfig(dir: string): Config {
   return {
@@ -199,7 +199,7 @@ test('D2 the counts come from the executor\'s own helpers: the free-again date, 
   assert.match(text, /T2500 [^\n]*creator user 877[^\n]*2 of 2 1v1s against it this week \(the limit\)/)
   // What the plan is told is what the executor refuses (an executor on the same store, FoxLeague mocked).
   // A rival 10 percent weaker than ours (18 against 20): a 1v1 every level may play (55 percent and up since 2026-11-06).
-  const exec = new Executor({ cfg: {} as Config, chain: {} as never, fox: { user: async () => null, ...rivalSquad(18) } as never, store: svc.store })
+  const exec = new Executor({ cfg: {} as Config, chain: { ...producingBlocks } as never, fox: { user: async () => null, ...rivalSquad(18) } as never, store: svc.store })
   const wallet = { ...dryWallet, address: svc.store.agent(0)!.address }
   const [r] = await exec.run(svc.store.agent(0)!, wallet, s, [act({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: 878, deadline_minutes: 60 })])
   assert.equal(r!.status, 'dry_run', r!.summary)

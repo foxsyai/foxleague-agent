@@ -3,6 +3,7 @@
 
 import { requestJson, RateLimiter, sleep } from '../util/http.ts'
 import { b64ToString } from '../util/encoding.ts'
+import { cut } from '../util/text.ts'
 import type { Config } from '../config.ts'
 
 interface GatewayEnvelope<T> {
@@ -79,6 +80,82 @@ export class BroadcastRefused extends Error {
   }
 }
 
+/** The metachain's id in the gateway's routes (GET /network/status/4294967295). */
+export const METACHAIN = 4294967295
+
+/**
+ * How old the newest block of a shard may be before the agent signs nothing (the owner's rule after the MultiversX
+ * mainnet halt of 17 Nov 2026, 09:01 to about 15:00 UTC). A round lasts 600 ms on mainnet, so a shard's newest block is
+ * normally under a second old. 60 s is 100 rounds: far past a few missed rounds, an observer a little behind or a
+ * computer clock a few seconds off, and a halt (minutes to hours) is seen within a minute of its start.
+ */
+export const BLOCK_STALE_MS = 60_000
+/**
+ * How long a shard's reading is kept. The age is measured against the clock at every use, so a kept reading only makes
+ * the block look older, never fresher: at most BLOCK_CACHE_MS on top of its age, well under BLOCK_STALE_MS.
+ */
+export const BLOCK_CACHE_MS = 10_000
+/** No block of MultiversX mainnet is older than this (its genesis is in 2020): a smaller time is not in milliseconds. */
+const FIRST_BLOCK_MS = Date.UTC(2020, 0, 1)
+
+/**
+ * The newest block's time (ms) in an answer of GET /network/status/<shard>: `erd_block_timestamp_ms`, or
+ * `erd_block_timestamp` (seconds) from a gateway that serves only those. Null for anything else, and for two that
+ * disagree by a second or more (one of them is not what it says).
+ */
+export function blockTimeMs(status: unknown): number | null {
+  if (!status || typeof status !== 'object') return null
+  const s = status as Record<string, unknown>
+  const whole = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v > 0
+  const ms = whole(s.erd_block_timestamp_ms) ? s.erd_block_timestamp_ms : null
+  const sec = whole(s.erd_block_timestamp) ? s.erd_block_timestamp : null
+  if (ms !== null && sec !== null && Math.abs(ms - sec * 1000) >= 1000) return null
+  const at = ms ?? (sec !== null ? sec * 1000 : null)
+  return at !== null && at >= FIRST_BLOCK_MS ? at : null
+}
+
+const shardName = (shard: number) => (shard === METACHAIN ? 'the metachain' : `shard ${shard}`)
+const utc = (ms: number) => `${new Date(ms).toISOString().slice(0, 19).replace('T', ' ')} UTC`
+/** A span as the owner reads it: `45 s`, `3 min`, `5 h 59 min`, `2 d 3 h`. */
+function span(ms: number): string {
+  const min = Math.floor(ms / 60_000)
+  if (min < 1) return `${Math.floor(ms / 1000)} s`
+  const h = Math.floor(min / 60)
+  const d = Math.floor(h / 24)
+  if (d >= 1) return `${d} d${h % 24 ? ` ${h % 24} h` : ''}`
+  if (h >= 1) return `${h} h${min % 60 ? ` ${min % 60} min` : ''}`
+  return `${min} min`
+}
+
+/**
+ * Why nothing may be signed now, in our own words, or null while every shard of `shards` has a block at most
+ * BLOCK_STALE_MS old. The shards are read at once. A shard whose block time cannot be read refuses (unknown is not
+ * "producing blocks", AGENTS.md rules 4 and 5), and so does one dated ahead of this computer's clock by more than the
+ * threshold: then the clock or the answer is wrong, and a halt cannot be told. The next plan tries again.
+ */
+export async function chainHalt(chain: Pick<Chain, 'newestBlockMs'>, shards: number[], now: () => number = Date.now): Promise<string | null> {
+  const reads = await Promise.all(
+    [...new Set(shards)].map(async shard => {
+      try {
+        const at = await chain.newestBlockMs(shard)
+        if (typeof at !== 'number' || !Number.isFinite(at)) throw new Error('no block time')
+        return { shard, at }
+      } catch (err) {
+        return { shard, err: cut(err instanceof Error ? err.message : String(err), 160) }
+      }
+    }),
+  )
+  const t = now()
+  for (const r of reads) {
+    if ('err' in r) return `whether the MultiversX network is producing blocks could not be read (${shardName(r.shard)}: ${r.err}): nothing is signed, the next plan tries again`
+  }
+  for (const r of reads as { shard: number; at: number }[]) {
+    if (r.at - t > BLOCK_STALE_MS) return `the newest MultiversX block of ${shardName(r.shard)} is dated ${utc(r.at)}, ahead of this computer's clock (${utc(t)}) by more than ${BLOCK_STALE_MS / 1000} s: whether the network is producing blocks cannot be told, so nothing is signed (check the computer's clock); the next plan tries again`
+    if (t - r.at > BLOCK_STALE_MS) return `the MultiversX network has produced no block since ${utc(r.at)} (${shardName(r.shard)}, ${span(t - r.at)} ago): nothing is signed, the next plan tries again`
+  }
+  return null
+}
+
 export interface ChainOptions {
   /** Before a refused transaction is looked up, so an observer that did take it has passed it on. */
   refusalLookupDelayMs?: number
@@ -93,6 +170,8 @@ export class Chain {
   private priceCache: { usd: number; at: number } | undefined
   private acceptedPrice: number | undefined
   private candidatePrice: { price: number; seen: number; since: number } | undefined
+  /** The newest block per shard as last read (BLOCK_CACHE_MS). */
+  private readonly blocks = new Map<number, { at: number; readAt: number }>()
 
   constructor(cfg: Pick<Config, 'gatewayUrl' | 'apiUrl' | 'gatewayRps' | 'apiRps'>, opts: ChainOptions = {}) {
     this.gw = cfg.gatewayUrl
@@ -123,6 +202,23 @@ export class Chain {
   async guarded(address: string): Promise<boolean> {
     const d = await this.gwGet<{ guardianData?: { guarded?: boolean } }>(`/address/${address}/guardian-data`)
     return d.guardianData?.guarded === true
+  }
+
+  /**
+   * The time (ms) of the newest block of a shard (METACHAIN for the metachain), from the gateway's GET
+   * /network/status/<shard>; kept BLOCK_CACHE_MS. Throws when it cannot be read: a failed read is never kept. Asked once
+   * more at most, within 10 s a try: a gateway that does not answer refuses the signature soon, it does not hold it.
+   */
+  async newestBlockMs(shard: number): Promise<number> {
+    const kept = this.blocks.get(shard)
+    if (kept && Date.now() - kept.readAt < BLOCK_CACHE_MS) return kept.at
+    const path = `/network/status/${shard}`
+    const { status, json } = await requestJson<GatewayEnvelope<{ status?: unknown }>>(this.gwLimiter, `${this.gw}${path}`, { retries: 1, timeoutMs: 10_000 })
+    if (!json || !json.data) throw new Error(`gateway ${path}: HTTP ${status} ${json?.error || 'no data'}`)
+    const at = blockTimeMs(json.data.status)
+    if (at === null) throw new Error(`gateway ${path}: no block time in the answer`)
+    this.blocks.set(shard, { at, readAt: Date.now() })
+    return at
   }
 
   /** Every ESDT and NFT the wallet holds, in one call (keys like "FXLP-6f28e5-0177"). */

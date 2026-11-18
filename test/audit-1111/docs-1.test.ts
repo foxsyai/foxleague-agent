@@ -14,7 +14,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { Store } from '../../src/store/db.ts'
 import { Executor } from '../../src/executor/executor.ts'
-import { ADDR, dryWallet, snapshot } from '../fixtures.ts'
+import { ADDR, dryWallet, producingBlocks, snapshot } from '../fixtures.ts'
 import { numberToHex, wholeToAtomic } from '../../src/util/encoding.ts'
 import type { PlannedAction } from '../../src/executor/actions.ts'
 
@@ -33,7 +33,7 @@ function newInstall() {
     getReservesAndTotalSupply: [b64(wholeToAtomic(10_000_000)), b64(wholeToAtomic(6000)), b64(1n)],
     getAmountIn: [b64(wholeToAtomic(3) + wholeToAtomic(1) / 5n)], // 3.2 EGLD for 5,300 FOXSY
   }
-  const chain = { simulate: async () => ({ ok: true, detail: 'success', raw: {} }), query: async (_sc: string, fn: string) => answers[fn]! }
+  const chain = { ...producingBlocks, simulate: async () => ({ ok: true, detail: 'success', raw: {} }), query: async (_sc: string, fn: string) => answers[fn]! }
   const fox = { user: async () => null, nameAvailable: async () => ({ available: true }) }
   const exec = new Executor({ cfg: {} as never, chain: chain as never, fox: fox as never, store })
   // What the chain says at every reading while nothing is signed: the dry run changes none of it.

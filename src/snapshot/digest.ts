@@ -1,6 +1,6 @@
 // Compact text rendering of a snapshot: for the CLI, Telegram and the strategist's prompt.
 
-import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, shopDiscountLive } from '../foxleague/levels.ts'
+import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, referralLive, shopDiscountLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
 import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
 import { calendarLines } from './calendar.ts'
@@ -10,7 +10,7 @@ import { auctionMinRaisePercent, casualCostRefusal, conditionAtStart, elevenOvrT
 import { atomicToFloat, formatAtomic } from '../util/encoding.ts'
 import { asSeen, cut } from '../util/text.ts'
 import { agentName } from '../names.ts'
-import { disciplineOf, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
+import { disciplineOf, fieldJudged, transferLockEnd, type AgentSnapshot, type PlayerView } from './snapshot.ts'
 import { CASUAL_DAYS, ELO_BAND, EVEN_BAND, formationsToTest, LEAGUE_DAYS, LEAGUE_MIN_PLAYED, LEAGUE_TEAMS, type FormationRecordRow } from './formations.ts'
 import { gateLine, matchGate, type MatchGate } from '../foxleague/gate.ts'
 import { unknownSwitchLines } from '../foxleague/config-watch.ts'
@@ -353,6 +353,10 @@ function levelLines(s: AgentSnapshot): string[] {
   // The ELO pair cap (FoxLeague's elo_pair_cap, MNT-3): a fact for the plan, no rule of the executor.
   const pc = s.config?.elo_pair_cap
   if (pc) out.push(`ELO pair cap: ${whenLive(eloPairCapLive(s.config, now), pc.live_from)}: the same two teams move ELO in at most ${known(pc.per_day)} meetings a game day (from ${known(pc.reset_hour_utc)}:00 UTC), ranked, 1v1s and tournaments of every level together; a later meeting that day still counts for the result, the prize, XP and competitive matches but moves no ELO for either team (a forfeit always costs its ELO), and ranked draws no team already met that often; the rivals listed below and your tournament opponents of the game day show their meetings today once it is live`)
+  // FoxLeague's referral programme (its referral switch, Invite Friends): the owner's rule, the agents take no part in it
+  // (2026-11-19). No action of the agent can take part either: the line keeps the plan from weighing it.
+  const rf = s.config?.referral
+  if (rf) out.push(`Referral programme (Invite Friends): ${whenLive(referralLive(s.config, now), rf.live_from)}: a team shares one invite link with a limited number of places; a new team that pays its registration with it gets free ranked tickets and the inviting team earns in-game credits only (Recover All, an XP booster, a Common pack), never FOXSY; an existing team cannot use an invitation, and inviting yourself with a second wallet or arranging matches to qualify is abuse under Fair Play. You take no part in it: never register with an invitation, never share or use an invite link and never use a referral credit; the owner's teams never invite one another (Fair Play). It changes nothing in how you play`)
   const dearer = otherSplit(s, s.config?.private_tournament_prize_split)
   if (dearer) out.push(`A private tournament created now ${dearer}: every team in it shares that fee`)
   // A switch FoxLeague serves that no rule of the agent reads: its key, state and numbers only (audit 2026-11-16, P-W6).
@@ -496,11 +500,18 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     out.push(`Your best XI OVR (what OVR ranges are checked against): ${ovr}; a range about 10 percent either way for your own open tournament: ovr_min ${lo}, ovr_max ${hi}${count}; a targeted challenge or a private tournament takes none; for an open challenge: ovr_max ${Math.ceil(ovr)} (no stronger team can take it), no other value (a lower top and FoxLeague refuses you as its creator), and any ovr_min up to ${Math.floor(ovr)}${eleven}`)
   }
   out.push(`Open tournaments: ${m.openStandard.length ? '' : 'none'}`)
+  // A planning snapshot reads the field of FIELD_TOURNAMENTS of them (readFields): every other one the field rule judges
+  // at the join says that its field was not read (FLD-1), so "not read" never looks like "nothing to say". Not of one
+  // this team already sits in. A snapshot that read no field at all (before each action, the CLI) says nothing of it.
+  const takenAt = new Date(s.takenAt)
+  const seatedIn = new Set((s.auth?.myTournaments?.active ?? []).map(t => t.id))
+  const unreadField = (t: (typeof m.openStandard)[number]) => Boolean(m.fields) && !m.fields!.some(f => f.id === t.id) && fieldJudged(t, takenAt) && !seatedIn.has(t.id)
+  const listed = m.openStandard.slice(0, 30)
   // Every level is held to the field rule (Zeus only until 2026-11-06).
-  if (m.fields?.length) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
+  if (m.fields?.length || listed.some(unreadField)) out.push(`  (field lines: a seated team is clearly stronger when its lineup (each card at the stronger of its synced and live stats, at full condition) is more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours at the tournament's start, whatever its ELO, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours; an unread lineup counts on its ELO alone, and a team known only in part that is not clearly stronger counts as unknown; clearly weaker is both the other way; the executor never joins a field with ${FIELD_LIMIT} or more clearly stronger teams, or ${FIELD_LIMIT} or more unknown ones)`)
   // The join rule's schedule test (BEH-3): its own team only; an unread calendar is said once, not under every line.
   let calendarBlind = false
-  for (const t of m.openStandard.slice(0, 30)) {
+  for (const t of listed) {
     out.push(`  T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} ${word(t.format)} ${t.participant_count ?? '?'}/${t.max_teams} (min ${t.min_teams}) fee ${t.entry_fee_foxsy} deadline ${when(t.deadline)} starts ${when(t.starts_at)}${scheduleText(t, s.config?.tournament_defaults?.groups_knockout_group_size ?? 4)}${t.is_private ? (t.invited ? ', private, you are invited' : ', private') : ''}${otherSplit(s, t.prize_split) ? `, ${otherSplit(s, t.prize_split)}` : ''}${ovrRange(t)}${rangeClosed(s, t)}`)
     // What the join rule's schedule test answers now, so the plan does not propose a seat it will refuse (BEH-3).
     const worn = s.team && s.auth && !s.watchOnly ? scheduleRefusal(s, t, new Date(s.takenAt)) : null
@@ -508,6 +519,7 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     else if (worn) out.push(`    schedule: the executor refuses this join now: ${oneLine(worn)}`)
     const field = m.fields?.find(f => f.id === t.id)
     if (field) out.push(`    ${fieldText(s, t, field)}`)
+    else if (unreadField(t)) out.push(`    field: not read in this snapshot; the executor reads it at the join and refuses it with ${FIELD_LIMIT} or more clearly stronger teams`)
   }
   if (calendarBlind) out.push('  (schedule: your current tournaments or their upcoming matches could not be read, so the executor refuses every join until they are)')
   // League + Knockout invitations: accepted with join_tournament, by every level within its limits (owner, 2026-10-24).

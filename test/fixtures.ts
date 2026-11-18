@@ -107,6 +107,9 @@ export function tournament(id: number, more: Record<string, unknown> = {}, parti
   }
 }
 
+/** A chain producing blocks (HALT): the newest block of every shard under a second old. For a chain mock of a test's own. */
+export const producingBlocks = { newestBlockMs: async (_shard: number) => Date.now() - 400 }
+
 export interface Mocks {
   chain: Record<string, unknown>
   fox: Record<string, unknown>
@@ -123,6 +126,7 @@ export function setup(over: Partial<Mocks> = {}) {
     account: async () => ({ nonce: 1, balance: wholeToAtomic(10) }),
     send: async () => 'hash1',
     waitForOutcome: async () => ({ kind: 'success' }),
+    ...producingBlocks,
     ...over.chain,
   }
   const fox = {

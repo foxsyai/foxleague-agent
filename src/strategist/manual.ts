@@ -18,6 +18,7 @@ const FOLDERS = ['mechanics/economy-map.mdx', 'mechanics', 'getting-started/play
  */
 export const LEFT_OUT: Record<string, string> = {
   'mechanics/world-cup.mdx': 'a preview, not live',
+  'mechanics/invite-friends.mdx': "the referral programme: the agents take no part in it (owner, 2026-11-19); the snapshot's Referral line gives it in short",
   'getting-started/first-match.md': 'an app walkthrough; the match rules are on the mechanics pages',
   'getting-started/onboarding.mdx': 'onboarding; registration is handled by code',
   'getting-started/quick-start.mdx': 'an app walkthrough',

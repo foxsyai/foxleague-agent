@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { winChance } from '../snapshot/winchance.ts'
 import { Address, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
-import { BroadcastRefused, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
+import { BroadcastRefused, METACHAIN, chainHalt, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { FusionPrepared, Tournament, TournamentDetail } from '../foxleague/types.ts'
@@ -20,7 +20,7 @@ import type { AgentRow, Store } from '../store/db.ts'
 import { atomicToFloat, b64ToBigInt, decimalToAtomic, formatAtomic, u64Hex, wholeToAtomic } from '../util/encoding.ts'
 import { sleep } from '../util/http.ts'
 import { agentName } from '../names.ts'
-import type { AgentWallet } from '../wallet/wallet.ts'
+import { shardOf, type AgentWallet } from '../wallet/wallet.ts'
 import { createStartMs, describeAction, type Action, type PlannedAction } from './actions.ts'
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
@@ -125,6 +125,15 @@ export function liveSigningAllowed(): boolean {
   const v = process.env.AGENT_LIVE_ENABLED?.trim().toLowerCase()
   return v === '1' || v === 'true'
 }
+
+/**
+ * The shards every signature waits on besides the signing wallet's own (HALT, owner's rule after the MultiversX halt
+ * of 17 Nov 2026): the metachain, which notarizes the blocks of every shard (a payment that crosses shards needs it
+ * and so does the finality the executor waits for), and the shard of the contracts the agent pays, where each payment
+ * executes (FoxLeague's players and tournaments contracts, xExchange's pair and its composable tasks contract: all on
+ * shard 1 today). The wallet's own shard takes its nonce, its gas and the FOXSY it sends.
+ */
+const SIGNING_SHARDS = [METACHAIN, ...new Set([MAINNET.playersContract, MAINNET.tournamentsContract, MAINNET.composableTasks, MAINNET.foxsyWegldPair].map(shardOf))]
 
 export class Executor {
   private readonly d: ExecutorDeps
@@ -319,6 +328,13 @@ export class Executor {
       }
       let weighed = await weigh(verdict)
       if ('refusal' in weighed) return finish('refused', `${desc}: ${weighed.refusal}`)
+      // HALT: nothing is booked, prepared or signed while MultiversX produces no block or that cannot be read, in a dry
+      // run as live (it tells what live would do). An action that signs nothing (lineups, training, a casual game, a free
+      // seat) does not wait on the chain. send() checks once more right before each signature.
+      if (weighed.built.txs.length || weighed.seat.length || weighed.built.counted?.length) {
+        const halt = await this.haltReason(wallet)
+        if (halt) return finish('refused', `${desc}: ${halt}`)
+      }
       if (a.type === 'fuse' && verdict.facts.unprepared && !dry) {
         // From FoxLeague's fusion switch FoxLeague prepares the fusion (a write on its side, up to 45 s under this wallet's
         // lock; R73A-2): asked only now that every check of the agent's own passed with the least a fusionMint can cost,
@@ -899,6 +915,23 @@ export class Executor {
   }
 
   /**
+   * HALT: why nothing may be signed for this wallet now, or null: a shard it waits on (SIGNING_SHARDS and its own) has
+   * produced no block for BLOCK_STALE_MS, or its block time cannot be read (chainHalt).
+   */
+  private haltReason(wallet: AgentWallet): Promise<string | null> {
+    return chainHalt(this.d.chain, [...SIGNING_SHARDS, wallet.shard])
+  }
+
+  /**
+   * HALT, right before a signature: a chain that stopped since the check before the booking throws ChainHalted, and the
+   * caller's catch releases the booking (nothing was signed, AGENTS.md rule 3).
+   */
+  private async assertChainLive(wallet: AgentWallet): Promise<void> {
+    const why = await this.haltReason(wallet)
+    if (why) throw new ChainHalted(why)
+  }
+
+  /**
    * Signs and sends; from the signature on the payment counts as possibly sent. `keep` holds its hash as a pending payment
    * from the signature on, under the hash computed here: an answer lost on the way may still have landed, so the next plan
    * must find it and not pay again.
@@ -906,6 +939,7 @@ export class Executor {
   private async send(wallet: AgentWallet, spec: TxSpec, booking: Booking, keep?: { kind: string; payload: unknown }): Promise<string> {
     const account = await this.d.chain.account(wallet.address)
     const tx = buildTransaction(spec, wallet.address, account.nonce)
+    await this.assertChainLive(wallet)
     this.assertNotStopped(wallet.index)
     wallet.signTransaction(tx)
     const sentBefore = booking.sent
@@ -1011,6 +1045,7 @@ export class Executor {
           const spec = registerAndPayTx(v.facts.feeAtomic as bigint, relayer, snap.config?.relayer_max_gas_limit)
           const account = await chain.account(wallet.address)
           const tx = buildTransaction(spec, wallet.address, account.nonce)
+          await this.assertChainLive(wallet)
           this.assertNotStopped(wallet.index)
           wallet.signTransaction(tx)
           booking.sent = true
@@ -1487,6 +1522,9 @@ export class Executor {
     return finish('unconfirmed', `${desc}: paid ${hash}, seat not confirmed yet; the join is retried with the same hash, never paid again`, usd, hash)
   }
 }
+
+/** HALT, right before a signature: MultiversX produces no block (or that cannot be read). Nothing was signed or sent. */
+class ChainHalted extends Error {}
 
 /** The kill switch, a pause or a stop before a signature: nothing was sent. */
 class Stopped extends Error {

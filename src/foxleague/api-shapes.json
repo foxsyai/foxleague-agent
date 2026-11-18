@@ -1,8 +1,8 @@
 {
-  "synced": "729164194 2026-11-15",
+  "synced": "99c47a4e6 2026-11-18",
   "routes": {
     "POST /api/auth/verify": "b8ce52f90fe6a1281328bc539fa1d11f0508e13aaf8a7c307c55a97083716f58",
-    "GET /api/config": "c390b03a1eed73d644e717bbfa2e541e886ec910d123dc1879f01b7c4ab54564",
+    "GET /api/config": "8b0f9a307a124e57f49067ed2973fe9e0b434549f215f935b3d4d7133f0bdd18",
     "GET /api/marketplace/recent-sales": "361e8712876625466cf407965c0c23ba3487d4cc09cb2ca7d96b766a40baf0e8",
     "GET /api/matches/history": "65f4c93906a7702b60726ef8787d97946223e4012134e850debce8bfb11db153",
     "GET /api/public/tournament-match/{id}/stats": "ab1ed41260274a925096209f990ee0cee344ac2c90ea3b0b3ecf7b29c0f92ad7",

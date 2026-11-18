@@ -70,7 +70,7 @@ the normal tick).
   calendar again for its own start when it creates, so a start another team is creating at is refused before anything
   is paid. Until registration closes, each plan checks again whether a tournament it created still fits the squad and
   its other tournaments; it may leave one that no longer does, and its entry comes back. For the 4 open Silver, Gold or paid Bronze tournaments it could join whose
-  deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by starting eleven and rating: an eleven more than 10 percent stronger than yours counts as clearly stronger whatever its rating). It
+  deadlines come first (up to 16 seated teams each), it sees how the seated teams compare (clearly stronger, even, clearly weaker, by starting eleven and rating: an eleven more than 10 percent stronger than yours counts as clearly stronger whatever its rating). Of each other one it is told that its field was not read yet: the agent reads it at the join and does not pay into a field with 3 or more clearly stronger teams. It
   refuses a schedule that would wear the squad out, counting the largest group a Groups + Knockout can draw, judged on the condition the squad will have at the start (rested
   until then, less what its other tournaments cost before it). FoxLeague plays one match of the whole tournament at a
   time, so a team's matches are spread over the whole tournament: the agent counts that span, judges every field from
