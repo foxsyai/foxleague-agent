@@ -8,14 +8,16 @@
 //
 // This file ties every stated number to the code: the size of the text every plan sends (so a manual that grows
 // fails here until the numbers are looked at again), the list prices in MODELS, the default tick and active hours.
-// The cost of the default (Sonnet 5.5 at medium) is derived from the measured token counts; no cost of a model is
-// stated that was neither measured nor derived this way.
+// The cost of the default (Haiku 5.5 at high since the owner's decision of 2026-11-20, DEF-1; Sonnet 5.5 at medium
+// before) is derived from the measured token counts; no cost of a model is stated that was neither measured nor derived
+// this way.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { MODELS } from '../../src/strategist/strategist.ts'
+import type Anthropic from '@anthropic-ai/sdk'
+import { MODELS, usd } from '../../src/strategist/strategist.ts'
 import { SYSTEM_PROMPT } from '../../src/strategist/prompt.ts'
-import { DEFAULT_SETTINGS } from '../../src/store/settings.ts'
+import { DEFAULT_AI, DEFAULT_SETTINGS } from '../../src/store/settings.ts'
 
 const ROOT = new URL('../../', import.meta.url)
 const raw = (f: string) => readFileSync(new URL(f, ROOT), 'utf8')
@@ -61,13 +63,14 @@ const stated = (f: string) => {
   return out
 }
 
-test('DOCS-4 the default the sentence names is the default of the code: Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours', () => {
-  assert.match(raw('src/config.ts'), /model: process\.env\.AGENT_MODEL\?\.trim\(\) \|\| 'claude-sonnet-5-5'/)
-  assert.match(raw('src/strategist/strategist.ts'), /process\.env\.AGENT_MODEL_EFFORT \?\? 'medium'/)
-  assert.equal(MODELS['claude-sonnet-5-5']!.label, 'Sonnet 5.5')
+test('DOCS-4 the default the sentence names is the default of the code: Haiku 5.5 at high, a plan every 2 hours inside 12 active hours', () => {
+  assert.deepEqual(DEFAULT_AI, { model: 'claude-haiku-5-5', effort: 'high' })
+  assert.match(raw('src/config.ts'), /model: process\.env\.AGENT_MODEL\?\.trim\(\) \|\| DEFAULT_AI\.model/)
+  assert.match(raw('src/strategist/strategist.ts'), /process\.env\.AGENT_MODEL_EFFORT \?\? \(named \? 'medium' : DEFAULT_AI\.effort\)/)
+  assert.equal(MODELS[DEFAULT_AI.model]!.label, 'Haiku 5.5')
   for (const f of PLACES) {
     const s = stated(f)
-    assert.match(read(f), /Sonnet 5\.5 at medium/, f)
+    assert.match(read(f), /Haiku 5\.5 at high/, f)
     assert.equal(s.tickHours * 60, DEFAULT_SETTINGS.tickMinutes, f)
     assert.equal(s.hours, activeHours, f)
   }
@@ -82,10 +85,12 @@ test('DOCS-4 the stated size of the rules and the manual is the size of the text
 })
 
 test('DOCS-4 the stated cost of a plan at the defaults is what its input costs at the list price, plus a short answer', () => {
-  const input = (planInputTokens * MODELS['claude-sonnet-5-5']!.price[0]) / 1e6
+  // Priced as the code books it (usd): Haiku 5.5's card for a prompt over 100,000 tokens, which a plan's is. Its answer
+  // at high effort is about 16,300 tokens (src/strategist/strategist.ts, roomFor), about $0.04 at that card.
+  const input = usd(DEFAULT_AI.model, { input_tokens: planInputTokens, output_tokens: 0, cache_read_input_tokens: 0, cache_creation_input_tokens: 0, iterations: null } as unknown as Anthropic.Beta.BetaUsage)
   for (const f of PLACES) {
     const { perPlan } = stated(f)
-    assert.ok(input <= perPlan, `${f}: a lone plan reads about ${planInputTokens} tokens, $${input.toFixed(3)} on Sonnet 5.5 before the answer; the page says about $${perPlan}`)
+    assert.ok(input <= perPlan, `${f}: a lone plan reads about ${planInputTokens} tokens, $${input.toFixed(3)} on ${MODELS[DEFAULT_AI.model]!.label} before the answer; the page says about $${perPlan}`)
     assert.ok(perPlan - input <= 0.05, `${f}: $${perPlan} a plan is more than the input ($${input.toFixed(3)}) and a short answer`)
   }
 })
@@ -116,6 +121,7 @@ test('DOCS-4 no page keeps the old cost or a cost per agent that was not measure
   for (const f of [...PLACES, 'install.sh']) {
     const text = read(f)
     assert.doesNotMatch(text, /About \$1 a day for a single agent/i, f)
+    assert.doesNotMatch(text, /About \$1\.50 a day for a single agent/i, `${f}: the cost of Sonnet 5.5 at medium, the default before 2026-11-20`)
     assert.doesNotMatch(text, /about \$0\.40 a day/, `${f}: three or more agents at $0.40 a day each was never measured on today's manual`)
     assert.doesNotMatch(text, /\$20\. Then it can never cost more/, f)
   }
@@ -135,12 +141,13 @@ test('DOCS-4 the monthly limit the pages suggest at Anthropic lasts a month of a
   }
 })
 
-test('DOCS-4 the first credit the pages suggest is said for what it is: about a week of a default agent', () => {
+test('DOCS-4 the first credit the pages suggest is said for what it is: about two weeks of a default agent', () => {
+  // About a week at Sonnet 5.5 at medium, the default before 2026-11-20 (DEF-1); about two weeks at Haiku 5.5 at high.
   const perDay = stated('site/src/content/docs/help/costs.md').perDay
   for (const f of ['site/src/content/docs/start/keys.mdx', 'INSTALL.md', 'src/web/dashboard.html']) {
     const credit = num(/add credit\. \$(\d+) /i, read(f), `${f}: the first credit`)
     const days = credit / perDay
-    assert.ok(days >= 6 && days <= 8, `${f}: $${credit} is ${days.toFixed(1)} days at $${perDay} a day`)
-    assert.match(read(f), /add credit\. \$\d+ (is enough to start: it )?(runs|lasts) a single agent at the defaults (for )?about a week/i, f)
+    assert.ok(days >= 12 && days <= 17, `${f}: $${credit} is ${days.toFixed(1)} days at $${perDay} a day`)
+    assert.match(read(f), /add credit\. \$\d+ (is enough to start: it )?(runs|lasts) a single agent at the defaults (for )?about two weeks/i, f)
   }
 })

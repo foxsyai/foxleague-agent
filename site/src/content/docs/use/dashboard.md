@@ -47,14 +47,15 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   higher of its spot price and its two-day median, so a sudden dip never makes a payment look cheaper.
 - **Spent today**: what all agents spent this game day (it resets at 14:00 UTC, like the game's own daily limits).
 - **Strategist**: the AI model and effort for every agent that has no model or effort of its own, from four models:
-  Haiku 5.5, Sonnet 5.5, Opus 5.5 and Fable 5.2. Below it, how many agents use their own. Sonnet 5.5 is the default and plays well; Haiku 5.5 is the cheapest, for trying things out: how well it
-  plays this game has not been measured yet; Opus 5.5, Fable 5.2 and a higher effort think harder and cost more. A
-  dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
+  Haiku 5.5, Sonnet 5.5, Opus 5.5 and Fable 5.2. Below it, how many agents use their own. Haiku 5.5 at high effort is
+  the default and plays well at the lowest cost. Sonnet 5.5 plans more carefully and acts less; Opus 5.5 is the most
+  active and costs the most of the three. Fable 5.2, the most capable, costs more still. A higher effort thinks harder
+  and costs more. A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
   one click. A switch that starts shadow plans asks for the password too
   ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
   soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
   not ready. Without the AI key the box is greyed out: it shows the model and effort the agents start on once the
-  key is set (Sonnet 5.5 at medium on a new install), and the level's recommended AI is shown next to the level.
+  key is set (Haiku 5.5 at high on a new install), and the level's recommended AI is shown next to the level.
   Under it, **When FoxLeague changes its rules**: **tell me only** (the default) or **also pause the actions whose
   rules changed until the agents are synced**; while a pause holds something, the line under it names the actions.
   Pausing is one click; going back to tell me only asks for your password

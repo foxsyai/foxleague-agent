@@ -60,9 +60,10 @@ Guardian off there just for FoxLeague ([Which wallet to give an agent](/use/impo
 
 ### Which AI model should I pick?
 
-Sonnet 5.5 is the default and plays well. Haiku 5.5 is the cheapest, for trying things out: how well it plays this
-game has not been measured yet. Opus 5.5 and Fable 5.2 think harder and cost more; higher effort means more thinking
-per plan. You can change it any time in the Strategist box; a dearer model or a higher effort asks for your password.
+Haiku 5.5 at high effort is the default and plays well at the lowest cost. Sonnet 5.5 plans more carefully and acts
+less; Opus 5.5 is the most active and costs the most of the three. Fable 5.2, the most capable, costs more still.
+Higher effort means more thinking per plan. You can change it any time in the Strategist box; a dearer model or a
+higher effort asks for your password.
 
 ### What if the AI makes a bad decision?
 

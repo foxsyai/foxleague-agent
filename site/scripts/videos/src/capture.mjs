@@ -111,7 +111,7 @@ async function dashboard({ later }) {
   else delete process.env.ANTHROPIC_API_KEY
   const cfg = {
     mnemonic: Mnemonic.generate().toString(), dataDir: dir, gatewayUrl: 'http://127.0.0.1:9', apiUrl: 'http://127.0.0.1:9', foxleagueUrl: 'http://127.0.0.1:9',
-    gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: process.env.ANTHROPIC_API_KEY, model: 'claude-sonnet-5-5', // src/config.ts: the default when AGENT_MODEL is not set
+    gatewayRps: 5, apiRps: 1, foxleagueRps: 5, anthropicApiKey: process.env.ANTHROPIC_API_KEY, model: 'claude-haiku-5-5', // src/config.ts: the default when AGENT_MODEL is not set (DEFAULT_AI)
     telegramToken: undefined, telegramChatId: undefined, isServer: false, defaultDryRun: true, maxAgents: 5,
   }
   const svc = new Service(cfg)

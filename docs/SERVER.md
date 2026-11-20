@@ -41,6 +41,11 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
   localhost, at an address written as numbers and at `WEB_UI_HOST`, so a website cannot point its own name at it
   (behind nginx the `server_name` does that).
 - `MVX_GATEWAY_URL`: a private MultiversX observing squad if you run one; the public gateway otherwise.
+- `AGENT_MODEL` and `AGENT_MODEL_EFFORT`: the AI the agents play until a model is picked in the dashboard's Strategist
+  box. Without them Haiku 5.5 at high effort, the default of a new install; an install that set neither and picked
+  nothing in the dashboard moves to it from Sonnet 5.5 at medium with this version, which lowers what it spends. A
+  model named here without an effort plays at medium, as before, so an update raises no effort. Once a model is picked
+  in the Strategist box, the box wins over both, and an agent's own model and effort win over the box.
 
 ## Dashboard behind nginx
 

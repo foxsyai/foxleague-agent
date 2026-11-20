@@ -137,7 +137,7 @@ afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a
 | Silver amounts (FOXSY) | 1,000, 1,500 | + 2,000, 2,500 | + 3,000, 3,500 | + 4,000, 4,500 | + 4,999 | as beast |
 | Gold amounts (FOXSY) | none (no Gold) | 5,000 | 5,000, 7,500 | up to 10,000 | up to 20,000 | up to 25,000 |
 | Tick | 120 min | 120 min | 90 min | 90 min | 75 min | 60 min |
-| Recommended AI | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high | Opus 5.5, high |
+| Recommended AI | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high |
 
 The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the Bronze amounts (100, 250 and 500), the active hours (08:00 to 20:00
 UTC), a random shift of up to 10 minutes either way, actions at least 30 seconds apart.
@@ -150,8 +150,10 @@ How the limits are sized: the daily cap covers the largest entry the level allow
 FOXSY is about $13.50, a beast's of 20,000 about $54) and a busy day of its buying (entries, ranked tickets, syncs,
 recovery, its paid sessions, booster and pack), the monthly budget is close to 30 days of typical play at that level,
 and the top-up warning comes when about two days of play at the daily cap are left. The AI is one setting for every
-agent; a level that plans twice as often costs about twice as much in AI calls. [What it costs](/help/costs/) gives
-the cost of a plan, also as measured on Opus 5.5 at high effort.
+agent; a level that plans twice as often costs about twice as much in AI calls. Every level recommends the AI a new
+install starts on, Haiku 5.5 at high effort; Sonnet 5.5 plans more carefully and acts less, Opus 5.5 is the most
+active and costs the most of the three. [What it costs](/help/costs/) gives the cost of a plan at the defaults and as
+measured on Opus 5.5 at high effort.
 
 A bid also needs a daily cap above its value, and each level's daily cap fits its max bid: a predator's 14,000 FOXSY
 is about $38 of its $50, Zeus's 38,000 about $103 of its $150.

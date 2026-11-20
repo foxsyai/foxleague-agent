@@ -1273,7 +1273,7 @@ const TIPS = {
   k_spent: ['Spent today', `<p>What all agents spent this game day, in USD. The game day resets at 14:00 UTC, like the game's own daily limits.</p>
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent without its own and how hard it thinks (effort). An agent can have its own model and effort in its Settings (AI); the line below says how many do. The manager chat and /ask use this one.</p>
-    <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> is the cheapest, for trying things out: how well it plays this game has not been measured yet. <b>Sonnet 5.5</b> is the default and handles this game well. <b>Opus 5.5</b> is stronger and costs about 2x as much; <b>Fable 5.2</b>, the most capable, about 4x.</p>
+    <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> at high effort is the default and plays well at the lowest cost. <b>Sonnet 5.5</b> plans more carefully and acts less; <b>Opus 5.5</b> is the most active and costs the most of the three. <b>Fable 5.2</b>, the most capable, costs more still.</p>
     <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
     <p>Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set. You can change them from then on.</p>
@@ -1776,12 +1776,12 @@ const GUIDE = [
     intro: 'The AI that plans for your agents. Without it they only watch and never play.',
     steps: [
       ['Open the Anthropic console and sign up, or log in if you have an account.', 'https://platform.claude.com'],
-      ['Open Billing and add credit. $10 runs a single agent at the defaults for about a week.', 'https://platform.claude.com/settings/billing'],
+      ['Open Billing and add credit. $10 runs a single agent at the defaults for about two weeks.', 'https://platform.claude.com/settings/billing'],
       ['Open Limits and set a monthly spend limit, for example $60: a month of a single agent at the defaults with room to spare. Then it can never cost more than that.', 'https://platform.claude.com/settings/limits'],
       ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $1.50 a day for a single agent with the default model, effort and tick (Sonnet 5.5 at medium, a plan every 2 hours inside 12 active hours, about $0.25 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
+    note: 'About $0.60 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 12 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
