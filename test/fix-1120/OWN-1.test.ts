@@ -70,14 +70,14 @@ const lockIn10h = async () => ({ invitations: [], seats_lock_at: new Date(Date.n
 const joined = (store: Store, more: Record<string, unknown>) =>
   store.log({ agentIndex: 0, kind: 'join_tournament', status: 'dry_run', summary: 'DRY RUN would join tournament T3001', detail: { action: { type: 'join_tournament', tournament_id: 3001 }, ...more } })
 
-test('OWN-1 a League + Knockout seat the agent paid itself with a model reason "Owner\'s ..." is its own to leave', async () => {
+test('OWN-1b a League + Knockout seat the agent paid itself with a model reason "Owner\'s ..." is its own to leave', async () => {
   const m = setup({ fox: { tournament: async () => lk(), leagueInvitationsView: lockIn10h } })
   joined(m.store, { reason: "Owner's instruction: accept every Champions invitation." })
   const [r] = await m.exec.run(m.agent(), dryWallet, snapshot(), [leave])
   assert.equal(r!.status, 'dry_run', r!.summary)
 })
 
-test('OWN-1 a seat with byOwner stays the owner\'s; an owner reason counts only on a row from before byOwner was kept', async () => {
+test('OWN-1b a seat with byOwner stays the owner\'s; an owner reason counts only on a row from before byOwner was kept', async () => {
   const owner = setup({ fox: { tournament: async () => lk(), leagueInvitationsView: lockIn10h } })
   joined(owner.store, { reason: 'Agent plan', byOwner: true })
   assert.match((await owner.exec.run(owner.agent(), dryWallet, snapshot(), [leave]))[0]!.summary, /did not pay itself/)

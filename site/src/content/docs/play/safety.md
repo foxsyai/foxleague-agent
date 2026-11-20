@@ -20,8 +20,9 @@ not go through does not use up the setup budget for the next try.
 It also signs nothing while the MultiversX network is not producing blocks. Before every payment, and once more right
 before its signature, it checks that the network's newest blocks are under a minute old (a block normally comes about
 every second). When they are not, or when that cannot be read, nothing is booked or signed: the action is refused with
-the time of the last block, and the next plan tries again. What needs no payment goes on: lineups, training and casual
-games.
+the time of the last block, and the next plan tries again. Right before a signature a reading that failed is asked once
+more a few seconds later, so one short blip of the gateway does not stop a payment halfway; a block that is too old is
+never asked again. What needs no payment goes on: lineups, training and casual games.
 
 ## The AI never holds your keys
 
