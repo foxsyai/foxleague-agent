@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { winChance } from '../snapshot/winchance.ts'
 import { Address, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
-import { BroadcastRefused, METACHAIN, chainHalt, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
+import { BroadcastRefused, HALT_REREAD_MS, METACHAIN, chainHalt, chainHaltCheck, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { FusionPrepared, Tournament, TournamentDetail } from '../foxleague/types.ts'
@@ -925,11 +925,24 @@ export class Executor {
 
   /**
    * HALT, right before a signature: a chain that stopped since the check before the booking throws ChainHalted, and the
-   * caller's catch releases the booking (nothing was signed, AGENTS.md rule 3).
+   * caller's catch releases the booking (nothing was signed, AGENTS.md rule 3). A status that could not be read is asked
+   * once more after HALT_REREAD_MS (R80A-1): the seat after an organizer payment is signed up to a minute after it, and
+   * one gateway blip there left a created tournament without its seat. Never more than once, and never a stale block
+   * (a halt): unknown still refuses, a little later.
    */
   private async assertChainLive(wallet: AgentWallet): Promise<void> {
-    const why = await this.haltReason(wallet)
-    if (why) throw new ChainHalted(why)
+    const shards = [...SIGNING_SHARDS, wallet.shard]
+    let why = await chainHaltCheck(this.d.chain, shards)
+    if (why?.unread) {
+      await this.haltPause(HALT_REREAD_MS)
+      why = await chainHaltCheck(this.d.chain, shards)
+    }
+    if (why) throw new ChainHalted(why.text)
+  }
+
+  /** The pause before the chain's status is read once more (a method, so a test can take it without the wait). */
+  private haltPause(ms: number): Promise<void> {
+    return sleep(ms)
   }
 
   /**

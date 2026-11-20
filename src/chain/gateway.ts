@@ -134,6 +134,22 @@ function span(ms: number): string {
  * threshold: then the clock or the answer is wrong, and a halt cannot be told. The next plan tries again.
  */
 export async function chainHalt(chain: Pick<Chain, 'newestBlockMs'>, shards: number[], now: () => number = Date.now): Promise<string | null> {
+  return (await chainHaltCheck(chain, shards, now))?.text ?? null
+}
+
+/**
+ * How long the check right before a signature waits before it reads a status that could not be read once more (R80A-1):
+ * longer than a read's own retry (half a second), so a gateway blip of a few seconds passes, and short enough that the
+ * check still refuses within a minute when the gateway stays down (two reads of at most 10 s a try each, and this).
+ */
+export const HALT_REREAD_MS = 5_000
+
+/**
+ * chainHalt with what kind of refusal it is: `unread` when a shard's block time could not be read (a gateway that did
+ * not answer, which the check right before a signature asks once more, R80A-1), not when a block is too old or dated
+ * ahead (a halt, or a clock that is wrong: never asked again).
+ */
+export async function chainHaltCheck(chain: Pick<Chain, 'newestBlockMs'>, shards: number[], now: () => number = Date.now): Promise<{ unread: boolean; text: string } | null> {
   const reads = await Promise.all(
     [...new Set(shards)].map(async shard => {
       try {
@@ -147,11 +163,11 @@ export async function chainHalt(chain: Pick<Chain, 'newestBlockMs'>, shards: num
   )
   const t = now()
   for (const r of reads) {
-    if ('err' in r) return `whether the MultiversX network is producing blocks could not be read (${shardName(r.shard)}: ${r.err}): nothing is signed, the next plan tries again`
+    if ('err' in r) return { unread: true, text: `whether the MultiversX network is producing blocks could not be read (${shardName(r.shard)}: ${r.err}): nothing is signed, the next plan tries again` }
   }
   for (const r of reads as { shard: number; at: number }[]) {
-    if (r.at - t > BLOCK_STALE_MS) return `the newest MultiversX block of ${shardName(r.shard)} is dated ${utc(r.at)}, ahead of this computer's clock (${utc(t)}) by more than ${BLOCK_STALE_MS / 1000} s: whether the network is producing blocks cannot be told, so nothing is signed (check the computer's clock); the next plan tries again`
-    if (t - r.at > BLOCK_STALE_MS) return `the MultiversX network has produced no block since ${utc(r.at)} (${shardName(r.shard)}, ${span(t - r.at)} ago): nothing is signed, the next plan tries again`
+    if (r.at - t > BLOCK_STALE_MS) return { unread: false, text: `the newest MultiversX block of ${shardName(r.shard)} is dated ${utc(r.at)}, ahead of this computer's clock (${utc(t)}) by more than ${BLOCK_STALE_MS / 1000} s: whether the network is producing blocks cannot be told, so nothing is signed (check the computer's clock); the next plan tries again` }
+    if (t - r.at > BLOCK_STALE_MS) return { unread: false, text: `the MultiversX network has produced no block since ${utc(r.at)} (${shardName(r.shard)}, ${span(t - r.at)} ago): nothing is signed, the next plan tries again` }
   }
   return null
 }
