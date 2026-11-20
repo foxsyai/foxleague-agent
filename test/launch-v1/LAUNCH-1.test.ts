@@ -38,3 +38,9 @@ test('LAUNCH-1 the site\'s GitHub icon opens the repository and the README no lo
   assert.doesNotMatch(readme, /internal testing/)
   assert.match(readme, /^Status: released\./m)
 })
+
+// Moved here from PR #86 (its review, R86A-1): the answer says the code is public, so it goes live with the launch.
+test('LAUNCH-1 the site answers "Is it open source?" with the license and the repository', () => {
+  const faq = read('site/src/content/docs/help/faq.md').replace(/\s+/g, ' ')
+  assert.match(faq, /### Is it open source\? Yes: the code is public on GitHub \(\[foxsyai\/foxleague-agent\]\(https:\/\/github\.com\/foxsyai\/foxleague-agent\)\) under the Apache License 2\.0, copyright Foxsy AI\./)
+})
