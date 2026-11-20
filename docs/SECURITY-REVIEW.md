@@ -1772,8 +1772,8 @@ Stays open:
 - The first install has no earlier version to check a signature with: it trusts GitHub over https and the release's
   checksum, as the install line itself does. `get.sh` does not pass `--proto '=https'` to curl for its GitHub
   downloads, and the tag ruleset on `v*` (only maintainers, no moving or deleting) is still to be asked of GitHub.
-- `RELEASE_KEYS` in `src/update/keys.ts` is empty until the owner makes the key: until a release pins it, no agent
-  offers or takes an update from its dashboard.
+- `RELEASE_KEYS` in `src/update/keys.ts` was empty until the owner made the key (since then: pinned on 2026-11-20,
+  in a section of its own): until a release pins it, no agent offers or takes an update from its dashboard.
 - Nobody has run the installer or the update on macOS or on Windows (WSL2) yet (since then: the Mac check of
   2026-11-12 and the Windows real-PC check of 2026-11-13, each in a section of its own; the replay also runs on
   Ubuntu 26.04 since W-9). The fresh install was replayed on
@@ -3129,6 +3129,23 @@ empty lines were right) and passes now. The second review found two more of the 
 Stays open:
 - The quote check itself still matches an empty quote anywhere; the test above holds the hints instead.
 - Production was not read for this pull request and nothing was deployed: the site is published after the merge.
+
+## The owner's release key (2026-11-20)
+
+Before the public release the owner made the release key on their own computer with `node scripts/release/release.ts
+keygen` and a passphrase only they know. The private half is in `~/.config/foxleague-agent/release-key.pem` on that
+computer (the guide asks for one offline backup); it was never shown to this session, to GitHub or to a server. The public half the tool
+printed is pinned in `src/update/keys.ts`. The test `test/release-key/KEY-1.test.ts` failed on 176c6b4 (no key pinned)
+and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| KEY-1 | launch (the owner, 2026-11-20) | `RELEASE_KEYS` was empty: an agent built from this tree refused every in-app update (fail closed). The release tool refuses to build a release whose tag pins no key, so no release could be signed | The owner's Ed25519 public key is the one entry of `RELEASE_KEYS`. The test holds exactly one Ed25519 public key, the same one the release tool reads from the file. No private key is in it |
+
+Stays open:
+- The key reaches installed agents with the first release that pins it (v1.0.0): an install of an earlier internal
+  version has no key and takes no update from its dashboard; it updates by pasting the install line again.
+- Rotating the key follows `docs/RELEASING.md` ("Rotating the key"): the new key goes in a release signed with this one.
 
 ## One manager message at a time (2026-11-13)
 
