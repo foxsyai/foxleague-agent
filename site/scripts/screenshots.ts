@@ -137,9 +137,14 @@ await send('Page.navigate', { url: `${base}/` })
 await sleep(3000)
 
 await shot('dashboard')
-await js(`document.getElementById('settingsForm').scrollIntoView({block: 'end'})`)
-await sleep(600)
+// The agent page from its top in a taller window, so its plan, its budget and its settings are in one picture (the page's
+// caption); the window is set back for the shots after it (review of PR #83).
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1700, deviceScaleFactor: 1, mobile: false })
+await js(`window.scrollTo(0, 0)`)
+await sleep(800)
 await shot('agent-page')
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+await sleep(400)
 await js(`window.scrollTo(0, 0); S.instance.setup.welcomeHidden = false; showGuide(true, 'ai')`)
 await sleep(800)
 await shot('getting-started')
