@@ -153,8 +153,8 @@ export function strategistChoice(store: Store, cfg: Config, say?: (text: string)
     if (!say) movedSaid.add(cfg.model)
     tell(moved(cfg.model, ` (AGENT_MODEL in the env file still names ${cfg.model})`))
   }
-  const named = (picked !== undefined && isKnownModel(picked)) || Boolean(process.env.AGENT_MODEL?.trim()) || cfg.model !== DEFAULT_AI.model
-  const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? (named ? 'medium' : DEFAULT_AI.effort)
+  const modelNamed = (picked !== undefined && isKnownModel(picked)) || Boolean(process.env.AGENT_MODEL?.trim()) || cfg.model !== DEFAULT_AI.model
+  const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? (modelNamed ? 'medium' : DEFAULT_AI.effort)
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
 }
 

@@ -66,7 +66,7 @@ const stated = (f: string) => {
 test('DOCS-4 the default the sentence names is the default of the code: Haiku 5.5 at high, a plan every 2 hours inside 12 active hours', () => {
   assert.deepEqual(DEFAULT_AI, { model: 'claude-haiku-5-5', effort: 'high' })
   assert.match(raw('src/config.ts'), /model: process\.env\.AGENT_MODEL\?\.trim\(\) \|\| DEFAULT_AI\.model/)
-  assert.match(raw('src/strategist/strategist.ts'), /process\.env\.AGENT_MODEL_EFFORT \?\? \(named \? 'medium' : DEFAULT_AI\.effort\)/)
+  assert.match(raw('src/strategist/strategist.ts'), /process\.env\.AGENT_MODEL_EFFORT \?\? \(modelNamed \? 'medium' : DEFAULT_AI\.effort\)/)
   assert.equal(MODELS[DEFAULT_AI.model]!.label, 'Haiku 5.5')
   for (const f of PLACES) {
     const s = stated(f)
