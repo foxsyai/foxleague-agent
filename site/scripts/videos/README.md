@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit ae5421e (2026-11-20): 132 quoted lines, 0 changed.
+Checked against commit cf14179 (2026-11-20): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
@@ -181,9 +181,7 @@ Checked against commit ae5421e (2026-11-20): 132 quoted lines, 0 changed.
 | windows | `get.ps1:883` | Windows 2/6: WSL, the part of Windows that runs Linux | ok |
 | windows | `get.ps1:884` | Asking Windows about WSL (this can take a minute). | ok |
 | windows | `get.ps1:886` | WSL 2 is installed. | ok |
-| windows | `get.ps1:919` | Ready? (Enter means yes, n means no): | ok |
 | windows | `get.ps1:942` | Windows 3/6: Ubuntu, the Linux the agent runs in | ok |
-| windows | `get.ps1:945` | Ubuntu is installed and has a user of its own. | ok |
 | windows | `get.ps1:961` | Ubuntu is not installed yet. It is downloaded now with Microsoft's own command: wsl --install -d Ubuntu | ok |
 | windows | `get.ps1:964` | - The download can look stuck at 0%. A click into this window pauses it (Windows then selects text): | ok |
 | windows | `get.ps1:965` | press Enter once and it goes on. | ok |
@@ -195,7 +193,9 @@ Checked against commit ae5421e (2026-11-20): 132 quoted lines, 0 changed.
 | windows | `get.ps1:971` | - Ubuntu may also ask "Help improve Ubuntu!" (Y/n/e): either answer is fine for the agent. | ok |
 | windows | `get.ps1:972` | - When Ubuntu then shows its own prompt (a line that ends with $), type  exit  and press Enter | ok |
 | windows | `get.ps1:973` | to come back to this installer. | ok |
+| windows | `get.ps1:977` | Ready? (Enter means yes, n means no): | ok |
 | windows | `get.ps1:980` | When Ubuntu shows a line that ends with $, type  exit  and press Enter to come back here. | ok |
+| windows | `get.ps1:993` | Ubuntu is installed and has a user of its own. | ok |
 | windows | `get.ps1:1042` | Windows 4/6: Ubuntu's settings (systemd, curl) | ok |
 | windows | `get.ps1:1053` | systemd is already turned on in /etc/wsl.conf. | ok |
 | windows | `get.ps1:1090` | systemd runs in Ubuntu. | ok |
@@ -233,9 +233,6 @@ Checked against commit ae5421e (2026-11-20): 132 quoted lines, 0 changed.
 | windows, mac, linux | `get.sh:259` | Starting the installer | ok |
 | windows, mac, linux | `install.sh:235` | Downloading Node.js v22.22.0 (a private copy, nothing is installed system-wide) | ok |
 | windows, mac, linux | `install.sh:270` | Node.js v22.22.0 at /home/ana/foxleague-agent/.node/bin/node / Node.js v22.22.0 at /Users/ana/foxleague-agent/.node/bin/node | ok |
-| windows, mac, linux | `install.sh:507` | (empty line) | ok |
-| windows, mac, linux | `install.sh:516` | (empty line) | ok |
-| windows, mac, linux | `install.sh:518` | (empty line) | ok |
 | windows, mac, linux | `install.sh:745` | Removing the background service | ok |
 | windows, mac, linux | `install.sh:759` | Stopped. Your folder, your wallet words (.env), your data and your PEM files are untouched. | ok |
 | windows, mac, linux | `install.sh:766` | The agent wallets may still hold funds. Keep the recovery words; delete the folder | ok |
@@ -247,8 +244,11 @@ Checked against commit ae5421e (2026-11-20): 132 quoted lines, 0 changed.
 | windows, mac, linux | `install.sh:858` | Nothing is shared with anyone: your wallet words and keys stay in this folder. | ok |
 | windows, mac, linux | `install.sh:872` | 1/7 Node.js and dependencies | ok |
 | windows, mac, linux | `install.sh:880` | 2/7 Your wallet | ok |
+| windows, mac, linux | `install.sh:889` | (empty line) | ok |
 | windows, mac, linux | `install.sh:892` | A new wallet was created. Its recovery words are the ONLY way to get your funds back. | ok |
 | windows, mac, linux | `install.sh:897` | Write them down on paper now. Never type them into a website, a chat or a screenshot. | ok |
+| windows, mac, linux | `install.sh:898` | (empty line) | ok |
+| windows, mac, linux | `install.sh:900` | (empty line) | ok |
 | windows, mac, linux | `install.sh:905` | Type yes when the words are written down: | ok |
 | windows, mac, linux | `install.sh:914` | Good. The words stay in /home/ana/foxleague-agent/.env (readable only by you). / Good. The words stay in /Users/ana/foxleague-agent/.env (readable only by you). | ok |
 | windows, mac, linux | `install.sh:915` | To see them again later: cd /home/ana/foxleague-agent && ./cli.sh backup-words / To see them again later: cd /Users/ana/foxleague-agent && ./cli.sh backup-words | ok |

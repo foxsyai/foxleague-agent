@@ -66,13 +66,13 @@ export function texts(os) {
       ...say(880, '2/7 Your wallet'),
       [cli(124, 'New recovery words written to ${envFile} (mode 600).')],
       [cli(125, ['Agent 1 address: ', V(VALUES.address, 'addr')])],
-      info(507, ''),
+      info(889, ''),
       info(892, 'A new wallet was created. Its recovery words are the ONLY way to get your funds back.'),
       info(897, 'Write them down on paper now. Never type them into a website, a chat or a screenshot.'),
-      info(516, ''),
+      info(898, ''),
       // src/cli.ts:146 prints each word as "NN. word". Here: word1 ... word24, never real words.
       ...VALUES.words.map((w, i) => [seg(`${String(i + 1).padStart(2)}. ${w}`, null, i === 0 ? { f: 'src/cli.ts', l: 146, frags: ['${String(i + 1).padStart(2)}. ${w}'] } : null)]),
-      info(518, ''),
+      info(900, ''),
     ],
     wordsPrompt: () => ask(905, 'Type yes when the words are written down'),
     afterYes: () => [
@@ -192,7 +192,7 @@ export function texts(os) {
         psLine(972, '- When Ubuntu then shows its own prompt (a line that ends with $), type  exit  and press Enter'),
         psLine(973, '  to come back to this installer.'),
       ],
-      ready: () => [V('  '), ps(919, 'Ready?'), V(' '), ps(99, '(Enter means yes, n means no)'), V(': ')],
+      ready: () => [V('  '), ps(977, 'Ready?'), V(' '), ps(99, '(Enter means yes, n means no)'), V(': ')],
       exitNote: () => [[V('  ', 'y'), ps(980, 'When Ubuntu shows a line that ends with $, type  exit  and press Enter to come back here.', 'y')]],
       // WSL's and Ubuntu's own lines (not in the repository): as the real PC printed them (Microsoft Store WSL
       // 3.0.1.0, Ubuntu 26.04), with the example user. After the password: "usermod: no changes", no sudo hint.
@@ -213,7 +213,7 @@ export function texts(os) {
       ],
       // Ubuntu's shell starts in the Windows folder the PowerShell window was in (C:\Users\ana).
       ubuntuPrompt: () => prompt(`/mnt/c/Users/${user}`),
-      ubuntuReady: () => [psLine(945, 'Ubuntu is installed and has a user of its own.')],
+      ubuntuReady: () => [psLine(993, 'Ubuntu is installed and has a user of its own.')],
       settings: () => [
         ...psStep(1042, "Windows 4/6: Ubuntu's settings (systemd, curl)"),
         psLine(1053, 'systemd is already turned on in /etc/wsl.conf.'),

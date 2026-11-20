@@ -218,3 +218,21 @@ test('R71A-1 the record has its row, in a section of its own before the last one
   assert.ok(section.includes('\nStays open:\n'))
   assert.doesNotMatch(section, /—|, and |\bbots?\b/i)
 })
+
+// Review of PR #83 (R83A-1, low): the quote check finds a line by its text, so an empty quote matched any line and a
+// text that stands twice matched the occurrence nearest an old number. The hints are for people: they must name the
+// line the video shows.
+test('R83A-1 every line hint names the line the video shows: an empty line is an info "" of install.sh, a text that stands twice is the branch the video plays', async () => {
+  const { quotedLines } = await script('quotes.mjs')
+  const { quoted }: { quoted: Quote[] } = quotedLines()
+  const lineOf = (q: Quote) => read(q.f).split('\n')[q.l - 1] ?? ''
+  // Each hint stands on a line that holds its text (none merely "moved").
+  for (const q of quoted) assert.ok(q.frags.every(fr => lineOf(q).includes(fr) || lineOf(q).includes(fr.replaceAll("'", "''"))), `${q.f}:${q.l} holds ${JSON.stringify(q.frags)}`)
+  const empty = quoted.filter(q => q.frags.every(fr => fr.trim() === ''))
+  assert.ok(empty.length >= 3, 'the empty lines around the recovery words are quoted')
+  for (const q of empty) assert.match(lineOf(q), /^\s*info ""\s*$/, `${q.f}:${q.l} is an empty line the installer prints`)
+  // get.ps1 asks "Ready?" and says Ubuntu is installed in two branches; the video plays the Ubuntu install.
+  const at = (text: string) => quoted.filter(q => q.f === 'get.ps1' && q.frags.includes(text)).map(lineOf)
+  assert.deepEqual(at('Ready?').map(l => l.includes('Ubuntu was not installed')), [true], 'Ready? is the one before the Ubuntu install')
+  assert.deepEqual(at('Ubuntu is installed and has a user of its own.').map(l => l.includes('return $fresh')), [true], 'the line after the Ubuntu install')
+})
