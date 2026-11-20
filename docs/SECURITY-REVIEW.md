@@ -3151,11 +3151,13 @@ Stays open:
 ## The public release, v1.0.0 (2026-11-23)
 
 The pull request that makes the repository ready to be public, prepared on 2026-11-20 and merged on launch day. It
-does DOCS-11's launch-day items. `test/launch-v1/LAUNCH-1.test.ts` failed on 50942e7 for each of them and passes now.
+does DOCS-11's launch-day items. `test/launch-v1/LAUNCH-1.test.ts` failed on 50942e7 for each of them and passes now. R85A-1
+is the finding of its agent review.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | LAUNCH-1 | launch (the owner, 2026-11-20) | Before the public release the site wrapped the install line in a "Coming soon" frame with a banner on five pages, its GitHub icon opened Foxsy AI's page instead of the repository, the README said "in internal testing" and the version was 0.11.0 | Version 1.0.0 in `package.json` and both places of `package-lock.json`. No banner or frame on any page; the frame's component is gone. The home page, "Run it on a server" and the GitHub icon link the repository. The README says "Status: released". The site's screenshots are taken again for the new version label. The line hints of the install videos follow the pages (0 moved) |
+| R85A-1 | medium (agent review of PR #85; the release process, not a money path) | With the tree at 1.0.0, the fresh install check's first throwaway release, also 1.0.0, wrote its files back unchanged: `git commit` had nothing to commit and the check stopped at its step 2 ("the release could not be built"). The recipe of `docs/WINDOWS-TEST.md` uses the same tool | `mkrel.ts` in `scripts/release/fresh-install-check.sh` commits with `--allow-empty`, so a release of the version the tree has can be tagged. `test/launch-v1/FIC-1.test.ts` runs the tool as the script writes it, without Docker; it failed on 4948c2e ("nothing to commit") and passes now |
 
 Stays open:
 - The release itself follows `docs/RELEASING.md`: this commit runs on the owner's server first, then the tag v1.0.0, the
