@@ -14,12 +14,26 @@ const WEEK_MS = 7 * 86_400_000
  */
 const CREATED_MS = CREATE_START_MAX_MS + 86_400_000
 
+/**
+ * From when every action the owner asks the agent for keeps `byOwner` with its activity row: PR #32 (8ceeb56) was deployed
+ * at 10:24 UTC on 24 Oct 2026, and this is the next midnight, so no row of the owner's after it lacks the flag. Only a
+ * row from before it may be told the owner's by the reason the code wrote ("owner (Telegram /do)"); a row after it never
+ * is, because its reason is the model's text (OWN-1). The rows that read it are 60 days old at most, so this goes by
+ * itself on 24 Dec 2026.
+ */
+export const BY_OWNER_KEPT_FROM_MS = Date.parse('2026-10-25T00:00:00Z')
+
+/** An owner's action from before `byOwner` was kept: told by the reason the code wrote, on such a row only (OWN-1). */
+export function ownerByOldReason(r: ActivityRow, reason: unknown): boolean {
+  return Date.parse(r.at) < BY_OWNER_KEPT_FROM_MS && /^owner\b/i.test(String(reason ?? ''))
+}
+
 /** Activity of the same ledger (dry run or live) the action is judged in. */
 const counted = (dry: boolean, status: string) => (dry ? status === 'dry_run' : status === 'confirmed' || status === 'unconfirmed')
 
-function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown }; sent?: boolean } {
+function detailOf(r: ActivityRow): { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; action?: { tournament_id?: unknown }; sent?: boolean } {
   try {
-    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; reason?: string; action?: { tournament_id?: unknown }; sent?: boolean }
+    return JSON.parse(r.detail ?? '{}') as { opponentUserId?: number; createdTournamentId?: number; byOwner?: boolean; action?: { tournament_id?: unknown }; sent?: boolean }
   } catch {
     return {}
   }
@@ -99,14 +113,18 @@ export function weeklyFreeAt(times: Date[], limit: number): Date | null {
 
 /**
  * The tournaments and 1v1s this agent created itself in the last 31 days (CREATED_MS): the id FoxLeague gave a live create (written
- * by the executor), whatever came after it. One the owner asked for (Telegram /do: byOwner, or an owner reason on a row
- * from before it was kept) or made in FoxLeague is the owner's: the agent never widens its range (agent review of PR #38).
+ * by the executor), whatever came after it. One the owner asked for (Telegram /do: `byOwner`, written by the executor) or
+ * made in FoxLeague is the owner's: the agent never widens its range (agent review of PR #38). The reason is never read:
+ * it is the model's text, and since the owner's strategy has an "Organizer:" line the models write "Owner's organizer
+ * instruction" for the agent's own creates, which then counted as the owner's for good (OWN-1, 19 Nov 2026). No row
+ * needs it: `createdTournamentId` is written since PR #38 (26 Oct) and every path that acts for the owner writes
+ * `byOwner` since PR #32 (24 Oct), before it.
  */
 export function ownCreations(store: Store, agentIndex: number, now: Date): Set<number> {
   const out = new Set<number>()
   for (const r of store.activityOf(agentIndex, ['create_tournament', 'create_challenge'], new Date(now.getTime() - CREATED_MS))) {
     const d = detailOf(r)
-    if (typeof d.createdTournamentId !== 'number' || d.byOwner === true || /^owner\b/i.test(String(d.reason ?? ''))) continue
+    if (typeof d.createdTournamentId !== 'number' || d.byOwner === true) continue
     out.add(d.createdTournamentId)
   }
   return out

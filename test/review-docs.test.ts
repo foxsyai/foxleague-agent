@@ -35,7 +35,7 @@ test('D3 the safety page says which levels create private tournaments (every lev
   const doc = read(`${DOCS}/play/safety.md`)
   assert.doesNotMatch(doc, /never creates a private tournament/)
   assert.match(doc, /every level may create one/)
-  const invite = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
+  const invite = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
   const v = checkAction(parseAction(invite), snapshot(), { settings: TEST_SETTINGS, now: new Date() })
   assert.equal(v.ok, true, `a private tournament is refused: ${v.ok ? "" : v.refusal}`)
 })

@@ -5,7 +5,7 @@
 import { blockingWindow, ceilMinute, clash, firstFreeStart, nextPlanLeadMs } from './slots.ts'
 import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
-import { CREATE_START_MAX_MS, CREATE_START_MIN_MS, FORMATION_SLOTS, createStartMs, rangeWords } from './actions.ts'
+import { CREATE_START_MAX_MS, CREATE_START_MIN_MS, FORMATION_SLOTS, ORGANIZER_START_MIN_MS, createStartMs, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
 import type { CanFuse, CanList, FoxConfig, FusionPrepared, MatchWaiverQuote, MedicineQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
@@ -859,6 +859,30 @@ export function paidSessionsToday(t: { used_today: number; daily_free: number })
   return Math.max(0, t.used_today - t.daily_free)
 }
 
+/** The training quota as FoxLeague's shop status serves it. */
+export type TrainingQuota = { daily_free: number; premium_cap: number; used_today: number; premium_used_today: number; slots_banked: number }
+
+/**
+ * Why the game day has no training session left for the agent: the day's free sessions used up and no paid one it may
+ * take (none banked, FoxLeague's paid cap, or the level's paid sessions a day), the refusal only the next game day
+ * lifts; null when a session can run, and when a count could not be read (the train rule refuses that itself, and
+ * unknown is no "used up"). The train rule and the scheduler's wait for the reset (RESET-1) both read it here.
+ */
+export function trainingDayRefusal(t: TrainingQuota, paidPerDay: number): string | null {
+  if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return null
+  if (t.used_today < t.daily_free) return null
+  if (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0) return `daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`
+  if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked)) return null
+  const paidToday = paidSessionsToday(t)
+  if (paidToday >= paidPerDay) return `${paidPerDay} paid training sessions a day at this level, ${paidToday} used today`
+  return null
+}
+
+/** Why the game day has no match start left (FoxLeague's daily starts, casual and ranked together), or null (RESET-1). */
+export function matchDayRefusal(al: { today_count: number; daily_limit: number }): string | null {
+  return al.today_count >= al.daily_limit ? `daily match limit reached (${al.today_count}/${al.daily_limit})` : null
+}
+
 /** The condition a training session costs a card (FoxLeague's `training_condition_loss`, not public), before age. */
 export const TRAINING_CONDITION_LOSS = 5
 
@@ -1145,6 +1169,20 @@ function squadLegal(s: AgentSnapshot, at: Date, what = ''): string | null {
   return null
 }
 
+/**
+ * A card in an auction takes no Shop item of its own (FoxLeague #752, the owner's rule of 14 Nov 2026 there): the
+ * marketplace contract holds it until the auction ends and it may be another manager's then. FoxLeague sells no
+ * Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for it; a payment confirmed for one anyway is
+ * refused and refunded whole (the gas lost), a bulk recovery that names it too, and before #752 it kept the payment.
+ * The players contract waives nothing on a card it holds. A card whose auction state the roster did not give is
+ * unknown, never "in the wallet": refused for these items (SYNC-2, AGENTS.md rule 4).
+ */
+function inAuctionRefusal(p: PlayerView): string | null {
+  if (p.listed === false) return null
+  if (p.listed === true) return `card #${p.nonce} is in an auction (listed for sale): FoxLeague sells no Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for it until the auction ends`
+  return `whether card #${p.nonce} is in an auction could not be read: nothing is bought for it blind`
+}
+
 /** An eleven and bench for `formation`: cards in the wallet, free to play, each starter in a slot of its position. */
 function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], substitutes: number[], minCondition: number, now: Date): Verdict {
   const all = [...lineup, ...substitutes]
@@ -1241,10 +1279,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // Numbers it cannot read are no count (EDGE-3, R55A-3).
       if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse('training quota unknown (the sessions used today or the free ones could not be read)')
       const paid = t.used_today >= t.daily_free
-      if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
+      // Used up for the game day (the scheduler holds such a session for the reset by the same reading, RESET-1).
+      const dayDone = trainingDayRefusal(t, ctx.settings.paidTrainingPerDay)
+      if (dayDone) return refuse(dayDone)
       if (paid && (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked))) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
-      const paidToday = paidSessionsToday(t)
-      if (paid && paidToday >= ctx.settings.paidTrainingPerDay) return refuse(`${ctx.settings.paidTrainingPerDay} paid training sessions a day at this level, ${paidToday} used today`)
       // The team unread: the card may be a starter (R54A-5).
       if (!s.team || s.team.lineup.includes(p.nonce)) {
         const waits = waitingOpenRefusal(s, ctx, 'training', s.team?.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
@@ -1281,7 +1319,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!s.team) return refuse(TEAM_UNREADABLE)
       const al = s.auth?.allowance
       if (!al) return refuse('daily allowance unknown')
-      if (al.today_count >= al.daily_limit) return refuse(`daily match limit reached (${al.today_count}/${al.daily_limit})`)
+      const startsDone = matchDayRefusal(al)
+      if (startsDone) return refuse(startsDone)
       if (s.auth?.activeMatch) return refuse(`already in match #${s.auth.activeMatch.match_id ?? s.auth.activeMatch.tournament_match_id ?? '?'}`)
       const busy = tournamentMatchWithinHour(s, ctx.now)
       if (busy) return refuse(s.auth?.upcoming ? `pre-match lockout: ${busy}` : `${busy} (the pre-match lockout is unknown): no match started blind`)
@@ -1542,16 +1581,26 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // (R74A-1): the 2-hour floor of this moment would be about an hour ahead by then. The next plan reads the refusal
       // cut to 300 characters after the action's description (a title of up to 60): the start comes first, then the
       // taken window, so a cut takes the window and never the minute (R74A-4).
+      // The soonest start this create may have: FoxLeague's 2 hours for the owner's own (Telegram /do), 3 days for the
+      // agent's (ORG-3). The free starts a refusal names are searched from it, so the next plan does not pick one too soon.
+      const minAhead = ctx.byOwner ? CREATE_START_MIN_MS : ORGANIZER_START_MIN_MS
       const taken = clash(s.market.slots ?? [], blockingWindow(a.format, a.max_teams, Boolean(a.home_and_away), startsAt))
       if (taken) {
-        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
+        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), minAhead + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
         const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
         return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next ${CREATE_START_MAX_MS / 86_400_000} days (${takenWindow})`}`)
       }
       // FoxLeague's own calendar for this start, a tournament being created counted too (ORG-2, src/snapshot/calendar.ts).
-      const held = startCalendarVerdict(ctx.startCalendar, { format: a.format, teams: a.max_teams, home_and_away: Boolean(a.home_and_away) }, s.market.slots ?? [], Math.max(startsAt, ctx.now.getTime() + CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings)), ctx.now.getTime() + CREATE_START_MAX_MS)
+      const held = startCalendarVerdict(ctx.startCalendar, { format: a.format, teams: a.max_teams, home_and_away: Boolean(a.home_and_away) }, s.market.slots ?? [], Math.max(startsAt, ctx.now.getTime() + minAhead + nextPlanLeadMs(ctx.settings)), ctx.now.getTime() + CREATE_START_MAX_MS)
       if (held && 'refusal' in held) return refuse(held.refusal)
+      // ORG-3: a tournament the agent creates, public or private, starts at least 3 days ahead, so teams have days to see
+      // it and join before its deadline (an unfilled one keeps the organizer's deposit). Private too: its seats fill only
+      // when the invited teams join, and an invitation seen late is the same risk as a listing seen late. A stricter
+      // check than FoxLeague's 2 hours, never a looser one; the owner's own create keeps the 2 hours.
+      if (!ctx.byOwner && ahead < ORGANIZER_START_MIN_MS) {
+        return refuse(`starts ${startIso.slice(0, 16)} UTC, less than ${ORGANIZER_START_MIN_MS / 86_400_000} days from now: a tournament this agent creates needs days to fill; the earliest start allowed is starts_at ${new Date(ceilMinute(ctx.now.getTime() + ORGANIZER_START_MIN_MS)).toISOString().slice(0, 16)}Z (take one of your own starts, all ${ORGANIZER_START_MIN_MS / 86_400_000} days ahead or more)`)
+      }
       // The executor creates a knockout with its third place match (executor.ts), one match more in its schedule.
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, has_third_place_match: a.format === 'knockout', round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)
@@ -1644,6 +1693,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           for (const n of a.player_nonces ?? []) {
             const p = card(s, n)
             if (!p) return refuse(`#${n} is not in the wallet`)
+            const held = inAuctionRefusal(p)
+            if (held) return refuse(held)
             total += Math.ceil((prices.condition * (100 - p.condition)) / 100)
           }
           if (total <= 0) return refuse('selected cards are already at full condition')
@@ -1703,7 +1754,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           const days = a.quantity
           const p = typeof n === 'number' ? card(s, n) : undefined
           if (!p || typeof days !== 'number') return refuse(`#${n} is not in the wallet`)
-          if (p.listed) return refuse(`#${n} is listed for sale: only a card in the wallet takes medicine`)
+          const held = inAuctionRefusal(p)
+          if (held) return refuse(held)
           if (!p.injuredUntil) return refuse(`#${n} is not injured`)
           // The level's count (owner, 2026-11-10), in days over all cards, from the agent's own purchases of the last 7 days.
           const perWeek = ctx.settings.medicineDaysPerWeek
@@ -1876,7 +1928,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!s.team) return refuse(TEAM_UNREADABLE)
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
-      if (c.listed) return refuse(`#${a.nonce} is listed for sale: a listed card cannot be waived`)
+      const held = inAuctionRefusal(c)
+      if (held) return refuse(held)
       // Only for a fusion that can really happen: otherwise the FOXSY buys nothing. A Legendary is never fused, but
       // FoxLeague sells its match waiver for the listing gate (405, 135 played): bought only for a card the agent
       // would list (audit C1, 2026-10-23). Its cooldown waiver still buys nothing.

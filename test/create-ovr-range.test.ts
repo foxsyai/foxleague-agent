@@ -13,7 +13,7 @@ import { SYSTEM_PROMPT } from '../src/strategist/prompt.ts'
 import { TEST_SETTINGS, liveWallet, setup, snapshot, tournament, withLive } from './fixtures.ts'
 
 const challenge = (more: Record<string, unknown> = {}) => ({ type: 'create_challenge', tier: 'silver', stake_foxsy: 1000, target_user_id: null, deadline_minutes: 60, ...more })
-const cup = (more: Record<string, unknown> = {}) => ({ type: 'create_tournament', title: 'Autumn Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: 24, registration_closes_minutes_before: 60, round_interval_minutes: 30, ...more })
+const cup = (more: Record<string, unknown> = {}) => ({ type: 'create_tournament', title: 'Autumn Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 30, ...more })
 
 test('a create may carry an OVR range of whole numbers 1 to 100, the minimum not above the maximum', () => {
   assert.deepEqual([(parseAction(challenge({ ovr_max: 33 })) as { ovr_max?: number }).ovr_max, (parseAction(cup({ ovr_min: 25, ovr_max: 35 })) as { ovr_min?: number }).ovr_min], [33, 25])

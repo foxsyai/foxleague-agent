@@ -298,8 +298,9 @@ test('R58A-1: no 1v1 is created or joined when the team\'s busy hour opens withi
 })
 
 test('R58A-2: a tournament the agent creates is judged at its start, and a final medicine refusal stops counting', async () => {
-  const create = { type: 'create_tournament', title: 'Cup', format: 'knockout', tier: 'silver', max_teams: 4, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 48, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
-  assert.doesNotMatch(why(create, {}, withCard(3, { injuredUntil: inDays(1) })), /injured/)
+  // Four days ahead: the agent's own create starts 3 days ahead or more (ORG-3).
+  const create = { type: 'create_tournament', title: 'Cup', format: 'knockout', tier: 'silver', max_teams: 4, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
+  assert.doesNotMatch(why(create, {}, withCard(3, { injuredUntil: inDays(3) })), /injured/)
   assert.match(why(create, {}, withCard(3, { injuredUntil: inDays(5) })), /starter #3 is injured until .* past the start of your tournament/)
   // FoxLeague refuses the confirm for good and returns the payment: the retry hears it, and the FOXSY stops counting.
   const until = inDays(8)

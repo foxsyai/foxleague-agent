@@ -2996,6 +2996,79 @@ Stays open:
   take in and the route shapes are the same at `a546f7279`; the next sync after FoxLeague's next promotion moves it.
 - Production was not read and nothing was deployed.
 
+## Whose tournament it is, the game day's reset, organizer starts and FoxLeague of 19 Nov (2026-11-20)
+
+Five changes for one pull request, from the agents' own production of 18 and 19 Nov, the GitHub review of PR #80 and
+FoxLeague's changes of 19 Nov. The facts:
+- **19 Nov, agent 4.** It was refused widening T6101, which it created itself on 16 Nov 14:05 UTC ("a tournament or
+  challenge this agent did not create (the owner's)"). Its create row holds `createdTournamentId: 6101`, no `byOwner`,
+  and the model's reason "Owner's organizer instruction. ...". T6211 (agent 9) and T6318 (agent 3) were in the same case.
+- **18 and 19 Nov, agents 10, 1, 3 and 9 (Haiku and Opus).** Plans made from 13:27 to 13:58 UTC with the day's five free
+  training sessions or five match starts used up ran their trainings and matches before the 14:00 UTC reset: "daily
+  training exhausted (5 used, 0 paid slots banked)", "daily match limit reached (5/5)", one at 14:00:04 against counts
+  read just before 14:00. The plans were right; the scheduler did not know the reset.
+- **The GitHub review of PR #80 (R80A-1).** The seat of a created tournament is signed up to a minute after the
+  organizer payment, so its chain check reads every shard afresh; one gateway blip left "created T..., its seat not paid".
+- **19 Nov, agent 3.** It created a public Silver round robin, T6303, at 19:27 UTC on the first free start the snapshot
+  offered, 05:26 the next morning. Nobody joined overnight; it was cancelled and the 150 FOXSY calendar deposit was lost.
+  Every organizer tournament of the agents that filled was booked 6 to 15 days ahead.
+- **FoxLeague of 19 Nov.** The running agent alerted at 09:03 UTC that FoxLeague's manual changed (the busy-card rule of
+  #748). FoxLeague's release branch for mainnet holds more that its main has not taken yet: #752 (a card in an auction
+  takes no paid action) and #764 (account bans and deletion, a new legal page).
+
+The fixes are by Claude Opus 5.5, test first: each test under `test/fix-1120/` named after its Id failed on `62f06c0`
+for the reason given and passes now, except the ones that pin what stays (OWN-1's `byOwner` test, OWN-1b's second
+test, ORG-3's constant, its test of a 1v1 and the owner's create and the R80A-1 tests of a halt, which pass on both: the
+reviewer asked for the coverage).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| OWN-1 | medium (money: an unfilled organizer tournament keeps its deposit) | `ownCreations` (`src/executor/rivals.ts`) skipped a create row whose reason began with "owner". The reason is the model's own text: since the owner's strategy of every agent has an "Organizer:" line (15 Nov) the models write "Owner's organizer instruction ..." for the agent's own creates, which then counted as the owner's for good: `widen_range` refused them (AGENTS.md rule 2 in spirit: model text decided a rule) | Whose a creation is comes from what the executor wrote: `byOwner`, never a reason. No fallback is kept: `createdTournamentId` is written since `468fb2a` (R38A-1, PR #38, 26 Oct); every path that acts for the owner (Telegram `/do`, the owner's leave) writes `byOwner` since `8ceeb56` (R32A-4, PR #32, deployed 24 Oct 10:24 UTC), an ancestor of it, so no create row with a created id can lack it while made for the owner. R38A-1's test logged such a row; it now logs it as the executor does |
+| OWN-1b | low (the agent could not leave a seat it paid itself) | The League + Knockout seat check (`executor.ts`) read the same reason: a seat the agent joined with a reason "Owner's ..." was the owner's | The reason counts only on a join row dated before 25 Oct 00:00 UTC (`BY_OWNER_KEPT_FROM_MS`, the night after `byOwner` was first kept), where a `/do` join can lack it; on a newer row only `byOwner` decides. The seat window is 60 days, so this ends by itself on 24 Dec |
+| RESET-1 | low (refusals, and a plan's trainings and matches lost to the reset; no payment) | `scheduleActions` (`src/service.ts`) ran a plan's actions at random moments of its window, the game day's reset ignored, so a training or a match start the day had no room for ran before 14:00 and was refused | `newDayHolds` (`src/executor/new-day.ts`) reads the plan's own snapshot with the executor's own rules (`trainingDayRefusal`, `matchDayRefusal`, now shared with the `train` and `play_match` rules), counting the plan's earlier sessions and starts; it holds such an action until the first reset after the snapshot plus 2 minutes. The plan's order, the match gates and the deadlines hold; one the window ends before (or one that would push a later deadline action late) is dropped with the usual "dropped from this plan" line. An owner's request is not held. The margin: FoxLeague counts the day's sessions and starts at each request from the reset hour (shop.rs `used_today`, matches.rs `DAILY_MATCH_COUNT_SQL`); the fresh snapshot an action is checked against is read after its wait, so a read after the reset sees the new day; 14:00:04 was checked against counts read before 14:00. Two minutes cover that read and the two servers' clocks |
+| R80A-1 | low (no money: the seat booking was released; an unfilled tournament may keep its deposit) | One gateway blip between the organizer payment and the seat's signature left a created tournament without its seat; no test covered a halt between the two signatures of one action | Tests of a halt and of an unreadable status between the organizer payment and the seat and between the ranked press and the ticket's signature, with what is booked, what is released and the row's text. `chainHaltCheck` tells an unreadable status from a stale block; right before a signature an unreadable one is read once more after 5 s (`HALT_REREAD_MS`), never more and never a stale block. Unknown still refuses, within a minute; the stop check still follows |
+| ORG-3 | medium (money: 150 FOXSY on T6303) | The snapshot offered the first free start for a new tournament, hours away; the executor took any start 2 hours ahead | One constant, `ORGANIZER_START_MIN_MS` (3 days, `src/executor/actions.ts`): the snapshot (`calendarLines`, the gaps line, the calendar read's count) offers no start sooner than 3 days after the latest moment the plan's actions run and says why; the executor refuses the agent's own create starting sooner, naming the earliest start allowed; the free starts a clash names are searched from it. Private too: its seats fill only when the invited teams join; its deposit is lost the same way. Not affected: a 1v1 (no start of its own) and the owner's own create (`byOwner`, FoxLeague's 2 hours). A stricter check, never a looser one; the 30-day horizon and each agent's own pick stay |
+| SYNC2-1 | medium (money: a payment kept for a card the marketplace contract holds; from #752 refunded whole with the gas lost) | The agent's condition recovery named any card of the wallet, one in an auction too. Before FoxLeague's #752 the confirm kept the payment and recovered the listed card; from it the whole payment is refunded (a bulk recovery that names it too), so no card is recovered and the gas is lost | A card-targeted Shop item for a card in an auction is refused before anything is booked: "card #N is in an auction (listed for sale): FoxLeague sells no Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for it until the auction ends". The agent's recovery names its cards, so no listed card is counted (it never uses Recover All) |
+| SYNC2-2 | low (rule 4) | Medicine and both fusion waivers refused a listed card, but a card whose auction state the roster did not give read as "in the wallet" | Unknown refuses these four items (recovery, medicine, both fusion waivers) only; the read is the agent's own roster, `listed_for_sale` per card |
+| SYNC2-3 | low (what the plan knows) | The plan saw "LISTED" on a card line, not that such a card takes no Shop item | A snapshot line names the cards in an auction and says they take no Shop item and no training until the auction ends |
+| SYNC2-4 | low (the manual sync would stop) | FoxLeague's new page `legal/account-bans` (release branch) was undecided | Left out of the agents' manual with its reason (`LEFT_OUT`): nothing a plan decides; a banned wallet cannot sign in, so every read that needs a session fails and the executor refuses |
+| R81A-1 | medium (money: a training slot bought for nothing that day) | The GitHub review of PR #81: `newDayHolds` did not count a `buy` of `training_slot` earlier in the same plan, though the executor's `applyEffect` does. With the free sessions used and nothing banked, a routine plan `[buy training_slot 2, train, train]` dropped both trainings while the buy still spent the FOXSY; before RESET-1 they ran on the slots just bought | A slot bought earlier in the plan adds a paid session today, as `applyEffect` counts it (`slots_banked` plus the quantity, 1 when none is given). No other action adds room for the day: nothing buys match starts (a ranked ticket pays for a ranked game, not for a start). Its test (RESET-1, "a training slot bought earlier in the plan ...") failed on `89dc1ca` |
+
+Also in this change: the game manual copy is synced to FoxLeague's `origin/main` `af825e955` (manual `1ab9de65d`, 16
+pages; the busy-card rule on four). The route record and the game settings keys are unchanged.
+
+What was checked and needs no change:
+- The other reads of activity text in `src/executor`: `targetedRecord` reads `action.tournament_id`, the action the
+  executor itself validated; `match-starts.ts` reads the `play_match` summaries the executor writes (validated fields
+  only); the shop retry reads the chain's own failure reason ("new NFT data on sender"). `formatResult`, the shadow
+  record and the plan lines only display a reason.
+- The fresh snapshot right before each action reads FoxLeague's shop status and daily allowance afresh (no client cache;
+  only the roster has a 30 s server cache), so after the hold it sees the new day's counts.
+- The private split extension (`src/local`, not in the repository) cuts a recovery into one-card pieces that each run
+  through the executor, so the new refusal holds for each piece.
+
+Stays open:
+- **The busy-card rule** (#748) ships off with no switch in `/api/config`: the manual copy carries it, the executor has
+  no rule for it. It waits for its switch; the agent's config watch tells the owner when one appears.
+- **#752 and #764 are on FoxLeague's release branch only** on 2026-11-20; whether mainnet runs them was not read. The
+  agent's refusal holds either way. The next `sync-manual` after FoxLeague's next promotion takes #752's manual lines.
+- **The prompt's create line** still says "2 hours to 30 days after the action runs" (`src/strategist/prompt.ts` is
+  byte-stable for the prompt cache): the snapshot's lines and the executor's refusal carry the 3 days.
+- **An earlier training or match start counts as run** (R81A-2, low, the GitHub review of PR #81). `newDayHolds`
+  counts each earlier `train` and `play_match` of the plan as one that runs, as `applyEffect` counts a confirmed one;
+  `runPlan` may still skip one (the action probability) or the executor refuse it; the one after it is then held or
+  dropped though the day still had room. No money moves and the next plan plays it. A fix would read the day again
+  before each held action, not at the schedule; a held action dropped at the schedule cannot come back. Left as it is.
+- **Whose create keeps the 2 hours.** Only a create sent with `byOwner` (Telegram `/do`) keeps FoxLeague's 2 hours. A
+  plan made from the owner's request in words and a CLI plan carry no `byOwner`, so the 3-day floor holds for them too
+  (ORG-3); an owner's plan in words is not held for the reset either (RESET-1 holds routine plans only).
+- **Other per-day limits at the reset.** RESET-1 holds trainings and match starts only. A paid action refused by the
+  daily cap just before the reset (the cap is per game day too) is still refused, not held.
+- **The private split extension**: a recovery piece for a card in an auction is now refused; the pieces after it in
+  its group are dropped with it. The owner's local file now leaves listed cards out of the
+  split (one condition in `src/local`, with its own test), so the other pieces run.
+- Production was not read and nothing was deployed.
+
 ## Haiku 5.5 at high, the AI of a new install (2026-11-20)
 
 The owner's decision of 2026-11-20. His ten live agents played Opus 5.5, Sonnet 5.5 and Haiku 5.5, all at high effort,

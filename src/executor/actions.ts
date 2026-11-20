@@ -260,6 +260,13 @@ function ovrRange(o: Record<string, unknown>): { ovr_min?: number; ovr_max?: num
  */
 export const CREATE_START_MIN_MS = 2 * 3600_000
 export const CREATE_START_MAX_MS = 30 * 86_400_000
+/**
+ * A tournament the agent creates itself starts at least 3 days after the create runs (ORG-3, the owner's rule of 19 Nov
+ * 2026): one created for the next morning got nobody overnight and lost its 150 FOXSY calendar deposit, while every one
+ * that filled was booked 6 to 15 days ahead. The snapshot offers no sooner start and the executor refuses one; a create
+ * the owner asks for (Telegram /do) keeps FoxLeague's 2 hours.
+ */
+export const ORGANIZER_START_MIN_MS = 3 * 86_400_000
 /** The horizon in whole days, as the plan and the refusals name it. */
 export const CREATE_START_MAX_DAYS = CREATE_START_MAX_MS / 86_400_000
 const CREATE_START_MAX_HOURS = CREATE_START_MAX_MS / 3600_000
