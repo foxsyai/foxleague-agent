@@ -107,8 +107,8 @@ words the owner keeps out of the project. The installers' own lines are shown ex
   does: a throwaway wallet in a temporary folder, every network address pointed at `127.0.0.1:9`, no AI key, no
   Telegram. The login and the dashboard on screen are the real `src/web/login.html` and `dashboard.html`, driven by
   Playwright: the login is typed, the guide closed and Update now clicked for real. The updater is a stand-in whose
-  messages are the real updater's (`src/update/updater.ts`). The install pages are `site/dist` as built; the
-  "Coming soon" banner and frame are taken off in the browser only, so the page looks as it will after the release.
+  messages are the real updater's (`src/update/updater.ts`). The install pages are `site/dist` as built (before the
+  public release the capture also took the "Coming soon" banner and frame off, in the browser only).
 - The capture checks the text each screenshot shows for the word the owner keeps out of the project (BotFather, a
   name, is allowed) and lists any hit in `build/shots/<system>/boxes.json` and on the console.
 - `src/stage/` draws one frame at any time t: a plain desktop (no logos), the terminal (text, wrapping at the
@@ -145,8 +145,8 @@ The line numbers are those of the commit the videos were drawn from.
 ## What is not from the installer files
 
 - The site's header on the install page shows the site's own links with the GitHub, X, Telegram and YouTube icons
-  (the real page). For a video without them, `src/capture.mjs` can hide that row like it hides
-  the "Coming soon" banner.
+  (the real page). For a video without them, `src/capture.mjs` can hide that row in the browser,
+  as it hid the "Coming soon" banner before the release.
 - The copy button of the site's code block sits over the end of the line, as on the real page at 1600 px.
 
 - WSL's and Ubuntu's own lines on Windows are those of the real PC (Microsoft Store WSL 3.0.1.0, Ubuntu 26.04), with
@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit 4fe1ed6 (2026-11-20): 132 quoted lines, 0 changed.
+Checked against commit 50942e7 (2026-11-20): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
@@ -285,14 +285,14 @@ Checked against commit 4fe1ed6 (2026-11-20): 132 quoted lines, 0 changed.
 | windows, mac, linux | `install.sh:1080` | 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games. | ok |
 | windows, mac, linux | `install.sh:1095` | Keep your recovery words safe. Anyone with them controls the agent wallets. | ok |
 | windows, mac, linux | `install.sh:1101` | Open the dashboard in your browser now? (y/n) [y]: | ok |
-| linux | `site/src/content/docs/start/install-linux.mdx:42` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
-| linux | `site/src/content/docs/start/install-linux.mdx:143` | cd ~/foxleague-agent | ok |
-| linux | `site/src/content/docs/start/install-linux.mdx:144` | ./install.sh --uninstall | ok |
-| mac | `site/src/content/docs/start/install-mac.mdx:42` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
-| mac | `site/src/content/docs/start/install-mac.mdx:140` | cd ~/foxleague-agent | ok |
-| mac | `site/src/content/docs/start/install-mac.mdx:141` | ./install.sh --uninstall | ok |
-| windows | `site/src/content/docs/start/install-windows.mdx:45` | irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 \| iex | ok |
-| windows | `site/src/content/docs/start/install-windows.mdx:208` | & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall | ok |
+| linux | `site/src/content/docs/start/install-linux.mdx:37` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
+| linux | `site/src/content/docs/start/install-linux.mdx:136` | cd ~/foxleague-agent | ok |
+| linux | `site/src/content/docs/start/install-linux.mdx:137` | ./install.sh --uninstall | ok |
+| mac | `site/src/content/docs/start/install-mac.mdx:37` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
+| mac | `site/src/content/docs/start/install-mac.mdx:133` | cd ~/foxleague-agent | ok |
+| mac | `site/src/content/docs/start/install-mac.mdx:134` | ./install.sh --uninstall | ok |
+| windows | `site/src/content/docs/start/install-windows.mdx:40` | irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 \| iex | ok |
+| windows | `site/src/content/docs/start/install-windows.mdx:201` | & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall | ok |
 | windows, mac, linux | `src/cli.ts:124` | New recovery words written to /home/ana/foxleague-agent/.env (mode 600). / New recovery words written to /Users/ana/foxleague-agent/.env (mode 600). | ok |
 | windows, mac, linux | `src/cli.ts:125` | Agent 1 address: erd1gupzwzfxh2lk2gwk7s7lfa9jqtm98h88m6z0dsfg49d8552jlckacd4d5s | ok |
 | windows, mac, linux | `src/cli.ts:146` | 1. word1 | ok |

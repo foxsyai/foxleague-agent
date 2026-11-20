@@ -1,12 +1,9 @@
 ---
 title: Install on Linux
 description: Install the FoxLeague agent on Linux with systemd with one line in a terminal, step by step.
-banner:
-  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import ComingSoon from '../../../components/ComingSoon.astro';
 
 <video controls preload="none" poster="/videos/install-linux.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
   <source src="/videos/install-linux.mp4" type="video/mp4" />
@@ -36,13 +33,9 @@ after you log out and after a restart, for as long as the computer is on and awa
 Open a terminal (on Ubuntu: Ctrl+Alt+T). Copy this line (the button at its right copies it), paste it with
 Ctrl+Shift+V and press Enter:
 
-<ComingSoon>
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 ```
-
-</ComingSoon>
 
 The line downloads the newest release into `~/foxleague-agent`, checks the download against the release's
 checksum and starts the guided installer.

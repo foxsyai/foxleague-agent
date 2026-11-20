@@ -166,8 +166,8 @@ export function texts(os) {
       // A plain start: the window shows only PowerShell's prompt (no banner, no copyright line).
       prompt: () => [X(`PS ${VALUES.windowsHome}> `, null, 'PowerShell prompt')],
       // How PowerShell's line editor colours the line: the command yellow, the pipe and parameters grey.
-      installLine: () => [seg('irm', 'cmd', { f: 'site/src/content/docs/start/install-windows.mdx', l: 45, frags: [PS_LINE] }), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 '), seg('|', 'op'), seg(' '), seg('iex', 'cmd')],
-      uninstallLine: () => [seg('&', 'op', { f: 'site/src/content/docs/start/install-windows.mdx', l: 208, frags: [PS_UNINSTALL] }), seg(' (['), seg('scriptblock'), seg(']::Create(('), seg('irm', 'cmd'), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) '), seg('-Uninstall', 'op')],
+      installLine: () => [seg('irm', 'cmd', { f: 'site/src/content/docs/start/install-windows.mdx', l: 40, frags: [PS_LINE] }), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 '), seg('|', 'op'), seg(' '), seg('iex', 'cmd')],
+      uninstallLine: () => [seg('&', 'op', { f: 'site/src/content/docs/start/install-windows.mdx', l: 201, frags: [PS_UNINSTALL] }), seg(' (['), seg('scriptblock'), seg(']::Create(('), seg('irm', 'cmd'), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) '), seg('-Uninstall', 'op')],
       start: () => [
         ...psStep(1323, 'foxleague-agent installer for Windows'),
         psLine(1324, 'The agent runs in Ubuntu, a Linux inside Windows (WSL 2). This installer sets that up and then starts the'),

@@ -1,12 +1,9 @@
 ---
 title: Install on Mac
 description: Install the FoxLeague agent on a Mac with one line in Terminal, step by step.
-banner:
-  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import ComingSoon from '../../../components/ComingSoon.astro';
 
 <video controls preload="none" poster="/videos/install-mac.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
   <source src="/videos/install-mac.mp4" type="video/mp4" />
@@ -36,13 +33,9 @@ are logged in and the Mac is awake.
 Open **Terminal**: press Cmd and Space, type Terminal and press Enter (or Finder, Applications, Utilities,
 Terminal). Copy this line (the button at its right copies it), paste it with Cmd and V and press Enter:
 
-<ComingSoon>
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 ```
-
-</ComingSoon>
 
 macOS has curl already. The line downloads the newest release into `~/foxleague-agent`, checks the download
 against the release's checksum and starts the guided installer. The download and the setup take a few minutes;

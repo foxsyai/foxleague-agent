@@ -5,7 +5,7 @@
 // API and environment variable names, comments for developers and the model's prompt (src/strategist/prompt.ts).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import ts from 'typescript'
 import { KEY_FIELDS } from '../src/store/secrets.ts'
@@ -41,7 +41,8 @@ const PAGES = [
   'src/web/login.html',
   'site/astro.config.mjs',
   ...walk('site/src/content/docs', p => /\.mdx?$/.test(p)),
-  ...walk('site/src/components', p => p.endsWith('.astro')),
+  // The site's own components, when it has any (the "Coming soon" frame, its last one, went with the public release).
+  ...(existsSync(join(REPO, 'site/src/components')) ? walk('site/src/components', p => p.endsWith('.astro')) : []),
 ]
 // The service's Telegram messages and replies, the CLI's messages, the dashboard's API answers and key labels: every
 // string in the code. The model's prompt is model text; src/local is the owner's private test feature.

@@ -1,12 +1,9 @@
 ---
 title: Install on Windows
 description: Install the FoxLeague agent on Windows 10 or 11 with one line in PowerShell, step by step.
-banner:
-  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import ComingSoon from '../../../components/ComingSoon.astro';
 
 <video controls preload="none" poster="/videos/install-windows.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
   <source src="/videos/install-windows.mp4" type="video/mp4" />
@@ -39,13 +36,9 @@ Open **Windows PowerShell**: press Start, type PowerShell and choose Windows Pow
 "as administrator". Copy this line (the button at its right copies it), paste it into the window with a right
 click or Ctrl+V and press Enter:
 
-<ComingSoon>
-
 ```powershell
 irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
 ```
-
-</ComingSoon>
 
 It is safe to paste it again at any time: each run finds what is already done and goes on from there. Paste one
 line at a time, here and everywhere on this page.

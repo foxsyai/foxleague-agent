@@ -6,7 +6,7 @@ against the game rules and your spending limits before anything is paid. It uses
 smart contracts, exactly like the player app, from your own computer or server. Your wallet words and keys never
 leave it.
 
-Status: in internal testing (the newest version is on the releases page). Everything below works live on mainnet.
+Status: released. The newest version is on the releases page; every installed agent offers it to its owner (Update now in the dashboard). Everything below works live on mainnet.
 
 ## Install
 

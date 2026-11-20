@@ -58,16 +58,11 @@ and logs the commit in `/var/www/agent.foxleague.ai.deploys`.
 After the first deploy the FoxLeague owner submits `https://agent.foxleague.ai/sitemap-index.xml` in Google
 Search Console. The `Dockerfile` and `nginx.conf` here are an alternative for a host that runs containers.
 
-## Launch day
+## Launch day (done for v1.0.0)
 
-Until the repository is public, the install line and the repository address sit in an orange "Coming soon" frame
-(`src/components/ComingSoon.astro`): it shows the real address, and a click opens Foxsy AI's GitHub page, never a
-404. When the repository goes public:
-
-1. Remove the `<ComingSoon>` frames (keep what they wrap) in `index.mdx`, `start/install-windows.mdx`,
-   `start/install-mac.mdx`, `start/install-linux.mdx` and `help/server.mdx`, and the `banner:` lines in `index.mdx`,
-   `start/install.mdx` and the three `start/install-*.mdx` pages.
-2. Point the GitHub icon in `astro.config.mjs` at `https://github.com/foxsyai/foxleague-agent`.
-3. Deploy, then run the one-line install on a clean machine.
+Until the public release the install line and the repository address sat in an orange "Coming soon" frame and every
+install page had a banner. On launch day the frames and the banners went, with the component that drew them
+(`src/components/ComingSoon.astro`); the GitHub icon in `astro.config.mjs` opens the repository and the home page and
+"Run it on a server" link it. `test/launch-v1/LAUNCH-1.test.ts` holds the pages to that.
 
 This folder is not part of the release downloads (`.gitattributes`) or the server deploys.
