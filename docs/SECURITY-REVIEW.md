@@ -3032,6 +3032,7 @@ reviewer asked for the coverage).
 | SYNC2-2 | low (rule 4) | Medicine and both fusion waivers refused a listed card, but a card whose auction state the roster did not give read as "in the wallet" | Unknown refuses these four items (recovery, medicine, both fusion waivers) only; the read is the agent's own roster, `listed_for_sale` per card |
 | SYNC2-3 | low (what the plan knows) | The plan saw "LISTED" on a card line, not that such a card takes no Shop item | A snapshot line names the cards in an auction and says they take no Shop item and no training until the auction ends |
 | SYNC2-4 | low (the manual sync would stop) | FoxLeague's new page `legal/account-bans` (release branch) was undecided | Left out of the agents' manual with its reason (`LEFT_OUT`): nothing a plan decides; a banned wallet cannot sign in, so every read that needs a session fails and the executor refuses |
+| R81A-1 | medium (money: a training slot bought for nothing that day) | The GitHub review of PR #81: `newDayHolds` did not count a `buy` of `training_slot` earlier in the same plan, though the executor's `applyEffect` does. With the free sessions used and nothing banked, a routine plan `[buy training_slot 2, train, train]` dropped both trainings while the buy still spent the FOXSY; before RESET-1 they ran on the slots just bought | A slot bought earlier in the plan adds a paid session today, as `applyEffect` counts it (`slots_banked` plus the quantity, 1 when none is given). No other action adds room for the day: nothing buys match starts (a ranked ticket pays for a ranked game, not for a start). Its test (RESET-1, "a training slot bought earlier in the plan ...") failed on `89dc1ca` |
 
 Also in this change: the game manual copy is synced to FoxLeague's `origin/main` `af825e955` (manual `1ab9de65d`, 16
 pages; the busy-card rule on four). The route record and the game settings keys are unchanged.
@@ -3053,6 +3054,14 @@ Stays open:
   agent's refusal holds either way. The next `sync-manual` after FoxLeague's next promotion takes #752's manual lines.
 - **The prompt's create line** still says "2 hours to 30 days after the action runs" (`src/strategist/prompt.ts` is
   byte-stable for the prompt cache): the snapshot's lines and the executor's refusal carry the 3 days.
+- **An earlier training or match start counts as run** (R81A-2, low, the GitHub review of PR #81). `newDayHolds`
+  counts each earlier `train` and `play_match` of the plan as one that runs, as `applyEffect` counts a confirmed one;
+  `runPlan` may still skip one (the action probability) or the executor refuse it; the one after it is then held or
+  dropped though the day still had room. No money moves and the next plan plays it. A fix would read the day again
+  before each held action, not at the schedule; a held action dropped at the schedule cannot come back. Left as it is.
+- **Whose create keeps the 2 hours.** Only a create sent with `byOwner` (Telegram `/do`) keeps FoxLeague's 2 hours. A
+  plan made from the owner's request in words and a CLI plan carry no `byOwner`, so the 3-day floor holds for them too
+  (ORG-3); an owner's plan in words is not held for the reset either (RESET-1 holds routine plans only).
 - **Other per-day limits at the reset.** RESET-1 holds trainings and match starts only. A paid action refused by the
   daily cap just before the reset (the cap is per game day too) is still refused, not held.
 - **The private split extension**: a recovery piece for a card in an auction is now refused; the pieces after it in
