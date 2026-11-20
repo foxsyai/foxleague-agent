@@ -232,7 +232,8 @@ if (cmd === 'init') {
   const text = readFileSync(service, 'utf8').replace(mark, '').replace(clean, '')
   writeFileSync(service, rest.includes('--break-start') ? mark + text : rest.includes('--end-at-once') ? clean + text : text)
   git('add', '-A')
-  git('commit', '-q', '-m', `release ${version}`)
+  // A release of the version the tree already has changes nothing: the commit is still made, so it can be tagged.
+  git('commit', '-q', '--allow-empty', '-m', `release ${version}`)
   git('tag', `v${version}`)
   const built = buildRelease({ repo, version, notes: opt('--notes') ?? `New in ${version}: a line of the fresh install check.`, privatePem: readFileSync(join(work, 'key.pem'), 'utf8'), out: join(work, 'out', `v${version}`) })
   const d = join(site, 'download', `v${version}`)
