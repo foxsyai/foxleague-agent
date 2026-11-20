@@ -842,7 +842,9 @@ function aiModelOptions() {
 }
 function aiEffortOptions() {
   const i = S.instance, all = i.aiAll || { model: i.model, effort: i.effort }
-  return [['', 'Same as all agents' + (all.effort ? ' (' + all.effort + ')' : '')], ...i.efforts.map(e => [e, e])]
+  // While no effort is picked for all agents, an agent with a model of its own plays medium, not the default pair's (R82A-1).
+  const inh = all.ownModelEffort && all.ownModelEffort !== all.effort ? '; ' + all.ownModelEffort + ' with a model of its own' : ''
+  return [['', 'Same as all agents' + (all.effort ? ' (' + all.effort + inh + ')' : '')], ...i.efforts.map(e => [e, e])]
 }
 // The line under the AI fields: what the agent plays, what it would play after saving, its shadow plans set on the
 // server (`same`: a repeat of the model and effort it plays) and a value saved on the server that is not used.
@@ -852,7 +854,7 @@ function ownAiHint(b, form) {
   const entry = e => { if (e === 'same') return 'a repeat of the model and effort it plays'; const at = e.indexOf(':'); return at < 0 ? name(e) : name(e.slice(0, at)) + ' (' + e.slice(at + 1) + ')' }
   const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a.join('')
   const all = i.aiAll || { model: i.model, effort: i.effort }
-  const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
+  const next = { model: form.aiModel || all.model, effort: form.aiEffort || (form.aiModel && all.ownModelEffort) || all.effort }
   const parts = ['Plays ' + name(ai.model) + ' at ' + ai.effort + ' effort, ' + (own.model || own.effort ? 'its own.' : 'the same as all agents.')]
   if (next.model !== ai.model || next.effort !== ai.effort) parts.push('After saving: ' + name(next.model) + ' at ' + next.effort + ' effort.')
   if ((ai.shadows || []).length) parts.push('Shadow plans set on the server for ' + (ai.ownShadows ? 'this agent' : 'every agent') + ': ' + list(ai.shadows.map(entry)) + '.')
@@ -1143,7 +1145,7 @@ function wakesShadow(model, effort) {
   const who = [...(S.agents || []), ...(S.retired || [])].filter(b => b.ai).concat([{ ai: { own: {}, shadows: i.shadowEntries || i.shadowModels || [] } }])
   return who.some(b => {
     const own = b.ai.own || {}
-    const cm = own.model || i.model, ce = own.effort || i.effort, nm = own.model || model, ne = own.effort || effort
+    const cm = own.model || i.model, ce = own.effort || (own.model && i.aiAll && i.aiAll.ownModelEffort) || i.effort, nm = own.model || model, ne = own.effort || effort
     return (b.ai.shadows || []).some(e => rests(e, cm, ce) && !rests(e, nm, ne))
   })
 }
@@ -1152,7 +1154,11 @@ function aiCostsMore(model, effort) {
   if (!cur || !pick) return true
   if (wakesShadow(model, effort)) return true
   if (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) return true
-  return i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
+  if (i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)) return true
+  // An agent with a model of its own and no effort of its own plays ownModelEffort (medium while no effort is picked
+  // here) and, once this is applied, the effort picked: a higher one raises it (allAgentsAiNeedsPassword, R82A-1).
+  const inh = i.aiAll && i.aiAll.ownModelEffort
+  return Boolean(inh) && i.efforts.indexOf(effort) > i.efforts.indexOf(inh) && [...(S.agents || []), ...(S.retired || [])].some(b => b.ai && b.ai.own && b.ai.own.model && !b.ai.own.effort)
 }
 // What the password dialog says: why this switch costs more. When it starts shadow plans, which ones and for which
 // agents (wakesShadow's rule, entry by entry): an agent's own list names that agent, the all-agents list also any agent
@@ -1160,7 +1166,13 @@ function aiCostsMore(model, effort) {
 function aiRaiseText(model, effort) {
   const i = S.instance
   if (effort === undefined) effort = i.effort
-  if (!wakesShadow(model, effort)) return 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+  if (!wakesShadow(model, effort)) {
+    // Only what an agent with a model of its own inherits rises (aiCostsMore, R82A-1): say that, not a dearer pair.
+    const inh = i.aiAll && i.aiAll.ownModelEffort, cur = i.models.find(m => m.id === i.model), pick = i.models.find(m => m.id === model)
+    const dearer = !cur || !pick || (pick.id !== cur.id && pick.dearest.some((p, k) => p > cur.cheapest[k])) || i.efforts.indexOf(effort) > i.efforts.indexOf(i.effort)
+    if (!dearer && inh && i.efforts.indexOf(effort) > i.efforts.indexOf(inh)) return 'An agent with a model of its own and no effort of its own plays at ' + inh + ' until an effort is picked here. With this switch it plays at ' + effort + ', which costs more on each of its plans. Your password confirms it.'
+    return 'A model with a higher price or a higher effort costs more on every plan of every agent. The AI spend has no cap of its own. Your password confirms it.'
+  }
   const name = id => (i.models.find(m => m.id === id) || { label: id }).label
   const list = a => a.length > 1 ? a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1] : a.join('')
   if (!S.agents) {
@@ -1176,7 +1188,7 @@ function aiRaiseText(model, effort) {
   const wake = (e, n) => { const k = entry(e); if (!woken.has(k)) woken.set(k, []); if (!woken.get(k).includes(n)) woken.get(k).push(n) }
   for (const b of [...S.agents, ...(S.retired || [])].filter(b => b.ai)) {
     const own = b.ai.own || {}
-    const cm = own.model || i.model, ce = own.effort || i.effort, nm = own.model || model, ne = own.effort || effort
+    const cm = own.model || i.model, ce = own.effort || (own.model && i.aiAll && i.aiAll.ownModelEffort) || i.effort, nm = own.model || model, ne = own.effort || effort
     for (const e of b.ai.shadows || []) if (rests(e, cm, ce) && !rests(e, nm, ne)) wake(e, b.index + 1)
   }
   for (const e of i.shadowEntries || []) if (rests(e, i.model, i.effort) && !rests(e, model, effort)) wake(e, 0)
@@ -1192,7 +1204,7 @@ function aiRaiseText(model, effort) {
 // server sends as aiAll: the Strategist box's, also while it is off (no AI key yet; agent review of PR #65).
 function agentAiCostsMore(b, form) {
   const i = S.instance, ai = b.ai || {}, all = i.aiAll || { model: i.model, effort: i.effort }
-  const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
+  const next = { model: form.aiModel || all.model, effort: form.aiEffort || (form.aiModel && all.ownModelEffort) || all.effort }
   if (next.model === ai.model && next.effort === ai.effort) return false
   const was = i.models.find(m => m.id === ai.model), will = i.models.find(m => m.id === next.model)
   if (!was || !will) return true
@@ -1206,7 +1218,7 @@ function agentAiText(b, form) {
   const i = S.instance, ai = b.ai || {}
   const name = id => (i.models.find(m => m.id === id) || { label: id }).label
   const all = i.aiAll || { model: i.model, effort: i.effort }
-  const next = { model: form.aiModel || all.model, effort: form.aiEffort || all.effort }
+  const next = { model: form.aiModel || all.model, effort: form.aiEffort || (form.aiModel && all.ownModelEffort) || all.effort }
   const rests = (e, m, f) => { if (e === 'same') return !(i.models.some(x => x.id === m) && i.efforts.includes(f)); const at = e.indexOf(':'); return at < 0 ? e === m : e.slice(0, at) === m && e.slice(at + 1) === f }
   const woken = (ai.shadows || []).filter(e => rests(e, ai.model, ai.effort) && !rests(e, next.model, next.effort))
   if (!woken.length) return 'A model with a higher price or a higher effort costs more on every plan of this agent. The AI spend has no cap of its own. Your password confirms it.'
@@ -1290,7 +1302,7 @@ const TIPS = {
   aiModel: ['AI model', `<p>The Claude model that plans for this agent. <b>Same as all agents</b>, the default, follows the Strategist box at the top. Pick a model to give this agent its own: the other agents keep theirs. A later switch in the Strategist box does not move this one.</p>
     <p>The price next to each model is its list price per million tokens in and out. A dearer model asks for your password, because the AI spend has no cap of its own; a cheaper one is one click. Going back to Same as all agents counts by the model it lands on. A change that starts shadow plans set on the server for this agent asks for it too.</p>
     <p>The line below the fields says what the agent plays now. The manager chat and /ask use the model of the Strategist box.</p>`],
-  aiEffort: ['Effort', `<p>How hard the AI thinks on each plan of this agent. <b>Same as all agents</b>, the default, follows the effort of the Strategist box. More effort means more thinking per plan: better on hard decisions but slower and dearer.</p>
+  aiEffort: ['Effort', `<p>How hard the AI thinks on each plan of this agent. <b>Same as all agents</b>, the default, follows the effort of the Strategist box. While no effort has been picked there (a new install), an agent with a model of its own plays at medium: the default's high comes only with the default model. More effort means more thinking per plan: better on hard decisions but slower and dearer.</p>
     <p>A higher effort asks for your password; a lower one is one click. Going back to Same as all agents counts by the effort it lands on. A shadow plan set on the server at the effort this agent plays rests: leaving that effort starts it, so that asks for the password too.</p>`],
   plan_now: ['Plan now', `<p>Runs a planning cycle for this agent now instead of waiting for the next one. The strategist reads a fresh snapshot and proposes actions; they run at random moments over the next minutes, checked like any other action. Only inside the agent's active hours: outside them, and while it is paused or still running a plan, it says why and starts nothing.</p>
     <p>It works only inside the active hours. It does nothing while the agent is paused or busy or while the kill switch is on.</p>`],

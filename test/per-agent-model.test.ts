@@ -1069,7 +1069,8 @@ test('R65A-4 with the strategist off (no AI key yet) the page resolves "Same as 
   try {
     assert.equal(svc.strategist, null)
     const st = await state()
-    assert.deepEqual([st.instance.model, st.instance.effort, st.instance.aiAll], [null, null, { model: SONNET, effort: 'medium' }])
+    // aiAll also carries what an agent with a model of its own inherits (R82A-1): medium here, as the effort was named.
+    assert.deepEqual([st.instance.model, st.instance.effort, st.instance.aiAll], [null, null, { model: SONNET, effort: 'medium', ownModelEffort: 'medium' }])
     const res = await post('/api/agents/0/settings', { dailyCapUsd: 1, aiModel: '', aiEffort: '' })
     assert.equal(res.status, 200, `a lowered cap with no key is one click on the server: ${await res.text()}`)
     const page = pageFunctions<(b: unknown, form: unknown) => boolean>(['agentAiCostsMore'], st)

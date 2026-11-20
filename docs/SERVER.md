@@ -44,8 +44,10 @@ The service reads `/etc/foxleague-agent/env`. Useful entries (`.env.example` lis
 - `AGENT_MODEL` and `AGENT_MODEL_EFFORT`: the AI the agents play until a model is picked in the dashboard's Strategist
   box. Without them Haiku 5.5 at high effort, the default of a new install; an install that set neither and picked
   nothing in the dashboard moves to it from Sonnet 5.5 at medium with this version, which lowers what it spends. A
-  model named here without an effort plays at medium, as before, so an update raises no effort. Once a model is picked
-  in the Strategist box, the box wins over both, and an agent's own model and effort win over the box.
+  model named here without an effort plays at medium, as before, so an update raises no effort. An agent with a model
+  of its own and no effort of its own plays the effort picked in the Strategist box or here, else medium, as before:
+  the high comes only with the default model. Once a model is picked in the Strategist box, the box wins over both, and
+  an agent's own model and effort win over the box.
 
 ## Dashboard behind nginx
 
@@ -95,8 +97,9 @@ checked on chain and on FoxLeague first; a used one is kept and named).
 
 ## An agent's own model and effort
 
-Every agent plays the model and effort of the dashboard's Strategist box unless it has its own. Give an agent its own
-in the dashboard (its Settings, AI) or here, as root. The service reads it at the agent's next plan, so nothing is
+Every agent plays the model and effort of the dashboard's Strategist box unless it has its own. While no effort has
+been picked there (nor in `AGENT_MODEL_EFFORT`), an agent with a model of its own and no effort of its own plays at
+medium, not at the high of the default pair. Give an agent its own in the dashboard (its Settings, AI) or here, as root. The service reads it at the agent's next plan, so nothing is
 restarted:
 
 ```

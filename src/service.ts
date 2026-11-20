@@ -32,7 +32,7 @@ import { PLAN_WINDOW_SHARE } from './executor/slots.ts'
 import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, MAX_UNANSWERED_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
-import { MODELS, Strategist, agentChoice, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { MODELS, Strategist, agentChoice, currentModel, describeModelError, inheritedEffort, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, shadowRuns, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
 import { ChatBusyError, Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
@@ -1724,9 +1724,14 @@ export class Service {
     return { ...ai, own: ai.model !== all.model || ai.effort !== all.effort }
   }
 
-  /** The all-agents model and effort: the strategist's, or without one (no AI key yet) the pair saved for when there is one. */
-  allAi(): { model: string; effort: Effort } {
-    return this.strategist ? { model: this.strategist.model, effort: this.strategist.effort } : strategistChoice(this.store, this.cfg, () => undefined)
+  /**
+   * The all-agents model and effort: the strategist's, or without one (no AI key yet) the pair saved for when there is
+   * one. `ownModelEffort`: the effort an agent with a model of its own and no effort of its own plays (inheritedEffort,
+   * R82A-1), never the high of the default pair.
+   */
+  allAi(): { model: string; effort: Effort; ownModelEffort: Effort } {
+    const pair = this.strategist ? { model: this.strategist.model, effort: this.strategist.effort } : strategistChoice(this.store, this.cfg, () => undefined)
+    return { ...pair, ownModelEffort: inheritedEffort(this.store) }
   }
 
   /** " · Haiku 5.5 at high" for an agent that plays another model or effort than the all-agents ones, else nothing. */
@@ -1896,8 +1901,8 @@ export class Service {
     // The model and effort this plan is asked from, read before the answer is awaited: the owner may switch the
     // strategist while the request is on its way, and this plan is still the earlier model's (agent review of PR #63,
     // R63A-2). The agent's own where it has them (the owner, 2026-11-13); an own value nobody knows is never used, and
-    // the log says why once.
-    const all = { model: this.strategist!.model, effort: this.strategist!.effort }
+    // the log says why once. An agent with a model of its own and no effort of its own inherits ownModelEffort (R82A-1).
+    const all = this.allAi()
     const ai = agentChoice(agent.settings, all)
     const why = ai.ignored.length ? `${agentName(agent.index)}: ${ai.ignored.join('; ')}` : ''
     if (why && this.aiSaid.get(agent.index) !== why) console.log(`[${new Date().toISOString()}] ${why}`)

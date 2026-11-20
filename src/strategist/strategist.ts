@@ -158,6 +158,18 @@ export function strategistChoice(store: Store, cfg: Config, say?: (text: string)
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
 }
 
+/**
+ * The effort an agent with a model of its own and no effort of its own plays (R82A-1, the GitHub review of PR #82): the
+ * effort picked for all agents (the Strategist box), else AGENT_MODEL_EFFORT, else medium. Never the high of the default
+ * pair: that comes with the default model nobody picked, and an agent's own model was picked. Before 2026-11-20 such an
+ * agent played medium here too, so the update raises none of them (AGENTS.md rule 7). It is never above the all-agents
+ * effort: where an effort was picked the two are the same, and where none was the all-agents one is medium or high.
+ */
+export function inheritedEffort(store: Store): Effort {
+  const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? 'medium'
+  return (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium'
+}
+
 /** A value typed by hand reaches the log only as what a model id can hold, and no more than 60 characters of it. */
 const named = (v: unknown): string => String(v).slice(0, 60).replace(/[^\w.:-]/g, '?')
 
@@ -168,24 +180,34 @@ const named = (v: unknown): string => String(v).slice(0, 60).replace(/[^\w.:-]/g
  * all-agents one in its place, and `ignored` says why, for the log. An own model that left the list runs its successor,
  * as the all-agents choice does: the same tier at the same price or less, so the agent never ends on a dearer model
  * than its own choice, nor on the all-agents one when that is dearer.
+ *
+ * An agent whose model is its own (one of the list, or the successor of one that left it) and that has no effort of
+ * its own plays `all.ownModelEffort` where it is given (inheritedEffort: the effort picked for all agents, else medium;
+ * R82A-1), not the high of the default pair. Without it, as for a pair being applied (which saves its effort for all
+ * agents), the all-agents effort.
  */
-export function agentChoice(own: { aiModel?: unknown; aiEffort?: unknown }, all: { model: string; effort: string }): { model: string; effort: Effort; ignored: string[] } {
+export function agentChoice(own: { aiModel?: unknown; aiEffort?: unknown }, all: { model: string; effort: string; ownModelEffort?: string }): { model: string; effort: Effort; ignored: string[] } {
   const ignored: string[] = []
   let model = all.model
+  let itsOwnModel = false
   const ownModel = own.aiModel
   if (ownModel !== undefined && ownModel !== '') {
     const id = typeof ownModel === 'string' ? ownModel : ''
-    if (id && isKnownModel(id)) model = id
-    else if (id && Object.hasOwn(SUCCESSORS, id)) {
+    if (id && isKnownModel(id)) {
+      model = id
+      itsOwnModel = true
+    } else if (id && Object.hasOwn(SUCCESSORS, id)) {
       model = currentModel(id)
+      itsOwnModel = true
       ignored.push(`its own model ${id} is no longer on the list: it plays its successor ${model}`)
     } else ignored.push(`its own model ${named(ownModel)} is not on the list (${Object.keys(MODELS).join(', ')}): it plays the all-agents model ${all.model}`)
   }
-  let effort = all.effort as Effort
+  const inherited = (itsOwnModel && all.ownModelEffort !== undefined ? all.ownModelEffort : all.effort) as Effort
+  let effort = inherited
   const ownEffort = own.aiEffort
   if (ownEffort !== undefined && ownEffort !== '') {
     if (typeof ownEffort === 'string' && (EFFORTS as readonly string[]).includes(ownEffort)) effort = ownEffort as Effort
-    else ignored.push(`its own effort ${named(ownEffort)} is not one of ${EFFORTS.join(', ')}: it plays the all-agents effort ${all.effort}`)
+    else ignored.push(`its own effort ${named(ownEffort)} is not one of ${EFFORTS.join(', ')}: it plays ${inherited === all.effort ? `the all-agents effort ${all.effort}` : `${inherited}, the effort of a model of its own while no effort is picked for all agents`}`)
   }
   return { model, effort, ignored }
 }

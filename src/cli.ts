@@ -17,7 +17,7 @@ import { secretsFile, writeSecrets } from './store/secrets.ts'
 import { Executor, formatResult, liveSigningAllowed } from './executor/executor.ts'
 import { parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
-import { EFFORTS, MODELS, Strategist, agentChoice, isKnownModel, ownAi, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
+import { EFFORTS, MODELS, Strategist, agentChoice, inheritedEffort, isKnownModel, ownAi, renderPlanRequest, strategistChoice } from './strategist/strategist.ts'
 import { MANUAL_BRANCH, buildManual, manualStatus } from './strategist/manual.ts'
 import { MANUAL_FILE, RECORD_FILE, checkManual, manualLine, manualRecord } from './strategist/manual-watch.ts'
 import { API_RECORD_FILE, apiRecord } from './foxleague/api-routes.ts'
@@ -349,8 +349,9 @@ async function main(): Promise<void> {
         console.log(renderPlanRequest(input))
         return
       }
-      // The agent's own model and effort where it has them, as the service plans it.
-      const choice = agentChoice(agent.settings, strategistChoice(store, cfg))
+      // The agent's own model and effort where it has them, as the service plans it (an own model without an effort of
+      // its own inherits inheritedEffort, R82A-1).
+      const choice = agentChoice(agent.settings, { ...strategistChoice(store, cfg), ownModelEffort: inheritedEffort(store) })
       for (const why of choice.ignored) console.log(`${agentName(index)}: ${why}`)
       const plan = await new Strategist(cfg.anthropicApiKey, choice.model, choice.effort).plan(input)
       console.log(`PLAN: ${plan.summary}\nmodel $${plan.usage.usd.toFixed(4)}, in ${plan.usage.inputTokens} (+${plan.usage.cacheReadTokens} cached, ${plan.usage.cacheWriteTokens} written), out ${plan.usage.outputTokens}, stop ${plan.stopReason}`)
@@ -404,7 +405,7 @@ async function main(): Promise<void> {
       // An agent's own AI model and effort (the owner, 2026-11-13). Set on the machine, like every server-side setting,
       // it asks for no dashboard password. A running service reads it at the agent's next plan.
       const store = new Store(cfg.dataDir)
-      const all = strategistChoice(store, cfg, () => undefined)
+      const all = { ...strategistChoice(store, cfg, () => undefined), ownModelEffort: inheritedEffort(store) }
       const pair = (ai: { model: string; effort: string }) => `${MODELS[ai.model]?.label ?? ai.model} at ${ai.effort} effort`
       const whose = (s: AgentSettings) => {
         const own = ownAi(s)
