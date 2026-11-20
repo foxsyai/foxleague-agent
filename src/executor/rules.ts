@@ -5,7 +5,7 @@
 import { blockingWindow, ceilMinute, clash, firstFreeStart, nextPlanLeadMs } from './slots.ts'
 import { percent, winChance } from '../snapshot/winchance.ts'
 import type { Action } from './actions.ts'
-import { CREATE_START_MAX_MS, CREATE_START_MIN_MS, FORMATION_SLOTS, createStartMs, rangeWords } from './actions.ts'
+import { CREATE_START_MAX_MS, CREATE_START_MIN_MS, FORMATION_SLOTS, ORGANIZER_START_MIN_MS, createStartMs, rangeWords } from './actions.ts'
 import type { AgentSnapshot, PlayerView } from '../snapshot/snapshot.ts'
 import type { CanFuse, CanList, FoxConfig, FusionPrepared, MatchWaiverQuote, MedicineQuote, OrganizerFeeQuote, PendingLeagueInvitation, RankedTicketView, Tournament, TournamentDetail, UpcomingMatch } from '../foxleague/types.ts'
 import { aRarity, matchGate } from '../foxleague/gate.ts'
@@ -1567,16 +1567,26 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // (R74A-1): the 2-hour floor of this moment would be about an hour ahead by then. The next plan reads the refusal
       // cut to 300 characters after the action's description (a title of up to 60): the start comes first, then the
       // taken window, so a cut takes the window and never the minute (R74A-4).
+      // The soonest start this create may have: FoxLeague's 2 hours for the owner's own (Telegram /do), 3 days for the
+      // agent's (ORG-3). The free starts a refusal names are searched from it, so the next plan does not pick one too soon.
+      const minAhead = ctx.byOwner ? CREATE_START_MIN_MS : ORGANIZER_START_MIN_MS
       const taken = clash(s.market.slots ?? [], blockingWindow(a.format, a.max_teams, Boolean(a.home_and_away), startsAt))
       if (taken) {
-        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
+        const free = firstFreeStart(s.market.slots ?? [], a.format, a.max_teams, Boolean(a.home_and_away), ctx.now.getTime(), minAhead + nextPlanLeadMs(ctx.settings), CREATE_START_MAX_MS)
         const iso = (t: number) => new Date(t).toISOString().slice(0, 16)
         const takenWindow = `the taken window is ${iso(taken.start)} to ${iso(ceilMinute(taken.end))} UTC`
         return refuse(`time slot taken by T${taken.id}; ${free !== null ? `the first free start for this format and size is starts_at ${iso(free)}Z (late enough for the next plan to create it; ${takenWindow})` : `no free start the next plan can still create in the next ${CREATE_START_MAX_MS / 86_400_000} days (${takenWindow})`}`)
       }
       // FoxLeague's own calendar for this start, a tournament being created counted too (ORG-2, src/snapshot/calendar.ts).
-      const held = startCalendarVerdict(ctx.startCalendar, { format: a.format, teams: a.max_teams, home_and_away: Boolean(a.home_and_away) }, s.market.slots ?? [], Math.max(startsAt, ctx.now.getTime() + CREATE_START_MIN_MS + nextPlanLeadMs(ctx.settings)), ctx.now.getTime() + CREATE_START_MAX_MS)
+      const held = startCalendarVerdict(ctx.startCalendar, { format: a.format, teams: a.max_teams, home_and_away: Boolean(a.home_and_away) }, s.market.slots ?? [], Math.max(startsAt, ctx.now.getTime() + minAhead + nextPlanLeadMs(ctx.settings)), ctx.now.getTime() + CREATE_START_MAX_MS)
       if (held && 'refusal' in held) return refuse(held.refusal)
+      // ORG-3: a tournament the agent creates, public or private, starts at least 3 days ahead, so teams have days to see
+      // it and join before its deadline (an unfilled one keeps the organizer's deposit). Private too: its seats fill only
+      // when the invited teams join, and an invitation seen late is the same risk as a listing seen late. A stricter
+      // check than FoxLeague's 2 hours, never a looser one; the owner's own create keeps the 2 hours.
+      if (!ctx.byOwner && ahead < ORGANIZER_START_MIN_MS) {
+        return refuse(`starts ${startIso.slice(0, 16)} UTC, less than ${ORGANIZER_START_MIN_MS / 86_400_000} days from now: a tournament this agent creates needs days to fill; the earliest start allowed is starts_at ${new Date(ceilMinute(ctx.now.getTime() + ORGANIZER_START_MIN_MS)).toISOString().slice(0, 16)}Z (take one of your own starts, all ${ORGANIZER_START_MIN_MS / 86_400_000} days ahead or more)`)
+      }
       // The executor creates a knockout with its third place match (executor.ts), one match more in its schedule.
       const worn = scheduleRefusal(s, { format: a.format, max_teams: a.max_teams, min_teams: a.min_teams, home_and_away: a.home_and_away, has_third_place_match: a.format === 'knockout', round_interval_minutes: a.round_interval_minutes, starts_at: startIso }, ctx.now)
       if (worn) return refuse(worn)

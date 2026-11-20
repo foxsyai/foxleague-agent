@@ -35,7 +35,7 @@ test('DOCS-2 Max shop payment caps the organizer deposit and the ranked ticket; 
   assert.equal(DEFAULT_SETTINGS.maxShopPaymentFoxsy, 500)
   const s = snapshot()
   s.config!.organizer_fees = LIVE_FEES
-  const cup = parseAction({ type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 8, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60 })
+  const cup = parseAction({ type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 8, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 60 })
   const [r] = await m.exec.run(m.agent(), dryWallet, s, [{ action: cup, reason: '' }])
   assert.equal(r!.status, 'refused', r!.summary)
   assert.match(r!.summary, /an organizer payment of 700 FOXSY exceeds the per-action maximum 500: a smaller tournament owes less/)

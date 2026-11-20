@@ -168,7 +168,7 @@ test('R51A-2: a create answered by an empty gateway error after the organizer pa
   const m = setup({ fox: { organizerFeeQuote: async () => OWED, createTournament, tournament: async () => tournament(55), joinTournament: async () => ({}) }, chain: { send: async () => `hash${calls.length}` } })
   const s = snapshot()
   s.config!.organizer_fees = { live: true, live_from: '2026-11-09T14:00:00Z', private_match_fee_foxsy: 0, calendar_deposit_per_match_foxsy: 25, calendar_deposit_min_foxsy: 0, calendar_deposit_grace_minutes: 60 }
-  const cup = parseAction({ type: 'create_tournament', title: 'Autumn Cup', format: 'round_robin', tier: 'silver', max_teams: 4, min_teams: 3, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 30 })
+  const cup = parseAction({ type: 'create_tournament', title: 'Autumn Cup', format: 'round_robin', tier: 'silver', max_teams: 4, min_teams: 3, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 30 })
   await withLive(m.store, async () => {
     const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action: cup, reason: '' }])
     assert.equal(r!.status, 'confirmed', r!.summary)

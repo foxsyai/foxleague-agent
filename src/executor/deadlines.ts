@@ -3,7 +3,7 @@
 // service.ts); the executor still checks everything against a fresh snapshot when the action runs, and nothing here
 // lets an action skip a check.
 
-import { CREATE_START_MIN_MS, type Action } from './actions.ts'
+import { ORGANIZER_START_MIN_MS, type Action } from './actions.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import { BUSY_OPENS_MARGIN_S, INVITATION_MARGIN_MS } from './rules.ts'
 
@@ -138,12 +138,12 @@ export function actionDeadline(a: Action, s: AgentSnapshot | null | undefined): 
       // snapshot holds no end of the agent's own auctions (its market list leaves them out): unknown, so early.
       return 'unread'
     case 'create_tournament': {
-      // A start at a fixed minute (2026-11-15): the executor wants it at least 2 hours ahead and registration closing
-      // more than 30 minutes from now. Whole hours count from the run, so they have no time limit; a start the rules
-      // cannot read is refused whenever it runs.
+      // A start at a fixed minute (2026-11-15): the executor wants the agent's own at least 3 days ahead (ORG-3) and
+      // registration closing more than 30 minutes from now. Whole hours count from the run, so they have no time limit;
+      // a start the rules cannot read is refused whenever it runs.
       if (a.starts_at === undefined) return null
       const start = time(a.starts_at)
-      return start === null ? null : start - Math.max(CREATE_START_MIN_MS, (a.registration_closes_minutes_before + 30) * 60_000)
+      return start === null ? null : start - Math.max(ORGANIZER_START_MIN_MS, (a.registration_closes_minutes_before + 30) * 60_000)
     }
     default:
       return null
