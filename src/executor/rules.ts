@@ -859,6 +859,30 @@ export function paidSessionsToday(t: { used_today: number; daily_free: number })
   return Math.max(0, t.used_today - t.daily_free)
 }
 
+/** The training quota as FoxLeague's shop status serves it. */
+export type TrainingQuota = { daily_free: number; premium_cap: number; used_today: number; premium_used_today: number; slots_banked: number }
+
+/**
+ * Why the game day has no training session left for the agent: the day's free sessions used up and no paid one it may
+ * take (none banked, FoxLeague's paid cap, or the level's paid sessions a day), the refusal only the next game day
+ * lifts; null when a session can run, and when a count could not be read (the train rule refuses that itself, and
+ * unknown is no "used up"). The train rule and the scheduler's wait for the reset (RESET-1) both read it here.
+ */
+export function trainingDayRefusal(t: TrainingQuota, paidPerDay: number): string | null {
+  if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return null
+  if (t.used_today < t.daily_free) return null
+  if (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0) return `daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`
+  if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked)) return null
+  const paidToday = paidSessionsToday(t)
+  if (paidToday >= paidPerDay) return `${paidPerDay} paid training sessions a day at this level, ${paidToday} used today`
+  return null
+}
+
+/** Why the game day has no match start left (FoxLeague's daily starts, casual and ranked together), or null (RESET-1). */
+export function matchDayRefusal(al: { today_count: number; daily_limit: number }): string | null {
+  return al.today_count >= al.daily_limit ? `daily match limit reached (${al.today_count}/${al.daily_limit})` : null
+}
+
 /** The condition a training session costs a card (FoxLeague's `training_condition_loss`, not public), before age. */
 export const TRAINING_CONDITION_LOSS = 5
 
@@ -1241,10 +1265,10 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // Numbers it cannot read are no count (EDGE-3, R55A-3).
       if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse('training quota unknown (the sessions used today or the free ones could not be read)')
       const paid = t.used_today >= t.daily_free
-      if (paid && (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0)) return refuse(`daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`)
+      // Used up for the game day (the scheduler holds such a session for the reset by the same reading, RESET-1).
+      const dayDone = trainingDayRefusal(t, ctx.settings.paidTrainingPerDay)
+      if (dayDone) return refuse(dayDone)
       if (paid && (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked))) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
-      const paidToday = paidSessionsToday(t)
-      if (paid && paidToday >= ctx.settings.paidTrainingPerDay) return refuse(`${ctx.settings.paidTrainingPerDay} paid training sessions a day at this level, ${paidToday} used today`)
       // The team unread: the card may be a starter (R54A-5).
       if (!s.team || s.team.lineup.includes(p.nonce)) {
         const waits = waitingOpenRefusal(s, ctx, 'training', s.team?.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
@@ -1281,7 +1305,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!s.team) return refuse(TEAM_UNREADABLE)
       const al = s.auth?.allowance
       if (!al) return refuse('daily allowance unknown')
-      if (al.today_count >= al.daily_limit) return refuse(`daily match limit reached (${al.today_count}/${al.daily_limit})`)
+      const startsDone = matchDayRefusal(al)
+      if (startsDone) return refuse(startsDone)
       if (s.auth?.activeMatch) return refuse(`already in match #${s.auth.activeMatch.match_id ?? s.auth.activeMatch.tournament_match_id ?? '?'}`)
       const busy = tournamentMatchWithinHour(s, ctx.now)
       if (busy) return refuse(s.auth?.upcoming ? `pre-match lockout: ${busy}` : `${busy} (the pre-match lockout is unknown): no match started blind`)

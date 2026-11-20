@@ -32,6 +32,7 @@ import { PLAN_WINDOW_SHARE } from './executor/slots.ts'
 import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './executor/rivals.ts'
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, MAX_UNANSWERED_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
+import { newDayHolds } from './executor/new-day.ts'
 import { MODELS, Strategist, agentChoice, currentModel, describeModelError, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, shadowRuns, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
 import { ChatBusyError, Proposals, type Proposal } from './strategist/proposals.ts'
@@ -190,8 +191,8 @@ export interface ScheduledAction {
  */
 export function scheduleActions(
   planned: PlannedAction[],
-  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: Deadline[] },
-): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string }[] } {
+  o: { windowMs: number; gapMs: number; random: () => number; lastMatchMs?: number | null; lastRankedMs?: number | null; deadlines?: Deadline[]; holds?: ({ ms: number; why: string } | null)[] },
+): { kept: ScheduledAction[]; dropped: { p: PlannedAction; reason: string; room?: string }[] } {
   // Leaving the agent's own unanswered 1v1 runs first, before anything else of the plan (audit 2026-11-16, BEH-9): it
   // depends on nothing the plan does, and until it runs any team can take the 1v1 the plan decided not to play. So does
   // leaving a tournament it created (ORG-1): until it runs, any team can bring it to its minimum and lock the seats.
@@ -200,20 +201,33 @@ export function scheduleActions(
   const actions = order.map(i => planned[i]!)
   const deadlines = o.deadlines ? order.map(i => o.deadlines![i] ?? null) : undefined
   const raw = actions.map(() => o.random() * o.windowMs).sort((a, b) => a - b)
+  // RESET-1: an action that by the plan's snapshot can only run on the new game day runs from the reset plus a margin
+  // (`holds`, src/executor/new-day.ts), never sooner. One the window ends before, or that would push an action after it
+  // past its deadline (the plan's order holds), is dropped first, as one more drop, and takes no room.
+  const holds = order.map(i => o.holds?.[i] ?? null)
+  const floors = holds.map(h => (h && h.ms > 0 ? h.ms : -Infinity))
+  const byDeadline = deadlines ? latestMoments(actions, { ...o, windowMs: Infinity }, deadlines, null) : null
+  const held = new Map<number, { reason: string; room?: string }>()
+  floors.forEach((f, i) => {
+    if (f > o.windowMs) held.set(i, { reason: holds[i]!.why })
+    else if (byDeadline && f > byDeadline[i]!) held.set(i, { reason: holds[i]!.why, room: 'an action after it that must run by its deadline' })
+  })
+  const heldOut = new Set(held.keys())
   // Without deadlines: what is dropped, and why. Each match has a latest moment that leaves the matches after it their
   // gates inside the window (audit 2026-11-16, BEH-5): a first match drawn late no longer pushes out a second the
   // window has room for.
-  const fit = latestMoments(actions, o, undefined, null)
-  const plain = placeActions(actions, raw, fit, o, null)
-  const dropped = new Set(plain.dropped.map(d => d.i))
+  const fit = latestMoments(actions, o, undefined, heldOut)
+  const plain = placeActions(actions, raw, fit, floors, o, heldOut, true)
+  const dropped = new Set([...heldOut, ...plain.dropped.map(d => d.i)])
   // With deadlines, the kept actions only: each also by its own deadline less the margin (0 for one that could not be
   // read or that runs at once). Never later than without deadlines, so no gate starts later and no new drop comes.
   const withDeadlines = deadlines ? latestMoments(actions, o, deadlines, dropped) : fit
   const latest = fit.map((f, i) => Math.min(f, withDeadlines[i]!))
-  const placed = placeActions(actions, raw, latest, o, dropped)
+  const placed = placeActions(actions, raw, latest, floors, o, dropped, false)
+  const drops: { i: number; reason: string; room?: string }[] = [...[...held].map(([i, d]) => ({ i, ...d })), ...plain.dropped].sort((x, y) => x.i - y.i)
   return {
     kept: placed.kept.map(k => ({ p: actions[k.i]!, offset: k.offset })),
-    dropped: plain.dropped.map(d => ({ p: actions[d.i]!, reason: d.reason })),
+    dropped: drops.map(d => ({ p: actions[d.i]!, reason: d.reason, ...(d.room ? { room: d.room } : {}) })),
   }
 }
 
@@ -246,15 +260,18 @@ function latestMoments(actions: PlannedAction[], o: { windowMs: number; gapMs: n
 
 /**
  * One forward pass of scheduleActions: each action at its draw, or at its latest moment when that is sooner, after the
- * one before it by the gap, a match after its gates. With `dropped` null a match that a gate pushes past the window is
- * dropped; with the set of the drops already decided those are skipped and nothing else is dropped.
+ * one before it by the gap and never before its floor (the new game day, RESET-1), a match after its gates. The actions
+ * in `skip` are left out. With `decide` a match that a gate pushes past the window is dropped; without it nothing else
+ * is dropped.
  */
 function placeActions(
   actions: PlannedAction[],
   raw: number[],
   latest: number[],
+  floors: number[],
   o: { windowMs: number; gapMs: number; lastMatchMs?: number | null; lastRankedMs?: number | null },
-  dropped: Set<number> | null,
+  skip: Set<number>,
+  decide: boolean,
 ): { kept: { i: number; offset: number }[]; dropped: { i: number; reason: string }[] } {
   const kept: { i: number; offset: number }[] = []
   const drops: { i: number; reason: string }[] = []
@@ -262,14 +279,14 @@ function placeActions(
   let lastMatch = o.lastMatchMs ?? null
   let lastRanked = o.lastRankedMs ?? null
   actions.forEach((p, i) => {
-    if (dropped?.has(i)) return
-    let at = Math.max(Math.min(raw[i]!, latest[i]!), last + o.gapMs)
+    if (skip.has(i)) return
+    let at = Math.max(Math.min(raw[i]!, latest[i]!), last + o.gapMs, floors[i]!)
     if (p.action.type === 'play_match') {
       const afterMatch = lastMatch === null ? -Infinity : lastMatch + PLAN_MATCH_GAP_MS
       const afterRanked = p.action.match_type === 'ranked' && lastRanked !== null ? lastRanked + PLAN_RANKED_GAP_MS : -Infinity
       const spaced = Math.max(at, afterMatch, afterRanked)
       // Dropped only when a gate pushes it out of the window (the 30-second gaps alone never drop an action).
-      if (dropped === null && spaced > o.windowMs && spaced > at) {
+      if (decide && spaced > o.windowMs && spaced > at) {
         drops.push({ i, reason: spaced === afterRanked ? 'the ranked cooldown (15 min after the last ranked start)' : 'the match before it (a match holds the team up to about 16 minutes)' })
         return
       }
@@ -2114,9 +2131,12 @@ export class Service {
       const d = actionDeadline(p.action, planSnap)
       return typeof d === 'number' ? d - start : d
     })
-    const { kept, dropped } = scheduleActions(actions, { windowMs, gapMs, random: Math.random, lastMatchMs: before.match ? before.match.getTime() - start : null, lastRankedMs: before.ranked ? before.ranked.getTime() - start : null, deadlines })
+    // What by the plan's snapshot can only run on the new game day waits for the reset (RESET-1). An owner's request
+    // runs at once, as before: the executor tells them why it cannot.
+    const holds = routine ? newDayHolds(actions, planSnap, agent.settings).map(h => (h ? { ms: h.at - start, why: h.why } : null)) : undefined
+    const { kept, dropped } = scheduleActions(actions, { windowMs, gapMs, random: Math.random, lastMatchMs: before.match ? before.match.getTime() - start : null, lastRankedMs: before.ranked ? before.ranked.getTime() - start : null, deadlines, holds })
     for (const d of dropped) {
-      const summary = `dropped from this plan: ${describeAction(d.p.action)}: ${d.reason} leaves no room before the plan's window ends; the next plan can play it`
+      const summary = `dropped from this plan: ${describeAction(d.p.action)}: ${d.reason} leaves no room before ${d.room ?? "the plan's window ends"}; the next plan can play it`
       this.store.log({ agentIndex: agent.index, kind: d.p.action.type, status: 'info', summary })
       // The owner asked for it (Telegram /do): they hear why it did not run, as the executor's refusal told them before.
       if (!routine) this.notify(`${agentName(agent.index)}: ${summary}`)
