@@ -10,7 +10,7 @@ import { parseAction, type PlannedAction } from '../executor/actions.ts'
 import type { BudgetView } from '../executor/budget.ts'
 import type { Config } from '../config.ts'
 import type { ActivityRow, Store } from '../store/db.ts'
-import { AI_EFFORTS, type AgentSettings } from '../store/settings.ts'
+import { AI_EFFORTS, DEFAULT_AI, type AgentSettings } from '../store/settings.ts'
 import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
@@ -125,9 +125,15 @@ const WITH_FALLBACK = new Set(['claude-sonnet-5-5', 'claude-opus-5', 'claude-opu
 const movedSaid = new Set<string>()
 
 /**
- * The web UI's choice (kv), else AGENT_MODEL / AGENT_MODEL_EFFORT from the env. A model that left the list becomes its
- * successor here, where the choice is read. A saved choice is saved again as the successor, so it happens once and
- * is said once, in the log and in the activity; the env file cannot be rewritten, so its one is said once per run.
+ * The web UI's choice (kv), else AGENT_MODEL / AGENT_MODEL_EFFORT from the env, else the AI of a new install
+ * (DEFAULT_AI: Haiku 5.5 at high). A model that left the list becomes its successor here, where the choice is read. A
+ * saved choice is saved again as the successor, so it happens once and is said once, in the log and in the activity;
+ * the env file cannot be rewritten, so its one is said once per run.
+ *
+ * The effort nobody chose (neither saved nor AGENT_MODEL_EFFORT) is high only with the model nobody chose. A model that
+ * was named (saved in the dashboard, AGENT_MODEL, or a cfg.model other than the default) without an effort plays at
+ * medium, what every version before 2026-11-20 played it at: an update raises no one's effort, which needs the
+ * password (AGENTS.md rule 7). An effort that is not one of the five is medium, never a guess upward.
  */
 export function strategistChoice(store: Store, cfg: Config, say?: (text: string) => void): { model: string; effort: Effort } {
   const tell = say ?? ((text: string) => console.log(`[${new Date().toISOString()}] ${text}`))
@@ -147,7 +153,8 @@ export function strategistChoice(store: Store, cfg: Config, say?: (text: string)
     if (!say) movedSaid.add(cfg.model)
     tell(moved(cfg.model, ` (AGENT_MODEL in the env file still names ${cfg.model})`))
   }
-  const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? 'medium'
+  const named = (picked !== undefined && isKnownModel(picked)) || Boolean(process.env.AGENT_MODEL?.trim()) || cfg.model !== DEFAULT_AI.model
+  const effort = store.getKv('strategist_effort') ?? process.env.AGENT_MODEL_EFFORT ?? (named ? 'medium' : DEFAULT_AI.effort)
   return { model, effort: (EFFORTS as readonly string[]).includes(effort) ? (effort as Effort) : 'medium' }
 }
 
