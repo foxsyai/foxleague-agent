@@ -147,3 +147,21 @@ test('RESET-1 an action held for the reset never pushes a later deadline action 
   assert.deepEqual(ran.map(r => `${r.type} ${hhmmss(r.at)}`), ['leave_tournament 13:59:00'])
   assert.match(info[0] ?? '', /^dropped from this plan: train #1 speed: the wait for the new game day at 14:00 UTC .* leaves no room before an action after it that must run by its deadline; the next plan can play it$/)
 })
+
+// The GitHub review of PR #81 (medium): a training slot the plan buys before its trainings adds a paid session today,
+// as the executor counts it (applyEffect: slots_banked plus the quantity, 1 when none is given). newDayHolds did not
+// count it, so the trainings after the buy were dropped while the buy still spent the FOXSY. No other action adds room
+// for the day: nothing buys match starts (a ranked ticket pays for a ranked game, not for a start).
+test('RESET-1 a training slot bought earlier in the plan adds today\'s room: the trainings after it run now', async () => {
+  const t0 = at('10:00:00')
+  const plan = [act({ type: 'buy', product: 'training_slot', quantity: 2 }), train(1), train(2)]
+  const { ran, info } = await runPlanned(t0, plan, planSnap(t0, { used: 5, banked: 0, starts: 0 }), () => 0)
+  assert.deepEqual(info, [], 'nothing is held or dropped')
+  assert.deepEqual(ran.map(r => `${r.type} ${hhmmss(r.at)}`), ['buy 10:00:00', 'train 10:00:30', 'train 10:01:00'])
+  // One slot lets one training run; the second waits for the new day. Built past the parser (which asks for a quantity)
+  // to pin the executor's default of 1 for an action without one.
+  const bare = { action: { type: 'buy', product: 'training_slot' }, reason: '' } as unknown as PlannedAction
+  const one = await runPlanned(t0, [bare, train(1), train(2)], planSnap(t0, { used: 5, banked: 0, starts: 0 }), () => 0)
+  assert.deepEqual(one.ran.map(r => r.type), ['buy', 'train'])
+  assert.match(one.info[0] ?? '', /^dropped from this plan: train #2 speed: the wait for the new game day at 14:00 UTC/)
+})

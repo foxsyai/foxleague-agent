@@ -27,8 +27,9 @@ export interface NewDayHold {
 
 /**
  * Per action of the plan, in its order: the hold when by the plan's snapshot it can only run on the next game day, else
- * null. The plan's own earlier actions count: a training or a match start the day still has room for uses it, so the
- * next one may find the day full. The counts the executor refuses on are read with its own rules (trainingDayRefusal,
+ * null. The plan's own earlier actions count, as the executor's applyEffect counts them: a training or a match start the
+ * day still has room for uses it, so the next one may find the day full, and a training slot bought adds a paid session
+ * (no other action adds room for the day: nothing buys match starts). The counts the executor refuses on are read with its own rules (trainingDayRefusal,
  * matchDayRefusal); a count that could not be read holds nothing (the executor refuses it on a fresh read). The reset is
  * the first after the snapshot was read: a plan whose snapshot is of the new day already holds to the reset after it.
  */
@@ -46,6 +47,8 @@ export function newDayHolds(actions: PlannedAction[], snap: AgentSnapshot | unde
   const al = snap.auth?.allowance ? { ...snap.auth.allowance } : null
   return actions.map(p => {
     const a = p.action
+    // A training slot bought earlier in the plan is a paid session today, as the executor counts it (applyEffect).
+    if (a.type === 'buy' && a.product === 'training_slot' && t) t.slots_banked += a.quantity ?? 1
     if (a.type === 'train' && t) {
       const full = trainingDayRefusal(t, settings.paidTrainingPerDay)
       if (full) return { at, why: `${day} (this one's ${full.startsWith('daily training exhausted') ? `training sessions are used up: ${t.used_today} used, ${t.slots_banked} paid slots banked` : full})` }
