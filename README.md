@@ -176,3 +176,12 @@ the tests and how a change reaches `main`. Opening a pull request runs nothing; 
 it, the label `merge-check` runs the tests and an agent review, and `main` takes the change once both pass and a
 maintainer approved it. New versions reach users as signed releases ([docs/RELEASING.md](docs/RELEASING.md)): the
 installer takes the newest one, and an installed agent offers each new one to its owner.
+
+## License
+
+The code and the documentation are open source under the [Apache License 2.0](LICENSE), copyright Foxsy AI
+([NOTICE](NOTICE)): you may use, change and share them, also commercially, under its terms.
+
+Not covered by the license (all rights reserved by Foxsy AI): the names FoxLeague and Foxsy, their logos and the
+images and videos in `site/public/` and `site/src/assets/` (with the logo images embedded in
+`src/web/login.html` and `src/web/dashboard.html`).
