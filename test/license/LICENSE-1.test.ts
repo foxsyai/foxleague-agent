@@ -18,8 +18,14 @@ test('LICENSE-1 LICENSE is the Apache License 2.0, word for word as the Apache S
   assert.equal(createHash('sha256').update(readFileSync(join(ROOT, 'LICENSE'))).digest('hex'), APACHE_2_0_SHA256)
 })
 
-test('LICENSE-1 NOTICE names the work and its copyright holder, Foxsy AI', () => {
-  assert.match(read('NOTICE'), /^FoxLeague Agent\nCopyright 2026 Foxsy AI\n/)
+test('LICENSE-1 NOTICE names the work and its copyright holder, Foxsy AI, and what the license does not cover', () => {
+  const notice = read('NOTICE')
+  assert.match(notice, /^FoxLeague Agent\nCopyright 2026 Foxsy AI\n/)
+  // A root LICENSE covers every file; the brand is kept out by name (review of PR #86).
+  assert.match(notice.replace(/\s+/g, ' '), /Not covered by the license \(all rights reserved by Foxsy AI\): the names FoxLeague and Foxsy, their logos and the images and videos in site\/public\/ and site\/src\/assets\/ \(with the logo images embedded in src\/web\/login\.html and src\/web\/dashboard\.html\)\./)
+  // What it names is there, so the sentence stays true of the tree.
+  for (const p of ['site/public', 'site/src/assets']) assert.ok(existsSync(join(ROOT, p)), p)
+  for (const p of ['src/web/login.html', 'src/web/dashboard.html']) assert.match(read(p), /data:image\/png;base64,/, `${p} embeds its logo`)
 })
 
 test('LICENSE-1 package.json and package-lock.json say Apache-2.0', () => {
@@ -31,7 +37,8 @@ test('LICENSE-1 the README says the license, and that the names and logos are no
   const readme = read('README.md').replace(/\s+/g, ' ')
   assert.match(readme, /## License/)
   assert.match(readme, /Apache License 2\.0/)
-  assert.match(readme, /names FoxLeague and Foxsy/)
+  assert.match(readme, /The code and the documentation are open source under the \[Apache License 2\.0\]\(LICENSE\), copyright Foxsy AI/)
+  assert.match(readme, /Not covered by the license \(all rights reserved by Foxsy AI\): the names FoxLeague and Foxsy, their logos and the/)
 })
 
 test('LICENSE-1 the release archive carries LICENSE and NOTICE: neither is left out of it', () => {
@@ -42,7 +49,3 @@ test('LICENSE-1 the release archive carries LICENSE and NOTICE: neither is left 
   }
 })
 
-test('LICENSE-1 the site answers "Is it open source?" with the license and the repository', () => {
-  const faq = read('site/src/content/docs/help/faq.md').replace(/\s+/g, ' ')
-  assert.match(faq, /### Is it open source\? Yes: the code is public on GitHub \(\[foxsyai\/foxleague-agent\]\(https:\/\/github\.com\/foxsyai\/foxleague-agent\)\) under the Apache License 2\.0, copyright Foxsy AI\./)
-})

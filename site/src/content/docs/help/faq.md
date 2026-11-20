@@ -19,12 +19,6 @@ maximums before it is signed, and refuses what does not fit. The gas reserve is 
 On your own computer, in the `foxleague-agent` folder, readable only by your user. Nothing is sent to FoxLeague or anyone
 else. The AI never sees them.
 
-### Is it open source?
-
-Yes: the code is public on GitHub ([foxsyai/foxleague-agent](https://github.com/foxsyai/foxleague-agent)) under the Apache
-License 2.0, copyright Foxsy AI. You can read every line before you run it, change it and share it under the
-license's terms. The license covers the code only, not the names FoxLeague and Foxsy or their logos.
-
 ### Does it keep playing when my computer is off?
 
 No: the agent runs on your computer. Matches FoxLeague already scheduled (tournaments, accepted 1v1s) are played

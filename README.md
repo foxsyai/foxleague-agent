@@ -179,6 +179,9 @@ installer takes the newest one, and an installed agent offers each new one to it
 
 ## License
 
-The code is open source under the [Apache License 2.0](LICENSE), copyright Foxsy AI ([NOTICE](NOTICE)): you may use,
-change and share it, also commercially, under its terms. The license covers the code only. It gives no right to the
-names FoxLeague and Foxsy or to their logos.
+The code and the documentation are open source under the [Apache License 2.0](LICENSE), copyright Foxsy AI
+([NOTICE](NOTICE)): you may use, change and share them, also commercially, under its terms.
+
+Not covered by the license (all rights reserved by Foxsy AI): the names FoxLeague and Foxsy, their logos and the
+images and videos in `site/public/` and `site/src/assets/` (with the logo images embedded in
+`src/web/login.html` and `src/web/dashboard.html`).
