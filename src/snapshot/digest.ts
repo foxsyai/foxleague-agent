@@ -448,6 +448,9 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     // lineup locks with it in the saved 18 (mainnet 2026-11-16, MNT-4). The agent lists none of its 18; the owner may.
     const auctioned = s.players.filter(p => p.listed && p.role !== 'reserve')
     if (auctioned.length) out.push(`LISTED IN YOUR 18: ${auctioned.map(p => `#${p.nonce}`).join(', ')}: a card in an auction does not play, and FoxLeague forfeits (3-0, the full K lost) your next tournament or 1v1 match whose lineup locks with ${auctioned.length === 1 ? 'it' : 'them'} in your 18; no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an 18 without ${auctioned.length === 1 ? 'it' : 'them'}`)
+    // FoxLeague sells no Shop item for a card in an auction (#752) and the executor refuses one (SYNC-2).
+    const inAuction = s.players.filter(p => p.listed)
+    if (inAuction.length) out.push(`In an auction (LISTED): ${inAuction.map(p => `#${p.nonce}`).join(', ')}: FoxLeague sells no Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for a card in an auction and trains none until the auction ends; leave ${inAuction.length === 1 ? 'it' : 'them'} out of every purchase`)
     const banned = s.players.filter(p => p.suspended && p.role !== 'reserve')
     if (banned.length) out.push(`Suspended in your 18: ${banned.map(p => `#${p.nonce}`).join(', ')}: out of your next tournament match of more than 2 teams (a 1v1 or a ranked game never serves a ban and still takes the card)`)
   }

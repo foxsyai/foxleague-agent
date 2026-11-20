@@ -26,6 +26,7 @@ export const LEFT_OUT: Record<string, string> = {
   'getting-started/wallet.mdx': 'wallet apps and logins; the agent signs with its own key',
   'reference': 'the FAQ and glossary: support answers and definitions the mechanics pages already give',
   'developer': 'guides for developer teams, not for playing',
+  'legal/account-bans.md': "what an administrator does to a banned or an empty account and to a banned wallet's payments; nothing a plan decides: a banned wallet cannot sign in, so every read that needs a session fails and the executor refuses (fail closed), and an agent's team keeps its account from the empty-account cleanup (FoxLeague's release branch, #764; SYNC-2)",
   'legal/privacy.md': 'privacy policy',
   'legal/terms.md': 'terms of use',
   'vision': 'roadmap and plans, not live rules',

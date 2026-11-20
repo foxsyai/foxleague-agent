@@ -1169,6 +1169,20 @@ function squadLegal(s: AgentSnapshot, at: Date, what = ''): string | null {
   return null
 }
 
+/**
+ * A card in an auction takes no Shop item of its own (FoxLeague #752, the owner's rule of 14 Nov 2026 there): the
+ * marketplace contract holds it until the auction ends and it may be another manager's then. FoxLeague sells no
+ * Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for it; a payment confirmed for one anyway is
+ * refused and refunded whole (the gas lost), a bulk recovery that names it too, and before #752 it kept the payment.
+ * The players contract waives nothing on a card it holds. A card whose auction state the roster did not give is
+ * unknown, never "in the wallet": refused for these items (SYNC-2, AGENTS.md rule 4).
+ */
+function inAuctionRefusal(p: PlayerView): string | null {
+  if (p.listed === false) return null
+  if (p.listed === true) return `card #${p.nonce} is in an auction (listed for sale): FoxLeague sells no Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for it until the auction ends`
+  return `whether card #${p.nonce} is in an auction could not be read: nothing is bought for it blind`
+}
+
 /** An eleven and bench for `formation`: cards in the wallet, free to play, each starter in a slot of its position. */
 function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], substitutes: number[], minCondition: number, now: Date): Verdict {
   const all = [...lineup, ...substitutes]
@@ -1679,6 +1693,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           for (const n of a.player_nonces ?? []) {
             const p = card(s, n)
             if (!p) return refuse(`#${n} is not in the wallet`)
+            const held = inAuctionRefusal(p)
+            if (held) return refuse(held)
             total += Math.ceil((prices.condition * (100 - p.condition)) / 100)
           }
           if (total <= 0) return refuse('selected cards are already at full condition')
@@ -1738,7 +1754,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           const days = a.quantity
           const p = typeof n === 'number' ? card(s, n) : undefined
           if (!p || typeof days !== 'number') return refuse(`#${n} is not in the wallet`)
-          if (p.listed) return refuse(`#${n} is listed for sale: only a card in the wallet takes medicine`)
+          const held = inAuctionRefusal(p)
+          if (held) return refuse(held)
           if (!p.injuredUntil) return refuse(`#${n} is not injured`)
           // The level's count (owner, 2026-11-10), in days over all cards, from the agent's own purchases of the last 7 days.
           const perWeek = ctx.settings.medicineDaysPerWeek
@@ -1911,7 +1928,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!s.team) return refuse(TEAM_UNREADABLE)
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
-      if (c.listed) return refuse(`#${a.nonce} is listed for sale: a listed card cannot be waived`)
+      const held = inAuctionRefusal(c)
+      if (held) return refuse(held)
       // Only for a fusion that can really happen: otherwise the FOXSY buys nothing. A Legendary is never fused, but
       // FoxLeague sells its match waiver for the listing gate (405, 135 played): bought only for a card the agent
       // would list (audit C1, 2026-10-23). Its cooldown waiver still buys nothing.
