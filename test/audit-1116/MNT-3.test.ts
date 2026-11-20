@@ -9,15 +9,18 @@ import assert from 'node:assert/strict'
 import { renderDigest } from '../../src/snapshot/digest.ts'
 import { snapshot } from '../fixtures.ts'
 
-/** The live game settings of 16 Nov 2026 11:50 UTC (GET /api/config), the block this finding is about. */
-const live = { elo_pair_cap: { live: false, live_from: '2026-11-20T14:00:00Z', per_day: 3, reset_hour_utc: 14 } }
+/**
+ * The block this finding is about, as GET /api/config served it on 16 Nov 2026 11:50 UTC, with its start moved to a date
+ * that stays ahead: the real one (2026-11-20T14:00:00Z) passed, and a start in the past is no longer "when it starts".
+ */
+const live = { elo_pair_cap: { live: false, live_from: '2099-11-20T14:00:00Z', per_day: 3, reset_hour_utc: 14 } }
 
 test('MNT-3 the snapshot tells the plan the ELO pair cap FoxLeague serves: its number, its day and when it starts', () => {
   const s = snapshot()
   Object.assign(s.config as object, { elo_pair_cap: live.elo_pair_cap })
   const text = renderDigest(s)
   assert.match(text, /pair cap/i, 'no line names the ELO pair cap')
-  assert.match(text, /2026-11-20T14:00/, 'the plan is not told when it starts')
+  assert.match(text, /2099-11-20T14:00/, 'the plan is not told when it starts')
 })
 
 test('MNT-3 once live, the snapshot says so', () => {
