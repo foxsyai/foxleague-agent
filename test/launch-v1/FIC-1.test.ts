@@ -13,7 +13,7 @@ import { join } from 'node:path'
 const REPO = join(import.meta.dirname, '..', '..')
 const script = readFileSync(join(REPO, 'scripts/release/fresh-install-check.sh'), 'utf8')
 
-test('FIC-1 the fresh install check builds its release 1.0.0 from a tree that is already at 1.0.0', () => {
+test('FIC-1 the fresh install check builds a release of the version the tree already has (1.0.0 on launch day)', () => {
   const m = /cat > "\$TOOLS\/mkrel\.ts" <<'EOF'\n([\s\S]*?)\nEOF\n/.exec(script)
   assert.ok(m, 'the script writes mkrel.ts from a heredoc')
   const dir = mkdtempSync(join(tmpdir(), 'fic1-'))
@@ -22,11 +22,13 @@ test('FIC-1 the fresh install check builds its release 1.0.0 from a tree that is
     writeFileSync(tool, m[1]! + '\n')
     const work = join(dir, 'rel')
     const run = (...args: string[]) => execFileSync(process.execPath, ['--disable-warning=ExperimentalWarning', tool, ...args], { env: { ...process.env, FOX_REPO: REPO }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] })
-    assert.equal(JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).version, '1.0.0', 'the case of the launch: the tree is at the version the check builds first')
+    // The case of the launch: the check's first release (1.0.0) was the version of the tree. Any version the tree has
+    // makes the same empty commit, so the test holds for every later release too.
+    const version: string = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')).version
     run('init', work)
-    run('release', work, '1.0.0', '--notes', 'The first release.')
+    run('release', work, version, '--notes', 'The first release.')
     assert.ok(existsSync(join(work, 'site', 'latest', 'download', 'release.json')), 'the release is served')
-    assert.equal(JSON.parse(readFileSync(join(work, 'site', 'latest', 'download', 'release.json'), 'utf8')).version, '1.0.0')
+    assert.equal(JSON.parse(readFileSync(join(work, 'site', 'latest', 'download', 'release.json'), 'utf8')).version, version)
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }

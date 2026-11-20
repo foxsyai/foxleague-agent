@@ -13,11 +13,12 @@ const pages = (dir: string): string[] =>
   readdirSync(join(ROOT, dir), { withFileTypes: true }).flatMap(e => (e.isDirectory() ? pages(`${dir}/${e.name}`) : /\.mdx?$/.test(e.name) ? [`${dir}/${e.name}`] : []))
 const REPO = 'https://github.com/foxsyai/foxleague-agent'
 
-test('LAUNCH-1 the version is 1.0.0 in package.json and in both places of package-lock.json', () => {
-  assert.equal(JSON.parse(read('package.json')).version, '1.0.0')
+test('LAUNCH-1 the version is 1.0.0 or later, the same in package.json and in both places of package-lock.json', () => {
+  const version: string = JSON.parse(read('package.json')).version
+  assert.match(version, /^[1-9]\d*\.\d+\.\d+$/, 'a public release: 1.0.0 or later')
   const lock = JSON.parse(read('package-lock.json'))
-  assert.equal(lock.version, '1.0.0')
-  assert.equal(lock.packages[''].version, '1.0.0')
+  assert.equal(lock.version, version)
+  assert.equal(lock.packages[''].version, version)
 })
 
 test('LAUNCH-1 no page of the site says "Coming soon" or wraps the install line in a frame: no banner, no ComingSoon', () => {
