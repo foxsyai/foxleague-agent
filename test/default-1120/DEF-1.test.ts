@@ -16,8 +16,8 @@ import { join, resolve } from 'node:path'
 import type { AddressInfo } from 'node:net'
 import type { Config } from '../../src/config.ts'
 import { Store } from '../../src/store/db.ts'
-import { LEVEL_AI } from '../../src/store/settings.ts'
-import { EFFORTS, MODELS, type Effort } from '../../src/strategist/strategist.ts'
+import { DEFAULT_AI, LEVEL_AI } from '../../src/store/settings.ts'
+import { EFFORTS, MODELS, SUCCESSORS, strategistChoice, type Effort } from '../../src/strategist/strategist.ts'
 import { Sessions, hashPassword } from '../../src/web/auth.ts'
 import * as web from '../../src/web/server.ts'
 
@@ -58,6 +58,33 @@ test('DEF-1 a new install plays Haiku 5.5 at high effort when nothing names a mo
   const example = read('.env.example')
   assert.match(example, /^AGENT_MODEL=claude-haiku-5-5$/m)
   assert.match(example, /^AGENT_MODEL_EFFORT=high$/m)
+})
+
+test('DEF-1 a model saved in the dashboard without an effort keeps medium: the update raises no effort of a model picked there', () => {
+  // The low of the re-review of PR #82: a model saved in the database names the model too (the first clause of
+  // modelNamed in strategistChoice). Only that clause holds here: no AGENT_MODEL, cfg.model the default.
+  const saved = { model: process.env.AGENT_MODEL, effort: process.env.AGENT_MODEL_EFFORT }
+  delete process.env.AGENT_MODEL
+  delete process.env.AGENT_MODEL_EFFORT
+  try {
+    const cfg = { model: DEFAULT_AI.model } as Config
+    const choose = (kept: string) => {
+      const store = new Store('', ':memory:')
+      store.setKv('strategist_model', kept)
+      return strategistChoice(store, cfg, () => undefined)
+    }
+    // Every model of the list, the default one too: medium, what it played before this version.
+    for (const model of Object.keys(MODELS)) assert.deepEqual(choose(model), { model, effort: 'medium' }, `${model} saved, no effort saved`)
+    // A model that left the list runs its successor, still a model that was picked.
+    for (const [old, next] of Object.entries(SUCCESSORS)) assert.deepEqual(choose(old), { model: next, effort: 'medium' }, `${old} saved, no effort saved`)
+    // A saved id nobody knows is never used: the install plays the default pair, as one that picked nothing.
+    assert.deepEqual(choose('claude-mystery-9'), { model: HAIKU, effort: 'high' })
+  } finally {
+    for (const [k, v] of [['AGENT_MODEL', saved.model], ['AGENT_MODEL_EFFORT', saved.effort]] as const) {
+      if (v === undefined) delete process.env[k]
+      else process.env[k] = v
+    }
+  }
 })
 
 test('DEF-1 every level recommends Haiku 5.5 at high effort, the pair a new install starts on', () => {
