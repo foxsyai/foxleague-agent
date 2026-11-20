@@ -1810,7 +1810,8 @@ Stays open:
   on the review job stays as it is.
 - DOCS-11's launch-day items: the "Coming soon" banners and frames of the site, "Status: in internal testing" in the
   README, the GitHub link of the site and the version number (`0.11.0` until the first public release). The
-  screenshots show the version label of the day they were taken: take them again after the version is set.
+  screenshots show the version label of the day they were taken: take them again after the version is set. (Since
+  then: all done for v1.0.0, in the section "The public release, v1.0.0 (2026-11-23)".)
 - DOCS-1 was closed in the text. A dry run of a new wallet still shows a refused registration, and from the second
   plan of a game day a refused swap: keeping a dry plan's simulated balance, and leaving an unregistered agent's
   dry swaps out of the allowance, is a change of the executor the owner may still want.
@@ -3146,6 +3147,22 @@ Stays open:
 - The key reaches installed agents with the first release that pins it (v1.0.0): an install of an earlier internal
   version has no key and takes no update from its dashboard; it updates by pasting the install line again.
 - Rotating the key follows `docs/RELEASING.md` ("Rotating the key"): the new key goes in a release signed with this one.
+
+## The public release, v1.0.0 (2026-11-23)
+
+The pull request that makes the repository ready to be public, prepared on 2026-11-20 and merged on launch day. It
+does DOCS-11's launch-day items. `test/launch-v1/LAUNCH-1.test.ts` failed on 50942e7 for each of them and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LAUNCH-1 | launch (the owner, 2026-11-20) | Before the public release the site wrapped the install line in a "Coming soon" frame with a banner on five pages, its GitHub icon opened Foxsy AI's page instead of the repository, the README said "in internal testing" and the version was 0.11.0 | Version 1.0.0 in `package.json` and both places of `package-lock.json`. No banner or frame on any page; the frame's component is gone. The home page, "Run it on a server" and the GitHub icon link the repository. The README says "Status: released". The site's screenshots are taken again for the new version label. The line hints of the install videos follow the pages (0 moved) |
+
+Stays open:
+- The release itself follows `docs/RELEASING.md`: this commit runs on the owner's server first, then the tag v1.0.0, the
+  release built and signed with the owner's key (KEY-1) and published as the latest, the site from the same commit
+  and an install from the release on a clean machine.
+- The repository is made public by the owner on GitHub. Nothing in this pull request changes who can push or merge.
+- Production was not read for this pull request and nothing was deployed.
 
 ## One manager message at a time (2026-11-13)
 
