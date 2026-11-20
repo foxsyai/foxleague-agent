@@ -85,10 +85,10 @@ test('what stays open is listed, and the list is true of the tree', () => {
   const open = flat.slice(flat.indexOf('Stays open:'))
   for (const said of [
     'trusts GitHub over https and the release\'s checksum', 'macOS or on Windows', 'Node.js v22.22.0', '`nginx -t`', 'INSTALL-21',
-    'DOCS-11\'s launch-day items', '`RELEASE_KEYS` in `src/update/keys.ts` is empty', 'Friday 13 November 2026',
+    'DOCS-11\'s launch-day items', '`RELEASE_KEYS` in `src/update/keys.ts` was empty until the owner made the key (since then: pinned on 2026-11-20', 'Friday 13 November 2026',
   ]) assert.ok(open.includes(said), said)
   // True today; when one of these changes, its line goes.
-  assert.equal(RELEASE_KEYS.length, 0, 'the release key is pinned now: take the line out of Stays open')
+  assert.equal(RELEASE_KEYS.length, 1, "one release key, the owner's (test/release-key/KEY-1.test.ts)")
   assert.match(readFileSync(new URL('install.sh', ROOT), 'utf8'), /^NODE_VERSION=v22\.22\.0$/m)
   assert.match(readFileSync(new URL('README.md', ROOT), 'utf8'), /Status: in internal testing/)
   assert.equal((JSON.parse(readFileSync(new URL('package.json', ROOT), 'utf8')) as { version: string }).version, '0.11.0')
