@@ -25,7 +25,7 @@ import { createStartMs, describeAction, type Action, type PlannedAction } from '
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
-import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
+import { oneVOnesThisWeek, ownCreations, ownerByOldReason, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import { holdRefusal } from './hold.ts'
 import {
@@ -609,11 +609,12 @@ export class Executor {
       const lock = view?.seats_lock_at ? Date.parse(view.seats_lock_at) : Number.NaN
       market.seatsLockAt = Number.isFinite(lock) ? new Date(lock) : null
       // The agent's own join of it (a paid one whose answer was lost too): a seat the owner took, in FoxLeague or through
-      // Telegram /do (byOwner, or an owner reason on a row from before it was kept), is the owner's to leave.
+      // Telegram /do (byOwner, or the owner's reason on a row from before it was kept), is the owner's to leave. The
+      // reason of a newer row is the model's text and decides nothing (OWN-1).
       market.ownSeat = store.activityOf(agent.index, ['join_tournament'], since(60 * 86_400_000)).some(r => {
         const d = detailOf(r) as { action?: { tournament_id?: number }; byOwner?: boolean; reason?: string; sent?: boolean }
         const paid = counted(r.status) || r.status === 'sent' || (r.status === 'error' && d.sent === true)
-        return paid && d.action?.tournament_id === a.tournament_id && d.byOwner !== true && !/^owner\b/i.test(String(d.reason ?? ''))
+        return paid && d.action?.tournament_id === a.tournament_id && d.byOwner !== true && !ownerByOldReason(r, d.reason)
       })
     }
     // A League + Knockout seat is paid only on an invitation read right now (null: unreadable, refused).
