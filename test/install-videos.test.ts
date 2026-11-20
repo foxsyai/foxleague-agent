@@ -231,6 +231,12 @@ test('R83A-1 every line hint names the line the video shows: an empty line is an
   const empty = quoted.filter(q => q.frags.every(fr => fr.trim() === ''))
   assert.ok(empty.length >= 3, 'the empty lines around the recovery words are quoted')
   for (const q of empty) assert.match(lineOf(q), /^\s*info ""\s*$/, `${q.f}:${q.l} is an empty line the installer prints`)
+  // A step title of install.sh (say) and every line of get.ps1 is printed from one string: the hint names the line that
+  // prints the whole text, not a longer title that starts with it or a function named after it (second review of PR #83).
+  const whole = (line: string, fr: string) => [fr, fr.replaceAll("'", "''")].some(t => line.includes(`"${t}"`) || line.includes(`'${t}'`))
+  for (const q of quoted.filter(q => q.f === 'get.ps1' || /^\s*say /.test(lineOf(q)))) {
+    for (const fr of q.frags.filter(fr => fr.trim())) assert.ok(whole(lineOf(q), fr), `${q.f}:${q.l} prints ${JSON.stringify(fr)} whole`)
+  }
   // get.ps1 asks "Ready?" and says Ubuntu is installed in two branches; the video plays the Ubuntu install.
   const at = (text: string) => quoted.filter(q => q.f === 'get.ps1' && q.frags.includes(text)).map(lineOf)
   assert.deepEqual(at('Ready?').map(l => l.includes('Ubuntu was not installed')), [true], 'Ready? is the one before the Ubuntu install')

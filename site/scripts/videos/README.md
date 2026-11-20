@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit cf14179 (2026-11-20): 132 quoted lines, 0 changed.
+Checked against commit 4fe1ed6 (2026-11-20): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
@@ -209,7 +209,7 @@ Checked against commit cf14179 (2026-11-20): 132 quoted lines, 0 changed.
 | windows | `get.ps1:1157` | To see the task: Start, Task Scheduler, Task Scheduler Library. To remove it, type: | ok |
 | windows | `get.ps1:1158` | Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false | ok |
 | windows | `get.ps1:1168` | The task is running. | ok |
-| windows | `get.ps1:1177` | Done | ok |
+| windows | `get.ps1:1179` | Done | ok |
 | windows | `get.ps1:1182` | Dashboard   http://localhost:8870 | ok |
 | windows | `get.ps1:1184` | The agent runs inside Ubuntu, not in Windows itself. | ok |
 | windows | `get.ps1:1185` | Its folder, from Windows Explorer: \\wsl$\Ubuntu\home\ana\foxleague-agent | ok |
@@ -272,7 +272,7 @@ Checked against commit cf14179 (2026-11-20): 132 quoted lines, 0 changed.
 | windows, mac, linux | `install.sh:1029` | Allow this machine to sign real transactions once you press Go LIVE? (y/n) [y]: | ok |
 | windows, mac, linux | `install.sh:1036` | 6/7 PEM files (to log into FoxLeague as your agents' teams and watch them) | ok |
 | windows, mac, linux | `install.sh:1039` | Each new agent you add in the dashboard gets its own pem/agentN.pem automatically. | ok |
-| windows, mac, linux | `install.sh:1043` | 7/7 Background service | ok |
+| windows, mac, linux | `install.sh:1052` | 7/7 Background service | ok |
 | windows, mac, linux | `install.sh:1065` | Running. | ok |
 | windows, mac, linux | `install.sh:1069` | Done | ok |
 | windows, mac, linux | `install.sh:1072` | Dashboard     http://localhost:8870   (user: ana) | ok |

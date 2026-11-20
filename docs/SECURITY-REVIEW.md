@@ -3118,12 +3118,13 @@ install videos and the site's screenshots. It closes two items the section "Haik
 (2026-11-20)" left open: the credit line and the old Strategist box in the videos and the screenshots. The agent review
 passed it with three low findings and no code of the agent in the change. R83A-1 has a test of the same name in
 `test/install-videos.test.ts` that failed on the branch at cf14179 (on the empty lines, then on the two texts once the
-empty lines were right) and passes now.
+empty lines were right) and passes now. The second review found two more of the same kind (R83A-3), held by the same test.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | R83A-1 | low (agent review of PR #83; hygiene, nothing a video shows) | Five line hints of `site/scripts/videos/src/text.mjs` named lines the videos do not show. The quote check finds a line by its text, so the three empty lines around the recovery words (`info ""`) matched any line and kept their old numbers (507, 516 and 518, lines of the systemd unit today). "Ready?" and "Ubuntu is installed and has a user of its own." stand twice in `get.ps1` and matched the occurrence nearest their old numbers: the other branch. The check said 0 moved | The hints name `install.sh` 889, 898 and 900 and `get.ps1` 977 and 993. The test holds every hint on a line that has its text, every empty quote on an `info ""` of `install.sh` and the two texts on the branch the video plays (the Ubuntu install). The README's table of quotes follows |
 | R83A-2 | low (agent review of PR #83; a picture) | `agent-page.png` showed the lower half of Settings and an empty left column: the script scrolled the end of the settings form into view, which is taller than the column beside it. The site's caption says "An agent's plan, budget and settings" | `site/scripts/screenshots.ts` takes this one shot from the top of the page in a window 1700 pixels tall and sets the window back for the shots after it: the plan, the budget and the settings are in one picture. No test reads a picture: it was looked at, as the README of the videos says for a frame |
+| R83A-3 | low (second agent review of PR #83; hygiene, nothing a video shows) | Two more hints matched a line that only holds their words: `say(1043, '7/7 Background service')` named the `--no-service` title ("7/7 Background service: skipped (--no-service)") and `psStep(1177, 'Done')` named `function Step-FoxDone`. R83A-1's test asked only that the line holds the text | The hints name `install.sh` 1052 and `get.ps1` 1179. R83A-1's test now also holds every step title of `install.sh` (`say`) and every line of `get.ps1` on the line that prints the whole text as one string; it failed on 4fe1ed6 for each of the two and passes now |
 
 Stays open:
 - The quote check itself still matches an empty quote anywhere; the test above holds the hints instead.

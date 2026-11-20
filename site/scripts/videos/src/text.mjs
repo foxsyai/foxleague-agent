@@ -128,7 +128,7 @@ export function texts(os) {
       [cli(240, ['Wrote ', V(`${vars.PEM_DIR}/agent1.pem`), ' (mode 600). ', 'Keep it on this computer and never send it to anyone.'])],
       info(1039, 'Each new agent you add in the dashboard gets its own pem/agentN.pem automatically.'),
     ],
-    service: () => [...say(1043, '7/7 Background service')],
+    service: () => [...say(1052, '7/7 Background service')],
     running: () => [info(1065, 'Running.')],
 
     // ---------------- Done (SHORTENED: next steps 3 and 4 and the everyday commands are left out) ----------------
@@ -234,7 +234,7 @@ export function texts(os) {
         psLine(1168, 'The task is running.'),
       ],
       done: () => [
-        ...psStep(1177, 'Done'),
+        ...psStep(1179, 'Done'),
         psLine(1182, ['Dashboard   ', V(`http://localhost:${VALUES.port}`)]),
         psLine(1184, 'The agent runs inside Ubuntu, not in Windows itself.'),
         psLine(1185, ['Its folder, from Windows Explorer: ', V(`\\\\wsl$\\Ubuntu\\home\\${user}\\foxleague-agent`)]),
