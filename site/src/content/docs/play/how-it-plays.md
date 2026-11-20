@@ -65,7 +65,8 @@ the normal tick).
 
 - **Tournaments**: it joins Silver and Gold tournaments where the squad can compete, and creates its own in a free
   platform time slot, sized from what recently filled. It names the start to the minute, 2 hours to 30 days ahead, so a
-  narrow gap in a busy calendar can still hold a small tournament. It reads the free starts from FoxLeague's own
+  narrow gap in a busy calendar can still hold a small tournament; a tournament it creates by itself starts at least 3
+  days ahead, so teams have days to see it and join before it closes (2 hours stay for one you ask for). It reads the free starts from FoxLeague's own
   calendar. Each of your agents is offered a start of its own, so two of them do not plan the same minute. It reads that
   calendar again for its own start when it creates, so a start another team is creating at is refused before anything
   is paid. Until registration closes, each plan checks again whether a tournament it created still fits the squad and
@@ -97,7 +98,7 @@ the normal tick).
   only when your team's best XI OVR, read from FoxLeague right before the payment, is inside it. It may set an OVR
   range on a tournament or a 1v1 it creates, so only teams of a strength it chooses can join; the range must hold its
   own best XI OVR, read right before the create. On its own open tournament it sets one by default, about 10 percent
-  either way around its best XI OVR, wider when recent tournaments filled slowly. When too few teams join its own open tournament or challenge, it may widen the range while it is open, never narrow it (a lower minimum, a higher maximum or no bound on that side; on a 1v1 only a lower minimum); teams already seated stay. It widens only what it created itself: a range you set in FoxLeague stays yours. The plan sees how many 1v1s it played against each
+  either way around its best XI OVR, wider when recent tournaments filled slowly. When too few teams join its own open tournament or challenge, it may widen the range while it is open, never narrow it (a lower minimum, a higher maximum or no bound on that side; on a 1v1 only a lower minimum); teams already seated stay. It widens only what it created itself, as its own record of the create says (never what the AI wrote as its reason): a range you set in FoxLeague stays yours. The plan sees how many 1v1s it played against each
   team this week, how its own challenges to that team fared and when a limit frees, and a team with its own challenge out is marked (it cannot accept another
   until that one ends). Every level may play a 1v1 three ways. A challenge to a named team is taken almost only
   when the two teams arranged it first, so the agent aims one only at a team of similar or lower strength that
@@ -143,7 +144,7 @@ the normal tick).
   Uncommon 36 there), so it fuses trained cards. For the new card FoxLeague prepares the transaction, and the agent
   signs it only when it is exactly the fusion it planned, for the fee of that rarity and nothing more. It fuses nothing
   while that setting cannot be read, while FoxLeague updates fusion or in the last minutes before it changes.
-- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included. A bid may carry the most the plan would pay: when another bid has raised the minimum by the time it runs, the agent bids the new minimum up to that amount, never above your limits. A card in an auction does not play for its 24 hours: if you list one of your saved 18 yourself in FoxLeague's app, the agent's plan is told in capitals to save an 18 without it, and the agent starts no match, 1v1 or entry until then, since a tournament or 1v1 match that locks with it in your 18 is forfeited 3-0.
+- **Marketplace**: bids on cards that clearly strengthen the squad at a fair price (never on a card whose transfer lock still runs more than 72 hours: it could not play for weeks), lists spare cards above the floor, never one of its 18 strongest cards and never so that fewer than 18 cards remain. It judges each card on its own, whoever sells it or bids on it, another of your agents included. A bid may carry the most the plan would pay: when another bid has raised the minimum by the time it runs, the agent bids the new minimum up to that amount, never above your limits. A card in an auction takes no Shop item (no condition recovery, medicine or waiver) until the auction ends; the agent buys none for it. A card in an auction does not play for its 24 hours: if you list one of your saved 18 yourself in FoxLeague's app, the agent's plan is told in capitals to save an 18 without it, and the agent starts no match, 1v1 or entry until then, since a tournament or 1v1 match that locks with it in your 18 is forfeited 3-0.
 
 ## Getting started by itself
 

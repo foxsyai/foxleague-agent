@@ -59,20 +59,23 @@ test('slots: a create that clashes is refused before FoxLeague is asked, with th
   const s = snapshot()
   const now = Date.now()
   s.market.recentStandard = [{ id: 1, tier: 'silver', format: 'knockout', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date(now - 24 * H).toISOString() }]
-  s.market.slots = [{ id: 65, title: 'OTAN', start: now + 10 * H, end: now + 17 * H }]
+  // Four days out: the agent's own create starts 3 days ahead or more (ORG-3).
+  const D = 96 * H
+  s.market.slots = [{ id: 65, title: 'OTAN', start: now + D + 10 * H, end: now + D + 17 * H }]
   const create = (hours: number): PlannedAction[] => [{
     action: { type: 'create_tournament', title: 'Fox Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: hours, registration_closes_minutes_before: 60, round_interval_minutes: 30 },
     reason: '',
   }]
-  const [r] = await m.exec.run(m.agent(), dryWallet, s, create(12))
+  const [r] = await m.exec.run(m.agent(), dryWallet, s, create(96 + 12))
   assert.equal(r!.status, 'refused')
   assert.match(r!.summary, /time slot taken by T65/)
-  // The first free start as the minute itself (whole hours until 2026-11-15): 2 hours from now plus the time until the
-  // next plan's create can run (R74A-1: the floor itself is about an hour ahead by then), rounded up to the minute.
-  const floor = 2 * H + nextPlanLeadMs(TEST_SETTINGS)
+  // The first free start as the minute itself (whole hours until 2026-11-15): the agent's floor (3 days since ORG-3, 2
+  // hours before it) from now plus the time until the next plan's create can run (R74A-1: the floor itself is about an
+  // hour ahead by then), rounded up to the minute.
+  const floor = 72 * H + nextPlanLeadMs(TEST_SETTINGS)
   const free = Date.parse(/starts_at (\S+)/.exec(r!.summary)?.[1] ?? '')
   assert.ok(free % 60_000 === 0 && free >= now + floor && free <= Date.now() + floor + 60_000, `a start well before OTAN fits: ${r!.summary}`)
-  const [ok] = await m.exec.run(m.agent(), dryWallet, s, create(19))
+  const [ok] = await m.exec.run(m.agent(), dryWallet, s, create(96 + 19))
   assert.equal(ok!.status, 'dry_run', 'after OTAN (window ends at +17 h, ours starts 1 h earlier)')
   assert.match(renderDigest(s), /Tournament time slots taken[\s\S]*T65 "OTAN"/)
   assert.match(renderDigest(s), /Free for a new tournament's whole window/)

@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import { winChance } from '../snapshot/winchance.ts'
 import { Address, Transaction, TransactionComputer } from '@multiversx/sdk-core'
 import { MAINNET, type Config } from '../config.ts'
-import { BroadcastRefused, METACHAIN, chainHalt, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
+import { BroadcastRefused, HALT_REREAD_MS, METACHAIN, chainHalt, chainHaltCheck, type Chain, type PlainTx, type TxOutcome } from '../chain/gateway.ts'
 import { quoteEgldForFoxsy } from '../chain/xexchange.ts'
 import { ApiRefusal, rivalStrength, type FoxLeague } from '../foxleague/api.ts'
 import type { FusionPrepared, Tournament, TournamentDetail } from '../foxleague/types.ts'
@@ -25,7 +25,7 @@ import { createStartMs, describeAction, type Action, type PlannedAction } from '
 import { budgetView, capRefusal, costUsd, gameDayKey, withoutRegistrationFees, type Prices } from './budget.ts'
 import { CREATE_STILL_PENDING, ORGANIZER_HASH_ANSWER, SHOP_FINAL, SHOP_REFUNDED, confirmShop, creditShopPayment } from './pending.ts'
 import { FUSION_UNASKED, MAX_UNANSWERED_PER_OPPONENT_WEEK, XP_BOOSTER_RENEW_HOURS, checkAction, lineupStrength, type RulesContext, type Verdict } from './rules.ts'
-import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './rivals.ts'
+import { oneVOnesThisWeek, ownCreations, ownerByOldReason, targetedRecord, weeklyFreeAt } from './rivals.ts'
 import { lastMatchStarts } from './match-starts.ts'
 import { holdRefusal } from './hold.ts'
 import {
@@ -609,11 +609,12 @@ export class Executor {
       const lock = view?.seats_lock_at ? Date.parse(view.seats_lock_at) : Number.NaN
       market.seatsLockAt = Number.isFinite(lock) ? new Date(lock) : null
       // The agent's own join of it (a paid one whose answer was lost too): a seat the owner took, in FoxLeague or through
-      // Telegram /do (byOwner, or an owner reason on a row from before it was kept), is the owner's to leave.
+      // Telegram /do (byOwner, or the owner's reason on a row from before it was kept), is the owner's to leave. The
+      // reason of a newer row is the model's text and decides nothing (OWN-1).
       market.ownSeat = store.activityOf(agent.index, ['join_tournament'], since(60 * 86_400_000)).some(r => {
         const d = detailOf(r) as { action?: { tournament_id?: number }; byOwner?: boolean; reason?: string; sent?: boolean }
         const paid = counted(r.status) || r.status === 'sent' || (r.status === 'error' && d.sent === true)
-        return paid && d.action?.tournament_id === a.tournament_id && d.byOwner !== true && !/^owner\b/i.test(String(d.reason ?? ''))
+        return paid && d.action?.tournament_id === a.tournament_id && d.byOwner !== true && !ownerByOldReason(r, d.reason)
       })
     }
     // A League + Knockout seat is paid only on an invitation read right now (null: unreadable, refused).
@@ -924,11 +925,24 @@ export class Executor {
 
   /**
    * HALT, right before a signature: a chain that stopped since the check before the booking throws ChainHalted, and the
-   * caller's catch releases the booking (nothing was signed, AGENTS.md rule 3).
+   * caller's catch releases the booking (nothing was signed, AGENTS.md rule 3). A status that could not be read is asked
+   * once more after HALT_REREAD_MS (R80A-1): the seat after an organizer payment is signed up to a minute after it, and
+   * one gateway blip there left a created tournament without its seat. Never more than once, and never a stale block
+   * (a halt): unknown still refuses, a little later.
    */
   private async assertChainLive(wallet: AgentWallet): Promise<void> {
-    const why = await this.haltReason(wallet)
-    if (why) throw new ChainHalted(why)
+    const shards = [...SIGNING_SHARDS, wallet.shard]
+    let why = await chainHaltCheck(this.d.chain, shards)
+    if (why?.unread) {
+      await this.haltPause(HALT_REREAD_MS)
+      why = await chainHaltCheck(this.d.chain, shards)
+    }
+    if (why) throw new ChainHalted(why.text)
+  }
+
+  /** The pause before the chain's status is read once more (a method, so a test can take it without the wait). */
+  private haltPause(ms: number): Promise<void> {
+    return sleep(ms)
   }
 
   /**

@@ -271,7 +271,7 @@ test('CL12: a paid Bronze takes its seat on chain, a free one as before', async 
   })
 })
 
-const CUP = { type: 'create_tournament', title: 'Autumn Cup', format: 'round_robin', tier: 'bronze', max_teams: 4, min_teams: 3, entry_fee_foxsy: 100, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
+const CUP = { type: 'create_tournament', title: 'Autumn Cup', format: 'round_robin', tier: 'bronze', max_teams: 4, min_teams: 3, entry_fee_foxsy: 100, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 30 }
 
 test('CL13: a Bronze is created only once it earns, at an amount of the owner\'s list inside FoxLeague\'s band', async () => {
   const action = parseAction(CUP)
@@ -565,7 +565,7 @@ test('CL15: a deposit payment that reverts creates nothing and leaves only the g
 
 test('CL16: a Groups + Knockout may start from 6 teams, and the condition check counts its largest group', async () => {
   const quote = async () => ({ ...OWED, owed: false, total_foxsy: 0 })
-  const cup = { ...CUP, tier: 'silver', entry_fee_foxsy: 1000, format: 'groups_knockout', max_teams: 16, starts_in_hours: 24 }
+  const cup = { ...CUP, tier: 'silver', entry_fee_foxsy: 1000, format: 'groups_knockout', max_teams: 16, starts_in_hours: 96 }
   const m = setup({ fox: { organizerFeeQuote: quote } })
   const s = liveSnapshot()
   s.market.recentStandard = Array.from({ length: 5 }, (_, i) => ({ id: i, tier: 'silver', format: 'knockout', max_teams: 16, seated: 16, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }))
@@ -795,7 +795,7 @@ const zeusCreate = async (more: Record<string, unknown>, split: typeof PRIVATE_S
   m.store.updateSettings(0, { ...m.agent().settings, strategy: STRATEGY_PRESETS.zeus! })
   s.config!.private_tournament_prize_split = split
   s.market.recentStandard = [{ id: 1, tier: 'silver', format: 'round_robin', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }] as never
-  const action = parseAction({ type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, ...more })
+  const action = parseAction({ type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 60, ...more })
   let summary = ''
   await withLive(m.store, async () => { summary = (await m.exec.run(m.agent(), liveWallet, s, [{ action, reason: '' }]))[0]!.summary })
   assert.equal(bodies.length, 1, summary)
@@ -810,7 +810,7 @@ test('R41-12: a paid private create states the platform fee the plan was told', 
   assert.equal('expected_platform_fee_percent' in (await zeusCreate(invites, undefined)), false, 'mainnet today serves no split: nothing to state')
 })
 
-const PRIVATE_CUP = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
+const PRIVATE_CUP = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
 
 test('R41-13: the fee moved between the plan and the action: the create states the plan\'s percent, FoxLeague refuses and nothing is paid', async () => {
   const bodies: Record<string, unknown>[] = []

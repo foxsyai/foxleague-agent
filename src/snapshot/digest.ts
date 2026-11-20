@@ -2,7 +2,7 @@
 
 import { cardBansLive, eloPairCapLive, fusionMode, leaveLockLive, levelsLive, organizerFeesLive, referralLive, shopDiscountLive } from '../foxleague/levels.ts'
 import { SMALLEST_ESTIMATE_MIN, ceilMinute, floorMinute, freeGaps, planLeadMs } from '../executor/slots.ts'
-import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
+import { CREATE_START_MAX_MS, ORGANIZER_START_MIN_MS } from '../executor/actions.ts'
 import { calendarLines } from './calendar.ts'
 import { ownTournamentLines } from './own-tournaments.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
@@ -448,6 +448,9 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     // lineup locks with it in the saved 18 (mainnet 2026-11-16, MNT-4). The agent lists none of its 18; the owner may.
     const auctioned = s.players.filter(p => p.listed && p.role !== 'reserve')
     if (auctioned.length) out.push(`LISTED IN YOUR 18: ${auctioned.map(p => `#${p.nonce}`).join(', ')}: a card in an auction does not play, and FoxLeague forfeits (3-0, the full K lost) your next tournament or 1v1 match whose lineup locks with ${auctioned.length === 1 ? 'it' : 'them'} in your 18; no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an 18 without ${auctioned.length === 1 ? 'it' : 'them'}`)
+    // FoxLeague sells no Shop item for a card in an auction (#752) and the executor refuses one (SYNC-2).
+    const inAuction = s.players.filter(p => p.listed)
+    if (inAuction.length) out.push(`In an auction (LISTED): ${inAuction.map(p => `#${p.nonce}`).join(', ')}: FoxLeague sells no Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for a card in an auction and trains none until the auction ends; leave ${inAuction.length === 1 ? 'it' : 'them'} out of every purchase`)
     const banned = s.players.filter(p => p.suspended && p.role !== 'reserve')
     if (banned.length) out.push(`Suspended in your 18: ${banned.map(p => `#${p.nonce}`).join(', ')}: out of your next tournament match of more than 2 teams (a 1v1 or a ranked game never serves a ban and still takes the card)`)
   }
@@ -553,15 +556,15 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
   for (const w of slots.slice(0, 20)) out.push(`  T${w.id} "${txt(w.title, 40)}" ${hm(w.start)} to ${hm(ceilMinute(w.end))}`)
   const minute = (t: number) => `${new Date(t).toISOString().slice(0, 16)}Z`
   // Each gap with the starts that fit it, as starts_at takes them: from its first minute plus the hour before a kickoff,
-  // to its last minute less the hour after the estimate. No start is given before 2 hours after the latest moment the
-  // plan's create can run (R74A-2): a gap open now begins its starts there, and a gap too short for the smallest
-  // tournament (3 matches) from its first start is left out.
-  const earliest = ceilMinute(now + CREATE_START_MIN_MS + planLeadMs(o.tickMinutes ?? MAX_TICK_MINUTES))
+  // to its last minute less the hour after the estimate. No start is given before 3 days after the latest moment the
+  // plan's create can run (R74A-2; ORG-3, a tournament the agent creates needs days to fill): a gap open now begins its
+  // starts there, and a gap too short for the smallest tournament (3 matches) from its first start is left out.
+  const earliest = ceilMinute(now + ORGANIZER_START_MIN_MS + planLeadMs(o.tickMinutes ?? MAX_TICK_MINUTES))
   const gaps = freeGaps(slots, now + 3600_000, now + CREATE_START_MAX_MS)
     .map(g => ({ start: ceilMinute(g.start), end: floorMinute(g.end) }))
     .map(g => ({ ...g, first: Math.max(g.start + 3600_000, earliest) }))
     .filter(g => g.end - g.first >= 3600_000 + SMALLEST_ESTIMATE_MIN * 60_000)
-  if (slots.length) out.push(`Free for a new tournament's whole window (next ${CREATE_START_MAX_MS / 86_400_000} days; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, 2 h after the latest moment this plan's actions run): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
+  if (slots.length) out.push(`Free for a new tournament's whole window (next ${CREATE_START_MAX_MS / 86_400_000} days; a start fits a gap when its window, from 1 h before it to 1 h after its estimated end, is inside; no start is given before ${minute(earliest)}, ${ORGANIZER_START_MIN_MS / 86_400_000} days after the latest moment this plan's actions run: a public tournament needs days to fill): ${gaps.slice(0, 8).map(g => `${minute(g.start)} to ${minute(g.end)} (starts_at from ${minute(g.first)} to ${minute(g.end - 3600_000)} less the estimate)`).join('; ') || 'none'}`)
   // FoxLeague's own free starts and this agent's own pick among them (P-O1, P-O2: src/snapshot/calendar.ts).
   out.push(...calendarLines(s, { now, earliest }))
   if (m.recentStandard.length) {

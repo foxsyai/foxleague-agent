@@ -41,7 +41,9 @@ test('MON-1: upcoming matches unread is no "1 fixture left": the same paid entry
 // The same rule judges a tournament the agent creates (entry plus, with organizer fees live, the calendar deposit).
 import { parseAction } from '../../src/executor/actions.ts'
 
-const CUP: PlannedAction = { action: parseAction({ type: 'create_tournament', title: 'Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: 3, registration_closes_minutes_before: 30, round_interval_minutes: 30 }), reason: 'test' }
+// A start in 3 hours is the owner's own create (Telegram /do); the agent's own starts 3 days ahead or more (ORG-3).
+const CUP: PlannedAction = { action: parseAction({ type: 'create_tournament', title: 'Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: 3, registration_closes_minutes_before: 30, round_interval_minutes: 30 }), reason: 'test', byOwner: true }
+const AGENT_CUP: PlannedAction = { action: parseAction({ type: 'create_tournament', title: 'Cup', format: 'knockout', tier: 'silver', max_teams: 8, min_teams: 8, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 30, round_interval_minutes: 30 }), reason: 'test' }
 function busyForCreate(upcomingRead: boolean) {
   const s = busySnapshot(upcomingRead)
   for (const p of s.players) p.condition = 55
@@ -62,4 +64,7 @@ test('MON-1: the same for a tournament the agent creates: upcoming matches unrea
   const m = setup()
   const [r] = await m.exec.run(m.agent(), dryWallet, busyForCreate(false), [CUP])
   assert.equal(r!.status, 'refused', `a failed read decided: ${r!.summary}`)
+  const [own] = await m.exec.run(m.agent(), dryWallet, busyForCreate(false), [AGENT_CUP])
+  assert.equal(own!.status, 'refused', `a failed read decided: ${own!.summary}`)
+  assert.doesNotMatch(own!.summary, /less than 3 days/)
 })

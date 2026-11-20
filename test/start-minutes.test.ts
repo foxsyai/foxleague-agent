@@ -26,8 +26,11 @@ import { TEST_SETTINGS, dryWallet, liveWallet, setup, snapshot, tournament, with
 
 const H = 3600_000
 const MIN = 60_000
-/** Two days from now (UTC): 18:48 that day is 42 to 67 hours ahead, whatever the time the suite runs. */
-const DAY = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10)
+/**
+ * Four days from now (UTC): 18:48 that day is 90 to 115 hours ahead, whatever the time the suite runs. It was two days
+ * until a tournament the agent creates had to start 3 days ahead or more (ORG-3, 19 Nov 2026).
+ */
+const DAY = new Date(Date.now() + 4 * 86_400_000).toISOString().slice(0, 10)
 const at = (hm: string) => Date.parse(`${DAY}T${hm}Z`)
 /** A whole UTC minute in the form the action takes. */
 const minute = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}Z`
@@ -39,7 +42,7 @@ const NOTHING_OWED = { owed: false, games: 0, private_fee_foxsy: 0, deposit_foxs
 function busyCalendar(s = snapshot()) {
   s.market.slots = [
     { id: 901, title: 'Before', start: Date.now() - H, end: at('18:48') },
-    { id: 902, title: 'After', start: at('21:00'), end: Date.now() + 100 * H },
+    { id: 902, title: 'After', start: at('21:00'), end: Date.now() + 200 * H },
   ]
   return s
 }
@@ -48,9 +51,9 @@ function busyCalendar(s = snapshot()) {
 const trio = (start: Record<string, unknown>) => ({ type: 'create_tournament', title: 'Evening Trio', format: 'round_robin', tier: 'silver', max_teams: 3, min_teams: 3, entry_fee_foxsy: 1000, registration_closes_minutes_before: 60, round_interval_minutes: 30, ...start })
 
 /** One dry run of one action, on an executor of its own (each create books its fee in the dry ledger). */
-async function dry(action: Action, s = busyCalendar()) {
+async function dry(action: Action, s = busyCalendar(), byOwner = false) {
   const m = setup()
-  const [r] = await m.exec.run(m.agent(), dryWallet, s, [{ action, reason: '' }])
+  const [r] = await m.exec.run(m.agent(), dryWallet, s, [{ action, reason: '', ...(byOwner ? { byOwner: true as const } : {}) }])
   return r!
 }
 
@@ -111,8 +114,10 @@ test('SM-3 a start less than 2 hours or more than 30 days after the create runs 
   const far = await dry(parseAction(trio({ starts_at: minute(ceil(now + 30 * 24 * H) + MIN) })), empty())
   assert.equal(far.status, 'refused', far.summary)
   assert.match(far.summary, /more than 30 days/)
-  // Inside the bounds, by a minute or two.
-  assert.equal((await dry(parseAction(trio({ starts_at: minute(ceil(now + 2 * H) + 2 * MIN) })), empty())).status, 'dry_run')
+  // Inside the bounds, by a minute or two: 2 hours for a create the owner asks for, 3 days for the agent's own (ORG-3).
+  assert.equal((await dry(parseAction(trio({ starts_at: minute(ceil(now + 2 * H) + 2 * MIN) })), empty(), true)).status, 'dry_run')
+  assert.match((await dry(parseAction(trio({ starts_at: minute(ceil(now + 2 * H) + 2 * MIN) })), empty())).summary, /less than 3 days from now/)
+  assert.equal((await dry(parseAction(trio({ starts_at: minute(ceil(now + 72 * H) + 2 * MIN) })), empty())).status, 'dry_run')
   assert.equal((await dry(parseAction(trio({ starts_at: minute(floor(now + 30 * 24 * H) - 2 * MIN) })), empty())).status, 'dry_run')
   // The whole hours keep their own bounds at the parser.
   for (const h of [1, 721]) assert.throws(() => parseAction(trio({ starts_in_hours: h })), /starts_in_hours must be an integer in \[2, 720\]/)
@@ -150,8 +155,8 @@ test('SM-4 a start that cannot be read is refused: by the parser for a plan, by 
 })
 
 test('SM-5 the whole hours still work: parsed as before, created that many hours after the run, and a clash names the first free start as starts_at', async () => {
-  const old = parseAction(trio({ starts_in_hours: 24 }))
-  assert.equal((old as { starts_in_hours?: number }).starts_in_hours, 24)
+  const old = parseAction(trio({ starts_in_hours: 96 }))
+  assert.equal((old as { starts_in_hours?: number }).starts_in_hours, 96)
   assert.equal('starts_at' in old, false)
   const created: Record<string, unknown>[] = []
   const m = setup({ fox: { createTournament: async (_w: unknown, body: Record<string, unknown>) => (created.push({ ...body }), { id: 55 }), tournament: async () => tournament(55), joinTournament: async () => ({}) } })
@@ -161,20 +166,20 @@ test('SM-5 the whole hours still work: parsed as before, created that many hours
     assert.equal(r!.status, 'confirmed', r!.summary)
   })
   const start = Date.parse(String(created[0]!.starts_at))
-  assert.ok(start >= before + 24 * H && start <= Date.now() + 24 * H, `24 hours after the run: ${created[0]!.starts_at}`)
+  assert.ok(start >= before + 96 * H && start <= Date.now() + 96 * H, `96 hours after the run: ${created[0]!.starts_at}`)
   assert.equal(Date.parse(String(created[0]!.deadline)), start - 60 * MIN)
-  // In the busy calendar: the first free start in the form that lands in the gap. 24 hours always falls inside T901
-  // (it runs to 18:48 on DAY, at least 42 hours ahead); 50 hours landed in the gap when run from 17:48 to 17:51 UTC.
-  const r = await dry(parseAction(trio({ starts_in_hours: 24 })))
+  // In the busy calendar: the first free start in the form that lands in the gap. 80 hours always falls inside T901
+  // (it runs to 18:48 on DAY, at least 90 hours ahead); 50 hours landed in the gap when run from 17:48 to 17:51 UTC.
+  const r = await dry(parseAction(trio({ starts_in_hours: 80 })))
   assert.equal(r.status, 'refused', r.summary)
   assert.match(r.summary, new RegExp(`the first free start for this format and size is starts_at ${DAY}T19:48Z`))
 })
 
-test('SM-6 a create at a fixed minute runs before it is too late: its deadline is its start less 2 hours, or less its registration close and 30 minutes', () => {
-  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z` })), snapshot()), at('19:49') - 2 * H)
-  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z`, registration_closes_minutes_before: 120 })), snapshot()), at('19:49') - 150 * MIN)
+test('SM-6 a create at a fixed minute runs before it is too late: its deadline is its start less 3 days (the agent\'s own, ORG-3; 2 hours before it), or less its registration close and 30 minutes', () => {
+  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z` })), snapshot()), at('19:49') - 72 * H)
+  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z`, registration_closes_minutes_before: 120 })), snapshot()), at('19:49') - 72 * H)
   // Without a snapshot too: the start is in the action itself.
-  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z` })), null), at('19:49') - 2 * H)
+  assert.equal(actionDeadline(parseAction(trio({ starts_at: `${DAY}T19:49Z` })), null), at('19:49') - 72 * H)
   // Whole hours count from the run: no time limit, as before.
   assert.equal(actionDeadline(parseAction(trio({ starts_in_hours: 24 })), snapshot()), null)
 })
@@ -184,7 +189,7 @@ test('SM-7 the free-slot hint gives each gap to the minute, rounded inward, with
   // Windows that end and start on seconds, as FoxLeague's do when a tournament was created at "now + N hours".
   s.market.slots = [
     { id: 901, title: 'Before', start: Date.now() - H, end: Date.parse(`${DAY}T18:47:30Z`) },
-    { id: 902, title: 'After', start: Date.parse(`${DAY}T21:00:20Z`), end: Date.now() + 100 * H },
+    { id: 902, title: 'After', start: Date.parse(`${DAY}T21:00:20Z`), end: Date.now() + 200 * H },
   ]
   const d = renderDigest(s)
   const md = DAY.slice(5)
@@ -220,10 +225,10 @@ test('SM-9 whole hours: FoxLeague is sent the start the slot check used, counted
     const s = snapshot()
     s.config!.organizer_fees = LIVE_FEES
     await withLive(m.store, async () => {
-      const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action: parseAction(trio({ starts_in_hours: 24 })), reason: '' }])
+      const [r] = await m.exec.run(m.agent(), liveWallet, s, [{ action: parseAction(trio({ starts_in_hours: 96 })), reason: '' }])
       assert.equal(r!.status, 'confirmed', r!.summary)
     })
-    assert.equal(created[0]!.starts_at, new Date(t0 + 24 * H).toISOString())
+    assert.equal(created[0]!.starts_at, new Date(t0 + 96 * H).toISOString())
   } finally {
     mock.timers.reset()
   }
@@ -267,6 +272,11 @@ const CALL = 13 * MIN
 const ceilMin = (ms: number) => Math.ceil(ms / MIN) * MIN
 const floorMin = (ms: number) => Math.floor(ms / MIN) * MIN
 const FIRST_FREE = /the first free start for this format and size is starts_at (\S+)/
+/**
+ * How far the agent's floor moved when its own creates had to start 3 days ahead (ORG-3, 19 Nov 2026): from 2 hours to
+ * 72. These tests keep their calendars as they were, that much later, so each start sits where it sat against the floor.
+ */
+const SHIFT = 70 * H
 
 /** A dry run of the 3-team create at `start`, with the mocked clock set to `at`. */
 async function createAt(start: string, s: ReturnType<typeof snapshot>, at: number) {
@@ -281,17 +291,17 @@ function freeLine(s: ReturnType<typeof snapshot>): string {
   return text.split('\n').find(l => l.startsWith("Free for a new tournament's whole window")) ?? ''
 }
 
-test('R74A-1 a calendar free now: the first free start a clash names is still 2 hours ahead when the next plan creates it, one tick later or at the latest', async () => {
+test('R74A-1 a calendar free now: the first free start a clash names is still far enough ahead (3 days since ORG-3) when the next plan creates it, one tick later or at the latest', async () => {
   mock.timers.enable({ apis: ['Date'], now: Date.now() })
   try {
     const now = Date.now()
     const s = snapshot()
-    s.market.slots = [{ id: 950, title: 'Later', start: now + 30 * H, end: now + 40 * H }]
-    const r = await dry(parseAction(trio({ starts_at: minute(ceilMin(now + 35 * H)) })), s)
+    s.market.slots = [{ id: 950, title: 'Later', start: now + SHIFT + 30 * H, end: now + SHIFT + 40 * H }]
+    const r = await dry(parseAction(trio({ starts_at: minute(ceilMin(now + SHIFT + 35 * H)) })), s)
     assert.equal(r.status, 'refused', r.summary)
     assert.match(r.summary, /time slot taken by T950/)
     const free = FIRST_FREE.exec(r.summary)?.[1] ?? ''
-    assert.ok(Date.parse(free) < now + 30 * H, `a start in the calendar free now, before T950: ${r.summary}`)
+    assert.ok(Date.parse(free) < now + SHIFT + 30 * H, `a start in the calendar free now, before T950: ${r.summary}`)
     // One tick later (the next plan and its call), and at the latest: the rest of this plan's window, the tick and its
     // jitter, the next plan's call and its own window.
     for (const later of [TICK + CALL, WINDOW + TICK + JITTER + CALL + WINDOW]) {
@@ -308,28 +318,28 @@ test('R74A-1 a stretch free now that is too short for that room is not named: th
   try {
     const now = Date.now()
     const s = snapshot()
-    // Free until 4 hours ahead: a 3-team round robin fits from 2 h to 2 h 51 min ahead, too soon for the next plan.
-    s.market.slots = [{ id: 951, title: 'Soon', start: now + 4 * H, end: now + 30 * H }]
-    const r = await dry(parseAction(trio({ starts_at: minute(ceilMin(now + 10 * H)) })), s)
+    // Free until 74 hours ahead: a 3-team round robin fits from 72 h to 72 h 51 min ahead, too soon for the next plan.
+    s.market.slots = [{ id: 951, title: 'Soon', start: now + SHIFT + 4 * H, end: now + SHIFT + 30 * H }]
+    const r = await dry(parseAction(trio({ starts_at: minute(ceilMin(now + SHIFT + 10 * H)) })), s)
     assert.equal(r.status, 'refused', r.summary)
     assert.match(r.summary, /time slot taken by T951/)
-    assert.equal(FIRST_FREE.exec(r.summary)?.[1], minute(ceilMin(now + 31 * H)), `T951's end plus the hour before a kickoff: ${r.summary}`)
-    const ok = await createAt(minute(ceilMin(now + 31 * H)), s, now + WINDOW + TICK + JITTER + CALL + WINDOW)
+    assert.equal(FIRST_FREE.exec(r.summary)?.[1], minute(ceilMin(now + SHIFT + 31 * H)), `T951's end plus the hour before a kickoff: ${r.summary}`)
+    const ok = await createAt(minute(ceilMin(now + SHIFT + 31 * H)), s, now + WINDOW + TICK + JITTER + CALL + WINDOW)
     assert.equal(ok.status, 'dry_run', ok.summary)
   } finally {
     mock.timers.reset()
   }
 })
 
-test("R74A-2 a gap open now: the first start the plan request gives is still 2 hours ahead when the create runs, up to the end of its plan's window", async () => {
+test("R74A-2 a gap open now: the first start the plan request gives is still far enough ahead (3 days since ORG-3) when the create runs, up to the end of its plan's window", async () => {
   mock.timers.enable({ apis: ['Date'], now: Date.now() })
   try {
     const now = Date.now()
     const s = snapshot()
-    s.market.slots = [{ id: 960, title: 'Later', start: now + 20 * H, end: now + 30 * H }]
+    s.market.slots = [{ id: 960, title: 'Later', start: now + SHIFT + 20 * H, end: now + SHIFT + 30 * H }]
     const line = freeLine(s)
     // The gap itself stays as it is: from the first minute an hour from now to T960's start.
-    const gap = new RegExp(`${minute(ceilMin(now + H))} to ${minute(floorMin(now + 20 * H))} \\(starts_at from (\\S+) to `).exec(line)
+    const gap = new RegExp(`${minute(ceilMin(now + H))} to ${minute(floorMin(now + SHIFT + 20 * H))} \\(starts_at from (\\S+) to `).exec(line)
     assert.ok(gap, `the gap open now is offered: ${line}`)
     for (const later of [0, CALL, CALL + WINDOW]) {
       const ok = await createAt(gap[1]!, s, now + later)
@@ -345,15 +355,15 @@ test('R74A-2 a gap open now that is too short once that room is added is not off
   try {
     const now = Date.now()
     const s = snapshot()
-    // Free until 3 h 30 min ahead (a 3-team round robin fits from 2 h to 2 h 21 min ahead, before this plan's create can
-    // run), then from 30 to 33 hours ahead.
+    // Free until 73 h 30 min ahead (a 3-team round robin fits from 72 h to 72 h 21 min ahead, before this plan's create
+    // can run), then from 100 to 103 hours ahead.
     s.market.slots = [
-      { id: 970, title: 'Soon', start: now + 3.5 * H, end: now + 30 * H },
-      { id: 971, title: 'After', start: now + 33 * H, end: now + 100 * H },
+      { id: 970, title: 'Soon', start: now + SHIFT + 3.5 * H, end: now + SHIFT + 30 * H },
+      { id: 971, title: 'After', start: now + SHIFT + 33 * H, end: now + SHIFT + 100 * H },
     ]
     const line = freeLine(s)
     assert.doesNotMatch(line, new RegExp(`${minute(ceilMin(now + H))} to `), `the gap open now is left out: ${line}`)
-    assert.match(line, new RegExp(`${minute(ceilMin(now + 30 * H))} to ${minute(floorMin(now + 33 * H))} \\(starts_at from ${minute(ceilMin(now + 30 * H) + H)} to `), line)
+    assert.match(line, new RegExp(`${minute(ceilMin(now + SHIFT + 30 * H))} to ${minute(floorMin(now + SHIFT + 33 * H))} \\(starts_at from ${minute(ceilMin(now + SHIFT + 30 * H) + H)} to `), line)
   } finally {
     mock.timers.reset()
   }

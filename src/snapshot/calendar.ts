@@ -14,7 +14,7 @@
 // answer: no agent reads another's state or plans (the owner's rule of 2026-10-27, agents play alone).
 
 import type { FoxLeague } from '../foxleague/api.ts'
-import { CREATE_START_MAX_MS, CREATE_START_MIN_MS } from '../executor/actions.ts'
+import { CREATE_START_MAX_MS, ORGANIZER_START_MIN_MS } from '../executor/actions.ts'
 import { blockingWindow, ceilMinute, clash, estimateMinutes, planLeadMs, type SlotWindow } from '../executor/slots.ts'
 import { MAX_TICK_MINUTES } from '../store/settings.ts'
 
@@ -110,10 +110,10 @@ export function joinRanges(ranges: { first: number; last: number }[]): { first: 
 }
 
 /**
- * The earliest start a read counts toward the 10 it needs: the latest first start a plan request can give (2 hours after
- * the longest plan window) and an hour more, so the plan request finds at least as many starts as the read counted.
+ * The earliest start a read counts toward the 10 it needs: the latest first start a plan request can give (3 days after
+ * the longest plan window, ORG-3) and an hour more, so the plan request finds at least as many starts as the read counted.
  */
-const READ_COUNT_FROM_MS = CREATE_START_MIN_MS + planLeadMs(MAX_TICK_MINUTES) + 3600_000
+const READ_COUNT_FROM_MS = ORGANIZER_START_MIN_MS + planLeadMs(MAX_TICK_MINUTES) + 3600_000
 
 /**
  * Reads each shape's free starts over the agent's horizon, in windows of up to 14 days from `now` (FoxLeague answers no
@@ -190,8 +190,10 @@ export function calendarLines(s: { agent: { index: number | null }; market: { sl
   if (!cal) return []
   const minute = (t: number) => `${new Date(t).toISOString().slice(0, 16)}Z`
   const days = CREATE_START_MAX_MS / 86_400_000
+  // Never sooner than 3 days ahead, whatever the caller passes (ORG-3): the executor refuses a sooner one.
+  const earliest = Math.max(o.earliest, o.now + ORGANIZER_START_MIN_MS)
   const out = [
-    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, which spreads the starts offered when the calendar has room; take yours, a next one only if yours is refused; none before ${minute(o.earliest)}; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
+    `Your own starts for a new tournament (FoxLeague's calendar of free starts, next ${days} days, every booking counted; picked by your agent number, which spreads the starts offered when the calendar has room; take yours, a next one only if yours is refused; none before ${minute(earliest)}: a public tournament needs days to fill; the starts are a booking apart; a start that fits a shape fits every shape with a shorter estimate):`,
   ]
   for (const c of cal) {
     const head = `  ${c.format} of ${c.teams} (estimate ${estimateMinutes(c.format, c.teams, false)} min): `
@@ -199,7 +201,7 @@ export function calendarLines(s: { agent: { index: number | null }; market: { sl
       out.push(`${head}could not read the free starts (unknown, not free): no start offered; the slot check at the create decides`)
       continue
     }
-    const starts = freeStartsFor(c, c.free, s.market.slots ?? [], o.earliest, o.now + CREATE_START_MAX_MS)
+    const starts = freeStartsFor(c, c.free, s.market.slots ?? [], earliest, o.now + CREATE_START_MAX_MS)
     const mine = ownStartIndex(starts.length, s.agent.index)
     if (!starts.length) out.push(`${head}no free start in the next ${days} days`)
     else if (mine === null) out.push(`${head}free starts: ${starts.slice(0, 4).map(minute).join(', ')}`)

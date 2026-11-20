@@ -215,7 +215,9 @@ while one of them has no block for more than 60 s (100 rounds), while one cannot
 60 s ahead of the computer's clock, and says so ("the MultiversX network has produced no block since ... : nothing is
 signed, the next plan tries again"). The check runs in the executor before anything is booked or prepared (a dry run
 too) and once more right before each signature (`send`, the registration relay), where a refusal releases the booking.
-An action that signs nothing (lineups, training, a casual game, a free seat) does not wait on the chain. FoxLeague's
+Right before a signature a status that could not be read is asked once more after 5 s (`HALT_REREAD_MS`, R80A-1): the
+seat of a created tournament is signed up to a minute after its organizer payment; one gateway blip there left the
+tournament without its seat. Never more than once and never for a block that is too old (a halt). An action that signs nothing (lineups, training, a casual game, a free seat) does not wait on the chain. FoxLeague's
 own `GET /api/chain-status` (`{ready, paused_since}`, on `release/mainnet-1.0` since #780) answers 404 on mainnet on
 2026-11-19 and is not read.
 
@@ -1103,7 +1105,10 @@ binaries; out of scope).
   (`GET /api/tournaments/availability`, `next_free`) is on the quarter hour (release/mainnet-1.0 fb820dd57). The agent
   sends the start of its action (since 2026-11-15): `starts_at`, a whole UTC minute 2 hours to 30 days after the create
   runs (30 days since 2026-11-16, 72 hours before), or the older `starts_in_hours`, whole hours from that moment; the deadline is that start less
-  `registration_closes_minutes_before`. The time slot, the schedule and the organizer quote are checked at that same
+  `registration_closes_minutes_before`. A tournament the agent creates by itself starts at least 3 days after the create
+  runs (`ORGANIZER_START_MIN_MS`, ORG-3, the owner's rule of 2026-11-19): the snapshot offers no sooner start and the
+  executor refuses one, naming the earliest start allowed; the 2 hours stay for a create the owner asks for (Telegram
+  `/do`). The time slot, the schedule and the organizer quote are checked at that same
   instant.
 - Round interval 30 to 1,440 minutes: `Round interval must be 30-1440 minutes` (`tournaments.rs:2421`, `:2482-2484`).
 - **Platform-wide slot**: a standard tournament's window (`starts_at - 1 h` to the estimated end + 1 h,
@@ -2275,3 +2280,25 @@ field was not read and that the executor reads it at the join; `FIELD_TOURNAMENT
 seats x 2 or 3 FoxLeague reads a tournament, cached 20 minutes).
 
 The game manual copy is synced to `99c47a4e6` (16 pages, one sentence changed, Invite Friends left out).
+
+## 29. FoxLeague of 2026-11-19 (origin/main af825e955, manual 1ab9de65d; release d326a05b1): one match at a time, no Shop item for a card in an auction, account bans
+
+Read on 2026-11-20 through git only (a scratch mirror of FoxLeague's repository) and FoxLeague's live `/api/config`.
+FoxLeague promoted `origin/release/mainnet-1.0` into `origin/main` on 2026-11-19 (#784, `af825e955`; its manual is at
+`1ab9de65d`). The release branch went on to `d326a05b1` with more that main has not taken yet (#752, #764, #791 and
+others). `sync-manual` reads `origin/main`; the 54 route shapes and the game settings keys are the same as before.
+
+| FoxLeague change | Effect on the agent | What the agent does since this change |
+|---|---|---|
+| #748 (on main): the busy-card rule, "a player plays one match at a time", from a date still to be announced (ships off, no switch in `/api/config` yet). From the strategy lock of a tournament match or a 1v1 until that match has ended, every card of the 18 it locked is busy: a save that adds a busy card to an 18 is refused; a busy card still in an 18 at its lock is replaced like an injured one | None while it is off. Once on, a card bought from a team that is playing cannot join the agent's 18 at once; two of the agent's own tournaments whose broadcasts overlap share no card | The manual copy carries the rule (four pages). No executor logic yet: it waits for its switch in `/api/config`, which the agent's config watch reports to the owner |
+| #752 (release only on 2026-11-20): a card in an auction takes no paid action. Condition Recovery, Reduce Cooldown, Medicine and the Fusion Match Waiver are not sold for it; a payment confirmed for one anyway is refused and refunded whole (the gas is lost), a bulk recovery that names it too; it is not trained; a team with one of its 18 in an auction is not drawn in ranked. Before #752 the confirm kept a recovery's or a medicine's payment and applied it to the listed card | The agent's condition recovery named any card of the wallet, a listed one too | Every card-targeted Shop item (condition recovery, medicine, both fusion waivers) is refused before anything is booked for a card in an auction or one whose auction state the roster did not give (SYNC-2). The plan is told which cards are in an auction. The agent never uses Recover All: its recovery names its cards, so no listed card is counted |
+| #764 (release only): administrators ban, unban and delete accounts; an empty account (no team, no money trail) is deleted after 30 days by default; a banned wallet cannot sign in, play or buy; a payment it sends straight to a contract is refunded (a tournament entry, a Shop payment) or held (a registration fee). New manual page `legal/account-bans` | A banned agent's sign-in fails, so every read that needs a session fails and the executor refuses (fail closed). A registered agent is never an empty account | The page is left out of the agents' manual on purpose, decided before main takes it |
+| #791, #787, #783: signing with xPortal on a phone, the app at `app.foxleague.ai`; the 3D pitch's WebGL notice; the sync strip's wording | Not used | Nothing |
+
+Also with this change (from the agents' own production of 18 and 19 Nov): a plan's training or match start that the
+day has no room for waits for the reset plus 2 minutes (RESET-1; FoxLeague counts the day's sessions and starts at each
+request from the reset hour, shop.rs `used_today` and matches.rs `DAILY_MATCH_COUNT_SQL`), a tournament the agent
+creates starts at least 3 days ahead (ORG-3) and only what the executor wrote with a create (`byOwner`) decides whose
+it is (OWN-1).
+
+The game manual copy is synced to `1ab9de65d` (16 pages; the busy-card rule on four).

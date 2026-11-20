@@ -109,7 +109,7 @@ test('AL3 a Zeus private tournament invites every team the plan names, one the o
   m.store.setKv('agent_user_id:1', '12') // the FoxLeague user id the service notes for another of the owner's agents
   const s = snapshot()
   s.market.recentStandard = [{ id: 1, tier: 'silver', format: 'round_robin', max_teams: 8, seated: 8, fee: 1000, status: 'completed', starts_at: new Date().toISOString() }] as never
-  const cup = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 6, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
+  const cup = { type: 'create_tournament', title: 'Varna Cup', format: 'round_robin', tier: 'silver', max_teams: 6, min_teams: 4, entry_fee_foxsy: 1000, starts_in_hours: 96, registration_closes_minutes_before: 60, round_interval_minutes: 60, invite_user_ids: [11, 12, 13] }
   const [r] = await m.exec.run(m.agent(), dryWallet, s, [{ action: parseAction(cup), reason: '' }])
   assert.doesNotMatch(r!.summary, /cannot reach the minimum/, r!.summary)
   assert.equal(r!.status, 'dry_run', r!.summary)

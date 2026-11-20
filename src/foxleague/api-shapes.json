@@ -1,5 +1,5 @@
 {
-  "synced": "99c47a4e6 2026-11-18",
+  "synced": "1ab9de65d 2026-11-19",
   "routes": {
     "POST /api/auth/verify": "b8ce52f90fe6a1281328bc539fa1d11f0508e13aaf8a7c307c55a97083716f58",
     "GET /api/config": "8b0f9a307a124e57f49067ed2973fe9e0b434549f215f935b3d4d7133f0bdd18",

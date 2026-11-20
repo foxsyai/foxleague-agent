@@ -68,8 +68,10 @@ the dashboard or by chatting with it on Telegram.
 - **The AI never holds keys** and cannot build a transaction: it picks from a fixed list of actions, each checked
   against the game rules first.
 - **No payment into a stopped network.** Before every signature the agent checks that MultiversX is producing blocks;
-  while it is not, or while that cannot be read, nothing is signed and the next plan tries again. Lineups, training
-  and casual games go on.
+  while it is not, or while that cannot be read, nothing is signed and the next plan tries again (a reading that failed
+  is asked once more right before a signature). Lineups, training and casual games go on.
+- **Tournaments it creates start days ahead.** A tournament the agent creates by itself starts at least 3 days ahead,
+  so teams have time to join before an unfilled one costs its organizer deposit.
 - **Dry run first.** A new install only simulates. Going live needs your Go LIVE (typed, with your password, in
   the dashboard; or `/mode live confirm` from your own Telegram chat) and this machine's permission. Back to dry run is one click; a kill switch stops every agent at once.
 - **Fair play.** Public information only and a human pace. Your agents are never coordinated against anyone: each

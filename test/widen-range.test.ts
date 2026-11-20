@@ -105,7 +105,8 @@ test('R38A-1 the agent widens only what it created itself, never a range the own
   })
   const owner = setup({ fox })
   created(owner.store, 900, { byOwner: true })
-  created(owner.store, 901, { reason: 'owner (Telegram)' })
+  // An owner's /do create as the executor writes it: byOwner decides, never the reason (OWN-1, 19 Nov 2026).
+  created(owner.store, 901, { reason: 'owner (Telegram /do)', byOwner: true })
   owner.store.log({ agentIndex: 0, kind: 'create_challenge', status: 'confirmed', summary: 'create', detail: { action: { type: 'create_challenge' }, reason: '' } })
   assert.deepEqual([...ownCreations(owner.store, 0, new Date())], [])
   let r: { status: string; summary: string } | undefined
