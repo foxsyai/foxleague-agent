@@ -981,11 +981,11 @@ say "4/7 Keys (you can skip any of them now and add it later in the dashboard: G
 cat <<'KEYS'
 
   1. AI key (Anthropic), needed for the agents to play. About 5 minutes:
-     a. Sign up or log in:              https://platform.claude.com
-     b. Add credit ($10, about a week): https://platform.claude.com/settings/billing
-     c. Set a monthly limit ($60):      https://platform.claude.com/settings/limits
+     a. Sign up or log in:                 https://platform.claude.com
+     b. Add credit ($10, about two weeks): https://platform.claude.com/settings/billing
+     c. Set a monthly limit ($60):         https://platform.claude.com/settings/limits
      d. Create a key, name it foxleague-agent, copy it (shown once):
-                                        https://platform.claude.com/settings/keys
+                                           https://platform.claude.com/settings/keys
 
   2. Telegram, optional (a morning summary of every agent, talk to your manager):
      a. In Telegram, open BotFather:    https://t.me/BotFather
