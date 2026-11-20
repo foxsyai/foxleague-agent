@@ -3065,8 +3065,50 @@ Stays open:
 - **Other per-day limits at the reset.** RESET-1 holds trainings and match starts only. A paid action refused by the
   daily cap just before the reset (the cap is per game day too) is still refused, not held.
 - **The private split extension**: a recovery piece for a card in an auction is now refused; the pieces after it in
-  its group are dropped with it. Leaving listed cards out of the split (one condition in `src/local`) would keep the
-  rest; it is the owner's local file and was not changed.
+  its group are dropped with it. The owner's local file now leaves listed cards out of the
+  split (one condition in `src/local`, with its own test), so the other pieces run.
+- Production was not read and nothing was deployed.
+
+## Haiku 5.5 at high, the AI of a new install (2026-11-20)
+
+The owner's decision of 2026-11-20. His ten live agents played Opus 5.5, Sonnet 5.5 and Haiku 5.5, all at high effort,
+from 13 to 19 Nov: the same results (56 to 57 percent of competitive matches won, about the same ELO gain), Haiku at
+about $0.51 an agent a day against $1.59 for Sonnet and $2.90 for Opus, and each of Haiku's slips refused by the code
+before any money moved. It answers the open line of W-8 (Windows real-PC check of 2026-11-13: "Changing that default
+raises the AI spend: the owner's call"): the owner decided it, and the new default lowers the AI spend.
+
+The fixes are by Claude Opus 5.5, test first: the tests under `test/default-1120/` are named after their Id, and each
+failed for the reason given (DEF-1 on `62f06c0`: Sonnet 5.5 at medium, Opus 5.5 recommended, the old pages; R82A-1 on
+`9914141`: Opus 5.5 at high) and passes now. DEF-2 has no test of its own: its checks sit in DEF-1's first and third
+tests, and the medium of a model named without an effort held before as well, so they guard it. The tests that pinned
+the old default follow it: DOCS-4, MS-C, LIST-6, LOCAL-1, LIST-11, PAM-13, W-8 and the Zeus test.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| DEF-1 | design (the owner, 2026-11-20) | A new install played Sonnet 5.5 at medium (`AGENT_MODEL`'s default and the effort `strategistChoice` fell back to) while every level recommended Opus 5.5 at high | `DEFAULT_AI` (`src/store/settings.ts`): Haiku 5.5 at high. `AGENT_MODEL` falls back to it, `LEVEL_AI` recommends it for every level and `.env.example` names it. The pages, the guides and the dashboard say it, with one sentence on when Sonnet 5.5 (plans more carefully, acts less) or Opus 5.5 (the most active, the dearest of the three) fits. The cost of a day at the defaults is about $0.60 (about $0.10 a plan on Haiku's card for a prompt over 100,000 tokens, its answer at high included) and $10 of first credit lasts about two weeks. Sonnet 5.5, Opus 5.5 and Fable 5.2 stay choices |
+| DEF-2 | design (rule 7) | The effort nobody chose: high for every install would raise one that named a model in `AGENT_MODEL` without an effort from medium to high on update, with no password | `strategistChoice`: the effort nobody chose (no effort saved in the dashboard, no `AGENT_MODEL_EFFORT`) is high only with the model nobody chose (no model saved, no `AGENT_MODEL`, `cfg.model` the default). A model named without an effort plays at medium, what earlier versions played it at. An effort that is not one of the five is medium. The password rule is unchanged: from the default a dearer model or a higher effort asks, the default itself never asks, and back to it from any model of the list at high or above is one click |
+| R82A-1 | high (rule 7; the GitHub review of PR #82) | DEF-2 looked at the all-agents choice only. An agent with a model of its own and Effort "Same as all agents" took the all-agents effort (`agentChoice`). With nothing picked in the Strategist box and no `AGENT_MODEL*` (the installer writes neither), an agent saved as Opus 5.5 played Opus 5.5 at medium before the update and at high after it, with no password, the step the dashboard asks the password for. `cli model 2 claude-opus-5-5 same` reached it too | `inheritedEffort` (`src/strategist/strategist.ts`): an agent whose model is its own (one of the list, or the successor of one that left it) and that has no effort of its own plays the effort picked for all agents (the Strategist box, else `AGENT_MODEL_EFFORT`), else medium. The default pair's high goes only to the agents that play the default model, and the effort inherited is never above the all-agents one. The service's `allAi` carries it as `ownModelEffort`; the plan path, the dashboard's pairs, the CLI and the page (`aiAll`) read it. An agent whose own model is Haiku 5.5 plays medium too: its model was picked, and medium is what it played before. Applying a pair in the Strategist box saves its effort for all agents, so `allAgentsAiNeedsPassword` also weighs each agent's raise: Haiku 5.5 at high picked while such an agent plays at medium asks for the password, on the server and on the page. The page's "Same as all agents" reads "(high; medium with a model of its own)" and the Effort bubble and the Settings page say why. Nothing is written to the database |
+
+What was checked and needs no change:
+- The owner's live server: the Strategist box saves its model and its effort together (`setStrategist`), and that pair
+  wins over `AGENT_MODEL`, `AGENT_MODEL_EFFORT` and the defaults; each agent's own model and effort win over the box.
+  Where an effort was picked for all agents, R82A-1's rule gives the agents what they played before.
+- No other reader of an agent's pair: `agentChoice` is called by the service (its pairs and the plan path, both through
+  `allAi`), the password routes and the CLI; the page copies it in its three places.
+
+Stays open:
+- **Sonnet 5.5 at medium to Haiku 5.5 at high asks for the password.** `raisesAiSpend` weighs the effort by itself, and
+  the pair cannot be shown cheaper on every plan: a plan's prompt is on Haiku's dearer card, only 4 times under
+  Sonnet's, and Haiku at high writes about 16,300 tokens. Haiku 5.5 at medium is one click. Loosening it is the owner's
+  call.
+- **A shadow entry that rested.** An install made before this version that never picked a model and set a shadow entry
+  for Sonnet 5.5 (it rested while Sonnet played) starts paying for it after the update. Shadow plans are set by hand on
+  the server; no such install is known.
+- **The installer's credit line.** `install.sh` still says "Add credit ($10, about a week)". The install videos quote
+  it (`test/install-videos.test.ts`), so it changes with a re-render of `site/scripts/videos`. At the new default $10
+  lasts about two weeks, as the pages say.
+- **The screenshots and the videos** on the site show the Strategist box as they were captured; the capture scripts
+  (`site/scripts/screenshots.ts`, `site/scripts/videos/src/capture.mjs`) use the new default for the next capture.
 - Production was not read and nothing was deployed.
 
 ## One manager message at a time (2026-11-13)

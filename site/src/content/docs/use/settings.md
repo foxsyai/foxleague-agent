@@ -30,7 +30,7 @@ AI asks for your password. The defaults below are the steady level's, the one ev
 | Setting | Default | What it does |
 |---|---|---|
 | AI model | Same as all agents | The Claude model that plans for this agent. Same as all agents follows the Strategist box at the top of the dashboard. Pick one of the four models (each shown with its list price per million tokens) to give this agent its own: a later switch in the Strategist box does not move it. A dearer model asks for your password; a cheaper one is one click. Going back to Same as all agents counts by the model it lands on. |
-| Effort | Same as all agents | How hard the AI thinks on each plan of this agent: low, medium, high, xhigh or max. More effort thinks longer and costs more. A higher effort asks for your password; a lower one is one click. |
+| Effort | Same as all agents | How hard the AI thinks on each plan of this agent: low, medium, high, xhigh or max. More effort thinks longer and costs more. A higher effort asks for your password; a lower one is one click. While no effort has been picked in the Strategist box (a new install), an agent with a model of its own plays at medium: the default's high comes only with the default model. |
 
 The line under the two fields says what the agent plays now and what it would play after saving. A change that
 starts shadow plans set on the server for this agent asks for your password too

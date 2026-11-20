@@ -143,13 +143,13 @@ test('LIST-5 a saved model that left the list moves to its successor, once, with
   }
 })
 
-test('LIST-6 a new install plays on Sonnet 5.5: the default when AGENT_MODEL is not set', () => {
+test('LIST-6 a new install plays on Haiku 5.5 (Sonnet 5.5 until DEF-1 of 2026-11-20): the default when AGENT_MODEL is not set', () => {
   const dir = mkdtempSync(join(tmpdir(), 'foxagent-model-'))
   const env = { PATH: process.env.PATH!, HOME: dir, AGENT_ENV_FILE: join(dir, 'no-such.env'), AGENT_DATA_DIR: dir }
   const run = (more: Record<string, string> = {}) => spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', '--input-type=module', '-e', `const { loadConfig } = await import(${JSON.stringify(join(REPO, 'src/config.ts'))}); console.log(loadConfig().model)`], { env: { ...env, ...more }, cwd: dir, encoding: 'utf8', timeout: 60_000 })
-  assert.equal(run().stdout.trim(), 'claude-sonnet-5-5')
+  assert.equal(run().stdout.trim(), 'claude-haiku-5-5')
   assert.equal(run({ AGENT_MODEL: 'claude-opus-5-5' }).stdout.trim(), 'claude-opus-5-5', 'the owner\'s choice in the env file still wins')
-  assert.match(readFileSync(join(REPO, '.env.example'), 'utf8'), /^AGENT_MODEL=claude-sonnet-5-5$/m)
+  assert.match(readFileSync(join(REPO, '.env.example'), 'utf8'), /^AGENT_MODEL=claude-haiku-5-5$/m)
 })
 
 test('LIST-7 the password rule over the list: a switch that can raise any price asks, a retired model counts as its successor', () => {
@@ -274,23 +274,22 @@ test('LOCAL-1 the model list opens with "Local model (free, coming soon)": greye
   assert.ok(apply.indexOf('S.instance.models.some') < apply.indexOf("api('POST', '/api/strategist'"), 'checked before anything is sent')
   const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
   assert.match(tip, /A free model that runs on your own computer is being tested\. It is not ready, so it cannot be picked yet\./)
-  assert.match(tip, /<b>Haiku 5\.5<\/b> is the cheapest, for trying things out: how well it plays this game has not been measured yet\./)
-  assert.match(tip, /<b>Sonnet 5\.5<\/b> is the default and handles this game well/)
+  assert.match(tip, /<b>Haiku 5\.5<\/b> at high effort is the default and plays well at the lowest cost\./)
+  assert.match(tip, /<b>Sonnet 5\.5<\/b> plans more carefully and acts less/)
   assert.doesNotMatch(tip, /Sonnet 5<|Opus 5<|Fable 5\.1/, 'the bubble names no model that left the list')
   assert.doesNotMatch(tip, /—|, and |, or /)
 })
 
-test('LIST-11 every page that names the default or the list follows: Sonnet 5.5 the default, Haiku 5.5 the cheapest with nothing promised', () => {
+test('LIST-11 every page that names the default or the list follows: Haiku 5.5 at high the default since DEF-1 (Sonnet 5.5 before)', () => {
   const read = (f: string) => readFileSync(join(REPO, f), 'utf8')
   const DOCS = 'site/src/content/docs'
   for (const f of ['README.md', 'INSTALL.md', `${DOCS}/help/costs.md`, `${DOCS}/start/keys.mdx`, 'src/web/dashboard.html']) {
-    assert.match(read(f), /with the default model, effort and tick \(Sonnet 5\.5 at medium, a plan every 2 hours/, f)
+    assert.match(read(f), /with the default model, effort and tick \(Haiku 5\.5 at high, a plan every 2 hours/, f)
     assert.doesNotMatch(read(f), /Sonnet 5 at medium/, f)
   }
   for (const f of [`${DOCS}/use/dashboard.md`, `${DOCS}/help/faq.md`]) {
     const text = read(f).replace(/\s+/g, ' ')
-    assert.match(text, /Sonnet 5\.5 is the default and plays well/, f)
-    assert.match(text, /Haiku 5\.5 is the cheapest, for trying things out: how well it plays this game has not been measured yet/, f)
+    assert.match(text, /Haiku 5\.5 at high effort is the default and plays well at the lowest cost/, f)
     assert.doesNotMatch(text, /Sonnet 5 is the default/, f)
   }
   assert.match(read(`${DOCS}/use/dashboard.md`).replace(/\s+/g, ' '), /The entry "Local model \(free, coming soon\)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is not ready\./)

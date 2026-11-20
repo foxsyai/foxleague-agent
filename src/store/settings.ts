@@ -67,6 +67,15 @@ export interface AgentSettings {
 /** The efforts an AI request takes, from the least to the most thinking (the strategist's EFFORTS is this list). */
 export const AI_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 
+/**
+ * The AI of a new install (the owner, 2026-11-20): Claude Haiku 5.5 at high effort, the model AGENT_MODEL falls back to
+ * (src/config.ts) and the effort strategistChoice gives it while nothing names an effort. Until then a new install
+ * played Sonnet 5.5 at medium. The owner's ten agents played Haiku, Sonnet and Opus 5.5 at high for a week: the same
+ * share of competitive matches won, Haiku at about a third of Sonnet's AI cost a day and a sixth of Opus's, and each
+ * of its slips refused by the code before a payment. Sonnet 5.5, Opus 5.5 and Fable 5.2 stay choices.
+ */
+export const DEFAULT_AI = { model: 'claude-haiku-5-5', effort: 'high' } as const
+
 /** The most medicine days a week a setting takes (three of the longest injuries' 18 days and some). */
 export const MAX_MEDICINE_DAYS_PER_WEEK = 60
 
@@ -96,10 +105,11 @@ const LEVEL_HEADS: Record<string, string> = {
 export const STRATEGY_PRESETS: Record<string, string> = Object.fromEntries(Object.entries(LEVEL_HEADS).map(([level, head]) => [level, `${head} ${STRATEGY_CORE}`]))
 
 /**
- * The AI the levels play best with: one brain, so one recommendation; how often a level plans sets what it costs. The
- * model is one setting for every agent (the Strategist box), so this is shown, never switched.
+ * The AI the levels play best with: one brain, so one recommendation, the AI of a new install (DEFAULT_AI, since
+ * 2026-11-20; Opus 5.5 at high before); how often a level plans sets what it costs. It is shown next to the level,
+ * never switched: the Strategist box sets the model for every agent without its own.
  */
-export const LEVEL_AI: Record<string, { model: string; effort: 'medium' | 'high' }> = Object.fromEntries(Object.keys(LEVEL_HEADS).map(level => [level, { model: 'claude-opus-5-5', effort: 'high' as const }]))
+export const LEVEL_AI: Record<string, { model: string; effort: 'medium' | 'high' }> = Object.fromEntries(Object.keys(LEVEL_HEADS).map(level => [level, { model: DEFAULT_AI.model, effort: DEFAULT_AI.effort }]))
 
 /** The gas reserve can be lowered, never to nothing: a wallet without EGLD cannot even pay a refund claim. */
 export const MIN_GAS_RESERVE_EGLD = 0.05

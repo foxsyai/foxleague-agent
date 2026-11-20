@@ -24,7 +24,7 @@ test('Zeus is level 6 of 6 with its own limits and AI, and the strategy text fit
   const z = LEVEL_SETTINGS.zeus!
   assert.deepEqual([z.dailyCapUsd, z.monthlyBudgetUsd, z.topUpWarningUsd, z.maxBidFoxsy, z.tickMinutes], [150, 3000, 300, 38_000, 60])
   assert.equal(z.topUpWarningUsd, 2 * z.dailyCapUsd, 'the warning at two days of play')
-  assert.deepEqual(LEVEL_AI.zeus, { model: 'claude-opus-5-5', effort: 'high' })
+  assert.deepEqual(LEVEL_AI.zeus, { model: 'claude-haiku-5-5', effort: 'high' })
   assert.deepEqual(Object.keys(LEVEL_AI), Object.keys(STRATEGY_PRESETS), 'a recommended AI for every level')
 })
 

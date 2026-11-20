@@ -454,7 +454,7 @@ only slugs of their shape that the copy knows. A page new to the copy is named o
 current, while the check could not tell or for another copy; the system prompt does not change, so the prompt cache
 holds. The text never reaches Telegram, the dashboard, the summary or the snapshot the executor checks. A plan costs
 more only while the copy is behind: up to about 15,000 input tokens (about $0.06 a plan on Opus 5.5 at its input
-price), usually one or two pages, about 2,000 to 6,000 tokens.
+price, under a cent on Haiku 5.5, the default), usually one or two pages, about 2,000 to 6,000 tokens.
 
 **FoxLeague's API description** (P-W4; `src/foxleague/api-routes.ts`): FoxLeague's mainnet serves an OpenAPI 3.1
 document at `GET /api/openapi.json` (its `backend/src/openapi/mod.rs`, chain 1 only; the same document as

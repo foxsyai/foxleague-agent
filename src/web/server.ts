@@ -256,8 +256,8 @@ const REVOKED_SESSIONS_KEY = 'revoked_sessions'
 /** A dashboard port that could not be opened is tried again this often, until it is free. */
 export const LISTEN_RETRY_MS = 60_000
 
-/** A model and effort an agent plays with. */
-type AiPair = { model: string; effort: string }
+/** A model and effort an agent plays with; for the all-agents pair, also what an agent with a model of its own inherits (R82A-1). */
+type AiPair = { model: string; effort: string; ownModelEffort?: string }
 
 /**
  * Whether a switch of the playing model or effort starts shadow plans (agent review of PR #63, R63A-1). A shadow entry
@@ -296,11 +296,19 @@ export function agentAiNeedsPassword(current: AiPair, next: AiPair, shadows: rea
  * The password rule for the all-agents model and effort: a dearer pair asks as before (it is also the pair of the
  * manager chat and of /ask). A switch that starts shadow plans asks too, judged per agent by what the switch really
  * changes for it: an agent with its own model and its own effort is not moved by it, so its shadow plans start or rest
- * as before; one with only its own effort follows the model, and so on.
+ * as before; one with only its own effort follows the model, and so on. A switch that raises one agent's pair asks too
+ * (R82A-1): an agent with a model of its own and no effort of its own plays `all.ownModelEffort` (medium while no
+ * effort is picked for all agents) and, once a pair is applied, the effort applied. `next` carries no ownModelEffort:
+ * applying it saves its effort for all agents. Elsewhere such a raise is a raise of the all-agents pair too.
  */
 export function allAgentsAiNeedsPassword(all: AiPair, next: AiPair, agents: readonly { settings: { aiModel?: unknown; aiEffort?: unknown }; shadows: readonly string[] }[]): boolean {
   if (raisesAiSpend(all, next as { model: string; effort: Effort })) return true
-  return agents.some(a => wakesShadow(a.shadows, agentChoice(a.settings, all), agentChoice(a.settings, next)))
+  const after = { model: next.model, effort: next.effort }
+  return agents.some(a => {
+    const was = agentChoice(a.settings, all)
+    const will = agentChoice(a.settings, after)
+    return raisesAiSpend(was, will) || wakesShadow(a.shadows, was, will)
+  })
 }
 
 export function startWeb(service: Service, creds: Credentials, port: number, host = '127.0.0.1', o: { retryMs?: number } = {}): Server {
@@ -731,7 +739,7 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
         // later: + Add agent makes one that follows the all-agents pair and the all-agents shadow list, so it stands in
         // as one more agent with no settings of its own (agent review of PR #65).
         if (service.strategist) {
-          const all = { model: service.strategist.model, effort: service.strategist.effort }
+          const all = service.allAi()
           const agents: { settings: { aiModel: string; aiEffort: string }; shadows: string[] }[] = [...service.store.agents(), ...service.store.retiredAgents()].map(b => ({ settings: b.settings, shadows: shadowModelsSet(service.store, b.index) }))
           agents.push({ settings: { aiModel: '', aiEffort: '' }, shadows: shadowModelsSet(service.store) })
           if (allAgentsAiNeedsPassword(all, { model, effort }, agents)) recheckPassword(req, body.password)

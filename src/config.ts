@@ -5,6 +5,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { applySecretOverrides } from './store/secrets.ts'
+import { DEFAULT_AI } from './store/settings.ts'
 
 /** MultiversX mainnet identifiers (docs/FOXLEAGUE-INTEGRATION.md section 1.2). */
 export const MAINNET = {
@@ -111,9 +112,10 @@ export function loadConfig(): Config {
     apiRps: num('MVX_API_RPS', 1.8),
     foxleagueRps: num('FOXLEAGUE_RPS', 5),
     anthropicApiKey: process.env.ANTHROPIC_API_KEY?.trim() || undefined,
-    // The default of a new install (Sonnet 5.5 since the owner's list of 2026-11-11). A model that left the list is
-    // moved to its successor where the choice is read (strategistChoice), so the env file of an older install still works.
-    model: process.env.AGENT_MODEL?.trim() || 'claude-sonnet-5-5',
+    // The default of a new install (Haiku 5.5 since the owner's decision of 2026-11-20, Sonnet 5.5 before: DEFAULT_AI). A
+    // model that left the list is moved to its successor where the choice is read (strategistChoice), so the env file of
+    // an older install still works.
+    model: process.env.AGENT_MODEL?.trim() || DEFAULT_AI.model,
     telegramToken: process.env.TELEGRAM_BOT_TOKEN?.trim() || undefined,
     telegramChatId: process.env.TELEGRAM_CHAT_ID?.trim() || undefined,
     isServer: flag('AGENT_IS_SERVER', false),

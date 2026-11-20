@@ -681,18 +681,20 @@ test('PAM-13 cli model: shows each agent\'s AI and shadow entries, and sets an a
   assert.deepEqual([store.agent(2)!.settings.aiModel, store.agent(2)!.settings.aiEffort], ['', 'xhigh'])
   r = cli()
   assert.equal(r.status, 0, r.stderr)
+  // Nothing picked and no AGENT_MODEL: the all-agents pair is the default of a new install (Haiku 5.5 at high since
+  // DEF-1 of 2026-11-20, Sonnet 5.5 at medium before).
   assert.deepEqual(r.stdout.trim().split('\n'), [
-    'all agents: Sonnet 5.5 at medium effort (the Strategist box)',
-    'agent 1: Sonnet 5.5 at medium effort (same as all agents)',
+    'all agents: Haiku 5.5 at high effort (the Strategist box)',
+    'agent 1: Haiku 5.5 at high effort (same as all agents)',
     'agent 2: Haiku 5.5 at high effort (its own model and its own effort)',
-    `agent 3: Sonnet 5.5 at xhigh effort (its own effort); shadow plans by ${SONNET}:low, ${SONNET}:xhigh (its own list)`,
+    `agent 3: Haiku 5.5 at xhigh effort (its own effort); shadow plans by ${SONNET}:low, ${SONNET}:xhigh (its own list)`,
   ])
   r = cli('2')
   assert.equal(r.stdout.trim(), 'agent 2: Haiku 5.5 at high effort (its own model and its own effort)')
   // Back to the all-agents pair.
   r = cli('2', 'same', 'same')
   assert.equal(r.status, 0, r.stderr)
-  assert.equal(r.stdout.trim(), 'agent 2 plays Sonnet 5.5 at medium effort from its next plan (same as all agents)')
+  assert.equal(r.stdout.trim(), 'agent 2 plays Haiku 5.5 at high effort from its next plan (same as all agents)')
   assert.deepEqual([store.agent(1)!.settings.aiModel, store.agent(1)!.settings.aiEffort], ['', ''])
   // Refused, and nothing written.
   for (const [args, why] of [[['2', 'gpt-oss', 'high'], /unknown model gpt-oss/], [['2', 'claude-sonnet-5', 'high'], /unknown model claude-sonnet-5/], [['2', HAIKU, 'turbo'], /unknown effort turbo/], [['2', HAIKU], /usage|model <N>/], [['9', HAIKU, 'high'], /no agent 9/]] as const) {
@@ -1067,7 +1069,8 @@ test('R65A-4 with the strategist off (no AI key yet) the page resolves "Same as 
   try {
     assert.equal(svc.strategist, null)
     const st = await state()
-    assert.deepEqual([st.instance.model, st.instance.effort, st.instance.aiAll], [null, null, { model: SONNET, effort: 'medium' }])
+    // aiAll also carries what an agent with a model of its own inherits (R82A-1): medium here, as the effort was named.
+    assert.deepEqual([st.instance.model, st.instance.effort, st.instance.aiAll], [null, null, { model: SONNET, effort: 'medium', ownModelEffort: 'medium' }])
     const res = await post('/api/agents/0/settings', { dailyCapUsd: 1, aiModel: '', aiEffort: '' })
     assert.equal(res.status, 200, `a lowered cap with no key is one click on the server: ${await res.text()}`)
     const page = pageFunctions<(b: unknown, form: unknown) => boolean>(['agentAiCostsMore'], st)
