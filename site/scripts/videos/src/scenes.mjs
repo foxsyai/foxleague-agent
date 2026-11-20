@@ -192,7 +192,7 @@ export function build(os, { cw, boxes, shotNames, shotBase, fav }) {
     tl.lines(T.ps.uninstall()).out(T.ps.uninstallAsk()).wait(1.1).enter()
     tl.lines(T.ps.uninstallRun()).wait(0.3).lines(T.uninstall()).wait(0.2).lines(T.ps.uninstallEnd()).out(T.ps.prompt())
   } else {
-    const [l1, l2] = os === 'mac' ? [133, 134] : [140, 141]
+    const [l1, l2] = os === 'mac' ? [140, 141] : [143, 144]
     tl.type(seg('cd ~/foxleague-agent', null, { f: MDX(os), l: l1, frags: ['cd ~/foxleague-agent'] }), 16).wait(0.1).enter(0.05)
     if (os === 'linux') tl.title(TITLES.linux('~/foxleague-agent'))
     tl.out(T.prompt('~/foxleague-agent')).wait(0.3)
