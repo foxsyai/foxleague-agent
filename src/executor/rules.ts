@@ -1272,7 +1272,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'sync': {
       if (!registered) return refuse('not registered')
-      const dirty = s.players.filter(p => p.dirty && p.listed === false && (a.nonce === undefined || p.nonce === a.nonce))
+      // A listed card is left out (FoxLeague syncs no card the marketplace contract holds); one whose auction state
+      // could not be read refuses the sync with that reason rather than being left out unnamed (review of PR #87).
+      const named = s.players.filter(p => p.dirty && (a.nonce === undefined || p.nonce === a.nonce))
+      const unreadCard = named.find(p => p.listed !== true && p.listed !== false)
+      if (unreadCard) return refuse(listedRefusal(unreadCard)!)
+      const dirty = named.filter(p => p.listed === false)
       if (!dirty.length) return refuse(a.nonce === undefined ? 'no dirty cards to sync' : `#${a.nonce} has nothing to sync`)
       const changed = dirty.filter(p => Object.keys(p.live).some(k => p.live[k] !== p.synced[k]))
       const cost = cfg.sync_cost_foxsy * dirty.length

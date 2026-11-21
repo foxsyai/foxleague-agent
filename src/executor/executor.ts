@@ -1617,7 +1617,7 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
   const card = (n: number) => s.players.find(p => p.nonce === n)
   switch (a.type) {
     case 'sync':
-      for (const p of s.players) if (!p.listed && (a.nonce === undefined || p.nonce === a.nonce)) { p.dirty = false; p.synced = { ...p.live } }
+      for (const p of s.players) if (p.listed === false && (a.nonce === undefined || p.nonce === a.nonce)) { p.dirty = false; p.synced = { ...p.live } }
       break
     case 'train': {
       const p = card(a.player_nonce)

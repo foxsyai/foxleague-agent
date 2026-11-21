@@ -3140,12 +3140,16 @@ trained; #764, account bans) and screens of the app. FoxLeague's server changes 
 (#792, #795, #796, #801, #802) touch no route the agent sends to. The game settings keys are unchanged.
 
 The fix is by Claude Opus 5.5, test first: `test/sync-1121/SYNC-3.test.ts` failed on `6fb2ced` for the reason given
-(SYNC3-1, each of its cases; SYNC3-2 on the copy of 19 Nov) and passes now.
+(each SYNC3-1 test, one per check; SYNC3-2 on the copy of 19 Nov) and passes now. The GitHub review of PR #87 (Claude
+Fable 5.2 at high effort, PASS) found two lows: their tests (the two sync tests; the waiver and listing counts and ranks,
+now one test each) failed on `f158a31` or `6fb2ced` and pass now.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | SYNC3-1 | low (rule 4; no refusal on a normal day: FoxLeague's API description requires `listed_for_sale` on every card) | SYNC-2 made the four card Shop items refuse a card whose auction state the roster did not give. The other checks in `rules.ts` still read such a card as in the wallet: `train`, the squad a paid match or entry is played with (`squadLegal`), a saved eleven (`lineupVerdict`), a fusion's three cards, the cards a fusion or a listing leaves toward 18, a `sync` and a `list_card` | One helper, `listedRefusal`: a card known not to be listed passes, a listed one keeps "#N is listed for sale", an unread one is refused with "whether #N is in an auction (listed for sale) could not be read: not acting blind". The counts toward 18 and a sync's cards count only a card known not to be listed |
 | SYNC3-2 | low (the manual check warned on every plan) | The agents' manual copy and the route record were FoxLeague's of 19 Nov | Synced to `237984579` (16 pages, nine changed) with the two new route shapes; SYNC2-5 no longer pins the commit, SYNC3-2 does. The copy grew by 4 KB: the rules and the manual are about 111,700 tokens by the measured ratio, more than 5 percent above the 105,000 the five places stated (DOCS-4 failed on the synced copy), restated as about 112,000. The cost of a plan and of a day at the defaults ($0.10, $0.60) still holds |
+| R87A-1 | low (rule 4, a wrong reason; no money moves: `checkedSync` throws before anything is booked) | `sync` left an unread dirty card out instead of refusing: `sync` of that card said "#N has nothing to sync" (that it was clean); a whole-wallet sync passed the rules at the known cards' fee; `applyEffect` still marked an unread card synced in the working snapshot | A sync that names a dirty card whose auction state was not read is refused with that reason; a listed one is left out as before. `applyEffect` marks only cards known not to be listed as synced |
+| R87A-2 | low (tests) | The changed counts in `fusionBlocked`, `listingBlocked` and `list_card` (the cards left toward 18 and the strongest-18 rank) had no test that failed before the fix; SYNC3-1 was one test of seven cases | One test per check: train, squad, eleven, fusion inputs and count, the cooldown waiver's peers and count, the Legendary match waiver's count and rank, the listing, its count and rank, the sync and its effect |
 
 Stays open:
 - The busy-card rule of #748 is still off (its switch waits for FoxLeague's Terms); the agent has no rule of its own for
