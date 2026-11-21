@@ -3130,6 +3130,27 @@ Stays open:
 - The quote check itself still matches an empty quote anywhere; the test above holds the hints instead.
 - Production was not read for this pull request and nothing was deployed: the site is published after the merge.
 
+## FoxLeague of 21 Nov (2026-11-21)
+
+The running agent alerted at 20:50 UTC that FoxLeague's manual changed (nine pages) and that two routes it calls
+changed shape: FoxLeague promoted its release branch into `origin/main` (#806, `5eecea2aa`, manual `237984579`). The
+routes are the statistics of a match, which gained `injuries` (#801); the agent reads only both formations and both
+elevens there. The pages carry what SYNC-2 already acts on (#752, a card in an auction takes no paid action and is not
+trained; #764, account bans) and screens of the app. FoxLeague's server changes since SYNC-2 read the release branch
+(#792, #795, #796, #801, #802) touch no route the agent sends to. The game settings keys are unchanged.
+
+The fix is by Claude Opus 5.5, test first: `test/sync-1121/SYNC-3.test.ts` failed on `6fb2ced` for the reason given
+(SYNC3-1, each of its cases; SYNC3-2 on the copy of 19 Nov) and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SYNC3-1 | low (rule 4; no refusal on a normal day: FoxLeague's API description requires `listed_for_sale` on every card) | SYNC-2 made the four card Shop items refuse a card whose auction state the roster did not give. The other checks in `rules.ts` still read such a card as in the wallet: `train`, the squad a paid match or entry is played with (`squadLegal`), a saved eleven (`lineupVerdict`), a fusion's three cards, the cards a fusion or a listing leaves toward 18, a `sync` and a `list_card` | One helper, `listedRefusal`: a card known not to be listed passes, a listed one keeps "#N is listed for sale", an unread one is refused with "whether #N is in an auction (listed for sale) could not be read: not acting blind". The counts toward 18 and a sync's cards count only a card known not to be listed |
+| SYNC3-2 | low (the manual check warned on every plan) | The agents' manual copy and the route record were FoxLeague's of 19 Nov | Synced to `237984579` (16 pages, nine changed) with the two new route shapes; SYNC2-5 no longer pins the commit, SYNC3-2 does. The copy grew by 4 KB: the rules and the manual are about 111,700 tokens by the measured ratio, more than 5 percent above the 105,000 the five places stated (DOCS-4 failed on the synced copy), restated as about 112,000. The cost of a plan and of a day at the defaults ($0.10, $0.60) still holds |
+
+Stays open:
+- The busy-card rule of #748 is still off (its switch waits for FoxLeague's Terms); the agent has no rule of its own for
+  it until the switch appears in `/api/config`.
+
 ## The owner's release key (2026-11-20)
 
 Before the public release the owner made the release key on their own computer with `node scripts/release/release.ts
