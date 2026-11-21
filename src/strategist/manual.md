@@ -1,5 +1,5 @@
 # FoxLeague player manual
-The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 1ab9de65d 2026-11-19.
+The official player manual (docs.foxleague.ai), synced from the FoxLeague repository, main at 237984579 2026-11-21.
 Rules and numbers as the platform runs them. Where a live value in the snapshot differs (fees, prices, allowances, config), the live value wins.
 A card's OVR is the average of its seven stats; the stats that matter for its position count for more than OVR.
 
@@ -736,6 +736,7 @@ On mainnet every sale runs as a **24-hour auction**. There is no instant buy: a 
 2. Find the player in your roster
 3. Enter the **reserve price** in FOXSY, then click **START AUCTION**
 4. Approve the listing transaction in your wallet. The NFT moves into the contract's escrow for the 24 hours the auction runs
+5. The auction shows under **My Listings** a few seconds later, without a page refresh: the platform reads it from the blockchain once the transaction has run. Meanwhile the tab says it is on its way. If it has not shown after a minute, the tab says so: refresh the page a minute later.
 
 Reserve prices are whole FOXSY with a **minimum of 500**, enforced on chain. The Sell form refuses a price below the minimum and accepts at most **1,000,000**. That maximum is a limit of the Sell form only: the contract itself does not cap the reserve at 1,000,000. No bid under the reserve is ever accepted, so the reserve is the lowest amount you can be forced to sell at.
 
@@ -792,7 +793,7 @@ Winning an auction does **not start** a transfer cooldown. It does not clear one
 
 ## Canceling a listing
 
-Changed your mind? Open **Marketplace → My Listings** and click **Cancel** on the card. The same **Cancel** button also appears on your own card in the Browse grid plus its detail modal. The player returns to your roster with no fee. The listing disappears from the browse grid.
+Changed your mind? Open **Marketplace → My Listings** and click **Cancel** on the card. The same **Cancel** button also appears on your own card in the Browse grid plus its detail modal. The player returns to your roster with no fee. The listing disappears from the browse grid a few seconds later, without a page refresh.
 
 Cancelling only works while the auction has **zero bids**. Once a bid lands you are committed until the clock ends, which is what stops a seller pulling a card out from under a bidder.
 
@@ -941,7 +942,7 @@ The competitive mode. ELO points move between you and your opponent based on the
 
 - **Best for**: climbing the leaderboard, qualifying for league promotions
 - **Matchmaking**: a random opponent within 150 ELO of you. The search widens to 300, then 500, if nobody fits; after that an AI team stands in. Your league is not used.
-- **Once a day per opponent**: the same two teams meet in ranked at most once every 24 hours, whoever started the game. A team you played in ranked in the last 24 hours is not drawn again; when no other team fits, the AI stands in. A team whose starting XI is not all match-fit right now (each player at condition 30 or more, none in a transfer cooldown) is not drawn either. A game still being played counts as a meeting; one that failed or was abandoned does not. Should a second ranked game of the same two teams still take place inside the 24 hours, it records the result but moves no rating. From Friday 20 November 2026, 14:00 UTC a ranked game that moves ELO also counts toward the [ELO pair cap](#the-elo-pair-cap). A team you already met in 3 games that moved ELO since the last daily reset at 14:00 UTC (ranked, 1v1 and tournaments together) is not drawn either.
+- **Once a day per opponent**: the same two teams meet in ranked at most once every 24 hours, whoever started the game. A team you played in ranked in the last 24 hours is not drawn again; when no other team fits, the AI stands in. A team whose starting XI is not all match-fit right now (each player at condition 30 or more, none in a transfer cooldown) is not drawn either. Nor is a team with one of its 18 (starting XI or bench) in an auction: that card is held by the marketplace contract and does not play. A game still being played counts as a meeting; one that failed or was abandoned does not. Should a second ranked game of the same two teams still take place inside the 24 hours, it records the result but moves no rating. From Friday 20 November 2026, 14:00 UTC a ranked game that moves ELO also counts toward the [ELO pair cap](#the-elo-pair-cap). A team you already met in 3 games that moved ELO since the last daily reset at 14:00 UTC (ranked, 1v1 and tournaments together) is not drawn either.
 - **Ranked ticket (from Monday 9 November 2026, 14:00 UTC)**: the team that starts a ranked game pays **25 FOXSY** before the opponent is drawn. **KICK OFF** shows the price with what it buys, then asks your wallet for one payment; the game starts once it is confirmed. One payment is one ticket for one ranked game. Only your team earns XP (a quarter of the Gold rate) and competitive matches. The team drawn in pays nothing, loses no condition and earns neither; its ELO moves like yours. A ranked game that fails before its result gives the ticket back for your next start.
 - **AI stand-in**: a ranked game against the AI still records the win, loss or draw. It moves no ELO. From Monday 9 November 2026, 14:00 UTC it is also free: it takes no ticket, costs no condition and earns no XP, so the ticket you hold stays for your next ranked start.
 - **Condition**: only you, the player who started the match, pay condition. The opponent drawn into your game pays nothing.
@@ -1094,7 +1095,7 @@ A challenge can carry an optional **minimum** and/or **maximum team OVR** (whole
 - Nothing is checked after that: lineup changes and player growth before the match are never measured against it.
 - You always play your own challenge, so your best XI OVR must be inside the range you set. The create form shows your best XI next to the two inputs.
 - A developer challenge takes no range.
-- The challenge card and its page show the range as a chip (**OVR ≤ 35**). A team outside it sees Join greyed with the reason.
+- The challenge card and its page show the range as a chip (**OVR ≤ 35**). A team outside it is not offered Join: in the list its card reads **OVR out of range** in place of the button. The challenge page shows Join greyed with the reason.
 - Every challenge card still to be played shows each team's **Best XI OVR** with the formation it comes from under it, so you can see the strength of a challenger before you accept. The lobby of the challenge shows the same number. It is the one team OVR the app shows everywhere: see [your team OVR](/getting-started/players/#your-team-ovr-the-best-xi-ovr).
 - **Nobody accepting?** While the challenge is open (before its deadline), you can **widen** the range from its page: **Widen the range** sits next to the chip. Lower the minimum or raise the maximum. Clear a field to remove that bound. It never gets narrower: a higher minimum, a lower maximum or a new bound on a side that has none is refused. An admin can widen it too. See [Widening the range](/mechanics/tournaments/#widening-the-range).
 
@@ -1216,7 +1217,7 @@ There's no separate Hall of Fame for 1v1. They're tracked alongside regular rank
 - **Sync before the opponent accepts**. The snapshot freezes whatever's synced at the match's strategy lock, normally right after the challenge fills. Train/sync first, then challenge, because an open challenge can be accepted at any moment.
 - **Pick a deadline you'll honor**. If you target someone, give them time to see and respond. 30 min is aggressive; 1-2 h is conventional.
 - **Check the live entry-fee bounds** in the create form.
-- **Mind the 1-hour busy window**. Casual and ranked play is blocked from 1 hour before your 1v1 kicks off until its broadcast ends, so plan around the deadline window. Overlapping tournament matches are handled by the scheduler, which slides the 1v1 kickoff past them.
+- **Mind the 1-hour busy window**. Casual and ranked play is blocked from 1 hour before your 1v1 kicks off until its broadcast ends, so plan around the deadline window. Overlapping tournament matches are handled by the scheduler, which slides the 1v1 kickoff past them. If the scheduler cannot read when the two teams are busy, it does not guess that they are free: it tries again twice and then moves the kickoff past the window it would have checked (2 hours by default, plus one match's length) and writes a warning in Admin > Events.
 
 # Permanent Match Records
 (docs.foxleague.ai/mechanics/permanent-records/)
@@ -1296,6 +1297,8 @@ The Shop panel always shows the **live** price at the top of every item (check t
 | **Fusion Match Waiver** | per match, by rarity: Uncommon 20, Rare 100, Epic 100, Legendary 100 FOXSY; none for Common | Credits competitive matches a card still needs for the match gate of its rarity, never the matches that must really be played. Bought per card on its profile in the **Squad** (**Buy matches**, every rarity with a waiver) plus in the **Fusion** tab for a fusion input |
 | **Badge Regeneration** | 1,000 FOXSY (first 3 re-rolls are free) | Re-roll your team badge with a fresh AI-generated image. Sold from **Settings**, not the Shop tab |
 | **Ranked ticket** | 25 FOXSY, from Monday 9 November 2026, 14:00 UTC | One ranked game you start against a real opponent. A game the AI fills keeps it. Paid from **Play Match**, not the Shop tab |
+
+**A card in an auction:** Condition Recovery, Reduce Cooldown, Medicine and the Fusion Match Waiver are not sold for a card that is in an auction, because the marketplace contract holds it until the auction ends. The Shop leaves such a card out of its pickers and out of Recover All and names it with the reason. A card you list after you picked it is refused at the press with the same reason and nothing is signed. A card that left your wallet another way after you picked it (sold or sent) reads **This card is no longer in your wallet. Nothing to pay.** If the auction ends without a sale or is cancelled, the card is back in your wallet and the items are sold for it again.
 
 ---
 
@@ -1497,7 +1500,7 @@ In the Squad view, unsynced players show an orange "Sync All" banner with the co
 ## How sync works
 
 1. You train players, stats grow in your Squad view, players are marked **unsynced**
-2. The Squad page shows a banner: **"+15% squad power locked. Sync to unleash"** (the wording softens for smaller gaps)
+2. The Squad page shows a strip with **Sync All**. When the trained stats of your starters are at least **1%** above their synced ones, the strip leads with that percentage, for example **"+15% squad power locked. Sync to unleash"** (the wording softens for smaller gaps). Under 1% it reads **"Your team needs to be synced on chain"**, with no percentage
 3. Click **Sync All** (or sync a single player from their profile)
 4. A FOXSY transaction appears in your wallet
 5. Approve it. The transaction writes all your recent stat increases to the blockchain in one batch
@@ -1518,7 +1521,9 @@ There's no "right" answer. It depends on your style:
 - **Once per session**: efficient, batch all your training in one go
 - **Rarely**: accept the gap, just play with what you have on chain
 
-The banner percentage tells you exactly what you're missing. **0%** = nothing to sync. **15%+** = you're playing with stats significantly weaker than what you've trained but haven't yet synced.
+The percentage on the Squad strip tells you what you're missing: how far the trained stats of your starters are above their synced ones, rounded down. **15%+** = you're playing with stats significantly weaker than what you've trained but haven't yet synced.
+
+You will often see the strip with **no percentage**. A player counts as unsynced after every match it plays, because its match count changed (and its XP, when the match gave any), also when no stat grew. The gap is then under 1% and the strip only reads **"Your team needs to be synced on chain"**. The same happens when you trained bench players only. **No strip** = nothing to sync. The strip also shows when a player is below full condition, with **Recover All**.
 
 The percentage is measured over your 11 lineup starters only (your whole squad until you save a lineup), while the Sync All cost counts every unsynced player, bench included.
 
@@ -1619,7 +1624,7 @@ From the moment yellow card bans and injuries start (see [Players](/getting-star
 
 ## A player still in another match
 
-From a date still to be announced a player plays one match at a time: from the strategy lock of a tournament match or a 1v1 challenge until that match has ended, every player of the 18 it locked is busy. A save that adds a busy player to your 18 is refused, for example a player you just bought from a team that is playing. One of your own players is busy for your saves only while your team also has a match of another tournament whose broadcast overlaps his: within one tournament you can leave him out and take him back at any time. The message names him and the kickoff of the match he is locked for, for example "Romero is still in the squad of another match (kickoff 16 Nov 14:00 UTC). A player plays one match at a time: you can add him once that match has ended." Save again once that match has ended. A save that keeps the players you saved goes through as usual. The bench Tactics completes for you leaves a busy player out. If a busy player is still in your 18 when your match locks, he is replaced like an injured player (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). Before a ranked or casual game he is left out the same way when another team's lock holds him. A lock of your own team never holds your players for a ranked or casual game: your team rests from an hour before its own kickoff.
+From a date still to be announced a player plays one match at a time: from the strategy lock of a tournament match or a 1v1 challenge until that match has ended, every player of the 18 it locked is busy. A save that adds a busy player to your 18 is refused, for example a player you just bought from a team that is playing. One of your own players is busy for your saves only while your team also has a match of another tournament whose broadcast overlaps his: within one tournament you can leave him out and take him back at any time. The message names him and the kickoff of the match he is locked for, for example "Romero is still in the squad of another match (kickoff 16 Nov 14:00 UTC). A player plays one match at a time: you can add him once that match has ended." Save again once that match has ended. A later-round match can lock while the match that decides one of its teams is still being broadcast: until both of its teams are shown, a player in the 18 that any team of the tournament had saved at that lock is busy for the other teams with that match's kickoff, so the message never tells who went through. A save that keeps the players you saved goes through as usual. The bench Tactics completes for you leaves a busy player out. If a busy player is still in your 18 when your match locks, he is replaced like an injured player (see [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit)). Before a ranked or casual game he is left out the same way when another team's lock holds him. A lock of your own team never holds your players for a ranked or casual game: your team rests from an hour before its own kickoff.
 
 ## Rotating reserves in
 
@@ -1844,6 +1849,7 @@ Developer tournaments and 1v1 challenges pay none.
 | Enough teams join but their number does not fit the format | Comes back in full |
 | It is played to the end | Comes back in full |
 | The FoxLeague team cancels it | Comes back in full |
+| One-signature create: FoxLeague bans your account before it opens, so it is refused | Comes back in full |
 
 **A private tournament has a higher platform fee.** A tournament with an invite list created from the same moment keeps 20% of the pool instead of 10%. Its prizes are 40%, 25% and 15%, so the teams share the cost. The event page shows the split before you join.
 
@@ -1861,7 +1867,7 @@ FoxLeague can switch on a **one-signature create** for these tournaments. It is 
 - **Your earlier tournament or challenge is still waiting for its payment**: the form says so and counts down until you can start a different one, with a link to the pending one. One payment can wait at a time. When the countdown ends the time slot is yours again: a tournament you start there replaces the unpaid one.
 - **Your payment is not confirmed yet**: the tournament opens as soon as it lands, even if you leave the page; nothing is charged twice. Closing the tab in that moment asks you to stay first.
 - **The registration deadline is too close**: pick a deadline about 13 minutes away or more (by default: the time your signature stays valid, a minute for the chain and two minutes for the check that opens your tournament if your confirmation never arrives), so your payment always lands before registration closes. The form tells you the exact number of minutes.
-- **It could not open**: the tournament is cancelled and your entry fee is refunded when the deadline passed before your payment was confirmed. The same happens when you created another tournament you play in meanwhile and when a Champions FoxLeague tournament your team is in started meanwhile. A first payment that lands after all once you started again at its time slot is refunded too: the new tournament replaced it.
+- **It could not open**: the tournament is cancelled and your entry fee is refunded when the deadline passed before your payment was confirmed. The same happens when you created another tournament you play in meanwhile and when a Champions FoxLeague tournament your team is in started meanwhile. A first payment that lands after all once you started again at its time slot is refunded too: the new tournament replaced it. If FoxLeague banned your account meanwhile, the tournament is cancelled too and your whole payment comes back, the calendar deposit included: a ban is FoxLeague's decision, never counted as your own withdrawal.
 - **A private tournament** tells the teams you invited once it is open, never before.
 
 Organizer-only tournaments, developer tournaments and Champions FoxLeague keep the two steps even with the switch on: the game creates the tournament first. On a paid developer tournament you play in, your signature then pays the entry fee.
@@ -2008,7 +2014,7 @@ FoxLeague expects your full 18 (11 starters + 7 substitutes) in your wallet when
 - A starter saved in a slot of another line (lineups saved before 28 October 2026 could hold one) is replaced the same way when your bench has a fit player nearer that slot's line. Otherwise he plays there: this alone never forfeits a match
 - Once the match has ended, its card on the tournament page lists the auto-subs of each side under **Lineup changes before kickoff**: who was relieved, who took his place and why (injured, suspended, still playing another match, below the condition floor or saved outside his line). Nothing of it shows before the match has ended
 - A suspended player (3 yellow cards, see [Yellow card bans](/getting-started/players/#yellow-card-bans)) or an injured one (see [Injuries](/getting-started/players/#injuries)) sits the match out. He is replaced the same way. An outfield shirt takes your bench keeper only when no other fit player is left. Your bench plays one short
-- **One match at a time** (from a date still to be announced): a player plays one match at a time. From the strategy lock of a match until that match has ended, every player of the 18 it locked is busy. A team that buys him meanwhile cannot add him to its lineup: Tactics refuses the save, names him and gives the kickoff of the match he is locked for. Your own team can leave him out and take him back within the same tournament; it cannot take him back while it also has a match of another tournament whose broadcast overlaps his. A lineup that keeps the players you saved is never refused
+- **One match at a time** (from a date still to be announced): a player plays one match at a time. From the strategy lock of a match until that match has ended, every player of the 18 it locked is busy. A team that buys him meanwhile cannot add him to its lineup: Tactics refuses the save, names him and gives the kickoff of the match he is locked for. Your own team can leave him out and take him back within the same tournament; it cannot take him back while it also has a match of another tournament whose broadcast overlaps his. A lineup that keeps the players you saved is never refused. A later-round match can lock while the match that decides one of its teams is still being broadcast. Until both of its teams are shown, every player in the 18 that any team of the tournament had saved at that lock is busy for the other teams, with that match's kickoff, so the busy players never tell who went through. Your own team's players are never busy for you this way
 - A busy player still in a team's 18 when that team's match locks is replaced the same way as an injured one and the match card says he was still playing another match. Your bench plays one short. Your own players stay free for your next match of the same tournament. In another tournament they are busy only when its broadcast overlaps the one they are locked for by the schedule: then the later match is played without them
 - A card **in an auction** is not replaced: the contract holds it for the 24 hours of the auction, so it is not in your wallet. A starter or a substitute of your saved 18 in an auction at the lock makes your squad short, so the match is forfeited 3-0 (a 1v1 challenge too). Replace him in your 18 in Tactics before the lock. Or list him only when no match of yours locks during the auction
 - If fewer than 11 match-fit players can be assembled from your 18 (or one of your 18 is not in your wallet: in an auction, sold or sent away), your team **forfeits** the match 3-0 and the opponent takes the win. The forfeit reason is shown on the match card so you know what went wrong
@@ -2085,6 +2091,8 @@ Training is how your players evolve. Each session gives a player XP on a chosen 
 5. The session runs instantly. XP added, condition reduced
 
 There is a **daily training cap** per wallet (free sessions per day). Once you hit it the Train button is greyed out. You can buy extra **Training Slots** to keep going that day. For the exact numbers (free sessions, premium-slot cap, expiry, the XP Booster pairing) see [Training Slots](/mechanics/shop/#training-slots) in the Shop.
+
+A player that is in an auction cannot be trained, because the marketplace contract holds the card until the auction ends. The Training tab says so and its buttons are greyed out. If the auction ends without a sale or is cancelled, the card is back in your wallet and trains again.
 
 ## XP meters and bumps
 
@@ -2254,6 +2262,7 @@ The injuries start at the same moment as the bans. From then:
 - **The Marketplace:** every listing card shows the same. The listing's detail shows the **Discipline** block, so you know before you bid. A sale keeps the count, any ban plus any injury.
 - **A match's card on the tournament page:** once the match has ended, **Lineup changes before kickoff** lists what the lineup lock changed for each team, with the reason, for example "Romero was injured: Petrescu took his place" or, for a player still locked in another match's squad, "Romero was still playing another match: Petrescu took his place". See [Auto-subs and forfeit](/mechanics/tournaments/#auto-subs-and-forfeit).
 - **A match's statistics** (Match History, Upcoming, a tournament's matches, the end of a ranked game): a small yellow card on the row of each player booked in that match, two for a second yellow card. They show once the match's statistics do: for a tournament match when it ends, never earlier. A yellow card in a 1v1 challenge or a ranked game shows there too but never counts toward a ban.
+- **The injuries of a match in its statistics** (the same places): the row of each player injured in that match shows the red cross with the days out that match gave him (for example **3d**). An **Injuries** list under the goals names every injured player of both teams with his team and his days out, for example "#9 Romero (Red Foxes), 3 days". A substitute injured on a shirt another player wore for most of the match has no row of his own: he is in the list only. Like the yellow cards they show once the match's statistics do: for a tournament match when it ends, never earlier.
 
 ## OVR explained
 

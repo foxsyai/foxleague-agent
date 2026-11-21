@@ -2302,3 +2302,18 @@ creates starts at least 3 days ahead (ORG-3) and only what the executor wrote wi
 it is (OWN-1).
 
 The game manual copy is synced to `1ab9de65d` (16 pages; the busy-card rule on four).
+
+## 30. FoxLeague of 2026-11-21 (origin/main 5eecea2aa, manual 237984579): the injuries of a match in its statistics
+
+Read on 2026-11-21 through git only (FoxLeague's repository next to this one) and FoxLeague's live `/api/config`.
+FoxLeague promoted `origin/release/mainnet-1.0` into `origin/main` twice on 2026-11-21 (#803 and #806, `5eecea2aa`;
+its manual is at `237984579`); the release branch holds nothing main has not taken. The running agent's manual check
+alerted at 20:50 UTC: nine pages and two route shapes changed. The game settings keys are the same as before.
+
+| FoxLeague change | Effect on the agent | What the agent does since this change |
+|---|---|---|
+| #801: the statistics of a match (`GET /api/matches/{id}/stats`, `GET /api/public/tournament-match/{id}/stats`) carry `injuries`, every player the match injured with his side, nonce, name, shirt number and days out | None: the agent reads only `gated`, both formations and both elevens there (`matchFormations`); a field added changes nothing it reads | The route record holds the two new shapes |
+| #752 and #764 on main (on the release branch since 20 Nov, section 29): the training page says a card in an auction cannot be trained; the Shop page names the four items not sold for it; a ban before a one-signature create opens refunds it in full | The executor refused a listed card for training, a match, an eleven and a fusion, but read a card whose auction state the roster did not give as in the wallet there | Every check reads such a card as not in the wallet (SYNC-3): training, the squad of a match or an entry, a saved eleven, a fusion's three cards and the cards it leaves, a sync and a listing. FoxLeague's API description requires `listed_for_sale` on every card (`PlayerCache`), so this refuses nothing on a normal day |
+| #792 (the 1v1 scheduler retries a busy-window read and never reads a failure as nobody busy), #796 (alarms on FoxLeague's admin page close themselves), #795 (a banned account's sign-in says "This account is banned."), #798, #802 and #804 (the app's signing window, auctions and dashboard) | None: FoxLeague's own scheduling, admin and app; a banned wallet's sign-in fails, so every read that needs a session refuses | Nothing |
+
+The game manual copy is synced to `237984579` (16 pages; nine changed).
