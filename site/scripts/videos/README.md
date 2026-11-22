@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit 6b54f42 (2026-11-22): 132 quoted lines, 0 changed.
+Checked against commit b2c689a (2026-11-22): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
@@ -293,20 +293,20 @@ Checked against commit 6b54f42 (2026-11-22): 132 quoted lines, 0 changed.
 | mac | `site/src/content/docs/start/install-mac.mdx:134` | ./install.sh --uninstall | ok |
 | windows | `site/src/content/docs/start/install-windows.mdx:40` | irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 \| iex | ok |
 | windows | `site/src/content/docs/start/install-windows.mdx:201` | & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall | ok |
-| windows, mac, linux | `src/cli.ts:124` | New recovery words written to /home/ana/foxleague-agent/.env (mode 600). / New recovery words written to /Users/ana/foxleague-agent/.env (mode 600). | ok |
-| windows, mac, linux | `src/cli.ts:125` | Agent 1 address: erd1gupzwzfxh2lk2gwk7s7lfa9jqtm98h88m6z0dsfg49d8552jlckacd4d5s | ok |
-| windows, mac, linux | `src/cli.ts:146` | 1. word1 | ok |
-| windows, mac, linux | `src/cli.ts:240` | Wrote /home/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. / Wrote /Users/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. | ok |
-| windows, mac, linux | `src/cli.ts:447` | Writing to /home/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. / Writing to /Users/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. | ok |
-| windows, mac, linux | `src/cli.ts:453` | Anthropic API key (sk-ant-...): | ok |
-| windows, mac, linux | `src/cli.ts:454` | Telegram token from BotFather: | ok |
-| windows, mac, linux | `src/cli.ts:484` | Binance API key (withdraw-only, IP-restricted): | ok |
-| windows, mac, linux | `src/cli.ts:485` | Binance API secret: | ok |
-| windows, mac, linux | `src/cli.ts:491` | Saved: nothing. | ok |
-| windows, mac, linux | `src/cli.ts:503` | Dashboard username, your own choice (3 to 32 letters or digits): | ok |
-| windows, mac, linux | `src/cli.ts:507` | Password (at least 12 characters): | ok |
-| windows, mac, linux | `src/cli.ts:509` | Repeat the password: | ok |
-| windows, mac, linux | `src/cli.ts:513` | Saved the web UI login for "ana" in /home/ana/foxleague-agent/.env. / Saved the web UI login for "ana" in /Users/ana/foxleague-agent/.env. | ok |
+| windows, mac, linux | `src/cli.ts:133` | New recovery words written to /home/ana/foxleague-agent/.env (mode 600). / New recovery words written to /Users/ana/foxleague-agent/.env (mode 600). | ok |
+| windows, mac, linux | `src/cli.ts:134` | Agent 1 address: erd1gupzwzfxh2lk2gwk7s7lfa9jqtm98h88m6z0dsfg49d8552jlckacd4d5s | ok |
+| windows, mac, linux | `src/cli.ts:155` | 1. word1 | ok |
+| windows, mac, linux | `src/cli.ts:256` | Wrote /home/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. / Wrote /Users/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. | ok |
+| windows, mac, linux | `src/cli.ts:463` | Writing to /home/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. / Writing to /Users/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. | ok |
+| windows, mac, linux | `src/cli.ts:469` | Anthropic API key (sk-ant-...): | ok |
+| windows, mac, linux | `src/cli.ts:470` | Telegram token from BotFather: | ok |
+| windows, mac, linux | `src/cli.ts:500` | Binance API key (withdraw-only, IP-restricted): | ok |
+| windows, mac, linux | `src/cli.ts:501` | Binance API secret: | ok |
+| windows, mac, linux | `src/cli.ts:507` | Saved: nothing. | ok |
+| windows, mac, linux | `src/cli.ts:519` | Dashboard username, your own choice (3 to 32 letters or digits): | ok |
+| windows, mac, linux | `src/cli.ts:523` | Password (at least 12 characters): | ok |
+| windows, mac, linux | `src/cli.ts:525` | Repeat the password: | ok |
+| windows, mac, linux | `src/cli.ts:529` | Saved the web UI login for "ana" in /home/ana/foxleague-agent/.env. / Saved the web UI login for "ana" in /Users/ana/foxleague-agent/.env. | ok |
 
 Lines that are not from the repository (the system's own words, written as they usually appear):
 
