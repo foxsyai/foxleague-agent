@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit d9f7215 (2026-11-22): 132 quoted lines, 0 changed.
+Checked against commit d80eb2a (2026-11-22): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
