@@ -378,7 +378,7 @@ test('UPD-12: a newer signed release is offered and told once; looking for it in
     assert.deepEqual(v.available, { version: '1.2.0', notes: 'New in 1.2.0: medicine for injured cards.', published: '2026-11-11T10:00:00Z' })
     assert.equal(v.canInstall, true)
     assert.equal(said.length, 1)
-    assert.match(said[0]!, /^foxleague-agent 1\.2\.0 is out \(you run 1\.1\.0\)\.\nNew in 1\.2\.0: medicine for injured cards\.\nTo install it: send \/upgrade here, or press Update now in the dashboard\./)
+    assert.match(said[0]!, /^foxleague-agent 1\.2\.0 is out \(you run 1\.1\.0\)\.\nNew in 1\.2\.0: medicine for injured cards\.\nTo install it: send \/upgrade here or press Update now in the dashboard\./)
     await up.check()
     await up.check()
     assert.equal(said.length, 1, 'one notice per version, not one per check')

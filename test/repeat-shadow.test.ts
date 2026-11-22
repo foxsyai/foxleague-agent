@@ -76,7 +76,7 @@ test('RS-1 the setting: `same` asks the real plan\'s own model and effort again 
   store.setKv('shadow_model_agent_10', `${HAIKU}:low,${HAIKU}:medium,${HAIKU}:high`)
   const haikuH = { model: HAIKU, effort: 'high' }
   assert.deepEqual(runs(haikuH, 9), [{ model: HAIKU, effort: 'low' }, { model: HAIKU, effort: 'medium' }])
-  assert.deepEqual(S.shadowChoices(store, haikuH, 9).leftOut, [`${HAIKU}:high is the model and effort that play, and a shadow plan needs another model or effort`])
+  assert.deepEqual(S.shadowChoices(store, haikuH, 9).leftOut, [`${HAIKU}:high is the model and effort that play; a shadow plan needs another model or effort`])
   // `same` beside an explicit entry of the same pair: the explicit one rests as before, `same` runs once.
   for (const list of [`same,${HAIKU}:high`, `${HAIKU}:high,same`, `${HAIKU},same`, 'same, same ,same', `same,${HAIKU}:high,same`]) {
     store.setKv('shadow_model_agent_10', list)
@@ -92,7 +92,7 @@ test('RS-1 the setting: `same` asks the real plan\'s own model and effort again 
   const odd = S.shadowChoices(store, { model: SONNET, effort: 'high' }, 2)
   assert.deepEqual(odd.models, [`${HAIKU}:low`])
   assert.equal(odd.leftOut.length, 3)
-  assert.match(odd.leftOut[0]!, /^same:low has an effort, and same takes none: it is the real plan's model and effort$/)
+  assert.match(odd.leftOut[0]!, /^same:low has an effort but same takes none: it is the real plan's model and effort$/)
   assert.match(odd.leftOut[1]!, /^SAME is not a model on the list/)
   store.setKv('shadow_model_agent_3', `same, ${HAIKU}:low`)
   // The playing model given alone (the settings of before, no effort known): the repeat cannot know its effort.
@@ -102,7 +102,7 @@ test('RS-1 the setting: `same` asks the real plan\'s own model and effort again 
   // A playing model the list does not have (AGENT_MODEL naming another model): no repeat by it, never a guess.
   const unknown = S.shadowChoices(store, { model: 'gpt-oss', effort: 'high' }, 2)
   assert.deepEqual(S.shadowRuns(unknown), [{ model: HAIKU, effort: 'low' }])
-  assert.deepEqual(unknown.leftOut, ['same needs a model of the list, and the one that plays (gpt-oss) is not'])
+  assert.deepEqual(unknown.leftOut, ['same needs a model of the list but the one that plays (gpt-oss) is not'])
   // The web rule and the CLI read it as an entry that can run.
   store.setKv('shadow_model_agent_7', `same,${OPUS}:low`)
   assert.deepEqual(S.shadowModelsSet(store, 6), ['same', `${OPUS}:low`])
@@ -113,7 +113,7 @@ test('RS-1 the setting: `same` asks the real plan\'s own model and effort again 
   assert.deepEqual(runs(opusX, 6), [])
   // The log names it in plain words.
   store.setKv('shadow_model_agent_7', `same,${OPUS}:xhigh`)
-  assert.equal(S.shadowNote(S.shadowChoices(store, opusX, 6)), `shadow plans run by same (the real plan's model and effort again) only: ${OPUS}:xhigh is the model and effort that play, and a shadow plan needs another model or effort`)
+  assert.equal(S.shadowNote(S.shadowChoices(store, opusX, 6)), `shadow plans run by same (the real plan's model and effort again) only: ${OPUS}:xhigh is the model and effort that play; a shadow plan needs another model or effort`)
 }))
 
 // ---- in the service ----
@@ -461,7 +461,7 @@ test('R67A-1 rule 7: `same` rests under a playing model the list does not have, 
     store.setKv('shadow_model', 'same')
     const choices = S.shadowChoices(store, { model: OPUS_48, effort: 'medium' }, 0)
     assert.deepEqual(S.shadowRuns(choices), [])
-    assert.deepEqual(choices.leftOut, [`same needs a model of the list, and the one that plays (${OPUS_48}) is not`])
+    assert.deepEqual(choices.leftOut, [`same needs a model of the list but the one that plays (${OPUS_48}) is not`])
   })
   // From a model the list does not have (priced or not) to any pair of the list, `same` starts: the password.
   const ids = Object.keys(strategist.MODELS)

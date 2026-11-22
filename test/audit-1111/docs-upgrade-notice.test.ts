@@ -46,6 +46,6 @@ test('the notice of a new version names a command the agent has', async () => {
 test('the words of the notice: /upgrade on Telegram, Update now in the dashboard', () => {
   const src = raw('src/update/updater.ts')
   assert.doesNotMatch(src, /\/update(?![s\w/.])/, 'updater.ts names /update, which is no command')
-  assert.match(src, /'To install it: send \/upgrade here, or press Update now in the dashboard\. The agent restarts and tells you when it is back\.'/)
+  assert.match(src, /'To install it: send \/upgrade here or press Update now in the dashboard\. The agent restarts and tells you when it is back\.'/)
   assert.match(raw('src/service.ts'), /case 'upgrade':/)
 })

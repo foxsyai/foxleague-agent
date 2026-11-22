@@ -488,10 +488,10 @@ test('SHADOWS-2 the setting: one id as before, several separated by commas; an u
     // The model that plays rests; the other runs. Under another playing model both run.
     const rests = choices(`${SHADOW}, ${PLAYING}`)
     assert.deepEqual(rests.models, [SHADOW])
-    assert.deepEqual(rests.leftOut, ['claude-sonnet-5-5 is the model that plays, and a shadow plan needs another one'])
+    assert.deepEqual(rests.leftOut, ['claude-sonnet-5-5 is the model that plays; a shadow plan needs another one'])
     assert.deepEqual(choices(`${SHADOW}, ${PLAYING}`, THIRD), { models: [SHADOW, PLAYING], effort: 'medium', leftOut: [] })
     assert.deepEqual(shadow.shadowModelsSet!(store), [SHADOW, PLAYING], 'what is set, whatever model plays')
-    assert.deepEqual(choices(PLAYING), { models: [], effort: 'medium', leftOut: ['claude-sonnet-5-5 is the model that plays, and a shadow plan needs another one'] })
+    assert.deepEqual(choices(PLAYING), { models: [], effort: 'medium', leftOut: ['claude-sonnet-5-5 is the model that plays; a shadow plan needs another one'] })
     // A repeated id counts once, said nowhere.
     assert.deepEqual(choices(`${SHADOW}, ${THIRD},${SHADOW} , ${SHADOW}`), { models: [SHADOW, THIRD], effort: 'medium', leftOut: [] })
     assert.deepEqual(shadow.shadowModelsSet!(store), [SHADOW, THIRD])
@@ -544,10 +544,10 @@ test('SHADOWS-3 in the service: an unknown id in the list is left out and said o
   t.mock.method(console, 'log', (...a: unknown[]) => void logged.push(a.join(' ')))
   const cases: [string, string[], RegExp | null][] = [
     [`gpt-oss, ${SHADOW}`, [SHADOW], /shadow plans run by claude-haiku-5-5 only: gpt-oss is not a model on the list \(claude-haiku-5-5, claude-sonnet-5-5, claude-opus-5-5, claude-fable-5-2\)$/],
-    [`${PLAYING}, ${THIRD}`, [THIRD], /shadow plans run by claude-opus-5-5 only: claude-sonnet-5-5 is the model that plays, and a shadow plan needs another one$/],
+    [`${PLAYING}, ${THIRD}`, [THIRD], /shadow plans run by claude-opus-5-5 only: claude-sonnet-5-5 is the model that plays; a shadow plan needs another one$/],
     [`${SHADOW}, ${SHADOW},${SHADOW}`, [SHADOW], null],
-    [`${SHADOW}, nope, ${THIRD}, ${PLAYING}`, [SHADOW, THIRD], /shadow plans run by claude-haiku-5-5, claude-opus-5-5 only: nope is not a model on the list \([^)]*\); claude-sonnet-5-5 is the model that plays, and a shadow plan needs another one$/],
-    [`nope, ${PLAYING}`, [], /shadow plans are off: nope is not a model on the list \([^)]*\); claude-sonnet-5-5 is the model that plays, and a shadow plan needs another one$/],
+    [`${SHADOW}, nope, ${THIRD}, ${PLAYING}`, [SHADOW, THIRD], /shadow plans run by claude-haiku-5-5, claude-opus-5-5 only: nope is not a model on the list \([^)]*\); claude-sonnet-5-5 is the model that plays; a shadow plan needs another one$/],
+    [`nope, ${PLAYING}`, [], /shadow plans are off: nope is not a model on the list \([^)]*\); claude-sonnet-5-5 is the model that plays; a shadow plan needs another one$/],
   ]
   for (const [setting, run, said] of cases) {
     logged.length = 0
