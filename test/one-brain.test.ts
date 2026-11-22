@@ -141,7 +141,7 @@ test('OB-9: the six levels share one strategy core and differ in money and pace 
   assert.deepEqual(row('boostersPerWeek'), [0, 1, 2, 3, 7, 7])
   assert.deepEqual(row('packsPerWeek'), [0, 0, 1, 2, 2, 2])
   // Since BIDS-1 (2026-11-22): the limits per rarity set again from that day's market.
-  assert.deepEqual(row('maxBidFoxsy'), [500, 1500, 5500, 13_000, 13_000, 50_000])
+  assert.deepEqual(row('maxBidFoxsy'), [500, 1650, 5200, 16_400, 16_400, 51_700])
   assert.deepEqual(row('maxShopPaymentFoxsy'), [500, 2000, 2500, 3000, 9000, 9000])
   assert.deepEqual(row('tickMinutes'), [120, 120, 90, 90, 75, 60])
   // The plan sees the counts with the other limits.

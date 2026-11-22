@@ -21,17 +21,17 @@ import { ADDR, MAINNET_GATE, OTHER, TEST_SETTINGS, setup, snapshot } from './fix
 type Caps = { maxBidCommonFoxsy: number; maxBidUncommonFoxsy: number; maxBidRareFoxsy: number; maxBidEpicFoxsy: number; maxBidLegendaryFoxsy: number }
 const html = readFileSync(new URL('../src/web/dashboard.html', import.meta.url), 'utf8')
 
-test('the limits for a Common and an Uncommon default to 500 and 1,500, also for an agent made before them', () => {
+test('the limits for a Common and an Uncommon default to 500 and 1,650 (BIDS-1), also for an agent made before them', () => {
   const d = DEFAULT_SETTINGS as unknown as Caps
-  assert.deepEqual([d.maxBidCommonFoxsy, d.maxBidUncommonFoxsy, d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [500, 1500, 5500, 13_000, 50_000], 'Rare, Epic and Legendary since 2026-10-24: test/levels-bids-manual.test.ts')
+  assert.deepEqual([d.maxBidCommonFoxsy, d.maxBidUncommonFoxsy, d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [500, 1650, 5200, 16_400, 51_700], 'Rare, Epic and Legendary since 2026-10-24: test/levels-bids-manual.test.ts')
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
   ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify({ strategy: 'x', maxBidFoxsy: 47000 }))
   const s = store.agent(0)!.settings as unknown as Caps
-  assert.deepEqual([s.maxBidCommonFoxsy, s.maxBidUncommonFoxsy], [500, 1500])
+  assert.deepEqual([s.maxBidCommonFoxsy, s.maxBidUncommonFoxsy], [500, 1650])
 })
 
-test('a bid on a Common above 500 or an Uncommon above 1,500 is refused; a raised limit still meets the build cost', () => {
+test('a bid on a Common above 500 or an Uncommon above 1,650 (BIDS-1) is refused; a raised limit still meets the build cost', () => {
   const s = snapshot()
   s.chain!.foxsy = wholeToAtomic(200_000)
   // mainnet's gate rows and cooldown settings: a Common is worth 600 to build, an Uncommon 2,200 (test/bid-ceiling.test.ts)
@@ -41,8 +41,8 @@ test('a bid on a Common above 500 or an Uncommon above 1,500 is refused; a raise
     checkAction({ type: 'bid', nonce: 9, foxsy }, s, { settings: { ...TEST_SETTINGS, ...DEFAULT_SETTINGS, maxBidFoxsy: 47_000, ...more }, now: new Date(), auction, cardRarity: rarity } as RulesContext)
   assert.equal(bid(500, 'Common').ok, true, bid(500, 'Common').refusal)
   assert.match(bid(501, 'Common').refusal!, /above your limit for a Common \(500 FOXSY\)/)
-  assert.equal(bid(1500, 'Uncommon').ok, true, bid(1500, 'Uncommon').refusal)
-  assert.match(bid(1501, 'Uncommon').refusal!, /above your limit for an Uncommon \(1500 FOXSY\)/)
+  assert.equal(bid(1650, 'Uncommon').ok, true, bid(1650, 'Uncommon').refusal)
+  assert.match(bid(1651, 'Uncommon').refusal!, /above your limit for an Uncommon \(1650 FOXSY\)/)
   assert.equal(bid(2000, 'Uncommon', { maxBidUncommonFoxsy: 3000 }).ok, true, 'the owner raised it')
   assert.match(bid(2300, 'Uncommon', { maxBidUncommonFoxsy: 3000 }).refusal!, /above what an Uncommon costs to build yourself \(2200 FOXSY/, 'the build cost still holds above it')
   assert.match(bid(700, 'Common', { maxBidCommonFoxsy: 1000 }).refusal!, /costs to build yourself \(600 FOXSY/)
@@ -68,7 +68,7 @@ test('the plan sees the five limits and the five market prices', () => {
   assert.match(renderDigest(s), /Market prices \(median of the daily median sale prices; every trading day counts once\): Common 500 \(5 trading days in 30 days\), Uncommon 1,100 \(5 trading days in 30 days\), Rare 6,000 \(5 trading days in 30 days\), Epic unknown \(too few sales in 90 days\), Legendary unknown/)
   const store = setup().store
   const text = renderPlanRequest({ snapshot: s, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true })
-  assert.match(text, /by rarity at most Common 500, Uncommon 1500, Rare 5500, Epic 13000, Legendary 50000 \(the owner's limits\)/)
+  assert.match(text, /by rarity at most Common 500, Uncommon 1650, Rare 5200, Epic 16400, Legendary 51700 \(the owner's limits\)/)
 })
 
 test('the dashboard has the two new limits with their info bubbles and market lines, and the password guards them', () => {
@@ -83,7 +83,7 @@ test('the dashboard has the two new limits with their info bubbles and market li
   assert.match(html, /const LIMITS = \[[^\]]*'maxBidCommonFoxsy', 'maxBidUncommonFoxsy', 'maxBidRareFoxsy'/)
   const page = readFileSync(new URL('../site/src/content/docs/use/settings.md', import.meta.url), 'utf8')
   assert.match(page, /\| Max bid for a Common \| 500 \|/)
-  assert.match(page, /\| Max bid for an Uncommon \| 1,500 \|/)
+  assert.match(page, /\| Max bid for an Uncommon \| 1,650 \|/)
 })
 
 // Agent review of PR #26 (low): the plan saw all five limits but the build cost of Rare, Epic and Legendary only, so

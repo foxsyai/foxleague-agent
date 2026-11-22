@@ -412,7 +412,7 @@ test('each level brings its own default limits, rising with the level; every age
   }
   assert.deepEqual(LEVEL_SETTINGS.steady!.entryFeesSilver, [1000, 1500])
   assert.equal(LEVEL_SETTINGS.beast!.entryFeesSilver.at(-1), 4999)
-  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [500, 1500], 'every level bids (2026-11-06): a Common\'s price at steady, an Uncommon\'s at climber')
+  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [500, 1650], 'every level bids (2026-11-06): a Common\'s price at steady, an Uncommon\'s at climber')
   for (const l of levels) assert.ok(l.maxEntryFeeFoxsy * 0.0027 < l.dailyCapUsd, 'the largest entry fits the daily cap at a FOXSY price of $0.0027')
   assert.deepEqual([D.strategy, D.dailyCapUsd, D.activeHoursUtc, D.tickMinutes, D.tickJitterMinutes, D.minGapSeconds, D.actionProbability], [P.steady, 5, [6, 22], 120, 10, 30, 1])
   // The cycle: never under 10 minutes, the random window included.

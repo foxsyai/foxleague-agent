@@ -22,7 +22,7 @@ test('Zeus is level 6 of 6 with its own limits and AI, and the strategy text fit
   assert.match(STRATEGY_PRESETS.zeus!, /^Zeus \(level 6 of 6\)/)
   assert.equal(validateSettingsPatch({ strategy: STRATEGY_PRESETS.zeus! }).strategy, STRATEGY_PRESETS.zeus)
   const z = LEVEL_SETTINGS.zeus!
-  assert.deepEqual([z.dailyCapUsd, z.monthlyBudgetUsd, z.topUpWarningUsd, z.maxBidFoxsy, z.tickMinutes], [150, 3000, 300, 50_000, 60])
+  assert.deepEqual([z.dailyCapUsd, z.monthlyBudgetUsd, z.topUpWarningUsd, z.maxBidFoxsy, z.tickMinutes], [150, 3000, 300, 51_700, 60])
   assert.equal(z.topUpWarningUsd, 2 * z.dailyCapUsd, 'the warning at two days of play')
   assert.deepEqual(LEVEL_AI.zeus, { model: 'claude-haiku-5-5', effort: 'high' })
   assert.deepEqual(Object.keys(LEVEL_AI), Object.keys(STRATEGY_PRESETS), 'a recommended AI for every level')
