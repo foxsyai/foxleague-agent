@@ -507,6 +507,7 @@ test('R63A-1 the dashboard asks for the password in the same cases, so the owner
   // Since the agent review of PR #65 (R65A-6) the effort goes with the model: a lower effort can start an entry with one.
   assert.match(apply, /askPassword\(wakesShadow\(body\.model, body\.effort\) \? 'Start shadow plans' : 'Switch to a dearer AI', aiRaiseText\(body\.model, body\.effort\)\)/)
   const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
-  assert.match(tip, /A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays\./)
+  // The sentence joins the bubble only while shadow plans are set on this install (TEXT-1).
+  assert.match(html, /k_strat: '<p>A switch that starts shadow plans asks for your password too: a shadow model set on the server rests while it is the model that plays\.<\/p>'/)
   assert.doesNotMatch(tip, /—|, and |, or /)
 })

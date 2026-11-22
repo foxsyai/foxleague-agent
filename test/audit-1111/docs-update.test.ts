@@ -73,7 +73,7 @@ test('no password, and the page says why: only a signed, newer release can be in
   assert.match(read(UPDATE), /Nothing is ever installed by itself/)
   // The dashboard's own bubble says the same three things.
   const bubble = read('src/web/dashboard.html')
-  assert.match(bubble, /Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password/)
+  assert.match(bubble, /Nothing is ever installed by itself\. Only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password/)
   assert.match(bubble, /the other waiting actions of a running plan are dropped and the next plan takes them up/)
   assert.match(read(SAFETY), /a key that never leaves the maintainers' own computers/)
 })

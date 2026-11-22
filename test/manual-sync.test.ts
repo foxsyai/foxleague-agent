@@ -131,7 +131,7 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
   }
   assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password, and so do a higher count \(paid training, boosters or packs\), a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
   assert.match(settings, /the Silver and Gold amounts, the paid training a day, the boosters and packs a week, the medicine days a week or the tick; your limits per rarity stay as they are\)/, 'B7 (the counts since the audit of 2026-11-06, DOCS-2; the medicine days since 2026-11-10)')
-  assert.match(tip('strategy'), /the settings that do not fit it yet \(moving up, those under its values; moving down, those above them\), each with a tick, and its recommended AI/, 'B8')
+  assert.match(tip('strategy'), /the settings that do not fit it yet \(moving up, those under its values; moving down, those above them\), each with a tick, plus its recommended AI/, 'B8')
   assert.match(settings, /Each level up to the predator adds two Silver steps; the beast and Zeus add the 4,999 ceiling\./, 'B9')
   assert.match(settings, /every planned action is carried out \(a match that its cooldown pushes past the plan's window waits for the next plan; a plan keeps at most 12 actions\)/, 'B10')
 })
@@ -142,7 +142,7 @@ test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.m
   // Since 2026-10-24 the manual is cached only when another call is due within the hour (test/cache-when-reused.test.ts).
   // The numbers of this sentence are tied to the code and to the manual's size in test/audit-1111/docs-4.test.ts (DOCS-4,
   // measured again on 2026-11-11): here only that the five places carry the same sentence.
-  const COST = /About \$0\.60 a day for a single agent with the default model, effort and tick \(Haiku 5\.5 at high, a plan every 2 hours inside 12 active hours, about \$0\.10 a plan\): every plan sends the rules and the game manual, about 112,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price\. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5\.5 at high effort averaged \$0\.15 a plan with the manual from the cache and \$0\.60 without\./i
+  const COST = /About \$0\.60 a day for a single agent with the default model, effort and tick \(Haiku 5\.5 at high, a plan every 2 hours inside 12 active hours, about \$0\.10 a plan\): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price\. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5\.5 at high effort averaged \$0\.15 a plan with the manual from the cache and \$0\.60 without\./i
   for (const f of [`${DOCS}/help/costs.md`, `${DOCS}/start/keys.mdx`, 'INSTALL.md', 'README.md']) {
     assert.doesNotMatch(read(f), /\$0\.20 to \$0\.50/, `C1 ${f} keeps the old AI cost`)
     assert.match(read(f), COST, `C1 ${f}`)

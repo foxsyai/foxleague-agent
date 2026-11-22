@@ -68,7 +68,7 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   team, rating and record, matches and training today. While the page is open, a reading older than 10 minutes is
   taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once and stays greyed out until the new reading is shown). **Value** is what
   the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
-  reserve aside); it turns orange, and the agent's tab shows **low funds**, when that falls under your **Top-up
+  reserve aside); it turns orange (and the agent's tab shows **low funds**) when that falls under your **Top-up
   warning** (it shows in the morning summary on Telegram, at once with `/updates all`; with a Binance key, Telegram and the platform LIVE, a top-up
   proposal comes at once (once a day per agent)). To top up, send EGLD to the agent's
   address: it buys FOXSY by itself (WEGLD and FOXSY work too). **In tournaments** lists the tournaments and 1v1s the agent is in, each open

@@ -3082,10 +3082,14 @@ on `4e4c375` and passes now; the GitHub review of PR #89 (PASS) found three lows
 | R89A-1 | low (record) | "Stays open" named only the install videos; the Getting started screenshot on the Keys page shows the old step too | Named |
 | R89A-2 | low (test) | APIKEY-1 found the installer's line by its number, so a line added above it failed the test with the steps unchanged | The test finds the line by its text and checks the videos' quote at that line's own number |
 | R89A-3 | low (record) | The record said the key is read only from `.env` or the Keys box; a key pasted in Keys rests in `data/secrets.json` | Named, with its mode and that it wins over `.env` |
+| R89A-4 | low (dashboard) | The fourth review: Refresh was one state for every agent tab, so a refresh of agent 1 greyed out agent 2's button and dropped a press there | The state is per agent (`refreshing`, a set of the agents being read); a tab switch draws the button for the agent it opens |
+| R89A-5 | low (test) | REFRESH-1 replaced the page's `act`, so "until the new reading is shown" rested on an unchecked comment | A test checks that the page's own `act` awaits `loadState()` before it returns |
+| R89A-6 | low (record) | The record said the key is never shown back; Keys and `/keys` show a masked form | Named: the first 10 and the last 4 characters |
 
 A key that never expires is a long-lived secret (the console says so in red). What holds it: the agent reads it
 from `.env` (mode 600) or, once pasted in the dashboard's Keys box (password), from `data/secrets.json` (mode 600),
-which wins over `.env`; it never shows it back and never sends it anywhere but Anthropic's API; the monthly spend limit of the step before caps what a leaked key could cost. The scope stays
+which wins over `.env`; it shows back only a masked form (the first 10 and the last 4 characters, in Keys and Telegram's
+`/keys`) and never sends it anywhere but Anthropic's API; the monthly spend limit of the step before caps what a leaked key could cost. The scope stays
 the Default workspace, never Organization (which would also open the Admin API). The owner can revoke the key in
 the console at any time and paste a new one in Keys.
 
