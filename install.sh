@@ -255,13 +255,13 @@ ensure_node() {
     rm -rf "$ROOT/.node.old"
     NODE="$ROOT/.node/bin/node"
   fi
-  # The launcher (run.sh) reads which Node to start the agent with: the first path of .node-path that is there.
-  # For a Node.js of the system the program itself goes first (INS-A6): the path a version manager puts on the
-  # PATH may last one shell only (fnm's folder is gone at the next restart, asdf's shim needs the shell's setup).
-  # The path it was found at follows, for when the program's own folder goes (Homebrew's link outlives an upgrade).
-  local real=''
+  # run.sh starts the agent with the first path of .node-path that is there. For a Node.js of the system the program
+  # itself goes first (INS-A6: a version manager's path may last one shell only), then the path it was found at
+  # (Homebrew's link outlives an upgrade). An update's --prepare runs on that program, so it keeps a good list (REL-1).
+  local real='' kept=''; if [ "$MODE" = prepare ] && [ -f "$ROOT/.node-path" ]; then kept=$(while IFS= read -r n || [ -n "$n" ]; do if [ -n "$n" ] && [ -x "$n" ]; then echo "$n"; break; fi; done < "$ROOT/.node-path") || kept=''; fi
   if [ "$NODE" = "$sys" ]; then real=$("$NODE" -p process.execPath 2>/dev/null || true); fi
-  if [ -n "$real" ] && [ "$real" != "$NODE" ] && node_ok "$real"; then
+  if [ -n "$kept" ] && node_ok "$kept"; then :
+  elif [ -n "$real" ] && [ "$real" != "$NODE" ] && node_ok "$real"; then
     printf '%s\n%s\n' "$real" "$NODE" | put_file "$ROOT/.node-path" 644
   else
     printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
