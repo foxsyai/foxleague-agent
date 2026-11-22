@@ -22,11 +22,16 @@ const CODE = [...files(join(ROOT, 'src')), join(ROOT, 'run.sh'), join(ROOT, 'ins
 /** Texts the agent builds from a call, not from a version number: the pieces that make them. */
 const BUILT: Record<string, string[]> = {
   'mode dry run': ['mode ${this.modeText()}', "return 'dry run'"],
+  // The install's folder in the container comes from the layout.
+  'then run ./run.sh again in /home/fox/foxleague-agent': ['then run ./run.sh again in ${this.d.layout.root}'],
 }
 
-/** The texts the script waits for in the agent's log, without the ones its own throwaway releases write. */
+/**
+ * The texts the script waits for in an agent's log (the service's journal, the log of the agent started by hand),
+ * without the ones its own throwaway releases write.
+ */
 function awaited(): string[] {
-  const texts = [...SCRIPT.matchAll(/journal_has '([^']*)'/g)].map(m => m[1]!)
+  const texts = [...SCRIPT.matchAll(/(?:journal|log2)_has '([^']*)'/g)].map(m => m[1]!)
   return [...new Set(texts)].filter(t => !t.startsWith('fresh-install-check:'))
 }
 
@@ -50,4 +55,17 @@ test('FIC-2 the notice of a new release, as the check waits for it, is the one t
   const notice = SCRIPT.match(/journal_has '(To install it: [^']*)'/)?.[1]
   assert.ok(notice, 'the check waits for the notice of a new release')
   assert.ok(readFileSync(join(ROOT, 'src/update/updater.ts'), 'utf8').includes(notice), notice)
+})
+
+// R90A-1 (agent review of PR #90): the script also waits for texts in the log of the agent started by hand
+// (`log2_has`, step 11f); the test read only `journal_has`. Every helper that greps a log is read now.
+test('R90A-1 every helper of the script that waits for a text in a log is read', () => {
+  const helpers = [...SCRIPT.matchAll(/^(\w+_has)\(\) \{ ([^\n]*)\}$/gm)].filter(m => /journal|\.log\b/.test(m[2]!)).map(m => m[1]!)
+  assert.ok(helpers.includes('journal_has') && helpers.includes('log2_has'), `the log helpers were not found: ${helpers.join(', ')}`)
+  const read = new Set(awaited())
+  for (const helper of helpers) {
+    for (const m of SCRIPT.matchAll(new RegExp(`${helper} '([^']*)'`, 'g'))) {
+      if (!m[1]!.startsWith('fresh-install-check:')) assert.ok(read.has(m[1]!), `${helper} '${m[1]}' is not checked against the code`)
+    }
+  }
 })
