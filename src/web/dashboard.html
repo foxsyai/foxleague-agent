@@ -1024,7 +1024,12 @@ $('killBtn').onclick = async () => {
   if (password) act('Kill switch released', () => api('POST', '/api/kill', { on, password }))
 }
 $('logoutBtn').onclick = async () => { try { await api('POST', '/logout') } catch {} location.href = '/login' }
-$('refreshBtn').onclick = () => act('Snapshot refreshed', () => api('POST', '/api/agents/' + sel + '/refresh'))
+// Greyed out until the new reading is on the page (act reloads the state before it returns), so the press is seen.
+$('refreshBtn').onclick = async () => {
+  const b = $('refreshBtn'); if (b.disabled) return
+  b.disabled = true; b.textContent = 'Refreshing…'
+  try { await act('Snapshot refreshed', () => api('POST', '/api/agents/' + sel + '/refresh')) } finally { b.disabled = false; b.textContent = 'Refresh' }
+}
 $('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(agent().address); toast('Address copied') } catch { toast('Copy failed: select the address by hand', true) } }
 $('tickBtn').onclick = () => act('Planning…', () => api('POST', '/api/agents/' + sel + '/tick'))
 $('removeBtn').onclick = async () => {
@@ -1311,7 +1316,7 @@ const TIPS = {
   mine: ['In tournaments', `<p>The tournaments and 1v1 challenges the agent is in right now. While one is still open, <b>Leave</b> gives the seat or stake back to the wallet, except a tournament that is exactly at its minimum number of teams once FoxLeague's leave lock is on: its seats stay until more teams join.</p>
     <p>On a 1v1 the agent created and nobody accepted, Leave also closes the challenge, so the agent can take another one. The agent can do the same by itself when it sees a better 1v1.</p>`],
   wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation and the tournaments it is in, with today's matches and training.</p>
-    <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
+    <p>Refresh reads the chain and FoxLeague again now; the button stays greyed out until the new reading is shown. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
     <p>The filter narrows it to plans, actions or problems.</p>

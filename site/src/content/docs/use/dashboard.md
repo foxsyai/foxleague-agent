@@ -66,7 +66,7 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   agent you no longer use (see below).
 - **Wallet and team**: the EGLD, WEGLD and FOXSY balances (WEGLD shows 0.0000 when the wallet holds none), cards,
   team, rating and record, matches and training today. While the page is open, a reading older than 10 minutes is
-  taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once). **Value** is what
+  taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once and stays greyed out until the new reading is shown). **Value** is what
   the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
   reserve aside); it turns orange, and the agent's tab shows **low funds**, when that falls under your **Top-up
   warning** (it shows in the morning summary on Telegram, at once with `/updates all`; with a Binance key, Telegram and the platform LIVE, a top-up
