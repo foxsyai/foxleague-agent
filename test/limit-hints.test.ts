@@ -34,7 +34,7 @@ test('a limit within 90 to 150 percent of the market price is green, under it am
 test('the line judges the limit that binds: Max bid when it is lower than the limit for the rarity', () => {
   const state = limitState()
   assert.deepEqual(state(6000, 6100, 0), { tone: 'low', text: 'Market today: 6,100 FOXSY. Bids are off: Max bid is 0.' })
-  assert.deepEqual(state(6000, 6100, 4000), { tone: 'low', text: 'Market today: 6,100 FOXSY. Below the market: the agent may miss most sales. Max bid (4,000) is the limit here.' }, 'no button: the field for the rarity would not help')
+  assert.deepEqual(state(6000, 6100, 4000), { tone: 'low', text: 'Market today: 6,100 FOXSY. Below the market: the agent may miss most sales. Max bid (4,000) is the limit here: raise Max bid too.' }, 'no button: the field for the rarity would not help')
   assert.equal(state(32_000, 31_240, 15_000).tone, 'low')
   assert.deepEqual(state(20_000, 6100, 12_000), { tone: 'high', text: 'Market today: 6,100 FOXSY. Well above the market: the agent aims lower, but may pay up to this. Max bid (12,000) is the limit here.', suggest: 6000 }, 'lowering the limit for the rarity does help')
   assert.equal(state(6000, 6100, 47_000).tone, 'ok')
@@ -79,4 +79,7 @@ test('the settings page says what the line shows when Max bid is 0 or binds', ()
   const page = readFileSync(new URL('../site/src/content/docs/use/settings.md', import.meta.url), 'utf8')
   assert.match(page, /Bids are off: Max bid is 0/)
   assert.match(page, /Max bid \(4,000\) is the limit here/)
+  // The owner, 2026-11-22 (LIMITHINT-1): a rarity limit raised over the market while Max bid stays low still reads
+  // amber; the line says what to do. Not when Max bid is well above the market: raising it would be wrong there.
+  assert.match(page, /"Max bid \(4,000\) is the limit here: raise Max bid too"/)
 })

@@ -181,8 +181,18 @@ test('R82A-1 the dashboard asks by the same rule and says what an agent with its
   const instance = { model: HAIKU, effort: 'high', aiAll: all, models, efforts, shadowModels: [], shadowEntries: [] }
   const ownOpus = { ai: { model: OPUS, effort: 'medium', own: { model: OPUS, effort: null }, ignored: [], shadows: [] } }
   const S = { instance, agents: [ownOpus], retired: [] }
-  // "Same as all agents" says what it means for a model of its own.
-  assert.deepEqual((fn(['aiEffortOptions'], S) as () => string[][])()[0], ['', 'Same as all agents (high; medium with a model of its own)'])
+  // "Same as all agents" names the effort this agent gets from it (EFFORT-1, the owner 2026-11-22: the long label
+  // "high; medium with a model of its own" was cut off in the box): high while it follows the all-agents model,
+  // medium once it has a model of its own and no effort is picked for all agents.
+  const options = fn(['sameEffort', 'aiEffortOptions'], S) as (ownModel?: string) => string[][]
+  assert.deepEqual(options('')[0], ['', 'Same as all agents (high)'])
+  assert.deepEqual(options(OPUS)[0], ['', 'Same as all agents (medium)'])
+  // Once an effort is picked for all agents, a model of its own follows it too.
+  const picked = fn(['sameEffort', 'aiEffortOptions'], { ...S, instance: { ...instance, aiAll: { model: HAIKU, effort: 'high', ownModelEffort: 'high' } } }) as (ownModel?: string) => string[][]
+  assert.deepEqual(picked(OPUS)[0], ['', 'Same as all agents (high)'])
+  // The form names it from the agent's saved model; again whenever the model field changes.
+  assert.match(html, /fillOptions\(\$\('sAiEffort'\), aiEffortOptions\(own\.aiModel\), own\.aiEffort\)/)
+  assert.match(html, /function renderOwnAi\(\) \{[\s\S]{0,200}first\.textContent = aiEffortOptions\(form\.aiModel\)\[0\]\[1\]/)
   // The agent form: the page and the server agree on every choice.
   const costsMore = fn(['agentAiCostsMore'], S) as (b: unknown, form: unknown) => boolean
   const hint = fn(['ownAiHint'], S) as (b: unknown, form: unknown) => string

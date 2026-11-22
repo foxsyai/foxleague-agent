@@ -776,7 +776,7 @@ test('PAM-16 the dashboard: an agent\'s own AI model and effort with "Same as al
   assert.deepEqual(pageFunctions<() => string[][]>(['aiModelOptions'], { instance })(), [
     ['', 'Same as all agents (Opus 5.5)'], [HAIKU, 'Haiku 5.5 · $0.1 / $0.5 per M tokens'], [SONNET, 'Sonnet 5.5 · $2 / $10 per M tokens'], [OPUS, 'Opus 5.5 · $4 / $20 per M tokens'], [FABLE, 'Fable 5.2 · $8 / $40 per M tokens'],
   ])
-  assert.deepEqual(pageFunctions<() => string[][]>(['aiEffortOptions'], { instance })(), [['', 'Same as all agents (high)'], ['low', 'low'], ['medium', 'medium'], ['high', 'high'], ['xhigh', 'xhigh'], ['max', 'max']])
+  assert.deepEqual(pageFunctions<() => string[][]>(['sameEffort', 'aiEffortOptions'], { instance })(), [['', 'Same as all agents (high)'], ['low', 'low'], ['medium', 'medium'], ['high', 'high'], ['xhigh', 'xhigh'], ['max', 'max']])
 
   // The page's rule for one agent is the server's, over every pair it plays and every pair the form can give.
   const shadowSets: string[][] = [[], [`${OPUS}:low`, `${OPUS}:high`], [SONNET], [`${HAIKU}:xhigh`, FABLE]]
@@ -973,7 +973,7 @@ test('R65A-2 the AI fields show the values the agent plays: an own model that le
   const fill = html.match(/function fillForm\(st\) \{[\s\S]*?\n\}/)?.[0] ?? ''
   assert.doesNotMatch(fill, /fillOptions\(\$\('sAiModel'\), aiModelOptions\(\), st\.aiModel\)/, 'the model field is filled from the saved id: an own model that left the list shows as "Same as all agents" and the next save writes an empty model')
   assert.match(fill, /const own = aiFormValues\(agent\(\), st\)/)
-  assert.match(fill, /fillOptions\(\$\('sAiModel'\), aiModelOptions\(\), own\.aiModel\); fillOptions\(\$\('sAiEffort'\), aiEffortOptions\(\), own\.aiEffort\)/)
+  assert.match(fill, /fillOptions\(\$\('sAiModel'\), aiModelOptions\(\), own\.aiModel\); fillOptions\(\$\('sAiEffort'\), aiEffortOptions\(own\.aiModel\), own\.aiEffort\)/)
   const rules = web as unknown as { agentAiNeedsPassword: (current: Pair, next: Pair, shadows: readonly string[]) => boolean }
   const models = Object.keys(strategist.MODELS).map(id => ({ id, label: strategist.MODELS[id]!.label, price: strategist.MODELS[id]!.price, ...strategist.priceRange(id)! }))
   for (const all of [{ model: OPUS, effort: 'high' }, { model: HAIKU, effort: 'low' }]) {
@@ -1062,7 +1062,7 @@ test('R65A-4 with the strategist off (no AI key yet) the page resolves "Same as 
   assert.equal(hint(follows, { aiModel: '', aiEffort: '' }), 'Plays Sonnet 5.5 at medium effort, the same as all agents.')
   assert.equal(hint(follows, { aiModel: HAIKU, aiEffort: '' }), 'Plays Sonnet 5.5 at medium effort, the same as all agents. After saving: Haiku 5.5 at medium effort.')
   assert.deepEqual(pageFunctions<() => string[][]>(['aiModelOptions'], S)()[0], ['', 'Same as all agents (Sonnet 5.5)'])
-  assert.deepEqual(pageFunctions<() => string[][]>(['aiEffortOptions'], S)()[0], ['', 'Same as all agents (medium)'])
+  assert.deepEqual(pageFunctions<() => string[][]>(['sameEffort', 'aiEffortOptions'], S)()[0], ['', 'Same as all agents (medium)'])
   // With a key the pair is the strategist's, the same as instance.model and effort: everything as before (PAM-16).
   // The server: no key, model and effort stay null (the Strategist box and the last plan say off), aiAll is the saved pair.
   const { svc, server, post, state } = await webService({ noKey: true })

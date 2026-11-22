@@ -641,7 +641,7 @@ function renderHeader() {
   const sm = $('sModel'), se = $('sEffort')
   if (!sm.options.length) {
     // Not a model yet: greyed out, with no id, so it can be neither picked nor sent (the server takes only its own list).
-    sm.append(el('option', { value: '', disabled: true, text: 'Local model (free, coming soon)' }))
+    sm.append(el('option', { value: '', disabled: true, text: 'Local model (coming soon)' }))
     for (const m of i.models) sm.append(el('option', { value: m.id, text: m.label }))
     for (const e of i.efforts) se.append(el('option', { value: e, text: 'effort ' + e }))
   }
@@ -829,7 +829,7 @@ function fillForm(st) {
   $('sTick').value = st.tickMinutes; $('sJitter').value = st.tickJitterMinutes
   $('sFrom').value = st.activeHoursUtc[0]; $('sTo').value = st.activeHoursUtc[1]
   const own = aiFormValues(agent(), st)
-  fillOptions($('sAiModel'), aiModelOptions(), own.aiModel); fillOptions($('sAiEffort'), aiEffortOptions(), own.aiEffort)
+  fillOptions($('sAiModel'), aiModelOptions(), own.aiModel); fillOptions($('sAiEffort'), aiEffortOptions(own.aiModel), own.aiEffort)
   renderOwnAi()
   formDirty = false
 }
@@ -853,11 +853,16 @@ function aiModelOptions() {
   const i = S.instance, all = i.aiAll || { model: i.model, effort: i.effort }, cur = i.models.find(m => m.id === all.model)
   return [['', 'Same as all agents' + (cur ? ' (' + cur.label + ')' : '')], ...i.models.map(m => [m.id, m.label + ' · $' + m.price[0] + ' / $' + m.price[1] + ' per M tokens'])]
 }
-function aiEffortOptions() {
+// "Same as all agents" names the effort this agent gets from it: while no effort is picked for all agents (a new
+// install), an agent with a model of its own plays medium, not the default pair's high (R82A-1). One short label for
+// this agent's case, not both (EFFORT-1, the owner: "high; medium with a model of its own" was cut off in the box).
+function sameEffort(ownModel) {
   const i = S.instance, all = i.aiAll || { model: i.model, effort: i.effort }
-  // While no effort is picked for all agents, an agent with a model of its own plays medium, not the default pair's (R82A-1).
-  const inh = all.ownModelEffort && all.ownModelEffort !== all.effort ? '; ' + all.ownModelEffort + ' with a model of its own' : ''
-  return [['', 'Same as all agents' + (all.effort ? ' (' + all.effort + inh + ')' : '')], ...i.efforts.map(e => [e, e])]
+  return (ownModel && all.ownModelEffort) || all.effort
+}
+function aiEffortOptions(ownModel) {
+  const i = S.instance, e = sameEffort(ownModel)
+  return [['', 'Same as all agents' + (e ? ' (' + e + ')' : '')], ...i.efforts.map(x => [x, x])]
 }
 // The line under the AI fields: what the agent plays, what it would play after saving, its shadow plans set on the
 // server (`same`: a repeat of the model and effort it plays) and a value saved on the server that is not used.
@@ -877,7 +882,12 @@ function ownAiHint(b, form) {
   if (ignored.some(w => w.startsWith('its own effort'))) parts.push('An effort saved on the server is not one of the five, so the agent plays the all-agents one.')
   return parts.join(' ')
 }
-function renderOwnAi() { const b = agent(); if (b) $('hAi').textContent = ownAiHint(b, readForm()) }
+function renderOwnAi() {
+  const b = agent(); if (!b) return
+  const form = readForm(), first = $('sAiEffort').options[0]
+  if (first && first.value === '') first.textContent = aiEffortOptions(form.aiModel)[0][1]
+  $('hAi').textContent = ownAiHint(b, form)
+}
 
 // Owner, 2026-10-23: one look says whether a limit per rarity still fits today's market. Within 90 to 150 percent
 // of the market price it is in range; under it the agent may miss most sales; far over it the agent may pay too much.
@@ -894,7 +904,8 @@ function limitState(limit, market, maxBid = Infinity) {
   const binds = capped ? maxBid : limit
   const by = capped ? ' Max bid (' + Number(maxBid).toLocaleString('en-US') + ') is the limit here.' : ''
   if (!(binds > 0)) return { tone: 'low', text: m + ' Bids on this rarity are off.', suggest }
-  if (binds < market * 0.9) return capped ? { tone: 'low', text: m + ' Below the market: the agent may miss most sales.' + by } : { tone: 'low', text: m + ' Below the market: the agent may miss most sales.', suggest }
+  // Max bid holds the line under the market: say what to do (LIMITHINT-1, the owner: a raised rarity limit still read amber).
+  if (binds < market * 0.9) return capped ? { tone: 'low', text: m + ' Below the market: the agent may miss most sales.' + by.replace(/\.$/, ': raise Max bid too.') } : { tone: 'low', text: m + ' Below the market: the agent may miss most sales.', suggest }
   if (binds > market * 1.5) return { tone: 'high', text: m + ' Well above the market: the agent aims lower, but may pay up to this.' + by, suggest }
   return { tone: 'ok', text: m + ' Your limit covers it.' + by }
 }
@@ -979,7 +990,7 @@ async function loadActivity() {
   if (sel === null) return
   try { activityRows = await api('GET', '/api/agents/' + sel + '/activity?limit=150'); renderActivity() } catch (e) { if (e.message !== 'signed out') toast('Could not load activity: ' + e.message, true) }
 }
-function select(i) { sel = i; remember(i); formDirty = false; stopSpeech(true); renderAgentbar(); renderAgent(); loadActivity() }
+function select(i) { sel = i; remember(i); formDirty = false; stopSpeech(true); renderAgentbar(); renderAgent(); renderRefresh(); loadActivity() }
 
 // Going live, releasing the kill switch and raising a limit ask for the password again (the server checks it).
 // One branded dialog for every question the dashboard asks, never the browser's own confirm or prompt.
@@ -1037,7 +1048,15 @@ $('killBtn').onclick = async () => {
   if (password) act('Kill switch released', () => api('POST', '/api/kill', { on, password }))
 }
 $('logoutBtn').onclick = async () => { try { await api('POST', '/logout') } catch {} location.href = '/login' }
-$('refreshBtn').onclick = () => act('Snapshot refreshed', () => api('POST', '/api/agents/' + sel + '/refresh'))
+// Greyed out until the new reading is on the page (act reloads the state before it returns), so the press is seen.
+// The state is per agent (R89A-4): while one agent is read, another tab's button stays pressable.
+const refreshing = new Set()
+function renderRefresh() { const b = $('refreshBtn'), on = refreshing.has(sel); b.disabled = on; b.textContent = on ? 'Refreshing…' : 'Refresh' }
+$('refreshBtn').onclick = async () => {
+  const i = sel; if (refreshing.has(i)) return
+  refreshing.add(i); renderRefresh()
+  try { await act('Snapshot refreshed', () => api('POST', '/api/agents/' + i + '/refresh')) } finally { refreshing.delete(i); renderRefresh() }
+}
 $('copyBtn').onclick = async () => { try { await navigator.clipboard.writeText(agent().address); toast('Address copied') } catch { toast('Copy failed: select the address by hand', true) } }
 $('tickBtn').onclick = () => act('Planning…', () => api('POST', '/api/agents/' + sel + '/tick'))
 $('removeBtn').onclick = async () => {
@@ -1045,7 +1064,7 @@ $('removeBtn').onclick = async () => {
   if (!b.paused) return toast('Pause agent ' + (b.index + 1) + ' first', true)
   const r = await dialog({ title: 'Remove agent ' + (b.index + 1) + '?', text: 'The agent stops managing this team and its key is deleted from this install. The team, its cards and its funds stay in the wallet. You keep your own key file. Its history stays here.', detail: b.address, type: 'REMOVE', password: true, ok: 'Remove', tone: 'danger' })
   if (!r) return
-  act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && S.agents[0]) select(S.agents[0].index) })
+  act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && !S.agents.some(x => x.index === b.index) && S.agents[0]) select(S.agents[0].index) })
 }
 // Delete: only for a wallet never used; the server reads the chain again before anything goes.
 $('deleteBtn').onclick = async () => {
@@ -1310,7 +1329,7 @@ const TIPS = {
   update: ['Version and updates', `<p>The version this agent runs. The agent checks by itself about every 10 minutes whether a newer release of foxleague-agent is out (it asks GitHub). When one is, a notice appears here and on Telegram, with what is new. The round arrow next to the version, <b>Check for updates</b>, asks now.</p>
     <p>The notice and a short message then give the answer at once. Checking installs nothing. Only a release that is signed by the foxleague-agent maintainers and newer than the one you run is ever offered. Two checks less than 15 seconds apart ask once: the second shows the answer of the first. The arrow is off while an update installs and is not shown where the check is switched off.</p>
     <p><b>Update now</b> installs it in one click: the agent downloads the release, checks that it is signed by the foxleague-agent maintainers, prepares it next to the running version and restarts into it. That takes a minute or two. An action that is being signed finishes first; the other waiting actions of a running plan are dropped and the next plan takes them up. Your wallet, keys, settings and history are not touched. On Telegram, <b>/upgrade</b> does the same.</p>
-    <p>Nothing is ever installed by itself, and only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password. If the new version does not start, the agent goes back to the one it ran before and tells you. The notice then says that nothing has to be done and its button reads <b>Try again</b>: press it only if you want to install that version once more.</p>
+    <p>Nothing is ever installed by itself. Only a signed release that is newer than yours is accepted, whoever presses the button: that is why it asks for no password. If the new version does not start, the agent goes back to the one it ran before and tells you. The notice then says that nothing has to be done and its button reads <b>Try again</b>: press it only if you want to install that version once more.</p>
     <p>How the last update went stays in the notice for a day and only while the version it speaks of still runs: after you install another version by hand or from a terminal it goes. When the agent's background service was set up by an older installer, the notice may say to run ./install.sh --update once in a terminal. It then offers no <b>Update now</b>, which would fail the same way, until that is done. On Windows, open Ubuntu first: type wsl -d Ubuntu --cd ~ in PowerShell, then cd foxleague-agent.</p>
     <p>An agent that you start yourself with ./run.sh (an install without the background service) does not restart by itself: the new version is put in place, the agent keeps playing and the notice says how to start the new version.</p>
     <p>An install made from a git checkout or set up by hand on a server shows the notice with the command to run instead of the button. To switch the check off, set AGENT_UPDATE_CHECK=0 in the env file and restart.</p>`],
@@ -1341,8 +1360,8 @@ const TIPS = {
   delete: ['Delete', `<p>Only for an agent whose wallet was never used: no transaction, no EGLD, WEGLD, FOXSY or cards, no FoxLeague team. The button shows only then.</p>
     <p>The agent goes for good: its tab, its settings, its history and its PEM file in pem/. On a server install the file is on your computer: run ./deploy/sync-pems.sh there to remove it. Nothing is lost, because the wallet is empty and + Add agent makes the same wallet again.</p>
     <p>Before anything is deleted, the wallet is read again from the chain and FoxLeague. An agent that was ever used is retired instead.</p>`],
-  retire: ['Retire and restore', `<p>Parks an agent you no longer use: it is paused and moved out of the tabs, into <b>Retired</b> (next to + Add agent). It makes no plans, costs nothing and sends no warnings, and it does not count toward the agent limit.</p>
-    <p>Nothing is sold or moved: the wallet keeps its funds and cards, and the team stays in FoxLeague, so tournaments it already joined go on without it. An imported team keeps its key.</p>
+  retire: ['Retire and restore', `<p>Parks an agent you no longer use: it is paused and moved out of the tabs, into <b>Retired</b> (next to + Add agent). It makes no plans, costs nothing, sends no warnings and does not count toward the agent limit.</p>
+    <p>Nothing is sold or moved: the wallet keeps its funds and cards. The team stays in FoxLeague, so tournaments it already joined go on without it. An imported team keeps its key.</p>
     <p><b>Restore</b> brings it back to the tabs with its settings and history, paused: press Resume when it should play again. It cannot be retired while a payment waits for FoxLeague's confirmation.</p>`],
   k_egld: ['EGLD price', `<p>EGLD in USD from the MultiversX API. Every spend is valued in USD at this price before it is checked against your caps.</p>`],
   k_foxsy: ['FOXSY price', `<p>FOXSY in USD at the xExchange FOXSY/WEGLD spot price. Entry fees, stakes, shop items and the registration fee are paid in FOXSY; the caps count them in USD at the higher of this price and its two-day median, so a sudden dip never makes a payment look cheaper.</p>`],
@@ -1350,10 +1369,10 @@ const TIPS = {
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent without its own and how hard it thinks (effort). An agent can have its own model and effort in its Settings (AI); the line below says how many do. The manager chat and /ask use this one.</p>
     <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> at high effort is the default and plays well at the lowest cost. <b>Sonnet 5.5</b> plans more carefully and acts less; <b>Opus 5.5</b> is the most active and costs the most of the three. <b>Fable 5.2</b>, the most capable, costs more still.</p>
-    <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
+    <p>The first entry, Local model, is greyed out. A model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
     <p>Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set. You can change them from then on.</p>
-    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click. A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays.</p>
+    <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click.</p>
     <p>The line below shows the list price per million tokens and what the AI cost: today, yesterday (days in UTC, plans plus the manager chat) and in all. Compare two days to judge a change of model or effort.</p>`],
   key_ANTHROPIC_API_KEY: ['Anthropic API key', `<p>Runs the strategist: every plan, the manager chat and /ask. It starts with <code>sk-ant-</code>.</p>
     <p>Create it at platform.claude.com (API keys) and set a monthly spend limit there. Getting started has the steps.</p>`],
@@ -1364,82 +1383,86 @@ const TIPS = {
   key_BINANCE_API_SECRET: ['Binance API secret', `<p>The secret that belongs to the Binance API key. Binance shows it only once, when you create the key.</p>`],
   keys_test: ['Test keys', `<p>Checks every key against its service: Anthropic model access, a test message to your Telegram chat and the Binance key's permissions. Nothing is changed.</p>`],
   aiModel: ['AI model', `<p>The Claude model that plans for this agent. <b>Same as all agents</b>, the default, follows the Strategist box at the top. Pick a model to give this agent its own: the other agents keep theirs. A later switch in the Strategist box does not move this one.</p>
-    <p>The price next to each model is its list price per million tokens in and out. A dearer model asks for your password, because the AI spend has no cap of its own; a cheaper one is one click. Going back to Same as all agents counts by the model it lands on. A change that starts shadow plans set on the server for this agent asks for it too.</p>
+    <p>The price next to each model is its list price per million tokens in and out. A dearer model asks for your password, because the AI spend has no cap of its own; a cheaper one is one click. Going back to Same as all agents counts by the model it lands on.</p>
     <p>The line below the fields says what the agent plays now. The manager chat and /ask use the model of the Strategist box.</p>`],
   aiEffort: ['Effort', `<p>How hard the AI thinks on each plan of this agent. <b>Same as all agents</b>, the default, follows the effort of the Strategist box. While no effort has been picked there (a new install), an agent with a model of its own plays at medium: the default's high comes only with the default model. More effort means more thinking per plan: better on hard decisions but slower and dearer.</p>
-    <p>A higher effort asks for your password; a lower one is one click. Going back to Same as all agents counts by the effort it lands on. A shadow plan set on the server at the effort this agent plays rests: leaving that effort starts it, so that asks for the password too.</p>`],
-  plan_now: ['Plan now', `<p>Runs a planning cycle for this agent now instead of waiting for the next one. The strategist reads a fresh snapshot and proposes actions; they run at random moments over the next minutes, checked like any other action. Only inside the agent's active hours: outside them, and while it is paused or still running a plan, it says why and starts nothing.</p>
+    <p>A higher effort asks for your password; a lower one is one click. Going back to Same as all agents counts by the effort it lands on.</p>`],
+  plan_now: ['Plan now', `<p>Runs a planning cycle for this agent now instead of waiting for the next one. The strategist reads a fresh snapshot and proposes actions; they run at random moments over the next minutes, checked like any other action. Only inside the agent's active hours: outside them (or while it is paused or still running a plan) it says why and starts nothing.</p>
     <p>It works only inside the active hours. It does nothing while the agent is paused or busy or while the kill switch is on.</p>`],
   pause: ['Pause and resume', `<p>Stops this agent only: no planning and no actions. The other agents carry on. Resume picks up at the next cycle.</p>
     <p>To stop every agent at once, use the kill switch. To stop signing but keep planning, use Back to dry run.</p>`],
   mine: ['In tournaments', `<p>The tournaments and 1v1 challenges the agent is in right now. While one is still open, <b>Leave</b> gives the seat or stake back to the wallet, except a tournament that is exactly at its minimum number of teams once FoxLeague's leave lock is on: its seats stay until more teams join.</p>
     <p>On a 1v1 the agent created and nobody accepted, Leave also closes the challenge, so the agent can take another one. The agent can do the same by itself when it sees a better 1v1.</p>`],
   wallet: ['Wallet and team', `<p>The agent's wallet on MultiversX with its EGLD, WEGLD, FOXSY, value and cards, plus the team: registration, rating and record, formation and the tournaments it is in, with today's matches and training.</p>
-    <p>Refresh reads the chain and FoxLeague again now. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
+    <p>Refresh reads the chain and FoxLeague again now; the button stays greyed out until the new reading is shown. While this page is open, a reading older than 10 minutes is taken again by itself, so a top-up shows within seconds. Explorer opens the wallet on the MultiversX explorer. To watch the agent play, log into the FoxLeague app with this agent's PEM.</p>`],
   lastplan: ['Last plan', `<p>The strategist's latest plan for this agent: its reading of the situation, each action with a one-line reason and the cost of the model call.</p>`],
   activity: ['Activity', `<p>Everything this agent did, newest first: plans, actions with their result (dry run, done, refused or failed) and changes such as a pause or a new strategy.</p>
-    <p>The filter narrows it to plans, actions or problems.</p>
-    <p>A row marked <b>shadow plan, not carried out</b> is what another AI model would have planned from the same request. It is recorded only to compare the models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it. One that says <b>the real plan's own model and effort again</b> is the same model planning the same request a second time, to see how much its plans differ. Such rows appear only while shadow plans are switched on on the server.</p>`],
+    <p>The filter narrows it to plans, actions or problems.</p>`],
   budget: ['Budget', `<p>Spend against your caps: today (the game day resets at 14:00 UTC), this month and the one-time setup budget.</p>
     <p>Every paid action is valued in USD at live prices before it runs; one that would go over a cap is refused. Dry-run spend has its own ledger, so it never blocks live spending.</p>`],
   advice: ['Talk to the manager', `<p>Write advice or a question for this agent, as you would in Telegram.</p>
     <p>A question gets an answer. Advice comes back as the full revised strategy with Apply and Cancel; nothing changes until you press Apply. Name other agents ("all agents", "agent 2") to include them.</p>
     <p>The conversation stays in this box: your messages on the right, the manager's answers on the left, up to 100 messages, together with the ones from Telegram. Ctrl+Enter sends.</p>
     <p>While the manager is answering a message (sent from here, another tab or Telegram), Send waits: the answer is written and paid for even when this page loses the connection, so a second Send would pay twice. Send comes back when the answer is in the box. A message sent meanwhile from Telegram or another tab is turned away with that reason: send it again when the answer is in. If this page lost the connection and the answer came meanwhile, it shows in the conversation and your message does not come back into the box.</p>
-    <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message, or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
+    <p>The manager reads the current conversation, so a follow-up needs no repeating. After an hour without a message or after Clear, your next message starts a new conversation. A thin line shows where its memory starts; what is above stays here for you to read back.</p>
     <p>The chat can change only the strategy text, never the caps, the mode, pause, the kill switch or the model.</p>`],
   funds: ['Value', `<p>What this wallet holds for the game, in USD at the current prices: its EGLD, its WEGLD and its FOXSY. "To play with" is the same without the EGLD gas reserve, which is never swapped: it is what the agent can still spend on the game.</p>
-    <p>It turns orange, and the agent's tab shows "low funds", when what it can play with is worth less than the Top-up warning in Settings. On Telegram it shows in the morning summary, or at once with /updates all; with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once (once a day per agent). It warns again only after a top-up to well above that level. Nothing is paused: the agent plays on with what it has.</p>
+    <p>It turns orange (and the agent's tab shows "low funds") when what it can play with is worth less than the Top-up warning in Settings. On Telegram it shows in the morning summary or at once with /updates all; with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once (once a day per agent). It warns again only after a top-up to well above that level. Nothing is paused: the agent plays on with what it has.</p>
     <p>To top up, send EGLD to the address above on the MultiversX network: the agent buys FOXSY with it by itself. You can send FOXSY or WEGLD too. When a swap fits in the wallet's WEGLD, the agent spends that first and all of it if needed, because WEGLD pays no network fees and needs no reserve. Otherwise it swaps EGLD, down to the gas reserve.</p>`],
   topup: ['Top-up warning', `<p>You are warned when what this agent can play with (its EGLD, WEGLD and FOXSY, the EGLD gas reserve aside) is worth less than this amount in USD: the value turns orange here and it shows in the morning summary on Telegram; with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once (once a day per agent). It warns again only after a top-up to at least 20 percent above this level and a new fall.</p>
     <p>Each level's default is about two days of play at its daily cap ($10 for steady, $200 for beast). 0 switches the warning off.</p>`],
   chat_clear: ['Clear', `<p>Empties the conversation, here and for Telegram: the manager starts fresh with your next message.</p>
-    <p>Why: the manager reads the current conversation again with every message you send, and the AI is paid for what it reads. A short conversation costs less and keeps the answers on the topic. One line costs a fraction of a cent, so it counts in long discussions and with the dearer models.</p>
-    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation, and it never reads more than the last 50 messages, about 25 of yours with their answers. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
+    <p>Why: the manager reads the current conversation again with every message you send; the AI is paid for what it reads. A short conversation costs less and keeps the answers on the topic. One line costs a fraction of a cent, so it counts in long discussions and with the dearer models.</p>
+    <p>It also forgets by itself: after an hour without a message your next one starts a new conversation. It never reads more than the last 50 messages, about 25 of yours with their answers. Strategy proposals still waiting in the conversation are dropped with it. Your strategies, settings and the activity history are not touched.</p>`],
   speak: ['Speak', `<p>Press Speak and talk instead of typing: your words appear in the box. Press Stop when you are done, read the text and press Send.</p>
-    <p>Your browser turns the speech into text, and the first time it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
+    <p>Your browser turns the speech into text; the first time, it asks you to allow the microphone. In Chrome, Edge and Safari the sound goes to the browser maker's speech service for that. Nothing else leaves this page and nothing is sent to the manager until you press Send.</p>
     <p>It listens in one language at a time. With several languages set in your browser, pick the one you speak in the list next to the button. Browsers without speech to text (Firefox) do not show the button.</p>`],
   strategy: ['Strategy', `<p>The direction the strategist follows on every cycle, in plain words: what to aim for, what to avoid and how much risk to take.</p>
-    <p>Six levels, one brain: every level plays by the same rules (the ones Zeus had): it weighs a win chance for every team, plays a 1v1 against a known team only from 55 percent, enters a tournament only with a real chance of the top three, may post open challenges and create private tournaments, sells a spare card when its price beats its use, and spends only when it pays. What grows from one level to the next is the money: the daily cap and monthly budget, the largest entry, shop payment and bid (any rarity, within its limit), and the counts of paid training a day, boosters and packs a week and medicine days a week. <b>Steady</b> has the smallest budget, <b>Zeus</b> the largest and plans every hour. The manual's Strategy levels page has the full table. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that do not fit it yet (moving up, those under its values; moving down, those above them), each with a tick, and its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
+    <p>Six levels, one brain: every level plays by the same rules (the ones Zeus had): it weighs a win chance for every team, plays a 1v1 against a known team only from 55 percent, enters a tournament only with a real chance of the top three, may post open challenges and create private tournaments, sells a spare card when its price beats its use and spends only when it pays. What grows from one level to the next is the money: the daily cap and monthly budget, the largest entry, shop payment and bid (any rarity, within its limit) and the counts of paid training a day, boosters and packs a week and medicine days a week. <b>Steady</b> has the smallest budget, <b>Zeus</b> the largest and plans every hour. The manual's Strategy levels page has the full table. Edit the text freely or let Talk to the manager rewrite it for you.</p><p>Picking a level opens a proposal: the settings that do not fit it yet (moving up, those under its values; moving down, those above them), each with a tick, plus its recommended AI. Accept and save takes the ticked ones; Cancel keeps everything as saved. Raising a limit or switching to a dearer AI asks for your password.</p>
     <p>The caps always win: the strategy guides the choices, the executor enforces the limits.</p>`],
   daily: ['Daily cap (USD)', `<p>The most this agent may spend in one game day, in USD at live prices. The game day resets at 14:00 UTC.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in one game day (before the team exists: the larger of this and the setup budget).</p>
     <p>It counts FOXSY paid (entries, stakes, shop and sync) and network fees. Registration is not included; it has its own setup budget.</p>
     <p>A Gold entry of 5,000 FOXSY needs a daily cap above its USD value.</p>`],
   monthly: ['Monthly budget (USD)', `<p>The most this agent may spend in a calendar month (UTC), in USD. Every action has to fit both this budget and the daily cap.</p>
+    <p>It starts again on the 1st at 00:00 UTC, not at the 14:00 UTC game-day reset. In the month you start, the whole budget is there for the days left in it; the daily cap still limits each day.</p>
     <p>It also limits the EGLD or WEGLD swapped to FOXSY in a month, next to the daily cap for swaps. The EGLD gas reserve is never swapped.</p>`],
   setup: ['Setup budget (USD)', `<p>A separate one-time budget for starting the team: the 5,000 FOXSY registration fee, the swap that buys it and its network fee. It does not count against the daily or monthly caps.</p>`],
   reserve: ['EGLD gas reserve', `<p>EGLD that always stays in the wallet to pay network fees. A swap may only use the EGLD above it; transaction fees may be paid from it.</p>
     <p>1 EGLD pays for well over a thousand ordinary transactions. Default 1 EGLD; the lowest allowed is 0.05.</p>`],
   entry: ['Max entry fee or stake (FOXSY)', `<p>The largest single tournament entry fee or 1v1 stake the agent may pay, when it joins or creates one.</p>
-    <p>Silver entries run from 1,000 to 4,999 FOXSY and Gold starts at 5,000. Below 5,000 the agent never enters Gold.</p>`],
+    <p>A paid Bronze tournament takes 100 to 999 FOXSY a seat, Silver 1,000 to 4,999 and Gold 5,000 or more. A 1v1 stake starts at Silver (1,000). Below 5,000 the agent never enters Gold.</p>`],
   shop: ['Max shop payment (FOXSY)', `<p>The largest single shop payment. Prices: condition recovery up to 100 per player (pro-rated), a training slot 20, the XP booster 2,000 and a common pack 2,500.</p>
     <p>At 2,500 it can buy recovery, training slots, the booster and a pack. Medicine for a long injury of a high rarity and the dearer waivers need more: 9,000 covers the 18 days of medicine a Legendary's longest injury can take and an Epic's 90 match credits. The two fusion waivers use the same maximum: a shorter fusion cooldown (75 per day, at most 825 per card) and bought match credit (priced by rarity: an Uncommon 20 per match, at most 200 per card; a Rare or an Epic 100 per match, a Rare's 30 credits 3,000; none for a Common). It holds a fusion fee (100 to 800) too, so at 500 the fees up to 400 are in reach. Medicine for an injured player is one payment for the days it saves (100 FOXSY a day for a Common up to 500 for a Legendary), so at 500 it buys up to 5 days for a Common and 1 for a Legendary. Marketplace bids have their own limits.</p>
     <p>It also caps the ranked ticket of a ranked game the agent starts and the calendar deposit a tournament the agent creates owes (per scheduled game, counted on its maximum number of teams: a knockout of 16 owes 15 games, a round robin of 8 owes 28). A tournament that owes more than this is not created.</p>`],
-  swap: ['Max swap (FOXSY)', `<p>The largest single swap to FOXSY on xExchange, counted in FOXSY received. The agent pays with the wallet's WEGLD when it covers the swap, otherwise with EGLD above the gas reserve, and swaps only what its next actions need.</p>`],
+  swap: ['Max swap (FOXSY)', `<p>The largest single swap to FOXSY on xExchange, counted in FOXSY received. The agent pays with the wallet's WEGLD when it covers the swap (otherwise with EGLD above the gas reserve) and swaps only what its next actions need.</p>`],
   bid: ['Max bid (FOXSY)', `<p>The largest single bid the agent may place on a marketplace auction. Every sale is a 24-hour auction: a bid must reach the reserve or beat the top bid by the smallest raise FoxLeague accepts (5 percent unless FoxLeague changes it; the agent reads it before every plan). An outbid bidder gets the FOXSY back at once.</p>
-    <p>Whatever this says, a bid never goes above what the card would cost to build yourself and bring to its match gate: the Common packs, the fusion fees and the time, each match and each day of waiting at FoxLeague's own price for skipping it. At today's prices that is about 14,450 FOXSY for a Rare, 60,400 for an Epic and 225,650 for a Legendary. The limits per rarity below (by default 500 for a Common, 1,500 for an Uncommon, 7,000 for a Rare, 14,000 for an Epic and 38,000 for a Legendary) usually bind first.</p>
-    <p>A bid is the whole price of the card, not an amount added to the reserve. The agent may bid twice on one auction at most, each time the reserve or that smallest raise over the top bid, and every bid stays under the lowest of this, the limit for the card's rarity and the build cost.</p>
+    <p>Whatever this says, a bid never goes above what the card would cost to build yourself and bring to its match gate: the Common packs, the fusion fees and the time, each match and each day of waiting at FoxLeague's own price for skipping it. The limits per rarity below usually bind first.</p>
+    <p>A bid is the whole price of the card, not an amount added to the reserve. The agent may bid twice on one auction at most, each time the reserve or that smallest raise over the top bid. Every bid stays under the lowest of this, the limit for the card's rarity and the build cost.</p>
     <p>0 turns bidding off.</p>`],
-  bidCommon: ['Max bid for a Common (FOXSY)', `<p>The most the agent may bid for a Common card. The default, 500, is what a card from a Common pack costs (2,500 FOXSY for 5 cards) and the lowest price a card can be listed at, so the agent never pays more for a Common than the shop would charge.</p>
-    <p>A Common at auction has already played its 5 matches and has a known position, which a pack card has not. The agent aims below the market price it is shown. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password; 0 turns bids on Commons off.</p>`],
-  bidUncommon: ['Max bid for an Uncommon (FOXSY)', `<p>The most the agent may bid for an Uncommon card. The default, 1,500, is about a third above the Uncommon's market price when it was set (measured like the Rare's) and under what building one costs: 3 Commons and the 100 FOXSY fusion fee, then its 15 matches.</p>
-    <p>The agent aims below the market price it is shown. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password.</p>`],
-  bidRare: ['Max bid for a Rare (FOXSY)', `<p>The most the agent may bid for a Rare card. The default, 7,000, is about 20 percent above the Rare's market price when it was set (the median of what Rares sold for each trading day, so one day of cheap sales counts once): room to bid once more after being outbid, since the agent bids at most twice on one auction.</p>
-    <p>The agent aims below the market price it is shown, at the reserve or the smallest raise that wins. Max bid holds above this, and so does the cost of building the card yourself. Raising it asks for your password.</p>
-    <p>The line under the field shows today's market price: green when your limit is in range (90 to 150 percent of it), amber when it is under the market (the agent may miss most sales), red when it is far above (the agent may pay too much). It judges whichever limit binds, so with a lower Max bid it says so. The button fills in the market price, rounded; Save keeps it.</p>`],
-  bidEpic: ['Max bid for an Epic (FOXSY)', `<p>The most the agent may bid for an Epic card. The default, 14,000, is about 20 percent above the Epic's market price when it was set, measured the same way.</p>
-    <p>The agent aims below the market price it is shown. Max bid holds above this. Raising it asks for your password.</p>`],
-  bidLegendary: ['Max bid for a Legendary (FOXSY)', `<p>The most the agent may bid for a Legendary card. The default, 38,000, is about 20 percent above the Legendary's market price when it was set, measured the same way.</p>
-    <p>The agent aims below the market price it is shown. Max bid holds above this, so with a max bid under it, the max bid is the limit. Raising it asks for your password.</p>`],
+  bidCommon: ['Max bid for a Common (FOXSY)', `<p>The most the agent may bid for a Common card. It is a ceiling, not a target: the agent aims below the market price it sees and bids the reserve or the smallest raise that wins, at most twice on one auction. A Common bought at auction has already played its first matches and has a known position, which a card from a pack has not.</p>
+    <p>The line under the field compares your limit with what Commons sell for today: green when your limit covers the market, amber when it is below it (the agent may miss most sales), red when it is well above it (the agent may pay up to your limit). The button fills in the market price, rounded; Save keeps it.</p>
+    <p>The lowest of this, Max bid and the cost of building the card yourself is the limit that counts. Raising it asks for your password; 0 turns bids on Commons off.</p>`],
+  bidUncommon: ['Max bid for an Uncommon (FOXSY)', `<p>The most the agent may bid for an Uncommon card. It is a ceiling, not a target: the agent aims below the market price it sees and bids the reserve or the smallest raise that wins, at most twice on one auction.</p>
+    <p>The line under the field compares your limit with what Uncommons sell for today: green when your limit covers the market, amber when it is below it (the agent may miss most sales), red when it is well above it (the agent may pay up to your limit). The button fills in the market price, rounded; Save keeps it.</p>
+    <p>The lowest of this, Max bid and the cost of building the card yourself is the limit that counts. Raising it asks for your password; 0 turns bids on Uncommons off.</p>`],
+  bidRare: ['Max bid for a Rare (FOXSY)', `<p>The most the agent may bid for a Rare card. It is a ceiling, not a target: the agent aims below the market price it sees and bids the reserve or the smallest raise that wins, at most twice on one auction.</p>
+    <p>The line under the field compares your limit with what Rares sell for today: green when your limit covers the market, amber when it is below it (the agent may miss most sales), red when it is well above it (the agent may pay up to your limit). The button fills in the market price, rounded; Save keeps it.</p>
+    <p>The lowest of this, Max bid and the cost of building the card yourself is the limit that counts. Raising it asks for your password; 0 turns bids on Rares off.</p>`],
+  bidEpic: ['Max bid for an Epic (FOXSY)', `<p>The most the agent may bid for an Epic card. It is a ceiling, not a target: the agent aims below the market price it sees and bids the reserve or the smallest raise that wins, at most twice on one auction.</p>
+    <p>The line under the field compares your limit with what Epics sell for today: green when your limit covers the market, amber when it is below it (the agent may miss most sales), red when it is well above it (the agent may pay up to your limit). The button fills in the market price, rounded; Save keeps it.</p>
+    <p>The lowest of this, Max bid and the cost of building the card yourself is the limit that counts. Raising it asks for your password; 0 turns bids on Epics off.</p>`],
+  bidLegendary: ['Max bid for a Legendary (FOXSY)', `<p>The most the agent may bid for a Legendary card. It is a ceiling, not a target: the agent aims below the market price it sees and bids the reserve or the smallest raise that wins, at most twice on one auction.</p>
+    <p>The line under the field compares your limit with what Legendaries sell for today: green when your limit covers the market, amber when it is below it (the agent may miss most sales), red when it is well above it (the agent may pay up to your limit). The button fills in the market price, rounded; Save keeps it.</p>
+    <p>The lowest of this, Max bid and the cost of building the card yourself is the limit that counts. Raising it asks for your password; 0 turns bids on Legendaries off.</p>`],
   paidTraining: ['Paid training a day', `<p>How many paid training sessions (20 FOXSY each, on top of the 5 free ones) the agent may use in one game day: FoxLeague allows 10. Sessions it already holds count, so it never buys more than this.</p>
     <p>The defaults grow with the level: 2, 4, 6, 8, then 10 for Beast and Zeus. Raising it asks for your password.</p>`],
   boosters: ['Boosters a week', `<p>How many XP boosters (2,000 FOXSY, double XP for 24 hours) the agent may buy in any 7 days, counted from its own purchases. 7 is one every day; 0 turns the booster off.</p>
-    <p>It still buys one only once a competitive match of its own is drawn within the 24 hours, and weighs whether the day's matches make it pay (about 3 sure ones). The defaults: none for Steady, then 1, 2 and 3; every day for Beast and Zeus. Raising it asks for your password.</p>`],
+    <p>It still buys one only once a competitive match of its own is drawn within the 24 hours and weighs whether the day's matches make it pay (about 3 sure ones). The defaults: none for Steady, then 1, 2 and 3; every day for Beast and Zeus. Raising it asks for your password.</p>`],
   packs: ['Packs a week', `<p>How many Common packs (2,500 FOXSY for 5 Common cards) the agent may buy in any 7 days, counted from its own purchases: FoxLeague allows 2 a wallet a week. 0 turns packs off.</p>
     <p>The defaults: none for Steady and Climber, 1 for Hunter, 2 from Predator up. Raising it asks for your password.</p>`],
   medicine: ['Medicine days a week', `<p>How many days of medicine the agent may buy in any 7 days, over all its players, counted from its own purchases. Medicine shortens an injury by whole days (100 FOXSY a day for a Common up to 500 for a Legendary) and FoxLeague always keeps a third of the injury, so the most it sells is 2 days of a 3-day injury, 6 of 9 and 18 of 27. 0 buys none.</p>
-    <p>The agent buys it only for a starter it cannot replace who would miss matches that matter, and each payment also stays within Max shop payment. The defaults: none for Steady, then 2, 4 and 6 (the whole of a light and of a medium injury), 12 for Beast and 18 for Zeus. An agent saved before this field existed has 0 until you set it. Raising it asks for your password.</p>`],
+    <p>The agent buys it only for a starter it cannot replace who would miss matches that matter; each payment also stays within Max shop payment. The defaults: none for Steady, then 2, 4 and 6 (the whole of a light and of a medium injury), 12 for Beast and 18 for Zeus. An agent saved before this field existed has 0 until you set it. Raising it asks for your password.</p>`],
   bronze: ['Bronze amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Bronze tournament, between 100 and 999 FOXSY. Leave it empty and it creates none; it can still join one, within Max entry or stake.</p><p>A Bronze costs an entry and earns only once FoxLeague's competition levels are live. Before that the agent creates none.</p>`],
   silver: ['Silver amounts (FOXSY)', `<p>The round entry fees the agent may choose when it creates a Silver tournament or a 1v1 challenge, between 1,000 and 4,999 FOXSY.</p>
     <p>Joining someone else's tournament uses that tournament's fee, checked against the max entry fee.</p>`],
@@ -1447,19 +1470,36 @@ const TIPS = {
     <p>Leave it empty to keep the agent out of Gold altogether: it then never creates or joins a Gold tournament or 1v1. That is the steady level's default.</p>`],
   tick: ['Tick (minutes)', `<p>How often the agent plans. Each cycle reads a fresh snapshot, asks the strategist and runs the actions over the following minutes, at least 30 seconds apart.</p>
     <p>A shorter tick reacts faster and costs more in model calls. The shortest is 10 minutes. The defaults: 120 for Steady and Climber, 90 for Hunter and Predator, 75 for Beast and 60 for Zeus; at 120 the daily trainings, matches and entries fit in 6 to 8 plans a day. A planning cycle also runs about an hour before each match session locks (matches whose locks fall within 2 hours of each other share it), whatever the tick.</p>
-    <p>After a plan with nothing to do, the next plan comes after twice the tick (still with the random window), and again after each plan with nothing to do, until a plan acts or the 14:00 UTC game-day reset: the first plan after the reset and any plan after one that acted come at the normal tick. The quiet hours before the reset then cost half the model calls.</p>
+    <p>After a plan with nothing to do, the next plan comes after twice the tick (still with the random window). So it goes after each plan with nothing to do, until a plan acts or the 14:00 UTC game-day reset: the first plan after the reset and any plan after one that acted come at the normal tick. The quiet hours before the reset then cost half the model calls.</p>
     <p>A shorter tick counts from the save: the next plan comes within one new tick.</p>`],
   jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. The default is 10; 0 keeps the exact tick.</p>
     <p>It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20.</p>`],
   hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
-    <p>The default, from 8 until 20, is 12 hours around the 14:00 UTC game-day reset. From 0 until 24 runs all day.</p>
-    <p>Add your time zone's offset to read them locally: at UTC+3, 8 until 20 is 11:00 to 23:00.</p>
+    <p>The default, from 6 until 22, is 16 hours around the 14:00 UTC game-day reset. From 0 until 24 runs all day.</p>
+    <p>Add your time zone's offset to read them locally: at UTC+2, 6 until 22 is 08:00 to 00:00.</p>
     <p>The window may cross midnight: from 22 until 6 means night hours.</p>`],
+}
+// Shadow plans are off unless switched on on the machine that runs the agent: the Activity bubble explains them only
+// while the list holds one, as the filter for them shows only then (TEXT-1).
+const SHADOW_TIP = `<p>A row marked <b>shadow plan, not carried out</b> is what another AI model would have planned from the same request. It is recorded only to compare the models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it. One that says <b>the real plan's own model and effort again</b> is the same model planning the same request a second time, to see how much its plans differ. Such rows appear only while shadow plans are switched on on the server.</p>`
+// The password rule of the three AI choices for shadow plans, shown only while shadow plans are set on this install.
+const SHADOW_EXTRA = {
+  k_strat: '<p>A switch that starts shadow plans asks for your password too: a shadow model set on the server rests while it is the model that plays.</p>',
+  aiModel: '<p>A change that starts shadow plans set on the server for this agent asks for your password too.</p>',
+  aiEffort: '<p>A shadow plan set on the server at the effort this agent plays rests: leaving that effort starts it, so that asks for the password too.</p>',
+}
+function shadowsSet() {
+  // The retired agents count too, as wakesShadow counts them (R89A-10).
+  return Boolean(S && (((S.instance || {}).shadowModels || []).length || [...(S.agents || []), ...(S.retired || [])].some(b => ((b.ai || {}).shadows || []).length)))
+}
+function tipBody(k) {
+  if (k === 'activity') return TIPS[k][1] + (activityRows.some(r => r.kind === 'shadow') ? SHADOW_TIP : '')
+  return TIPS[k][1] + (SHADOW_EXTRA[k] && shadowsSet() ? SHADOW_EXTRA[k] : '')
 }
 function showTip(k) {
   const t = TIPS[k]; if (!t) return
   $('tipTitle').textContent = t[0]
-  $('tipBody').innerHTML = t[1]
+  $('tipBody').innerHTML = tipBody(k)
   $('tipwrap').classList.add('on')
 }
 // Mouse users get a preview on hover; everyone can tap or click for the full text.
@@ -1851,13 +1891,13 @@ const GUIDE = [
   { id: 'ai', title: 'AI key (Anthropic)', need: true, done: st => st.ai,
     intro: 'The AI that plans for your agents. Without it they only watch and never play.',
     steps: [
-      ['Open the Anthropic console and sign up, or log in if you have an account.', 'https://platform.claude.com'],
+      ['Open the Anthropic console and sign up (or log in if you have an account).', 'https://platform.claude.com'],
       ['Open Billing and add credit. $10 runs a single agent at the defaults for about two weeks.', 'https://platform.claude.com/settings/billing'],
       ['Open Limits and set a monthly spend limit, for example $60: a month of a single agent at the defaults with room to spare. Then it can never cost more than that.', 'https://platform.claude.com/settings/limits'],
-      ['Open API keys, press Create key, name it foxleague-agent and copy it. It is shown only once.', 'https://platform.claude.com/settings/keys'],
+      ['Open API keys and press Create key. Where the console asks where your code runs, choose Somewhere else (an API key): the other choices sign in a command line tool the agent does not use. Name the key foxleague-agent, set Expires to Never and leave the rest as it is: a key that expires stops your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $0.60 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 12 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
+    note: 'About $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
@@ -1868,7 +1908,7 @@ const GUIDE = [
       ['Still in Keys, press Link my Telegram, send the 6-digit code to your agent\'s Telegram account, then press I sent it. From then on it talks only to you.', null, true],
     ] },
   { id: 'binance', title: 'CEX top-up, optional', need: false, done: st => st.binance,
-    intro: 'Lets your agents get EGLD from an exchange (a CEX), each top-up approved by you: when an agent runs low, Telegram shows the proposal and a one-time code, and /topup with the code sends it. The example is Binance: a key that can only read and withdraw EGLD to your agent wallets.',
+    intro: 'Lets your agents get EGLD from an exchange (a CEX), each top-up approved by you: when an agent runs low, Telegram shows the proposal and a one-time code; /topup with the code sends it. The example is Binance: a key that can only read and withdraw EGLD to your agent wallets.',
     steps: [
       ['Log in to Binance and open API Management.', 'https://www.binance.com/en/my/settings/api-management'],
       ['Press Create API, choose System generated, name it foxleague-agent and confirm with your 2FA.'],

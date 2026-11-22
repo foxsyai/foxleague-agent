@@ -260,7 +260,7 @@ Checked against commit 4fe1ed6 (2026-11-20): 132 quoted lines, 0 changed.
 | windows, mac, linux | `install.sh:984` | a. Sign up or log in:                 https://platform.claude.com | ok |
 | windows, mac, linux | `install.sh:985` | b. Add credit ($10, about two weeks): https://platform.claude.com/settings/billing | ok |
 | windows, mac, linux | `install.sh:986` | c. Set a monthly limit ($60):         https://platform.claude.com/settings/limits | ok |
-| windows, mac, linux | `install.sh:987` | d. Create a key, name it foxleague-agent, copy it (shown once): | ok |
+| windows, mac, linux | `install.sh:987` | d. Create key (Somewhere else), name foxleague-agent, Expires Never, copy it (once): | ok |
 | windows, mac, linux | `install.sh:988` | https://platform.claude.com/settings/keys | ok |
 | windows, mac, linux | `install.sh:990` | 2. Telegram, optional (a morning summary of every agent, talk to your manager): | ok |
 | windows, mac, linux | `install.sh:997` | 3. CEX top-up, optional (EGLD top-ups from an exchange, each one approved by you on Telegram). | ok |

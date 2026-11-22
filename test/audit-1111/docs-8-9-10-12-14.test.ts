@@ -122,9 +122,10 @@ test('DOCS-12 setup on your own computer names the command that works there: ./c
 
 // ---- DOCS-14 ----
 
-test('DOCS-14 the home page does not promise around the clock while a new agent plans 12 hours a day', () => {
+test('DOCS-14 the home page does not promise around the clock while a new agent plans 16 hours a day', () => {
   const [from, to] = DEFAULT_SETTINGS.activeHoursUtc
-  assert.equal((to - from + 24) % 24 || 24, 12)
+  // 06:00 to 22:00 UTC since HOURS-1 (it was 12 hours, 08:00 to 20:00).
+  assert.equal((to - from + 24) % 24 || 24, 16)
   const home = raw(`${DOCS}/index.mdx`)
   assert.doesNotMatch(home, /around the clock/)
   assert.match(home, /every day, inside the hours you choose/)

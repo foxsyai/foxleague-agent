@@ -63,7 +63,7 @@ const stated = (f: string) => {
   return out
 }
 
-test('DOCS-4 the default the sentence names is the default of the code: Haiku 5.5 at high, a plan every 2 hours inside 12 active hours', () => {
+test('DOCS-4 the default the sentence names is the default of the code: Haiku 5.5 at high, a plan every 2 hours inside 16 active hours', () => {
   assert.deepEqual(DEFAULT_AI, { model: 'claude-haiku-5-5', effort: 'high' })
   assert.match(raw('src/config.ts'), /model: process\.env\.AGENT_MODEL\?\.trim\(\) \|\| DEFAULT_AI\.model/)
   assert.match(raw('src/strategist/strategist.ts'), /process\.env\.AGENT_MODEL_EFFORT \?\? \(modelNamed \? 'medium' : DEFAULT_AI\.effort\)/)
@@ -96,7 +96,8 @@ test('DOCS-4 the stated cost of a plan at the defaults is what its input costs a
 })
 
 test('DOCS-4 the stated cost of a day is the plans of a default day at the stated cost of a plan', () => {
-  assert.equal(plansADay, 6)
+  // 06:00 to 22:00 UTC since HOURS-1 (the owner, 2026-11-22): 16 hours at a 2-hour tick.
+  assert.equal(plansADay, 8)
   for (const f of PLACES) {
     const s = stated(f)
     assert.equal(s.perDay.toFixed(2), (plansADay * s.perPlan).toFixed(2), `${f}: ${plansADay} plans of $${s.perPlan}`)

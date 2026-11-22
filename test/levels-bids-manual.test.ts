@@ -1,7 +1,9 @@
 // Owner, 2026-10-24: a bid needs room above the market price to be outbid once and bid again (an agent bids at most
 // twice on one auction, each time 5 percent over the top bid), and the room only works in the limits per rarity, since
 // a bid stops at the lowest of Max bid, its rarity's limit and the build cost. The limits become Common 500, Uncommon
-// 1,500, Rare 7,000, Epic 14,000 and Legendary 38,000 (about 20 percent over the market for the last three), and each
+// 1,500, Rare 7,000, Epic 14,000 and Legendary 38,000 (about 20 percent over the market for the last three; set again on
+// 2026-11-22 by the owner's rule, BIDS-1: three of the rarity below plus 5 percent, Uncommon 1,650, Rare 5,200, Epic
+// 16,400, Legendary 51,700); each
 // level's Max bid is the limit of the dearest rarity it buys: hunter Uncommon, predator Rare, beast Epic, Zeus all. The
 // manual tells the rules in general, with examples, never the dated prices and events of our testing.
 
@@ -18,19 +20,26 @@ const D = DEFAULT_SETTINGS as typeof DEFAULT_SETTINGS & { maxBidCommonFoxsy: num
 const LEVELS = ['steady', 'climber', 'hunter', 'predator', 'beast', 'zeus'] as const
 const n = (v: number) => v.toLocaleString('en-US')
 
-test('the limits per rarity leave room over the market price to be outbid once and bid again', () => {
-  assert.deepEqual([D.maxBidCommonFoxsy, D.maxBidUncommonFoxsy, D.maxBidRareFoxsy, D.maxBidEpicFoxsy, D.maxBidLegendaryFoxsy], [500, 1500, 7000, 14_000, 38_000])
-  assert.equal(MAX_BIDS_PER_AUCTION, 2, 'one bid and one more after being outbid')
-  // The market prices the defaults were set from (the median of the daily medians over 30 days).
-  const market = { Rare: 5650, Epic: 11_828, Legendary: 31_240 }
-  for (const [r, limit] of [['Rare', D.maxBidRareFoxsy], ['Epic', D.maxBidEpicFoxsy], ['Legendary', D.maxBidLegendaryFoxsy]] as const) {
-    const over = limit / market[r] - 1
-    assert.ok(over >= 0.15 && over <= 0.25, `${r}: ${Math.round(over * 100)} percent over the market`)
-    // A first bid at the market and one 5 percent raise over a rival's 5 percent raise both fit.
-    assert.ok(market[r] * 1.05 * 1.05 <= limit, `${r}: room for a second bid`)
+test('the limits per rarity follow the owner\'s rule: three cards of the rarity below plus 5 percent (BIDS-1)', () => {
+  // The owner, 2026-11-22: a card is three of the rarity below fused, so each limit is three times the one below plus
+  // 5 percent, from a Common at 525, rounded; the Common itself stays at a pack card's price.
+  assert.deepEqual([D.maxBidCommonFoxsy, D.maxBidUncommonFoxsy, D.maxBidRareFoxsy, D.maxBidEpicFoxsy, D.maxBidLegendaryFoxsy], [500, 1650, 5200, 16_400, 51_700])
+  let chain = 500 * 1.05
+  for (const limit of [D.maxBidUncommonFoxsy, D.maxBidRareFoxsy, D.maxBidEpicFoxsy, D.maxBidLegendaryFoxsy]) {
+    chain *= 3 * 1.05
+    assert.ok(Math.abs(limit - chain) / chain < 0.01, `${limit} is the rule's ${Math.round(chain)}, rounded`)
   }
   assert.equal(D.maxBidCommonFoxsy, 2500 / 5, 'a Common never above a pack card')
-  assert.ok(D.maxBidUncommonFoxsy < 3 * 500 + 100, 'an Uncommon under its cost from packs and the fusion fee')
+  assert.equal(MAX_BIDS_PER_AUCTION, 2, 'one bid and one more after being outbid')
+  // Against the dashboard's market prices of that day (Rare 4,800, Epic 11,700, Legendary 46,000): a bid at the market
+  // and one 5 percent raise always fit; a second round (a raise over a rival's raise) fits an Epic and a Legendary.
+  const market = { Rare: 4800, Epic: 11_700, Legendary: 46_000 }
+  const limits = { Rare: D.maxBidRareFoxsy, Epic: D.maxBidEpicFoxsy, Legendary: D.maxBidLegendaryFoxsy }
+  for (const r of ['Rare', 'Epic', 'Legendary'] as const) assert.ok(market[r] * 1.05 <= limits[r], `${r}: room for a raise`)
+  for (const r of ['Epic', 'Legendary'] as const) assert.ok(market[r] * 1.05 * 1.05 <= limits[r], `${r}: room for a second bid`)
+  // The Uncommon's 1,650 is above three pack Commons and the fusion fee (1,600) but under the build ceiling, which also
+  // counts its 15 matches (2,200 on mainnet's settings of that day): a bid never goes above building one.
+  assert.ok(D.maxBidUncommonFoxsy < 2200, 'an Uncommon under its build ceiling')
 })
 
 test('each level\'s max bid is the limit of the dearest rarity it buys, and fits its daily cap', () => {
@@ -95,7 +104,7 @@ test('the manual, README, INSTALL.md and the dashboard\'s info bubbles tell no d
 test('the strategy levels page says every level bids on any rarity within its max bid, as the texts do', () => {
   const page = read('site/src/content/docs/play/strategy-levels.md').replace(/\s+/g, ' ')
   assert.doesNotMatch(page, /never on Common or Uncommon ones/)
-  assert.match(page, /\| Bids at auction \| any rarity, up to 500 \| up to 1,500 \| up to 7,000 \| up to 14,000 \| up to 14,000 \| up to 38,000 \|/)
+  assert.match(page, /\| Bids at auction \| any rarity, up to 500 \| up to 1,650 \| up to 5,200 \| up to 16,400 \| up to 16,400 \| up to 51,700 \|/)
   assert.match(page, /So a Steady agent can take a Legendary listed at 500 FOXSY, and Zeus can buy a Common, never above 500 for it\./)
 })
 
@@ -111,7 +120,7 @@ test('an agent that saved its limits keeps them; one that never did gets the new
   ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify({ ...DEFAULT_SETTINGS, maxBidRareFoxsy: 6000, maxBidEpicFoxsy: 12_000, maxBidLegendaryFoxsy: 32_000 }))
   assert.deepEqual([store.agent(0)!.settings.maxBidRareFoxsy, store.agent(0)!.settings.maxBidEpicFoxsy, store.agent(0)!.settings.maxBidLegendaryFoxsy], [6000, 12_000, 32_000], 'saved limits win')
   ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare('UPDATE agents SET settings = ? WHERE idx = 0').run(JSON.stringify({ strategy: 'x' }))
-  assert.equal(store.agent(0)!.settings.maxBidRareFoxsy, 7000, 'no saved limit: the new default')
+  assert.equal(store.agent(0)!.settings.maxBidRareFoxsy, 5200, 'no saved limit: the new default')
   const record = read('docs/SECURITY-REVIEW.md').replace(/\s+/g, ' ')
   assert.doesNotMatch(record, /Agents on the defaults get them at once/)
   assert.match(record, /an agent that saved its limits keeps them/)
