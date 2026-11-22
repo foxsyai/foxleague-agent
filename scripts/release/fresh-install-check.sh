@@ -469,7 +469,7 @@ fx sh -c 'printf "AGENT_UPDATE_URL=\"http://127.0.0.1:8899\"\n" >> ~/foxleague-a
 until_ok 30 healthz
 fx fox-dash login owner "$PASSWORD" >/dev/null 2>&1
 check "the dashboard shows the notice by itself within two minutes (version and notes)" until_ok 150 state_has '"available":{"version":"1.0.1","notes":"Newin1.0.1'
-check "the notice in the log names /upgrade" journal_has 'To install it: send /upgrade here, or press Update now in the dashboard.'
+check "the notice in the log names /upgrade" journal_has 'To install it: send /upgrade here or press Update now in the dashboard.'
 check "Update now without the CSRF token is refused (403)" sh -c "docker exec -u fox -e HOME=/home/fox $C fox-dash nocsrf | grep -q 'http 403'"
 fx fox-dash update > "$LOGS/11a-update.txt" 2>&1
 check "Update now is accepted" has "$LOGS/11a-update.txt" 'Installing 1\.0\.1'
