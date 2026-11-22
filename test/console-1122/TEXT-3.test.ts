@@ -20,7 +20,7 @@ const RULE = /,\s+(?:and|or)\b|\u2014/
  * below), so the list cannot outlive what it excuses.
  */
 const ALLOWED: Record<string, string[]> = {
-  // The snapshot (renderDigest and its lines): the plan request and the owner's chat carry it to the AI, and `cli
+  // The snapshot (renderDigest and its lines): the plan request and the owner's chat carry it to the AI; `cli
   // snapshot` prints it as the AI reads it. The /agents reply shows only its first five lines, none of these.
   'src/snapshot/digest.ts': [
     'ELO pair cap: ',
@@ -59,7 +59,7 @@ function walk(dir: string): string[] {
 
 const MAX_VARIANTS = 64
 const isText = (n: ts.Node) => ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n) || ts.isTemplateExpression(n)
-/** Whether an expression builds text: a string, a template, or a choice or `+` chain that holds one. */
+/** Whether an expression builds text: a string, a template or a choice or `+` chain that holds one. */
 function textual(n: ts.Node): boolean {
   if (isText(n)) return true
   if (ts.isParenthesizedExpression(n)) return textual(n.expression)
@@ -100,7 +100,7 @@ function starts(n: ts.Node): string[] {
   return []
 }
 
-/** What a list of texts is joined with when the code says (`.join(', ')`), or null. */
+/** What a list of texts is joined with when the code says (`.join(', ')`); null when it does not. */
 function separator(list: ts.ArrayLiteralExpression): string | null {
   const call = list.parent
   if (!ts.isPropertyAccessExpression(call) || call.name.text !== 'join' || !ts.isCallExpression(call.parent)) return null
@@ -143,7 +143,7 @@ function textHits(file: string, source: string): { line: number; starts: string[
 
 test('TEXT-3 no text the code shows a person holds an em dash or a comma before "and" or "or"', () => {
   // The scan itself: a template's pieces and a `+` chain are read together, a joined list and a computed value are not
-  // a comma before "and", comments and identifiers are not read, and an em dash is found.
+  // a comma before "and", comments and identifiers are not read; an em dash is found.
   const sample = [
     'const a = `one,${x ? \' and two\' : \'\'}`', // 1: across the pieces of a template
     "const b = 'three,' +", // 2: across a + chain
@@ -170,7 +170,7 @@ test('TEXT-3 no text the code shows a person holds an em dash or a comma before 
       else found.push(`${file}:${h.line}: ...${h.at}...`)
     }
   }
-  assert.deepEqual(found, [], `a comma before "and" or "or", or an em dash, in text a person reads:\n${found.join('\n')}`)
+  assert.deepEqual(found, [], `an em dash or a comma before "and" or "or" in text a person reads:\n${found.join('\n')}`)
   const stale = Object.entries(ALLOWED).flatMap(([file, entries]) => entries.map(e => `${file}: ${e}`)).filter(e => !used.has(e))
   assert.deepEqual(stale, [], 'every allowed string still exists and still needs its place on the list')
 })
