@@ -19,7 +19,7 @@ curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh
 
 On Windows 10 and 11, open PowerShell (a normal window) and paste this line instead. It sets up WSL2 and Ubuntu
 where they are missing, which may need an administrator prompt and one restart of Windows (then paste the same
-line again), and runs the same installer inside Ubuntu. Installing Ubuntu needs about 4 GB free on drive C:.
+line again). After that it runs the same installer inside Ubuntu. Installing Ubuntu needs about 4 GB free on drive C:.
 
 ```
 irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 | iex
@@ -32,16 +32,16 @@ by step. Each system has its own guide, step by step, with what to do if it gets
 [Install on Mac](https://agent.foxleague.ai/start/install-mac/) and
 [Install on Linux](https://agent.foxleague.ai/start/install-linux/). The same is in [INSTALL.md](INSTALL.md), with
 everything else. On Windows the agent runs while Ubuntu (WSL) runs (a scheduled task of the Windows installer is
-there to keep Ubuntu running while you are logged in), and on macOS it starts when you log in (macOS lists it as
+there to keep Ubuntu running while you are logged in); on macOS it starts when you log in (macOS lists it as
 "FoxLeague Agent" in System Settings, General, Login Items & Extensions).
 
-You need about 5 EGLD to start (2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
-Anthropic API key for the AI. Telegram and Binance are optional.
+You need enough EGLD to start (part of it buys the 5,000 FOXSY registration at the day's price, 1 stays as the gas
+reserve) and an Anthropic API key for the AI. Telegram and Binance are optional.
 
 ## What it does
 
 Every two hours by default (randomised, inside the active hours you choose; higher levels plan more often, Zeus every
-hour, and the tick is yours to set) each agent reads its team and the platform, asks the AI for a plan and runs the actions spread over the
+hour; the tick is yours to set) each agent reads its team and the platform, asks the AI for a plan and runs the actions spread over the
 next minutes, in the plan's order (one with a deadline, such as leaving a 1v1 before it runs out or a bid before the auction
 ends, at least 5 minutes before it; leaving its own 1v1 nobody took yet and taking another team's open 1v1 at the start):
 
@@ -63,12 +63,12 @@ the dashboard or by chatting with it on Telegram.
 ## Safety
 
 - **Your limits are code, not a prompt.** A daily cap, a monthly budget and a one-time setup budget in USD at
-  live prices, and a maximum per entry fee, shop payment, bid and swap in FOXSY. The AI proposes; the executor refuses
+  live prices; a maximum per entry fee, shop payment, bid and swap in FOXSY. The AI proposes; the executor refuses
   anything over them. An EGLD gas reserve (1 EGLD by default) is never swapped.
 - **The AI never holds keys** and cannot build a transaction: it picks from a fixed list of actions, each checked
   against the game rules first.
 - **No payment into a stopped network.** Before every signature the agent checks that MultiversX is producing blocks;
-  while it is not, or while that cannot be read, nothing is signed and the next plan tries again (a reading that failed
+  while it is not or while that cannot be read, nothing is signed and the next plan tries again (a reading that failed
   is asked once more right before a signature). Lineups, training and casual games go on.
 - **Tournaments it creates start days ahead.** A tournament the agent creates by itself starts at least 3 days ahead,
   so teams have time to join before an unfilled one costs its organizer deposit.
@@ -84,8 +84,8 @@ the dashboard or by chatting with it on Telegram.
   every team and plays only what pays; the levels differ in the money they may spend (your limits, the paid training,
   boosters and packs they may buy) and in how often they plan.
 - **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release,
-  the last of them a final audit by six reviewers before the public launch. Every confirmed finding is fixed or
-  decided; the few still open are listed in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+  the last of them audits by teams of reviewers (one area each) and a final pass before the public launch. Every
+  confirmed finding is fixed or decided; the few still open are listed in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 
@@ -94,13 +94,13 @@ the dashboard or by chatting with it on Telegram.
   the AI's model and effort for all agents or one agent; the Keys panel.
 - **Telegram** (optional): a summary of every agent each morning, every update as it happens if you want it
   (`/updates all`). Write in plain words ("focus on Silver tournaments this
-  week") and the manager answers, or proposes a new strategy you apply with one tap. Commands: `/status`
+  week") and the manager answers or proposes a new strategy you apply with one tap. Commands: `/status`
   (it shows the version too), `/plan`, `/summary`, `/pause`, `/mode`, `/kill`, `/topup`, `/upgrade`, `/help`.
 - **Updates:** about every 10 minutes the agent asks GitHub for the newest release and tells you, in the dashboard
   and on Telegram, when one is out; the round arrow next to the version in the dashboard (**Check for updates**)
   asks at once. **Update now** in the dashboard or `/upgrade` on Telegram installs it; nothing installs by itself.
-  Only a release signed by the maintainers and newer than yours is taken, it is prepared next to the running
-  version, and a version that does not start is undone by itself. `./install.sh --update` does the same from a
+  Only a release signed by the maintainers and newer than yours is taken. It is prepared next to the running
+  version; a version that does not start is undone by itself. `./install.sh --update` does the same from a
   terminal; `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
 - **FoxLeague's manual:** every hour from the morning summary's hour the agent compares the manual FoxLeague serves
   with the copy its agents play by; each snapshot also compares FoxLeague's game settings with the ones that copy was
@@ -160,12 +160,12 @@ TypeScript on Node 22 (no build step), SQLite for state. `npm test` runs the tes
 Knowledge base: `docs/FOXLEAGUE-INTEGRATION.md` (every action as API calls and transactions),
 `docs/ECONOMY-AND-RULES.md` (costs, rewards, caps and cooldowns) and `src/strategist/manual.md` (the player
 manual, rebuilt with `./cli.sh sync-manual <path to the FoxLeague repository>`, which also writes
-`src/strategist/manual-pages.json`, the page record the daily check compares FoxLeague's manual with, and
-`src/foxleague/api-shapes.json`, the shapes of the routes listed in `src/foxleague/api-routes.ts`).
+`src/strategist/manual-pages.json` (the page record the daily check compares FoxLeague's manual with) and
+`src/foxleague/api-shapes.json` (the shapes of the routes listed in `src/foxleague/api-routes.ts`)).
 
 ## Fair play
 
-FoxLeague's Fair Play rules allow automation on your own wallets for the actions the app offers, and prohibit
+FoxLeague's Fair Play rules allow automation on your own wallets for the actions the app offers. They prohibit
 its abuse: bypassing an enforced rule, overloading the platform, using hidden information, coordinating teams or
 harvesting bonuses. Every agent must stay inside them. You are responsible for your agents.
 
@@ -173,9 +173,9 @@ harvesting bonuses. Every agent must stay inside them. You are responsible for y
 
 Pull requests are welcome. Read [AGENTS.md](AGENTS.md) first: it holds the rules that keep money safe, how to run
 the tests and how a change reaches `main`. Opening a pull request runs nothing; when a maintainer decides to merge
-it, the label `merge-check` runs the tests and an agent review, and `main` takes the change once both pass and a
+it, the label `merge-check` runs the tests and an agent review; `main` takes the change once both pass and a
 maintainer approved it. New versions reach users as signed releases ([docs/RELEASING.md](docs/RELEASING.md)): the
-installer takes the newest one, and an installed agent offers each new one to its owner.
+installer takes the newest one and an installed agent offers each new one to its owner.
 
 ## License
 

@@ -7,15 +7,16 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { pageText, ruleHits } from './text-rules.ts'
 
 const html = readFileSync(join(import.meta.dirname, '..', '..', 'src/web/dashboard.html'), 'utf8')
-const plain = (s: string) => s.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ')
 
 test('TEXT-1 no info bubble and no line of the guide holds an em dash or a comma before "and" or "or"', () => {
   const tips = html.slice(html.indexOf('const TIPS = {'), html.indexOf('\nfunction showTip'))
   const guide = html.slice(html.indexOf('const GUIDE = ['), html.indexOf('\n]\n', html.indexOf('const GUIDE = [')))
   assert.ok(tips.length > 20_000 && guide.length > 3_000, 'both found')
-  const hits = [...plain(tips + guide).matchAll(/[^.;:]{0,60}(?:, and |, or |—)[^.;:]{0,40}/g)].map(m => m[0].trim())
+  // The scan of TEXT-2 (text-rules.ts): a comma, then "and" or "or" across tags and line breaks, or an em dash.
+  const hits = ruleHits(pageText(`${tips}\n${guide}`)).map(h => h.text)
   assert.deepEqual(hits, [])
 })
 

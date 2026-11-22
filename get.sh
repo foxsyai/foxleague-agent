@@ -53,7 +53,7 @@ main() {
     die "$DIR belongs to $owner, not to root: paste the line as $as, without sudo"
   fi
   if [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
-    die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."
+    die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and paste the line again) or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of bash."
   fi
 
   # A download into a file. curl writes to its output and the shell puts that into the file: a curl that may not
@@ -99,7 +99,7 @@ main() {
   }
 
   kind=$(folder_kind)
-  [ "$kind" != other ] || die "$DIR is not empty and is not a foxleague-agent install: nothing was changed. Empty it, or name another folder with FOXAGENT_DIR."
+  [ "$kind" != other ] || die "$DIR is not empty and is not a foxleague-agent install: nothing was changed. Empty it or name another folder with FOXAGENT_DIR."
 
   tmp=$(mktemp -d)
   trap 'rm -rf "$tmp"' EXIT
@@ -208,7 +208,7 @@ main() {
   fi
   if printf '%s' "$installed" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' && older_than "$got" "$installed"; then
     if [ "${FOXAGENT_ALLOW_DOWNGRADE:-0}" != 1 ]; then
-      give_up "version $got is older than the $installed installed in $DIR: nothing was changed. An older version does not know the settings and limits added since, so limits you set would not be applied, and it may not read what the newer version saved. To go back anyway, put FOXAGENT_ALLOW_DOWNGRADE=1 in front of bash."
+      give_up "version $got is older than the $installed installed in $DIR: nothing was changed. An older version does not know the settings and limits added since, so limits you set would not be applied; it may not read what the newer version saved. To go back anyway, put FOXAGENT_ALLOW_DOWNGRADE=1 in front of bash."
     fi
     echo "  Going back from $installed to $got because FOXAGENT_ALLOW_DOWNGRADE=1 says so."
     echo "  Settings and limits that $installed added are not applied by $got."
@@ -223,7 +223,7 @@ main() {
   # job) it never ran, after the release it had no dependencies for was switched to (INS-A1): asked before anything
   # is changed.
   if [ "${FOXAGENT_NO_RUN:-0}" != 1 ] && ! { : < /dev/tty; } 2>/dev/null; then
-    give_up "the installer asks its questions in a terminal and this line runs without one (over ssh without -t, or from a scheduled job): nothing was changed. Paste the line in a terminal (over SSH: log in first, or use ssh -t)."
+    give_up "the installer asks its questions in a terminal and this line runs without one (over ssh without -t or from a scheduled job): nothing was changed. Paste the line in a terminal (over SSH: log in first or use ssh -t)."
   fi
   # Over an install, whose agent may be running, the new release gets Node.js and its dependencies here, in its
   # staging folder (its own install.sh --prepare, as an update from the dashboard does), and only a release that is

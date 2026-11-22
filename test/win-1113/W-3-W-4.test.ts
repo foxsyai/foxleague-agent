@@ -17,7 +17,7 @@ const GUIDES = ['INSTALL.md', WINDOWS]
 
 test('W-3 the guides say that the Ubuntu download can look stuck, why, and the welcome window', () => {
   for (const f of GUIDES) {
-    assert.match(flat(f), /The download can look stuck at 0%: a click into the PowerShell window pauses it \(Windows then selects text\), and Enter once lets it go on\. A window "Welcome to WSL" may open by itself: close it\./, f)
+    assert.match(flat(f), /The download can look stuck at 0%: a click into the PowerShell window pauses it \(Windows then selects text\); Enter once lets it go on\. A window "Welcome to WSL" may open by itself: close it\./, f)
   }
 })
 

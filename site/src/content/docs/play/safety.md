@@ -1,12 +1,12 @@
 ---
 title: Safety and your limits
-description: Why the agent can never spend more than you allow, and how it plays fair.
+description: Why the agent can never spend more than you allow and how it plays fair.
 ---
 
 ## Your limits are code, not a request
 
 The AI only **proposes**. Every action goes through an executor written in plain code, which checks it against the
-game rules and your limits right before it runs, and refuses what does not fit:
+game rules and your limits right before it runs and refuses what does not fit:
 
 - a **daily cap**, a **monthly budget** and a one-time **setup budget**, in USD at live prices;
 - a maximum per **entry fee or stake**, **shop payment**, **bid** and **swap**;
@@ -17,17 +17,17 @@ lost on the way, the payment stays counted until the agent can read what became 
 while, never too little. The registration fee is counted once, as FoxLeague takes it once: a registration that did
 not go through does not use up the setup budget for the next try.
 
-It also signs nothing while the MultiversX network is not producing blocks. Before every payment, and once more right
-before its signature, it checks that the network's newest blocks are under a minute old (a block normally comes about
-every second). When they are not, or when that cannot be read, nothing is booked or signed: the action is refused with
-the time of the last block, and the next plan tries again. Right before a signature a reading that failed is asked once
+It also signs nothing while the MultiversX network is not producing blocks. Before every payment (and once more right
+before its signature) it checks that the network's newest blocks are under a minute old (a block normally comes about
+every second). When they are not or when that cannot be read, nothing is booked or signed: the action is refused with
+the time of the last block and the next plan tries again. Right before a signature a reading that failed is asked once
 more a few seconds later, so one short blip of the gateway does not stop a payment halfway; a block that is too old is
 never asked again. What needs no payment goes on: lineups, training and casual games.
 
 ## The AI never holds your keys
 
 The AI sees a snapshot of the game, never your wallet or keys. It cannot build a transaction: it picks from a fixed
-list of actions (train, play, join, buy, bid...), each with checked arguments, and the executor builds and signs
+list of actions (train, play, join, buy, bid...), each with checked arguments; the executor builds and signs
 it. Text written by other players (team names, tournament titles) reaches it only as data, never as instructions.
 
 When FoxLeague changes a page of its manual, each plan reads that page's current text until a version of the agent
@@ -40,8 +40,8 @@ If you prefer, the dashboard can also pause the actions whose rules changed unti
 
 ## You stay in control
 
-- **Dry run first**: a new install only simulates, and an agent you add later follows the current mode. Going
-  live in the dashboard needs you to type `GO LIVE` and your password, and this machine's permission
+- **Dry run first**: a new install only simulates; an agent you add later follows the current mode. Going
+  live in the dashboard needs you to type `GO LIVE` and your password, plus this machine's permission
   (`AGENT_LIVE_ENABLED=1` in `.env`, asked by the installer); on Telegram it takes `/mode live confirm`,
   which only your own chat can send.
 - **Back to dry run** is one click. **Pause** stops one agent; the **Kill switch** stops every agent, even free actions.
@@ -55,7 +55,7 @@ If you prefer, the dashboard can also pause the actions whose rules changed unti
 - **Top-ups from Binance** move only with a one-time code you send on Telegram, only to an agent's own wallet,
   with a key that can only read and withdraw from one IP. A withdrawal whose answer was lost is never sent again
   by itself: it stays "not known" for 30 minutes from the moment it was sent, while the agent asks Binance what
-  became of it, and you check Binance first.
+  became of it; you check Binance first.
 
 ## What leaves your computer
 
@@ -67,7 +67,7 @@ The agent talks only to the services it needs:
   since your agents' copy; those requests carry nothing of yours. `AGENT_MANUAL_CHECK=0` in `.env` switches it off.
 - **Anthropic**: what the AI needs to plan and to answer you. That is the snapshot of the game, your strategy, the
   budget that is left, the recent activity and your conversation with the manager. Never your recovery words or keys.
-- **Telegram and Binance**, only when you set their keys: your messages and the agent's answers, and the top-ups
+- **Telegram and Binance**, only when you set their keys: your messages and the agent's answers; the top-ups
   you approve.
 - **GitHub**, about every 10 minutes and when you press **Check for updates** (the round arrow next to the version,
   at most once in 15 seconds): one request for the newest release of foxleague-agent, so the agent can tell you
@@ -83,12 +83,12 @@ release only when the signature is good, the version is newer than yours and the
 was signed, so a stolen GitHub account or a changed download cannot put other code on your computer.
 
 That is why an update needs no password: the button and `/upgrade` can start only that one thing. Nothing installs
-by itself, the running version is not touched while the new one is prepared, and a new version that does not start
+by itself. The running version is not touched while the new one is prepared; a new version that does not start
 is undone by itself ([Update](/help/update/)).
 
 ## A wallet only for the game
 
-Each agent plays from its own wallet, and the agent's key file can sign for everything that wallet holds. So
+Each agent plays from its own wallet; the agent's key file can sign for everything that wallet holds. So
 keep it a wallet made only for FoxLeague: no Guardian, no other assets, only the amount you set aside for the
 game, in small amounts that you top up daily, weekly or whenever it suits you. **+ Add agent** creates such a
 wallet. Your personal wallet, with its history and other assets, is better kept away from any automation
@@ -96,7 +96,7 @@ wallet. Your personal wallet, with its history and other assets, is better kept 
 
 ## Fair play
 
-FoxLeague's Fair Play rules allow automation on your own wallets for the actions the app offers, and prohibit its
+FoxLeague's Fair Play rules allow automation on your own wallets for the actions the app offers. They prohibit its
 abuse. The agent:
 
 - uses only public information, the same a player sees in the app;
@@ -105,11 +105,11 @@ abuse. The agent:
   teams are yours, so two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each
   other at auction, by chance (FoxLeague's Fair Play forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests;
 - protects itself from rivals trying to farm it (a 1v1 against a named team or one it joins only when that team is of
-  similar strength, at most two played 1v1s a week against the same team, a challenge nobody accepted not counting, and
+  similar strength; at most two played 1v1s a week against the same team, a challenge nobody accepted not counting;
   no third challenge in 7 days to a team that let two of its challenges expire unanswered; an
   open challenge, which any team inside its range may take, is posted only when the squad needs competitive matches it
   cannot get otherwise and always carries an OVR range around your team's own best XI OVR, its top at that rating, so
-  FoxLeague itself keeps every stronger team out, and none while your starters are too tired for
+  FoxLeague itself keeps every stronger team out; none while your starters are too tired for
   a fresh team of that rating);
 - joins a private tournament only when your team is invited (every level may create one);
 - takes no part in FoxLeague's referral programme (Invite Friends): it registers without an invitation, shares or uses
@@ -120,7 +120,8 @@ You remain responsible for your agents.
 ## Reviewed
 
 The code went through fourteen numbered adversarial reviews that tried to break the money limits, attack it from
-outside and break its security, then a review of CI and whole-project reviews before release. The last was a final
-audit before the public launch by six reviewers, one area each: the money limits, attacks from outside, rare cases,
-the game's own rules, the installer with its updates and these pages. Every finding was fixed with a test that
+outside and break its security, then a review of CI and whole-project reviews before release. The last were audits
+by teams of reviewers (one area each) and a final pass before the public launch. Their areas: the money limits,
+attacks from outside, rare cases, the game's own rules, the chain, the installers, the updater, the live agents' own
+records and these pages. Every finding was fixed with a test that
 proves it or weighed and decided; the few still open are listed in the review record.

@@ -35,7 +35,7 @@ new one. It never reads more than the last 50 messages (about 25 of yours with t
 what is above stays there for you to read back.
 
 There is one conversation for all your agents, the same one on every agent's page and on Telegram: you have one
-manager for all your teams. A message sent from an agent's page is about that agent unless you name others, and
+manager for all your teams. A message sent from an agent's page is about that agent unless you name others;
 the manager is told which agent each earlier message was about.
 
 **Clear** (on Telegram: `/clear`) empties the conversation at once. Use it when you change the subject: the AI is
@@ -59,7 +59,7 @@ Once Telegram is linked ([Your keys](/start/keys/)), you get a **summary every m
 yesterday per agent: what it did, what it spent, its rating and what its wallet is worth. When FoxLeague's manual
 changed since the copy your agents play by, it has one more line that names the pages, up to eight, then how many
 more ([Update](/help/update/#when-foxleagues-manual-changes)). Plans and action results
-wait for it, so many agents never flood your chat; `/updates all` sends every update as it happens again, and
+wait for it, so many agents never flood your chat; `/updates all` sends every update as it happens again;
 `/updates daily` goes back. A low-funds warning waits for the summary too, unless it comes with a top-up proposal.
 What you ask for yourself (`/do`, `/tick`) answers at once. Urgent messages always come at once: the kill switch, an internal error, a change of
 mode or keys, plans failing for a problem with the AI account (its key, credit or limits) or three times in a row
@@ -82,8 +82,8 @@ FoxLeague's manual or game settings since your agents' copy comes at once too, e
 | `/strategy [N\|all]` | Show the strategy |
 | `/strategy N\|all <preset or text>` | Replace it directly (presets: steady, climber, hunter, predator, beast, zeus). The limits stay as they are: set the level's limits in the dashboard |
 | `/clear` | Start a new conversation with the manager |
-| `/kill on\|off` | Stop every agent at once, or release |
-| `/summary [today]` | Yesterday per agent, or today so far |
+| `/kill on\|off` | Stop every agent at once (or release) |
+| `/summary [today]` | Yesterday per agent (or today so far) |
 | `/updates [daily\|all]` | Daily: plans and action results wait for the morning summary; all: every update as it happens |
 | `/upgrade` | Install the newest version of foxleague-agent when one is out, as **Update now** does in the dashboard: the agent restarts and says when it is back ([Update](/help/update/)) |
 | `/topup N` | Propose an EGLD top-up from Binance for agent N, with a one-time code |
