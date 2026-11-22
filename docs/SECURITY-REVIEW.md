@@ -3260,6 +3260,16 @@ team, Import by words and by PEM file, Remove, Retire and Restore): `main` merge
 videos rendered again, since the installer's AI key line changed (APIKEY-1; its number and every quote stay, 132 quoted
 lines, 0 changed). The release notes name Find my team, the bid rule and the $0.80 a day.
 
+The same day, the owner's text rules were applied to everything a user reads, each with a test that failed first: no
+em dash and no comma before "and" or "or" in the docs, the site, the dashboard and the installers (TEXT-2, 199
+rewritten) and in the strings the code shows: Telegram, the command line, the dashboard's answers plus the Activity rows
+(TEXT-3, 29 rewritten; `src/strategist/prompt.ts` byte-identical). Every number a user reads was checked against the code,
+FoxLeague's live settings and its manual (NUM-1, NUM-2: two corrected); the figures of a moment were made general:
+the EGLD of a day's exchange rate (NUM-3), the dollar examples of the levels page (NUM-4), no fixed EGLD to start
+(NUM-5), the AI cost sentence without the token count and the costs measured in our own testing (NUM-6). NUM-7 corrects
+a refusal reason: a change while an open challenge waits was refused "more than 10 percent below a fresh team" where the
+rule is a fresh team more than 10 percent stronger (`MAX_1V1_STRENGTH_RATIO`); the rule itself is unchanged.
+
 Stays open:
 - The release itself follows `docs/RELEASING.md`: this commit runs on the owner's server first, then the tag v1.0.0, the
   release built and signed with the owner's key (KEY-1) and published as the latest, the site from the same commit

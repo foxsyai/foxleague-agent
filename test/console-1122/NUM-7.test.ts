@@ -1,4 +1,4 @@
-// NUM-6: the owner, 2026-11-22, before the public release: every number in the text the code shows a person checked
+// NUM-7: the owner, 2026-11-22, before the public release: every number in the text the code shows a person checked
 // against the code (TEXT-3 holds the same text to the two text rules). One refusal said its number the wrong way round.
 // While an open challenge of ours waits, a change that weakens the eleven is refused when a team at the top of the
 // range would be more than 10 percent stronger than the eleven after it (top > eleven x MAX_1V1_STRENGTH_RATIO, 1.1).
@@ -11,7 +11,7 @@ import { TEST_SETTINGS, snapshot, tournament } from '../fixtures.ts'
 
 const ctx = (): RulesContext => ({ settings: { ...TEST_SETTINGS }, now: new Date() })
 
-test('NUM-6 the refusal of a change while an open challenge waits says the top of its range would be more than 10 percent stronger, as the rule counts', () => {
+test('NUM-7 the refusal of a change while an open challenge waits says the top of its range would be more than 10 percent stronger, as the rule counts', () => {
   assert.equal(MAX_1V1_STRENGTH_RATIO, 1.1, 'the margin the refusal names as 10 percent')
   // The fixture's eleven at condition 82 plays at OVR 18.2; training a starter takes 5 condition from it: 18.155.
   const s = snapshot()
