@@ -47,7 +47,7 @@ test('the command is /upgrade on Telegram and Update now in the dashboard, and n
   }
   // What the agent itself tells the owner to send.
   assert.doesNotMatch(raw('src/update/updater.ts'), /send \/update here/, 'the notice names /update, which the agent answers with "unknown command"')
-  assert.match(raw('src/update/updater.ts'), /send \/upgrade here, or press Update now in the dashboard/)
+  assert.match(raw('src/update/updater.ts'), /send \/upgrade here or press Update now in the dashboard/)
 })
 
 test('/status shows the version, and the pages say so', () => {
@@ -121,7 +121,7 @@ test('the installs that show the notice and cannot update themselves are named w
   const server = selfUpdateRefusal({ root: '/x', code: '/x', managed: false }, { isServer: true })
   const flat = selfUpdateRefusal({ root: '/nowhere-such', code: '/nowhere-such', managed: false })
   assert.equal(server, 'this agent runs on a server set up by hand: update it the way it was deployed')
-  assert.equal(flat, 'this install was not made by the one-line installer: paste the install line again once, and later updates are one click')
+  assert.equal(flat, 'this install was not made by the one-line installer: paste the install line again once; later updates are one click')
   assert.match(raw('src/update/install.ts'), /'this install is a git checkout: update it in a terminal with \.\/install\.sh --update'/)
   const page = read(UPDATE)
   assert.match(page, /A git checkout/)

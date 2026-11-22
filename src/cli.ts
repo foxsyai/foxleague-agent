@@ -299,7 +299,7 @@ async function main(): Promise<void> {
       writeFileSync(RECORD_FILE, `${JSON.stringify(manualRecord(repo, MANUAL_BRANCH, text, settings), null, 2)}\n`)
       writeFileSync(API_RECORD_FILE, `${JSON.stringify(shapes, null, 2)}\n`)
       console.log(`Wrote ${out}: ${pages} pages, ${Math.round(text.length / 1024)} KB (about ${Math.round(text.length / 2.7 / 1000)}k tokens; tables run about 2.7 characters a token), manual at ${commit}.`)
-      console.log(`Wrote ${RECORD_FILE}: the page record the check compares FoxLeague's manual with, and the keys of its game settings.`)
+      console.log(`Wrote ${RECORD_FILE}: the keys of FoxLeague's game settings and the page record the check compares its manual with.`)
       console.log(`Wrote ${API_RECORD_FILE}: the shapes of the ${Object.keys(shapes.routes).length} routes the agent calls, from FoxLeague's API description.`)
       console.log('Commit the three and deploy them; the strategist reads the manual at start.')
       return

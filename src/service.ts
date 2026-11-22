@@ -721,7 +721,7 @@ export class Service {
           const label = `${this.modelLabel(model)}${this.accountStop?.effort ? ` at ${this.accountStop.effort} effort` : ''}`
           return this.notify(`Plans with ${label} are failing: ${msg}. The agents that play ${this.modelLabel(model)} wait until it is fixed: the API key may not use that model or the account refuses it (Keys in the dashboard or the Anthropic console). Agents on other models plan as usual.`)
         }
-        return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard, or the Anthropic console for credit and limits).`)
+        return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard or, for credit and limits, the Anthropic console).`)
       }
       return this.report(`${agentName(index)} tick failed: ${msg}`)
     }
@@ -1416,7 +1416,7 @@ export class Service {
     if (!team) throw new Error('this wallet has no FoxLeague team. Register the team in the FoxLeague app first or use + Add agent for a new one')
     const [account, esdts, guarded] = await Promise.all([this.chain.account(address), this.chain.esdts(address), this.chain.guarded(address)])
     // Nothing an agent signs would go through: say so now, not after the import at the first transaction.
-    if (guarded) throw new Error('this wallet has a Guardian, so an agent cannot sign for it. Turn the Guardian off in your wallet first, or better, play with a wallet made only for FoxLeague')
+    if (guarded) throw new Error('this wallet has a Guardian, so an agent cannot sign for it. Turn the Guardian off in your wallet first or, better, play with a wallet made only for FoxLeague')
     const foxsy = esdts.find(e => e.tokenIdentifier === MAINNET.foxsyToken)
     const now = Date.now()
     for (const [t, p] of this.pendingImports) if (p.expires < now) this.pendingImports.delete(t)

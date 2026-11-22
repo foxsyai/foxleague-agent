@@ -188,7 +188,7 @@ export function shadowChoices(store: Store, playing: string | { model: string; e
     const e = entryOf(id)
     if (id === SAME) {
       const p = typeof playing === 'string' ? { model: playing, effort: null } : playing
-      if (!isKnownModel(p.model)) leftOut.push(`${SAME} needs a model of the list, and the one that plays (${String(p.model).slice(0, 60).replace(/[^\w.:-]/g, '?')}) is not`)
+      if (!isKnownModel(p.model)) leftOut.push(`${SAME} needs a model of the list but the one that plays (${String(p.model).slice(0, 60).replace(/[^\w.:-]/g, '?')}) is not`)
       // These two checks together are repeatRuns, with a reason each.
       else if (p.effort === null || !isEffort(p.effort)) leftOut.push(`${SAME} needs the effort that plays, which is not known here`)
       else {
@@ -197,11 +197,11 @@ export function shadowChoices(store: Store, playing: string | { model: string; e
         pairs.add(pair)
         repeat = { model: p.model, effort: p.effort }
       }
-    } else if (e.model === SAME) leftOut.push(`${named} has an effort, and ${SAME} takes none: it is the real plan's model and effort`)
+    } else if (e.model === SAME) leftOut.push(`${named} has an effort but ${SAME} takes none: it is the real plan's model and effort`)
     else if (!isKnownModel(e.model)) leftOut.push(`${named} is not a model on the list (${Object.keys(MODELS).join(', ')})`)
     else if (e.effort !== null && !isEffort(e.effort)) leftOut.push(`${named} has an effort that is not one of ${EFFORTS.join(', ')}`)
     else if (rests(id, playing)) {
-      leftOut.push(e.effort === null ? `${named} is the model that plays, and a shadow plan needs another one` : `${named} is the model and effort that play, and a shadow plan needs another model or effort`)
+      leftOut.push(e.effort === null ? `${named} is the model that plays; a shadow plan needs another one` : `${named} is the model and effort that play; a shadow plan needs another model or effort`)
     } else {
       const pair = `${e.model}:${e.effort ?? effort}`
       if (!pairs.has(pair)) models.push(id)

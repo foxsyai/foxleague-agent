@@ -56,7 +56,7 @@ export function selfUpdateRefusal(layout: Layout, o: { isServer?: boolean } = {}
   if (!layout.managed) {
     return existsSync(join(layout.code, '.git'))
       ? 'this install is a git checkout: update it in a terminal with ./install.sh --update'
-      : 'this install was not made by the one-line installer: paste the install line again once, and later updates are one click'
+      : 'this install was not made by the one-line installer: paste the install line again once; later updates are one click'
   }
   try {
     accessSync(join(layout.root, 'versions'), constants.W_OK)

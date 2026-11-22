@@ -29,7 +29,7 @@ test('FRESH-7: the notice of a new release names /upgrade, the command that inst
     await web.close()
   }
   assert.equal(said.length, 1)
-  assert.match(said[0]!, /^To install it: send \/upgrade here, or press Update now in the dashboard\./m)
+  assert.match(said[0]!, /^To install it: send \/upgrade here or press Update now in the dashboard\./m)
   assert.doesNotMatch(said[0]!, /\/update\b/, 'no command that Telegram does not know')
   // The command the notice names is one the service has.
   const service = readFileSync(join(REPO, 'src', 'service.ts'), 'utf8')
