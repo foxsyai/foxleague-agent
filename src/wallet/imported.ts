@@ -79,6 +79,57 @@ export function secretKeyFrom(input: ImportInput): UserSecretKey {
   }
 }
 
+/** How many accounts Find my team lists at a time. */
+export const FIND_ACCOUNTS = 20
+
+/**
+ * Find my team: the addresses of accounts `from` to `from + FIND_ACCOUNTS - 1` (never past 999) of recovery words or
+ * of a keystore that holds words, for the owner to see which one plays the team. Only addresses leave this function;
+ * each key is dropped as soon as its address is known. A PEM file or a keystore that holds one key has one account:
+ * the usual Check reads it. Errors never repeat what was pasted.
+ */
+export function accountAddresses(input: ImportInput, from: unknown = 0): { account: number; address: string }[] {
+  const start = from === undefined || from === null || from === '' ? 0 : Number(from)
+  if (!Number.isInteger(start) || start < 0 || start > 999) throw new Error('the first account to list is 0 to 999')
+  let words: Mnemonic
+  switch (input?.kind) {
+    case 'words': {
+      const text = String(input.words ?? '').trim().toLowerCase().split(/\s+/).join(' ')
+      try {
+        validateMnemonic(text)
+      } catch {
+        throw new Error('these are not valid recovery words (12 or 24 words from the standard list, in order)')
+      }
+      words = Mnemonic.fromString(text)
+      break
+    }
+    case 'keystore': {
+      let file: unknown
+      try {
+        file = JSON.parse(String(input.keystore ?? ''))
+      } catch {
+        throw new Error('this is not a keystore file (JSON)')
+      }
+      checkKdf(file)
+      if ((file as { kind?: unknown }).kind !== 'mnemonic') throw new Error('this keystore holds one account: press Check')
+      try {
+        // Opened once for every account (its key derivation is the slow part).
+        words = UserWallet.decryptMnemonic(file, String(input.password ?? ''))
+      } catch {
+        throw new Error('the keystore password is wrong or the file is not a MultiversX keystore')
+      }
+      break
+    }
+    case 'pem':
+      throw new Error('a PEM file holds one account: press Check')
+    default:
+      throw new Error('choose a keystore file or recovery words')
+  }
+  const out: { account: number; address: string }[] = []
+  for (let n = start; n < Math.min(start + FIND_ACCOUNTS, 1000); n++) out.push({ account: n, address: addressOfKey(words.deriveKey(n)) })
+  return out
+}
+
 export function addressOfKey(sk: UserSecretKey): string {
   return sk.generatePublicKey().toAddress('erd').toBech32()
 }

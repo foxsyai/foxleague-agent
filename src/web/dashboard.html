@@ -155,6 +155,19 @@ a.btn{display:inline-flex;align-items:center;justify-content:center;text-decorat
 #impbox textarea{resize:vertical;min-height:64px;font-family:ui-monospace,Menlo,monospace}
 #impbox input[type=file]{padding:7px 8px;font-size:12.5px}
 .impkinds{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 14px}
+.improw{display:flex;gap:8px;align-items:stretch}
+#impbox .improw input{flex:1;margin-bottom:0}
+.improw .btn{white-space:nowrap}
+.imphint{font-size:12px;color:var(--dim);margin:6px 0 12px}
+.implist{border:1px solid var(--line);border-radius:8px;max-height:260px;overflow:auto;margin:0 0 12px;background:var(--panel2)}
+.implist .irow{display:flex;align-items:center;gap:8px;padding:6px 10px;border-top:1px solid var(--line);font-size:12.5px}
+.implist .irow:first-child{border-top:0}
+.implist .inum{min-width:28px;color:var(--dim);text-align:right}
+.implist .iaddr{font-family:ui-monospace,Menlo,monospace;color:var(--dim)}
+.implist .iteam{flex:1;min-width:0;overflow-wrap:anywhere;color:var(--dim)}
+.implist .ihas .iteam{color:var(--fg);font-weight:600}
+.implist .ihead{color:var(--dim)}
+.implist .btn{padding:4px 10px;font-size:12px}
 .impkinds label{display:flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;cursor:pointer}
 .impkinds label:has(input:checked){border-color:var(--acc);color:var(--acc);background:rgba(245,165,36,.08)}
 .impkinds label:has(input:focus-visible){outline:2px solid var(--acc);outline-offset:2px}
@@ -426,7 +439,7 @@ form.settings label .info{width:13px;height:13px;font-size:9px;margin-left:4px}
     <div data-kind="pem"><label class="dlglabel" for="impPemFile">The PEM file of your team's wallet</label><input id="impPemFile" type="file" accept=".pem,text/plain"></div>
     <div data-kind="keystore" hidden><label class="dlglabel" for="impKsFile">The keystore file (.json) from the MultiversX web wallet</label><input id="impKsFile" type="file" accept=".json,application/json"><label class="dlglabel" for="impKsPw">The keystore password</label><input id="impKsPw" type="password" autocomplete="off"></div>
     <div data-kind="words" hidden><label class="dlglabel" for="impWords">Your recovery words, in order</label><textarea id="impWords" rows="3" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea></div>
-    <div data-kind="keystore words" hidden><label class="dlglabel" for="impAccount">Account number within the recovery words: 0 is the first (a keystore that holds one key ignores it)</label><input id="impAccount" type="number" min="0" max="999" value="0"></div>
+    <div data-kind="keystore words" hidden><label class="dlglabel" for="impAccount">Account number within the recovery words: 0 is the first (a keystore that holds one key ignores it)</label><div class="improw"><input id="impAccount" type="number" min="0" max="999" value="0"><button class="btn" type="button" id="impFind">Find my team</button></div><p class="imphint">Not sure which account holds your team? Find my team lists the first 20 accounts of these words with the team each one plays. It only reads FoxLeague's public profiles: nothing is signed or stored. FoxLeague sees the 20 addresses asked together.</p><div id="impList" class="implist" hidden></div></div>
     <p class="dlgwarn">Best is a wallet made only for FoxLeague, with no Guardian and only the amount you set aside for the game, not your personal wallet. A wallet with a Guardian is refused: an agent cannot sign for it. Nothing is stored until you check the team and confirm with your password.</p>
   </div>
   <div id="impStep2" hidden>
@@ -1075,7 +1088,12 @@ $('retwrap').addEventListener('click', e => { if (e.target.id === 'retwrap') clo
 // is stored); step 2 confirms with the password. The fields are cleared as soon as the server has the key.
 let impToken = null
 const impKind = () => document.querySelector('input[name=impKind]:checked').value
-function impShow() { for (const d of $('impStep1').querySelectorAll('[data-kind]')) d.hidden = !d.dataset.kind.split(' ').includes(impKind()) }
+// A Find my team list belongs to the key it was found with: any change to the key or its type clears it (R88A-2).
+let impGen = 0
+function impListClear() { impGen++; $('impList').hidden = true; $('impList').replaceChildren() }
+function impShow() { for (const d of $('impStep1').querySelectorAll('[data-kind]')) d.hidden = !d.dataset.kind.split(' ').includes(impKind()); impListClear() }
+for (const id of ['impWords', 'impKsPw']) $(id).addEventListener('input', impListClear)
+$('impKsFile').addEventListener('change', impListClear)
 for (const r of document.querySelectorAll('input[name=impKind]')) r.addEventListener('change', impShow)
 function impReset() { impToken = null; $('impbox').reset(); $('impStep1').hidden = false; $('impStep2').hidden = true; $('impOk').textContent = 'Check'; impShow() }
 function openImport() { impReset(); $('impwrap').classList.add('on'); $('impOk').focus() }
@@ -1118,6 +1136,52 @@ $('impbox').onsubmit = async e => {
     btn.disabled = false; btn.textContent = impToken ? 'Import team' : 'Check'
   }
 }
+// Find my team: the first 20 accounts of the words (or of a keystore that holds words), each with the team it plays.
+// A row with a team fills in its number and runs the usual Check; nothing is stored until the password confirms.
+async function impFindRun(from) {
+  const btn = $('impFind'); if (btn.disabled) return
+  btn.disabled = true
+  const gen = impGen
+  try {
+    const kind = impKind(), body = { kind, from }
+    if (kind === 'keystore') { body.keystore = await readKeyFile($('impKsFile').files[0]); body.password = $('impKsPw').value }
+    if (kind === 'words') { if (!$('impWords').value.trim()) throw new Error('paste the recovery words first'); body.words = $('impWords').value }
+    btn.textContent = 'Searching…'
+    const r = await api('POST', '/api/agents/import/find', body)
+    if (gen !== impGen) return // the key changed while FoxLeague answered: this list is not for the key in the fields
+    impShowFound(r.accounts, from)
+  } catch (err) {
+    toast(err.message || String(err), true)
+  } finally {
+    btn.disabled = false; btn.textContent = 'Find my team'
+  }
+}
+/** The first line of the list: the teams to import and the accounts FoxLeague could not answer, never "no team" for those (R88A-1). */
+function impFindHead(accounts, from) {
+  const last = accounts.length ? accounts[accounts.length - 1].account : from
+  const teams = accounts.filter(a => a.team && !a.agent && !a.own)
+  const unread = accounts.filter(a => a.unread).length
+  const found = teams.length === 1 ? 'one team, on account ' + teams[0].account : teams.length ? teams.length + ' teams' : ''
+  const missing = unread ? unread + ' could not be read, search again' : ''
+  return 'Accounts ' + from + ' to ' + last + ': ' + (missing ? (found || 'no team found yet') + '; ' + missing : found || 'no team to import here')
+}
+function impShowFound(accounts, from) {
+  const short = a => a.slice(0, 10) + '…' + a.slice(-6)
+  const last = accounts.length ? accounts[accounts.length - 1].account : from
+  const rows = [el('div', { class: 'irow ihead', text: impFindHead(accounts, from) })]
+  for (const a of accounts) {
+    const why = a.agent ? 'already ' + a.agent : a.own ? "this install's own account: use + Add agent" : a.unread ? 'could not be read, search again' : a.team ? '' : 'no team'
+    const row = el('div', { class: 'irow' + (a.team && !why ? ' ihas' : '') },
+      el('span', { class: 'inum', text: String(a.account) }),
+      el('span', { class: 'iaddr', text: short(a.address), title: a.address }),
+      el('span', { class: 'iteam', text: a.team ? a.team + (why ? ' · ' + why : '') : why }))
+    if (a.team && !why) row.append(el('button', { class: 'btn go', type: 'button', text: 'Use this one', onclick: () => { $('impAccount').value = String(a.account); $('impbox').requestSubmit() } }))
+    rows.push(row)
+  }
+  if (last < 999) rows.push(el('div', { class: 'irow' }, el('button', { class: 'btn', type: 'button', text: 'Show the next 20', onclick: () => impFindRun(last + 1) })))
+  $('impList').replaceChildren(...rows); $('impList').hidden = false
+}
+$('impFind').onclick = () => impFindRun(0)
 $('impCancel').onclick = closeImport
 $('impwrap').addEventListener('click', e => { if (e.target.id === 'impwrap') closeImport() })
 $('pauseBtn').onclick = () => { const b = agent(); act(b.paused ? 'Resumed' : 'Paused', () => api('POST', '/api/agents/' + sel + '/' + (b.paused ? 'resume' : 'pause'))) }

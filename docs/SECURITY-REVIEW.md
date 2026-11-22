@@ -3111,6 +3111,37 @@ Stays open:
   (`site/scripts/screenshots.ts`, `site/scripts/videos/src/capture.mjs`) use the new default for the next capture.
 - Production was not read and nothing was deployed.
 
+## Find my team (2026-11-22)
+
+The owner, before the public release: a player often has several wallets made from the same recovery words (xPortal
+and the web wallet derive account 0, 1, 2 ... from them) and the team may be on any of them. Import team checked one
+account number at a time, so a player who did not know it tried them one by one. **Find my team**, beside the account
+number in the import dialog, lists the first 20 accounts of the words (or of a keystore that holds words) with the
+team each one plays, like the account list of a wallet; **Use this one** fills in the number and runs the usual
+Check. The tests in `test/find-team/FIND.test.ts` failed before the change (no such search) and pass now; of the
+GitHub review's findings, R88A-1 to R88A-3 failed on `c983590` and pass now, R88A-4 (a stronger test of what was
+right) passes on both.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| FIND-1 | feature (the owner, 2026-11-22) | The account number had to be known: the check reads one account | `POST /api/agents/import/find` (dashboard login and CSRF as every write) answers the account numbers, addresses and team names of 20 accounts from `from` (0 to 999). `accountAddresses` (`src/wallet/imported.ts`) keeps only each address and drops its key at once; a keystore is opened once (`decryptMnemonic`) under the same KDF limit as the check. Nothing is stored and no session is opened: the team name comes from FoxLeague's public profile (`GET /api/users/{address}`), so no FoxLeague account is created for an empty wallet. The answer holds no key or word; errors never repeat what was pasted |
+| FIND-2 | rule 4 | A profile FoxLeague could not answer would read as "no team" | It is `unread` ("could not be read, search again"), never "no team" |
+| FIND-3 | hygiene | A double click would ask FoxLeague 40 times | One search at a time (a second one is refused until the first ends); a PEM file or a keystore with one key has one account and is sent to Check |
+| FIND-4 | what the owner sees | A wallet that is already an agent (or one of this install's own accounts) would be offered for import, then refused by the check | Named in its row ("already agent 2", "this install's own account: use + Add agent") with no **Use this one** |
+| R88A-1 | medium (rule 4, what the owner reads) | The GitHub review of PR #88: the list's first line counted accounts FoxLeague could not answer as "no team", so a failed read of the account with the team read "no team to import here" | `impFindHead` says "no team found yet; N could not be read, search again" (or the teams found, then the unread count); "no team to import here" only when every account was read |
+| R88A-2 | low (a check of the wrong account; the Check and the password step still show the real team) | The list stayed when the words, the keystore file or its password changed; a search that answered after a change of the key type was shown too: **Use this one** then checked that number of the new key | Any change to the key or its type clears the list (`impListClear`); a search drops an answer that comes back after a change |
+| R88A-3 | low (privacy, the owner's call) | One search tells FoxLeague that 20 addresses are asked together from one address, which the one-account Check never did | Said in the dialog ("FoxLeague sees the 20 addresses asked together.") and in the guide, with the way around it: type the account number instead |
+| R88A-4 | low (tests) | FIND-3 timed the keystore search; 20 openings fit in its 3 s | The test counts the openings: one `decryptMnemonic`, no per-account `decrypt` |
+
+What did not change: the check (`previewImport`) and the import itself, the password step, the one PEM file kept per
+imported team, the Guardian refusal. The team name is player-written text: it reaches only the dashboard, as text
+(`textContent`), never a prompt.
+
+Stays open:
+- FoxLeague sees the 20 addresses of a search asked together (R88A-3): the owner who minds types the account number.
+- A team on an account past 999 is not found (the account number stops there too).
+- The list shows the team name only; its overall, balances and Guardian come with the Check of the chosen account.
+
 ## GitHub review of PR #83 (2026-11-20)
 
 PR #83 drew the launch media again from `ae5421e`: the installer's credit line ("$10, about two weeks"), the three
