@@ -3253,6 +3253,13 @@ is the finding of its agent review.
 | R85A-1 | medium (agent review of PR #85; the release process, not a money path) | With the tree at 1.0.0, the fresh install check's first throwaway release, also 1.0.0, wrote its files back unchanged: `git commit` had nothing to commit and the check stopped at its step 2 ("the release could not be built"). The recipe of `docs/WINDOWS-TEST.md` uses the same tool | `mkrel.ts` in `scripts/release/fresh-install-check.sh` commits with `--allow-empty`, so a release of the version the tree has can be tagged. `test/launch-v1/FIC-1.test.ts` runs the tool as the script writes it, without Docker; it failed on 4948c2e ("nothing to commit") and passes now |
 | R85A-2 | low (re-review of PR #85; the tests) | `FIC-1`, `LAUNCH-1` and `docs-record` pinned the version 1.0.0: the version pull request of the next release would fail them. Once edited, `FIC-1` would no longer cover the empty commit | `FIC-1` builds the version the tree has; `LAUNCH-1` and `docs-record` hold a version of 1.0.0 or later, the same in `package.json` and both places of `package-lock.json`. Checked with the tree set to 1.0.1 for a moment: the three pass and `FIC-1` still fails without `--allow-empty` |
 
+Updated on 2026-11-22, after #87 to #89 reached `main` and the owner's test of the release candidate passed (Find my
+team, Import by words and by PEM file, Remove, Retire and Restore): `main` merged in; the twelve screenshots taken again
+(V1.0.0, the new AI key steps, the $0.80 cost line and the new texts) with a new one of Find my team
+(`import-team-find.png`, on the import page, taken by `site/scripts/screenshots.ts` on throwaway words); the three install
+videos rendered again, since the installer's AI key line changed (APIKEY-1; its number and every quote stay, 132 quoted
+lines, 0 changed). The release notes name Find my team, the bid rule and the $0.80 a day.
+
 Stays open:
 - The release itself follows `docs/RELEASING.md`: this commit runs on the owner's server first, then the tag v1.0.0, the
   release built and signed with the owner's key (KEY-1) and published as the latest, the site from the same commit

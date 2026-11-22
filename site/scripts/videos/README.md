@@ -7,7 +7,7 @@ own texts on example values. A changed sentence is one edit and a re-run, never 
 |---|---|---|
 | `site/public/videos/install-windows.mp4` and `.jpg` | 53.7 s, 5.4 MB (CRF 27) | `site/src/content/docs/start/install-windows.mdx` |
 | `site/public/videos/install-mac.mp4` and `.jpg` | 42.1 s, 5.3 MB (CRF 23) | `site/src/content/docs/start/install-mac.mdx` |
-| `site/public/videos/install-linux.mp4` and `.jpg` | 42.1 s, 5.7 MB (CRF 23) | `site/src/content/docs/start/install-linux.mdx` |
+| `site/public/videos/install-linux.mp4` and `.jpg` | 42.1 s, 5.8 MB (CRF 23) | `site/src/content/docs/start/install-linux.mdx` |
 
 1920x1080, 30 frames a second, H.264 High, yuv420p, no sound, the index at the front of the file (`+faststart`),
 under 6 MB each. The poster is the installer's Done screen.
@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit 50942e7 (2026-11-20): 132 quoted lines, 0 changed.
+Checked against commit 6b54f42 (2026-11-22): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
