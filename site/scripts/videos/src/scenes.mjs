@@ -94,7 +94,7 @@ export function build(os, { cw, boxes, shotNames, shotBase, fav }) {
   tl.wait(0.35).move(inTerm.x, inTerm.y, 0.5).click()
   tl.keys(WORDS.pasteKeys[os], 0.8).wait(0.15)
   if (os === 'windows') tl.out(T.ps.installLine())
-  else tl.out(seg(INSTALL_LINE_SH, null, { f: MDX(os), l: 42, frags: [INSTALL_LINE_SH] }))
+  else tl.out(seg(INSTALL_LINE_SH, null, { f: MDX(os), l: 37, frags: [INSTALL_LINE_SH] }))
   tl.wait(0.75).enter(0.12)
 
   // ---------------- 3. Windows only: get.ps1's own steps, Ubuntu's first start ----------------
@@ -192,7 +192,7 @@ export function build(os, { cw, boxes, shotNames, shotBase, fav }) {
     tl.lines(T.ps.uninstall()).out(T.ps.uninstallAsk()).wait(1.1).enter()
     tl.lines(T.ps.uninstallRun()).wait(0.3).lines(T.uninstall()).wait(0.2).lines(T.ps.uninstallEnd()).out(T.ps.prompt())
   } else {
-    const [l1, l2] = os === 'mac' ? [140, 141] : [143, 144]
+    const [l1, l2] = os === 'mac' ? [133, 134] : [136, 137]
     tl.type(seg('cd ~/foxleague-agent', null, { f: MDX(os), l: l1, frags: ['cd ~/foxleague-agent'] }), 16).wait(0.1).enter(0.05)
     if (os === 'linux') tl.title(TITLES.linux('~/foxleague-agent'))
     tl.out(T.prompt('~/foxleague-agent')).wait(0.3)

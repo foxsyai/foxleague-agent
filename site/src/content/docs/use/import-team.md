@@ -23,6 +23,8 @@ rating, record and badge. There is no new wallet and no new registration.
    in and the check runs. **Show the next 20** goes further, up to account 999. It only reads FoxLeague's public
    profiles: no login, no transaction and nothing stored. FoxLeague sees the 20 addresses asked together, from your
    address: if that matters to you, type the account number instead.
+
+   ![Find my team: the first 20 accounts of the words, with the team each one plays](/screenshots/import-team-find.png)
 3. Press **Check**. The dashboard shows the team it found, the wallet address and what the wallet holds. Nothing
    is stored yet.
 4. If it is your team, type your dashboard password and press **Import team**.

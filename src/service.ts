@@ -7,7 +7,7 @@ import { envFilePath, loadConfig, type Config } from './config.ts'
 import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
-import type { MatchFormations } from './foxleague/types.ts'
+import type { MatchFormations, Tournament } from './foxleague/types.ts'
 import type { MarketSale } from './snapshot/market.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
@@ -33,7 +33,7 @@ import { oneVOnesThisWeek, ownCreations, targetedRecord, weeklyFreeAt } from './
 import { MATCH_COOLDOWN_MS, MATCH_RUNS_MS, MAX_1V1_PER_OPPONENT_WEEK, MAX_UNANSWERED_PER_OPPONENT_WEEK, RANKED_COOLDOWN_MS } from './executor/rules.ts'
 import { casualStartsSince, gameDayStart, lastMatchStarts } from './executor/match-starts.ts'
 import { newDayHolds } from './executor/new-day.ts'
-import { MODELS, Strategist, agentChoice, currentModel, describeModelError, inheritedEffort, isKnownModel, isModelAccountError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
+import { MODELS, Strategist, agentChoice, currentModel, describeModelError, inheritedEffort, isKnownModel, isModelAccountError, isModelPermissionError, renderPlanRequest, strategistChoice, type Effort, type Plan } from './strategist/strategist.ts'
 import { SHADOW_KIND, SHADOW_TIMEOUT_MS, recordPlan, shadowChoices, shadowLine, shadowNote, shadowRuns, type RecordedPlan, type ShadowOutcome, type ShadowPlanRow } from './strategist/shadow.ts'
 import { ChatBusyError, Proposals, type Proposal } from './strategist/proposals.ts'
 import { retryPendingPayments } from './executor/pending.ts'
@@ -493,6 +493,12 @@ export class Service {
   private readonly busy = new Set<number>()
   /** A tick still making its plan (the snapshot, the AI), before its actions wait for their moments: Remove waits for it (R89A-12). */
   private readonly planning = new Set<number>()
+  /**
+   * Raised per agent by Remove and Retire: a tick reads it before its first wait and its plan before each step, and a
+   * changed value ends it quietly, so a plan that waited through a Remove (or a Retire) never runs for the team imported again (or
+   * restored) under the same number and resumed (LIFE-2, audit 2026-11-22).
+   */
+  private readonly generation = new Map<number, number>()
   /** Last snapshot per agent, for the web UI (refreshed at every tick and every action). */
   readonly snapshots = new Map<number, AgentSnapshot>()
   readonly proposals = new Proposals()
@@ -654,8 +660,12 @@ export class Service {
    * While the AI account refuses every plan (a usage or spend limit, the key, billing: isModelAccountError), the agent
    * that asks again at its own tick and when it last asked; the others skip the snapshot and the call (audit
    * 2026-11-16, P10). Cleared by a plan that works (said once) or by the asking agent failing for another reason.
+   * `model`: a 403 (permission denied) is the prober's model, which the key may not use: only the agents whose plan
+   * uses that model wait, and only a plan on it ends the stop (LIFE-1, audit 2026-11-22). Null for the account itself:
+   * a 401, billing, credit or a limit. One stop per model and one for the account, each with its own prober: two
+   * refused models no longer take one slot from each other (R85A-3).
    */
-  private accountStop: { prober: number; askedAt: number } | null = null
+  private readonly accountStops = new Map<string | null, { prober: number; askedAt: number; effort: string | null }>()
 
   /**
    * Why this agent's scheduled tick waits instead of asking the model, or null: an account stop another agent is asking
@@ -663,32 +673,77 @@ export class Service {
    * its random window and 5 minutes (paused, retired, outside its hours) hands over to the next agent that ticks.
    */
   private accountWait(index: number): string | null {
-    const stop = this.accountStop
-    if (!stop || stop.prober === index) return null
-    const prober = this.store.agent(stop.prober)
-    const window = prober && !prober.retired ? (prober.settings.tickMinutes + prober.settings.tickJitterMinutes + 5) * 60_000 : 0
-    if (Date.now() - stop.askedAt >= window) return null
-    return `the AI account refuses every plan: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+    const agent = this.store.agent(index)
+    const keys = this.stopKeys(agent ? this.aiOf(agent).model : null)
+    // The agent that asks for one of its stops asks: it speaks for both (a plan that works ends each one it covers).
+    if (keys.some(k => this.accountStops.get(k)?.prober === index)) return null
+    for (const model of keys) {
+      const stop = this.accountStops.get(model)
+      if (!stop) continue
+      const prober = this.store.agent(stop.prober)
+      const window = prober && !prober.retired ? (prober.settings.tickMinutes + prober.settings.tickJitterMinutes + 5) * 60_000 : 0
+      if (Date.now() - stop.askedAt >= window) continue
+      if (model !== null) return `the AI account refuses every plan with ${this.modelLabel(model)}: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+      return `the AI account refuses every plan: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+    }
+    return null
+  }
+
+  /** The stops a plan on `model` falls under: the account's and that model's (the account's alone for an unknown model). */
+  private stopKeys(model: string | null): (string | null)[] {
+    return model === null ? [null] : [null, model]
+  }
+
+  private modelLabel(model: string): string {
+    return MODELS[model]?.label ?? model
+  }
+
+  /** The models refused with a 403 apart from `model`, as the owner reads them ("Opus 5.5 and Sonnet 5.5"). */
+  private otherRefused(model: string): string {
+    const labels = [...this.accountStops.keys()].filter((m): m is string => m !== null && m !== model).map(m => this.modelLabel(m))
+    return labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}` : (labels[0] ?? '')
   }
 
   /**
    * A plan that failed. Routine (it waits for the summary) unless it needs the owner: a problem with the AI account
    * (said at once, at most once an hour whatever number of agents hit it) or an agent failing 3 plans in a row.
    */
-  private tickFailed(index: number, err: unknown, msg: string): void {
+  private tickFailed(index: number, err: unknown, msg: string, asked?: { model: string; effort: string }): void {
     const streak = (this.failStreak.get(index) ?? 0) + 1
     this.failStreak.set(index, streak)
     // Keyed by the problem, not by the call: Anthropic's error text carries a request id that differs on every call
     // (audit 2026-11-16, BEH-1).
-    const problem = alertKey(msg)
+    let problem = alertKey(msg)
+    let stopModel: string | null = null
     // An account stop: this agent asked last. A failure of another kind frees the others (it may be this agent's own).
-    if (isModelAccountError(err)) this.accountStop = { prober: index, askedAt: Date.now() }
-    else if (this.accountStop?.prober === index) this.accountStop = null
+    if (isModelAccountError(err)) {
+      // A 403 is the model this plan was asked from, which the key may not use (LIFE-1); any other account error is the
+      // account itself.
+      const row = asked ? null : this.store.agent(index)
+      const ai = asked ?? (row ? this.aiOf(row) : null)
+      const model = isModelPermissionError(err) && ai ? ai.model : null
+      stopModel = model
+      const effort = model !== null && ai ? ai.effort : null
+      // The stops this agent asked for that answered otherwise now end (a 403 after a 401: the key works again).
+      for (const [key, stop] of this.accountStops) if (stop.prober === index && key !== model) this.accountStops.delete(key)
+      this.accountStops.set(model, { prober: index, askedAt: Date.now(), effort })
+      if (model !== null) problem = `${problem}:${model}`
+    } else for (const [key, stop] of this.accountStops) if (stop.prober === index) this.accountStops.delete(key)
     if (isModelAccountError(err)) {
       const last = this.alertedAt.get(problem) ?? 0
       if (Date.now() - last >= 3600_000) {
         this.alertedAt.set(problem, Date.now())
-        return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard, or the Anthropic console for credit and limits).`)
+        const model = stopModel
+        if (model !== null) {
+          const effort = this.accountStops.get(model)?.effort
+          const label = `${this.modelLabel(model)}${effort ? ` at ${effort} effort` : ''}`
+          const others = this.otherRefused(model)
+          const rest = this.accountStops.has(null)
+            ? 'The account itself refuses plans too: every agent waits.'
+            : others ? `Plans with ${others} are refused too; agents on any other model plan as usual.` : 'Agents on other models plan as usual.'
+          return this.notify(`Plans with ${label} are failing: ${msg}. The agents that play ${this.modelLabel(model)} wait until it is fixed: the API key may not use that model or the account refuses it (Keys in the dashboard or the Anthropic console). ${rest}`)
+        }
+        return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard or, for credit and limits, the Anthropic console).`)
       }
       return this.report(`${agentName(index)} tick failed: ${msg}`)
     }
@@ -1383,7 +1438,7 @@ export class Service {
     if (!team) throw new Error('this wallet has no FoxLeague team. Register the team in the FoxLeague app first or use + Add agent for a new one')
     const [account, esdts, guarded] = await Promise.all([this.chain.account(address), this.chain.esdts(address), this.chain.guarded(address)])
     // Nothing an agent signs would go through: say so now, not after the import at the first transaction.
-    if (guarded) throw new Error('this wallet has a Guardian, so an agent cannot sign for it. Turn the Guardian off in your wallet first, or better, play with a wallet made only for FoxLeague')
+    if (guarded) throw new Error('this wallet has a Guardian, so an agent cannot sign for it. Turn the Guardian off in your wallet first or, better, play with a wallet made only for FoxLeague')
     const foxsy = esdts.find(e => e.tokenIdentifier === MAINNET.foxsyToken)
     const now = Date.now()
     for (const [t, p] of this.pendingImports) if (p.expires < now) this.pendingImports.delete(t)
@@ -1485,6 +1540,7 @@ export class Service {
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)
     this.store.removeImportedAgent(index)
+    this.generation.set(index, (this.generation.get(index) ?? 0) + 1)
     deleteImportedKey(this.cfg.dataDir, agent.address)
     this.wallets.delete(index)
     this.snapshots.delete(index)
@@ -1522,6 +1578,7 @@ export class Service {
       foxsy: snap?.chain ? formatAtomic(snap.chain.foxsy, 0) : null,
       usd: usd === null ? null : Math.round(usd * 100) / 100,
     })
+    this.generation.set(index, (this.generation.get(index) ?? 0) + 1)
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)
     this.snapshots.delete(index)
@@ -1618,11 +1675,17 @@ export class Service {
     this.timers.set(index, setTimeout(() => void this.tick(index, undefined, { scheduled: true }).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
   }
 
-  /** Sleeps like setTimeout but wakes at once when the service stops. */
+  /**
+   * Sleeps like setTimeout but wakes at once when the service stops, and does not sleep at all once it began to stop
+   * (an abort listener added then never fires). Its listener goes when its timer fires (LIFE-3, audit 2026-11-22).
+   */
   private pause(ms: number): Promise<void> {
+    const signal = this.stopSignal.signal
+    if (signal.aborted) return Promise.resolve()
     return new Promise(resolve => {
-      const t = setTimeout(resolve, ms)
-      this.stopSignal.signal.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true })
+      const onStop = () => (clearTimeout(t), resolve())
+      const t = setTimeout(() => (signal.removeEventListener('abort', onStop), resolve()), ms)
+      signal.addEventListener('abort', onStop, { once: true })
     })
   }
 
@@ -1853,11 +1916,13 @@ export class Service {
 
   async tick(index: number, ownerRequest?: string, o: { loud?: boolean; scheduled?: boolean } = {}): Promise<string> {
     if (o.loud) {
+      // Only what it added: a plan the owner started before (still running, so this tick is refused) stays loud (LIFE-4).
+      const added = !this.loud.has(index)
       this.loud.add(index)
       try {
         return await this.tick(index, ownerRequest)
       } finally {
-        this.loud.delete(index)
+        if (added) this.loud.delete(index)
       }
     }
     // Only a plan with no action makes the next one wait twice the tick: any other outcome of this tick does not.
@@ -1867,6 +1932,9 @@ export class Service {
     const agent = this.store.agent(index)!
     this.busy.add(index)
     this.planning.add(index)
+    // Read before the first wait: a Retire while the plan is still being made ends it too (R85A-4).
+    const generation = this.generation.get(index) ?? 0
+    let asked: { model: string; effort: string } | undefined
     try {
       await this.retryPending(agent)
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
@@ -1874,6 +1942,8 @@ export class Service {
       const waits = o.scheduled ? this.accountWait(index) : null
       if (waits) return waits
       const snap = await this.snapshot(index, true)
+      // A stop that began while the snapshot was read: no plan is asked for (or paid) now (LIFE-3).
+      if (this.stopping) return 'stopping'
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
       // League + Knockout invitations reach the owner (the agent decides on them within the limits, join_tournament);
@@ -1890,12 +1960,22 @@ export class Service {
         this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: 'snapshot taken; no strategist (ANTHROPIC_API_KEY not set)', detail: { warnings: snap.warnings } })
         return 'snapshot only (no strategist key)'
       }
-      if (this.accountStop) this.accountStop = { prober: index, askedAt: Date.now() }
+      if (this.stopping) return 'stopping'
+      // The model and effort this plan is asked from (makePlan reads the same): an account stop on one model is that model's.
+      asked = this.aiOf(agent)
+      for (const key of this.stopKeys(asked.model)) {
+        const stop = this.accountStops.get(key)
+        if (stop) this.accountStops.set(key, { ...stop, prober: index, askedAt: Date.now() })
+      }
       const plan = await this.makePlan(agent, snap, ownerRequest)
       this.failStreak.delete(index)
-      if (this.accountStop) {
-        this.accountStop = null
-        this.notify(`Plans work again: ${agentName(index)}'s plan went through. The agents that waited plan at their next tick.`)
+      // A plan that works ends the account's stop and its own model's, no other model's (R85A-3).
+      const ended = this.stopKeys(asked.model).filter(k => this.accountStops.delete(k))
+      if (ended.length) {
+        const others = this.otherRefused(asked.model)
+        const still = others ? ` Plans with ${others} are still refused.` : ''
+        const what = ended.includes(null) ? 'Plans' : `Plans with ${this.modelLabel(asked.model)}`
+        this.notify(`${what} work again: ${agentName(index)}'s plan went through. The agents that waited plan at their next tick.${still}`)
       }
       // What the plan weighed goes with its private creates: each action reads a fresh snapshot, up to 0.8 of a tick later.
       // No private split served: it was told the public one. An unread config told it nothing: no private create from this plan.
@@ -1912,7 +1992,7 @@ export class Service {
       if (!plan.actions.length) this.quiet.add(index)
       // From here the plan's actions wait for their moments and read the agent before each one (Remove may go).
       this.planning.delete(index)
-      const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
+      const running = this.runPlan(agent, plan.actions, !ownerRequest, snap, generation)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
       this.startShadow(index, plan)
@@ -1921,7 +2001,7 @@ export class Service {
     } catch (err) {
       const msg = describeModelError(err)
       this.store.log({ agentIndex: index, kind: 'tick', status: 'error', summary: msg })
-      this.tickFailed(index, err, msg)
+      this.tickFailed(index, err, msg, asked)
       return msg
     } finally {
       this.planning.delete(index)
@@ -2158,8 +2238,10 @@ export class Service {
   private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
     const now = new Date()
     const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
-    // Its own 1v1s another team has taken now count as accepted (BEH-2).
-    const seated = new Set((snap.auth?.myTournaments?.active ?? []).filter(t => t.max_teams === 2 && typeof t.participant_count === 'number' && t.participant_count >= 2).map(t => t.id))
+    // Its own 1v1s another team has taken now count as accepted (BEH-2). FoxLeague's /tournaments/my carries no seat
+    // count; the public list does (INT-3, audit 2026-11-22).
+    const seats = (t: Tournament) => (typeof t.participant_count === 'number' ? t.participant_count : snap.market.openChallenges.find(x => x.id === t.id)?.participant_count)
+    const seated = new Set((snap.auth?.myTournaments?.active ?? []).filter(t => t.max_teams === 2 && (seats(t) ?? 0) >= 2).map(t => t.id))
     const targeted = [...targetedRecord(this.store, agent.index, dry, now, seated)].map(([userId, r]) => ({ userId, sent: r.sent, accepted: r.accepted, unanswered: r.unanswered.length, freeAt: weeklyFreeAt(r.unanswered, MAX_UNANSWERED_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
     return { ...snap, oneVOnes: { week, targeted }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
   }
@@ -2170,8 +2252,11 @@ export class Service {
    * deadlines come from `planSnap`, the snapshot the plan was made from; without one every deadline is unread and its
    * action runs early. Routine actions pass the per-action probability; owner requests always run.
    */
-  private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot): Promise<void> {
+  private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot, generation: number = this.generation.get(agent.index) ?? 0): Promise<void> {
     if (!actions.length) return
+    // `generation`: read by the tick before it began (now when not given). A Remove or a Retire since then ends the plan at its next step,
+    // whatever comes back under the number (LIFE-2, R85A-4).
+    const same = () => (this.generation.get(agent.index) ?? 0) === generation
     // The share the starts a snapshot or a refusal suggests leave room for (slots.ts, planLeadMs and nextPlanLeadMs).
     let windowMs = routine ? agent.settings.tickMinutes * 60_000 * PLAN_WINDOW_SHARE : 0
     // Never spread past our next strategy lock: a sync or a recovery meant for that match must land before it.
@@ -2231,7 +2316,7 @@ export class Service {
       last = at
       const wait = start + at - Date.now()
       if (wait > 0) await this.pause(wait)
-      if (this.stopping) return
+      if (this.stopping || !same()) return
       const current = this.store.agent(agent.index)
       if (!current || current.paused || this.store.killSwitch) return
       if (current.dryRun !== plannedDry) {
@@ -2249,7 +2334,7 @@ export class Service {
       const snap = await this.snapshot(agent.index)
       // A stop that came while the snapshot was read (tens of seconds): the action is not started. Nor for a team
       // removed meanwhile: the plan ends here, quietly (R89A-14).
-      if (this.stopping || !this.store.agent(agent.index)) return
+      if (this.stopping || !this.store.agent(agent.index) || !same()) return
       if (!planned.piece && extensions.splitAction && !beforeLock) {
         const pieces = extensions.splitAction(planned, snap, current.settings)
         if (pieces && pieces.length > 1) {
@@ -2425,6 +2510,9 @@ export class Service {
           const [r] = await this.executor.run(this.store.agent(i!)!, this.wallet(i!), snap, [planned])
           return r ? formatResult(i!, r) : 'nothing ran'
         }
+        // Paused, the kill switch, a plan still running: the owner hears why, not "planning" (LIFE-4).
+        const refusal = this.tickRefusal(i!, request)
+        if (refusal) return refusal
         void this.tick(i!, request, { loud: true })
         return `${agentName(i!)}: planning "${request}"`
       }

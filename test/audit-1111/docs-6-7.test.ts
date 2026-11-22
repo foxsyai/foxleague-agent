@@ -64,7 +64,7 @@ test('DOCS-7 INSTALL.md, the README and the Windows page say the same of Windows
     assert.match(text, /does not start with Windows/, f)
   }
   assert.match(read('README.md'), /On Windows the agent runs while Ubuntu \(WSL\) runs/)
-  assert.match(read(WINDOWS), /\| \*\*The agent stops when I close Ubuntu, or after Windows restarts\*\* \|/, 'no row for an agent that stops when the Ubuntu window is closed')
+  assert.match(read(WINDOWS), /\| \*\*The agent stops when I close Ubuntu or after Windows restarts\*\* \|/, 'no row for an agent that stops when the Ubuntu window is closed')
   assert.match(read(TROUBLE), /\[Install on Windows\]\(\/start\/install-windows\/#if-it-gets-stuck\)/, 'Troubleshooting does not lead to the Windows rows')
 })
 
@@ -96,7 +96,7 @@ test('the install pages give the Node.js rule of the installer and of package.js
   assert.equal((JSON.parse(raw('package.json')) as { engines: { node: string } }).engines.node, '>=22.18.0 <23 || >=24.2.0')
   assert.match(raw('install.sh'), /\(a===22&&b>=18\)\|\|\(a===24&&b>=2\)\|\|a>24/)
   for (const f of [...SYSTEMS, 'INSTALL.md']) {
-    assert.match(read(f), /\(22 from 22\.18, or 24\.2 and later, with npm beside it\), otherwise downloads a private copy[^|]*and checks it against the SHA-256 written in the installer/, f)
+    assert.match(read(f), /\(22 from 22\.18 or 24\.2 and later, with npm beside it\), otherwise downloads a private copy[^|]*and checks it against the SHA-256 written in the installer/, f)
   }
   for (const f of [INSTALL_PAGE, ...SYSTEMS]) assert.doesNotMatch(read(f), /if it is recent enough/, f)
 })

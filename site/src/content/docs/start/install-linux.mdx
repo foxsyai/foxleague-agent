@@ -1,12 +1,9 @@
 ---
 title: Install on Linux
 description: Install the FoxLeague agent on Linux with systemd with one line in a terminal, step by step.
-banner:
-  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
 ---
 
 import { Aside } from '@astrojs/starlight/components';
-import ComingSoon from '../../../components/ComingSoon.astro';
 
 <video controls preload="none" poster="/videos/install-linux.jpg" width="1920" height="1080" style={{ width: '100%', height: 'auto', borderRadius: '8px' }}>
   <source src="/videos/install-linux.mp4" type="video/mp4" />
@@ -28,7 +25,7 @@ after you log out and after a restart, for as long as the computer is on and awa
 - **curl.** Ubuntu Desktop comes without it: install it first with `sudo apt install curl`. Use this one, not the
   snap that Ubuntu's hint offers: the apt one is the one the install is tested with.
 - **Internet**, for the agent and its Node.js.
-- About 5 EGLD to send to your agent and an AI key from Anthropic ([Your keys](/start/keys/)). Both can come after
+- Some EGLD to send to your agent (enough for the 5,000 FOXSY registration, the 1 EGLD gas reserve and the first games) and an AI key from Anthropic ([Your keys](/start/keys/)). Both can come after
   the install.
 
 ## The line to paste
@@ -36,13 +33,9 @@ after you log out and after a restart, for as long as the computer is on and awa
 Open a terminal (on Ubuntu: Ctrl+Alt+T). Copy this line (the button at its right copies it), paste it with
 Ctrl+Shift+V and press Enter:
 
-<ComingSoon>
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 ```
-
-</ComingSoon>
 
 The line downloads the newest release into `~/foxleague-agent`, checks the download against the release's
 checksum and starts the guided installer.
@@ -51,10 +44,10 @@ To install a given version, put it in front: `curl -fsSL .../get.sh | FOXAGENT_V
 version is not put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway
 (the settings and limits the newer version added are then not applied). Another folder is named with
 `FOXAGENT_DIR`; it must be empty or hold an install of foxleague-agent. Your user has one background service: when it already runs the agent of another folder, the installer stops
-before the first question and says how to go on (`./install.sh --uninstall` in that folder first, or
+before the first question and says how to go on (`./install.sh --uninstall` in that folder first or
 `./install.sh --no-service` here). With git instead:
 `git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`. A git checkout
-follows its branch: `./install.sh --update` pulls it, and that may be code that is in no release yet.
+follows its branch: `./install.sh --update` pulls it; that may be code that is in no release yet.
 
 ## What you will see, step by step
 
@@ -64,7 +57,7 @@ user's systemd are there, so a missing one is said at once. Then it says each st
 
 | Step | What happens |
 |---|---|
-| 1/7 Node.js and dependencies | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. Nothing is installed for the whole system. |
+| 1/7 Node.js and dependencies | Uses the Node.js on your computer when the agent runs on it (22 from 22.18 or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. Nothing is installed for the whole system. |
 | 2/7 Your wallet | Creates a new wallet for your first agent and shows its **recovery words once**. Write them on paper, then type `yes`. |
 | 3/7 Dashboard login | You choose a username (3 to 32 letters or digits), a password (12 characters or more, typed twice) and a port (8870 by default). There is no default username: Enter alone is refused. A password that is too short or typed differently the second time is asked for again. A port that another program already uses is refused and the next one is offered. |
 | 4/7 Keys | The AI key, Telegram and the CEX top-up, each with simple steps and links. Nothing you paste is shown. Enter at a key skips it: every key can be added later in the dashboard. |
@@ -92,7 +85,7 @@ your agent and going live. Next: [Your keys, step by step](/start/keys/).
 in. It plays while the computer is on and awake: a laptop that sleeps (its lid closed) plays nothing until it
 wakes.
 
-**On a server without a desktop** the dashboard listens on that machine only (127.0.0.1), and the installer does
+**On a server without a desktop** the dashboard listens on that machine only (127.0.0.1); the installer does
 not offer a browser. From your own computer, open an SSH tunnel and leave it open:
 `ssh -L 8870:localhost:8870 you@your-server`. Then open `http://localhost:8870` on your own computer. Never open the
 port to the internet. For a server with its own user for the agent and the dashboard behind nginx on your own
@@ -109,7 +102,7 @@ there first with `cd ~/foxleague-agent`. The logs and the restart work from any 
 
 **Run the installer again** at any time with `./install.sh` in the `foxleague-agent` folder: it keeps your
 wallet, login and keys. It asks again for the port, the keys and the live permission, each with your earlier
-answer as the default. At "Enter keys now?" Enter means no on every later run: the keys stay as they are, and you
+answer as the default. At "Enter keys now?" Enter means no on every later run: the keys stay as they are; you
 change them in the dashboard. Pressing Enter at the live permission keeps it as `.env` has it: on only when it
 already says 1 or true.
 
@@ -118,7 +111,7 @@ already says 1 or true.
 - **The version** you run is in the dashboard's header, for example `v1.0.0`. The round arrow next to it,
   **Check for updates**, asks now; by itself the agent asks about every 10 minutes.
 - **Update now.** When a new version is out, a notice under the header shows what is new and the **Update now**
-  button. Telegram tells you once too, and `/upgrade` there does the same. Nothing is installed by itself. The
+  button. Telegram tells you once too; `/upgrade` there does the same. Nothing is installed by itself. The
   update takes a minute or two: the dashboard is away for about half a minute and its page comes back by itself.
   Your wallet, keys, settings and history are kept.
 - **If the new version does not start**, it is undone by itself after about a minute and a half: the agent goes
@@ -145,14 +138,14 @@ cd ~/foxleague-agent
 ```
 
 It stops the background service, removes it and leaves your folder, wallet and PEM files in place. Everything the
-install added is in that folder, its own Node.js and the download cache of npm included: about 240 MB, and about
+install added is in that folder, its own Node.js and the download cache of npm included: about 240 MB; about
 280 MB once an update has kept the release before it (kept so that the update can be undone). The agent wallets
-may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
+may still hold funds. Keep the recovery words and delete the folder only when the wallets are empty.
 Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
 started yourself with `./run.sh`, for example), it says so and how to stop it.
 
 The installer turned on linger, which lets background services of your user start without a login. The uninstall
-leaves it on, because other services of yours may count on it, and says so: `loginctl disable-linger $USER` turns
+leaves it on (because other services of yours may count on it) and says so: `loginctl disable-linger $USER` turns
 it off.
 
 ## If it gets stuck
@@ -162,7 +155,7 @@ it off.
 | **"Command 'curl' not found"** or **"curl is needed and is not installed"** | Run `sudo apt install curl`, then paste the install line again. Use this one, not the snap: the apt one is the one the install is tested with. A missing tar is said the same way: `sudo apt install tar`. |
 | **"do not install the agent as root"** | Create a user for the agent: `adduser fox`, then `su - fox` and paste the line again. |
 | **"this machine does not run systemd"** | systemd keeps the agent running in the background. Without systemd: run `./install.sh --no-service` in the `foxleague-agent` folder, then start the agent yourself with `./run.sh`. In Ubuntu on Windows (WSL) the PowerShell line turns systemd on by itself ([Install on Windows](/start/install-windows/)). By hand there: make the line under `[boot]` in `/etc/wsl.conf` read `systemd=true` (add the two lines `[boot]` and `systemd=true` when the file has no `[boot]`), run `wsl --shutdown` in PowerShell, open Ubuntu again and run the installer again. |
-| **"the background services of the user ... cannot be reached from this terminal"** | The terminal was opened with `su` or `sudo` and the installer could not start the user's services from it. Log in as that user itself (a new terminal, or `ssh` to the machine as that user) and run the installer again. |
+| **"the background services of the user ... cannot be reached from this terminal"** | The terminal was opened with `su` or `sudo` and the installer could not start the user's services from it. Log in as that user itself (a new terminal or `ssh` to the machine as that user) and run the installer again. |
 | **"Job for foxleague-agent.service failed"** (or "Start request repeated too quickly") | systemd allows the agent five starts in ten minutes and then refuses the next one. Run `systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent`. The installer and `./install.sh --update` clear that count themselves before they restart the agent. |
 | **The agent stops when I log out** | Run `sudo loginctl enable-linger $USER` once. The installer turns linger on; when it could not, it said "the agent runs while you are logged in". |
 | **"Port ... is already used by another program on this machine"** | Another program listens on that port. Type another port number; the installer offers the next one. |

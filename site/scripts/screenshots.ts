@@ -159,6 +159,19 @@ await shot('add-agent')
 await js(`$('pwCancel').click(); openImport()`)
 await sleep(400)
 await shot('import-team')
+// Find my team as it looks after a search (the demo has no FoxLeague to ask): one team on account 4. The box shows
+// plain text that is no recovery phrase (a picture of real words teaches pasting them where others can see them); the
+// list's addresses come from throwaway words that are never shown.
+const DEMO_BOX = 'example words only never use these as recovery words'
+const demoWords = Mnemonic.generate()
+const found = Array.from({ length: 20 }, (_, n) => ({ account: n, address: demoWords.deriveKey(n).generatePublicKey().toAddress('erd').toBech32(), team: n === 4 ? 'Vixen United' : null }))
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 1150, deviceScaleFactor: 1, mobile: false }) // the list below the dialog's fields
+await js(`document.querySelector('input[name=impKind][value=words]').click(); $('impWords').value = ${JSON.stringify(DEMO_BOX)}; impShowFound(${JSON.stringify(found)}, 0)`)
+await sleep(400)
+await shot('import-team-find')
+await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
+await js(`impReset()`)
+await sleep(300)
 // Step 2 as it looks after the check (the demo has no FoxLeague to ask).
 await js(`impToken = 'demo'; $('impFound').replaceChildren(el('div', { text: 'Vixen United · overall 64 · has a badge' }), el('div', { text: S.agents[1].address }), el('div', { text: '1.2500 EGLD · 3,120 FOXSY' })); $('impStep1').hidden = true; $('impStep2').hidden = false; $('impOk').textContent = 'Import team'`)
 await sleep(300)

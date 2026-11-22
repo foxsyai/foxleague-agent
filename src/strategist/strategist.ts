@@ -730,6 +730,11 @@ export function isModelAccountError(err: unknown): boolean {
   return false
 }
 
+/** A 403: the key may not use the model it asked for (or the account refuses it), not a fault of the whole account (LIFE-1). */
+export function isModelPermissionError(err: unknown): boolean {
+  return err instanceof Anthropic.PermissionDeniedError
+}
+
 export function describeModelError(err: unknown): string {
   if (err instanceof Anthropic.AuthenticationError) return 'Anthropic API key rejected'
   if (err instanceof Anthropic.PermissionDeniedError) return 'Anthropic API: permission denied (spend limit or model access)'

@@ -159,9 +159,9 @@ test('the pages say what the code does for the win chance, the podium rule, the 
   const pct = Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)
   assert.equal(pct, 10)
   // MONEY-2: never above the squad-only chance.
-  assert.match(levels, /the ELO expectation and the squad ratio, averaged, and never more than the two starting elevens alone give/)
+  assert.match(levels, /the ELO expectation and the squad ratio, averaged and never more than the two starting elevens alone give/)
   // MONEY-1: a lineup more than 10 percent above ours is clearly stronger at any ELO.
-  assert.match(levels, new RegExp(`its starting eleven is more than ${pct} percent stronger than ours, whatever its rating`))
+  assert.match(levels, new RegExp(`its starting eleven is more than ${pct} percent stronger than ours \\(whatever its rating\\)`))
   assert.match(plays, new RegExp(`an eleven more than ${pct} percent stronger than yours counts as clearly stronger whatever its rating`))
   // INTEG-1: the 1v1 match-fit count.
   assert.match(plays, /it counts 11 match-fit players among your 18 the way FoxLeague does, an injured one not among them and a tired outfield player relieved only by an outfield player from the bench \(never by the bench keeper\)/)

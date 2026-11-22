@@ -49,7 +49,7 @@ test('tournaments: refused when three seated teams are clearly stronger, so the 
   const join = { type: 'join_tournament', tournament_id: 301 } as const
   const three = checkAction(join, s, ctx({ tournament: d, field: field(3) }))
   assert.equal(three.ok, false)
-  assert.match((three as { refusal: string }).refusal, /3 seated teams are clearly stronger \(a lineup more than 10 percent above yours, or more than 5 percent with an ELO more than 50 above yours\): no real chance of the top three/)
+  assert.match((three as { refusal: string }).refusal, /3 seated teams are clearly stronger \(a lineup more than 10 percent above yours or more than 5 percent above yours with an ELO more than 50 above yours\): no real chance of the top three/)
   assert.equal(checkAction(join, s, ctx({ tournament: d, field: field(2) })).ok, true)
 })
 

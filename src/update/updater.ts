@@ -242,8 +242,8 @@ export class Updater {
       how !== null
         ? `To install it: ${how}.`
         : this.restarts
-          ? 'To install it: send /upgrade here, or press Update now in the dashboard. The agent restarts and tells you when it is back.'
-          : 'To install it: send /upgrade here, or press Update now in the dashboard. The new version then runs from the next start of the agent: nothing restarts it by itself here.',
+          ? 'To install it: send /upgrade here or press Update now in the dashboard. The agent restarts and tells you when it is back.'
+          : 'To install it: send /upgrade here or press Update now in the dashboard. The new version then runs from the next start of the agent: nothing restarts it by itself here.',
     ].join('\n')
   }
 

@@ -158,10 +158,16 @@ export function servedHost(req: IncomingMessage, bind: string): boolean {
 async function readBody(req: IncomingMessage, limit = 64 * 1024): Promise<string> {
   let size = 0
   const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    size += (chunk as Buffer).length
-    if (size > limit) throw new HttpFail(413, 'request body too large')
-    chunks.push(chunk as Buffer)
+  try {
+    for await (const chunk of req) {
+      size += (chunk as Buffer).length
+      if (size > limit) throw new HttpFail(413, 'request body too large')
+      chunks.push(chunk as Buffer)
+    }
+  } catch (err) {
+    if (err instanceof HttpFail) throw err
+    // A body cut short (the client closed the connection) is the client's: a fixed 400, no stack in the log (ATK-1).
+    throw new HttpFail(400, 'request cut short')
   }
   return Buffer.concat(chunks).toString('utf8')
 }

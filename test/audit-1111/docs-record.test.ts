@@ -90,8 +90,8 @@ test('what stays open is listed, and the list is true of the tree', () => {
   // True today; when one of these changes, its line goes.
   assert.equal(RELEASE_KEYS.length, 1, "one release key, the owner's (test/release-key/KEY-1.test.ts)")
   assert.match(readFileSync(new URL('install.sh', ROOT), 'utf8'), /^NODE_VERSION=v22\.22\.0$/m)
-  assert.match(readFileSync(new URL('README.md', ROOT), 'utf8'), /Status: in internal testing/)
-  assert.equal((JSON.parse(readFileSync(new URL('package.json', ROOT), 'utf8')) as { version: string }).version, '0.11.0')
+  assert.match(readFileSync(new URL('README.md', ROOT), 'utf8'), /Status: released\./)
+  assert.match((JSON.parse(readFileSync(new URL('package.json', ROOT), 'utf8')) as { version: string }).version, /^[1-9]\d*\.\d+\.\d+$/, 'past the first public release (1.0.0)')
   assert.ok(existsSync(new URL('docs/RELEASING.md', ROOT)))
   assert.doesNotMatch(readFileSync(new URL('get.sh', ROOT), 'utf8'), /--proto/)
 })

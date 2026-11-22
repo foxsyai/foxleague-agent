@@ -67,7 +67,7 @@ function filesUnder(dir: string): string[] {
 
 test('MAC-2: the folder size is the one measured on the Mac, said the same way in INSTALL.md and on the install page of each system, and nowhere 190 MB', () => {
   // Measured: Node.js (.node) 189 MB, each release folder 42 MB, npm's cache about 6 MB (in the folder since MAC-1).
-  const size = /about (\d+) MB, and about (\d+) MB once an update has kept the release before it/
+  const size = /about (\d+) MB; about (\d+) MB once an update has kept the release before it/
   const said = (f: string): number[] | undefined => size.exec(flat(f))?.slice(1, 3).map(Number)
   assert.deepEqual(said('INSTALL.md'), [240, 280], 'INSTALL.md')
   // (The Update page said it until 2026-11-15; the uninstall is now on the page of each system.)

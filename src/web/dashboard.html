@@ -529,7 +529,7 @@ function renderUpdate() {
   let text = '', notes = '', tone = '', button = false, again = false
   // u.restarts is false where no background service starts the agent again: the release is put in place and
   // u.waiting then holds what the owner does to start it.
-  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + (u.restarts === false ? '. This takes a minute or two. The agent keeps playing: it does not restart by itself here, and this notice then says how to start the new version.' : '. The agent restarts in a minute or two and this page comes back by itself.')
+  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + (u.restarts === false ? '. This takes a minute or two. The agent keeps playing: it does not restart by itself here; this notice then says how to start the new version.' : '. The agent restarts in a minute or two and this page comes back by itself.')
   else if (u.waiting) text = u.waiting.message
   else if (u.available && byTerminal) {
     text = recent.message + (recent.version === u.available.version ? '' : ' Version ' + u.available.version + ' is out too: ./install.sh --update installs the newest.')
@@ -981,7 +981,7 @@ async function loadState() {
     if (sel === null || !S.agents.some(b => b.index === sel)) { const r = recalled(); sel = S.agents.some(b => b.index === r) ? r : (S.agents[0] ? S.agents[0].index : null) }
     renderHeader(); renderAgentbar(); renderSetup()
     if (sel !== null) renderAgent()
-    else { $('loading').textContent = S.retired && S.retired.length ? 'Every agent is retired. Restore one from Retired, or add a new one.' : 'No agents yet.'; $('loading').hidden = false; $('agentview').hidden = true }
+    else { $('loading').textContent = S.retired && S.retired.length ? 'Every agent is retired. Restore one from Retired or add a new one.' : 'No agents yet.'; $('loading').hidden = false; $('agentview').hidden = true }
     if ($('retwrap').classList.contains('on')) renderRetired()
     renderChat()
   } catch (e) { if (e.message !== 'signed out' && !updating) toast('Could not load state: ' + e.message, true) }
@@ -1897,7 +1897,7 @@ const GUIDE = [
       ['Open API keys and press Create key. Where the console asks where your code runs, choose Somewhere else (an API key): the other choices sign in a command line tool the agent does not use. Name the key foxleague-agent, set Expires to Never and leave the rest as it is: a key that expires stops your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
+    note: 'About $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, over 100,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price; agents that plan within the same hour share the cache and pay far less for that text. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [
@@ -1922,7 +1922,7 @@ const GUIDE = [
     steps: [
       ['Buy EGLD on any exchange (for example Binance, Bybit or Bitget).'],
       ['Withdraw it to the wallet of agent 1 on the MultiversX (EGLD) network. The address is in Wallet and team, with a Copy button.'],
-      ['About 5 EGLD is a good start: 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.'],
+      ['Send enough EGLD to cover this: part of it buys the 5,000 FOXSY registration at the day\'s price (the EGLD and FOXSY prices are at the top of this page), 1 stays as the gas reserve, the rest pays the first games.'],
     ] },
   { id: 'live', title: 'Watch, then go live', need: false, done: () => S.instance.liveMode,
     intro: 'New agents start in dry run: they plan and simulate, nothing is paid and nothing is bought.',

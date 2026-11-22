@@ -96,7 +96,7 @@ test('MS-A how it plays, strategy levels, safety and the home page say what the 
   const home = read(`${DOCS}/index.mdx`)
   assert.match(plays, new RegExp(`For the ${FIELD_TOURNAMENTS} open Silver, Gold or paid Bronze tournaments it could join whose deadlines come first \\(up to ${FIELD_SEATS} seated teams each\\)`), 'A1 the field read')
   assert.match(levels, /a \*\*win chance\*\* for each team on its challenge list \(up to 10, first the teams that take 1v1s they had not arranged\)/, 'A2 the challenge list')
-  assert.match(levels, /For each team on its challenge list \(up to 10\) it reads the ELO and the lineup strength, ours at today's condition and theirs at full condition/, 'A2')
+  assert.match(levels, /For each team on its challenge list \(up to 10\) it reads the ELO and the lineup strength \(ours at today's condition and theirs at full condition\)/, 'A2')
   assert.match(levels, new RegExp(`over the last ${MARKET_WINDOWS[0]} days \\(${MARKET_WINDOWS[1]} or ${MARKET_WINDOWS[2]} days when fewer than ${MIN_TRADING_DAYS} days traded; with too few sales even then the agent sees no market price\\)`), 'A3 the market windows')
   assert.match(levels, /the settings the level would change \(moving up, those that fall short, raised to the level; moving down, those above it, lowered to the level\), each with a tick/, 'A4 the level proposal')
   assert.match(plays, /An open challenge can be taken by any team inside its OVR range, often within minutes: its range tops out at your team's own best XI OVR/, 'A5 open challenges at every level (OP-2, OP-4)')
@@ -108,7 +108,7 @@ test('MS-A how it plays, strategy levels, safety and the home page say what the 
   assert.match(plays, new RegExp(`its previous plan \\(summary and actions, up to ${PREVIOUS_PLAN_CHARS.toLocaleString('en-US')} characters\\)`), 'A11 the previous plan')
   assert.match(levels, /\(raising a limit or shortening the tick asks for your password\)/, 'A12')
   assert.match(safety, /raising a limit \(also a shorter tick, longer active hours, Gold back on or a smaller gas reserve\), switching to a dearer AI, releasing the kill switch and changing a key all ask for your password again/, 'A12')
-  assert.match(safety, /needs you to type `GO LIVE` and your password, and this machine's permission \(`AGENT_LIVE_ENABLED=1` in `\.env`, asked by the installer\)/, 'A13')
+  assert.match(safety, /needs you to type `GO LIVE` and your password, plus this machine's permission \(`AGENT_LIVE_ENABLED=1` in `\.env`, asked by the installer\)/, 'A13')
   assert.equal(LEVEL_SETTINGS.zeus!.tickMinutes, 60)
 })
 
@@ -129,7 +129,7 @@ test('MS-B the settings, dashboard and Telegram pages and the info bubbles say w
   for (const [name, text] of [['dashboard', dash], ['settings', settings], ['funds bubble', tip('funds')], ['topup bubble', tip('topup')], ['costs', read(`${DOCS}/help/costs.md`)]] as const) {
     assert.match(text, /with a Binance key, Telegram and the platform LIVE, a top-up proposal comes at once \(once a day per agent\)/i, `B5 ${name}`)
   }
-  assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password, and so do a higher count \(paid training, boosters or packs\), a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
+  assert.match(settings, /Lowering a limit is one click\. Raising one asks for your password; so do a higher count \(paid training, boosters or packs\), a smaller gas reserve, Gold amounts where there were none, a shorter tick and longer active hours\./, 'B6')
   assert.match(settings, /the Silver and Gold amounts, the paid training a day, the boosters and packs a week, the medicine days a week or the tick; your limits per rarity stay as they are\)/, 'B7 (the counts since the audit of 2026-11-06, DOCS-2; the medicine days since 2026-11-10)')
   assert.match(tip('strategy'), /the settings that do not fit it yet \(moving up, those under its values; moving down, those above them\), each with a tick, plus its recommended AI/, 'B8')
   assert.match(settings, /Each level up to the predator adds two Silver steps; the beast and Zeus add the 4,999 ceiling\./, 'B9')
@@ -142,7 +142,7 @@ test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.m
   // Since 2026-10-24 the manual is cached only when another call is due within the hour (test/cache-when-reused.test.ts).
   // The numbers of this sentence are tied to the code and to the manual's size in test/audit-1111/docs-4.test.ts (DOCS-4,
   // measured again on 2026-11-11): here only that the five places carry the same sentence.
-  const COST = /About \$0\.80 a day for a single agent with the default model, effort and tick \(Haiku 5\.5 at high, a plan every 2 hours inside 16 active hours, about \$0\.10 a plan\): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price\. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5\.5 at high effort averaged \$0\.15 a plan with the manual from the cache and \$0\.60 without\./i
+  const COST = /About \$0\.80 a day for a single agent with the default model, effort and tick \(Haiku 5\.5 at high, a plan every 2 hours inside 16 active hours, about \$0\.10 a plan\): every plan sends the rules and the game manual, over 100,000 tokens\. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price; agents that plan within the same hour share the cache and pay far less for that text\./i
   for (const f of [`${DOCS}/help/costs.md`, `${DOCS}/start/keys.mdx`, 'INSTALL.md', 'README.md']) {
     assert.doesNotMatch(read(f), /\$0\.20 to \$0\.50/, `C1 ${f} keeps the old AI cost`)
     assert.match(read(f), COST, `C1 ${f}`)

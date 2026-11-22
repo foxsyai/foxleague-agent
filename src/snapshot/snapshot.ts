@@ -923,7 +923,10 @@ export async function takeSnapshot(deps: SnapshotDeps, target: { wallet: AgentWa
       .slice(0, 16)
     eloPairs = []
     for (const userId of ids) {
-      const st = await fox.eloPair(wallet, userId).catch(() => null)
+      // FoxLeague answers live:false with meetings 0 when its own read of the switch fails: it did not count, so
+      // only an answer that says the cap is live is a count (INT-2, audit 2026-11-22).
+      const got = await fox.eloPair(wallet, userId).catch(() => null)
+      const st = got?.live === true ? got : null
       const meetings = typeof st?.meetings === 'number' && Number.isSafeInteger(st.meetings) && st.meetings >= 0 ? st.meetings : null
       const until = st?.no_elo === true && typeof st.no_elo_until === 'string' ? Date.parse(st.no_elo_until) : NaN
       eloPairs.push({ userId, meetings, noEloUntil: Number.isFinite(until) ? new Date(until).toISOString() : null })

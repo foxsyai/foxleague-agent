@@ -273,7 +273,7 @@ test('PAM-6 the setting: an entry may carry its effort (model:effort); each agen
     // The entry at the very model and effort that play rests; the same model at another effort runs.
     const atMedium = shadow.shadowChoices(store, { model: OPUS, effort: 'medium' }, 6)
     assert.deepEqual(atMedium.models, [`${OPUS}:low`, `${OPUS}:xhigh`])
-    assert.deepEqual(atMedium.leftOut, [`${OPUS}:medium is the model and effort that play, and a shadow plan needs another model or effort`])
+    assert.deepEqual(atMedium.leftOut, [`${OPUS}:medium is the model and effort that play; a shadow plan needs another model or effort`])
     // The other agents follow the all-agents list: none is set.
     for (const i of [null, 0, 5, 7]) assert.deepEqual(shadow.shadowChoices(store, opusHigh, i), { models: [], effort: 'medium', leftOut: [] }, String(i))
     store.setKv('shadow_model', HAIKU)
@@ -292,7 +292,7 @@ test('PAM-6 the setting: an entry may carry its effort (model:effort); each agen
     store.setKv('shadow_model_agent_2', `${HAIKU}, ${SONNET}:max`)
     assert.deepEqual(runs(opusHigh, 1), [{ model: HAIKU, effort: 'low' }, { model: SONNET, effort: 'max' }])
     // An entry without an effort still rests at its model whatever the effort: the settings of before run as before.
-    assert.deepEqual(shadow.shadowChoices(store, { model: HAIKU, effort: 'xhigh' }, 1).leftOut, [`${HAIKU} is the model that plays, and a shadow plan needs another one`])
+    assert.deepEqual(shadow.shadowChoices(store, { model: HAIKU, effort: 'xhigh' }, 1).leftOut, [`${HAIKU} is the model that plays; a shadow plan needs another one`])
     // An effort nobody knows: the entry is left out with its reason (never run at a guessed effort); the others run.
     store.setKv('shadow_model_agent_3', `${OPUS}:turbo, ${OPUS}:HIGH, ${OPUS}:, gpt-oss:low, ${HAIKU}:low`)
     const odd = shadow.shadowChoices(store, { model: SONNET, effort: 'high' }, 2)
@@ -322,7 +322,7 @@ test('PAM-6 the setting: an entry may carry its effort (model:effort); each agen
     // The settings of before read byte for byte as before, with the playing model given alone (no effort known).
     store.setKv('shadow_model', `${HAIKU}, ${OPUS}`)
     assert.deepEqual(shadow.shadowChoices(store, SONNET), { models: [HAIKU, OPUS], effort: 'medium', leftOut: [] })
-    assert.deepEqual(shadow.shadowChoices(store, OPUS), { models: [HAIKU], effort: 'medium', leftOut: [`${OPUS} is the model that plays, and a shadow plan needs another one`] })
+    assert.deepEqual(shadow.shadowChoices(store, OPUS), { models: [HAIKU], effort: 'medium', leftOut: [`${OPUS} is the model that plays; a shadow plan needs another one`] })
     assert.deepEqual(shadow.shadowModelsSet(store), [HAIKU, OPUS])
   } finally {
     for (const [i, k] of (['AGENT_SHADOW_MODEL', 'AGENT_SHADOW_EFFORT'] as const).entries()) {

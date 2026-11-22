@@ -1,6 +1,6 @@
 {
   "name": "foxleague-agent",
-  "version": "0.11.0",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "private": true,
   "description": "AI team manager for FoxLeague (MultiversX mainnet)",

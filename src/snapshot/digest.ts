@@ -417,7 +417,9 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
       const rf = s.rivalFormations?.find(r => r.tournamentId === m.tournament_id && r.opponent === m.opponent_name)
       out.push(`Upcoming: T${m.tournament_id} "${txt(m.tournament_title, 60)}" ${txt(m.round_label ?? '', 20)} vs ${m.opponent_name ? txt(m.opponent_name, 20) : 'TBD'} at ${when(m.scheduled_at)}, locks ${when(m.strategy_locks_at)} [${word(m.phase)}]${rf ? ` [${rivalText(rf.formations, rf.strength, lineupStrength(s))}]` : ''}${upcomingPairNote(s, m)}`)
     }
-    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} ${word(t.format)} ${word(t.status)} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && t.participant_count === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}${a.unseatedCreated?.includes(t.id) ? ` (created by you, with no seat of yours: take it with join_tournament${organizerFeesLive(s.config, new Date(s.takenAt)) ? ', or unfilled at its deadline it keeps your organizer deposit' : ''})` : ''}`)
+    // FoxLeague's /tournaments/my carries no seat count; the public list does (INT-3, audit 2026-11-22).
+    const seatsOf = (t: Tournament) => (typeof t.participant_count === 'number' ? t.participant_count : s.market.openStandard.find(x => x.id === t.id)?.participant_count)
+    for (const t of a.myTournaments?.active ?? []) out.push(`My active tournament: T${t.id} "${txt(t.title, 60)}" ${word(t.tier)} ${word(t.format)} ${word(t.status)} fee ${t.entry_fee_foxsy}${t.status === 'open' && leaveLockLive(s.config) && seatsOf(t) === t.min_teams ? ' (seats locked: at its minimum, no leave until more teams join)' : ''}${a.unseatedCreated?.includes(t.id) ? ` (created by you, with no seat of yours: take it with join_tournament${organizerFeesLive(s.config, new Date(s.takenAt)) ? ', or unfilled at its deadline it keeps your organizer deposit' : ''})` : ''}`)
     // Its own open creations with a range: FoxLeague lets the creator widen one while it is open for joining (only one
     // this agent created itself: a range the owner set with the same team is the owner's).
     for (const t of a.myTournaments?.active ?? []) {
@@ -448,6 +450,12 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     // lineup locks with it in the saved 18 (mainnet 2026-11-16, MNT-4). The agent lists none of its 18; the owner may.
     const auctioned = s.players.filter(p => p.listed && p.role !== 'reserve')
     if (auctioned.length) out.push(`LISTED IN YOUR 18: ${auctioned.map(p => `#${p.nonce}`).join(', ')}: a card in an auction does not play, and FoxLeague forfeits (3-0, the full K lost) your next tournament or 1v1 match whose lineup locks with ${auctioned.length === 1 ? 'it' : 'them'} in your 18; no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an 18 without ${auctioned.length === 1 ? 'it' : 'them'}`)
+    // FoxLeague's own-session roster leaves out every card the marketplace contract holds (roster_chain_view.rs), so a
+    // card of the saved 18 in an auction comes as no card at all, like one sold or sent away (INT-1, audit 2026-11-22).
+    // Said only when the roster was read: an unread roster is unknown, never "missing" (AGENTS.md rule 4).
+    const rosterRead = !s.warnings.some(w => w.startsWith('players: '))
+    const gone = rosterRead && s.team && !s.team.hidden ? [...new Set([...s.team.lineup, ...s.team.substitutes])].filter(n => !s.players.some(p => p.nonce === n)) : []
+    if (gone.length) out.push(`CARDS OF YOUR 18 NOT IN YOUR ROSTER: ${gone.map(n => `#${n}`).join(', ')}: sold, sent away or in an auction (the contract holds a card in an auction, so FoxLeague leaves it out of your roster); FoxLeague forfeits (3-0, the full K lost) your next tournament or 1v1 match whose lineup locks with ${gone.length === 1 ? 'it' : 'them'} in your 18; no match, 1v1 or entry runs until set_lineup (or set_formation with lineup and substitutes) saves an 18 without ${gone.length === 1 ? 'it' : 'them'}`)
     // FoxLeague sells no Shop item for a card in an auction (#752) and the executor refuses one (SYNC-2).
     const inAuction = s.players.filter(p => p.listed)
     if (inAuction.length) out.push(`In an auction (LISTED): ${inAuction.map(p => `#${p.nonce}`).join(', ')}: FoxLeague sells no Condition Recovery, Reduce Cooldown, Medicine or Fusion Match Waiver for a card in an auction and trains none until the auction ends; leave ${inAuction.length === 1 ? 'it' : 'them'} out of every purchase`)

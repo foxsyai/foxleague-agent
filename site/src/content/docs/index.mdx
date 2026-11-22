@@ -2,8 +2,6 @@
 title: Your AI team manager for FoxLeague
 description: An agent that trains, plays and levels up your FoxLeague team on MultiversX Supernova, within the limits you set.
 template: splash
-banner:
-  content: 'Coming soon: the one-line install and the code open to everyone with the public release. <a href="https://x.com/foxsy_ai">Follow FoxLeague on X</a> for the date.'
 hero:
   title: Your AI team manager
   tagline: An agent that trains, plays and levels up your FoxLeague team every day, inside the hours you choose, on MultiversX Supernova. You set the strategy and the limits; it never spends past them.
@@ -21,21 +19,16 @@ hero:
 ---
 
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
-import ComingSoon from '../../components/ComingSoon.astro';
 
 ## One line to start
 
 Linux, macOS or Windows through WSL2. Open a terminal and paste:
 
-<ComingSoon>
-
 ```sh
 curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh | bash
 ```
 
-</ComingSoon>
-
-On Ubuntu, install curl first: `sudo apt install curl`.
+On Ubuntu, install curl first: `sudo apt install curl`. The code is public: [github.com/foxsyai/foxleague-agent](https://github.com/foxsyai/foxleague-agent).
 
 On Windows the line is another one, pasted into PowerShell: see [Install on Windows](/start/install-windows/).
 Each system has its own page, step by step: [Windows](/start/install-windows/), [Mac](/start/install-mac/) and
@@ -57,7 +50,7 @@ in the background. Everything runs on your own computer: your recovery words and
 	</Card>
 	<Card title="Grows the squad" icon="puzzle">
 		Weighs the XP booster, paid training, Common packs, fusion and the marketplace against the numbers in the
-		game's economy map, and buys only what pays.
+		game's economy map and buys only what pays.
 	</Card>
 	<Card title="Stays inside your limits" icon="approve-check">
 		A daily cap, a monthly budget and a maximum per payment, all enforced in code. A new install starts in dry run;
@@ -70,12 +63,12 @@ in the background. Everything runs on your own computer: your recovery words and
 Every two hours at the first levels (up to every hour at Zeus), inside the hours you choose, the agent reads your team
 and the whole platform (tournaments, challenges, auctions, prices, your budget), asks the AI for a plan and runs it,
 action by action. Every action is checked against the game rules and your limits right before it runs. You follow
-along in the dashboard or on Telegram, and you steer with a strategy in plain words.
+along in the dashboard or on Telegram; you steer with a strategy in plain words.
 
 ## What you need
 
-- A computer that stays on, or a small server.
-- About 5 EGLD: 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest plays the first games.
+- A computer that stays on or a small server.
+- Enough EGLD to start: part of it buys the 5,000 FOXSY registration at the day's price, 1 stays as the gas reserve, the rest plays the first games.
 - An AI key from Anthropic (about 5 minutes to create). Telegram and the CEX top-up are optional.
 
 <CardGrid>

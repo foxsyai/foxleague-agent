@@ -112,7 +112,7 @@ fi
 # The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
 # so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
 if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
-  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
+  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again) or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
@@ -255,13 +255,13 @@ ensure_node() {
     rm -rf "$ROOT/.node.old"
     NODE="$ROOT/.node/bin/node"
   fi
-  # The launcher (run.sh) reads which Node to start the agent with: the first path of .node-path that is there.
-  # For a Node.js of the system the program itself goes first (INS-A6): the path a version manager puts on the
-  # PATH may last one shell only (fnm's folder is gone at the next restart, asdf's shim needs the shell's setup).
-  # The path it was found at follows, for when the program's own folder goes (Homebrew's link outlives an upgrade).
-  local real=''
+  # run.sh starts the agent with the first path of .node-path that is there. For a Node.js of the system the program
+  # itself goes first (INS-A6: a version manager's path may last one shell only), then the path it was found at
+  # (Homebrew's link outlives an upgrade). An update's --prepare runs on that program, so it keeps a good list (REL-1).
+  local real='' kept=''; if [ "$MODE" = prepare ] && [ -f "$ROOT/.node-path" ]; then kept=$(while IFS= read -r n || [ -n "$n" ]; do if [ -n "$n" ] && [ -x "$n" ]; then echo "$n"; break; fi; done < "$ROOT/.node-path") || kept=''; fi
   if [ "$NODE" = "$sys" ]; then real=$("$NODE" -p process.execPath 2>/dev/null || true); fi
-  if [ -n "$real" ] && [ "$real" != "$NODE" ] && node_ok "$real"; then
+  if [ -n "$kept" ] && node_ok "$kept"; then :
+  elif [ -n "$real" ] && [ "$real" != "$NODE" ] && node_ok "$real"; then
     printf '%s\n%s\n' "$real" "$NODE" | put_file "$ROOT/.node-path" 644
   else
     printf '%s\n' "$NODE" | put_file "$ROOT/.node-path" 644
@@ -450,7 +450,7 @@ find_user_systemd() {
 # Why there is no service manager to use, in words for the newcomer, with commands that exist.
 no_user_systemd() {
   if [ -d "$RUN_DIR/systemd/system" ]; then
-    die "the background services of the user $USER_NAME cannot be reached from this terminal. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself (a new terminal, or ssh $USER_NAME@this-machine) and run the installer again: cd $ROOT && ./install.sh"
+    die "the background services of the user $USER_NAME cannot be reached from this terminal. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself (a new terminal or ssh $USER_NAME@this-machine) and run the installer again: cd $ROOT && ./install.sh"
   fi
   die "this machine does not run systemd, which keeps the agent running in the background. On Windows (WSL2): add the two lines [boot] and systemd=true to /etc/wsl.conf, run wsl --shutdown in PowerShell, open Ubuntu again and run the installer again: cd $ROOT && ./install.sh   Without systemd: cd $ROOT && ./install.sh --no-service   and start the agent yourself with ./run.sh"
 }
@@ -1076,8 +1076,8 @@ cat <<EOF
 
   Next steps
   1. Open the dashboard. Its Getting started guide walks you through the rest, step by step.
-  2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start:
-     2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.
+  2. Send EGLD to agent 1's wallet above (MultiversX network), enough to cover this:
+     part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.
   3. Watch a plan or two in dry run. A new wallet shows only the simulated FOXSY swap there: the
      registration line then says it needs 5,000 FOXSY, because nothing was really bought.
   4. Set your caps and strategy, then press Go LIVE. Agent 1 swaps, registers its team and plays

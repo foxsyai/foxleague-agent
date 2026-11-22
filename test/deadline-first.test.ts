@@ -105,7 +105,7 @@ test('DL-1: a leave_tournament whose deadline is 12 minutes after the plan\'s st
   // The tick hands runPlan the snapshot its plan was made from.
   const src = readFileSync(new URL('../src/service.ts', import.meta.url), 'utf8')
   const tick = src.slice(src.indexOf('  async tick('), src.indexOf('  modelUsdByDay()'))
-  assert.match(tick, /const snap = await this\.snapshot\(index, true\)[\s\S]*const plan = await this\.makePlan\(agent, snap, ownerRequest\)[\s\S]*this\.runPlan\(agent, plan\.actions, !ownerRequest, snap\)/)
+  assert.match(tick, /const snap = await this\.snapshot\(index, true\)[\s\S]*const plan = await this\.makePlan\(agent, snap, ownerRequest\)[\s\S]*this\.runPlan\(agent, plan\.actions, !ownerRequest, snap[,)]/)
 })
 
 test('DL-2: the plan\'s order holds when a later deadline action moves earlier: the actions before it move with it', async () => {

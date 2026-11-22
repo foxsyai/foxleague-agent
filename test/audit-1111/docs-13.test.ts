@@ -18,9 +18,10 @@ const pages = (dir: string): string[] => readdirSync(dir, { withFileTypes: true 
 test('DOCS-13 every screenshot a page of the manual names exists, and the script writes each of them', () => {
   const named = new Set(pages(DOCS).flatMap(p => [...readFileSync(p, 'utf8').matchAll(/\]\(\/screenshots\/([a-z0-9-]+\.png)\)/g)].map(m => m[1]!)))
   const files = readdirSync(SHOTS).filter(f => f.endsWith('.png'))
-  assert.equal(named.size, 10)
+  // Find my team's list (import-team-find.png) since the launch update of 2026-11-22.
+  assert.equal(named.size, 11)
   // The script takes one more (add-agent.png), which no page shows today.
-  assert.equal(files.length, 11)
+  assert.equal(files.length, 12)
   const script = readFileSync(join(ROOT, 'site/scripts/screenshots.ts'), 'utf8')
   for (const f of named) {
     assert.ok(files.includes(f), `${f} is named on a page and is not there`)

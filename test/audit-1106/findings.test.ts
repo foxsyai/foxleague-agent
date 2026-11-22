@@ -157,7 +157,7 @@ test('INTEG-2: a create FoxLeague left pending on chain after the organizer paym
   await withLive(retry.store, async () => {
     const [r] = await retry.exec.run(retry.agent(), liveWallet, s, [{ action: cup, reason: '' }])
     assert.equal(asked, 2, 'asked again after tx_pending, with the same hash')
-    assert.match(r!.summary, /hashfee2 made, and FoxLeague may have created it/, r!.summary)
+    assert.match(r!.summary, /hashfee2 made; FoxLeague may have created it/, r!.summary)
   })
 })
 

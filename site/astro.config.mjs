@@ -41,9 +41,9 @@ export default defineConfig({
 				{ tag: 'meta', attrs: { name: 'twitter:image', content: 'https://agent.foxleague.ai/og.png' } },
 			],
 			customCss: ['./src/styles/custom.css'],
-			// GitHub: Foxsy AI's page until the repository is public (launch day: the repository itself).
+			// GitHub: the repository (it opened Foxsy AI's page until the public release).
 			social: [
-				{ icon: 'github', label: 'GitHub', href: 'https://github.com/foxsyai' },
+				{ icon: 'github', label: 'GitHub', href: 'https://github.com/foxsyai/foxleague-agent' },
 				{ icon: 'x.com', label: 'X / Twitter', href: 'https://x.com/foxsy_ai' },
 				{ icon: 'telegram', label: 'Telegram', href: 'https://t.me/foxsyai' },
 				{ icon: 'youtube', label: 'YouTube', href: 'https://youtube.com/@FoxsyAI' },

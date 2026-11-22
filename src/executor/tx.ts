@@ -255,7 +255,7 @@ export function fusionMintTx(agentAddress: string, prep: FusionPrepared, expect:
   if (num(parts[5]) !== expect.feeAtomic) fail(`it pays ${String(parts[5])} (hex) atomic FOXSY, the checks allowed ${expect.feeAtomic}`)
   for (let i = 0; i < 3; i++) {
     const [token, nonceHex, amount] = parts.slice(6 + i * 3, 9 + i * 3)
-    if (token !== FXLP_HEX || num(nonceHex) !== BigInt(expect.nonces[i]!) || amount !== '01') fail('it moves other cards than the three planned, or in another order')
+    if (token !== FXLP_HEX || num(nonceHex) !== BigInt(expect.nonces[i]!) || amount !== '01') fail('it moves other cards than the three planned or in another order')
   }
   if (parts[15] !== hexOfString('fusionMint')) fail('it calls another endpoint than fusionMint')
   if (num(parts[16]) !== BigInt(expect.positionChoice)) fail('it takes another position than planned')

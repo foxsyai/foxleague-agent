@@ -6,8 +6,8 @@ own texts on example values. A changed sentence is one edit and a re-run, never 
 | Video and poster | Length, size | Shown on |
 |---|---|---|
 | `site/public/videos/install-windows.mp4` and `.jpg` | 53.7 s, 5.4 MB (CRF 27) | `site/src/content/docs/start/install-windows.mdx` |
-| `site/public/videos/install-mac.mp4` and `.jpg` | 42.1 s, 5.3 MB (CRF 23) | `site/src/content/docs/start/install-mac.mdx` |
-| `site/public/videos/install-linux.mp4` and `.jpg` | 42.1 s, 5.7 MB (CRF 23) | `site/src/content/docs/start/install-linux.mdx` |
+| `site/public/videos/install-mac.mp4` and `.jpg` | 42.1 s, 5.2 MB (CRF 23) | `site/src/content/docs/start/install-mac.mdx` |
+| `site/public/videos/install-linux.mp4` and `.jpg` | 42.1 s, 5.8 MB (CRF 23) | `site/src/content/docs/start/install-linux.mdx` |
 
 1920x1080, 30 frames a second, H.264 High, yuv420p, no sound, the index at the front of the file (`+faststart`),
 under 6 MB each. The poster is the installer's Done screen.
@@ -107,8 +107,8 @@ words the owner keeps out of the project. The installers' own lines are shown ex
   does: a throwaway wallet in a temporary folder, every network address pointed at `127.0.0.1:9`, no AI key, no
   Telegram. The login and the dashboard on screen are the real `src/web/login.html` and `dashboard.html`, driven by
   Playwright: the login is typed, the guide closed and Update now clicked for real. The updater is a stand-in whose
-  messages are the real updater's (`src/update/updater.ts`). The install pages are `site/dist` as built; the
-  "Coming soon" banner and frame are taken off in the browser only, so the page looks as it will after the release.
+  messages are the real updater's (`src/update/updater.ts`). The install pages are `site/dist` as built (before the
+  public release the capture also took the "Coming soon" banner and frame off, in the browser only).
 - The capture checks the text each screenshot shows for the word the owner keeps out of the project (BotFather, a
   name, is allowed) and lists any hit in `build/shots/<system>/boxes.json` and on the console.
 - `src/stage/` draws one frame at any time t: a plain desktop (no logos), the terminal (text, wrapping at the
@@ -145,8 +145,8 @@ The line numbers are those of the commit the videos were drawn from.
 ## What is not from the installer files
 
 - The site's header on the install page shows the site's own links with the GitHub, X, Telegram and YouTube icons
-  (the real page). For a video without them, `src/capture.mjs` can hide that row like it hides
-  the "Coming soon" banner.
+  (the real page). For a video without them, `src/capture.mjs` can hide that row in the browser,
+  as it hid the "Coming soon" banner before the release.
 - The copy button of the site's code block sits over the end of the line, as on the real page at 1600 px.
 
 - WSL's and Ubuntu's own lines on Windows are those of the real PC (Microsoft Store WSL 3.0.1.0, Ubuntu 26.04), with
@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit 4fe1ed6 (2026-11-20): 132 quoted lines, 0 changed.
+Checked against commit d80eb2a (2026-11-22): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
@@ -281,32 +281,32 @@ Checked against commit 4fe1ed6 (2026-11-20): 132 quoted lines, 0 changed.
 | windows, mac, linux | `install.sh:1075` | PEM files     /home/ana/foxleague-agent/pem / PEM files     /Users/ana/foxleague-agent/pem | ok |
 | windows, mac, linux | `install.sh:1077` | Next steps | ok |
 | windows, mac, linux | `install.sh:1078` | 1. Open the dashboard. Its Getting started guide walks you through the rest, step by step. | ok |
-| windows, mac, linux | `install.sh:1079` | 2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start: | ok |
-| windows, mac, linux | `install.sh:1080` | 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games. | ok |
+| windows, mac, linux | `install.sh:1079` | 2. Send EGLD to agent 1's wallet above (MultiversX network), enough to cover this: | ok |
+| windows, mac, linux | `install.sh:1080` | part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games. | ok |
 | windows, mac, linux | `install.sh:1095` | Keep your recovery words safe. Anyone with them controls the agent wallets. | ok |
 | windows, mac, linux | `install.sh:1101` | Open the dashboard in your browser now? (y/n) [y]: | ok |
-| linux | `site/src/content/docs/start/install-linux.mdx:42` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
-| linux | `site/src/content/docs/start/install-linux.mdx:143` | cd ~/foxleague-agent | ok |
-| linux | `site/src/content/docs/start/install-linux.mdx:144` | ./install.sh --uninstall | ok |
-| mac | `site/src/content/docs/start/install-mac.mdx:42` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
-| mac | `site/src/content/docs/start/install-mac.mdx:140` | cd ~/foxleague-agent | ok |
-| mac | `site/src/content/docs/start/install-mac.mdx:141` | ./install.sh --uninstall | ok |
-| windows | `site/src/content/docs/start/install-windows.mdx:45` | irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 \| iex | ok |
-| windows | `site/src/content/docs/start/install-windows.mdx:208` | & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall | ok |
-| windows, mac, linux | `src/cli.ts:124` | New recovery words written to /home/ana/foxleague-agent/.env (mode 600). / New recovery words written to /Users/ana/foxleague-agent/.env (mode 600). | ok |
-| windows, mac, linux | `src/cli.ts:125` | Agent 1 address: erd1gupzwzfxh2lk2gwk7s7lfa9jqtm98h88m6z0dsfg49d8552jlckacd4d5s | ok |
-| windows, mac, linux | `src/cli.ts:146` | 1. word1 | ok |
-| windows, mac, linux | `src/cli.ts:240` | Wrote /home/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. / Wrote /Users/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. | ok |
-| windows, mac, linux | `src/cli.ts:447` | Writing to /home/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. / Writing to /Users/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. | ok |
-| windows, mac, linux | `src/cli.ts:453` | Anthropic API key (sk-ant-...): | ok |
-| windows, mac, linux | `src/cli.ts:454` | Telegram token from BotFather: | ok |
-| windows, mac, linux | `src/cli.ts:484` | Binance API key (withdraw-only, IP-restricted): | ok |
-| windows, mac, linux | `src/cli.ts:485` | Binance API secret: | ok |
-| windows, mac, linux | `src/cli.ts:491` | Saved: nothing. | ok |
-| windows, mac, linux | `src/cli.ts:503` | Dashboard username, your own choice (3 to 32 letters or digits): | ok |
-| windows, mac, linux | `src/cli.ts:507` | Password (at least 12 characters): | ok |
-| windows, mac, linux | `src/cli.ts:509` | Repeat the password: | ok |
-| windows, mac, linux | `src/cli.ts:513` | Saved the web UI login for "ana" in /home/ana/foxleague-agent/.env. / Saved the web UI login for "ana" in /Users/ana/foxleague-agent/.env. | ok |
+| linux | `site/src/content/docs/start/install-linux.mdx:37` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
+| linux | `site/src/content/docs/start/install-linux.mdx:136` | cd ~/foxleague-agent | ok |
+| linux | `site/src/content/docs/start/install-linux.mdx:137` | ./install.sh --uninstall | ok |
+| mac | `site/src/content/docs/start/install-mac.mdx:37` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
+| mac | `site/src/content/docs/start/install-mac.mdx:133` | cd ~/foxleague-agent | ok |
+| mac | `site/src/content/docs/start/install-mac.mdx:134` | ./install.sh --uninstall | ok |
+| windows | `site/src/content/docs/start/install-windows.mdx:40` | irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 \| iex | ok |
+| windows | `site/src/content/docs/start/install-windows.mdx:201` | & ([scriptblock]::Create((irm https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) -Uninstall | ok |
+| windows, mac, linux | `src/cli.ts:133` | New recovery words written to /home/ana/foxleague-agent/.env (mode 600). / New recovery words written to /Users/ana/foxleague-agent/.env (mode 600). | ok |
+| windows, mac, linux | `src/cli.ts:134` | Agent 1 address: erd1gupzwzfxh2lk2gwk7s7lfa9jqtm98h88m6z0dsfg49d8552jlckacd4d5s | ok |
+| windows, mac, linux | `src/cli.ts:155` | 1. word1 | ok |
+| windows, mac, linux | `src/cli.ts:256` | Wrote /home/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. / Wrote /Users/ana/foxleague-agent/pem/agent1.pem (mode 600). Keep it on this computer and never send it to anyone. | ok |
+| windows, mac, linux | `src/cli.ts:463` | Writing to /home/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. / Writing to /Users/ana/foxleague-agent/.env. Press Enter to keep a value unchanged. Nothing you type is shown. | ok |
+| windows, mac, linux | `src/cli.ts:469` | Anthropic API key (sk-ant-...): | ok |
+| windows, mac, linux | `src/cli.ts:470` | Telegram token from BotFather: | ok |
+| windows, mac, linux | `src/cli.ts:500` | Binance API key (withdraw-only, IP-restricted): | ok |
+| windows, mac, linux | `src/cli.ts:501` | Binance API secret: | ok |
+| windows, mac, linux | `src/cli.ts:507` | Saved: nothing. | ok |
+| windows, mac, linux | `src/cli.ts:519` | Dashboard username, your own choice (3 to 32 letters or digits): | ok |
+| windows, mac, linux | `src/cli.ts:523` | Password (at least 12 characters): | ok |
+| windows, mac, linux | `src/cli.ts:525` | Repeat the password: | ok |
+| windows, mac, linux | `src/cli.ts:529` | Saved the web UI login for "ana" in /home/ana/foxleague-agent/.env. / Saved the web UI login for "ana" in /Users/ana/foxleague-agent/.env. | ok |
 
 Lines that are not from the repository (the system's own words, written as they usually appear):
 

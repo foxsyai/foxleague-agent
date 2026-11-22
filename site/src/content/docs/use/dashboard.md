@@ -16,7 +16,7 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   password; back to dry run is one click.
 - **Kill switch** stops every agent at once. Turning it on is one click; releasing it asks for your password.
 - **The version** you run is the small label next to the mode, for example `v1.0.0`. Its **i** explains updates.
-  The round arrow next to it, **Check for updates**, asks GitHub now instead of at the next check, and the notice
+  The round arrow next to it, **Check for updates**, asks GitHub now instead of at the next check; the notice
   and a short message give the answer. It installs nothing. It is off while an update installs and not shown where
   the check is switched off.
 - **The update notice** appears under the header when a newer version is out: about every 10 minutes the agent
@@ -67,7 +67,7 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 - **Wallet and team**: the EGLD, WEGLD and FOXSY balances (WEGLD shows 0.0000 when the wallet holds none), cards,
   team, rating and record, matches and training today. While the page is open, a reading older than 10 minutes is
   taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once and stays greyed out until the new reading is shown). **Value** is what
-  the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
+  the wallet's EGLD, WEGLD and FOXSY are worth in USD, with what the agent can play with next to it (the EGLD gas
   reserve aside); it turns orange (and the agent's tab shows **low funds**) when that falls under your **Top-up
   warning** (it shows in the morning summary on Telegram, at once with `/updates all`; with a Binance key, Telegram and the platform LIVE, a top-up
   proposal comes at once (once a day per agent)). To top up, send EGLD to the agent's
@@ -110,7 +110,7 @@ then. **Restore** brings it back to the tabs with its settings and history, paus
 
 ![Retired: the parked agents, each with Restore](/screenshots/retired.png)
 
-On Telegram, `/status` names the retired agents, and commands for one of them answer that it is retired. Restore
+On Telegram, `/status` names the retired agents; commands for one of them answer that it is retired. Restore
 is in the dashboard only.
 
 ## Delete an agent that was never used
@@ -120,7 +120,7 @@ cards) and has no FoxLeague team, can be deleted instead of retired. Its page th
 **Retire**. Before anything goes, the wallet is read again from the chain and FoxLeague; if any of it is not clean
 or cannot be read, nothing is deleted.
 
-The agent, its settings and its history are deleted, and so is its PEM file in `pem/`. On a server install the PEM
+The agent, its settings and its history are deleted, as is its PEM file in `pem/`. On a server install the PEM
 files are on your computer: run `./deploy/sync-pems.sh` there and it removes the files of the deleted agents. Nothing
 is lost, because the wallet is empty and comes from your recovery words: **+ Add agent** takes the lowest free
 number, so it makes the same wallet again. An agent that was ever used is retired, never deleted.
@@ -128,4 +128,4 @@ number, so it makes the same wallet again. An agent that was ever used is retire
 ## Opening it from your phone
 
 The dashboard listens on your computer only, never on the internet. To open it from another device, use an SSH
-tunnel (`ssh -L 8870:localhost:8870 you@your-computer`), or follow the agent on Telegram.
+tunnel (`ssh -L 8870:localhost:8870 you@your-computer`) or follow the agent on Telegram.

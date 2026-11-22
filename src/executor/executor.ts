@@ -1077,7 +1077,7 @@ export class Executor {
               throw err
             }
             const why = err instanceof ApiRefusal ? `FoxLeague's relay answered: ${err.message}` : err instanceof Error ? err.message : String(err)
-            throw new Error(`the relay did not confirm the registration payment (${why}); it may have gone out all the same, so the fee stays counted, and the next plan reads from the chain whether it was paid`)
+            throw new Error(`the relay did not confirm the registration payment (${why}); it may have gone out all the same, so the fee stays counted; the next plan reads from the chain whether it was paid`)
           }
           this.settle(booking, relayed)
           const outcome = await this.outcome(relayed)
@@ -1170,7 +1170,7 @@ export class Executor {
             readBack = ` (the answer was lost: ${err instanceof Error ? err.message : String(err)}; the active match read back shows it)`
           }
           applyEffect(a, v, snap, built)
-          return `${desc}: match #${matchId} started (${a.match_type})${readBack}${paid === false ? '; the AI filled it: free, and the ticket stays for the next start' : ''}`
+          return `${desc}: match #${matchId} started (${a.match_type})${readBack}${paid === false ? '; the AI filled it: free (the ticket stays for the next start)' : ''}`
         }
         if (a.test && snap.team) {
           // The casual test bench (owner, 2026-11-04): FoxLeague plays a casual game with the formation and eleven saved
@@ -1396,7 +1396,7 @@ export class Executor {
             }
             if (outcome.kind === 'unconfirmed') {
               this.unbook(booking)
-              return finish('unconfirmed', `${desc}: organizer payment sent, not final yet (${outcome.reason}); nothing was created, and the next create of this amount uses this payment`, 0, hash)
+              return finish('unconfirmed', `${desc}: organizer payment sent, not final yet (${outcome.reason}); nothing was created; the next create of this amount uses this payment`, 0, hash)
             }
             organizerHash = hash
             body.organizer_fee_tx_hash = hash
@@ -1412,8 +1412,8 @@ export class Executor {
             return finish(
               'error',
               lost
-                ? `${desc}: organizer payment ${organizerHash} made, and the create got no answer; it was not asked again (${stop}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`
-                : `${desc}: organizer payment ${organizerHash} made, nothing created (${stop}); the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`,
+                ? `${desc}: organizer payment ${organizerHash} made; the create got no answer and was not asked again (${stop}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment (FoxLeague refunds one that stays unused)`
+                : `${desc}: organizer payment ${organizerHash} made, nothing created (${stop}); the next create of this amount uses this payment (FoxLeague refunds one that stays unused)`,
               0,
               organizerHash,
             )
@@ -1442,7 +1442,7 @@ export class Executor {
             // audit 2026-11-06, INTEG-2). The plan is shown a tournament it created without a seat (OPEN-8).
             if (err instanceof ApiRefusal && CREATE_STILL_PENDING.test(err.message)) {
               store.resolvePending(organizerHash, 'done')
-              return finish('error', `${desc}: organizer payment ${organizerHash} made, and FoxLeague may have created it: its creation is still pending on chain (${why}); the payment is on that tournament, not refunded, so the next plan reads your tournaments`, 0, organizerHash)
+              return finish('error', `${desc}: organizer payment ${organizerHash} made; FoxLeague may have created it: its creation is still pending on chain (${why}); the payment is on that tournament, not refunded, so the next plan reads your tournaments`, 0, organizerHash)
             }
             // An answer that settles the hash (used or refunded): it is forgotten, and a refunded one stops counting.
             if (err instanceof ApiRefusal && !err.isTxPending && ORGANIZER_HASH_ANSWER.test(err.message) && SHOP_FINAL.test(err.message)) {
@@ -1450,8 +1450,8 @@ export class Executor {
               if (SHOP_REFUNDED.test(err.message)) creditShopPayment(store, agent.index, organizerHash)
               return finish('error', `${desc}: organizer payment ${organizerHash} cannot be used: ${why}`, 0, organizerHash)
             }
-            if (noAnswer) return finish('error', `${desc}: organizer payment ${organizerHash} made, and the create got no answer (${why}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
-            return finish('error', `${desc}: organizer payment ${organizerHash} made, nothing created: ${why}; the next create of this amount uses this payment, and FoxLeague refunds one that stays unused`, 0, organizerHash)
+            if (noAnswer) return finish('error', `${desc}: organizer payment ${organizerHash} made; the create got no answer (${why}): FoxLeague may have created it all the same, so the next plan reads your tournaments; if it did not, the next create of this amount uses this payment (FoxLeague refunds one that stays unused)`, 0, organizerHash)
+            return finish('error', `${desc}: organizer payment ${organizerHash} made, nothing created: ${why}; the next create of this amount uses this payment (FoxLeague refunds one that stays unused)`, 0, organizerHash)
           }
         }
         if (organizerHash) store.resolvePending(organizerHash, 'done')

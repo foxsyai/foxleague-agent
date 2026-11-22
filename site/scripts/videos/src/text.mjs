@@ -64,14 +64,14 @@ export function texts(os) {
     // ---------------- 2/7 the wallet ----------------
     wallet: () => [
       ...say(880, '2/7 Your wallet'),
-      [cli(124, 'New recovery words written to ${envFile} (mode 600).')],
-      [cli(125, ['Agent 1 address: ', V(VALUES.address, 'addr')])],
+      [cli(133, 'New recovery words written to ${envFile} (mode 600).')],
+      [cli(134, ['Agent 1 address: ', V(VALUES.address, 'addr')])],
       info(889, ''),
       info(892, 'A new wallet was created. Its recovery words are the ONLY way to get your funds back.'),
       info(897, 'Write them down on paper now. Never type them into a website, a chat or a screenshot.'),
       info(898, ''),
-      // src/cli.ts:146 prints each word as "NN. word". Here: word1 ... word24, never real words.
-      ...VALUES.words.map((w, i) => [seg(`${String(i + 1).padStart(2)}. ${w}`, null, i === 0 ? { f: 'src/cli.ts', l: 146, frags: ['${String(i + 1).padStart(2)}. ${w}'] } : null)]),
+      // src/cli.ts:155 prints each word as "NN. word". Here: word1 ... word24, never real words.
+      ...VALUES.words.map((w, i) => [seg(`${String(i + 1).padStart(2)}. ${w}`, null, i === 0 ? { f: 'src/cli.ts', l: 155, frags: ['${String(i + 1).padStart(2)}. ${w}'] } : null)]),
       info(900, ''),
     ],
     wordsPrompt: () => ask(905, 'Type yes when the words are written down'),
@@ -82,10 +82,10 @@ export function texts(os) {
 
     // ---------------- 3/7 the dashboard login ----------------
     login: () => [...say(922, '3/7 Dashboard login'), info(926, 'Choose the username and password for the dashboard.')],
-    loginUser: () => [cli(503, 'Dashboard username, your own choice (3 to 32 letters or digits): ')],
-    loginPass: () => [cli(507, 'Password (at least 12 characters): ')],
-    loginRepeat: () => [cli(509, 'Repeat the password: ')],
-    loginSaved: () => [cli(513, ['Saved the web UI login for "', V(user), '" in ', V(vars.ENV_FILE), '.'])],
+    loginUser: () => [cli(519, 'Dashboard username, your own choice (3 to 32 letters or digits): ')],
+    loginPass: () => [cli(523, 'Password (at least 12 characters): ')],
+    loginRepeat: () => [cli(525, 'Repeat the password: ')],
+    loginSaved: () => [cli(529, ['Saved the web UI login for "', V(user), '" in ', V(vars.ENV_FILE), '.'])],
     port: () => ask(955, 'Dashboard port on this machine', VALUES.port),
 
     // ---------------- 4/7 the keys (SHORTENED: the steps of Telegram and of the CEX top-up are left out) ----------------
@@ -107,14 +107,14 @@ export function texts(os) {
       '',
     ],
     keysNow: () => yesNo(1012, 'Enter keys now?', 'y'),
-    configure: () => [cli(447, 'Writing to ${envFile}. Press Enter to keep a value unchanged. Nothing you type is shown.')],
+    configure: () => [cli(463, 'Writing to ${envFile}. Press Enter to keep a value unchanged. Nothing you type is shown.')],
     keyAsk: [
-      () => [cli(453, 'Anthropic API key (sk-ant-...)'), V(': ')],
-      () => [cli(454, 'Telegram token from BotFather'), V(': ')],
-      () => [cli(484, 'Binance API key (withdraw-only, IP-restricted)'), V(': ')],
-      () => [cli(485, 'Binance API secret'), V(': ')],
+      () => [cli(469, 'Anthropic API key (sk-ant-...)'), V(': ')],
+      () => [cli(470, 'Telegram token from BotFather'), V(': ')],
+      () => [cli(500, 'Binance API key (withdraw-only, IP-restricted)'), V(': ')],
+      () => [cli(501, 'Binance API secret'), V(': ')],
     ],
-    keysSaved: () => [cli(491, ['Saved: ', 'nothing', '.'])],
+    keysSaved: () => [cli(507, ['Saved: ', 'nothing', '.'])],
 
     // ---------------- 5/7 to 7/7 ----------------
     settings: () => [
@@ -125,7 +125,7 @@ export function texts(os) {
     allowLive: () => yesNo(1029, 'Allow this machine to sign real transactions once you press Go LIVE?', 'y'),
     pem: () => [
       ...say(1036, "6/7 PEM files (to log into FoxLeague as your agents' teams and watch them)"),
-      [cli(240, ['Wrote ', V(`${vars.PEM_DIR}/agent1.pem`), ' (mode 600). ', 'Keep it on this computer and never send it to anyone.'])],
+      [cli(256, ['Wrote ', V(`${vars.PEM_DIR}/agent1.pem`), ' (mode 600). ', 'Keep it on this computer and never send it to anyone.'])],
       info(1039, 'Each new agent you add in the dashboard gets its own pem/agentN.pem automatically.'),
     ],
     service: () => [...say(1052, '7/7 Background service')],
@@ -142,8 +142,8 @@ export function texts(os) {
       '',
       [sh(1077, '  Next steps')],
       [sh(1078, '  1. Open the dashboard. Its Getting started guide walks you through the rest, step by step.')],
-      [sh(1079, "  2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start:")],
-      [sh(1080, '     2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.')],
+      [sh(1079, "  2. Send EGLD to agent 1's wallet above (MultiversX network), enough to cover this:")],
+      [sh(1080, '     part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.')],
       '',
       [sh(1095, '  Keep your recovery words safe. Anyone with them controls the agent wallets.')],
     ],
@@ -166,8 +166,8 @@ export function texts(os) {
       // A plain start: the window shows only PowerShell's prompt (no banner, no copyright line).
       prompt: () => [X(`PS ${VALUES.windowsHome}> `, null, 'PowerShell prompt')],
       // How PowerShell's line editor colours the line: the command yellow, the pipe and parameters grey.
-      installLine: () => [seg('irm', 'cmd', { f: 'site/src/content/docs/start/install-windows.mdx', l: 45, frags: [PS_LINE] }), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 '), seg('|', 'op'), seg(' '), seg('iex', 'cmd')],
-      uninstallLine: () => [seg('&', 'op', { f: 'site/src/content/docs/start/install-windows.mdx', l: 208, frags: [PS_UNINSTALL] }), seg(' (['), seg('scriptblock'), seg(']::Create(('), seg('irm', 'cmd'), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) '), seg('-Uninstall', 'op')],
+      installLine: () => [seg('irm', 'cmd', { f: 'site/src/content/docs/start/install-windows.mdx', l: 40, frags: [PS_LINE] }), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1 '), seg('|', 'op'), seg(' '), seg('iex', 'cmd')],
+      uninstallLine: () => [seg('&', 'op', { f: 'site/src/content/docs/start/install-windows.mdx', l: 201, frags: [PS_UNINSTALL] }), seg(' (['), seg('scriptblock'), seg(']::Create(('), seg('irm', 'cmd'), seg(' https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.ps1))) '), seg('-Uninstall', 'op')],
       start: () => [
         ...psStep(1323, 'foxleague-agent installer for Windows'),
         psLine(1324, 'The agent runs in Ubuntu, a Linux inside Windows (WSL 2). This installer sets that up and then starts the'),

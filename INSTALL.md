@@ -11,10 +11,10 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 
 - A computer that stays on and awake: Windows 10 or 11, a Mac or Linux with systemd. Each has its own section
   below. A small cloud server works too: for a server set up by hand, see [docs/SERVER.md](docs/SERVER.md).
-- About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
-  (Settings: EGLD gas reserve), the rest pays for the first games.
+- Enough EGLD to start: part of it buys the 5,000 FOXSY registration at the day's price (the dashboard shows it), 1
+  stays in the wallet as the gas reserve (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
-- Optional: your agent's Telegram account for notifications and commands on your phone, and a Binance API key for
+- Optional: your agent's Telegram account for notifications and commands on your phone; a Binance API key for
   EGLD top-ups of the agent wallets, each one approved by you on Telegram with a one-time code.
 
 ## Install
@@ -78,8 +78,8 @@ here.
 3. **Windows 3/6: Ubuntu, the Linux the agent runs in.** When Ubuntu is not installed yet, the installer checks the
    free space, says what comes next and asks "Ready?". Then it downloads Ubuntu with Microsoft's own
    `wsl --install -d Ubuntu`, in the same window, with a progress bar.
-   - The download can look stuck at 0%: a click into the PowerShell window pauses it (Windows then selects text),
-     and Enter once lets it go on. A window "Welcome to WSL" may open by itself: close it.
+   - The download can look stuck at 0%: a click into the PowerShell window pauses it (Windows then selects text);
+     Enter once lets it go on. A window "Welcome to WSL" may open by itself: close it.
    - Ubuntu then asks you to choose a Linux username and password, in the same window or in a window of its own.
      They are new and yours to choose: they are not your Windows login and the installer never sees them. Use
      small letters for the username, for example `ana`: Ubuntu refuses capitals and spaces.
@@ -114,13 +114,13 @@ Windows 11).
 `\\wsl$\Ubuntu\home\<your Linux username>\foxleague-agent`. The commands of this guide that start with `./`,
 `systemctl` or `journalctl` are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in PowerShell, then
 `cd foxleague-agent`. Type `exit` to come back to PowerShell. A line with `&&` belongs inside Ubuntu (Windows
-PowerShell refuses `&&`), and a line that starts with `wsl` belongs in PowerShell.
+PowerShell refuses `&&`); a line that starts with `wsl` belongs in PowerShell.
 
 #### Updating
 
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now. A new version that does not start is undone by itself
-after about a minute and a half, and a failed update says why in the notice. From a terminal: open Ubuntu with
+after about a minute and a half; a failed update says why in the notice. From a terminal: open Ubuntu with
 `wsl -d Ubuntu --cd ~`, then `cd foxleague-agent` and `./install.sh --update`. Pasting the PowerShell line again
 also puts the newest version in place. When the notice says "this system's tar cannot unpack inside the agent's
 background service", an older installer set that service up: open Ubuntu, `cd foxleague-agent` and run
@@ -141,11 +141,11 @@ and says how that went. Nothing has to be typed inside Ubuntu. With `n` or when 
 to type by hand: `wsl -d Ubuntu --cd ~` in PowerShell, then inside Ubuntu
 `cd ~/foxleague-agent && ./install.sh --uninstall` and `exit`, one line at a time.
 
-What stays: your folder inside Ubuntu, with the wallet words (`.env`), the data and the PEM files (about 240 MB,
-and about 280 MB once an update has kept the release before it); WSL, Ubuntu and the line `systemd=true` in
+What stays: your folder inside Ubuntu, with the wallet words (`.env`), the data and the PEM files (about 240 MB;
+about 280 MB once an update has kept the release before it); WSL, Ubuntu and the line `systemd=true` in
 Ubuntu's `/etc/wsl.conf`, because other programs may use them (a file the installer changed is kept as it was in
 `/etc/wsl.conf.before-foxleague`); and linger, which the uninstall says how to turn off. The agent wallets may
-still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty. Ubuntu stops by
+still hold funds. Keep the recovery words and delete the folder only when the wallets are empty. Ubuntu stops by
 itself a short while after its last window closes. Do not remove Ubuntu itself (`wsl --unregister Ubuntu`
 deletes everything in it) while the agent wallets hold funds or the recovery words are not on paper.
 `Unregister-ScheduledTask -TaskName 'FoxLeague Agent (WSL)' -Confirm:$false` removes only the task: the hidden
@@ -153,7 +153,7 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
 
 #### If it gets stuck
 
-- **"Windows says that virtualization is turned off", or an error that names virtualization or 0x80370102:** WSL 2
+- **"Windows says that virtualization is turned off" (or an error that names virtualization or 0x80370102):** WSL 2
   needs virtualization, which is turned on in the PC's BIOS or UEFI setup. At "Go on anyway?" Enter means no and
   nothing is changed. Restart the PC and press the setup key while it starts: F2, Del, F10 or Esc, depending on the
   maker (the PC maker's guide tells which). Turn on Intel VT-x (Intel Virtualization Technology), AMD-V or SVM,
@@ -192,7 +192,7 @@ deletes everything in it) while the agent wallets hold funds or the recovery wor
 - **The dashboard does not open at `http://localhost:8870`:** the agent runs inside Ubuntu and Windows passes
   `localhost` on to it. Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again: it
   starts Ubuntu, the agent and the scheduled task again. Your wallet and your answers are kept.
-- **The agent stops when I close Ubuntu, or after Windows restarts:** the scheduled task "FoxLeague Agent (WSL)",
+- **The agent stops when I close Ubuntu or after Windows restarts:** the scheduled task "FoxLeague Agent (WSL)",
   which the PowerShell line makes, is there to keep Ubuntu running while you are logged in: look for it in Task
   Scheduler (Task Scheduler Library) and paste the PowerShell line again to make it again. Until it runs, open
   Ubuntu and leave its window open (minimised is fine): the agent starts with it. The agent does not play while the
@@ -226,7 +226,7 @@ logged in and the Mac is awake.
 
 - **A Mac with macOS**, with an Apple silicon or an Intel processor. The install was checked on macOS 15 on Apple
   silicon.
-- **No Xcode and no developer tools.** The line needs only what every Mac has (Terminal, curl and tar), and the
+- **No Xcode and no developer tools.** The line needs only what every Mac has (Terminal, curl and tar); the
   installer brings its own copy of Node.js. The install was checked on a Mac without Xcode's command line tools.
 - **Your own user account**, the one you log in with. Do not put `sudo` in front of the line: as root the installer
   stops.
@@ -259,7 +259,7 @@ starts `run.sh` there. An agent you switched off is never switched on again by `
 `launchctl bootstrap`). One switched off with `launchctl disable` alone still runs: it does not start at your next
 login and an update restarts it into the new version. `launchctl enable` alone switches it on again.
 
-**When it plays.** On macOS the agent starts when you log in, and a sleeping Mac plays nothing. Its timers pause
+**When it plays.** On macOS the agent starts when you log in; a sleeping Mac plays nothing. Its timers pause
 while the Mac sleeps: it plans, plays and checks for updates only while the Mac is awake. When the Mac wakes, it
 goes on. To let it play while you are away, keep the Mac awake. In System Settings open Energy (on a MacBook:
 Battery, then Options) and turn on "Prevent automatic sleeping" (on a MacBook: on power adapter). Or run
@@ -270,7 +270,7 @@ MacBook with its lid closed sleeps.
 
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now; by itself the agent asks about every 10 minutes while
-the Mac is awake. A new version that does not start is undone by itself, and a failed update says why in the
+the Mac is awake. A new version that does not start is undone by itself; a failed update says why in the
 notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo).
 
 #### Uninstalling
@@ -279,22 +279,22 @@ notice. From a terminal: `cd ~/foxleague-agent`, then `./install.sh --update` (a
 `~/Library/LaunchAgents` and the program it started, `FoxLeague Agent` in the agent's folder: no service, no
 background process and no open port of the agent are left. It leaves your folder, wallet and PEM files in place.
 Everything the install added is in that folder, its own Node.js and the download cache of npm included: about
-240 MB, and about 280 MB once an update has kept the release before it (kept so that the update can be undone). The
-agent wallets may still hold funds. Keep the recovery words, and delete the folder only when the wallets are empty.
+240 MB; about 280 MB once an update has kept the release before it (kept so that the update can be undone). The
+agent wallets may still hold funds. Keep the recovery words and delete the folder only when the wallets are empty.
 Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you started
 yourself with `./run.sh`, for example), it says so and how to stop it.
 
 #### If it gets stuck
 
 - **The agent does not play while my Mac sleeps:** a sleeping Mac plays nothing. Keep it awake while the agent
-  should play: "Prevent automatic sleeping" in System Settings under Energy (on a MacBook: Battery, then Options),
+  should play: "Prevent automatic sleeping" in System Settings under Energy (on a MacBook: Battery, then Options)
   or `caffeinate -i` in a Terminal window you leave open.
 - **The agent does not run after a restart of the Mac:** it starts when you log in: log in at the Mac.
 - **No update notice, although a new version is out:** the agent checks only while the Mac is awake, about every
   10 minutes. Press the round arrow next to the version (**Check for updates**) to ask now.
 - **"do not install the agent as root":** the line was run with `sudo` or as root. Paste it as your own user,
   without `sudo`.
-- **The dashboard does not open:** look at the log, `tail -f ~/foxleague-agent/data/service.log`, and restart the
+- **The dashboard does not open:** look at the log (`tail -f ~/foxleague-agent/data/service.log`) and restart the
   agent with `launchctl kickstart -k gui/$(id -u)/ai.foxleague.agent`.
 
 ### On Linux
@@ -325,10 +325,10 @@ and starts the guided installer. To install a given version, put it in front: `c
 put over a newer install: add `FOXAGENT_ALLOW_DOWNGRADE=1` in front of `bash` to go back anyway (the settings and
 limits the newer version added are then not applied). Another folder is named with `FOXAGENT_DIR`; it must be
 empty or hold an install of foxleague-agent. Your user has one background service: when it already runs the agent of another folder, the installer stops
-before the first question and says how to go on (`./install.sh --uninstall` in that folder first, or
+before the first question and says how to go on (`./install.sh --uninstall` in that folder first or
 `./install.sh --no-service` here). If you prefer git:
 `git clone https://github.com/foxsyai/foxleague-agent.git && cd foxleague-agent && ./install.sh`. A git checkout
-follows its branch: `./install.sh --update` pulls it, and that may be code that is in no release yet.
+follows its branch: `./install.sh --update` pulls it; that may be code that is in no release yet.
 
 #### What you will see, step by step
 
@@ -351,7 +351,7 @@ for the agent and the dashboard behind nginx, see [docs/SERVER.md](docs/SERVER.m
 
 An update is one click: **Update now** in the dashboard ([Updates](#updates)). The round arrow next to the version
 in the dashboard's header, **Check for updates**, asks now. A new version that does not start is undone by itself
-after about a minute and a half, and a failed update says why in the notice. From a terminal:
+after about a minute and a half; a failed update says why in the notice. From a terminal:
 `cd ~/foxleague-agent`, then `./install.sh --update` (as yourself, without sudo). When the notice says "this system's tar cannot unpack inside
 the agent's background service", an older installer set that service up: run `./install.sh --update` once in a
 terminal, in the agent's folder; later updates are one click again.
@@ -360,8 +360,8 @@ terminal, in the agent's folder; later updates are one click again.
 
 `cd ~/foxleague-agent`, then `./install.sh --uninstall`. It stops the background service, removes it and leaves
 your folder, wallet and PEM files in place. Everything the install added is in that folder, its own Node.js and the
-download cache of npm included: about 240 MB, and about 280 MB once an update has kept the release before it (kept
-so that the update can be undone). The agent wallets may still hold funds. Keep the recovery words, and delete the
+download cache of npm included: about 240 MB; about 280 MB once an update has kept the release before it (kept
+so that the update can be undone). The agent wallets may still hold funds. Keep the recovery words and delete the
 folder only when the wallets are empty. The uninstall also leaves linger on, which lets background services of
 your user start without a login, because other services of yours may count on it: `loginctl disable-linger $USER`
 turns it off. Type it as yourself, without sudo: with sudo it stops and says so. When it cannot stop the agent (one you
@@ -380,7 +380,7 @@ started yourself with `./run.sh`, for example), it says so and how to stop it.
   the file has no `[boot]`), run `wsl --shutdown` in PowerShell, open Ubuntu again and run the installer again.
 - **"the background services of the user ... cannot be reached from this terminal":** the terminal was opened with
   `su` or `sudo` and the installer could not start the user's services from it. Log in as that user itself (a new
-  terminal, or `ssh` to the machine as that user) and run the installer again.
+  terminal or `ssh` to the machine as that user) and run the installer again.
 - **"Job for foxleague-agent.service failed" (or "Start request repeated too quickly"):** systemd allows the agent
   five starts in ten minutes and then refuses the next one. Run
   `systemctl --user reset-failed foxleague-agent && systemctl --user restart foxleague-agent`. The installer and
@@ -396,7 +396,7 @@ On every system the installer walks you through seven steps and explains each on
 
 | Step | What happens |
 |---|---|
-| 1/7 Node.js and dependencies | Uses the Node.js on your computer when the agent runs on it (22 from 22.18, or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. Nothing is installed for the whole system. |
+| 1/7 Node.js and dependencies | Uses the Node.js on your computer when the agent runs on it (22 from 22.18 or 24.2 and later, with npm beside it), otherwise downloads a private copy into the `foxleague-agent` folder and checks it against the SHA-256 written in the installer. Nothing is installed for the whole system. |
 | 2/7 Your wallet | Creates a new wallet and shows its recovery words once. Write them down on paper, then type `yes`. |
 | 3/7 Dashboard login | You choose a username (3 to 32 letters or digits), a password (at least 12 characters, typed twice) and a port (default 8870). There is no default username: Enter alone is refused. A password that is too short or typed differently the second time is asked for again. A port that another program already uses is refused and the next one is offered. |
 | 4/7 Keys | The AI key, Telegram and the CEX top-up key. Nothing you paste is shown. Every key can be skipped and added later in the dashboard. |
@@ -408,7 +408,7 @@ On every system the installer walks you through seven steps and explains each on
 Run `./install.sh` again at any time (on Windows, paste the PowerShell line again): it keeps your wallet, login and
 keys. It asks again for the port, the keys and the live permission, each with your earlier answer as the default,
 so pressing Enter keeps things as they are. At "Enter keys now?" Enter means no on every later run: the keys stay
-as they are, and you change them in the dashboard. Pressing Enter at the live permission keeps it as `.env` has it:
+as they are; you change them in the dashboard. Pressing Enter at the live permission keeps it as `.env` has it:
 on only when it already says 1 or true. The dashboard's **Getting started** guide repeats the key steps below,
 shows which keys are set and has a "Don't show this again" box.
 
@@ -424,7 +424,7 @@ shows which keys are set and has a "Don't show this again" box.
 3. **Watch the dry run.** Once the EGLD arrives, the agent plans its first steps. In dry run nothing is paid and
    nothing is bought, so a new wallet shows only the simulated FOXSY swap: the registration line then says it
    needs 5,000 FOXSY for the fee, because nothing was really bought. That is expected. The team is registered once
-   you go live, and training and matches follow. Read a plan or two in Last plan and Activity.
+   you go live; training and matches follow. Read a plan or two in Last plan and Activity.
 4. **Set your limits and strategy** in Settings: daily cap, monthly budget, the largest entry fee, shop payment
    and bid. Write your strategy in plain words too. Every field has an "i" that explains it.
 5. **Go live.** Press Go LIVE in the header, type `GO LIVE` and your password. Back to dry run is one click.
@@ -456,15 +456,15 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
    your code runs, choose Somewhere else (an API key): the other choices sign in a command line tool the agent does
    not use. Name the key foxleague-agent, set Expires to Never and leave the rest as it is: a key that expires stops
    your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown only once.
-5. Paste it in the installer, or in the dashboard: Keys, Anthropic API key, your password, Save.
+5. Paste it in the installer or in the dashboard: Keys, Anthropic API key, your password, Save.
 
 **2. Telegram (optional): a morning summary of every agent and details on request; you can also talk to your manager**
 
 1. In Telegram, open [BotFather](https://t.me/BotFather). It creates your agent's Telegram account.
 2. Send `/newbot`. Give it a name, then a username. Telegram requires the username to end in "bot".
 3. Copy the token it sends you (it looks like `123456789:AAH...`).
-4. Paste it in the installer, or in the dashboard: Keys, Telegram token, your password, Save.
-5. Link your chat: the installer shows a 6-digit code, or press **Link my Telegram** in Keys. Send the code to
+4. Paste it in the installer or in the dashboard: Keys, Telegram token, your password, Save.
+5. Link your chat: the installer shows a 6-digit code (so does **Link my Telegram** in Keys). Send the code to
    your agent's Telegram account from your own Telegram account, then press **I sent it**. It then talks only to you.
 
 **3. CEX top-up (optional): EGLD top-ups from an exchange, each one approved by you on Telegram**
@@ -504,7 +504,7 @@ results, not meeting). What they share is a pooled formation record with no team
 
 - **The game:** limited by your daily cap and monthly budget (defaults $5 a day and $150 a month) plus a
   one-time $20 setup budget for the registration. Your agents never go over them.
-- **The AI:** about $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the dashboard.
+- **The AI:** about $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, over 100,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price; agents that plan within the same hour share the cache and pay far less for that text. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the dashboard.
 - **Network fees:** a few cents a day. Each agent always keeps an EGLD reserve for them (1 EGLD by default, never swapped).
 
 ## Safety built in
@@ -533,7 +533,7 @@ they change anything and say so, because files of root there would keep the agen
 a container or a service of your own starts as root there (one that mounts your install, a system unit without
 `User=`) still starts when it says `FOXAGENT_SUPERVISED=1` (in `.env` or in its environment) and runs with no
 terminal. One whose own update already ran there as root starts too.
-On Windows they are the Linux ones, typed inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell), and the
+On Windows they are the Linux ones, typed inside Ubuntu (open it with `wsl -d Ubuntu --cd ~` in PowerShell); the
 uninstall is one line in PowerShell ([On Windows](#on-windows), "Uninstalling").
 
 ## Updates
@@ -541,11 +541,11 @@ uninstall is one line in PowerShell ([On Windows](#on-windows), "Uninstalling").
 About every 10 minutes the agent asks GitHub whether a newer release is out; the round arrow next to the version
 in the dashboard (**Check for updates**) asks at once. When one is out, the dashboard shows a notice with what is
 new and Telegram tells you once. Press **Update now** in the dashboard or send `/upgrade` on Telegram: nothing is ever installed by
-itself, and no password is asked, because only a release that is signed by the foxleague-agent maintainers and
+itself. No password is asked, because only a release that is signed by the foxleague-agent maintainers and
 newer than yours can be installed. The agent checks the signature, prepares the
 new version next to the running one and restarts into it; the waiting actions of a running plan are dropped and the
 next plan takes them up. The dashboard is away for about half a minute. A new version that does not start is undone
-by itself after about a minute and a half, and you are told. Your wallet, keys, settings and history are kept.
+by itself after about a minute and a half; you are told so. Your wallet, keys, settings and history are kept.
 
 `./install.sh --update` does the same from a terminal. A git checkout and a server set up by hand show the notice
 with what to do instead of the button. `AGENT_UPDATE_CHECK=0` in `.env` switches the check off.
@@ -560,19 +560,19 @@ in place and the agent keeps playing on the version it runs. The dashboard then 
 runs from the next start" (Telegram too, after **Update now** or `/upgrade`). Stop the agent (Ctrl-C in its
 terminal) and run `./run.sh` again.
 
-How to uninstall, and what stays, is in the section of your system: [On Windows](#on-windows),
+How to uninstall (and what stays) is in the section of your system: [On Windows](#on-windows),
 [On a Mac](#on-a-mac) and [On Linux](#on-linux), under "Uninstalling".
 
 ## Troubleshooting
 
-Problems while installing, and those of one system only, are under "If it gets stuck" in the section of your
+Problems while installing (and those of one system only) are under "If it gets stuck" in the section of your
 system: [On Windows](#on-windows), [On a Mac](#on-a-mac) and [On Linux](#on-linux). Here is what can happen on every
 system once the agent runs.
 
 - **The dashboard does not open:** check the logs (see above). Another program may use the port: run
   `./install.sh` again and pick another one.
 - **"The dashboard could not start: port ... is used by another program":** the agent says this once, in the logs
-  and on Telegram. Your agents keep playing without the dashboard, and the agent tries the port again every minute.
+  and on Telegram. Your agents keep playing without the dashboard; the agent tries the port again every minute.
   Close the other program or choose another port. For another port run `./install.sh` again; you can also set
   `WEB_UI_PORT` in `.env` and restart the agent.
 - **The dashboard asks for the login although I am signed in:** the dashboard may be open in two browsers, for

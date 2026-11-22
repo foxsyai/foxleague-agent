@@ -1810,7 +1810,8 @@ Stays open:
   on the review job stays as it is.
 - DOCS-11's launch-day items: the "Coming soon" banners and frames of the site, "Status: in internal testing" in the
   README, the GitHub link of the site and the version number (`0.11.0` until the first public release). The
-  screenshots show the version label of the day they were taken: take them again after the version is set.
+  screenshots show the version label of the day they were taken: take them again after the version is set. (Since
+  then: all done for v1.0.0, in the section "The public release, v1.0.0 (2026-11-23)".)
 - DOCS-1 was closed in the text. A dry run of a new wallet still shows a refused registration, and from the second
   plan of a game day a refused swap: keeping a dry plan's simulated balance, and leaving an unregistered agent's
   dry swaps out of the allowance, is a change of the executor the owner may still want.
@@ -3239,6 +3240,90 @@ Stays open:
 - The key reaches installed agents with the first release that pins it (v1.0.0): an install of an earlier internal
   version has no key and takes no update from its dashboard; it updates by pasting the install line again.
 - Rotating the key follows `docs/RELEASING.md` ("Rotating the key"): the new key goes in a release signed with this one.
+
+## The public release, v1.0.0 (2026-11-23)
+
+The pull request that makes the repository ready to be public, prepared on 2026-11-20 and merged on launch day. It
+does DOCS-11's launch-day items. `test/launch-v1/LAUNCH-1.test.ts` failed on 50942e7 for each of them and passes now. R85A-1
+to R85A-4 are the findings of its agent reviews.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| LAUNCH-1 | launch (the owner, 2026-11-20) | Before the public release the site wrapped the install line in a "Coming soon" frame with a banner on five pages, its GitHub icon opened Foxsy AI's page instead of the repository, the README said "in internal testing" and the version was 0.11.0 | Version 1.0.0 in `package.json` and both places of `package-lock.json`. No banner or frame on any page; the frame's component is gone. The home page, "Run it on a server" and the GitHub icon link the repository. The FAQ answers "Is it open source?" (Apache License 2.0, PR #86). The README says "Status: released". The site's screenshots are taken again for the new version label. The line hints of the install videos follow the pages (0 moved) |
+| R85A-1 | medium (agent review of PR #85; the release process, not a money path) | With the tree at 1.0.0, the fresh install check's first throwaway release, also 1.0.0, wrote its files back unchanged: `git commit` had nothing to commit and the check stopped at its step 2 ("the release could not be built"). The recipe of `docs/WINDOWS-TEST.md` uses the same tool | `mkrel.ts` in `scripts/release/fresh-install-check.sh` commits with `--allow-empty`, so a release of the version the tree has can be tagged. `test/launch-v1/FIC-1.test.ts` runs the tool as the script writes it, without Docker; it failed on 4948c2e ("nothing to commit") and passes now |
+| R85A-2 | low (re-review of PR #85; the tests) | `FIC-1`, `LAUNCH-1` and `docs-record` pinned the version 1.0.0: the version pull request of the next release would fail them. Once edited, `FIC-1` would no longer cover the empty commit | `FIC-1` builds the version the tree has; `LAUNCH-1` and `docs-record` hold a version of 1.0.0 or later, the same in `package.json` and both places of `package-lock.json`. Checked with the tree set to 1.0.1 for a moment: the three pass and `FIC-1` still fails without `--allow-empty` |
+| R85A-3 | low (agent review of PR #85 on fd70bb2; nothing signed, nothing spent) | LIFE-1's stop had one slot. With two models both refused with a 403, each refusal took the slot from the other: every agent on either model read a snapshot and asked at every tick (P10 undone) and the second alert said that agents on other models plan as usual | One stop per refused model and one for the account, each with its own prober (`accountStops` in `service.ts`): an agent waits for the account's stop and its own model's, a plan that works ends those two only and says which model works again, the alert names the other refused models. Two cases in `test/audit-1122/LIFE-1.test.ts` failed on fd70bb2 (agents 3 and 4 asked; the stop that ended was the other model's) and pass now |
+| R85A-4 | low (agent review of PR #85 on 25d8af9; every step still checked on a fresh snapshot) | LIFE-2 left one case open: `runPlan` read the generation at its own start, after the plan was made, and Retire does not wait for a plan being made (Remove does). A Retire while the model was still answering raised the generation first, so after Restore and Resume before the first action's moment the plan made before the Retire ran | The tick reads the generation before its first wait and hands it to `runPlan` (`service.ts`), so a Retire or a Remove at any point of the tick ends its plan at the next step. `test/audit-1122/LIFE-2.test.ts` holds Retire while the plan is made, then Restore and Resume; it failed on 25d8af9 (the action ran) and passes now, with a control in which the same plan runs |
+
+Updated on 2026-11-22, after #87 to #89 reached `main` and the owner's test of the release candidate passed (Find my
+team, Import by words and by PEM file, Remove, Retire and Restore): `main` merged in; the twelve screenshots taken again
+(V1.0.0, the new AI key steps, the $0.80 cost line and the new texts) with a new one of Find my team
+(`import-team-find.png`, on the import page, taken by `site/scripts/screenshots.ts` on throwaway words); the three install
+videos rendered again, since the installer's AI key line changed (APIKEY-1; its number and every quote stay, 132 quoted
+lines, 0 changed). The release notes name Find my team, the bid rule and the $0.80 a day.
+
+The same day, the owner's text rules were applied to everything a user reads, each with a test that failed first: no
+em dash and no comma before "and" or "or" in the docs, the site, the dashboard and the installers (TEXT-2, 199
+rewritten) and in the strings the code shows: Telegram, the command line, the dashboard's answers plus the Activity rows
+(TEXT-3, 29 rewritten; `src/strategist/prompt.ts` byte-identical). Every number a user reads was checked against the code,
+FoxLeague's live settings and its manual (NUM-1, NUM-2: two corrected); the figures of a moment were made general:
+the EGLD of a day's exchange rate (NUM-3), the dollar examples of the levels page (NUM-4), no fixed EGLD to start
+(NUM-5), the AI cost sentence without the token count and the costs measured in our own testing (NUM-6). NUM-7 corrects
+a refusal reason: a change while an open challenge waits was refused "more than 10 percent below a fresh team" where the
+rule is a fresh team more than 10 percent stronger (`MAX_1V1_STRENGTH_RATIO`); the rule itself is unchanged.
+
+Stays open:
+- The release itself follows `docs/RELEASING.md`: this commit runs on the owner's server first, then the tag v1.0.0, the
+  release built and signed with the owner's key (KEY-1) and published as the latest, the site from the same commit
+  and an install from the release on a clean machine.
+- The repository is made public by the owner on GitHub. Nothing in this pull request changes who can push or merge.
+- Production was not read for this pull request and nothing was deployed.
+
+## Pre-release audit (2026-11-22)
+
+Before v1.0.0 five Claude Fable 5.2 reviewers at high effort, read-only and one area each (MONEY, LIFECYCLE, ATTACK,
+INTEGRATION, RELEASE), went through `a7e5668..6b54f42` and the older code it rests on. The branch moved to `9d6abf3`
+while they read (screenshots, videos, docs and one test; nothing under `src/`). None found a critical or a high finding:
+one medium (INT-1) and thirteen lows (ATK-3 and REL-3 are the same history); MONEY proved nothing (about 200,000
+random bids, 100,000 random schedules and every call of eight live flows failing in turn left no wrong booking or
+signature). The owner decided to fix all of them before the release, except ATK-3 and REL-3, which the owner
+accepted. The fixes are by Claude Opus 5.5 at extra-high effort, test first: each test in `test/audit-1122/` is named
+after its finding, failed on `9d6abf3` for the reason the report gives and passes now. A case that holds right
+behaviour (a control, an unread roster, a 401, the helper of REL-2) passed before too and says so in its name or
+comment.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| INT-1 | medium (a forfeit 3-0 and the full K; nothing paid wrongly) | FoxLeague's own-session roster leaves out every card the marketplace contract holds (`roster_chain_view.rs`), so a card of the saved 18 the owner put in an auction came as no card at all: the MNT-4 line "LISTED IN YOUR 18" and the "In an auction" line never fired. The executor refused every match ("#15 in the squad is not in the wallet"), but the plan was never told to save a new 18, so the next locked tournament or 1v1 match was forfeited. The site page and two docs promised the line | When the roster was read, the snapshot names in one capital line every card of the saved lineup and bench it leaves out (sold, sent away or in an auction), with the forfeit and "save an 18 without it". An unread roster names none (rule 4). MNT-4's test uses the real state (the card left out) and keeps FoxLeague's fallback roster (a listed card) as a second case; `how-it-plays.md`, ECONOMY-AND-RULES and FOXLEAGUE-INTEGRATION corrected |
+| INT-2 | low (information only) | The planning snapshot took the ELO pair meetings without reading the answer's `live`; FoxLeague answers `live: false, meetings: 0` when its own read of the switch fails; the plan read "0 of 3 ELO meetings today" | Only an answer whose `live` is true is a count; any other is unknown, as an unread one |
+| INT-3 | low (information only; the leave rule reads the detail) | `participant_count` is null in `/tournaments/my` rows. BEH-2's seated set (`service.ts`) and the "seats locked" note of a joined tournament (`digest.ts`) read it there only: a taken targeted 1v1 read "0 accepted" and the note never printed | Both take the count from the public list row when the row has none, as `own-tournaments.ts` already did |
+| ATK-1 | low (the log; no money path) | A request whose body was cut short (a client that reaches the port itself and closes the connection) ended as a 500 with "web UI error: Error: aborted" and its stack in the service log, once a request; `POST /login` reads its body before any password is weighed | `readBody` turns a stream error into a fixed 400 ("request cut short"), which is not logged; the 413 stays |
+| ATK-2 | low (needs someone on the owner's network path) | The nginx template's 443 block sent no `Strict-Transport-Security`: a dashboard name typed without `https://` asked port 80 in clear, where a copy of the sign-in page could take the password | The 443 block sends `Strict-Transport-Security "max-age=31536000" always`; `docs/SERVER.md` tells the owner of a server set up from the older template to add the line. No server was touched |
+| REL-1 | low (an agent down after a restart, without a word; the class of INS-A6) | An update's `install.sh --prepare` runs on the agent's own Node.js and rewrote `.node-path` to that one path, dropping the path the owner's shell found Node.js at: after a later `brew upgrade` (or snap refresh) the launcher found no Node.js | In `--prepare`, `.node-path` stays as it is when its first existing path passes `node_ok`; one that is gone or fails the release's Node.js rule is written again. Changed in place: the install videos' 132 quoted lines stand (0 changed, 0 moved) |
+| REL-2 | low (the owner's rule DOCS-11c) | `test/audit-1111/docs-11c.test.ts` held the words it guards against (the first numbers of both server addresses, the owner's dashboard domain word, the deploy user, the hosting and the private project names) and left itself out of its own search; `test/` is packed into every release | The check hashes the words of each tracked text file (their dotted and dashed runs, the starts of addresses, the user names) and compares SHA-256 digests (`test/audit-1122/private-names.ts`); a hit is told by file, line and the start of its digest (never by the word). The file no longer leaves itself out |
+| LIFE-1 | low (medium if Anthropic answers 403 for one model) | Every 403 counted as an account stop for the whole install: with a model per agent, a 403 for one agent's own model made it the prober, which renewed the stop at each tick, so the agents on other models never planned; the alert pointed to Keys or credit | A 403 keeps the prober's model and effort in the stop: only agents whose plan uses that model wait, only a plan on it ends the stop and the alert names it ("the API key may not use that model or the account refuses it"). A 401 or a billing, credit or limit error stays an account stop for every agent (P10) |
+| LIFE-2 | low (each step was still checked on a fresh snapshot) | A plan that waited through Remove (or Retire) could run its next action after the team was imported again (or restored) under the same number and resumed | A per-agent generation, raised by Remove and Retire, read by `runPlan` at its start, before each step and after each step's snapshot: a changed value ends the plan quietly |
+| LIFE-3 | low | `pause()` added its abort listener after the stop signal had fired, so a stop during a tick's snapshot still paid for the plan and `stop()` waited its full 150 s; each pause left its listener behind | `pause()` returns at once once the stop began and removes its listener when its timer fires; `tick()` returns after its snapshot (and again before the model call) while stopping |
+| LIFE-4 | low (older code) | Telegram `/do N <words>` answered "planning ..." while paused, under the kill switch or with a plan running; the refusal was dropped. The loud wrapper removed the number from `loud` even when it had not added it, so a `/do` silenced a running `/tick` plan | `/do` in words answers `tickRefusal` first; the wrapper removes only what it added |
+| LIFE-5 | low (older code, the CLI) | `./cli.sh address N` printed account N of the recovery words for an imported team's number (an owner funding it would send to a wallet no agent uses); `snapshot N` and `export-pem N` used the install's own account for a removed imported team's number | `address` prints an imported team's own address from the database; `address`, `snapshot` (and every `walletOf`) and `export-pem` refuse a removed imported team's number, as the service's `wallet()` does since R89A-12 |
+| SHOT-FIND | low (ATTACK's note; nothing exposed) | `site/scripts/screenshots.ts` filled the words box of Find my team with 24 valid throwaway recovery words; `import-team-find.png` showed them on the public site | The box shows "example words only never use these as recovery words", which is no recovery phrase; the list's addresses still come from throwaway words never shown. The screenshots were taken again and only `import-team-find.png` kept |
+| ATK-3 / REL-3 | low (owner's decision: accepted) | The git history (about 370 commits before `a681eaf`) and the tags `v0.10.0` and `v0.11.0` still hold what DOCS-11 (c) took out of the tree: the website server's address, its deploy user, another site on it and three project names. No secret: every ref was searched for keys, tokens, recovery words and password hashes | None: the owner publishes the repository with its history (see below) |
+
+Stays open:
+- ATK-3 / REL-3, accepted by the owner: making the repository public publishes its whole history and the tags
+  `v0.10.0` and `v0.11.0`, with the website server's address, its deploy user and three project names. No secret.
+- What MONEY could not prove from the code (no network by the rules of the review; the code fails closed on another
+  answer): that the gateway's block timestamp stops advancing on a halted shard (HALT-1); that FoxLeague plays one
+  match of a whole tournament per round interval (MNT-1); FoxLeague's rounding of the MetaStaking Shop price, live
+  from 1 Dec (MNT-2).
+- The release archive ships `test/`, `.github/`, `docs/` and `deploy/` by design: `.gitattributes` leaves out `site/`
+  only (`docs/RELEASING.md`). Nothing in them is secret since REL-2.
+- REL-2's digests hide the words from a reader, not from someone who tries every value: the two-number start of an
+  address and a short user name can be found that way, the project and domain words only by guessing them.
+- Two more readers of the seat count of `/tournaments/my` rows, not named by INT-3, still find none: `ownUnanswered`
+  (`deadlines.ts`, which counts an own 1v1 with no count as not taken on purpose: a leave is never late) and the
+  scouting gate `ownTaken` (`snapshot.ts`), which keeps scouting 1v1s while one of the agent's own is taken.
+- Production was not read for this work and nothing was deployed.
 
 ## One manager message at a time (2026-11-13)
 

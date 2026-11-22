@@ -15,31 +15,31 @@ About every 10 minutes the agent asks GitHub whether a newer release of foxleagu
   maintainers on what is new, with the **Update now** button;
 - **Telegram** sends you the same lines, once for each version.
 
-The version you run is always in the dashboard's header, next to the mode (for example `v1.0.0`), and in the
+The version you run is always in the dashboard's header next to the mode (for example `v1.0.0`) and in the
 first line of `/status`, which also names a newer version when one is out.
 
 To ask now instead of at the next check, press the round arrow next to the version, **Check for updates**. The
-notice and a short message give the answer at once, and nothing is installed until you press **Update now**. Two
+notice and a short message give the answer at once; nothing is installed until you press **Update now**. Two
 checks less than 15 seconds apart ask GitHub once: the second shows the answer of the first. In a terminal,
 `./cli.sh update-check` in the `foxleague-agent` folder asks as well. Where the check is switched off the arrow is
 not shown.
 
 ### One click
 
-Press **Update now** in the dashboard, or send `/upgrade` on Telegram. No password is asked: whoever asks, only a
+Press **Update now** in the dashboard or send `/upgrade` on Telegram. No password is asked: whoever asks, only a
 release that is signed by the foxleague-agent maintainers and newer than yours can be installed, so there is
 nothing to steer. This is what happens:
 
 1. The agent asks for that release again and checks its signature with the key that came with the version you run.
 2. It downloads the release and checks that it is, byte for byte, the one that was signed.
-3. It unpacks the new version into a folder of its own, next to the running version, and the new version prepares
+3. It unpacks the new version into a folder of its own next to the running version; the new version prepares
    itself there (its Node.js and its dependencies). The running version is not written to: when a step fails, the
    agent runs on as before and tells you why.
 4. The agent stops as for any restart. An action that is being signed finishes and is booked first. The other
-   actions of a running plan that were still waiting are dropped, and the next plan takes them up from a fresh
+   actions of a running plan that were still waiting are dropped; the next plan takes them up from a fresh
    look at the game.
 5. It starts again as the new version and tells you so, in the dashboard and on Telegram. All of it takes a minute
-   or two. The dashboard is away for about half a minute, and its page comes back by itself.
+   or two. The dashboard is away for about half a minute; its page comes back by itself.
 
 The new version has to stay up for 45 seconds before the next update is taken. **Update now** or `/upgrade` in
 that time answers "the last update is still being confirmed, try again in a minute".
@@ -55,7 +55,7 @@ agent holds the public half of that key, which came with the version it already 
 
 So an update is taken only when the signature is good, the version is newer than yours and the download is exactly
 the one that was signed. Someone who took over the GitHub repository, the download or the network on the way
-could not make your agent install their code, and could not push it back to an older version either. The first
+could not make your agent install their code and could not push it back to an older version either. The first
 install has no earlier version to check with: like the install line itself, it trusts GitHub over https and the
 release's checksum.
 
@@ -64,7 +64,7 @@ release's checksum.
 The agent keeps the version that ran before. A new version counts as started once the agent has been up for 45
 seconds. When it has not come that far in two starts, the agent goes back by itself to the version that ran before
 and tells you, in the dashboard and on Telegram: "The update to ... did not start and was undone: you run ... as
-before." That takes about a minute and a half. Your wallet, settings and history are untouched, and it is safe to
+before." That takes about a minute and a half. Your wallet, settings and history are untouched; it is safe to
 try again later.
 
 Nothing has to be done then: the agent keeps running the version it ran before. While the same new version is on
@@ -73,7 +73,7 @@ if you want to install that version once more. A version newer than the one that
 with **Update now**.
 
 The background service starts the agent again after every exit, also when a new version ends at once without an
-error, so the undo does not wait for you. Stopping the agent yourself (`systemctl --user stop foxleague-agent`, or
+error, so the undo does not wait for you. Stopping the agent yourself (`systemctl --user stop foxleague-agent` or
 the uninstall) stays a stop.
 
 ### From a terminal
@@ -131,13 +131,13 @@ These show the notice with what to do instead of the button:
 - **An install from before versions had folders of their own**: paste the install line again once. Later updates
   are one click.
 - **A folder the agent may not write to** (another user owns part of it, for example after a command run with
-  `sudo`, or it came back from a backup): make it yours again in a terminal, then update again. The notice gives
+  `sudo`; or it came back from a backup): make it yours again in a terminal, then update again. The notice gives
   the command with your folder, for example `sudo chown -R "$USER" ~/foxleague-agent && chmod -R u+rwX ~/foxleague-agent`.
 
 ### Switching the check off
 
 Set `AGENT_UPDATE_CHECK=0` in the `.env` file and restart the agent. It then asks GitHub nothing and shows no
-notice, and `/upgrade` answers that updates are switched off. `./install.sh --update` in a
+notice; `/upgrade` answers that updates are switched off. `./install.sh --update` in a
 terminal still updates.
 
 ### When FoxLeague's manual changes
