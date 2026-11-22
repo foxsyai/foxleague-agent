@@ -87,12 +87,10 @@ test('SYNC2-4 FoxLeague\'s new page "Account Bans and Deletion" is decided: left
   assert.match(LEFT_OUT['legal/account-bans.md'] ?? '', /administrator/)
 })
 
-test('SYNC2-5 the agents\' manual is FoxLeague\'s main of 19 Nov (1ab9de65d): the busy-card rule, still off', () => {
+test('SYNC2-5 the agents\' manual holds the busy-card rule of #748, still off (the copy\'s commit is pinned by the newest sync test, SYNC3-2)', () => {
   const manual = readFileSync(MANUAL_FILE, 'utf8')
-  assert.match(manual.split('\n', 3).join('\n'), / main at 1ab9de65d 2026-11-19\./)
   assert.match(manual, /^## A player still in another match$/m)
   assert.match(manual, /From a date still to be announced a player plays one match at a time/)
   const record = JSON.parse(readFileSync(RECORD_FILE, 'utf8')) as { synced: string; pages: Record<string, string> }
-  assert.equal(record.synced, '1ab9de65d 2026-11-19')
   assert.equal(record.pages['legal/account-bans'], undefined)
 })

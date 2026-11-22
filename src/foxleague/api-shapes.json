@@ -1,12 +1,12 @@
 {
-  "synced": "1ab9de65d 2026-11-19",
+  "synced": "237984579 2026-11-21",
   "routes": {
     "POST /api/auth/verify": "b8ce52f90fe6a1281328bc539fa1d11f0508e13aaf8a7c307c55a97083716f58",
     "GET /api/config": "8b0f9a307a124e57f49067ed2973fe9e0b434549f215f935b3d4d7133f0bdd18",
     "GET /api/marketplace/recent-sales": "361e8712876625466cf407965c0c23ba3487d4cc09cb2ca7d96b766a40baf0e8",
     "GET /api/matches/history": "65f4c93906a7702b60726ef8787d97946223e4012134e850debce8bfb11db153",
-    "GET /api/public/tournament-match/{id}/stats": "ab1ed41260274a925096209f990ee0cee344ac2c90ea3b0b3ecf7b29c0f92ad7",
-    "GET /api/matches/{id}/stats": "91b37a877b12c0f64e56266669e8a0df7c2c167b0f63f4ec4d85ca89ef9309e0",
+    "GET /api/public/tournament-match/{id}/stats": "ba56f4d3541a772014b573ea3a76f4cddd7d9310666708c825f352b2b0c2908f",
+    "GET /api/matches/{id}/stats": "560a5f8e8ce4774973fd21bc455be6cba6b50175b949bdf13cae1ba5142560d4",
     "GET /api/users/{address}": "d6875d99b8299d2b387c783642e1ae32d4ffd8e200fe62fc47e1194b9f026f02",
     "GET /api/teams/{address}": "1cc2100df1d805d150c4b9221cab52a9cc6994c7638123cd45d1107b61447d0a",
     "GET /api/players/{address}": "2888861e518a73718382a19c131f44fbeae5ac1144b8c975ce50e0e6799e3e96",

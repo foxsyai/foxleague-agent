@@ -1007,9 +1007,9 @@ function oneVOneStateRefusal(s: AgentSnapshot, now: Date): string | null {
  */
 function fusionBlocked(s: AgentSnapshot, c: PlayerView): string | null {
   if (c.rarity === 'Legendary') return 'a Legendary cannot be fused'
-  const peers = s.players.filter(p => p.rarity === c.rarity && !p.listed && !p.transferLockedUntil)
+  const peers = s.players.filter(p => p.rarity === c.rarity && p.listed === false && !p.transferLockedUntil)
   if (peers.length < 3) return `only ${peers.length} ${c.rarity} card${peers.length === 1 ? '' : 's'} free for fusion, 3 are needed`
-  const left = s.players.filter(p => !p.listed).length - 2
+  const left = s.players.filter(p => p.listed === false).length - 2
   if (left < 18) return `a fusion would leave ${left} cards and a match needs 18: get spare cards first`
   return null
 }
@@ -1044,7 +1044,7 @@ function noBoosterFixture(s: AgentSnapshot, now: Date): string | null {
  */
 function listingBlocked(s: AgentSnapshot, c: PlayerView): string | null {
   if (inSquad(s, c.nonce)) return `#${c.nonce} is in the lineup or on the bench`
-  const unlisted = s.players.filter(p => !p.listed)
+  const unlisted = s.players.filter(p => p.listed === false)
   if (unlisted.length - 1 < 18) return 'listing it would leave fewer than 18 cards; a match needs 18'
   const rank = [...unlisted].sort((x, y) => y.syncedTotal - x.syncedTotal).findIndex(p => p.nonce === c.nonce)
   if (rank >= 0 && rank < CORE_CARDS) return `#${c.nonce} is among the ${CORE_CARDS} strongest cards: the agent sells only spares`
@@ -1153,7 +1153,8 @@ function squadLegal(s: AgentSnapshot, at: Date, what = ''): string | null {
   for (const n of [...s.team.lineup, ...s.team.substitutes]) {
     const p = card(s, n)
     if (!p) return `#${n} in the squad is not in the wallet`
-    if (p.listed) return `#${n} is listed for sale`
+    const held = listedRefusal(p)
+    if (held) return held
     if (p.transferLockedUntil) return `#${n} is in a transfer cooldown until ${p.transferLockedUntil}`
     // Stats or condition FoxLeague's answer left out make the squad's strength NaN, which no "stronger than" test
     // catches (grand audit 2026-11-06, EDGE-1): no match, entry or 1v1 on a squad that cannot be read.
@@ -1167,6 +1168,18 @@ function squadLegal(s: AgentSnapshot, at: Date, what = ''): string | null {
   const fit = lineupPositionsOk(s, s.team.formation, s.team.lineup)
   if (fit) return `the saved lineup does not fit the formation ${s.team.formation} (${fit}): save one that fits first (set_formation with lineup and substitutes, or set_lineup)`
   return null
+}
+
+/**
+ * A card the marketplace contract holds takes no part in anything the agent does: FoxLeague trains none, plays none
+ * and fuses none (#752; the training page: "A player that is in an auction cannot be trained"). A card whose auction
+ * state the roster did not give is unknown, never "in the wallet" (SYNC-3, AGENTS.md rule 4; FoxLeague's API
+ * description requires listed_for_sale on every card, so it is no refusal on a normal day).
+ */
+function listedRefusal(p: PlayerView): string | null {
+  if (p.listed === false) return null
+  if (p.listed === true) return `#${p.nonce} is listed for sale`
+  return `whether #${p.nonce} is in an auction (listed for sale) could not be read: not acting blind`
 }
 
 /**
@@ -1190,7 +1203,8 @@ function lineupVerdict(s: AgentSnapshot, formation: string, lineup: number[], su
   for (const n of all) {
     const p = card(s, n)
     if (!p) return refuse(`#${n} is not in the wallet`)
-    if (p.listed) return refuse(`#${n} is listed for sale`)
+    const held = listedRefusal(p)
+    if (held) return refuse(held)
     if (p.transferLockedUntil) return refuse(`#${n} is in a transfer cooldown`)
   }
   const bad = lineupPositionsOk(s, formation, lineup)
@@ -1258,7 +1272,12 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
 
     case 'sync': {
       if (!registered) return refuse('not registered')
-      const dirty = s.players.filter(p => p.dirty && !p.listed && (a.nonce === undefined || p.nonce === a.nonce))
+      // A listed card is left out (FoxLeague syncs no card the marketplace contract holds); one whose auction state
+      // could not be read refuses the sync with that reason rather than being left out unnamed (review of PR #87).
+      const named = s.players.filter(p => p.dirty && (a.nonce === undefined || p.nonce === a.nonce))
+      const unreadCard = named.find(p => p.listed !== true && p.listed !== false)
+      if (unreadCard) return refuse(listedRefusal(unreadCard)!)
+      const dirty = named.filter(p => p.listed === false)
       if (!dirty.length) return refuse(a.nonce === undefined ? 'no dirty cards to sync' : `#${a.nonce} has nothing to sync`)
       const changed = dirty.filter(p => Object.keys(p.live).some(k => p.live[k] !== p.synced[k]))
       const cost = cfg.sync_cost_foxsy * dirty.length
@@ -1269,7 +1288,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!registered) return refuse('not registered')
       const p = card(s, a.player_nonce)
       if (!p) return refuse(`#${a.player_nonce} is not in the wallet`)
-      if (p.listed) return refuse(`#${p.nonce} is listed for sale`)
+      const held = listedRefusal(p)
+      if (held) return refuse(held)
       if (p.condition < cfg.min_field_condition) return refuse(`#${p.nonce} condition ${p.condition} is below ${cfg.min_field_condition}`)
       if ((p.live[a.attribute] ?? 0) >= p.cap) return refuse(`#${p.nonce} ${a.attribute} is at its ${p.rarity} cap ${p.cap}: XP would be lost`)
       const t = s.auth?.shop?.training
@@ -1820,7 +1840,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       // From the switch FoxLeague signs the competitive matches the card shows, synced or not.
       const g = matchGate(cfg, rarity)
       for (const c of inputs) {
-        if (c.listed) return refuse(`#${c.nonce} is listed for sale`)
+        const held = listedRefusal(c)
+        if (held) return refuse(held)
         if (c.transferLockedUntil) return refuse(`#${c.nonce} is in a transfer cooldown until ${c.transferLockedUntil}`)
         if (c.fusionReadyAt === 'unknown') return refuse(`#${c.nonce}'s fusion cooldown could not be read: not fusing blind`)
         if (c.fusionReadyAt) return refuse(`#${c.nonce} is in its fusion cooldown until ${c.fusionReadyAt}`)
@@ -1833,7 +1854,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         if (c.competitiveMatches < g.floor) return refuse(`#${c.nonce} has played ${c.competitiveMatches} competitive matches; ${aRarity(rarity)} must really play ${g.floor} of its ${g.gate}`)
         if (c.competitiveMatches + c.fusionMatchCredit < g.gate) return refuse(`#${c.nonce} has ${c.competitiveMatches + c.fusionMatchCredit} of the ${g.gate} competitive matches ${aRarity(rarity)} needs for fusion`)
       }
-      const left = s.players.filter(p => !p.listed).length - 2
+      const left = s.players.filter(p => p.listed === false).length - 2
       if (left < 18) return refuse(`fusion would leave ${left} cards; a match needs 18`)
       if (mint) {
         const v = mintFusion(a, s, ctx, inputs)
@@ -1901,9 +1922,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (!cfg.auction_enabled) return refuse('auctions are switched off')
       const c = card(s, a.nonce)
       if (!c) return refuse(`#${a.nonce} is not in the wallet`)
-      if (c.listed) return refuse(`#${a.nonce} is already listed`)
+      if (c.listed === true) return refuse(`#${a.nonce} is already listed`)
+      const held = listedRefusal(c)
+      if (held) return refuse(held)
       if (inSquad(s, a.nonce)) return refuse(`#${a.nonce} is in the lineup or on the bench: set a squad without it first`)
-      if (s.players.filter(p => !p.listed).length - 1 < 18) return refuse('listing would leave fewer than 18 cards; a match needs 18')
+      if (s.players.filter(p => p.listed === false).length - 1 < 18) return refuse('listing would leave fewer than 18 cards; a match needs 18')
       if (c.dirty) return refuse(`#${a.nonce} has unsynced stats: sync first (the contract reads the on-chain match count)`)
       const gate = matchGate(cfg, c.rarity)
       if (c.competitiveMatches < gate.floor || c.competitiveMatches + c.fusionMatchCredit < gate.gate) {
@@ -1913,7 +1936,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (a.reserve_foxsy < platformMin) return refuse(`reserve below the platform minimum of ${platformMin} FOXSY`)
       const rarityMin = MIN_RESERVE_FOXSY[c.rarity] ?? platformMin
       if (a.reserve_foxsy < rarityMin) return refuse(`reserve ${a.reserve_foxsy} is under the ${c.rarity} minimum of ${rarityMin} FOXSY`)
-      const rank = s.players.filter(p => !p.listed).sort((x, y) => y.syncedTotal - x.syncedTotal).findIndex(p => p.nonce === a.nonce)
+      const rank = s.players.filter(p => p.listed === false).sort((x, y) => y.syncedTotal - x.syncedTotal).findIndex(p => p.nonce === a.nonce)
       if (rank >= 0 && rank < CORE_CARDS) return refuse(`#${a.nonce} is among the ${CORE_CARDS} strongest cards: the agent sells only spares`)
       if (ctx.floorPrice === null) return refuse('the marketplace floor is unavailable: not listing blind')
       if (ctx.floorPrice && a.reserve_foxsy < ctx.floorPrice) return refuse(`reserve ${a.reserve_foxsy} is under the ${c.rarity} floor of ${ctx.floorPrice}: the agent does not sell below the market`)
