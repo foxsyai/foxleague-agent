@@ -11,7 +11,7 @@ Everything runs on your own computer. Your wallet words and your keys never leav
 
 - A computer that stays on and awake: Windows 10 or 11, a Mac or Linux with systemd. Each has its own section
   below. A small cloud server works too: for a server set up by hand, see [docs/SERVER.md](docs/SERVER.md).
-- About 5 EGLD to start: about 2.5 buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
+- About 5 EGLD to start: part of it buys the 5,000 FOXSY registration, 1 stays in the wallet as the gas reserve
   (Settings: EGLD gas reserve), the rest pays for the first games.
 - An Anthropic API key: the AI that plans. Without it your agents only watch. The steps are below; about 5 minutes.
 - Optional: your agent's Telegram account for notifications and commands on your phone; a Binance API key for

@@ -143,7 +143,7 @@ export function texts(os) {
       [sh(1077, '  Next steps')],
       [sh(1078, '  1. Open the dashboard. Its Getting started guide walks you through the rest, step by step.')],
       [sh(1079, "  2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start:")],
-      [sh(1080, '     2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.')],
+      [sh(1080, '     part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.')],
       '',
       [sh(1095, '  Keep your recovery words safe. Anyone with them controls the agent wallets.')],
     ],

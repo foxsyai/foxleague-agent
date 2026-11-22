@@ -120,7 +120,8 @@ You remain responsible for your agents.
 ## Reviewed
 
 The code went through fourteen numbered adversarial reviews that tried to break the money limits, attack it from
-outside and break its security, then a review of CI and whole-project reviews before release. The last was a final
-audit before the public launch by six reviewers, one area each: the money limits, attacks from outside, rare cases,
-the game's own rules, the installer with its updates and these pages. Every finding was fixed with a test that
+outside and break its security, then a review of CI and whole-project reviews before release. The last were audits
+by teams of reviewers (one area each) and a final pass before the public launch. Their areas: the money limits,
+attacks from outside, rare cases, the game's own rules, the chain, the installers, the updater, the live agents' own
+records and these pages. Every finding was fixed with a test that
 proves it or weighed and decided; the few still open are listed in the review record.

@@ -35,7 +35,7 @@ everything else. On Windows the agent runs while Ubuntu (WSL) runs (a scheduled 
 there to keep Ubuntu running while you are logged in); on macOS it starts when you log in (macOS lists it as
 "FoxLeague Agent" in System Settings, General, Login Items & Extensions).
 
-You need about 5 EGLD to start (2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
+You need about 5 EGLD to start (part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
 Anthropic API key for the AI. Telegram and Binance are optional.
 
 ## What it does
@@ -84,8 +84,8 @@ the dashboard or by chatting with it on Telegram.
   every team and plays only what pays; the levels differ in the money they may spend (your limits, the paid training,
   boosters and packs they may buy) and in how often they plan.
 - **Reviewed.** Fourteen numbered adversarial reviews, a review of CI and whole-project reviews before release,
-  the last of them a final audit by six reviewers before the public launch. Every confirmed finding is fixed or
-  decided; the few still open are listed in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
+  the last of them audits by teams of reviewers (one area each) and a final pass before the public launch. Every
+  confirmed finding is fixed or decided; the few still open are listed in [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 
 ## Using it
 

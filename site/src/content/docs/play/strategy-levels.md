@@ -80,8 +80,9 @@ for on FoxLeague (the median of each trading day's median price over the last 30
 than 5 days traded; with too few sales even then the agent sees no market price), so one day of cheap sales counts
 once) and aims below it: it bids the reserve or the smallest raise that wins. Your limits per rarity are the
 most it may pay. A card is three of the rarity below fused, so by default each limit is three times the one below plus
-5 percent: 500 FOXSY for a Common (a pack card's price, so never more than the shop charges), 1,650 for an Uncommon,
-5,200 for a Rare, 16,400 for an Epic and 51,700 for a Legendary. Markets move: Settings shows today's market price
+5 percent, counted from a Common at 525 (a pack card's 500 plus 5 percent) and rounded: 1,650 for an Uncommon,
+5,200 for a Rare, 16,400 for an Epic and 51,700 for a Legendary. The limit for a Common itself is 500 FOXSY (a pack
+card's price, so never more than the shop charges). Markets move: Settings shows today's market price
 under each limit, in colour, so you can see whether it still fits. Raising them asks for your password.
 
 **Never a card that cannot play for weeks.** A card that changed hands carries FoxLeague's transfer lock;
@@ -118,7 +119,8 @@ The presets set the direction and your limits always win: an agent stops at its 
 its largest single payment and its counts, whatever its strategy says. So each level comes with its own limits: **picking a
 level in Settings proposes them**. Each setting that does not fit the level yet gets a row with a tick;
 **Accept and save** saves the ticked ones (raising a limit or shortening the tick asks for your password). You can change any of them
-afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a very different price, adjust them:
+afterwards. The dollar values have to hold the FOXSY amounts beside them at the price of the day, which the FOXSY
+total at the top of the dashboard shows; when that price moves a lot, adjust them:
 
 | Setting | Steady | Climber | Hunter | Predator | Beast | Zeus |
 |---|---|---|---|---|---|---|
@@ -146,7 +148,7 @@ minimum up (for example 5,000 FOXSY), whatever the tournament is called. At ever
 tournament of a tier it knows (Bronze, Silver or Gold).
 
 How the limits are sized: the daily cap covers the largest entry the level allows (a climber's Gold entry of 5,000
-FOXSY is about $13.50, a beast's of 20,000 about $54) and a busy day of its buying (entries, ranked tickets, syncs,
+FOXSY, a beast's of 20,000) and a busy day of its buying (entries, ranked tickets, syncs,
 recovery, its paid sessions, booster and pack); the monthly budget is close to 30 days of typical play at that level;
 the top-up warning comes when about two days of play at the daily cap are left. The AI is one setting for every
 agent; a level that plans twice as often costs about twice as much in AI calls. Every level recommends the AI a new

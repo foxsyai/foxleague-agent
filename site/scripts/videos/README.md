@@ -171,7 +171,7 @@ The line numbers are those of the commit the videos were drawn from.
 piece; the line given is where it stands now.
 
 <!-- quotes:start -->
-Checked against commit 6b54f42 (2026-11-22): 132 quoted lines, 0 changed.
+Checked against commit 27508be (2026-11-22): 132 quoted lines, 0 changed.
 
 | Video | File:line | Text on screen | Check |
 |---|---|---|---|
@@ -282,7 +282,7 @@ Checked against commit 6b54f42 (2026-11-22): 132 quoted lines, 0 changed.
 | windows, mac, linux | `install.sh:1077` | Next steps | ok |
 | windows, mac, linux | `install.sh:1078` | 1. Open the dashboard. Its Getting started guide walks you through the rest, step by step. | ok |
 | windows, mac, linux | `install.sh:1079` | 2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start: | ok |
-| windows, mac, linux | `install.sh:1080` | 2.5 buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games. | ok |
+| windows, mac, linux | `install.sh:1080` | part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games. | ok |
 | windows, mac, linux | `install.sh:1095` | Keep your recovery words safe. Anyone with them controls the agent wallets. | ok |
 | windows, mac, linux | `install.sh:1101` | Open the dashboard in your browser now? (y/n) [y]: | ok |
 | linux | `site/src/content/docs/start/install-linux.mdx:37` | curl -fsSL https://raw.githubusercontent.com/foxsyai/foxleague-agent/main/get.sh \| bash | ok |
