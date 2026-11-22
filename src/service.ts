@@ -494,8 +494,8 @@ export class Service {
   /** A tick still making its plan (the snapshot, the AI), before its actions wait for their moments: Remove waits for it (R89A-12). */
   private readonly planning = new Set<number>()
   /**
-   * Raised per agent by Remove and Retire: a plan reads it at its start and before each step, and a changed value ends
-   * it quietly, so a plan that waited through a Remove (or a Retire) never runs for the team imported again (or
+   * Raised per agent by Remove and Retire: a tick reads it before its first wait and its plan before each step, and a
+   * changed value ends it quietly, so a plan that waited through a Remove (or a Retire) never runs for the team imported again (or
    * restored) under the same number and resumed (LIFE-2, audit 2026-11-22).
    */
   private readonly generation = new Map<number, number>()
@@ -1932,6 +1932,8 @@ export class Service {
     const agent = this.store.agent(index)!
     this.busy.add(index)
     this.planning.add(index)
+    // Read before the first wait: a Retire while the plan is still being made ends it too (R85A-4).
+    const generation = this.generation.get(index) ?? 0
     let asked: { model: string; effort: string } | undefined
     try {
       await this.retryPending(agent)
@@ -1990,7 +1992,7 @@ export class Service {
       if (!plan.actions.length) this.quiet.add(index)
       // From here the plan's actions wait for their moments and read the agent before each one (Remove may go).
       this.planning.delete(index)
-      const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
+      const running = this.runPlan(agent, plan.actions, !ownerRequest, snap, generation)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
       this.startShadow(index, plan)
@@ -2250,10 +2252,10 @@ export class Service {
    * deadlines come from `planSnap`, the snapshot the plan was made from; without one every deadline is unread and its
    * action runs early. Routine actions pass the per-action probability; owner requests always run.
    */
-  private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot): Promise<void> {
+  private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot, generation: number = this.generation.get(agent.index) ?? 0): Promise<void> {
     if (!actions.length) return
-    // A Remove or a Retire after this point ends the plan at its next step, whatever comes back under the number (LIFE-2).
-    const generation = this.generation.get(agent.index) ?? 0
+    // `generation`: read by the tick before it began (now when not given). A Remove or a Retire since then ends the plan at its next step,
+    // whatever comes back under the number (LIFE-2, R85A-4).
     const same = () => (this.generation.get(agent.index) ?? 0) === generation
     // The share the starts a snapshot or a refusal suggests leave room for (slots.ts, planLeadMs and nextPlanLeadMs).
     let windowMs = routine ? agent.settings.tickMinutes * 60_000 * PLAN_WINDOW_SHARE : 0
