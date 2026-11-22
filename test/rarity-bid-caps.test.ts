@@ -22,14 +22,14 @@ import { ADDR, OTHER, TEST_SETTINGS, dryWallet, setup, snapshot } from './fixtur
 type Caps = { maxBidRareFoxsy: number; maxBidEpicFoxsy: number; maxBidLegendaryFoxsy: number }
 
 // Since 2026-10-24 about 20 percent over the market (7,000, 14,000 and 38,000): test/levels-bids-manual.test.ts.
-test('the limits per rarity default to 7,000, 14,000 and 38,000, also for an agent made before them', () => {
+test('the limits per rarity default to 5,500, 13,000 and 50,000 (BIDS-1, the owner 2026-11-22), also for an agent made before them', () => {
   const d = DEFAULT_SETTINGS as unknown as Caps
-  assert.deepEqual([d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [7000, 14_000, 38_000])
+  assert.deepEqual([d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [5500, 13_000, 50_000])
   const store = new Store('', ':memory:')
   store.addAgent(0, ADDR)
   ;(store as unknown as { db: { prepare(q: string): { run(...a: unknown[]): void } } }).db.prepare("UPDATE agents SET settings = ? WHERE idx = 0").run(JSON.stringify({ strategy: 'x', maxBidFoxsy: 47000 }))
   const s = store.agent(0)!.settings as unknown as Caps
-  assert.deepEqual([s.maxBidRareFoxsy, s.maxBidEpicFoxsy, s.maxBidLegendaryFoxsy], [7000, 14_000, 38_000])
+  assert.deepEqual([s.maxBidRareFoxsy, s.maxBidEpicFoxsy, s.maxBidLegendaryFoxsy], [5500, 13_000, 50_000])
 })
 
 test('a bid above the owner\'s limit for its rarity is refused; a raised limit is honoured within the max bid', () => {
@@ -40,11 +40,11 @@ test('a bid above the owner\'s limit for its rarity is refused; a raised limit i
   const auction = { seller: OTHER, minPrice: wholeToAtomic(500), highestBid: 0n, highestBidder: null, endsAt: new Date(Date.now() + 3600_000) }
   const bid = (foxsy: number, rarity: string, more: Partial<Caps> = {}) =>
     checkAction({ type: 'bid', nonce: 9, foxsy }, s, { settings: { ...TEST_SETTINGS, maxBidFoxsy: 47_000, ...more }, now: new Date(), auction, cardRarity: rarity } as RulesContext)
-  assert.equal(bid(7000, 'Rare').ok, true, bid(7000, 'Rare').refusal)
-  assert.match(bid(7001, 'Rare').refusal!, /above your limit for a Rare \(7000 FOXSY\)/)
-  assert.match(bid(14_001, 'Epic').refusal!, /above your limit for an Epic \(14000 FOXSY\)/)
-  assert.match(bid(38_001, 'Legendary').refusal!, /above your limit for a Legendary \(38000 FOXSY\)/)
-  assert.equal(bid(40_000, 'Legendary', { maxBidLegendaryFoxsy: 45_000 }).ok, true, 'the owner raised it')
+  assert.equal(bid(5500, 'Rare').ok, true, bid(5500, 'Rare').refusal)
+  assert.match(bid(5501, 'Rare').refusal!, /above your limit for a Rare \(5500 FOXSY\)/)
+  assert.match(bid(13_001, 'Epic').refusal!, /above your limit for an Epic \(13000 FOXSY\)/)
+  assert.match(bid(47_000, 'Legendary', { maxBidLegendaryFoxsy: 45_000 }).refusal!, /above your limit for a Legendary \(45000 FOXSY\)/)
+  assert.equal(bid(40_000, 'Legendary', { maxBidLegendaryFoxsy: 45_000 }).ok, true, 'the owner set it')
   assert.match(bid(46_000, 'Legendary', { maxBidLegendaryFoxsy: 60_000, maxBidFoxsy: 45_000 } as never).refusal!, /per-action maximum 45000/, 'the max bid still binds on top')
   assert.equal(bid(1000, 'Uncommon').ok, true, 'under the Uncommon limit (1,500 since 2026-10-24: test/limits-common-uncommon.test.ts)')
 })
@@ -52,7 +52,7 @@ test('a bid above the owner\'s limit for its rarity is refused; a raised limit i
 test('raising a limit per rarity asks for the password, lowering it does not; each is validated', () => {
   const cur = DEFAULT_SETTINGS
   assert.equal(raisesLimit(cur, { maxBidRareFoxsy: 8000 } as never), true)
-  assert.equal(raisesLimit(cur, { maxBidLegendaryFoxsy: 40_000 } as never), true)
+  assert.equal(raisesLimit(cur, { maxBidLegendaryFoxsy: 55_000 } as never), true)
   assert.equal(raisesLimit(cur, { maxBidEpicFoxsy: 10_000 } as never), false)
   assert.deepEqual(validateSettingsPatch({ maxBidRareFoxsy: 7000, maxBidEpicFoxsy: 0, maxBidLegendaryFoxsy: 32000 }), { maxBidRareFoxsy: 7000, maxBidEpicFoxsy: 0, maxBidLegendaryFoxsy: 32000 })
   assert.throws(() => validateSettingsPatch({ maxBidRareFoxsy: -1 }), /maxBidRareFoxsy/)
@@ -100,7 +100,7 @@ test('the planning snapshot reads only the new sales and carries the market pric
   assert.deepEqual(calls, [0], 'a page of known sales ends the read')
   assert.match(renderDigest(s1), /Market prices \(median of the daily median sale prices; every trading day counts once\): Common unknown \(too few sales in 90 days\), Uncommon unknown \(too few sales in 90 days\), Rare 6,100 \(5 trading days in 30 days\)/)
   const store = setup().store
-  assert.match(renderPlanRequest({ snapshot: s1, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true }), /by rarity at most Common 500, Uncommon 1500, Rare 7000, Epic 14000, Legendary 38000 \(the owner's limits\)/)
+  assert.match(renderPlanRequest({ snapshot: s1, settings: DEFAULT_SETTINGS, budget: budgetView(store, 0, DEFAULT_SETTINGS, true, new Date()), recent: [], dryRun: true }), /by rarity at most Common 500, Uncommon 1500, Rare 5500, Epic 13000, Legendary 50000 \(the owner's limits\)/)
 })
 
 // Agent review of PR #21 (medium): a card whose rarity is unknown skipped both its limit and the build cost.

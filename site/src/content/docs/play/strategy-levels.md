@@ -39,10 +39,10 @@ afterwards or write your own. [Every setting explained](/use/settings/) covers t
 |---|---|---|
 | **1. Steady** | Entries at your lowest Silver amounts, 2 paid training sessions a day, cards at auction up to 500 FOXSY, fusion fees and small waivers; from FoxLeague's competition levels on, the ranked ticket of each ranked start (within Max shop payment) | $5 |
 | **2. Climber** | Gold entries too, 4 paid sessions a day, an XP booster a week, cards up to 1,500 FOXSY | $15 |
-| **3. Hunter** | 6 paid sessions a day, 2 boosters and a Common pack a week, cards up to 7,000 FOXSY | $25 |
-| **4. Predator** | 8 paid sessions a day, 3 boosters and 2 packs a week, a Rare's fusion match waivers, cards up to 14,000 FOXSY | $50 |
+| **3. Hunter** | 6 paid sessions a day, 2 boosters and a Common pack a week, cards up to 5,500 FOXSY | $25 |
+| **4. Predator** | 8 paid sessions a day, 3 boosters and 2 packs a week, a Rare's fusion match waivers, cards up to 13,000 FOXSY | $50 |
 | **5. Beast** | All 10 paid sessions a day, a booster every day, an Epic's fusion match waivers | $100 |
-| **6. Zeus** | Cards up to 38,000 FOXSY, the largest budget, a plan every hour | $150 |
+| **6. Zeus** | Cards up to 50,000 FOXSY, the largest budget, a plan every hour | $150 |
 
 On average about 90 percent of all entry fees come back as prizes, so entries are mostly a stake that returns,
 not a cost. They still count toward the day's budget when they are paid: a prize goes back to the wallet but not
@@ -56,7 +56,7 @@ back into the budget. The shop, the waivers and the bids are real spending.
 | XP boosters a week (2,000 FOXSY) | none | 1 | 2 | 3 | every day | every day |
 | Common packs a week (2,500 FOXSY) | none | none | 1 | 2 | 2 | 2 |
 | Days of injury medicine a week (100 to 500 FOXSY a day, by rarity) | none | 2 | 4 | 6 | 12 | 18 |
-| Bids at auction | any rarity, up to 500 | up to 1,500 | up to 7,000 | up to 14,000 | up to 14,000 | up to 38,000 |
+| Bids at auction | any rarity, up to 500 | up to 1,500 | up to 5,500 | up to 13,000 | up to 13,000 | up to 50,000 |
 | Fusion fees (100 to 800) | up to 400 | all | all | all | all | all |
 | Fusion waivers, one payment | up to 500 | up to 2,000 | up to 2,500 | up to 3,000 (a Rare's) | up to 9,000 (an Epic's) | up to 9,000 |
 | Champions FoxLeague (League + Knockout) invitations | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -80,10 +80,10 @@ for on FoxLeague (the median of each trading day's median price over the last 30
 than 5 days traded; with too few sales even then the agent sees no market price), so one day of cheap sales counts
 once), and aims below it: it bids the reserve or the smallest raise that wins. Your limits per rarity are the
 most it may pay: by default 500 FOXSY for a Common (a pack card's price, so never more than the shop charges), 1,500
-for an Uncommon (under the 1,600 that three Commons and the fusion fee cost), 7,000 for a Rare, 14,000 for an Epic and
-38,000 for a Legendary. Each sits a little above the market price it was set from, about 20 percent for the last
-three, so an agent that is outbid once can still bid again. Settings shows today's market price under each limit, in
-colour, so you can see whether it still fits. Raising them asks for your password.
+for an Uncommon (under the 1,600 that three Commons and the fusion fee cost), 5,500 for a Rare, 13,000 for an Epic and
+50,000 for a Legendary, each a little above what that rarity sold for when the defaults were set. Markets move:
+Settings shows today's market price under each limit, in colour, so you can see whether it still fits. Raising them
+asks for your password.
 
 **Never a card that cannot play for weeks.** A card that changed hands carries FoxLeague's transfer lock, and
 whoever buys it at auction takes the rest of that lock over. The agent reads the lock of every card it means to bid
@@ -129,7 +129,7 @@ afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a
 | Max entry fee or stake (FOXSY) | 1,500 | 5,000 | 7,500 | 10,000 | 20,000 | 25,000 |
 | Max shop payment (FOXSY) | 500 | 2,000 | 2,500 | 3,000 | 9,000 | 9,000 |
 | Max swap (FOXSY) | 10,000 | 10,000 | 10,000 | 20,000 | 40,000 | 50,000 |
-| Max bid (FOXSY) | 500 | 1,500 | 7,000 | 14,000 | 14,000 | 38,000 |
+| Max bid (FOXSY) | 500 | 1,500 | 5,500 | 13,000 | 13,000 | 50,000 |
 | Paid training a day | 2 | 4 | 6 | 8 | 10 | 10 |
 | Boosters a week | 0 | 1 | 2 | 3 | 7 | 7 |
 | Packs a week | 0 | 0 | 1 | 2 | 2 | 2 |
@@ -155,8 +155,7 @@ install starts on, Haiku 5.5 at high effort; Sonnet 5.5 plans more carefully and
 active and costs the most of the three. [What it costs](/help/costs/) gives the cost of a plan at the defaults and as
 measured on Opus 5.5 at high effort.
 
-A bid also needs a daily cap above its value, and each level's daily cap fits its max bid: a predator's 14,000 FOXSY
-is about $38 of its $50, Zeus's 38,000 about $103 of its $150.
+A bid also needs a daily cap above its value; each level's daily cap holds a bid at its max bid with room to spare.
 
 ## Good to know
 
