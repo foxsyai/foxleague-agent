@@ -73,7 +73,7 @@ test('the plan sees the five limits and the five market prices', () => {
 
 test('the dashboard has the two new limits with their info bubbles and market lines, and the password guards them', () => {
   for (const [id, tip] of [['sBidCommon', 'bidCommon'], ['sBidUncommon', 'bidUncommon']] as const) {
-    assert.match(html, new RegExp(`<label for="${id}">[^<]*<i class="info" data-tip="${tip}">i</i></label><input id="${id}" type="number" min="0" step="100"><div class="hint" id="h${id.slice(1)}"></div>`))
+    assert.match(html, new RegExp(`<label for="${id}">[^<]*<i class="info" data-tip="${tip}">i</i></label><input id="${id}" type="number" min="0" step="10"><div class="hint" id="h${id.slice(1)}"></div>`))
     assert.match(html, new RegExp(`\\n  ${tip}: \\[`), `the ${tip} info bubble`)
   }
   assert.match(html, /function renderLimitHints\(\) \{\n  for \(const r of \['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'\]\)/)
