@@ -72,12 +72,15 @@ test('R89A-12 Remove waits while the plan is still being made; it goes once the 
 test('R89A-12 a real tick: Remove is refused until the plan is made', async () => {
   const { svc, index } = await withImported()
   svc.store.setPaused(index, false)
+  // Every hour of the day, so the tick never ends at once as "outside active hours" (R89A-13: 22:00 to 06:00 UTC).
+  svc.store.updateSettings(index, { activeHoursUtc: [0, 24] })
   let release: (v: unknown) => void = () => undefined
   const inner = svc as unknown as { snapshot: (i: number, fresh?: boolean) => Promise<unknown> }
   const { snapshot } = await import('../fixtures.ts')
   inner.snapshot = () => new Promise(r => { release = r })
   const ticking = svc.tick(index)
   await new Promise(r => setTimeout(r, 30))
+  assert.equal(svc.isBusy(index), true, 'the tick runs: it was not refused')
   svc.store.setPaused(index, true)
   assert.throws(() => svc.removeAgent(index, 'owner'), /still being made/)
   release(snapshot())
@@ -108,4 +111,28 @@ test('R89A-12 a removed imported team\'s number never yields a wallet, never the
   assert.equal(svc.wallet(index).address, TEAM)
   svc.removeAgent(index, 'owner')
   assert.throws(() => svc.wallet(index), /was an imported team and has been removed/)
+})
+
+// The twelfth review (low, R89A-14): Pause and Remove while one step of a waiting plan read its snapshot (tens of seconds,
+// no lock held). The plan went on: the reading was stored under the removed number; wallet() then threw; the tick
+// logged an error and told Telegram "tick failed" for a team that is gone. Nothing was signed.
+test('R89A-14 a Remove during a step\'s snapshot ends the plan there: no action, no error, the reading not kept', async () => {
+  const { svc, index } = await withImported()
+  svc.store.setPaused(index, false)
+  svc.store.updateSettings(index, { activeHoursUtc: [0, 24] })
+  const inner = svc as unknown as { pause: () => Promise<void>; runPlan: (a: unknown, p: unknown[], routine: boolean) => Promise<void>; snapshots: Map<number, unknown>; executor: { runOne: () => Promise<unknown> } }
+  inner.pause = async () => undefined
+  inner.executor.runOne = async () => assert.fail('no action for a removed team')
+  // The step's snapshot is the real one, its FoxLeague read held until the team is removed.
+  let release: () => void = () => undefined
+  const held = new Promise<void>(r => { release = r })
+  Object.assign(svc.fox, { user: async () => (await held, { team_name: 'Red Foxes' }) })
+  inner.snapshots.delete(index)
+  const running = inner.runPlan(svc.store.agent(index)!, [{ action: { type: 'train', player_nonce: 1, attribute: 'speed' }, reason: '' }], false)
+  await new Promise(r => setTimeout(r, 30))
+  svc.store.setPaused(index, true)
+  assert.match(svc.removeAgent(index, 'owner'), /removed/)
+  release()
+  await running // resolves: no wallet() error for the removed number
+  assert.equal(inner.snapshots.has(index), false, 'the reading of a removed team is not kept')
 })

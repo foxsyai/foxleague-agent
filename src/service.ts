@@ -1222,6 +1222,8 @@ export class Service {
     const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
     const league = plan ? this.store.leagueCache() : undefined
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts, marketSales, league })
+    // A team removed while it was read: nothing of the reading is kept under its number (R89A-14).
+    if (!this.store.agent(index)) return snap
     // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
     // Its own matches are kept when they were read; a failed read of them hides none of the others' (audit B2).
     // The owner's choice (2026-11-04): and from the public matches of the top teams, the league formation table.
@@ -2203,8 +2205,9 @@ export class Service {
         continue
       }
       const snap = await this.snapshot(agent.index)
-      // A stop that came while the snapshot was read (tens of seconds): the action is not started.
-      if (this.stopping) return
+      // A stop that came while the snapshot was read (tens of seconds): the action is not started. Nor for a team
+      // removed meanwhile: the plan ends here, quietly (R89A-14).
+      if (this.stopping || !this.store.agent(agent.index)) return
       if (!planned.piece && extensions.splitAction && !beforeLock) {
         const pieces = extensions.splitAction(planned, snap, current.settings)
         if (pieces && pieces.length > 1) {
