@@ -1653,11 +1653,17 @@ export class Service {
     this.timers.set(index, setTimeout(() => void this.tick(index, undefined, { scheduled: true }).catch(err => this.panic(err)).finally(() => this.scheduleNext(index)), delayMs))
   }
 
-  /** Sleeps like setTimeout but wakes at once when the service stops. */
+  /**
+   * Sleeps like setTimeout but wakes at once when the service stops, and does not sleep at all once it began to stop
+   * (an abort listener added then never fires). Its listener goes when its timer fires (LIFE-3, audit 2026-11-22).
+   */
   private pause(ms: number): Promise<void> {
+    const signal = this.stopSignal.signal
+    if (signal.aborted) return Promise.resolve()
     return new Promise(resolve => {
-      const t = setTimeout(resolve, ms)
-      this.stopSignal.signal.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true })
+      const onStop = () => (clearTimeout(t), resolve())
+      const t = setTimeout(() => (signal.removeEventListener('abort', onStop), resolve()), ms)
+      signal.addEventListener('abort', onStop, { once: true })
     })
   }
 
@@ -1910,6 +1916,8 @@ export class Service {
       const waits = o.scheduled ? this.accountWait(index) : null
       if (waits) return waits
       const snap = await this.snapshot(index, true)
+      // A stop that began while the snapshot was read: no plan is asked for (or paid) now (LIFE-3).
+      if (this.stopping) return 'stopping'
       // Onboarding: the free team badge, once (plain code, never paid for; a failure never stops the tick).
       await ensureBadge({ store: this.store, fox: this.fox, notify: t => this.report(t) }, index, this.wallet(index), snap.team, agent.dryRun || !this.executor.liveEnabled).catch(() => undefined)
       // League + Knockout invitations reach the owner (the agent decides on them within the limits, join_tournament);
@@ -1926,6 +1934,7 @@ export class Service {
         this.store.log({ agentIndex: index, kind: 'tick', status: 'info', summary: 'snapshot taken; no strategist (ANTHROPIC_API_KEY not set)', detail: { warnings: snap.warnings } })
         return 'snapshot only (no strategist key)'
       }
+      if (this.stopping) return 'stopping'
       // The model and effort this plan is asked from (makePlan reads the same): an account stop on one model is that model's.
       asked = this.aiOf(agent)
       if (this.accountStop && this.stopCovers(asked.model)) this.accountStop = { ...this.accountStop, prober: index, askedAt: Date.now() }
