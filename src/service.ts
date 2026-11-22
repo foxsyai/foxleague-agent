@@ -493,6 +493,12 @@ export class Service {
   private readonly busy = new Set<number>()
   /** A tick still making its plan (the snapshot, the AI), before its actions wait for their moments: Remove waits for it (R89A-12). */
   private readonly planning = new Set<number>()
+  /**
+   * Raised per agent by Remove and Retire: a plan reads it at its start and before each step, and a changed value ends
+   * it quietly, so a plan that waited through a Remove (or a Retire) never runs for the team imported again (or
+   * restored) under the same number and resumed (LIFE-2, audit 2026-11-22).
+   */
+  private readonly generation = new Map<number, number>()
   /** Last snapshot per agent, for the web UI (refreshed at every tick and every action). */
   readonly snapshots = new Map<number, AgentSnapshot>()
   readonly proposals = new Proposals()
@@ -1512,6 +1518,7 @@ export class Service {
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)
     this.store.removeImportedAgent(index)
+    this.generation.set(index, (this.generation.get(index) ?? 0) + 1)
     deleteImportedKey(this.cfg.dataDir, agent.address)
     this.wallets.delete(index)
     this.snapshots.delete(index)
@@ -1549,6 +1556,7 @@ export class Service {
       foxsy: snap?.chain ? formatAtomic(snap.chain.foxsy, 0) : null,
       usd: usd === null ? null : Math.round(usd * 100) / 100,
     })
+    this.generation.set(index, (this.generation.get(index) ?? 0) + 1)
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)
     this.snapshots.delete(index)
@@ -2204,6 +2212,9 @@ export class Service {
    */
   private async runPlan(agent: AgentRow, actions: PlannedAction[], routine: boolean, planSnap?: AgentSnapshot): Promise<void> {
     if (!actions.length) return
+    // A Remove or a Retire after this point ends the plan at its next step, whatever comes back under the number (LIFE-2).
+    const generation = this.generation.get(agent.index) ?? 0
+    const same = () => (this.generation.get(agent.index) ?? 0) === generation
     // The share the starts a snapshot or a refusal suggests leave room for (slots.ts, planLeadMs and nextPlanLeadMs).
     let windowMs = routine ? agent.settings.tickMinutes * 60_000 * PLAN_WINDOW_SHARE : 0
     // Never spread past our next strategy lock: a sync or a recovery meant for that match must land before it.
@@ -2263,7 +2274,7 @@ export class Service {
       last = at
       const wait = start + at - Date.now()
       if (wait > 0) await this.pause(wait)
-      if (this.stopping) return
+      if (this.stopping || !same()) return
       const current = this.store.agent(agent.index)
       if (!current || current.paused || this.store.killSwitch) return
       if (current.dryRun !== plannedDry) {
@@ -2281,7 +2292,7 @@ export class Service {
       const snap = await this.snapshot(agent.index)
       // A stop that came while the snapshot was read (tens of seconds): the action is not started. Nor for a team
       // removed meanwhile: the plan ends here, quietly (R89A-14).
-      if (this.stopping || !this.store.agent(agent.index)) return
+      if (this.stopping || !this.store.agent(agent.index) || !same()) return
       if (!planned.piece && extensions.splitAction && !beforeLock) {
         const pieces = extensions.splitAction(planned, snap, current.settings)
         if (pieces && pieces.length > 1) {
