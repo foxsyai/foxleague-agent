@@ -21,7 +21,7 @@ import { ADDR, OTHER, TEST_SETTINGS, dryWallet, setup, snapshot } from './fixtur
 
 type Caps = { maxBidRareFoxsy: number; maxBidEpicFoxsy: number; maxBidLegendaryFoxsy: number }
 
-// Since 2026-10-24 about 20 percent over the market (7,000, 14,000 and 38,000): test/levels-bids-manual.test.ts.
+// 7,000, 14,000 and 38,000 from 2026-10-24; since 2026-11-22 the owner's rule (BIDS-1): test/levels-bids-manual.test.ts.
 test('the limits per rarity default to 5,200, 16,400 and 51,700 (BIDS-1, the owner 2026-11-22), also for an agent made before them', () => {
   const d = DEFAULT_SETTINGS as unknown as Caps
   assert.deepEqual([d.maxBidRareFoxsy, d.maxBidEpicFoxsy, d.maxBidLegendaryFoxsy], [5200, 16_400, 51_700])
@@ -45,8 +45,11 @@ test('a bid above the owner\'s limit for its rarity is refused; a raised limit i
   assert.match(bid(16_401, 'Epic').refusal!, /above your limit for an Epic \(16400 FOXSY\)/)
   assert.match(bid(47_000, 'Legendary', { maxBidLegendaryFoxsy: 45_000 }).refusal!, /above your limit for a Legendary \(45000 FOXSY\)/)
   assert.equal(bid(40_000, 'Legendary', { maxBidLegendaryFoxsy: 45_000 }).ok, true, 'the owner set it')
+  // The default Legendary limit itself (R89A-11), under a Max bid above it.
+  assert.equal(bid(51_700, 'Legendary', { maxBidFoxsy: 60_000 } as never).ok, true, bid(51_700, 'Legendary', { maxBidFoxsy: 60_000 } as never).refusal)
+  assert.match(bid(51_701, 'Legendary', { maxBidFoxsy: 60_000 } as never).refusal!, /above your limit for a Legendary \(51700 FOXSY\)/)
   assert.match(bid(46_000, 'Legendary', { maxBidLegendaryFoxsy: 60_000, maxBidFoxsy: 45_000 } as never).refusal!, /per-action maximum 45000/, 'the max bid still binds on top')
-  assert.equal(bid(1000, 'Uncommon').ok, true, 'under the Uncommon limit (1,500 since 2026-10-24: test/limits-common-uncommon.test.ts)')
+  assert.equal(bid(1000, 'Uncommon').ok, true, 'under the Uncommon limit (1,650 since BIDS-1: test/limits-common-uncommon.test.ts)')
 })
 
 test('raising a limit per rarity asks for the password, lowering it does not; each is validated', () => {

@@ -1425,7 +1425,8 @@ const SHADOW_EXTRA = {
   aiEffort: '<p>A shadow plan set on the server at the effort this agent plays rests: leaving that effort starts it, so that asks for the password too.</p>',
 }
 function shadowsSet() {
-  return Boolean(S && (((S.instance || {}).shadowModels || []).length || (S.agents || []).some(b => ((b.ai || {}).shadows || []).length)))
+  // The retired agents count too, as wakesShadow counts them (R89A-10).
+  return Boolean(S && (((S.instance || {}).shadowModels || []).length || [...(S.agents || []), ...(S.retired || [])].some(b => ((b.ai || {}).shadows || []).length)))
 }
 function tipBody(k) {
   if (k === 'activity') return TIPS[k][1] + (activityRows.some(r => r.kind === 'shadow') ? SHADOW_TIP : '')

@@ -32,7 +32,7 @@ test('TEXT-1 the info bubbles speak of shadow plans only where shadow plans are 
   assert.ok(src.every(Boolean), 'shadowsSet and tipBody are in the dashboard')
   const extra = html.match(/const SHADOW_EXTRA = \{[\s\S]*?\n\}\n/)?.[0]
   assert.ok(extra, 'SHADOW_EXTRA is in the dashboard')
-  const TIPS = { activity: ['Activity', '<p>fixed</p>'], aiModel: ['AI model', '<p>model</p>'], k_strat: ['Strategist', '<p>strat</p>'], wallet: ['Wallet', '<p>wallet</p>'] }
+  const TIPS = { activity: ['Activity', '<p>fixed</p>'], aiModel: ['AI model', '<p>model</p>'], aiEffort: ['Effort', '<p>effort</p>'], k_strat: ['Strategist', '<p>strat</p>'], wallet: ['Wallet', '<p>wallet</p>'] }
   const body = (k: string, S: unknown, rows: { kind: string }[]) =>
     new Function('TIPS', 'SHADOW_TIP', 'S', 'activityRows', `${extra}${src.join('')}; return tipBody(${JSON.stringify(k)})`)(TIPS, '<p>shadow rows</p>', S, rows)
   const none = { instance: { shadowModels: [] }, agents: [{ ai: { shadows: [] } }] }
@@ -41,6 +41,8 @@ test('TEXT-1 the info bubbles speak of shadow plans only where shadow plans are 
   assert.equal(body('aiModel', set, []), '<p>model</p><p>A change that starts shadow plans set on the server for this agent asks for your password too.</p>')
   assert.equal(body('k_strat', { instance: { shadowModels: ['claude-opus-5-5'] }, agents: [] }, []).endsWith('rests while it is the model that plays.</p>'), true)
   assert.equal(body('wallet', set, []), '<p>wallet</p>', 'a bubble with nothing to add')
+  // A retired agent's shadow plans count too, as the password rule (wakesShadow) counts them (R89A-10).
+  assert.match(body('aiEffort', { instance: { shadowModels: [] }, agents: [], retired: [{ ai: { shadows: ['same'] } }] }, []), /A shadow plan set on the server/)
   // Activity: by the rows in the list, not by the setting.
   assert.equal(body('activity', set, [{ kind: 'plan' }]), '<p>fixed</p>')
   assert.equal(body('activity', none, [{ kind: 'plan' }, { kind: 'shadow' }]), '<p>fixed</p><p>shadow rows</p>')

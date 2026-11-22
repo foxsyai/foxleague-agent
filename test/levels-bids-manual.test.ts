@@ -2,7 +2,8 @@
 // twice on one auction, each time 5 percent over the top bid), and the room only works in the limits per rarity, since
 // a bid stops at the lowest of Max bid, its rarity's limit and the build cost. The limits become Common 500, Uncommon
 // 1,500, Rare 7,000, Epic 14,000 and Legendary 38,000 (about 20 percent over the market for the last three; set again on
-// 2026-11-22, BIDS-1: Rare 5,500, Epic 13,000, Legendary 50,000); each
+// 2026-11-22 by the owner's rule, BIDS-1: three of the rarity below plus 5 percent, Uncommon 1,650, Rare 5,200, Epic
+// 16,400, Legendary 51,700); each
 // level's Max bid is the limit of the dearest rarity it buys: hunter Uncommon, predator Rare, beast Epic, Zeus all. The
 // manual tells the rules in general, with examples, never the dated prices and events of our testing.
 
