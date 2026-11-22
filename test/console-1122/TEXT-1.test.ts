@@ -58,3 +58,12 @@ test('MONTH-1 the monthly budget says when its month starts again and what the m
   const page = readFileSync(join(import.meta.dirname, '..', '..', 'site/src/content/docs/use/settings.md'), 'utf8')
   assert.match(page, /\| Monthly budget \| \$150 \| The most this agent may spend in a calendar month \(UTC\): it starts again on the 1st at 00:00 UTC\. In the month you start, the whole budget is there for the days left in it; the daily cap still limits each day\./)
 })
+
+test('ENTRY-1 the Max entry fee bubble names the three bands, Bronze too, and that a 1v1 stake starts at Silver', () => {
+  // The owner, 2026-11-22. FoxLeague's live tournament_fee_bounds that day: bronze 100 to 999, silver 1,000 to 5,000 (the
+  // effective top 4,999, tierBounds), gold from 5,000; a 1v1 stake runs on the Silver and Gold bounds only.
+  const tip = html.match(/entry: \['Max entry fee or stake \(FOXSY\)', `([^`]*)`/)?.[1] ?? ''
+  assert.match(tip, /<p>A paid Bronze tournament takes 100 to 999 FOXSY a seat, Silver 1,000 to 4,999 and Gold 5,000 or more\. A 1v1 stake starts at Silver \(1,000\)\. Below 5,000 the agent never enters Gold\.<\/p>/)
+  const page = readFileSync(join(import.meta.dirname, '..', '..', 'site/src/content/docs/use/settings.md'), 'utf8')
+  assert.match(page, /A paid Bronze tournament takes 100 to 999 FOXSY a seat, Silver 1,000 to 4,999 and Gold 5,000 or more\. A 1v1 stake starts at Silver \(1,000\)\./)
+})
