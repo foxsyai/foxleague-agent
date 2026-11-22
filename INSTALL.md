@@ -452,8 +452,10 @@ Add or change them any time in the dashboard: **Keys** in the header (your passw
    defaults for about two weeks.
 3. Open [Limits](https://platform.claude.com/settings/limits) and set a monthly spend limit, for example $60: a
    month of a single agent at the defaults with room to spare.
-4. Open [API keys](https://platform.claude.com/settings/keys), press Create key, name it foxleague-agent and copy it.
-   It is shown only once.
+4. Open [API keys](https://platform.claude.com/settings/keys) and press Create key. Where the console asks where
+   your code runs, choose Somewhere else (an API key): the other choices sign in a command line tool the agent does
+   not use. Name the key foxleague-agent, set Expires to Never and leave the rest as it is: a key that expires stops
+   your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown only once.
 5. Paste it in the installer, or in the dashboard: Keys, Anthropic API key, your password, Save.
 
 **2. Telegram (optional): a morning summary of every agent and details on request; you can also talk to your manager**

@@ -23,8 +23,11 @@ This is the AI that plans for your agents. Without it they only watch.
    limit is reached (or the credit runs out, or the key stops working) you hear it once on Telegram; one agent then
    asks again at each of its plans and the others wait without reading anything, and you hear once more when plans
    work again. **Plan now** always asks.
-4. Open [API keys](https://platform.claude.com/settings/keys), press **Create key**, name it `foxleague-agent` and
-   copy it. It is shown only once.
+4. Open [API keys](https://platform.claude.com/settings/keys) and press **Create key**. Where the console asks where
+   your code runs, choose **Somewhere else** (an API key): the other choices sign in a command line tool the agent
+   does not use. Name the key `foxleague-agent`, set Expires to **Never** and leave the rest as it is: a key that
+   expires stops your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown
+   only once.
 5. In the dashboard, press **Keys**, paste it into **Anthropic API key**, type your dashboard password and press
    **Save**. The agent uses it at once.
 </Steps>

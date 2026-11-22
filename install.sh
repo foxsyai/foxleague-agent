@@ -984,7 +984,7 @@ cat <<'KEYS'
      a. Sign up or log in:                 https://platform.claude.com
      b. Add credit ($10, about two weeks): https://platform.claude.com/settings/billing
      c. Set a monthly limit ($60):         https://platform.claude.com/settings/limits
-     d. Create a key, name it foxleague-agent, copy it (shown once):
+     d. Create key (Somewhere else), name foxleague-agent, Expires Never, copy it (once):
                                            https://platform.claude.com/settings/keys
 
   2. Telegram, optional (a morning summary of every agent, talk to your manager):
