@@ -1428,7 +1428,9 @@ export class Service {
     if (!agent) throw new Error(`no ${agentName(index)}`)
     if (agent.source !== 'imported') throw new Error(`${agentName(index)} comes from this install's recovery words and cannot be removed; pause it instead`)
     if (!agent.paused) throw new Error(`pause ${agentName(index)} first`)
-    if (this.busy.has(index) || !this.executor.idle) throw new Error(`${agentName(index)} is busy; try again in a minute`)
+    // As Retire (REMOVE-1): only an action of this agent still running refuses it. A plan that waits for its next action
+    // (busy up to 0.8 of a tick) stops at that step, which reads the agent first; another agent's action is no reason.
+    if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: remove it in a minute`)
     if (this.store.pending(index).length) throw new Error(`${agentName(index)} has a payment waiting for FoxLeague's confirmation; try again later`)
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)

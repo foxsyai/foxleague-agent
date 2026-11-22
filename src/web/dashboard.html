@@ -1051,7 +1051,7 @@ $('removeBtn').onclick = async () => {
   if (!b.paused) return toast('Pause agent ' + (b.index + 1) + ' first', true)
   const r = await dialog({ title: 'Remove agent ' + (b.index + 1) + '?', text: 'The agent stops managing this team and its key is deleted from this install. The team, its cards and its funds stay in the wallet. You keep your own key file. Its history stays here.', detail: b.address, type: 'REMOVE', password: true, ok: 'Remove', tone: 'danger' })
   if (!r) return
-  act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && S.agents[0]) select(S.agents[0].index) })
+  act('Removed', () => api('POST', '/api/agents/' + b.index + '/remove', { confirm: 'REMOVE', password: r.password })).then(() => { if (S && !S.agents.some(x => x.index === b.index) && S.agents[0]) select(S.agents[0].index) })
 }
 // Delete: only for a wallet never used; the server reads the chain again before anything goes.
 $('deleteBtn').onclick = async () => {
