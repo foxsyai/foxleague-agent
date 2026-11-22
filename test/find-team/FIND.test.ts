@@ -87,9 +87,19 @@ test('FIND-2 a profile FoxLeague could not answer is unread, never "no team"', a
 test('FIND-3 a keystore that holds words gives the same list; a key file is refused with "press Check"; the next 20 from any account', async () => {
   const { find } = await service({ [addressOf(23)]: 'Red Foxes' })
   const wordsKs = JSON.stringify(UserWallet.fromMnemonic({ mnemonic: TEAM_WORDS, password: 'pw' }).toJSON())
-  const started = Date.now()
-  const r = await find({ kind: 'keystore', keystore: wordsKs, password: 'pw' }, 20)
-  assert.ok(Date.now() - started < 3000, 'the keystore is opened once, not once an account')
+  // R88A-4: the keystore is opened once for the 20 accounts (its key derivation is the slow part), never once an account.
+  const opened = { mnemonic: 0, key: 0 }
+  const { decryptMnemonic, decrypt } = UserWallet
+  UserWallet.decryptMnemonic = ((...a: Parameters<typeof decryptMnemonic>) => (opened.mnemonic++, decryptMnemonic.apply(UserWallet, a))) as typeof decryptMnemonic
+  UserWallet.decrypt = ((...a: Parameters<typeof decrypt>) => (opened.key++, decrypt.apply(UserWallet, a))) as typeof decrypt
+  let r: Found
+  try {
+    r = await find({ kind: 'keystore', keystore: wordsKs, password: 'pw' }, 20)
+  } finally {
+    UserWallet.decryptMnemonic = decryptMnemonic
+    UserWallet.decrypt = decrypt
+  }
+  assert.deepEqual(opened, { mnemonic: 1, key: 0 })
   assert.deepEqual(r.accounts.map(a => a.account), [...Array(20).keys()].map(n => n + 20))
   assert.deepEqual(r.accounts.filter(a => a.team).map(a => a.account), [23])
   await assert.rejects(find({ kind: 'keystore', keystore: wordsKs, password: 'wrong' }), /password is wrong/)
@@ -165,4 +175,41 @@ test('FIND-6 the dashboard offers Find my team beside the account number, and th
   const page = read('site/src/content/docs/use/import-team.md').replace(/\s+/g, ' ')
   assert.match(page, /Not sure which account holds your team\? Press \*\*Find my team\*\*/)
   assert.match(page, /no login, no transaction and nothing stored/)
+})
+
+/** The dashboard's own function, run as the page runs it. */
+function dashboardFunction<T>(name: string): T {
+  const src = read('src/web/dashboard.html').match(new RegExp(`\\nfunction ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}\\n`))?.[0]
+  assert.ok(src, `${name} is in the dashboard`)
+  return new Function(`${src}; return ${name}`)() as T
+}
+
+test('R88A-1 the first line of the list never says "no team" while an account could not be read', () => {
+  const head = dashboardFunction<(accounts: Row[], from: number) => string>('impFindHead')
+  const rows = (f: (n: number) => Partial<Row>) => [...Array(20).keys()].map(n => ({ account: n, address: `erd1${n}`, team: null, ...f(n) }) as Row)
+  assert.equal(head(rows(() => ({})), 0), 'Accounts 0 to 19: no team to import here')
+  assert.equal(head(rows(n => (n === 4 ? { team: 'Red Foxes' } : {})), 0), 'Accounts 0 to 19: one team, on account 4')
+  // FoxLeague failed for the account that holds the team: the line says so, it does not say "no team".
+  assert.equal(head(rows(n => (n === 4 ? { unread: true } : {})), 0), 'Accounts 0 to 19: no team found yet; 1 could not be read, search again')
+  assert.equal(head(rows(() => ({ unread: true })), 0), 'Accounts 0 to 19: no team found yet; 20 could not be read, search again')
+  assert.equal(head(rows(n => (n === 4 ? { team: 'Red Foxes' } : n < 2 ? { unread: true } : {})), 0), 'Accounts 0 to 19: one team, on account 4; 2 could not be read, search again')
+  // A team that is already an agent here is no team to import.
+  assert.equal(head(rows(n => (n === 0 ? { team: 'Fox XI', agent: 'agent 1', own: true } : {})), 0), 'Accounts 0 to 19: no team to import here')
+  assert.equal(head(rows(n => (n === 3 || n === 7 ? { team: `T${n}` } : {})).map(a => ({ ...a, account: a.account + 980 })).slice(0, 20), 980), 'Accounts 980 to 999: 2 teams')
+})
+
+test('R88A-2 a list belongs to the key it was found with: a change of the words, the file, the password or the key type clears it; a late answer is dropped', () => {
+  const dash = read('src/web/dashboard.html')
+  assert.match(dash, /function impListClear\(\) \{ impGen\+\+; \$\('impList'\)\.hidden = true; \$\('impList'\)\.replaceChildren\(\) \}/)
+  assert.match(dash, /for \(const id of \['impWords', 'impKsPw'\]\) \$\(id\)\.addEventListener\('input', impListClear\)/)
+  assert.match(dash, /\$\('impKsFile'\)\.addEventListener\('change', impListClear\)/)
+  assert.match(dash, /function impShow\(\) \{[^\n]*impListClear\(\) \}/)
+  // The search remembers which key it asked for and drops an answer that comes back after a change.
+  assert.match(dash, /const gen = impGen\n/)
+  assert.match(dash, /if \(gen !== impGen\) return \/\/ the key changed while FoxLeague answered/)
+})
+
+test('R88A-3 the dialog and the guide say that FoxLeague sees the 20 addresses asked together', () => {
+  assert.match(read('src/web/dashboard.html'), /FoxLeague sees the 20 addresses asked together\./)
+  assert.match(read('site/src/content/docs/use/import-team.md').replace(/\s+/g, ' '), /FoxLeague sees the 20 addresses asked together, from your address: if that matters to you, type the account number instead\./)
 })
