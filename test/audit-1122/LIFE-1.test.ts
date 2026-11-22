@@ -103,3 +103,56 @@ test('LIFE-1 a 401 or a billing error stays an account stop for every agent (cov
     assert.match(said.find(t => /failing/i.test(t)) ?? '', /^Plans are failing: .*Every agent waits/)
   }
 })
+
+// R85A-3 (agent review of PR #85, on fd70bb2): the stop had one slot. With two models both refused with a 403, each refusal took
+// the slot from the other, so every agent on either model read a snapshot and asked at every tick, and the second
+// alert said that agents on other models plan as usual. Now each refused model keeps its own stop and its own prober.
+test('R85A-3 two models both refused with a 403: each keeps its own stop; the agents on either model wait', async () => {
+  const SONNET = 'claude-sonnet-5-5'
+  const { svc, said, asked, tick } = service(model => (model === FABLE || model === SONNET ? denied() : null))
+  let snaps = 0
+  Object.assign(svc as object, { snapshot: async () => (snaps++, snapshot()) })
+  // Agents 1 and 3 play Fable 5.2, agents 2 and 4 Sonnet 5.5.
+  svc.store.updateSettings(1, { aiModel: SONNET })
+  svc.store.updateSettings(2, { aiModel: FABLE })
+  svc.store.updateSettings(3, { aiModel: SONNET })
+  await tick(0)
+  await tick(1)
+  assert.deepEqual(asked, [{ index: 0, model: FABLE }, { index: 1, model: SONNET }])
+  const before = snaps
+  const fableWaits = await tick(2)
+  const sonnetWaits = await tick(3)
+  assert.equal(asked.length, 2, `agents 3 and 4 wait for the agent that asks for their model: ${JSON.stringify(asked)}`)
+  assert.equal(snaps, before, 'and read no snapshot')
+  assert.match(fableWaits, /agent 1/i, fableWaits)
+  assert.match(sonnetWaits, /agent 2/i, sonnetWaits)
+  // Each prober asks again at its own tick, and only it.
+  await tick(0)
+  await tick(1)
+  await tick(2)
+  await tick(3)
+  assert.equal(asked.length, 4, JSON.stringify(asked))
+  const alerts = said.filter(t => /failing/i.test(t))
+  assert.equal(alerts.length, 2, said.join(' | '))
+  assert.doesNotMatch(alerts[1]!, /Agents on other models plan as usual/, `Fable 5.2 is refused too: ${alerts[1]}`)
+  assert.match(alerts[1]!, /Fable 5\.2/, alerts[1])
+})
+
+test('R85A-3 a plan that works ends only its own model\'s stop', async () => {
+  const SONNET = 'claude-sonnet-5-5'
+  let fableBad = true
+  const { svc, said, asked, tick } = service(model => ((model === FABLE && fableBad) || model === SONNET ? denied() : null))
+  svc.store.updateSettings(1, { aiModel: SONNET })
+  svc.store.updateSettings(2, { aiModel: FABLE })
+  svc.store.updateSettings(3, { aiModel: SONNET })
+  await tick(0)
+  await tick(1)
+  fableBad = false
+  await tick(0)
+  assert.equal(said.filter(t => /work again/.test(t)).length, 1, said.join(' | '))
+  assert.match(said.find(t => /work again/.test(t))!, /Fable 5\.2/)
+  await tick(2)
+  assert.equal(asked.filter(a => a.index === 2).length, 1, 'agent 3 plays Fable 5.2 and plans again')
+  await tick(3)
+  assert.equal(asked.filter(a => a.index === 3).length, 0, 'agent 4 plays Sonnet 5.5, still refused: it waits for agent 2')
+})

@@ -662,9 +662,10 @@ export class Service {
    * 2026-11-16, P10). Cleared by a plan that works (said once) or by the asking agent failing for another reason.
    * `model`: a 403 (permission denied) is the prober's model, which the key may not use: only the agents whose plan
    * uses that model wait, and only a plan on it ends the stop (LIFE-1, audit 2026-11-22). Null for the account itself:
-   * a 401, billing, credit or a limit.
+   * a 401, billing, credit or a limit. One stop per model and one for the account, each with its own prober: two
+   * refused models no longer take one slot from each other (R85A-3).
    */
-  private accountStop: { prober: number; askedAt: number; model: string | null; effort: string | null } | null = null
+  private readonly accountStops = new Map<string | null, { prober: number; askedAt: number; effort: string | null }>()
 
   /**
    * Why this agent's scheduled tick waits instead of asking the model, or null: an account stop another agent is asking
@@ -672,24 +673,35 @@ export class Service {
    * its random window and 5 minutes (paused, retired, outside its hours) hands over to the next agent that ticks.
    */
   private accountWait(index: number): string | null {
-    const stop = this.accountStop
-    if (!stop || stop.prober === index) return null
     const agent = this.store.agent(index)
-    if (stop.model !== null && (!agent || this.aiOf(agent).model !== stop.model)) return null
-    const prober = this.store.agent(stop.prober)
-    const window = prober && !prober.retired ? (prober.settings.tickMinutes + prober.settings.tickJitterMinutes + 5) * 60_000 : 0
-    if (Date.now() - stop.askedAt >= window) return null
-    if (stop.model !== null) return `the AI account refuses every plan with ${this.modelLabel(stop.model)}: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
-    return `the AI account refuses every plan: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+    const keys = this.stopKeys(agent ? this.aiOf(agent).model : null)
+    // The agent that asks for one of its stops asks: it speaks for both (a plan that works ends each one it covers).
+    if (keys.some(k => this.accountStops.get(k)?.prober === index)) return null
+    for (const model of keys) {
+      const stop = this.accountStops.get(model)
+      if (!stop) continue
+      const prober = this.store.agent(stop.prober)
+      const window = prober && !prober.retired ? (prober.settings.tickMinutes + prober.settings.tickJitterMinutes + 5) * 60_000 : 0
+      if (Date.now() - stop.askedAt >= window) continue
+      if (model !== null) return `the AI account refuses every plan with ${this.modelLabel(model)}: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+      return `the AI account refuses every plan: ${agentName(stop.prober)} asks again at its next tick, this agent waits (no snapshot, no call)`
+    }
+    return null
+  }
+
+  /** The stops a plan on `model` falls under: the account's and that model's (the account's alone for an unknown model). */
+  private stopKeys(model: string | null): (string | null)[] {
+    return model === null ? [null] : [null, model]
   }
 
   private modelLabel(model: string): string {
     return MODELS[model]?.label ?? model
   }
 
-  /** Whether a plan on `model` speaks for the account stop: any plan for the account itself, one on its model for a model's. */
-  private stopCovers(model: string): boolean {
-    return this.accountStop !== null && (this.accountStop.model === null || this.accountStop.model === model)
+  /** The models refused with a 403 apart from `model`, as the owner reads them ("Opus 5.5 and Sonnet 5.5"). */
+  private otherRefused(model: string): string {
+    const labels = [...this.accountStops.keys()].filter((m): m is string => m !== null && m !== model).map(m => this.modelLabel(m))
+    return labels.length > 1 ? `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}` : (labels[0] ?? '')
   }
 
   /**
@@ -702,6 +714,7 @@ export class Service {
     // Keyed by the problem, not by the call: Anthropic's error text carries a request id that differs on every call
     // (audit 2026-11-16, BEH-1).
     let problem = alertKey(msg)
+    let stopModel: string | null = null
     // An account stop: this agent asked last. A failure of another kind frees the others (it may be this agent's own).
     if (isModelAccountError(err)) {
       // A 403 is the model this plan was asked from, which the key may not use (LIFE-1); any other account error is the
@@ -709,17 +722,26 @@ export class Service {
       const row = asked ? null : this.store.agent(index)
       const ai = asked ?? (row ? this.aiOf(row) : null)
       const model = isModelPermissionError(err) && ai ? ai.model : null
-      this.accountStop = { prober: index, askedAt: Date.now(), model, effort: model !== null && ai ? ai.effort : null }
+      stopModel = model
+      const effort = model !== null && ai ? ai.effort : null
+      // The stops this agent asked for that answered otherwise now end (a 403 after a 401: the key works again).
+      for (const [key, stop] of this.accountStops) if (stop.prober === index && key !== model) this.accountStops.delete(key)
+      this.accountStops.set(model, { prober: index, askedAt: Date.now(), effort })
       if (model !== null) problem = `${problem}:${model}`
-    } else if (this.accountStop?.prober === index) this.accountStop = null
+    } else for (const [key, stop] of this.accountStops) if (stop.prober === index) this.accountStops.delete(key)
     if (isModelAccountError(err)) {
       const last = this.alertedAt.get(problem) ?? 0
       if (Date.now() - last >= 3600_000) {
         this.alertedAt.set(problem, Date.now())
-        const model = this.accountStop?.model ?? null
+        const model = stopModel
         if (model !== null) {
-          const label = `${this.modelLabel(model)}${this.accountStop?.effort ? ` at ${this.accountStop.effort} effort` : ''}`
-          return this.notify(`Plans with ${label} are failing: ${msg}. The agents that play ${this.modelLabel(model)} wait until it is fixed: the API key may not use that model or the account refuses it (Keys in the dashboard or the Anthropic console). Agents on other models plan as usual.`)
+          const effort = this.accountStops.get(model)?.effort
+          const label = `${this.modelLabel(model)}${effort ? ` at ${effort} effort` : ''}`
+          const others = this.otherRefused(model)
+          const rest = this.accountStops.has(null)
+            ? 'The account itself refuses plans too: every agent waits.'
+            : others ? `Plans with ${others} are refused too; agents on any other model plan as usual.` : 'Agents on other models plan as usual.'
+          return this.notify(`Plans with ${label} are failing: ${msg}. The agents that play ${this.modelLabel(model)} wait until it is fixed: the API key may not use that model or the account refuses it (Keys in the dashboard or the Anthropic console). ${rest}`)
         }
         return this.notify(`Plans are failing: ${msg}. Every agent waits until it is fixed (Keys in the dashboard or, for credit and limits, the Anthropic console).`)
       }
@@ -1939,12 +1961,19 @@ export class Service {
       if (this.stopping) return 'stopping'
       // The model and effort this plan is asked from (makePlan reads the same): an account stop on one model is that model's.
       asked = this.aiOf(agent)
-      if (this.accountStop && this.stopCovers(asked.model)) this.accountStop = { ...this.accountStop, prober: index, askedAt: Date.now() }
+      for (const key of this.stopKeys(asked.model)) {
+        const stop = this.accountStops.get(key)
+        if (stop) this.accountStops.set(key, { ...stop, prober: index, askedAt: Date.now() })
+      }
       const plan = await this.makePlan(agent, snap, ownerRequest)
       this.failStreak.delete(index)
-      if (this.accountStop && this.stopCovers(asked.model)) {
-        this.accountStop = null
-        this.notify(`Plans work again: ${agentName(index)}'s plan went through. The agents that waited plan at their next tick.`)
+      // A plan that works ends the account's stop and its own model's, no other model's (R85A-3).
+      const ended = this.stopKeys(asked.model).filter(k => this.accountStops.delete(k))
+      if (ended.length) {
+        const others = this.otherRefused(asked.model)
+        const still = others ? ` Plans with ${others} are still refused.` : ''
+        const what = ended.includes(null) ? 'Plans' : `Plans with ${this.modelLabel(asked.model)}`
+        this.notify(`${what} work again: ${agentName(index)}'s plan went through. The agents that waited plan at their next tick.${still}`)
       }
       // What the plan weighed goes with its private creates: each action reads a fresh snapshot, up to 0.8 of a tick later.
       // No private split served: it was told the public one. An unread config told it nothing: no private create from this plan.
