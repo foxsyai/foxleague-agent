@@ -52,10 +52,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   active and costs the most of the three. Fable 5.2, the most capable, costs more still. A higher effort thinks harder
   and costs more. A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
   one click. A switch that starts shadow plans asks for the password too
-  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
-  soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
-  not ready. Without the AI key the box is greyed out: it shows the model and effort the agents start on once the
-  key is set (Haiku 5.5 at high on a new install), and the level's recommended AI is shown next to the level.
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (coming soon)"
+  at the top of the list cannot be picked: a model that runs on your own computer is being tested and is not ready.
+  Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set (Haiku 5.5 at high on a new install); the level's recommended AI is shown next to the level.
   Under it, **When FoxLeague changes its rules**: **tell me only** (the default) or **also pause the actions whose
   rules changed until the agents are synced**; while a pause holds something, the line under it names the actions.
   Pausing is one click; going back to tell me only asks for your password

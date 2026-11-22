@@ -628,7 +628,7 @@ function renderHeader() {
   const sm = $('sModel'), se = $('sEffort')
   if (!sm.options.length) {
     // Not a model yet: greyed out, with no id, so it can be neither picked nor sent (the server takes only its own list).
-    sm.append(el('option', { value: '', disabled: true, text: 'Local model (free, coming soon)' }))
+    sm.append(el('option', { value: '', disabled: true, text: 'Local model (coming soon)' }))
     for (const m of i.models) sm.append(el('option', { value: m.id, text: m.label }))
     for (const e of i.efforts) se.append(el('option', { value: e, text: 'effort ' + e }))
   }
@@ -1286,7 +1286,7 @@ const TIPS = {
     <p>It counts FOXSY paid and network fees. In dry run it reads the dry-run ledger; live spend has its own ledger.</p>`],
   k_strat: ['Strategist', `<p>The Claude model that plans for every agent without its own and how hard it thinks (effort). An agent can have its own model and effort in its Settings (AI); the line below says how many do. The manager chat and /ask use this one.</p>
     <p>The list runs from the least to the most capable model. <b>Haiku 5.5</b> at high effort is the default and plays well at the lowest cost. <b>Sonnet 5.5</b> plans more carefully and acts less; <b>Opus 5.5</b> is the most active and costs the most of the three. <b>Fable 5.2</b>, the most capable, costs more still.</p>
-    <p>The first entry, Local model, is greyed out. A free model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
+    <p>The first entry, Local model, is greyed out. A model that runs on your own computer is being tested. It is not ready, so it cannot be picked yet.</p>
     <p>Higher effort means more thinking per plan: better on hard decisions but slower and more expensive. Pick, then press Apply; it takes effect from the next cycle with the same API key.</p>
     <p>Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set. You can change them from then on.</p>
     <p>A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper model or less effort is one click. A switch that starts shadow plans asks for it too: a shadow model set on the server rests while it is the model that plays.</p>

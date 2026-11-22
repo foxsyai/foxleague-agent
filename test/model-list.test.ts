@@ -208,7 +208,7 @@ async function webService(before: (store: Store) => void = () => undefined) {
 test('LIST-8 /api/strategist accepts only the four: a model that left the list, the local model and any other id are refused', async () => {
   const { svc, server, password, post } = await webService()
   try {
-    for (const model of ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-opus-4-8', 'local', 'Local model (free, coming soon)', '', 'constructor', '__proto__']) {
+    for (const model of ['claude-sonnet-5', 'claude-opus-5', 'claude-fable-5-1', 'claude-opus-4-8', 'local', 'Local model (coming soon)', '', 'constructor', '__proto__']) {
       const res = await post('/api/strategist', { model, effort: 'low', password })
       assert.equal(res.status, 400, `${model || '(empty)'} was accepted`)
       assert.match(await res.text(), /unknown model/)
@@ -265,15 +265,17 @@ test('LIST-10 the dashboard asks for the password by the server\'s rule, two car
   assert.equal(from('a')('a', 'low'), false, 'the same model at the same effort raises nothing')
 })
 
-test('LOCAL-1 the model list opens with "Local model (free, coming soon)": greyed out, never selectable, never sent', () => {
+test('LOCAL-1 the model list opens with "Local model (coming soon)": greyed out, never selectable, never sent (no "free": the owner, 2026-11-22)', () => {
   const fill = html.slice(html.indexOf('if (!sm.options.length) {'), html.indexOf('if (!stratDirty)'))
-  assert.match(fill, /sm\.append\(el\('option', \{ value: '', disabled: true, text: 'Local model \(free, coming soon\)' \}\)\)\s*\n\s*for \(const m of i\.models\)/, 'the first entry of the list, disabled, with no model id')
+  assert.match(fill, /sm\.append\(el\('option', \{ value: '', disabled: true, text: 'Local model \(coming soon\)' \}\)\)\s*\n\s*for \(const m of i\.models\)/, 'the first entry of the list, disabled, with no model id')
   // Apply sends a model only when it is one of the server's list.
   const apply = html.slice(html.indexOf("$('stratApply').onclick"), html.indexOf("$('stratApply').onclick") + 1000)
   assert.match(apply, /if \(!S\.instance\.models\.some\(m => m\.id === body\.model\)\) \{ toast\('Pick a model from the list', true\); return false \}/)
   assert.ok(apply.indexOf('S.instance.models.some') < apply.indexOf("api('POST', '/api/strategist'"), 'checked before anything is sent')
   const tip = html.match(/k_strat: \['Strategist', `([^`]*)`/)?.[1] ?? ''
-  assert.match(tip, /A free model that runs on your own computer is being tested\. It is not ready, so it cannot be picked yet\./)
+  assert.match(tip, /The first entry, Local model, is greyed out\. A model that runs on your own computer is being tested\. It is not ready, so it cannot be picked yet\./)
+  // Nothing that is not shipped is promised as free (the owner, 2026-11-22).
+  assert.doesNotMatch(fill + tip.match(/<p>The first entry[^<]*<\/p>/)![0], /\bfree\b/i)
   assert.match(tip, /<b>Haiku 5\.5<\/b> at high effort is the default and plays well at the lowest cost\./)
   assert.match(tip, /<b>Sonnet 5\.5<\/b> plans more carefully and acts less/)
   assert.doesNotMatch(tip, /Sonnet 5<|Opus 5<|Fable 5\.1/, 'the bubble names no model that left the list')
@@ -292,7 +294,7 @@ test('LIST-11 every page that names the default or the list follows: Haiku 5.5 a
     assert.match(text, /Haiku 5\.5 at high effort is the default and plays well at the lowest cost/, f)
     assert.doesNotMatch(text, /Sonnet 5 is the default/, f)
   }
-  assert.match(read(`${DOCS}/use/dashboard.md`).replace(/\s+/g, ' '), /The entry "Local model \(free, coming soon\)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is not ready\./)
+  assert.match(read(`${DOCS}/use/dashboard.md`).replace(/\s+/g, ' '), /The entry "Local model \(coming soon\)" at the top of the list cannot be picked: a model that runs on your own computer is being tested and is not ready\./)
 })
 
 // ---- the agent review of pull request #63 ----
