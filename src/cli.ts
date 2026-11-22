@@ -105,8 +105,17 @@ function existingAgent(store: Store, index: number): void {
   if (!store.agent(index)) throw new Error(`no ${agentName(index)}: add it in the dashboard (simulate-as runs a throwaway wallet)`)
 }
 
+/**
+ * An imported team's number that is no longer an agent: it has no wallet here, never the install's own account at that
+ * number (LIFE-5, audit 2026-11-22; the service's wallet() does the same since R89A-12).
+ */
+function refuseRemovedImported(store: Store | null, index: number): void {
+  if (store && !store.agent(index) && store.importedAt(index)) throw new Error(`${agentName(index)} was an imported team and has been removed: it has no wallet here`)
+}
+
 /** An agent's wallet: an imported team's own key, else account N-1 of the recovery words. */
 function walletOf(store: Store, index: number): AgentWallet {
+  refuseRemovedImported(store, index)
   const row = store.agent(index)
   return row?.source === 'imported' ? loadImportedWallet(loadConfig().dataDir, row.address, index) : deriveWallet(mnemonicOrExit(), index)
 }
@@ -179,8 +188,13 @@ async function main(): Promise<void> {
       return
     }
     case 'address': {
-      const w = deriveWallet(mnemonicOrExit(), agentIndex(args[0]))
-      console.log(`${agentName(w.index)}: ${w.address} (shard ${w.shard})`)
+      // An imported team's number is its own address, from the database (LIFE-5); a new install has none yet.
+      const index = agentIndex(args[0])
+      const store = existsSync(join(cfg.dataDir, 'agent.db')) ? new Store(cfg.dataDir) : null
+      refuseRemovedImported(store, index)
+      const row = store?.agent(index)
+      const address = row?.source === 'imported' ? row.address : deriveWallet(mnemonicOrExit(), index).address
+      console.log(`${agentName(index)}: ${address} (shard ${shardOf(address)})`)
       return
     }
     case 'agents': {
@@ -235,7 +249,9 @@ async function main(): Promise<void> {
     case 'export-pem': {
       const [n, path] = args
       if (!path) usage()
-      if (new Store(cfg.dataDir).agent(agentIndex(n))?.source === 'imported') throw new Error(`${agentName(agentIndex(n))} is an imported team: its PEM file is the one you imported`)
+      const store = new Store(cfg.dataDir)
+      if (store.agent(agentIndex(n))?.source === 'imported') throw new Error(`${agentName(agentIndex(n))} is an imported team: its PEM file is the one you imported`)
+      refuseRemovedImported(store, agentIndex(n))
       const out = exportPem(mnemonicOrExit(), agentIndex(n), path, { isServer: cfg.isServer, repoRoot: REPO_ROOT })
       console.log(`Wrote ${out} (mode 600). ${GUIDED ? 'Keep it on this computer and never send it to anyone.' : 'Keep it on this machine; never copy it to the server or into git.'}`)
       return
