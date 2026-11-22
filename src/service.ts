@@ -1894,11 +1894,13 @@ export class Service {
 
   async tick(index: number, ownerRequest?: string, o: { loud?: boolean; scheduled?: boolean } = {}): Promise<string> {
     if (o.loud) {
+      // Only what it added: a plan the owner started before (still running, so this tick is refused) stays loud (LIFE-4).
+      const added = !this.loud.has(index)
       this.loud.add(index)
       try {
         return await this.tick(index, ownerRequest)
       } finally {
-        this.loud.delete(index)
+        if (added) this.loud.delete(index)
       }
     }
     // Only a plan with no action makes the next one wait twice the tick: any other outcome of this tick does not.
@@ -2477,6 +2479,9 @@ export class Service {
           const [r] = await this.executor.run(this.store.agent(i!)!, this.wallet(i!), snap, [planned])
           return r ? formatResult(i!, r) : 'nothing ran'
         }
+        // Paused, the kill switch, a plan still running: the owner hears why, not "planning" (LIFE-4).
+        const refusal = this.tickRefusal(i!, request)
+        if (refusal) return refusal
         void this.tick(i!, request, { loud: true })
         return `${agentName(i!)}: planning "${request}"`
       }
