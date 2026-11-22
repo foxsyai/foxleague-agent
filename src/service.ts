@@ -491,6 +491,8 @@ export class Service {
   /** When each agent's next tick is due (ms), for a settings save that shortens the cycle. */
   private readonly nextAt = new Map<number, number>()
   private readonly busy = new Set<number>()
+  /** A tick still making its plan (the snapshot, the AI), before its actions wait for their moments: Remove waits for it (R89A-12). */
+  private readonly planning = new Set<number>()
   /** Last snapshot per agent, for the web UI (refreshed at every tick and every action). */
   readonly snapshots = new Map<number, AgentSnapshot>()
   readonly proposals = new Proposals()
@@ -710,6 +712,8 @@ export class Service {
     let w = this.wallets.get(index)
     if (!w) {
       const row = this.store.agent(index)
+      // A removed imported team's number has no wallet here: never the install's own one at that number (R89A-12).
+      if (!row && this.store.importedAt(index)) throw new Error(`${agentName(index)} was an imported team and has been removed: it has no wallet here`)
       w = row?.source === 'imported' ? loadImportedWallet(this.cfg.dataDir, row.address, index) : deriveWallet(this.cfg.mnemonic!, index)
       this.wallets.set(index, w)
     }
@@ -1431,6 +1435,8 @@ export class Service {
     // As Retire (REMOVE-1): only an action of this agent still running refuses it. A plan that waits for its next action
     // (busy up to 0.8 of a tick) stops at that step, which reads the agent first; another agent's action is no reason.
     if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: remove it in a minute`)
+    // A tick still making its plan reads the wallet again (R89A-12): Remove waits for that part, a minute or so.
+    if (this.planning.has(index)) throw new Error(`${agentName(index)} is paused; the plan it started is still being made: remove it in a minute`)
     if (this.store.pending(index).length) throw new Error(`${agentName(index)} has a payment waiting for FoxLeague's confirmation; try again later`)
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)
@@ -1816,6 +1822,7 @@ export class Service {
     if (refusal) return refusal
     const agent = this.store.agent(index)!
     this.busy.add(index)
+    this.planning.add(index)
     try {
       await this.retryPending(agent)
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
@@ -1859,6 +1866,8 @@ export class Service {
         return false
       })
       if (!plan.actions.length) this.quiet.add(index)
+      // From here the plan's actions wait for their moments and read the agent before each one (Remove may go).
+      this.planning.delete(index)
       const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
@@ -1871,6 +1880,7 @@ export class Service {
       this.tickFailed(index, err, msg)
       return msg
     } finally {
+      this.planning.delete(index)
       this.busy.delete(index)
     }
   }
