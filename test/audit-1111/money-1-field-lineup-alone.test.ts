@@ -55,7 +55,7 @@ test('MONEY-1: two such teams are still a field to enter, three are not, and the
     return checkAction({ type: 'join_tournament', tournament_id: 303 }, snapshot(), { settings: TEST_SETTINGS, now: new Date(), tournament: d as TournamentDetail, field })
   }
   assert.equal(join([monster(1), monster(2), even(3), even(4)]).ok, true)
-  assert.match(String(join([monster(1), monster(2), monster(3), even(4)]).refusal), /3 seated teams are clearly stronger \(a lineup more than 10 percent above yours, or more than 5 percent with an ELO more than 50 above yours\): no real chance of the top three/)
+  assert.match(String(join([monster(1), monster(2), monster(3), even(4)]).refusal), /3 seated teams are clearly stronger \(a lineup more than 10 percent above yours or more than 5 percent above yours with an ELO more than 50 above yours\): no real chance of the top three/)
 })
 
 test('MONEY-1: the plan\'s field line counts as the rule does and its legend says so', async () => {

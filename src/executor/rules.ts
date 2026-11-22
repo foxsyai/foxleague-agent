@@ -919,7 +919,7 @@ export const MIN_1V1_CHANCE = 0.55
 export const STRONGER_SQUAD = 1.05
 export const STRONGER_ELO = 50
 /** What "clearly stronger" counts, for a refusal: the same margins judgeField uses. */
-const STRONGER_WORDS = `a lineup more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours, or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent with an ELO more than ${STRONGER_ELO} above yours`
+const STRONGER_WORDS = `a lineup more than ${Math.round((MAX_1V1_STRENGTH_RATIO - 1) * 100)} percent above yours or more than ${Math.round((STRONGER_SQUAD - 1) * 100)} percent above yours with an ELO more than ${STRONGER_ELO} above yours`
 /** No entry into a field with this many clearly stronger teams, or this many unread (every level since 2026-11-06). */
 export const FIELD_LIMIT = 3
 
@@ -1163,10 +1163,10 @@ function squadLegal(s: AgentSnapshot, at: Date, what = ''): string | null {
   for (const n of s.team.lineup) {
     const p = card(s, n)!
     if (p.disciplineUnread) return `#${n}'s injury could not be read: not acting blind`
-    if (outInjured(p, at)) return `starter #${n} is injured until ${p.injuredUntil}${what}: save an eleven without it first (set_lineup, or set_formation with a lineup when its line is short)`
+    if (outInjured(p, at)) return `starter #${n} is injured until ${p.injuredUntil}${what}: save an eleven without it first (set_lineup or, when its line is short, set_formation with a lineup)`
   }
   const fit = lineupPositionsOk(s, s.team.formation, s.team.lineup)
-  if (fit) return `the saved lineup does not fit the formation ${s.team.formation} (${fit}): save one that fits first (set_formation with lineup and substitutes, or set_lineup)`
+  if (fit) return `the saved lineup does not fit the formation ${s.team.formation} (${fit}): save one that fits first (set_lineup or set_formation with lineup and substitutes)`
   return null
 }
 
@@ -1426,8 +1426,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         // without being listed loses the gas). FoxLeague's own refusal can quote a title others wrote: not repeated here.
         const inv = ctx.invitation
         if (inv === null || inv === undefined) return refuse('the invitations could not be read: not paying blind')
-        if (inv === 'not invited' || inv.tournament_id !== t.id) return refuse(`T${t.id} is a League + Knockout, by invitation only, and this team has no pending invitation to it`)
-        if (!inv.can_accept) return refuse('FoxLeague says this invitation cannot be accepted now (one League + Knockout at a time, or the wallet is not on its on-chain list yet): not paying')
+        if (inv === 'not invited' || inv.tournament_id !== t.id) return refuse(`T${t.id} is a League + Knockout (by invitation only) and this team has no pending invitation to it`)
+        if (!inv.can_accept) return refuse('FoxLeague says this invitation cannot be accepted now (a team plays one League + Knockout at a time or the wallet is not on its on-chain list yet): not paying')
         if (!(Date.parse(inv.expires_at) - ctx.now.getTime() > INVITATION_MARGIN_MS)) return refuse('the invitation expires within 30 minutes: not paying at its edge')
       }
       // An OVR range (FoxLeague, 2026-10-24) is checked once at the join against the best XI OVR; outside it the paid
@@ -1550,7 +1550,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if ((cur.min === null && next.min !== null) || (cur.max === null && next.max !== null)) return refuse('never a new bound where there was none: widening only lowers a minimum or raises a maximum')
       if ((cur.min !== null && next.min !== null && next.min > cur.min) || (cur.max !== null && next.max !== null && next.max < cur.max)) return refuse('wider only: a lower minimum or a higher maximum')
       // The top of a 1v1's range is what keeps a stronger team out of an open challenge (OP-4): never raised or removed (OP-5).
-      if (t.max_teams === 2 && next.max !== cur.max) return refuse(`the top of a 1v1's range stays at ${cur.max ?? 'none'}: a higher one lets a stronger team take it; lower the minimum, or let it expire and create another`)
+      if (t.max_teams === 2 && next.max !== cur.max) return refuse(`the top of a 1v1's range stays at ${cur.max ?? 'none'}: a higher one lets a stronger team take it; lower the minimum or let it expire and create another`)
       return allow(0, { min: next.min, max: next.max }, 'play', ['more teams can join; nobody seated is measured again'])
     }
 
@@ -1637,7 +1637,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           if (!Number.isSafeInteger(q.total_foxsy) || q.total_foxsy <= 0) return refuse('the organizer payment could not be read: not paying blind')
           if (q.total_foxsy > ctx.settings.maxShopPaymentFoxsy) return refuse(`an organizer payment of ${q.total_foxsy} FOXSY exceeds the per-action maximum ${ctx.settings.maxShopPaymentFoxsy}: a smaller tournament owes less`)
           const held = ctx.pendingOrganizer
-          if (held && held.total !== q.total_foxsy) return refuse(`an organizer payment of ${held.total} FOXSY waits to be used or returned, and this tournament owes ${q.total_foxsy}: not paying a second one; a tournament that owes ${held.total} can use it`)
+          if (held && held.total !== q.total_foxsy) return refuse(`an organizer payment of ${held.total} FOXSY waits to be used or returned (this tournament owes ${q.total_foxsy}): not paying a second one; a tournament that owes ${held.total} can use it`)
           if (held) organizerHash = held.hash
           else organizerFoxsy = q.total_foxsy
           organizerNotes.push(`organizer payment ${q.total_foxsy} FOXSY (deposit ${q.deposit_foxsy}${q.private_fee_foxsy > 0 ? `, private fee ${q.private_fee_foxsy}` : ''}, ${q.games} games): the deposit is kept if too few teams join by the deadline`)
@@ -1655,7 +1655,7 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       if (challengeRange) {
         // An open challenge has one legal top, the best XI OVR rounded up: the refusal names it (audit 2026-11-16, BEH-4).
         const ovr = ctx.bestXiOvr
-        const legal = a.target_user_id === null && typeof ovr === 'number' && Number.isFinite(ovr) ? `; an open challenge takes ovr_max ${Math.ceil(ovr)}, no other value, and any ovr_min up to ${Math.floor(ovr)}` : ''
+        const legal = a.target_user_id === null && typeof ovr === 'number' && Number.isFinite(ovr) ? `; an open challenge takes ovr_max ${Math.ceil(ovr)} (no other value) and any ovr_min up to ${Math.floor(ovr)}` : ''
         return refuse(`${challengeRange}${legal}`)
       }
       const unranged = openRangeMissing(a, s, ctx)
