@@ -35,8 +35,8 @@ everything else. On Windows the agent runs while Ubuntu (WSL) runs (a scheduled 
 there to keep Ubuntu running while you are logged in); on macOS it starts when you log in (macOS lists it as
 "FoxLeague Agent" in System Settings, General, Login Items & Extensions).
 
-You need about 5 EGLD to start (part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve) and an
-Anthropic API key for the AI. Telegram and Binance are optional.
+You need enough EGLD to start (part of it buys the 5,000 FOXSY registration at the day's price, 1 stays as the gas
+reserve) and an Anthropic API key for the AI. Telegram and Binance are optional.
 
 ## What it does
 

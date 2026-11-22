@@ -47,7 +47,7 @@ test('NUM-3 nothing a user reads says how much EGLD buys the registration, a mar
     assert.doesNotMatch(text(read(file)).replace(/\s+/g, ' '), /\d(\.\d+)? (EGLD )?buys the 5,000 FOXSY registration/, file)
   }
   assert.match(scriptText(read('install.sh')), /\n {5}part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games\.\n/)
-  assert.match(flat('site/src/content/docs/help/costs.md'), /About \*\*5 EGLD\*\*: part of it buys the 5,000 FOXSY registration \(the dashboard shows the live EGLD and FOXSY prices at the top\), 1 stays in the wallet as the gas reserve/)
+  assert.match(flat('site/src/content/docs/help/costs.md'), /Enough \*\*EGLD\*\* to start: part of it buys the 5,000 FOXSY registration at the day's price \(the dashboard shows the live EGLD and FOXSY prices at the top\), 1 stays in the wallet as the gas reserve/)
 })
 
 test('NUM-4 the strategy levels page sizes the dollar limits without a FOXSY price of one day and says where the live price shows', () => {
@@ -55,4 +55,14 @@ test('NUM-4 the strategy levels page sizes the dollar limits without a FOXSY pri
   assert.doesNotMatch(page, /\$0\.00\d+|about \$13\.50|about \$54/)
   assert.match(page, /The dollar values have to hold the FOXSY amounts beside them at the price of the day, which the FOXSY total at the top of the dashboard shows; when that price moves a lot, adjust them:/)
   assert.match(page, /the daily cap covers the largest entry the level allows \(a climber's Gold entry of 5,000 FOXSY, a beast's of 20,000\)/)
+})
+
+test('NUM-5 no page names a fixed amount of EGLD to start: what it must cover, at the day\'s prices', () => {
+  // The owner, 2026-11-22: "about 5 EGLD" no longer covered the 5,000 FOXSY registration (about 4.1 EGLD that day), the
+  // 1 EGLD gas reserve and the first games. The pages say what the first EGLD must cover; the dashboard shows the prices.
+  const files = ['README.md', 'INSTALL.md', 'install.sh', 'src/web/dashboard.html', 'site/src/content/docs/help/costs.md', 'site/src/content/docs/index.mdx', 'site/src/content/docs/start/go-live.mdx', 'site/src/content/docs/start/install-linux.mdx', 'site/src/content/docs/start/install-mac.mdx', 'site/src/content/docs/start/install-windows.mdx']
+  for (const f of files) assert.doesNotMatch(flat(f), /about \**5 EGLD|5 EGLD is a good start/i, f)
+  assert.match(flat('README.md'), /You need enough EGLD to start \(part of it buys the 5,000 FOXSY registration at the day's price, 1 stays as the gas reserve\)/)
+  assert.match(flat('site/src/content/docs/help/costs.md'), /Enough \*\*EGLD\*\* to start: part of it buys the 5,000 FOXSY registration at the day's price \(the dashboard shows the live EGLD and FOXSY prices at the top\)/)
+  assert.match(flat('install.sh'), /2\. Send EGLD to agent 1's wallet above \(MultiversX network\), enough to cover this:/)
 })

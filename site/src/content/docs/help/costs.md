@@ -26,8 +26,8 @@ unless you switch it on yourself on the computer that runs the agent: the server
 
 ## To start
 
-About **5 EGLD**: part of it buys the 5,000 FOXSY registration (the dashboard shows the live EGLD and FOXSY prices at
-the top), 1 stays in the wallet as the gas reserve, the rest plays the first games. After that, top up as the agent plays: by hand or from Binance with top-ups you approve on Telegram
+Enough **EGLD** to start: part of it buys the 5,000 FOXSY registration at the day's price (the dashboard shows the live
+EGLD and FOXSY prices at the top), 1 stays in the wallet as the gas reserve, the rest plays the first games. After that, top up as the agent plays: by hand or from Binance with top-ups you approve on Telegram
 ([Your keys](/start/keys/#3-cex-top-up-optional)). Each agent's page shows what its wallet is worth; you are warned there,
 in the morning summary on Telegram (at once with `/updates all`) and, with a Binance key, Telegram and the platform
 LIVE, a top-up proposal comes at once (once a day per agent), when it falls under your **Top-up warning** ($10 unless you change it). Send EGLD, the agent buys

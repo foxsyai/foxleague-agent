@@ -1076,7 +1076,7 @@ cat <<EOF
 
   Next steps
   1. Open the dashboard. Its Getting started guide walks you through the rest, step by step.
-  2. Send EGLD to agent 1's wallet above (MultiversX network). About 5 EGLD is a good start:
+  2. Send EGLD to agent 1's wallet above (MultiversX network), enough to cover this:
      part of it buys the 5,000 FOXSY registration, 1 stays as the gas reserve, the rest pays the first games.
   3. Watch a plan or two in dry run. A new wallet shows only the simulated FOXSY swap there: the
      registration line then says it needs 5,000 FOXSY, because nothing was really bought.
