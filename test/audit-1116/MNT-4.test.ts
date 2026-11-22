@@ -23,10 +23,15 @@ test('MNT-4a the manual copy no longer says a listed card of the 18 is replaced 
 
 test('MNT-4a the snapshot says in capitals that a card of the saved 18 in an auction forfeits the next locked match', () => {
   const s = withFixture(snapshot())
-  // The owner listed a starter in FoxLeague's app (the agent itself lists no card of its 18): the contract holds it.
-  s.players.find(p => p.nonce === 4)!.listed = true
+  // The owner listed a starter in FoxLeague's app (the agent itself lists no card of its 18): the contract holds it, and
+  // FoxLeague's own-session roster leaves it out (pre-release audit 2026-11-22, INT-1); the saved 18 still name it.
+  s.players = s.players.filter(p => p.nonce !== 4)
   const text = renderDigest(s)
-  assert.match(text, /LISTED[^\n]*(forfeit|3-0)/i, 'only the squad line\'s LISTED tag: the plan is not told the T60 match in 2 h is forfeited unless #4 is replaced')
+  assert.match(text, /NOT IN YOUR ROSTER: #4\b[^\n]*auction[^\n]*(forfeit|3-0)/, 'the plan is not told the T60 match in 2 h is forfeited unless #4 is replaced')
+  // FoxLeague's fallback roster (its record copy) still carries the card with listed_for_sale: true: said the same way.
+  const fallback = withFixture(snapshot())
+  fallback.players.find(p => p.nonce === 4)!.listed = true
+  assert.match(renderDigest(fallback), /LISTED[^\n]*(forfeit|3-0)/i, 'only the squad line\'s LISTED tag: the plan is not told the T60 match in 2 h is forfeited unless #4 is replaced')
 })
 
 test('MNT-4b the Common pack week: from Monday 14:00 UTC, in the manual copy and in the instructions', () => {
