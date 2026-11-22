@@ -3074,20 +3074,24 @@ Stays open:
 The owner, setting up a key before the public release: Anthropic's console now asks "Where does your code run?" when
 **Create key** is pressed (Your own machine, Cloud or Kubernetes, CI pipeline, Somewhere else), then offers an
 expiry that defaults to 30 days, a linked account and a scope. The test `test/console-1122/APIKEY-1.test.ts` failed
-on `4e4c375` and passes now.
+on `4e4c375` and passes now; the GitHub review of PR #89 (PASS) found three lows, fixed in the same PR.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
 | APIKEY-1 | launch (the owner, 2026-11-22) | The steps said only "press Create key". **Your own machine** signs in the `ant` command line tool and makes no key the agent can use; the default expiry of 30 days stops every agent on that day (the agent tells the owner once, then waits) | The installer's 4/7 Keys help, INSTALL.md, the site's Keys page and the dashboard's guide say to choose **Somewhere else** (an API key), set Expires to **Never** and leave the linked account (yourself) and the scope (Default workspace) as they are. The installer's line keeps its number, so the install videos' quotes stay where they are |
+| R89A-1 | low (record) | "Stays open" named only the install videos; the Getting started screenshot on the Keys page shows the old step too | Named |
+| R89A-2 | low (test) | APIKEY-1 found the installer's line by its number, so a line added above it failed the test with the steps unchanged | The test finds the line by its text and checks the videos' quote at that line's own number |
+| R89A-3 | low (record) | The record said the key is read only from `.env` or the Keys box; a key pasted in Keys rests in `data/secrets.json` | Named, with its mode and that it wins over `.env` |
 
 A key that never expires is a long-lived secret (the console says so in red). What holds it: the agent reads it
-only from `.env` (mode 600) or the dashboard's Keys box (password), never shows it back and never sends it anywhere
-but Anthropic's API; the monthly spend limit of the step before caps what a leaked key could cost. The scope stays
+from `.env` (mode 600) or, once pasted in the dashboard's Keys box (password), from `data/secrets.json` (mode 600),
+which wins over `.env`; it never shows it back and never sends it anywhere but Anthropic's API; the monthly spend limit of the step before caps what a leaked key could cost. The scope stays
 the Default workspace, never Organization (which would also open the Admin API). The owner can revoke the key in
 the console at any time and paste a new one in Keys.
 
 Stays open:
-- The install videos show the old line until they are rendered again (with the launch screenshots).
+- The install videos and the Getting started screenshot (`site/public/screenshots/getting-started.png`, shown on the
+  Keys page above these steps) show the old step until they are rendered again with the launch PR (#85).
 
 ## Haiku 5.5 at high, the AI of a new install (2026-11-20)
 

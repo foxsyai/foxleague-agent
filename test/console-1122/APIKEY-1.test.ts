@@ -13,14 +13,19 @@ import { join } from 'node:path'
 const REPO = join(import.meta.dirname, '..', '..')
 const read = (p: string) => readFileSync(join(REPO, p), 'utf8')
 const flat = (p: string) => read(p).replace(/\s+/g, ' ')
+const LINE = '     d. Create key (Somewhere else), name foxleague-agent, Expires Never, copy it (once):'
 
 test('APIKEY-1 every list of the AI key steps says Somewhere else when the console asks where the code runs, and Expires Never', () => {
-  // The installer's 4/7 Keys help: one line, so the line numbers the install videos quote stay where they are.
-  const line = read('install.sh').split('\n')[986]
-  assert.equal(line, '     d. Create key (Somewhere else), name foxleague-agent, Expires Never, copy it (once):')
+  // The installer's 4/7 Keys help: one line, found by its text (R89A-2), so the line numbers the install videos quote
+  // stay where they are.
+  const lines = read('install.sh').split('\n')
+  const at = lines.findIndex(l => /^ {5}d\. .*Create key/.test(l))
+  assert.ok(at >= 0, 'the installer names Create key in its 4/7 Keys help')
+  assert.equal(lines[at], LINE)
+  assert.equal(lines.filter(l => l.includes('Create key')).length, 1, 'one line of the installer names it')
   assert.match(flat('INSTALL.md'), /press\ Create\ key\.\ Where\ the\ console\ asks\ where\ your\ code\ runs,\ choose\ Somewhere\ else\ \(an\ API\ key\):\ the\ other\ choices\ sign\ in\ a\ command\ line\ tool\ the\ agent\ does\ not\ use\.\ Name\ the\ key\ foxleague\-agent,\ set\ Expires\ to\ Never\ and\ leave\ the\ rest\ as\ it\ is:\ a\ key\ that\ expires\ stops\ your\ agents\ on\ that\ day;\ the\ monthly\ limit\ above\ caps\ what\ it\ can\ cost\.\ Copy\ it:\ it\ is\ shown\ only\ once\./)
   assert.match(flat('site/src/content/docs/start/keys.mdx'), /press\ \*\*Create\ key\*\*\.\ Where\ the\ console\ asks\ where\ your\ code\ runs,\ choose\ \*\*Somewhere\ else\*\*\ \(an\ API\ key\):\ the\ other\ choices\ sign\ in\ a\ command\ line\ tool\ the\ agent\ does\ not\ use\.\ Name\ the\ key\ `foxleague\-agent`,\ set\ Expires\ to\ \*\*Never\*\*\ and\ leave\ the\ rest\ as\ it\ is:\ a\ key\ that\ expires\ stops\ your\ agents\ on\ that\ day;\ the\ monthly\ limit\ above\ caps\ what\ it\ can\ cost\.\ Copy\ it:\ it\ is\ shown\ only\ once\./)
   assert.match(read('src/web/dashboard.html'), /\['Open\ API\ keys\ and\ press\ Create\ key\.\ Where\ the\ console\ asks\ where\ your\ code\ runs,\ choose\ Somewhere\ else\ \(an\ API\ key\):\ the\ other\ choices\ sign\ in\ a\ command\ line\ tool\ the\ agent\ does\ not\ use\.\ Name\ the\ key\ foxleague\-agent,\ set\ Expires\ to\ Never\ and\ leave\ the\ rest\ as\ it\ is:\ a\ key\ that\ expires\ stops\ your\ agents\ on\ that\ day;\ the\ monthly\ limit\ above\ caps\ what\ it\ can\ cost\.\ Copy\ it:\ it\ is\ shown\ only\ once\.',\ 'https:\/\/platform\.claude\.com\/settings\/keys'\]/)
   // The install videos quote the installer's line as it is.
-  assert.match(read('site/scripts/videos/src/text.mjs'), /\[sh\(987,\ '\ \ \ \ \ d\.\ Create\ key\ \(Somewhere\ else\),\ name\ foxleague\-agent,\ Expires\ Never,\ copy\ it\ \(once\):'\)\]/)
+  assert.ok(read('site/scripts/videos/src/text.mjs').includes(`[sh(${at + 1}, '${LINE}')]`), 'the videos quote the line at its own number')
 })
