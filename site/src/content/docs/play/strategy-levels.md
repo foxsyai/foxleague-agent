@@ -139,7 +139,7 @@ afterwards. The dollar values are sized for a FOXSY price of about $0.0027; at a
 | Tick | 120 min | 120 min | 90 min | 90 min | 75 min | 60 min |
 | Recommended AI | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high | Haiku 5.5, high |
 
-The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the Bronze amounts (100, 250 and 500), the active hours (08:00 to 20:00
+The same for every level: the setup budget ($20), the EGLD gas reserve (1 EGLD), the Bronze amounts (100, 250 and 500), the active hours (06:00 to 22:00
 UTC), a random shift of up to 10 minutes either way, actions at least 30 seconds apart.
 
 A level with no Gold amounts stays out of Gold by the amount too: it pays no entry or stake from FoxLeague's Gold

@@ -504,7 +504,7 @@ results, not meeting). What they share is a pooled formation record with no team
 
 - **The game:** limited by your daily cap and monthly budget (defaults $5 a day and $150 a month) plus a
   one-time $20 setup budget for the registration. Your agents never go over them.
-- **The AI:** about $0.60 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 12 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the dashboard.
+- **The AI:** about $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the dashboard.
 - **Network fees:** a few cents a day. Each agent always keeps an EGLD reserve for them (1 EGLD by default, never swapped).
 
 ## Safety built in
@@ -589,5 +589,5 @@ system once the agent runs.
   team, keep the original words and use **Import team** in the dashboard. To start over with the new words, stop
   the agent and move `data/agent.db*` to another folder (only when the old agent wallets are empty or you keep
   their words). The installer checks this before it starts the agent.
-- **Nothing happens at night:** each agent plays from 08:00 to 20:00 UTC by default (Settings: Active from and Active until).
+- **Nothing happens at night:** each agent plays from 06:00 to 22:00 UTC by default (Settings: Active from and Active until).
 - **"strategist OFF" in the logs:** add your Anthropic API key in Keys.

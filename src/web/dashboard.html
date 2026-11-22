@@ -1411,8 +1411,8 @@ const TIPS = {
   jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. The default is 10; 0 keeps the exact tick.</p>
     <p>It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20.</p>`],
   hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
-    <p>The default, from 8 until 20, is 12 hours around the 14:00 UTC game-day reset. From 0 until 24 runs all day.</p>
-    <p>Add your time zone's offset to read them locally: at UTC+3, 8 until 20 is 11:00 to 23:00.</p>
+    <p>The default, from 6 until 22, is 16 hours around the 14:00 UTC game-day reset. From 0 until 24 runs all day.</p>
+    <p>Add your time zone's offset to read them locally: at UTC+2, 6 until 22 is 08:00 to 00:00.</p>
     <p>The window may cross midnight: from 22 until 6 means night hours.</p>`],
 }
 // Shadow plans are off unless switched on on the machine that runs the agent: the Activity bubble explains them only
@@ -1832,7 +1832,7 @@ const GUIDE = [
       ['Open API keys and press Create key. Where the console asks where your code runs, choose Somewhere else (an API key): the other choices sign in a command line tool the agent does not use. Name the key foxleague-agent, set Expires to Never and leave the rest as it is: a key that expires stops your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown only once.', 'https://platform.claude.com/settings/keys'],
       ['Back here, press Keys, paste it into Anthropic API key, type your dashboard password and press Save. Every agent uses it at once.', null, true],
     ],
-    note: 'About $0.60 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 12 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
+    note: 'About $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the Strategist box and the tick in Settings.' },
   { id: 'tg', title: 'Telegram', need: false, done: st => st.telegramToken && st.telegramChat,
     intro: 'A summary of every agent each morning and any detail on request (/status, /plan, /log); you can also talk to your manager in plain words.',
     steps: [

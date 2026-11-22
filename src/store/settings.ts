@@ -162,7 +162,7 @@ export const DEFAULT_SETTINGS: AgentSettings = {
   setupBudgetUsd: 20,
   egldGasReserve: '1',
   tickJitterMinutes: 10,
-  activeHoursUtc: [8, 20],
+  activeHoursUtc: [6, 22],
   minGapSeconds: 30,
   actionProbability: 1,
   aiModel: '',

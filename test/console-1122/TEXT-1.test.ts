@@ -87,3 +87,20 @@ test('BIDTEXT-1 the bid limit bubbles explain the rule, with no default backstor
   const rows = page.split('\n').filter(l => /^\| Max bid/.test(l)).join('\n')
   assert.doesNotMatch(rows, /when it was set|percent above|about 14,450|the Rare's market price/)
 })
+
+test('HOURS-1 a new agent plays from 06:00 to 22:00 UTC, and the pages and bubbles say so', async () => {
+  // The owner, 2026-11-22: 16 hours, 08:00 to midnight in Romania in winter (UTC+2), the window the owner's own agents
+  // play since 2026-10-27; it was 08:00 to 20:00 UTC. At the 2-hour tick that is 8 plans a day, about $0.80 at $0.10.
+  const { DEFAULT_SETTINGS } = await import('../../src/store/settings.ts')
+  assert.deepEqual(DEFAULT_SETTINGS.activeHoursUtc, [6, 22])
+  const tip = html.match(/hours: \['[^']*', `([^`]*)`/)?.[1] ?? ''
+  assert.match(tip, /The default, from 6 until 22, is 16 hours around the 14:00 UTC game-day reset\./)
+  assert.match(tip, /Add your time zone's offset to read them locally: at UTC\+2, 6 until 22 is 08:00 to 00:00\./)
+  const read = (p: string) => readFileSync(join(import.meta.dirname, '..', '..', p), 'utf8')
+  assert.match(read('site/src/content/docs/use/settings.md'), /\| Active hours \| 06:00 to 22:00 UTC \| The agent plans only inside this window, in UTC: 16 hours around the 14:00 UTC game-day reset\./)
+  for (const f of ['INSTALL.md', 'site/src/content/docs/help/troubleshooting.md', 'site/src/content/docs/play/strategy-levels.md']) {
+    const text = read(f).replace(/\s+/g, ' ')
+    assert.match(text, /06:00 to 22:00 UTC/, f)
+    assert.doesNotMatch(text, /08:00 to 20:00 UTC/, f)
+  }
+})
