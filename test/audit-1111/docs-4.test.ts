@@ -51,9 +51,7 @@ const STATED = {
   perPlan: [/about \$(\d+(?:\.\d+)?) a plan\)/i, 'the cost of a plan'],
   tickHours: [/a plan every (\d+) hours inside \d+ active hours/, 'the tick'],
   hours: [/a plan every \d+ hours inside (\d+) active hours/, 'the active hours'],
-  tokens: [/the rules and the game manual, about ([\d,]+) tokens/, 'the size of the rules and the manual'],
-  cached: [/averaged \$(\d+(?:\.\d+)?) a plan with the manual from the cache/, 'the measured cost with the cache'],
-  uncached: [/from the cache and \$(\d+(?:\.\d+)?) without/, 'the measured cost without the cache'],
+  tokens: [/the rules and the game manual, over ([\d,]+) tokens/, 'the size of the rules and the manual'],
 } as const
 /** One stated number of a page, read when a test asks for it, so each test fails for its own reason. */
 const stated = (f: string) => {
@@ -76,11 +74,11 @@ test('DOCS-4 the default the sentence names is the default of the code: Haiku 5.
   }
 })
 
-test('DOCS-4 the stated size of the rules and the manual is the size of the text every plan sends today', () => {
+test('DOCS-4 the stated size of the rules and the manual holds for the text every plan sends today (NUM-6: "over 100,000", no count that moves with each sync)', () => {
   for (const f of PLACES) {
     const s = stated(f)
-    const off = Math.abs(systemTokens - s.tokens) / s.tokens
-    assert.ok(off <= 0.05, `${f} says about ${s.tokens} tokens; the prompt and the manual are about ${systemTokens} today (${systemBytes} bytes): measure a plan again and restate the costs`)
+    assert.equal(s.tokens, 100_000, `${f}: "over 100,000 tokens", the line of Haiku 5.5's long-prompt price`)
+    assert.ok(systemTokens > s.tokens, `${f} says over ${s.tokens} tokens; the prompt and the manual are about ${systemTokens} today (${systemBytes} bytes)`)
   }
 })
 
@@ -104,18 +102,17 @@ test('DOCS-4 the stated cost of a day is the plans of a default day at the state
   }
 })
 
-test('DOCS-4 the cost of Opus 5.5 at high effort is the one measured on ten agents, and no less than its input costs at the list prices', () => {
+test('DOCS-4 no page states a cost measured in our own testing (NUM-6, the owner 2026-11-22: general rules, never figures of a moment)', () => {
+  // The measurement of 2026-11-11 (ten agents on Opus 5.5 at high effort) stays here as the record it was; the pages
+  // say the rule (agents that plan within the same hour share the cache and pay far less for that text).
   const [inP, , readP] = MODELS['claude-opus-5-5']!.price
   const rest = MEASURED.planInputTokens - MEASURED.systemTokens
-  const floorCached = (MEASURED.systemTokens * readP + rest * inP) / 1e6
-  const floorUncached = (MEASURED.planInputTokens * inP) / 1e6
-  assert.ok(floorCached < MEASURED.opusHigh.cached && floorUncached < MEASURED.opusHigh.uncached, 'the measured costs hold the input at the list prices')
+  assert.ok((MEASURED.systemTokens * readP + rest * inP) / 1e6 < MEASURED.opusHigh.cached, 'the record holds the input at the list prices')
   for (const f of PLACES) {
-    const s = stated(f)
-    assert.match(read(f), /measured on real plans, ten agents on Opus 5\.5 at high effort averaged/, f)
-    assert.equal(s.cached, MEASURED.opusHigh.cached, f)
-    assert.equal(s.uncached, MEASURED.opusHigh.uncached, f)
+    assert.doesNotMatch(read(f), /measured on real plans|averaged \$\d/, f)
+    assert.match(read(f).replace(/\s+/g, ' '), /agents that plan within the same hour share the cache and pay far less for that text/i, f)
   }
+  assert.doesNotMatch(read('site/src/content/docs/play/strategy-levels.md').replace(/\s+/g, ' '), /as measured on Opus/)
 })
 
 test('DOCS-4 no page keeps the old cost or a cost per agent that was not measured', () => {

@@ -153,8 +153,7 @@ recovery, its paid sessions, booster and pack); the monthly budget is close to 3
 the top-up warning comes when about two days of play at the daily cap are left. The AI is one setting for every
 agent; a level that plans twice as often costs about twice as much in AI calls. Every level recommends the AI a new
 install starts on, Haiku 5.5 at high effort; Sonnet 5.5 plans more carefully and acts less, Opus 5.5 is the most
-active and costs the most of the three. [What it costs](/help/costs/) gives the cost of a plan at the defaults and as
-measured on Opus 5.5 at high effort.
+active and costs the most of the three. [What it costs](/help/costs/) gives the cost of a plan at the defaults.
 
 A bid also needs a daily cap above its value; each level's daily cap holds a bid at its max bid with room to spare.
 
