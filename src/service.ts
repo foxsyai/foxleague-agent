@@ -19,7 +19,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
 import { ChangedWordsError, assertSameWords, walletFromSecretKey, deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
-import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
+import { accountAddresses, addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
 import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
 import { atomicToFloat, formatAtomic } from './util/encoding.ts'
@@ -491,6 +491,8 @@ export class Service {
   /** When each agent's next tick is due (ms), for a settings save that shortens the cycle. */
   private readonly nextAt = new Map<number, number>()
   private readonly busy = new Set<number>()
+  /** A tick still making its plan (the snapshot, the AI), before its actions wait for their moments: Remove waits for it (R89A-12). */
+  private readonly planning = new Set<number>()
   /** Last snapshot per agent, for the web UI (refreshed at every tick and every action). */
   readonly snapshots = new Map<number, AgentSnapshot>()
   readonly proposals = new Proposals()
@@ -710,6 +712,8 @@ export class Service {
     let w = this.wallets.get(index)
     if (!w) {
       const row = this.store.agent(index)
+      // A removed imported team's number has no wallet here: never the install's own one at that number (R89A-12).
+      if (!row && this.store.importedAt(index)) throw new Error(`${agentName(index)} was an imported team and has been removed: it has no wallet here`)
       w = row?.source === 'imported' ? loadImportedWallet(this.cfg.dataDir, row.address, index) : deriveWallet(this.cfg.mnemonic!, index)
       this.wallets.set(index, w)
     }
@@ -1218,6 +1222,8 @@ export class Service {
     const marketSales = plan ? { has: (id: number) => this.store.hasSale(id), put: (rows: MarketSale[]) => this.store.putSales(rows), since: (iso: string) => this.store.salesSince(iso), complete: () => this.store.salesComplete, markComplete: () => this.store.markSalesComplete(), markIncomplete: () => this.store.markSalesIncomplete() } : undefined
     const league = plan ? this.store.leagueCache() : undefined
     const snap = await takeSnapshot({ chain: this.chain, fox: this.fox }, { wallet: this.wallet(index) }, new Date(), { research, matchFacts, marketSales, league })
+    // A team removed while it was read: nothing of the reading is kept under its number (R89A-14).
+    if (!this.store.agent(index)) return snap
     // The owner's choice (2026-10-22): every agent learns from the formation results of all of them, no team named.
     // Its own matches are kept when they were read; a failed read of them hides none of the others' (audit B2).
     // The owner's choice (2026-11-04): and from the public matches of the top teams, the league formation table.
@@ -1393,6 +1399,48 @@ export class Service {
     }
   }
 
+  /** A Find my team search is running: a second one waits for it (a double click asks FoxLeague 20 times, not 40). */
+  private findingImport = false
+
+  /**
+   * Import team, Find my team (the owner, 2026-11-22): the first 20 accounts of recovery words (or of a keystore that
+   * holds words) from `from`, each with the FoxLeague team its wallet plays, read from FoxLeague's public profile.
+   * No login, no transaction, nothing stored: the answer holds account numbers, addresses and team names only. A
+   * profile FoxLeague could not answer is unread, never "no team". A wallet that is already an agent here (or one of
+   * this install's own accounts, Add agent's) is named so the dashboard does not offer it.
+   */
+  async findImportAccounts(input: ImportInput, from?: unknown): Promise<{ accounts: { account: number; address: string; team: string | null; unread?: true; agent?: string; own?: true }[] }> {
+    if (this.stopping) throw new Error('the service is stopping; try again after the restart')
+    if (this.findingImport) throw new Error('already searching for your team: wait for that search to end')
+    this.findingImport = true
+    try {
+      const list = accountAddresses(input, from)
+      const agents = [...this.store.agents(), ...this.store.retiredAgents()]
+      const own = new Set<string>()
+      for (let i = 0; i <= this.store.maxIndex() + this.cfg.maxAgents; i++) if (!this.store.importedAt(i)) own.add(deriveWallet(this.cfg.mnemonic!, i).address)
+      const accounts = await Promise.all(list.map(async ({ account, address }) => {
+        let team: string | null = null
+        let unread = false
+        try {
+          const profile = await this.fox.user(address)
+          team = typeof profile?.team_name === 'string' && profile.team_name ? profile.team_name : null
+        } catch {
+          unread = true
+        }
+        const agent = agents.find(b => b.address === address)
+        return {
+          account, address, team,
+          ...(unread ? { unread: true as const } : {}),
+          ...(agent ? { agent: `${agentName(agent.index)}${agent.retired ? ' (retired)' : ''}` } : {}),
+          ...(own.has(address) ? { own: true as const } : {}),
+        }
+      }))
+      return { accounts }
+    } finally {
+      this.findingImport = false
+    }
+  }
+
   /** Import team, step 2 (after the password): stores the key, adds the agent paused, schedules it. */
   importAgent(token: string, who: string): AgentRow {
     const p = this.pendingImports.get(token)
@@ -1428,7 +1476,11 @@ export class Service {
     if (!agent) throw new Error(`no ${agentName(index)}`)
     if (agent.source !== 'imported') throw new Error(`${agentName(index)} comes from this install's recovery words and cannot be removed; pause it instead`)
     if (!agent.paused) throw new Error(`pause ${agentName(index)} first`)
-    if (this.busy.has(index) || !this.executor.idle) throw new Error(`${agentName(index)} is busy; try again in a minute`)
+    // As Retire (REMOVE-1): only an action of this agent still running refuses it. A plan that waits for its next action
+    // (busy up to 0.8 of a tick) stops at that step, which reads the agent first; another agent's action is no reason.
+    if (!this.executor.idleFor(index)) throw new Error(`${agentName(index)} is paused; an action it started is still finishing: remove it in a minute`)
+    // A tick still making its plan reads the wallet again (R89A-12): Remove waits for that part, a minute or so.
+    if (this.planning.has(index)) throw new Error(`${agentName(index)} is paused; the plan it started is still being made: remove it in a minute`)
     if (this.store.pending(index).length) throw new Error(`${agentName(index)} has a payment waiting for FoxLeague's confirmation; try again later`)
     clearTimeout(this.timers.get(index))
     this.timers.delete(index)
@@ -1814,6 +1866,7 @@ export class Service {
     if (refusal) return refusal
     const agent = this.store.agent(index)!
     this.busy.add(index)
+    this.planning.add(index)
     try {
       await this.retryPending(agent)
       const n = await creditRefunds({ store: this.store, chain: this.chain, fox: this.fox, wallet: this.wallet(index) }, agent, agent.dryRun || !this.executor.liveEnabled).catch(() => 0)
@@ -1857,6 +1910,8 @@ export class Service {
         return false
       })
       if (!plan.actions.length) this.quiet.add(index)
+      // From here the plan's actions wait for their moments and read the agent before each one (Remove may go).
+      this.planning.delete(index)
       const running = this.runPlan(agent, plan.actions, !ownerRequest, snap)
       // The real plan's actions are with runPlan, as ever. Only now, and without waiting for it, the shadow plan of
       // the same request starts (when one is switched on): it cannot throw and nothing here reads its answer.
@@ -1869,6 +1924,7 @@ export class Service {
       this.tickFailed(index, err, msg)
       return msg
     } finally {
+      this.planning.delete(index)
       this.busy.delete(index)
     }
   }
@@ -2191,8 +2247,9 @@ export class Service {
         continue
       }
       const snap = await this.snapshot(agent.index)
-      // A stop that came while the snapshot was read (tens of seconds): the action is not started.
-      if (this.stopping) return
+      // A stop that came while the snapshot was read (tens of seconds): the action is not started. Nor for a team
+      // removed meanwhile: the plan ends here, quietly (R89A-14).
+      if (this.stopping || !this.store.agent(agent.index)) return
       if (!planned.piece && extensions.splitAction && !beforeLock) {
         const pieces = extensions.splitAction(planned, snap, current.settings)
         if (pieces && pieces.length > 1) {

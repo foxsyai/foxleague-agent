@@ -23,13 +23,16 @@ This is the AI that plans for your agents. Without it they only watch.
    limit is reached (or the credit runs out, or the key stops working) you hear it once on Telegram; one agent then
    asks again at each of its plans and the others wait without reading anything, and you hear once more when plans
    work again. **Plan now** always asks.
-4. Open [API keys](https://platform.claude.com/settings/keys), press **Create key**, name it `foxleague-agent` and
-   copy it. It is shown only once.
+4. Open [API keys](https://platform.claude.com/settings/keys) and press **Create key**. Where the console asks where
+   your code runs, choose **Somewhere else** (an API key): the other choices sign in a command line tool the agent
+   does not use. Name the key `foxleague-agent`, set Expires to **Never** and leave the rest as it is: a key that
+   expires stops your agents on that day; the monthly limit above caps what it can cost. Copy it: it is shown
+   only once.
 5. In the dashboard, press **Keys**, paste it into **Anthropic API key**, type your dashboard password and press
    **Save**. The agent uses it at once.
 </Steps>
 
-About $0.60 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 12 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 105,000 tokens, and they are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan, and a shorter tick means more plans a day. You pick the model and effort in the Strategist box.
+About $0.80 a day for a single agent with the default model, effort and tick (Haiku 5.5 at high, a plan every 2 hours inside 16 active hours, about $0.10 a plan): every plan sends the rules and the game manual, about 112,000 tokens. They are cached for an hour only when another plan comes within that hour, so a lone agent sends them at the plain price. Agents that plan within the same hour share the cache and pay far less for that text: measured on real plans, ten agents on Opus 5.5 at high effort averaged $0.15 a plan with the manual from the cache and $0.60 without. Sonnet, Opus, Fable and a higher effort cost more for the same plan; a shorter tick means more plans a day. You pick the model and effort in the Strategist box.
 
 ## 2. Telegram, optional
 

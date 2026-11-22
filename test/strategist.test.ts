@@ -401,7 +401,7 @@ test('presets run from careful to all-in, and the AI is told the owner sets how 
   assert.match(SYSTEM_PROMPT, /How hard to spend on growth is the owner's call/)
 })
 
-test('each level brings its own default limits, rising with the level; every agent starts steady, 08 to 20 UTC', async () => {
+test('each level brings its own default limits, rising with the level; every agent starts steady, 06 to 22 UTC (HOURS-1)', async () => {
   const { LEVEL_SETTINGS, STRATEGY_PRESETS: P, DEFAULT_SETTINGS: D, validateSettingsPatch, checkTiming, MIN_TICK_MINUTES } = await import('../src/store/settings.ts')
   assert.deepEqual(Object.keys(LEVEL_SETTINGS), Object.keys(P), 'one set of limits per preset')
   const levels = Object.values(LEVEL_SETTINGS)
@@ -412,9 +412,9 @@ test('each level brings its own default limits, rising with the level; every age
   }
   assert.deepEqual(LEVEL_SETTINGS.steady!.entryFeesSilver, [1000, 1500])
   assert.equal(LEVEL_SETTINGS.beast!.entryFeesSilver.at(-1), 4999)
-  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [500, 1500], 'every level bids (2026-11-06): a Common\'s price at steady, an Uncommon\'s at climber')
+  assert.deepEqual([LEVEL_SETTINGS.steady!.maxBidFoxsy, LEVEL_SETTINGS.climber!.maxBidFoxsy], [500, 1650], 'every level bids (2026-11-06): a Common\'s price at steady, an Uncommon\'s at climber')
   for (const l of levels) assert.ok(l.maxEntryFeeFoxsy * 0.0027 < l.dailyCapUsd, 'the largest entry fits the daily cap at a FOXSY price of $0.0027')
-  assert.deepEqual([D.strategy, D.dailyCapUsd, D.activeHoursUtc, D.tickMinutes, D.tickJitterMinutes, D.minGapSeconds, D.actionProbability], [P.steady, 5, [8, 20], 120, 10, 30, 1])
+  assert.deepEqual([D.strategy, D.dailyCapUsd, D.activeHoursUtc, D.tickMinutes, D.tickJitterMinutes, D.minGapSeconds, D.actionProbability], [P.steady, 5, [6, 22], 120, 10, 30, 1])
   // The cycle: never under 10 minutes, the random window included.
   assert.throws(() => validateSettingsPatch({ tickMinutes: MIN_TICK_MINUTES - 1 }), /between 10 and 240/)
   assert.throws(() => checkTiming({ ...D, tickMinutes: 30, tickJitterMinutes: 25 }), /under 10 minutes: lower it to 20 or less/)

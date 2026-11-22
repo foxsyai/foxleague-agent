@@ -773,6 +773,15 @@ export function startWeb(service: Service, creds: Credentials, port: number, hos
           throw new HttpFail(400, err instanceof Error ? err.message : String(err))
         }
       }
+      // Find my team: the first 20 accounts of the words, each with its team; nothing is stored, no secret answered.
+      if (method === 'POST' && path === '/api/agents/import/find') {
+        const data = JSON.parse((await readBody(req, 16 * 1024)) || '{}') as Record<string, unknown>
+        try {
+          return json(res, 200, await service.findImportAccounts(data as unknown as ImportInput, data.from))
+        } catch (err) {
+          throw new HttpFail(400, err instanceof Error ? err.message : String(err))
+        }
+      }
       // Step 2: the dashboard password confirms, then the key is stored and the agent added (paused).
       if (method === 'POST' && path === '/api/agents/import') {
         const data = JSON.parse((await readBody(req, 4096)) || '{}') as { token?: unknown; password?: unknown }

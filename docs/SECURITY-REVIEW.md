@@ -3070,6 +3070,43 @@ Stays open:
   split (one condition in `src/local`, with its own test), so the other pieces run.
 - Production was not read and nothing was deployed.
 
+## The AI key in Anthropic's new console (2026-11-22)
+
+The owner, setting up a key before the public release: Anthropic's console now asks "Where does your code run?" when
+**Create key** is pressed (Your own machine, Cloud or Kubernetes, CI pipeline, Somewhere else), then offers an
+expiry that defaults to 30 days, a linked account and a scope. The test `test/console-1122/APIKEY-1.test.ts` failed
+on `4e4c375` and passes now; the GitHub reviews of PR #89 (each PASS) found the lows in the rows R89A-1 onward, all fixed in the same PR.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| APIKEY-1 | launch (the owner, 2026-11-22) | The steps said only "press Create key". **Your own machine** signs in the `ant` command line tool and makes no key the agent can use; the default expiry of 30 days stops every agent on that day (the agent tells the owner once, then waits) | The installer's 4/7 Keys help, INSTALL.md, the site's Keys page and the dashboard's guide say to choose **Somewhere else** (an API key), set Expires to **Never** and leave the linked account (yourself) and the scope (Default workspace) as they are. The installer's line keeps its number, so the install videos' quotes stay where they are |
+| R89A-1 | low (record) | "Stays open" named only the install videos; the Getting started screenshot on the Keys page shows the old step too | Named |
+| R89A-2 | low (test) | APIKEY-1 found the installer's line by its number, so a line added above it failed the test with the steps unchanged | The test finds the line by its text and checks the videos' quote at that line's own number |
+| R89A-3 | low (record) | The record said the key is read only from `.env` or the Keys box; a key pasted in Keys rests in `data/secrets.json` | Named, with its mode and that it wins over `.env` |
+| R89A-4 | low (dashboard) | The fourth review: Refresh was one state for every agent tab, so a refresh of agent 1 greyed out agent 2's button and dropped a press there | The state is per agent (`refreshing`, a set of the agents being read); a tab switch draws the button for the agent it opens |
+| R89A-5 | low (test) | REFRESH-1 replaced the page's `act`, so "until the new reading is shown" rested on an unchecked comment | A test checks that the page's own `act` awaits `loadState()` before it returns |
+| R89A-6 | low (record) | The record said the key is never shown back; Keys and `/keys` show a masked form | Named: the first 10 and the last 4 characters |
+| HOURS-1 | spend (the owner, 2026-11-22) | A new agent planned from 08:00 to 20:00 UTC, 12 hours; the owner's own agents play 06:00 to 22:00 since 2026-10-27 (08:00 to midnight in Romania in winter) | The default is 06:00 to 22:00 UTC, 16 hours: 8 plans a day at the 2-hour tick, about $0.80 a day of AI at the defaults where it was $0.60; the five places that state the cost say so. An existing agent keeps its window: every agent row saves the whole defaults when it is created (`addAgent`, `addImportedAgent`) and only keys added later fall back to the defaults, so no agent's spending rises by itself on an update. A longer window chosen by the owner still asks for the password |
+| BIDS-1 | spend (the owner, 2026-11-22) | The limits per rarity were set on 2026-10-24 from that day's market; on 2026-11-22 a Legendary sold near 46,000 while the default limit and Zeus's Max bid were 38,000, so a new Zeus agent could never buy one at market | The owner's rule: a card is three of the rarity below fused, so each limit is three times the one below plus 5 percent, from a Common at 525, rounded: Uncommon 1,650 (was 1,500), Rare 5,200 (7,000), Epic 16,400 (14,000), Legendary 51,700 (38,000); the Common stays at 500, a pack card's price. Against that day's market (Uncommon 1,300, Rare 4,800, Epic 11,700, Legendary 46,000) every limit holds a bid and one raise; an Epic and a Legendary also a second round. Each level's Max bid is still the limit of the dearest rarity it buys: Climber 1,650, Hunter 5,200, Predator and Beast 16,400, Zeus 51,700; a bid at the max still fits each level's daily cap. The Uncommon's 1,650 is above three pack Commons and the fusion fee but under the build ceiling with its matches (2,200). An agent that saved its limits keeps them (the owner's 10 agents saved 38,000 and the rest); one that never saved its limits per rarity (made before 2026-10-24 and never saved since) reads the new defaults at once, a rise on the Uncommon, the Epic and the Legendary without the password, still within its saved Max bid, the build cost and the daily cap (R89A-9). Zeus's Max bid (51,700) is above its Max swap (50,000): an agent that holds only EGLD funds a bid above 50,000 with two swaps, the first plan's one refused as "swap first" (fails closed, nothing overspent). A +10 percent rule was weighed and left: Predator's and Zeus's max bids would pass their daily caps |
+| REMOVE-1 | medium (the owner's test of the release candidate: an imported team could not be removed) | Remove of a paused imported team refused "agent N is busy" for as long as the plan it had started waited for its next action (up to 0.8 of a tick, 48 minutes at Zeus) or while any other agent ran an action; the page then switched to agent 1 as if the team was gone | Remove refuses as Retire does: only while an action of this agent is still running (`idleFor`) or a payment waits. A plan that only waits stops at its next step, which reads the agent first (removed: it stops, before any snapshot or signature). The page switches away only when the agent is gone, as for Retire and Delete |
+| R89A-9 | low (record, rule 7) | The tenth review: BIDS-1 recorded only that an agent with saved limits keeps them | The row says the other half: an agent that never saved its limits per rarity reads the new defaults at once, within its saved Max bid, the build cost and the daily cap |
+| R89A-10 | low (what the owner reads) | The bubbles' shadow sentence counted the active agents' shadow plans, the password rule (wakesShadow) the retired ones too | `shadowsSet` counts the retired agents as well |
+| R89A-11 | low (test) | The refusal at the default Legendary limit was not tested | Tested at 51,700 and 51,701 under a Max bid above it |
+| R89A-12 | medium (the eleventh review: a removed team's number read as the install's own wallet; nothing signed) | With REMOVE-1, Remove went also while the tick was still making its plan (the snapshot, the AI), which never read the agent again; `wallet()` then found no row and fell back to the install's own recovery-words wallet at that number: it was read from the chain and FoxLeague, stored as that number's snapshot and the plan paid for. The executor refuses a row that is gone, so no transaction | Remove waits while the plan is still being made (`planning`, set from the start of the tick until its actions are handed to `runPlan`): "the plan it started is still being made: remove it in a minute". A removed imported team's number never yields a wallet (`wallet()` refuses it, never the install's own). Tests: a real tick refuses Remove until it is over; a plan that waited through Remove stops at its next step with no snapshot and no action |
+| R89A-13 | low (test) | The twelfth review: R89A-12's real-tick test ran on the default hours (06:00 to 22:00 UTC), so between 22:00 and 06:00 the tick ended at once as outside its hours and the test failed: CI red 8 hours a day | The test sets all 24 hours and asserts the tick runs (`isBusy`) before it tries Remove |
+| R89A-14 | low (fails closed: a false "tick failed" for a removed team) | A step of a waiting plan read its snapshot (tens of seconds, no lock held); Pause and Remove in that read: the reading was stored under the removed number, then `wallet()` threw and the tick logged an error and told Telegram | After a step's snapshot the plan ends quietly when its team is gone; `snapshot()` keeps nothing of a reading whose team was removed meanwhile |
+
+A key that never expires is a long-lived secret (the console says so in red). What holds it: the agent reads it
+from `.env` (mode 600) or, once pasted in the dashboard's Keys box (password), from `data/secrets.json` (mode 600),
+which wins over `.env`; it shows back only a masked form (the first 10 and the last 4 characters, in Keys and Telegram's
+`/keys`) and never sends it anywhere but Anthropic's API; the monthly spend limit of the step before caps what a leaked key could cost. The scope stays
+the Default workspace, never Organization (which would also open the Admin API). The owner can revoke the key in
+the console at any time and paste a new one in Keys.
+
+Stays open:
+- The install videos and the Getting started screenshot (`site/public/screenshots/getting-started.png`, shown on the
+  Keys page above these steps) show the old step until they are rendered again with the launch PR (#85).
+
 ## Haiku 5.5 at high, the AI of a new install (2026-11-20)
 
 The owner's decision of 2026-11-20. His ten live agents played Opus 5.5, Sonnet 5.5 and Haiku 5.5, all at high effort,
@@ -3112,6 +3149,37 @@ Stays open:
   (`site/scripts/screenshots.ts`, `site/scripts/videos/src/capture.mjs`) use the new default for the next capture.
 - Production was not read and nothing was deployed.
 
+## Find my team (2026-11-22)
+
+The owner, before the public release: a player often has several wallets made from the same recovery words (xPortal
+and the web wallet derive account 0, 1, 2 ... from them) and the team may be on any of them. Import team checked one
+account number at a time, so a player who did not know it tried them one by one. **Find my team**, beside the account
+number in the import dialog, lists the first 20 accounts of the words (or of a keystore that holds words) with the
+team each one plays, like the account list of a wallet; **Use this one** fills in the number and runs the usual
+Check. The tests in `test/find-team/FIND.test.ts` failed before the change (no such search) and pass now; of the
+GitHub review's findings, R88A-1 to R88A-3 failed on `c983590` and pass now, R88A-4 (a stronger test of what was
+right) passes on both.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| FIND-1 | feature (the owner, 2026-11-22) | The account number had to be known: the check reads one account | `POST /api/agents/import/find` (dashboard login and CSRF as every write) answers the account numbers, addresses and team names of 20 accounts from `from` (0 to 999). `accountAddresses` (`src/wallet/imported.ts`) keeps only each address and drops its key at once; a keystore is opened once (`decryptMnemonic`) under the same KDF limit as the check. Nothing is stored and no session is opened: the team name comes from FoxLeague's public profile (`GET /api/users/{address}`), so no FoxLeague account is created for an empty wallet. The answer holds no key or word; errors never repeat what was pasted |
+| FIND-2 | rule 4 | A profile FoxLeague could not answer would read as "no team" | It is `unread` ("could not be read, search again"), never "no team" |
+| FIND-3 | hygiene | A double click would ask FoxLeague 40 times | One search at a time (a second one is refused until the first ends); a PEM file or a keystore with one key has one account and is sent to Check |
+| FIND-4 | what the owner sees | A wallet that is already an agent (or one of this install's own accounts) would be offered for import, then refused by the check | Named in its row ("already agent 2", "this install's own account: use + Add agent") with no **Use this one** |
+| R88A-1 | medium (rule 4, what the owner reads) | The GitHub review of PR #88: the list's first line counted accounts FoxLeague could not answer as "no team", so a failed read of the account with the team read "no team to import here" | `impFindHead` says "no team found yet; N could not be read, search again" (or the teams found, then the unread count); "no team to import here" only when every account was read |
+| R88A-2 | low (a check of the wrong account; the Check and the password step still show the real team) | The list stayed when the words, the keystore file or its password changed; a search that answered after a change of the key type was shown too: **Use this one** then checked that number of the new key | Any change to the key or its type clears the list (`impListClear`); a search drops an answer that comes back after a change |
+| R88A-3 | low (privacy, the owner's call) | One search tells FoxLeague that 20 addresses are asked together from one address, which the one-account Check never did | Said in the dialog ("FoxLeague sees the 20 addresses asked together.") and in the guide, with the way around it: type the account number instead |
+| R88A-4 | low (tests) | FIND-3 timed the keystore search; 20 openings fit in its 3 s | The test counts the openings: one `decryptMnemonic`, no per-account `decrypt` |
+
+What did not change: the check (`previewImport`) and the import itself, the password step, the one PEM file kept per
+imported team, the Guardian refusal. The team name is player-written text: it reaches only the dashboard, as text
+(`textContent`), never a prompt.
+
+Stays open:
+- FoxLeague sees the 20 addresses of a search asked together (R88A-3): the owner who minds types the account number.
+- A team on an account past 999 is not found (the account number stops there too).
+- The list shows the team name only; its overall, balances and Guardian come with the Check of the chosen account.
+
 ## GitHub review of PR #83 (2026-11-20)
 
 PR #83 drew the launch media again from `ae5421e`: the installer's credit line ("$10, about two weeks"), the three
@@ -3130,6 +3198,31 @@ empty lines were right) and passes now. The second review found two more of the 
 Stays open:
 - The quote check itself still matches an empty quote anywhere; the test above holds the hints instead.
 - Production was not read for this pull request and nothing was deployed: the site is published after the merge.
+
+## FoxLeague of 21 Nov (2026-11-21)
+
+The running agent alerted at 20:50 UTC that FoxLeague's manual changed (nine pages) and that two routes it calls
+changed shape: FoxLeague promoted its release branch into `origin/main` (#806, `5eecea2aa`, manual `237984579`). The
+routes are the statistics of a match, which gained `injuries` (#801); the agent reads only both formations and both
+elevens there. The pages carry what SYNC-2 already acts on (#752, a card in an auction takes no paid action and is not
+trained; #764, account bans) and screens of the app. FoxLeague's server changes since SYNC-2 read the release branch
+(#792, #795, #796, #801, #802) touch no route the agent sends to. The game settings keys are unchanged.
+
+The fix is by Claude Opus 5.5, test first: `test/sync-1121/SYNC-3.test.ts` failed on `6fb2ced` for the reason given
+(each SYNC3-1 test, one per check; SYNC3-2 on the copy of 19 Nov) and passes now. The GitHub review of PR #87 (Claude
+Fable 5.2 at high effort, PASS) found two lows: their tests (the two sync tests; the waiver and listing counts and ranks,
+now one test each) failed on `f158a31` or `6fb2ced` and pass now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| SYNC3-1 | low (rule 4; no refusal on a normal day: FoxLeague's API description requires `listed_for_sale` on every card) | SYNC-2 made the four card Shop items refuse a card whose auction state the roster did not give. The other checks in `rules.ts` still read such a card as in the wallet: `train`, the squad a paid match or entry is played with (`squadLegal`), a saved eleven (`lineupVerdict`), a fusion's three cards, the cards a fusion or a listing leaves toward 18, a `sync` and a `list_card` | One helper, `listedRefusal`: a card known not to be listed passes, a listed one keeps "#N is listed for sale", an unread one is refused with "whether #N is in an auction (listed for sale) could not be read: not acting blind". The counts toward 18 and a sync's cards count only a card known not to be listed |
+| SYNC3-2 | low (the manual check warned on every plan) | The agents' manual copy and the route record were FoxLeague's of 19 Nov | Synced to `237984579` (16 pages, nine changed) with the two new route shapes; SYNC2-5 no longer pins the commit, SYNC3-2 does. The copy grew by 4 KB: the rules and the manual are about 111,700 tokens by the measured ratio, more than 5 percent above the 105,000 the five places stated (DOCS-4 failed on the synced copy), restated as about 112,000. The cost of a plan and of a day at the defaults ($0.10, $0.60) still holds |
+| R87A-1 | low (rule 4, a wrong reason; no money moves: `checkedSync` throws before anything is booked) | `sync` left an unread dirty card out instead of refusing: `sync` of that card said "#N has nothing to sync" (that it was clean); a whole-wallet sync passed the rules at the known cards' fee; `applyEffect` still marked an unread card synced in the working snapshot | A sync that names a dirty card whose auction state was not read is refused with that reason; a listed one is left out as before. `applyEffect` marks only cards known not to be listed as synced |
+| R87A-2 | low (tests) | The changed counts in `fusionBlocked`, `listingBlocked` and `list_card` (the cards left toward 18 and the strongest-18 rank) had no test that failed before the fix; SYNC3-1 was one test of seven cases | One test per check: train, squad, eleven, fusion inputs and count, the cooldown waiver's peers and count, the Legendary match waiver's count and rank, the listing, its count and rank, the sync and its effect |
+
+Stays open:
+- The busy-card rule of #748 is still off (its switch waits for FoxLeague's Terms); the agent has no rule of its own for
+  it until the switch appears in `/api/config`.
 
 ## The owner's release key (2026-11-20)
 

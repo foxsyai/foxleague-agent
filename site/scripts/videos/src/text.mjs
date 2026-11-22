@@ -96,7 +96,7 @@ export function texts(os) {
       [sh(984, '     a. Sign up or log in:                 https://platform.claude.com')],
       [sh(985, '     b. Add credit ($10, about two weeks): https://platform.claude.com/settings/billing')],
       [sh(986, '     c. Set a monthly limit ($60):         https://platform.claude.com/settings/limits')],
-      [sh(987, '     d. Create a key, name it foxleague-agent, copy it (shown once):')],
+      [sh(987, '     d. Create key (Somewhere else), name foxleague-agent, Expires Never, copy it (once):')],
       [sh(988, '                                           https://platform.claude.com/settings/keys')],
       '',
       [sh(990, '  2. Telegram, optional (a morning summary of every agent, talk to your manager):')],

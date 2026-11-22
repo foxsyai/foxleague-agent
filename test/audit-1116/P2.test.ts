@@ -61,10 +61,10 @@ test('P2: never above the ceiling, the owner\'s Max bid or the rarity limit', as
   assert.equal(owner.r.status, 'refused')
   assert.match(owner.r.summary, /exceeds the per-action maximum 2500/)
   assert.deepEqual(owner.sent, [])
-  // An Uncommon card: the minimum (1,575) above the Uncommon limit (1,500) is refused by it, whatever the ceiling.
-  const rare = await bid(1500, { foxsy: 1200, max_foxsy: 2400 }, 'Uncommon')
+  // An Uncommon card: the minimum (1,680) above the Uncommon limit (1,650 since BIDS-1) is refused by it, whatever the ceiling.
+  const rare = await bid(1600, { foxsy: 1200, max_foxsy: 2400 }, 'Uncommon')
   assert.equal(rare.r.status, 'refused')
-  assert.match(rare.r.summary, /above your limit for an Uncommon \(1500 FOXSY\)/)
+  assert.match(rare.r.summary, /above your limit for an Uncommon \(1650 FOXSY\)/)
   assert.deepEqual(rare.sent, [])
 })
 

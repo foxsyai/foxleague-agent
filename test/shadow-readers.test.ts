@@ -141,7 +141,8 @@ test('SHADOW-11 the dashboard shows a shadow row marked as not carried out, and 
   assert.match(html, /const SHADOW_MARK = \['stale', 'shadow plan, not carried out'\]/)
   assert.match(html, /const \[cls, label\] = r\.kind === 'shadow' \? SHADOW_MARK : STATUS\[r\.status\]/, 'the row carries the mark in place of its status')
   assert.match(html, /const rows = shownActivity\(activityRows, pick\.value\)/, 'the list is filtered by that function')
-  const tip = html.match(/activity: \['Activity', `([^`]*)`/)?.[1] ?? ''
+  // The paragraph joins the Activity bubble only while the list holds a shadow plan (TEXT-1).
+  const tip = html.match(/const SHADOW_TIP = `([^`]*)`/)?.[1] ?? ''
   assert.match(tip, /A row marked <b>shadow plan, not carried out<\/b> is what another AI model would have planned from the same request\. It is recorded only to compare the models: nothing of it was done, it counts as neither a plan nor an action and the agent never reads it\./)
   assert.doesNotMatch(tip, /—|, and |, or /)
 

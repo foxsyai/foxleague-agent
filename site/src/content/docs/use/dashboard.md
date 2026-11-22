@@ -52,10 +52,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   active and costs the most of the three. Fable 5.2, the most capable, costs more still. A higher effort thinks harder
   and costs more. A dearer model or a higher effort asks for your password, because the AI spend has no cap of its own; a cheaper one is
   one click. A switch that starts shadow plans asks for the password too
-  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (free, coming
-  soon)" at the top of the list cannot be picked: a free model that runs on your own computer is being tested and is
-  not ready. Without the AI key the box is greyed out: it shows the model and effort the agents start on once the
-  key is set (Haiku 5.5 at high on a new install), and the level's recommended AI is shown next to the level.
+  ([What it costs](/help/costs/#comparing-a-second-model-before-you-switch)). The entry "Local model (coming soon)"
+  at the top of the list cannot be picked: a model that runs on your own computer is being tested and is not ready.
+  Without the AI key the box is greyed out: it shows the model and effort the agents start on once the key is set (Haiku 5.5 at high on a new install); the level's recommended AI is shown next to the level.
   Under it, **When FoxLeague changes its rules**: **tell me only** (the default) or **also pause the actions whose
   rules changed until the agents are synced**; while a pause holds something, the line under it names the actions.
   Pausing is one click; going back to tell me only asks for your password
@@ -67,9 +66,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
   agent you no longer use (see below).
 - **Wallet and team**: the EGLD, WEGLD and FOXSY balances (WEGLD shows 0.0000 when the wallet holds none), cards,
   team, rating and record, matches and training today. While the page is open, a reading older than 10 minutes is
-  taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once). **Value** is what
+  taken again by itself, so a top-up shows within seconds (**Refresh** reads it at once and stays greyed out until the new reading is shown). **Value** is what
   the wallet's EGLD, WEGLD and FOXSY are worth in USD, and next to it what the agent can play with (the EGLD gas
-  reserve aside); it turns orange, and the agent's tab shows **low funds**, when that falls under your **Top-up
+  reserve aside); it turns orange (and the agent's tab shows **low funds**) when that falls under your **Top-up
   warning** (it shows in the morning summary on Telegram, at once with `/updates all`; with a Binance key, Telegram and the platform LIVE, a top-up
   proposal comes at once (once a day per agent)). To top up, send EGLD to the agent's
   address: it buys FOXSY by itself (WEGLD and FOXSY work too). **In tournaments** lists the tournaments and 1v1s the agent is in, each open

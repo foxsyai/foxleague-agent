@@ -647,3 +647,22 @@ and in mainnet's live API description. No contract changed.
 - **The agent, from its own production:** a training or a match start the game day has no room for, by the plan's own
   snapshot, waits for the 14:00 UTC reset plus 2 minutes (RESET-1); FoxLeague counts the day's sessions and starts at each
   request from the reset hour, so a fresh read after it sees the new day.
+
+## 24. Changes of 2026-11-21 (FoxLeague `origin/main` `5eecea2aa`, manual `237984579`)
+
+FoxLeague promoted its release branch into `origin/main` twice on 2026-11-21 (#803, #806); the release branch holds
+nothing main has not taken. The running agent's manual check alerted at 20:50 UTC (nine pages, two route shapes).
+
+- **The injuries of a match in its statistics** (#801): the statistics of a ranked, casual, tournament or 1v1 match
+  name every player the match injured, with his team and his days out (`injuries`), once they show. Not used: the agent
+  reads only both formations and both elevens there; its own cards' injuries come from its roster.
+- **A card in an auction** (#752, section 23) is now in FoxLeague's manual: it is not trained and takes none of the four
+  card Shop items. The executor reads a card whose auction state could not be read as not in the wallet everywhere,
+  not only for the Shop items: training, the squad of a match or an entry, a saved eleven, a fusion's three cards and
+  the cards it leaves, a sync and a listing (SYNC-3). FoxLeague's API description requires `listed_for_sale` on every
+  card, so this refuses nothing on a normal day.
+- **Account bans** (#764, section 23): a ban before a one-signature create opens cancels it and refunds the whole
+  payment, the calendar deposit included. Nothing a plan decides.
+- **Not used by the agent:** FoxLeague's 1v1 scheduler retries a busy-window read (#792); its admin alarms close
+  themselves (#796); a banned account's sign-in text (#795); the app's auctions, dashboard links, xPortal and 2FA
+  Guardian windows and the 3D pitch's WebGL notice.

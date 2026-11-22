@@ -14,10 +14,11 @@ export interface AgentSettings {
   /** Largest single marketplace bid, in FOXSY. */
   maxBidFoxsy: number
   /**
-   * Largest bid per rarity, in FOXSY, under the max bid: the owner's limits (2026-10-24). A Common at 500, a pack
-   * card's price (2,500 for 5); an Uncommon at 1,500, about a third over its market price (the median of the daily
-   * median sale prices, 1,133) and under the 1,600 it costs to build; a Rare at 7,000, an Epic at 14,000 and a
-   * Legendary at 38,000, about 20 percent over theirs (5,650, 11,828 and 31,240), so an agent outbid once may bid again.
+   * Largest bid per rarity, in FOXSY, under the max bid: the owner's limits (2026-10-24; since 2026-11-22 by the owner's
+   * rule, BIDS-1). A card is three of the rarity below fused, so each limit is three times the one below plus 5 percent,
+   * from a Common at 525 (rounded): Uncommon 1,650, Rare 5,200, Epic 16,400, Legendary 51,700. The Common itself stays
+   * at 500, a pack card's price (2,500 for 5), so the agent never pays more for one than the shop charges. Every limit
+   * stays under what the card costs to build with its matches (the build ceiling, auctionCeiling).
    */
   maxBidCommonFoxsy: number
   maxBidUncommonFoxsy: number
@@ -138,31 +139,31 @@ export type LevelSettings = Pick<AgentSettings, 'dailyCapUsd' | 'monthlyBudgetUs
  */
 export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
   steady: { dailyCapUsd: 5, monthlyBudgetUsd: 150, topUpWarningUsd: 10, maxEntryFeeFoxsy: 1500, maxShopPaymentFoxsy: 500, maxSwapFoxsy: 10_000, maxBidFoxsy: 500, entryFeesSilver: [1000, 1500], entryFeesGold: [], tickMinutes: 120, paidTrainingPerDay: 2, boostersPerWeek: 0, packsPerWeek: 0, medicineDaysPerWeek: 0 },
-  climber: { dailyCapUsd: 15, monthlyBudgetUsd: 250, topUpWarningUsd: 30, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2000, maxSwapFoxsy: 10_000, maxBidFoxsy: 1500, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120, paidTrainingPerDay: 4, boostersPerWeek: 1, packsPerWeek: 0, medicineDaysPerWeek: 2 },
-  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 400, topUpWarningUsd: 50, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 7000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 90, paidTrainingPerDay: 6, boostersPerWeek: 2, packsPerWeek: 1, medicineDaysPerWeek: 4 },
-  predator: { dailyCapUsd: 50, monthlyBudgetUsd: 750, topUpWarningUsd: 100, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 20_000, maxBidFoxsy: 14_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 90, paidTrainingPerDay: 8, boostersPerWeek: 3, packsPerWeek: 2, medicineDaysPerWeek: 6 },
-  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2_000, topUpWarningUsd: 200, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 40_000, maxBidFoxsy: 14_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 75, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 12 },
-  zeus: { dailyCapUsd: 150, monthlyBudgetUsd: 3_000, topUpWarningUsd: 300, maxEntryFeeFoxsy: 25_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 50_000, maxBidFoxsy: 38_000, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000, 25_000], tickMinutes: 60, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 18 },
+  climber: { dailyCapUsd: 15, monthlyBudgetUsd: 250, topUpWarningUsd: 30, maxEntryFeeFoxsy: 5000, maxShopPaymentFoxsy: 2000, maxSwapFoxsy: 10_000, maxBidFoxsy: 1650, entryFeesSilver: [1000, 1500, 2000, 2500], entryFeesGold: [5000], tickMinutes: 120, paidTrainingPerDay: 4, boostersPerWeek: 1, packsPerWeek: 0, medicineDaysPerWeek: 2 },
+  hunter: { dailyCapUsd: 25, monthlyBudgetUsd: 400, topUpWarningUsd: 50, maxEntryFeeFoxsy: 7500, maxShopPaymentFoxsy: 2500, maxSwapFoxsy: 10_000, maxBidFoxsy: 5200, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500], entryFeesGold: [5000, 7500], tickMinutes: 90, paidTrainingPerDay: 6, boostersPerWeek: 2, packsPerWeek: 1, medicineDaysPerWeek: 4 },
+  predator: { dailyCapUsd: 50, monthlyBudgetUsd: 750, topUpWarningUsd: 100, maxEntryFeeFoxsy: 10_000, maxShopPaymentFoxsy: 3000, maxSwapFoxsy: 20_000, maxBidFoxsy: 16_400, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500], entryFeesGold: [5000, 7500, 10_000], tickMinutes: 90, paidTrainingPerDay: 8, boostersPerWeek: 3, packsPerWeek: 2, medicineDaysPerWeek: 6 },
+  beast: { dailyCapUsd: 100, monthlyBudgetUsd: 2_000, topUpWarningUsd: 200, maxEntryFeeFoxsy: 20_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 40_000, maxBidFoxsy: 16_400, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000], tickMinutes: 75, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 12 },
+  zeus: { dailyCapUsd: 150, monthlyBudgetUsd: 3_000, topUpWarningUsd: 300, maxEntryFeeFoxsy: 25_000, maxShopPaymentFoxsy: 9000, maxSwapFoxsy: 50_000, maxBidFoxsy: 51_700, entryFeesSilver: [1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 4999], entryFeesGold: [5000, 7500, 10_000, 15_000, 20_000, 25_000], tickMinutes: 60, paidTrainingPerDay: 10, boostersPerWeek: 7, packsPerWeek: 2, medicineDaysPerWeek: 18 },
 }
 
 /**
- * Every new agent: the steady level, active 12 hours centred on the 14:00 UTC game-day reset, a cycle every 2 hours
- * give or take 10 minutes (every level: the daily-capped play fits in 6 to 8 plans), 30 s between actions, every
- * planned action carried out.
+ * Every new agent: the steady level, active 16 hours around the 14:00 UTC game-day reset (06:00 to 22:00, HOURS-1), a
+ * cycle every 2 hours give or take 10 minutes (8 plans a day; the daily-capped play fits in them), 30 s between
+ * actions, every planned action carried out.
  */
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
   entryFeesBronze: [100, 250, 500],
   maxBidCommonFoxsy: 500,
-  maxBidUncommonFoxsy: 1500,
-  maxBidRareFoxsy: 7000,
-  maxBidEpicFoxsy: 14_000,
-  maxBidLegendaryFoxsy: 38_000,
+  maxBidUncommonFoxsy: 1650,
+  maxBidRareFoxsy: 5200,
+  maxBidEpicFoxsy: 16_400,
+  maxBidLegendaryFoxsy: 51_700,
   setupBudgetUsd: 20,
   egldGasReserve: '1',
   tickJitterMinutes: 10,
-  activeHoursUtc: [8, 20],
+  activeHoursUtc: [6, 22],
   minGapSeconds: 30,
   actionProbability: 1,
   aiModel: '',
