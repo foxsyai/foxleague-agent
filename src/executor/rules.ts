@@ -906,7 +906,7 @@ function waitingOpenRefusal(s: AgentSnapshot, ctx: RulesContext, what: string, l
     const top = t.ovr_max
     if (typeof top !== 'number' || !Number.isFinite(top)) return `the range of your open challenge T${t.id} could not be read: no ${what} while it waits`
     if (after === null) return `your open challenge T${t.id} waits and your eleven after this ${what} could not be read: no ${what} blind`
-    if (top > after * MAX_1V1_STRENGTH_RATIO) return `your open challenge T${t.id} waits for an opponent (up to OVR ${top}): after this ${what} your eleven would play at OVR ${after.toFixed(1)}, more than 10 percent below a fresh team at its top; wait until it is taken or expires, or leave it first`
+    if (top > after * MAX_1V1_STRENGTH_RATIO) return `your open challenge T${t.id} waits for an opponent (up to OVR ${top}): after this ${what} your eleven would play at OVR ${after.toFixed(1)} and a fresh team at its top would be more than 10 percent stronger; leave it first or wait until it is taken or expires`
   }
   return null
 }
