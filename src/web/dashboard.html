@@ -891,7 +891,8 @@ function limitState(limit, market, maxBid = Infinity) {
   const binds = capped ? maxBid : limit
   const by = capped ? ' Max bid (' + Number(maxBid).toLocaleString('en-US') + ') is the limit here.' : ''
   if (!(binds > 0)) return { tone: 'low', text: m + ' Bids on this rarity are off.', suggest }
-  if (binds < market * 0.9) return capped ? { tone: 'low', text: m + ' Below the market: the agent may miss most sales.' + by } : { tone: 'low', text: m + ' Below the market: the agent may miss most sales.', suggest }
+  // Max bid holds the line under the market: say what to do (LIMITHINT-1, the owner: a raised rarity limit still read amber).
+  if (binds < market * 0.9) return capped ? { tone: 'low', text: m + ' Below the market: the agent may miss most sales.' + by.replace(/\.$/, ': raise Max bid too.') } : { tone: 'low', text: m + ' Below the market: the agent may miss most sales.', suggest }
   if (binds > market * 1.5) return { tone: 'high', text: m + ' Well above the market: the agent aims lower, but may pay up to this.' + by, suggest }
   return { tone: 'ok', text: m + ' Your limit covers it.' + by }
 }
