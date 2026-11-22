@@ -19,7 +19,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { neverUsedOrWhy, removePemFile } from './delete-agent.ts'
 import { ChangedWordsError, assertSameWords, walletFromSecretKey, deriveWallet, exportPem, type AgentWallet } from './wallet/wallet.ts'
-import { addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
+import { accountAddresses, addressOfKey, deleteImportedKey, loadImportedWallet, saveImportedKey, secretKeyFrom, type ImportInput } from './wallet/imported.ts'
 import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
 import { atomicToFloat, formatAtomic } from './util/encoding.ts'
@@ -1390,6 +1390,48 @@ export class Service {
       team: { name: team.name, overall: team.best_xi_ovr ?? team.team_overall, badge: Boolean(team.badge) },
       egld: atomicToFloat(account.balance).toFixed(4),
       foxsy: foxsy ? atomicToFloat(foxsy.balance).toFixed(0) : '0',
+    }
+  }
+
+  /** A Find my team search is running: a second one waits for it (a double click asks FoxLeague 20 times, not 40). */
+  private findingImport = false
+
+  /**
+   * Import team, Find my team (the owner, 2026-11-22): the first 20 accounts of recovery words (or of a keystore that
+   * holds words) from `from`, each with the FoxLeague team its wallet plays, read from FoxLeague's public profile.
+   * No login, no transaction, nothing stored: the answer holds account numbers, addresses and team names only. A
+   * profile FoxLeague could not answer is unread, never "no team". A wallet that is already an agent here (or one of
+   * this install's own accounts, Add agent's) is named so the dashboard does not offer it.
+   */
+  async findImportAccounts(input: ImportInput, from?: unknown): Promise<{ accounts: { account: number; address: string; team: string | null; unread?: true; agent?: string; own?: true }[] }> {
+    if (this.stopping) throw new Error('the service is stopping; try again after the restart')
+    if (this.findingImport) throw new Error('already searching for your team: wait for that search to end')
+    this.findingImport = true
+    try {
+      const list = accountAddresses(input, from)
+      const agents = [...this.store.agents(), ...this.store.retiredAgents()]
+      const own = new Set<string>()
+      for (let i = 0; i <= this.store.maxIndex() + this.cfg.maxAgents; i++) if (!this.store.importedAt(i)) own.add(deriveWallet(this.cfg.mnemonic!, i).address)
+      const accounts = await Promise.all(list.map(async ({ account, address }) => {
+        let team: string | null = null
+        let unread = false
+        try {
+          const profile = await this.fox.user(address)
+          team = typeof profile?.team_name === 'string' && profile.team_name ? profile.team_name : null
+        } catch {
+          unread = true
+        }
+        const agent = agents.find(b => b.address === address)
+        return {
+          account, address, team,
+          ...(unread ? { unread: true as const } : {}),
+          ...(agent ? { agent: `${agentName(agent.index)}${agent.retired ? ' (retired)' : ''}` } : {}),
+          ...(own.has(address) ? { own: true as const } : {}),
+        }
+      }))
+      return { accounts }
+    } finally {
+      this.findingImport = false
     }
   }
 

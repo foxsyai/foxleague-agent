@@ -3111,6 +3111,30 @@ Stays open:
   (`site/scripts/screenshots.ts`, `site/scripts/videos/src/capture.mjs`) use the new default for the next capture.
 - Production was not read and nothing was deployed.
 
+## Find my team (2026-11-22)
+
+The owner, before the public release: a player often has several wallets made from the same recovery words (xPortal
+and the web wallet derive account 0, 1, 2 ... from them) and the team may be on any of them. Import team checked one
+account number at a time, so a player who did not know it tried them one by one. **Find my team**, beside the account
+number in the import dialog, lists the first 20 accounts of the words (or of a keystore that holds words) with the
+team each one plays, like the account list of a wallet; **Use this one** fills in the number and runs the usual
+Check. The tests in `test/find-team/FIND.test.ts` failed before the change (no such search) and pass now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| FIND-1 | feature (the owner, 2026-11-22) | The account number had to be known: the check reads one account | `POST /api/agents/import/find` (dashboard login and CSRF as every write) answers the account numbers, addresses and team names of 20 accounts from `from` (0 to 999). `accountAddresses` (`src/wallet/imported.ts`) keeps only each address and drops its key at once; a keystore is opened once (`decryptMnemonic`) under the same KDF limit as the check. Nothing is stored and no session is opened: the team name comes from FoxLeague's public profile (`GET /api/users/{address}`), so no FoxLeague account is created for an empty wallet. The answer holds no key or word; errors never repeat what was pasted |
+| FIND-2 | rule 4 | A profile FoxLeague could not answer would read as "no team" | It is `unread` ("could not be read, search again"), never "no team" |
+| FIND-3 | hygiene | A double click would ask FoxLeague 40 times | One search at a time (a second one is refused until the first ends); a PEM file or a keystore with one key has one account and is sent to Check |
+| FIND-4 | what the owner sees | A wallet that is already an agent (or one of this install's own accounts) would be offered for import, then refused by the check | Named in its row ("already agent 2", "this install's own account: use + Add agent") with no **Use this one** |
+
+What did not change: the check (`previewImport`) and the import itself, the password step, the one PEM file kept per
+imported team, the Guardian refusal. The team name is player-written text: it reaches only the dashboard, as text
+(`textContent`), never a prompt.
+
+Stays open:
+- A team on an account past 999 is not found (the account number stops there too).
+- The list shows the team name only; its overall, balances and Guardian come with the Check of the chosen account.
+
 ## GitHub review of PR #83 (2026-11-20)
 
 PR #83 drew the launch media again from `ae5421e`: the installer's credit line ("$10, about two weeks"), the three

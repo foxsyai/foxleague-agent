@@ -16,6 +16,12 @@ rating, record and badge. There is no new wallet and no new registration.
    - **Keystore file**: the `.json` file from the MultiversX web wallet, with its password.
    - **Recovery words**: the words of that wallet, plus the account number (0 is the first account of the
      words).
+
+   Not sure which account holds your team? Press **Find my team** (with recovery words or a keystore file made
+   from them). The dashboard lists the first 20 accounts of the words, each with its address and the team its
+   wallet plays, the way a wallet lists its accounts. Press **Use this one** beside your team: its number is filled
+   in and the check runs. **Show the next 20** goes further, up to account 999. It only reads FoxLeague's public
+   profiles: no login, no transaction and nothing stored.
 3. Press **Check**. The dashboard shows the team it found, the wallet address and what the wallet holds. Nothing
    is stored yet.
 4. If it is your team, type your dashboard password and press **Import team**.
