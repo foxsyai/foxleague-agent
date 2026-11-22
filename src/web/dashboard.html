@@ -529,7 +529,7 @@ function renderUpdate() {
   let text = '', notes = '', tone = '', button = false, again = false
   // u.restarts is false where no background service starts the agent again: the release is put in place and
   // u.waiting then holds what the owner does to start it.
-  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + (u.restarts === false ? '. This takes a minute or two. The agent keeps playing: it does not restart by itself here, and this notice then says how to start the new version.' : '. The agent restarts in a minute or two and this page comes back by itself.')
+  if (busy) text = 'Installing version ' + ((updating && updating.to) || (u.available && u.available.version) || '') + (u.restarts === false ? '. This takes a minute or two. The agent keeps playing: it does not restart by itself here; this notice then says how to start the new version.' : '. The agent restarts in a minute or two and this page comes back by itself.')
   else if (u.waiting) text = u.waiting.message
   else if (u.available && byTerminal) {
     text = recent.message + (recent.version === u.available.version ? '' : ' Version ' + u.available.version + ' is out too: ./install.sh --update installs the newest.')
@@ -981,7 +981,7 @@ async function loadState() {
     if (sel === null || !S.agents.some(b => b.index === sel)) { const r = recalled(); sel = S.agents.some(b => b.index === r) ? r : (S.agents[0] ? S.agents[0].index : null) }
     renderHeader(); renderAgentbar(); renderSetup()
     if (sel !== null) renderAgent()
-    else { $('loading').textContent = S.retired && S.retired.length ? 'Every agent is retired. Restore one from Retired, or add a new one.' : 'No agents yet.'; $('loading').hidden = false; $('agentview').hidden = true }
+    else { $('loading').textContent = S.retired && S.retired.length ? 'Every agent is retired. Restore one from Retired or add a new one.' : 'No agents yet.'; $('loading').hidden = false; $('agentview').hidden = true }
     if ($('retwrap').classList.contains('on')) renderRetired()
     renderChat()
   } catch (e) { if (e.message !== 'signed out' && !updating) toast('Could not load state: ' + e.message, true) }

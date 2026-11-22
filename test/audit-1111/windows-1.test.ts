@@ -242,12 +242,12 @@ test('WIN-1 the Windows page has the Windows rows: virtualization, the kernel co
   const all = read(WINDOWS)
   const page = all.slice(all.indexOf('## If it gets stuck'), all.indexOf('## Installing by hand'))
   assert.ok(page.length > 1000, 'the Windows page has its table')
-  assert.match(page, /\| \*\*"Windows says that virtualization is turned off"\*\*, or an error that names virtualization or 0x80370102 \| WSL 2 needs virtualization, which is turned on in the PC's BIOS or UEFI setup/)
+  assert.match(page, /\| \*\*"Windows says that virtualization is turned off"\*\* \(or an error that names virtualization or 0x80370102\) \| WSL 2 needs virtualization, which is turned on in the PC's BIOS or UEFI setup/)
   assert.match(page, /\| \*\*"WSL 2 requires an update to its kernel component"\*\* \| Run `wsl --update` in PowerShell, then paste the PowerShell line again\. \|/)
   assert.match(page, /\| \*\*"Restart Windows now, then paste the same line again"\*\* \| Windows finishes installing WSL while it restarts\./)
   assert.match(page, /\| \*\*"this machine does not run systemd"\*\* \| [^|]*The PowerShell line turns systemd on by itself[^|]*never adds a second `\[boot\]`[^|]*\|/)
   assert.match(page, /\| \*\*The dashboard does not open at `http:\/\/localhost:8870`\*\* \| [^|]*Run `wsl --shutdown` in PowerShell, wait ten seconds and paste the PowerShell line again/)
-  assert.match(page, /\| \*\*The agent stops when I close Ubuntu, or after Windows restarts\*\* \| [^|]*The scheduled task "FoxLeague Agent \(WSL\)"[^|]*is there to keep Ubuntu running while you are logged in/)
+  assert.match(page, /\| \*\*The agent stops when I close Ubuntu or after Windows restarts\*\* \| [^|]*The scheduled task "FoxLeague Agent \(WSL\)"[^|]*is there to keep Ubuntu running while you are logged in/)
   assert.match(read(TROUBLE), /\[Install on Windows\]\(\/start\/install-windows\/#if-it-gets-stuck\)/, 'Troubleshooting leads to them')
   // The words of the rows are the script's own.
   assert.ok(code.includes("Write-FoxStep 'Restart Windows now, then paste the same line again'"))
@@ -269,7 +269,7 @@ test('WIN-1 the Windows page has the Windows rows: virtualization, the kernel co
   // INSTALL.md has the same rows in its Windows section.
   const md = read('INSTALL.md')
   const win = md.slice(md.indexOf('### On Windows'), md.indexOf('### On a Mac'))
-  for (const row of ['**"Windows says that virtualization is turned off", or an error that names virtualization or 0x80370102:**', '**"WSL 2 requires an update to its kernel component":**',
+  for (const row of ['**"Windows says that virtualization is turned off" (or an error that names virtualization or 0x80370102):**', '**"WSL 2 requires an update to its kernel component":**',
     '**"Restart Windows now, then paste the same line again":**', '**The dashboard does not open at `http://localhost:8870`:**']) assert.ok(win.includes(row), `INSTALL.md: ${row}`)
 })
 

@@ -12,7 +12,7 @@ public information, plays at a human pace and never coordinates your agents agai
 ### Can it spend more than I allow?
 
 No. The AI only proposes; plain code checks every payment against your daily cap, monthly budget and per-action
-maximums before it is signed, and refuses what does not fit. The gas reserve is never swapped.
+maximums before it is signed and refuses what does not fit. The gas reserve is never swapped.
 
 ### Where do my keys and recovery words live?
 
@@ -33,10 +33,10 @@ server ([Run it on a server](/help/server/)).
 
 ### How do I get a new version?
 
-The dashboard and Telegram tell you when one is out, and the round arrow next to the version in the dashboard
+The dashboard and Telegram tell you when one is out; the round arrow next to the version in the dashboard
 (**Check for updates**) asks at once. Press **Update now** in the dashboard or send `/upgrade` on Telegram: the agent installs it and
-restarts, and nothing is ever installed by itself. Only a release signed by the maintainers and newer than yours
-can be installed, and a version that does not start is undone by itself ([Update](/help/update/)).
+restarts. Nothing is ever installed by itself. Only a release signed by the maintainers and newer than yours
+can be installed; a version that does not start is undone by itself ([Update](/help/update/)).
 
 ### Can I play myself too?
 
@@ -47,21 +47,21 @@ changes on its next cycle and adapts. Pause the agent if you want to take over f
 
 Up to 5 active agents per computer by default. **+ Add agent** creates the next one, with its own wallet from the
 same recovery words, its own settings and its own budget. An agent you no longer use can be retired: it leaves the
-tabs, stops playing and frees its place, and you can restore it later ([Retire and restore an
+tabs, stops playing and frees its place; you can restore it later ([Retire and restore an
 agent](/use/dashboard/#retire-and-restore-an-agent)). One that was never used, with an empty wallet and no team, can
 be deleted ([Delete an agent](/use/dashboard/#delete-an-agent-that-was-never-used)). Each agent plays its own game as if it were alone and knows nothing of the others, so two of them may meet in a tournament or a 1v1, bid on the same card or buy a card from each other at auction, by chance: FoxLeague's Fair Play allows that (it forbids arranging results, not meeting). What they share is a pooled formation record with no team named, a league formation table built from public matches and the results of their casual tests.
 
 ### Can an agent run the team I already have?
 
 Yes. **Import team** gives an agent your existing FoxLeague team, from its PEM file, keystore file or recovery
-words, and it carries on from where the team is ([Import your team](/use/import-team/)). A wallet with a Guardian
+words; it carries on from where the team is ([Import your team](/use/import-team/)). A wallet with a Guardian
 is refused: an agent cannot sign for it.
 
 ### Which wallet should an agent use?
 
 A fresh wallet made only for FoxLeague, without a Guardian, holding only the amount you set aside for the game.
 Keep small amounts in it and top it up daily, weekly or whenever it suits you. **+ Add agent** makes such a wallet.
-We do not recommend giving an agent your personal wallet with your history and other assets, or turning the
+We do not recommend giving an agent your personal wallet with your history and other assets, nor turning the
 Guardian off there just for FoxLeague ([Which wallet to give an agent](/use/import-team/#which-wallet-to-give-an-agent)).
 
 ### Which AI model should I pick?
@@ -73,6 +73,6 @@ higher effort asks for your password.
 
 ### What if the AI makes a bad decision?
 
-It can only choose among allowed actions, inside your limits, and every action is checked right before it runs.
+It can only choose among allowed actions, inside your limits; every action is checked right before it runs.
 Read its reasons in Last plan, tell it what you want in plain words ([Talk to your manager](/use/talk-to-your-manager/))
 or press Back to dry run, Pause or the Kill switch.

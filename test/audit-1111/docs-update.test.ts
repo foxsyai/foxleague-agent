@@ -96,7 +96,7 @@ test('the Update page tells the steps as the code runs them', () => {
   assert.match(page, /next to the running version/)
   assert.match(page, /The running version is not written to/)
   assert.match(page, /An action that is being signed finishes and is booked first/)
-  assert.match(page, /actions of a running plan that were still waiting are dropped, and the next plan takes them up/)
+  assert.match(page, /actions of a running plan that were still waiting are dropped; the next plan takes them up/)
   assert.match(page, /`\.\/install\.sh --update`/)
   assert.match(page, /`FOXAGENT_ALLOW_DOWNGRADE=1`/)
   assert.match(page, /keeps the version that ran before/)
@@ -113,7 +113,7 @@ test('the env example, the server guide and the FAQ carry the update too', () =>
   assert.match(guide, /does not update itself: there is no Update now button, and `\/upgrade` answers that it is updated the way it was deployed/)
   assert.match(read(`${DOCS}/help/server.mdx`), /A server set up this way does not update itself/)
   assert.match(read(`${DOCS}/help/faq.md`), /### How do I get a new version\?/)
-  assert.match(read(`${DOCS}/help/faq.md`), /nothing is ever installed by itself/)
+  assert.match(read(`${DOCS}/help/faq.md`), /Nothing is ever installed by itself/)
 })
 
 test('the installs that show the notice and cannot update themselves are named with what they do instead', () => {

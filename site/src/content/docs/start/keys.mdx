@@ -1,12 +1,12 @@
 ---
 title: Your keys, step by step
-description: Create the AI key, and optionally Telegram and a CEX top-up key, in a few minutes.
+description: Create the AI key (and optionally Telegram and a CEX top-up key) in a few minutes.
 ---
 
 import { Steps, Aside } from '@astrojs/starlight/components';
 
 The agent needs one key to play: the **AI key**. Telegram and the CEX top-up are optional. You can paste each key in the
-installer, or later in the dashboard: **Keys** in the header. Your dashboard password confirms every change.
+installer or later in the dashboard: **Keys** in the header. Your dashboard password confirms every change.
 
 ![The Getting started guide in the dashboard: each step shows done, needed or optional](/screenshots/getting-started.png)
 
@@ -15,13 +15,13 @@ installer, or later in the dashboard: **Keys** in the header. Your dashboard pas
 This is the AI that plans for your agents. Without it they only watch.
 
 <Steps>
-1. Open [platform.claude.com](https://platform.claude.com) and sign up, or log in.
+1. Open [platform.claude.com](https://platform.claude.com) and sign up or log in.
 2. Open [Billing](https://platform.claude.com/settings/billing) and add credit. $10 runs a single agent at the
    defaults for about two weeks.
 3. Open [Limits](https://platform.claude.com/settings/limits) and set a monthly spend limit, for example $60: a
    month of a single agent at the defaults with room to spare. Then it can never cost more than that. When the
-   limit is reached (or the credit runs out, or the key stops working) you hear it once on Telegram; one agent then
-   asks again at each of its plans and the others wait without reading anything, and you hear once more when plans
+   limit is reached (or the credit runs out or the key stops working) you hear it once on Telegram; one agent then
+   asks again at each of its plans and the others wait without reading anything; you hear once more when plans
    work again. **Plan now** always asks.
 4. Open [API keys](https://platform.claude.com/settings/keys) and press **Create key**. Where the console asks where
    your code runs, choose **Somewhere else** (an API key): the other choices sign in a command line tool the agent
@@ -73,7 +73,7 @@ The example is Binance: an API key that can only read your account and withdraw 
    it there).
 4. Open [Address Management](https://www.binance.com/en/my/security/address-management), add each agent wallet on
    the **MultiversX (EGLD)** network and switch the whitelist on. Now money can only go to your agents. A top-up
-   goes only to a wallet on this whitelist, and **Test keys** shows which agent wallets are not on it yet.
+   goes only to a wallet on this whitelist; **Test keys** shows which agent wallets are not on it yet.
 5. Copy the API key and the secret (the secret is shown only once). In the dashboard, press **Keys**, paste both,
    type your password and press **Save**.
 </Steps>

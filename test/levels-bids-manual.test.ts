@@ -105,7 +105,7 @@ test('the strategy levels page says every level bids on any rarity within its ma
   const page = read('site/src/content/docs/play/strategy-levels.md').replace(/\s+/g, ' ')
   assert.doesNotMatch(page, /never on Common or Uncommon ones/)
   assert.match(page, /\| Bids at auction \| any rarity, up to 500 \| up to 1,650 \| up to 5,200 \| up to 16,400 \| up to 16,400 \| up to 51,700 \|/)
-  assert.match(page, /So a Steady agent can take a Legendary listed at 500 FOXSY, and Zeus can buy a Common, never above 500 for it\./)
+  assert.match(page, /So a Steady agent can take a Legendary listed at 500 FOXSY; Zeus can buy a Common, never above 500 for it\./)
 })
 
 // Agent review of PR #27 (medium): an agent saves its whole settings (at creation since PR #21, or on any save), and a

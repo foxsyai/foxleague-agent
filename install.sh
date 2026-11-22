@@ -112,7 +112,7 @@ fi
 # The guided install as root: the agent holds the recovery words, reads data from outside and serves a dashboard,
 # so it gets a user of its own. (An update and --uninstall of an install that already runs as root still work.)
 if [ "$MODE" = install ] && [ "$(id -u)" = 0 ] && [ "${FOXAGENT_ALLOW_ROOT:-0}" != 1 ]; then
-  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again), or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
+  die "do not install the agent as root: create a user for it (adduser fox, then log in as fox and run this again) or follow docs/SERVER.md for a server. To install as root anyway, put FOXAGENT_ALLOW_ROOT=1 in front of the command."
 fi
 
 # ---- .env helpers: one KEY="value" per line, mode 600 ----
@@ -450,7 +450,7 @@ find_user_systemd() {
 # Why there is no service manager to use, in words for the newcomer, with commands that exist.
 no_user_systemd() {
   if [ -d "$RUN_DIR/systemd/system" ]; then
-    die "the background services of the user $USER_NAME cannot be reached from this terminal. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself (a new terminal, or ssh $USER_NAME@this-machine) and run the installer again: cd $ROOT && ./install.sh"
+    die "the background services of the user $USER_NAME cannot be reached from this terminal. That happens in a terminal opened with su or sudo. Log in as $USER_NAME itself (a new terminal or ssh $USER_NAME@this-machine) and run the installer again: cd $ROOT && ./install.sh"
   fi
   die "this machine does not run systemd, which keeps the agent running in the background. On Windows (WSL2): add the two lines [boot] and systemd=true to /etc/wsl.conf, run wsl --shutdown in PowerShell, open Ubuntu again and run the installer again: cd $ROOT && ./install.sh   Without systemd: cd $ROOT && ./install.sh --no-service   and start the agent yourself with ./run.sh"
 }
