@@ -39,12 +39,22 @@ test('INT-1 two cards missing: one line names both', () => {
   assert.match(both[0]!, /without them/)
 })
 
-test('INT-1 an unread roster says nothing as if known (rule 4): no card is called missing', () => {
+test('INT-1 an unread roster says nothing as if known (rule 4): no card is called missing (coverage: right before the fix too)', () => {
   const s = withFixture(snapshot())
   // attempt() leaves the roster empty with a warning when GET /api/players fails.
   s.players = []
   s.warnings = ['players: FoxLeague 503']
   assert.doesNotMatch(renderDigest(s), /3-0[^\n]*#1\b|#1\b[^\n]*3-0|NOT IN YOUR ROSTER/i)
+  // The guard itself: a roster whose read left a warning names no card missing, even with cards in it.
+  const t = withFixture(snapshot())
+  t.players = t.players.filter(p => p.nonce !== 15)
+  t.warnings = ['players: FoxLeague 503']
+  assert.doesNotMatch(renderDigest(t), /NOT IN YOUR ROSTER/)
+  // Nor a team seen from outside (its lineup not public).
+  const u = withFixture(snapshot())
+  u.players = u.players.filter(p => p.nonce !== 15)
+  u.team = { ...u.team!, hidden: true }
+  assert.doesNotMatch(renderDigest(u), /NOT IN YOUR ROSTER/)
 })
 
 test('INT-1 control: every card of the saved 18 in the roster, no such line', () => {

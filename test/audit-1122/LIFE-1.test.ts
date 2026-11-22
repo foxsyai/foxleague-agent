@@ -93,7 +93,7 @@ test('LIFE-1 a 403 after a key error (the key works again, the model does not) f
   assert.equal(asked.length, 4, `agents 2 and 3 play Haiku 5.5 and plan: ${JSON.stringify(asked)}`)
 })
 
-test('LIFE-1 a 401 or a billing error stays an account stop for every agent', async () => {
+test('LIFE-1 a 401 or a billing error stays an account stop for every agent (coverage: right before the fix too)', async () => {
   for (const err of [rejected, credit]) {
     const { asked, said, tick } = service(model => (model === FABLE ? err() : null))
     await tick(0)

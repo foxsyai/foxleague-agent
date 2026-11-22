@@ -78,7 +78,7 @@ for (const withUpdate of [false, true]) {
   })
 }
 
-test('REL-1 the prepare still writes .node-path when its first path is gone or fails the Node.js rule', { timeout: 120_000 }, () => {
+test('REL-1 the prepare still writes .node-path when its first path is gone or fails the Node.js rule (coverage of the fix\'s limits: right before the fix too)', { timeout: 120_000 }, () => {
   const s = stubs({ node: false })
   const tools = systemTools()
   const a22 = cellar(join(s.dir, 'npm'), '22.20.0')
