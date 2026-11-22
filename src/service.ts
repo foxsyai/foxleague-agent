@@ -7,7 +7,7 @@ import { envFilePath, loadConfig, type Config } from './config.ts'
 import { Chain } from './chain/gateway.ts'
 import { FoxLeague } from './foxleague/api.ts'
 import { takeSnapshot, type AgentSnapshot } from './snapshot/snapshot.ts'
-import type { MatchFormations } from './foxleague/types.ts'
+import type { MatchFormations, Tournament } from './foxleague/types.ts'
 import type { MarketSale } from './snapshot/market.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
@@ -2158,8 +2158,10 @@ export class Service {
   private withOneVOnes(agent: AgentRow, snap: AgentSnapshot, dry: boolean): AgentSnapshot {
     const now = new Date()
     const week = [...oneVOnesThisWeek(this.store, agent.index, dry, now)].map(([userId, times]) => ({ userId, count: times.length, freeAt: weeklyFreeAt(times, MAX_1V1_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
-    // Its own 1v1s another team has taken now count as accepted (BEH-2).
-    const seated = new Set((snap.auth?.myTournaments?.active ?? []).filter(t => t.max_teams === 2 && typeof t.participant_count === 'number' && t.participant_count >= 2).map(t => t.id))
+    // Its own 1v1s another team has taken now count as accepted (BEH-2). FoxLeague's /tournaments/my carries no seat
+    // count; the public list does (INT-3, audit 2026-11-22).
+    const seats = (t: Tournament) => (typeof t.participant_count === 'number' ? t.participant_count : snap.market.openChallenges.find(x => x.id === t.id)?.participant_count)
+    const seated = new Set((snap.auth?.myTournaments?.active ?? []).filter(t => t.max_teams === 2 && (seats(t) ?? 0) >= 2).map(t => t.id))
     const targeted = [...targetedRecord(this.store, agent.index, dry, now, seated)].map(([userId, r]) => ({ userId, sent: r.sent, accepted: r.accepted, unanswered: r.unanswered.length, freeAt: weeklyFreeAt(r.unanswered, MAX_UNANSWERED_PER_OPPONENT_WEEK)?.toISOString() ?? null }))
     return { ...snap, oneVOnes: { week, targeted }, ownCreations: [...ownCreations(this.store, agent.index, now)] }
   }
