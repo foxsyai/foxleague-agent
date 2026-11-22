@@ -67,3 +67,23 @@ test('ENTRY-1 the Max entry fee bubble names the three bands, Bronze too, and th
   const page = readFileSync(join(import.meta.dirname, '..', '..', 'site/src/content/docs/use/settings.md'), 'utf8')
   assert.match(page, /A paid Bronze tournament takes 100 to 999 FOXSY a seat, Silver 1,000 to 4,999 and Gold 5,000 or more\. A 1v1 stake starts at Silver \(1,000\)\./)
 })
+
+test('BIDTEXT-1 the bid limit bubbles explain the rule, with no default backstory and no dated price', () => {
+  // The owner, 2026-11-22: "The default, 38,000, is about 20 percent above the Legendary's market price when it was
+  // set" went stale (Legendaries sold near 47,000 that day) and never followed the owner's own value. The five rarity
+  // bubbles now say the same general thing; the coloured line under each field shows today's market.
+  const tip = (k: string) => html.match(new RegExp(`\\n  ${k}: \\['[^']*', \`([^\`]*)\``))?.[1] ?? ''
+  const rarities = [['Common', 'a', 'Commons'], ['Uncommon', 'an', 'Uncommons'], ['Rare', 'a', 'Rares'], ['Epic', 'an', 'Epics'], ['Legendary', 'a', 'Legendaries']]
+  for (const [r, art, plural] of rarities) {
+    const t = tip(`bid${r}`).replace(/\s+/g, ' ')
+    assert.ok(t.startsWith(`<p>The most the agent may bid for ${art} ${r} card. It is a ceiling, not a target: the agent aims below the market price it sees and bids the reserve or the smallest raise that wins, at most twice on one auction.`), r)
+    assert.match(t, new RegExp(`<p>The line under the field compares your limit with what ${plural} sell for today: green when your limit covers the market, amber when it is below it \\(the agent may miss most sales\\), red when it is well above it \\(the agent may pay up to your limit\\)\\. The button fills in the market price, rounded; Save keeps it\\.</p>`), r)
+    assert.match(t, new RegExp(`<p>The lowest of this, Max bid and the cost of building the card yourself is the limit that counts\\. Raising it asks for your password; 0 turns bids on ${plural} off\\.</p>`), r)
+    assert.doesNotMatch(t, /default|when it was set|percent above|\d{3}/i, `${r}: no default backstory, no price`)
+  }
+  const bid = tip('bid')
+  assert.doesNotMatch(bid, /At today's prices|by default \d/)
+  const page = readFileSync(join(import.meta.dirname, '..', '..', 'site/src/content/docs/use/settings.md'), 'utf8')
+  const rows = page.split('\n').filter(l => /^\| Max bid/.test(l)).join('\n')
+  assert.doesNotMatch(rows, /when it was set|percent above|about 14,450|the Rare's market price/)
+})
