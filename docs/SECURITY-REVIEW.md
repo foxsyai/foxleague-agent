@@ -3364,8 +3364,8 @@ too) and passes now. The version is 1.0.2.
 Stays open:
 - The form's own placeholder still reads 1.0.1 (`.github/ISSUE_TEMPLATE/problem.yml`): a change under `.github/` is
   checked by hand, so it was left for the maintainer. The link fills in the real version either way.
-- The site's own favicon is the plain fox (`site/public/brand/favicon-32.png`); the dashboard's tab icon is now the
-  round badge. Whether the site should match is the owner's call.
+- Closed in v1.0.3 (V103-1, BRAND-2): the site and the dashboard show the same transparent fox as their tab icon; the
+  dashboard carries the site's `favicon-32.png` itself.
 - The site screenshots that show the header were taken again (eleven of twelve; the conversation card shows no header).
 - Production was not read for this work and nothing was deployed.
 

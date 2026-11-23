@@ -1,8 +1,9 @@
 // BRAND-1 (the owner, launch day 23 Nov 2026): the site's header logo, its tab icons and the link preview card still
 // showed FoxLeague's fox head and the Foxsy ball. They show the FoxLeague Agent fox now (the fox head with the AI
-// brain): the transparent fox in the dark header, the round badge as the tab and home screen icon (it reads at 32
-// pixels; Apple's home screen icon has no transparency) and both in the preview card. The card's address carries a
-// version, so X and Telegram fetch the new card instead of the one they keep for days.
+// brain): the transparent fox in the dark header, the round badge as the home screen icon (Apple's home screen icon has
+// no transparency) and both in the preview card. The tab icons were the round badge too until BRAND-2 made them the
+// transparent fox. The card's address carries a version, so X and Telegram fetch the new card instead of the one they
+// keep for days.
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
