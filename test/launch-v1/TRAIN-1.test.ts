@@ -107,9 +107,12 @@ test('TRAIN-1 premium_used_today, the purchases of the last 24 hours, decides no
     if (bought === undefined) delete (s.auth!.shop!.training as unknown as Record<string, unknown>).premium_used_today
     assert.equal(trainingDayRefusal(s.auth!.shop!.training!, 10), null, String(bought))
     assert.equal(why(TRAIN, s), '', String(bought))
-    // A slot purchase is held only to the level's count: 1 used today + 9 banked + 1 more is over 10, under 11.
+    // A slot purchase is held to the level's count and FoxLeague's paid sessions a game day (R91A-1), never to the
+    // purchases: 1 used today + 9 banked + 1 more is over 10, under 11.
     assert.match(why({ type: 'buy', product: 'training_slot', quantity: 1 }, s, level(10)), /10 paid training sessions a day at this level/, String(bought))
-    assert.equal(why({ type: 'buy', product: 'training_slot', quantity: 1 }, s, level(11)), '', String(bought))
+    const roomier = withTraining({ ...MORNING, premium_cap: 11, premium_used_today: bought })
+    if (bought === undefined) delete (roomier.auth!.shop!.training as unknown as Record<string, unknown>).premium_used_today
+    assert.equal(why({ type: 'buy', product: 'training_slot', quantity: 1 }, roomier, level(11)), '', String(bought))
   }
 })
 
@@ -139,11 +142,12 @@ test('TRAIN-1 the executor\'s in-plan count: a plan that buys 10 slots runs 10 p
   const results = await m.exec.run(m.agent(), dryWallet, withTraining(PLAN_DAY), PLAN)
   assert.deepEqual(results.map(r => r.status), ['dry_run', ...Array(10).fill('dry_run'), 'refused'], results.map(r => r.summary).join('\n'))
   assert.match(results[11]!.summary, /daily training exhausted/)
-  // FoxLeague's cap below the level's count stops the plan with slots still banked: 8 of the 10 run.
+  // FoxLeague's cap below the level's count stops the plan with slots still banked: 8 of 9 sessions run on 10 banked
+  // slots (bought earlier: a purchase of 10 against FoxLeague's 8 is refused since R91A-1).
   const low = setup()
-  const capped = await low.exec.run(low.agent(), dryWallet, withTraining({ ...PLAN_DAY, premium_cap: 8 }), PLAN.slice(0, 10))
-  assert.deepEqual(capped.map(r => r.status), ['dry_run', ...Array(8).fill('dry_run'), 'refused'], capped.map(r => r.summary).join('\n'))
-  assert.match(capped[9]!.summary, /daily training exhausted \(13 used/)
+  const capped = await low.exec.run(low.agent(), dryWallet, withTraining({ ...PLAN_DAY, premium_cap: 8, slots_banked: 10 }), PLAN.slice(1, 10))
+  assert.deepEqual(capped.map(r => r.status), [...Array(8).fill('dry_run'), 'refused'], capped.map(r => r.summary).join('\n'))
+  assert.match(capped[8]!.summary, /daily training exhausted \(13 used/)
 })
 
 test('TRAIN-1 the scheduler\'s in-plan count: the same plan holds only the 11th session for the reset', () => {
@@ -154,4 +158,22 @@ test('TRAIN-1 the scheduler\'s in-plan count: the same plan holds only the 11th 
   const low = withTraining({ ...PLAN_DAY, premium_cap: 8 })
   low.takenAt = s.takenAt
   assert.deepEqual(newDayHolds(PLAN.slice(0, 10), low, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), [...Array(9).fill('now'), 'held'])
+})
+
+// R91A-1 (agent review of PR #91, low): the slot purchase read premium_cap only to refuse when it was unread, not as a
+// limit. With FoxLeague's paid sessions a game day below the level's count (6 against 10), 6 paid sessions used and none
+// banked, a purchase of 4 slots passed the level's count and the sessions it was bought for were refused until the
+// reset. A purchase now stays inside both counts: the level's and FoxLeague's.
+test("R91A-1 a slot purchase stays inside FoxLeague's paid sessions a game day as well as the level's count", () => {
+  const capped = withTraining({ used_today: 11, daily_free: 5, premium_cap: 6, slots_banked: 0 })
+  assert.match(why({ type: 'buy', product: 'training_slot', quantity: 4 }, capped, level(10)), /FoxLeague runs at most 6 paid training sessions a game day: 6 used today and 0 banked leave room for 0/)
+  const banked = withTraining({ used_today: 6, daily_free: 5, premium_cap: 6, slots_banked: 3 })
+  assert.match(why({ type: 'buy', product: 'training_slot', quantity: 3 }, banked, level(10)), /leave room for 2/)
+  assert.equal(why({ type: 'buy', product: 'training_slot', quantity: 2 }, banked, level(10)), '')
+})
+
+test('R91A-1 control: with FoxLeague at 10 and the level at 10 the same purchases follow the level alone', () => {
+  const s = withTraining({ used_today: 11, daily_free: 5, premium_cap: 10, slots_banked: 0 })
+  assert.equal(why({ type: 'buy', product: 'training_slot', quantity: 4 }, s, level(10)), '')
+  assert.match(why({ type: 'buy', product: 'training_slot', quantity: 5 }, s, level(10)), /10 paid training sessions a day at this level/)
 })

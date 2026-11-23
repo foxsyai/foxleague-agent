@@ -1773,6 +1773,8 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           const limit = ctx.settings.paidTrainingPerDay
           const paidToday = paidSessionsToday(t)
           if (paidToday + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - paidToday - t.slots_banked)}`)
+          // FoxLeague's own paid sessions a game day bound it too: a slot past them could not be used before the reset (R91A-1).
+          if (paidToday + t.slots_banked + more > t.premium_cap) return refuse(`FoxLeague runs at most ${t.premium_cap} paid training sessions a game day: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, t.premium_cap - paidToday - t.slots_banked)}`)
           const unit = servedPriceRefusal(servedUnit('training_slot'), shopPrice(prices.training, bp), 'training slot')
           if (unit) return refuse(unit)
           amount = shopPrice(prices.training * more, bp)
