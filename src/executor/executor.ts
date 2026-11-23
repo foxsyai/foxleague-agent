@@ -1624,7 +1624,8 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
       if (p) p.condition = Math.max(0, p.condition - 5)
       const t = s.auth?.shop?.training
       if (t) {
-        if (v.facts.usesPaidSlot) { t.premium_used_today++; t.slots_banked-- }
+        // A paid session takes a banked slot; it is no purchase, so FoxLeague's premium_used_today stays (TRAIN-1).
+        if (v.facts.usesPaidSlot) t.slots_banked--
         t.used_today++
       }
       if (p) p.dirty = true

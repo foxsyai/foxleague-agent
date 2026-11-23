@@ -6,7 +6,7 @@
 
 import type { PlannedAction } from './actions.ts'
 import { gameDayStart } from './match-starts.ts'
-import { matchDayRefusal, trainingDayRefusal, type TrainingQuota } from './rules.ts'
+import { matchDayRefusal, slotPurchaseRefusal, trainingDayRefusal, type TrainingQuota } from './rules.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import type { AgentSettings } from '../store/settings.ts'
 
@@ -47,16 +47,21 @@ export function newDayHolds(actions: PlannedAction[], snap: AgentSnapshot | unde
   const al = snap.auth?.allowance ? { ...snap.auth.allowance } : null
   return actions.map(p => {
     const a = p.action
-    // A training slot bought earlier in the plan is a paid session today, as the executor counts it (applyEffect).
-    if (a.type === 'buy' && a.product === 'training_slot' && t) t.slots_banked += a.quantity ?? 1
+    // A training slot bought earlier in the plan is a paid session today, as the executor counts it (applyEffect),
+    // when the counts the purchase rule reads let the purchase through: one over them adds no slot (R91A-2). A count
+    // that could not be read holds nothing, here as everywhere in the scheduler: the executor decides on a fresh read
+    // (R91A-3).
+    if (a.type === 'buy' && a.product === 'training_slot' && t) {
+      const more = a.quantity ?? 1
+      const read = [t.premium_cap, t.slots_banked, t.used_today, t.daily_free].every(n => Number.isFinite(n))
+      if (!read || !slotPurchaseRefusal(t, more, settings.paidTrainingPerDay)) t.slots_banked += more
+    }
     if (a.type === 'train' && t) {
       const full = trainingDayRefusal(t, settings.paidTrainingPerDay)
-      if (full) return { at, why: `${day} (this one's ${full.startsWith('daily training exhausted') ? `training sessions are used up: ${t.used_today} used, ${t.slots_banked} paid slots banked` : full})` }
-      // The session it takes, as the executor counts one that ran (applyEffect): a paid one uses a banked slot.
-      if (t.used_today >= t.daily_free) {
-        t.premium_used_today++
-        t.slots_banked--
-      }
+      if (full) return { at, why: `${day} (this one's ${full.replace(/^daily training exhausted \((.*)\)$/, 'training sessions are used up: $1')})` }
+      // The session it takes, as the executor counts one that ran (applyEffect): a paid one uses a banked slot and is
+      // no purchase (TRAIN-1).
+      if (t.used_today >= t.daily_free) t.slots_banked--
       t.used_today++
     }
     if (a.type === 'play_match' && al) {
