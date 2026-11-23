@@ -34,7 +34,8 @@ function stepScript(name: string, text = WORKFLOW): string {
     if (l.trim() !== '' && !l.startsWith('        ')) break
     block.push(l)
   }
-  const runs = block.flatMap((l, i) => (l === '        run: |' ? [i] : []))
+  // `run: |` or `run: &name |` for a script that later steps take by its alias (REV-3).
+  const runs = block.flatMap((l, i) => (/^ {8}run: (&\w+ )?\|$/.test(l) ? [i] : []))
   assert.equal(runs.length, 1, `the step "${name}" has ${runs.length} "run: |" blocks`)
   const body: string[] = []
   for (const l of block.slice(runs[0]! + 1)) {
@@ -219,4 +220,163 @@ test('REV-2 the clean-up runs before the action starts, and the reviewer is told
   }
   assert.match(told, /`gh pr diff`/, 'and where a change to them is read')
   assert.match(told, /\.review-diff\/files\//)
+})
+
+// REV-3 (owner, 2026-11-23): Fable's weekly limit on the main token stood at 97 percent. The review fell back only to
+// the backup token, with Fable again: once both tokens' Fable was used up no review recorded a verdict. The owner's
+// order: the main token with Claude Fable 5.2 at high effort, then the main token with Claude Opus 5.5 at extra-high
+// effort, then the backup token with Fable, then the backup token with Opus. Each next run starts only when the run
+// before it reached no model (a limit used up, no credit left, a token expired or revoked): a run that reached the
+// model is never followed by another, so no comment is posted or billed twice. Claude Code's --fallback-model cannot
+// do this: billing and rate limit errors never trigger its switch (code.claude.com/docs/en/model-config.md).
+const REVIEWS = [
+  { name: 'Claude Code review', id: 'review', token: 'CLAUDE_CODE_OAUTH_TOKEN', model: 'claude-fable-5-2', effort: 'high' },
+  { name: 'Claude Code review with Opus', id: 'review_opus', token: 'CLAUDE_CODE_OAUTH_TOKEN', model: 'claude-opus-5-5', effort: 'xhigh' },
+  { name: 'Claude Code review on the backup token', id: 'review_backup', token: 'CLAUDE_CODE_OAUTH_TOKEN_BACKUP', model: 'claude-fable-5-2', effort: 'high' },
+  { name: 'Claude Code review on the backup token with Opus', id: 'review_backup_opus', token: 'CLAUDE_CODE_OAUTH_TOKEN_BACKUP', model: 'claude-opus-5-5', effort: 'xhigh' },
+]
+// The check after each run but the last: its id and the token the next run uses.
+const CHECKS = [
+  { name: 'Did the review reach the model', id: 'started', next: 'main' },
+  { name: 'Did the Opus review reach the model', id: 'started_opus', next: 'backup' },
+  { name: 'Did the backup review reach the model', id: 'started_backup', next: 'backup' },
+]
+
+/** The lines of the step with this name, up to the next step, the comment above it or the next job. */
+function stepBlock(name: string): string {
+  const lines = WORKFLOW.split('\n')
+  const at = lines.indexOf(`      - name: ${name}`)
+  assert.ok(at > 0, `the review workflow has no step named "${name}"`)
+  const block: string[] = []
+  for (const l of lines.slice(at + 1)) {
+    if (l.trim() !== '' && !l.startsWith('        ')) break
+    block.push(l)
+  }
+  return block.join('\n')
+}
+
+/** The claude_args of a run of the action, through its YAML anchor or alias. */
+function claudeArgs(block: string): string {
+  const name = /^ {10}claude_args: [&*](\w+)/m.exec(block)?.[1]
+  assert.ok(name, 'the run names its arguments by an anchor or an alias')
+  const from = WORKFLOW.indexOf(`          claude_args: &${name} |\n`)
+  assert.ok(from > 0, `the arguments &${name} are defined in the workflow`)
+  const body: string[] = []
+  for (const l of WORKFLOW.slice(from).split('\n').slice(1)) {
+    if (!l.startsWith('            ')) break
+    body.push(l.slice(12))
+  }
+  return body.join('\n')
+}
+
+/** Runs a step's script with this environment; its GITHUB_OUTPUT and step summary come back. */
+function runScript(name: string, env: Record<string, string>, temp: string): { status: number | null; out: string; outputs: string; summary: string } {
+  const file = join(temp, `${name.replace(/\W+/g, '-')}.sh`)
+  writeFileSync(file, stepScript(name))
+  const outputs = join(temp, `out-${Math.random()}`), summary = join(temp, `sum-${Math.random()}`)
+  writeFileSync(outputs, ''); writeFileSync(summary, '')
+  const r = spawnSync('bash', ['--noprofile', '--norc', '-e', file], {
+    cwd: temp, encoding: 'utf8', timeout: 60_000,
+    env: { ...CLEAN_ENV, RUNNER_TEMP: temp, GITHUB_OUTPUT: outputs, GITHUB_STEP_SUMMARY: summary, ...env },
+  })
+  return { status: r.status, out: r.stdout + r.stderr, outputs: readFileSync(outputs, 'utf8'), summary: readFileSync(summary, 'utf8') }
+}
+
+const NO_MODEL = JSON.stringify([{ type: 'system', subtype: 'init' }, { type: 'result', is_error: true, total_cost_usd: 0, modelUsage: {} }])
+const SOME_MODEL = JSON.stringify([{ type: 'result', is_error: true, total_cost_usd: 1.25, modelUsage: { 'claude-fable-5-2': { inputTokens: 9000, outputTokens: 800 } } }])
+
+test("REV-3 the reviews run in the owner's order: Fable then Opus on the main token, then the same on the backup token", () => {
+  const lines = WORKFLOW.split('\n')
+  const runs = lines.flatMap((l, i) => (/^\s+uses: anthropics\/claude-code-action@/.test(l) ? [i] : []))
+  const names = runs.map(i => lines.slice(0, i).reverse().map(l => /^ {6}- name: (.*)$/.exec(l)?.[1]).find(Boolean))
+  assert.deepEqual(names, REVIEWS.map(r => r.name), 'the runs of the action, in order')
+  for (const r of REVIEWS) {
+    const block = stepBlock(r.name)
+    assert.match(block, new RegExp(`^ {8}id: ${r.id}$`, 'm'), r.name)
+    assert.match(block, new RegExp(`^ {10}claude_code_oauth_token: \\$\\{\\{ secrets\\.${r.token} \\}\\}$`, 'm'), `${r.name} runs on ${r.token}`)
+    assert.equal(/anthropic_api_key/.test(block), r.token === 'CLAUDE_CODE_OAUTH_TOKEN', `${r.name}: the API key goes with the main token only`)
+    assert.match(block, /^ {8}continue-on-error: true$/m, `${r.name}: the verdict decides, not the step`)
+    const args = claudeArgs(block)
+    assert.match(args, new RegExp(`^--model ${r.model}$`, 'm'), r.name)
+    assert.match(args, new RegExp(`^--effort ${r.effort}$`, 'm'), r.name)
+  }
+})
+
+test('REV-3 the Opus runs take the Fable runs\' arguments with only the model and the effort changed', () => {
+  const plain = (args: string) => args.replace(/^--model .*$/m, '').replace(/^--effort .*$/m, '')
+  const fable = claudeArgs(stepBlock(REVIEWS[0]!.name))
+  const opus = claudeArgs(stepBlock(REVIEWS[1]!.name))
+  assert.notEqual(fable, opus)
+  assert.equal(plain(opus), plain(fable), 'the tools, the turns and the settings are the same')
+  for (const r of REVIEWS) assert.match(stepBlock(r.name), /^ {10}prompt: (&review_prompt \||\*review_prompt)$/m, `${r.name} reads the same prompt`)
+})
+
+test('REV-3 each next run starts only after a check that the run before it reached no model', () => {
+  for (const [i, c] of CHECKS.entries()) {
+    const block = stepBlock(c.name)
+    assert.match(block, new RegExp(`^ {8}id: ${c.id}$`, 'm'), c.name)
+    assert.match(block, new RegExp(`^ {8}if: \\$\\{\\{ steps\\.${REVIEWS[i]!.id}\\.outcome == 'failure' \\}\\}$`, 'm'), `${c.name} runs after a failed ${REVIEWS[i]!.name}`)
+    assert.match(block, new RegExp(`^ {10}NEXT: ${c.next}$`, 'm'), `${c.name}: the next run uses the ${c.next} token`)
+    assert.match(stepBlock(REVIEWS[i + 1]!.name), new RegExp(`^ {8}if: \\$\\{\\{ steps\\.${c.id}\\.outputs\\.retry == 'true' \\}\\}$`, 'm'), `${REVIEWS[i + 1]!.name} waits for ${c.name}`)
+  }
+  // One script for the three checks.
+  for (const c of CHECKS.slice(1)) assert.match(stepBlock(c.name), /^ {8}run: \*reached_model$/m, c.name)
+})
+
+test('REV-3 the check starts the next run only when the run before it reached no model and left no verdict', () => {
+  const cases: [string, { record?: string; verdict?: string; next: string; backup: boolean }, string][] = [
+    ['no model, Opus on the main token next (needs no backup secret)', { record: NO_MODEL, next: 'main', backup: false }, 'true'],
+    ['no model, the backup token next, a backup secret set', { record: NO_MODEL, next: 'backup', backup: true }, 'true'],
+    ['no model, the backup token next, no backup secret', { record: NO_MODEL, next: 'backup', backup: false }, 'false'],
+    ['the run reached the model: no second run, no comment twice', { record: SOME_MODEL, next: 'main', backup: true }, 'false'],
+    ['a verdict was recorded', { record: NO_MODEL, verdict: 'pass\nchecked', next: 'main', backup: true }, 'false'],
+    ['no record to read', { next: 'main', backup: true }, 'false'],
+  ]
+  for (const [what, c, retry] of cases) {
+    const temp = mkdtempSync(join(tmpdir(), 'foxagent-rev3-'))
+    const record = join(temp, 'claude-execution-output.json')
+    if (c.record) writeFileSync(record, c.record)
+    if (c.verdict) writeFileSync(join(temp, 'claude-review-verdict'), c.verdict)
+    const r = runScript(CHECKS[0]!.name, { NEXT: c.next, HAS_BACKUP: String(c.backup) }, temp)
+    assert.equal(r.status, 0, `${what}: ${r.out}`)
+    assert.match(r.outputs, new RegExp(`^retry=${retry}$`, 'm'), `${what}: ${r.out}`)
+    // The next run's own record is the one the next check reads: never this run's.
+    if (retry === 'true') assert.ok(!existsSync(record), `${what}: the record of the run that reached no model is removed`)
+  }
+})
+
+test('REV-3 the result says which model and token gave the verdict, in the job summary and in the commit status', () => {
+  const runs = (r: [string, string, string, string]) => ({ RUN_MAIN_FABLE: r[0], RUN_MAIN_OPUS: r[1], RUN_BACKUP_FABLE: r[2], RUN_BACKUP_OPUS: r[3] })
+  const cases: [[string, string, string, string], string][] = [
+    [['success', 'skipped', 'skipped', 'skipped'], 'Fable 5.2 high on the main token'],
+    [['failure', 'success', 'skipped', 'skipped'], 'Opus 5.5 xhigh on the main token'],
+    [['failure', 'failure', 'success', 'skipped'], 'Fable 5.2 high on the backup token'],
+    [['failure', 'failure', 'failure', 'success'], 'Opus 5.5 xhigh on the backup token'],
+  ]
+  for (const [outcomes, by] of cases) {
+    const temp = mkdtempSync(join(tmpdir(), 'foxagent-rev3-'))
+    writeFileSync(join(temp, 'claude-review-verdict'), 'pass\nevery file read')
+    const r = runScript('Enforce verdict', runs(outcomes), temp)
+    assert.equal(r.status, 0, r.out)
+    assert.match(r.outputs, new RegExp(`^by=${by}$`, 'm'), outcomes.join(' '))
+    assert.ok(r.summary.includes(`Reviewed by ${by}`), r.summary)
+  }
+  // No verdict: the step fails and still says which run came last.
+  const temp = mkdtempSync(join(tmpdir(), 'foxagent-rev3-'))
+  const none = runScript('Enforce verdict', runs(['failure', 'failure', 'skipped', 'skipped']), temp)
+  assert.notEqual(none.status, 0)
+  assert.match(none.outputs, /^by=Opus 5\.5 xhigh on the main token$/m)
+  // The job hands it to the report, which writes it into the status.
+  assert.match(WORKFLOW, /^ {6}by: \$\{\{ steps\.verdict\.outputs\.by \}\}$/m, 'the job output')
+  assert.match(stepBlock('Enforce verdict'), /^ {8}id: verdict$/m)
+  const post = stepBlock('Post foxleague-agent/review')
+  assert.match(post, /^ {10}BY: \$\{\{ needs\.claude-review\.outputs\.by \}\}$/m)
+  const bin = mkdtempSync(join(tmpdir(), 'foxagent-rev3-bin-'))
+  writeFileSync(join(bin, 'gh'), `#!/usr/bin/env bash\nprintf '%s\\n' "$@" > "${bin}/args"\n`)
+  chmodSync(join(bin, 'gh'), 0o755)
+  for (const [result, text] of [['success', 'Claude review: PASS by Opus 5.5 xhigh on the main token'], ['failure', 'Claude review: no PASS (failure) by Opus 5.5 xhigh on the main token']]) {
+    const r = runScript('Post foxleague-agent/review', { PATH: `${bin}:${process.env.PATH ?? ''}`, RESULT: result!, BY: 'Opus 5.5 xhigh on the main token', SHA: 'abc', RUN: 'https://example.invalid/run', GH_TOKEN: 'x', GITHUB_REPOSITORY: 'foxsyai/foxleague-agent' }, temp)
+    assert.equal(r.status, 0, r.out)
+    assert.ok(readFileSync(join(bin, 'args'), 'utf8').split('\n').includes(`description=${text}`), readFileSync(join(bin, 'args'), 'utf8'))
+  }
 })

@@ -10,7 +10,9 @@
 #
 # Taken from foxsyai/next-foxleague's claude-review (verdict script, workspace gate, backup token), with these
 # differences:
-#   - the model and the effort: Claude Fable 5.2 at high effort (the owner's choice of 2026-11-10);
+#   - the model and the effort: Claude Fable 5.2 at high effort (the owner's choice of 2026-11-10) and, when that run
+#     reaches no model (Fable's weekly limit used up, no credit left), Claude Opus 5.5 at extra-high effort on the
+#     same token (the owner's choice of 2026-11-23); then the backup token, Fable first and Opus after it;
 #   - pull_request_target, so a pull request from a fork (a community contributor) is reviewed too: the workflow
 #     and the secrets come from main, the pull request's code is only READ (never built or run here; CI builds it
 #     without secrets), and everything that steers Claude Code comes from main: every .claude/, .claude-plugin/,
@@ -21,7 +23,8 @@
 #
 # Setup (once, by a repo admin): gh secret set CLAUDE_CODE_OAUTH_TOKEN --repo foxsyai/foxleague-agent
 # (the token from `claude setup-token`, billed to the Claude subscription), or ANTHROPIC_API_KEY (API billing).
-# Optional backup, used only when the main credential reaches no model: CLAUDE_CODE_OAUTH_TOKEN_BACKUP.
+# Optional backup, used only when the main credential reaches no model with Fable or Opus:
+# CLAUDE_CODE_OAUTH_TOKEN_BACKUP. The job summary and the status name the model and the token that gave the verdict.
 name: claude-review
 
 on:
@@ -43,6 +46,9 @@ jobs:
   claude-review:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    # Which run gave the verdict, for the status the report posts (REV-3).
+    outputs:
+      by: ${{ steps.verdict.outputs.by }}
     steps:
       - name: Only a merge candidate is reviewed
         env:
@@ -289,8 +295,8 @@ jobs:
             only as the VERY LAST action of the review, after every file is read and every comment is
             posted. Never record pass before the review is complete. Once you have recorded block, never
             call pass afterwards (the script refuses the downgrade).
-          # The model and the effort are the owner's choice of 2026-11-10: Claude Fable 5.2 at high effort, both
-          # pinned (next-foxleague's reviewer, where the tools come from, keeps its own).
+          # The model and the effort of the first run are the owner's choice of 2026-11-10: Claude Fable 5.2 at high
+          # effort, both pinned (next-foxleague's reviewer, where the tools come from, keeps its own).
           claude_args: &review_args |
             --model claude-fable-5-2
             --effort high
@@ -299,35 +305,72 @@ jobs:
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(${{ runner.temp }}/review-verdict.sh:*),Read(./**),Grep,Glob"
             --disallowedTools "Read(./.git/**)"
 
-      # The backup token reviews only when the first run's own record proves it reached no model (an expired or
-      # exhausted main token), so no comment is posted or billed twice (next-foxleague, owner 2026-10-08).
+      # Who reviews next (owner, 2026-11-23): when a run reached no model (Fable's weekly limit used up, no credit
+      # left, a token expired or revoked), the main token with Claude Opus 5.5 at extra-high effort, then the backup
+      # token with Fable, last the backup token with Opus. Only a run's own record that proves it reached no model
+      # starts the next one: a run that reached the model is never followed by another, so no comment is posted or
+      # billed twice (next-foxleague, owner 2026-10-08). Claude Code's --fallback-model cannot do this: billing and
+      # rate limit errors never trigger its switch. The same check runs after each run but the last; NEXT names the
+      # token of the run it may start.
       - name: Did the review reach the model
         id: started
         if: ${{ steps.review.outcome == 'failure' }}
         env:
+          NEXT: main
           HAS_BACKUP: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP != '' }}
-        run: |
+        run: &reached_model |
           retry=false
           record="$RUNNER_TEMP/claude-execution-output.json"
           if [[ -s "$RUNNER_TEMP/claude-review-verdict" ]]; then
-            echo "the review recorded a verdict: no second run"
-          elif [[ "$HAS_BACKUP" != "true" ]]; then
-            echo "no CLAUDE_CODE_OAUTH_TOKEN_BACKUP secret: no second run"
+            echo "the review recorded a verdict: no further run"
+          elif [[ "$NEXT" == "backup" && "$HAS_BACKUP" != "true" ]]; then
+            echo "no CLAUDE_CODE_OAUTH_TOKEN_BACKUP secret: no further run"
           elif used=$(jq -rs '[.[] | if type == "array" then .[] else . end
                                | select(type == "object" and .type == "result")] | last
                              | if . == null then "unknown"
                                elif .is_error == true and (.total_cost_usd // 0) == 0
                                     and ((.modelUsage // {}) | length) == 0 then "none"
                                else "some" end' "$record" 2>/dev/null) && [[ "$used" == "none" ]]; then
-            echo "::warning::The main review token reached no model (no credit left, or the token expired or was revoked), so the backup token reviews this PR. Renew CLAUDE_CODE_OAUTH_TOKEN."
+            echo "::warning::This run of the review reached no model (its weekly limit used up, no credit left or its token expired or revoked), so the next run reviews this PR on the $NEXT token."
+            # The next run writes its own record: the check after it must read that one, never this one.
+            rm -f "$record"
             retry=true
           else
-            echo "the review reached the model or left no readable record: no second run, so no comment is posted twice"
+            echo "the review reached the model or left no readable record: no further run, so no comment is posted twice"
           fi
           echo "retry=$retry" >> "$GITHUB_OUTPUT"
 
-      - name: Claude Code review on the backup token
+      - name: Claude Code review with Opus
+        id: review_opus
         if: ${{ steps.started.outputs.retry == 'true' }}
+        continue-on-error: true
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: *review_prompt
+          # The owner's choice of 2026-11-23: Claude Opus 5.5 at extra-high effort when Fable reached no model. The
+          # rest is the first run's (test/review-workflow.test.ts REV-3: only the model and the effort differ).
+          claude_args: &opus_args |
+            --model claude-opus-5-5
+            --effort xhigh
+            --max-turns 100
+            --settings "${{ runner.temp }}/review-settings.json"
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(${{ runner.temp }}/review-verdict.sh:*),Read(./**),Grep,Glob"
+            --disallowedTools "Read(./.git/**)"
+
+      - name: Did the Opus review reach the model
+        id: started_opus
+        if: ${{ steps.review_opus.outcome == 'failure' }}
+        env:
+          NEXT: backup
+          HAS_BACKUP: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP != '' }}
+        run: *reached_model
+
+      - name: Claude Code review on the backup token
+        id: review_backup
+        if: ${{ steps.started_opus.outputs.retry == 'true' }}
         continue-on-error: true
         uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
         with:
@@ -335,6 +378,25 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           prompt: *review_prompt
           claude_args: *review_args
+
+      - name: Did the backup review reach the model
+        id: started_backup
+        if: ${{ steps.review_backup.outcome == 'failure' }}
+        env:
+          NEXT: backup
+          HAS_BACKUP: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP != '' }}
+        run: *reached_model
+
+      - name: Claude Code review on the backup token with Opus
+        id: review_backup_opus
+        if: ${{ steps.started_backup.outputs.retry == 'true' }}
+        continue-on-error: true
+        uses: anthropics/claude-code-action@1d6de8cb0c237e7c15e9e1bdf973826ebae490cc # v1.0.248
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN_BACKUP }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          prompt: *review_prompt
+          claude_args: *opus_args
 
       - name: Workspace gate log
         if: ${{ always() }}
@@ -345,21 +407,36 @@ jobs:
           fi
 
       - name: Enforce verdict
+        id: verdict
         if: ${{ always() }}
+        env:
+          RUN_MAIN_FABLE: ${{ steps.review.outcome }}
+          RUN_MAIN_OPUS: ${{ steps.review_opus.outcome }}
+          RUN_BACKUP_FABLE: ${{ steps.review_backup.outcome }}
+          RUN_BACKUP_OPUS: ${{ steps.review_backup_opus.outcome }}
         run: |
+          # The last run that started gave the verdict (or left none): the summary and the status name it.
+          ran() { [[ -n "$1" && "$1" != "skipped" ]]; }
+          by=""
+          if ran "$RUN_MAIN_FABLE"; then by="Fable 5.2 high on the main token"; fi
+          if ran "$RUN_MAIN_OPUS"; then by="Opus 5.5 xhigh on the main token"; fi
+          if ran "$RUN_BACKUP_FABLE"; then by="Fable 5.2 high on the backup token"; fi
+          if ran "$RUN_BACKUP_OPUS"; then by="Opus 5.5 xhigh on the backup token"; fi
+          echo "by=$by" >> "$GITHUB_OUTPUT"
           f="$RUNNER_TEMP/claude-review-verdict"
           if [[ ! -s "$f" ]]; then
-            echo "::error::Claude recorded no verdict (the review did not finish or never started). Add merge-check again or read the log."
+            echo "::error::Claude recorded no verdict (the review did not finish or never started; the last run: ${by:-none}). Add merge-check again or read the log."
             exit 1
           fi
           verdict=$(sed -n 1p "$f"); summary=$(sed -n 2p "$f")
           echo "### Claude review: ${verdict^^}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reviewed by $by" >> "$GITHUB_STEP_SUMMARY"
           echo "$summary" >> "$GITHUB_STEP_SUMMARY"
           if [[ "$verdict" == "block" ]]; then
-            echo "::error::Claude review BLOCK: $summary"
+            echo "::error::Claude review BLOCK ($by): $summary"
             exit 1
           fi
-          echo "Claude review PASS: $summary"
+          echo "Claude review PASS ($by): $summary"
 
   report:
     name: report review
@@ -387,8 +464,10 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
           RESULT: ${{ needs.claude-review.result }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BY: ${{ needs.claude-review.outputs.by }}
         run: |
           if [[ "$RESULT" == "success" ]]; then state=success; text="Claude review: PASS"
           else state=failure; text="Claude review: no PASS ($RESULT)"; fi
+          if [[ -n "${BY:-}" ]]; then text="$text by $BY"; fi
           gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$SHA" -f state="$state" -f context=foxleague-agent/review \
             -f description="$text" -f target_url="$RUN" --jq '"posted \(.context): \(.state)"'

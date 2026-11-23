@@ -168,8 +168,11 @@ test('MS-C install, keys, costs, server, FAQ, troubleshooting, update, INSTALL.m
 test('REV-1 the agent review on GitHub runs Claude Fable 5.2 at high effort, on both tokens, and AGENTS.md says so', () => {
   const wf = read('.github/workflows/claude-review.yml') // read() folds every run of white space into one space
   assert.match(wf, /claude_args: &review_args \| --model claude-fable-5-2 --effort high --max-turns/, 'the model and the effort are pinned')
-  assert.equal((wf.match(/--model /g) ?? []).length, 1, 'one place sets the model')
+  // Since REV-3 (owner, 2026-11-23) Opus 5.5 at extra-high effort reviews when Fable reaches no model: two argument
+  // blocks set a model, Fable's first (test/review-workflow.test.ts reads the whole order).
+  assert.equal((wf.match(/--model /g) ?? []).length, 2, 'two places set the model: Fable first, Opus when Fable reaches no model')
+  assert.match(wf, /claude_args: &opus_args \| --model claude-opus-5-5 --effort xhigh --max-turns/, 'the fallback')
+  assert.ok(wf.indexOf('&review_args') < wf.indexOf('&opus_args'), 'Fable runs first')
   assert.match(wf, /claude_args: \*review_args/, 'the backup token reviews with the same model and effort')
-  assert.doesNotMatch(wf, /claude-opus-5-5|xhigh/, 'nothing of the earlier choice is left')
-  assert.match(read('AGENTS.md'), /the agent review \(Claude Fable 5\.2 at high effort\)/)
+  assert.match(read('AGENTS.md'), /the agent review \(Claude Fable 5\.2 at high effort; when Fable reaches no model, Claude Opus 5\.5 at extra-high effort/)
 })
