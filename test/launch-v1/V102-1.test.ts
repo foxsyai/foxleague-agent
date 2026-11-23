@@ -1,13 +1,15 @@
-// V102-1 (the owner, launch day 23 Nov 2026): the FoxLeague Agent has its own logo, the fox head with the AI brain, and
+// V102-1 (the owner, launch day 23 Nov 2026): the FoxLeague Agent has its own logo (the fox head with the AI brain) and
 // the site and the launch media already show it. The dashboard and the sign-in page still showed emoji foxes and the
 // plain fox as their tab icon. Version 1.0.2 shows the brain fox (the header logo and the sign-in card: the transparent
-// one; the "Signed in" pill: the round badge, which reads better small) and the round badge at 32 px as the tab icon.
-// It also adds Report a problem to the dashboard's header: GitHub's public problem form with the running version
-// filled in, with an info bubble that warns before anything is typed (the last open item of ISSUE-1).
+// one; the "Signed in" pill: the round badge, which reads better small) and the round badge at 32 px as the tab icon
+// (since v1.0.3 the tab icon is the transparent fox, the site's favicon-32.png: V103-1). It also adds Report a problem
+// to the dashboard's header: GitHub's public problem form with the running version filled in, with an info bubble that
+// warns before anything is typed (the last open item of ISSUE-1).
 //
 // The drawing is the owner's file, byte for byte: its paths once per page, in a hidden sprite the logo and the avatar
 // use (<symbol> and <use>), so the 32 KB of path data is never pasted twice. The tests pin the SHA-256 of the owner's
-// drawing, its gradients and the tab icon: the logo files themselves live with the owner, not in this repository.
+// drawing and its gradients: the drawing lives with the owner, not in this repository. The tab icon is checked against
+// site/public/brand/favicon-32.png (V103-1).
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
