@@ -56,5 +56,6 @@ PowerShell ([Install on Windows](/start/install-windows/#uninstalling)).
 ## Still stuck?
 
 [Report a problem](https://github.com/foxsyai/foxleague-agent/issues/new/choose) on GitHub with your version (at the
-top of the dashboard) and what happened. Issues are public: never paste recovery words, keys, PEM or keystore files,
-the `.env` or a password. For a question, ask in the [Foxsy AI community on Telegram](https://t.me/foxsyai).
+top of the dashboard) and what happened; **Report a problem** in the dashboard's header opens that form with the
+version filled in. Issues are public: never paste recovery words, keys, PEM or keystore files, the `.env` or a
+password. For a question, ask in the [Foxsy AI community on Telegram](https://t.me/foxsyai).

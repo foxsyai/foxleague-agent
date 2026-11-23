@@ -3349,6 +3349,26 @@ Stays open:
 - This pull request changes `.github/`, so the agent review fails it on purpose: the maintainer checks it by hand.
 - A **Report a problem** link in the dashboard, with the version filled in, is for the next release.
 
+## The brain fox and Report a problem, v1.0.2 (2026-11-23)
+
+The owner's ask on launch day: the FoxLeague Agent has its own logo (the fox head with the AI brain) and the site and
+the launch media show it; the dashboard and the sign-in page still showed emoji foxes and the plain fox as their tab
+icon. The same release closes the last open item of ISSUE-1. `test/launch-v1/V102-1.test.ts` failed on 606cf36 in each
+of its 12 cases (the served-pages case at the brain fox: its Content-Security-Policy half is a control and passed before
+too) and passes now. The version is 1.0.2.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| V102-1 | design (the owner, 2026-11-23) | The header logo, the "Signed in" pill and the sign-in card showed the 🦊 emoji and the tab icon of both pages was the plain fox. A problem report had to find the issue forms and copy the version by hand | The owner's drawing byte for byte, once per page, in a hidden inline sprite (`<symbol>`) that the logo and the avatar draw with `<use>`: the transparent fox in the header and on the sign-in card, the round badge in the pill, the round badge at 32 px as the tab icon. No new route and no request: the pages stay self-contained and the Content-Security-Policy is unchanged (inline SVG is part of the page; `img-src 'self' data:` already allowed the data URI icon). The sprite holds no script, no handler, no style and no reference outside the page; it is hidden without `display:none`, which would stop its gradients from painting. **Report a problem** in the header, after Getting started, opens GitHub's problem form (`template=problem.yml`) in a new tab with `rel="noopener noreferrer"` and the running version, URL-encoded, in its field `version`; a version the agent could not read leaves the field empty. Its info bubble says that what is written there is public, names every secret never to paste and sends a security hole to the private report (SECURITY.md). On a phone the six header buttons sit in two rows of three |
+
+Stays open:
+- The form's own placeholder still reads 1.0.1 (`.github/ISSUE_TEMPLATE/problem.yml`): a change under `.github/` is
+  checked by hand, so it was left for the maintainer. The link fills in the real version either way.
+- The site's own favicon is the plain fox (`site/public/brand/favicon-32.png`); the dashboard's tab icon is now the
+  round badge. Whether the site should match is the owner's call.
+- The site screenshots that show the header were taken again (eleven of twelve; the conversation card shows no header).
+- Production was not read for this work and nothing was deployed.
+
 ## Pre-release audit (2026-11-22)
 
 Before v1.0.0 five Claude Fable 5.2 reviewers at high effort, read-only and one area each (MONEY, LIFECYCLE, ATTACK,

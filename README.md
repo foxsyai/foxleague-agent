@@ -172,6 +172,7 @@ harvesting bonuses. Every agent must stay inside them. You are responsible for y
 ## Questions, problems and ideas
 
 - **A problem or an idea:** choose a form on [GitHub](https://github.com/foxsyai/foxleague-agent/issues/new/choose).
+  **Report a problem** in the dashboard opens the problem form with the version you run filled in.
   Issues are public: never paste recovery words, keys, PEM or keystore files, the `.env` or a password.
 - **A question or a chat with other coaches:** the [Foxsy AI community on Telegram](https://t.me/foxsyai).
 - **A security hole:** report it privately, never in a public issue ([SECURITY.md](SECURITY.md)).
