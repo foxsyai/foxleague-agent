@@ -24,7 +24,8 @@ from the installers' own texts, on example values. When an installer line they s
 `public/og.png` is the link preview (1200×630) and `src/assets/hero.png` the home image, both from the launch
 media canvas, with the FoxLeague Agent fox (the fox head with the AI brain) in the badge at the centre spot. A new
 `og.png` raises the `?v=` of its address in `astro.config.mjs`: X and Telegram keep a card for days. `public/brand/`
-holds the header logo (`logo.png`, the transparent fox) and the tab and home screen icons (the round badge).
+holds the header logo (`logo.png`, the transparent fox), the tab icons (the same transparent fox) and the home
+screen icon (the round badge: iOS paints a transparent one black).
 
 ## Serving it
 

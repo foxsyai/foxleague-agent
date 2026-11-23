@@ -3369,6 +3369,20 @@ Stays open:
 - The site screenshots that show the header were taken again (eleven of twelve; the conversation card shows no header).
 - Production was not read for this work and nothing was deployed.
 
+
+## The transparent fox as the tab icon, v1.0.3 (2026-11-23)
+
+The owner's ask after the announcement: the tab icon of the site and of the agent's dashboard showed the fox on a dark
+round badge; it should be transparent like the header logo. `test/launch-v1/BRAND-2.test.ts` and `V103-1.test.ts`
+failed on 5bac179 and pass now. The version is 1.0.3.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| V103-1 | design (the owner, 2026-11-23) | The tab icon was the fox on a dark round badge on the site and in the dashboard; the two copies of the picture could drift apart | The site's `favicon-32.png` and `favicon-192.png` are the transparent fox (`favicon-192.png` is `logo.png` itself). The dashboard and the sign-in page carry exactly the site's `favicon-32.png` inline; V103-1 checks the bytes are the same. Apple's home screen icon keeps the round badge: iOS paints a transparent one black. The "Signed in" pill keeps the round badge |
+
+Stays open:
+- None in the code. Production was not read for this change; it reaches the server with the release.
+
 ## Pre-release audit (2026-11-22)
 
 Before v1.0.0 five Claude Fable 5.2 reviewers at high effort, read-only and one area each (MONEY, LIFECYCLE, ATTACK,
