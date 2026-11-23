@@ -3351,11 +3351,11 @@ Stays open:
 
 ## The brain fox and Report a problem, v1.0.2 (2026-11-23)
 
-The owner's ask on launch day: the FoxLeague Agent has its own logo, the fox head with the AI brain, and the site and
+The owner's ask on launch day: the FoxLeague Agent has its own logo (the fox head with the AI brain) and the site and
 the launch media show it; the dashboard and the sign-in page still showed emoji foxes and the plain fox as their tab
 icon. The same release closes the last open item of ISSUE-1. `test/launch-v1/V102-1.test.ts` failed on 606cf36 in each
-of its 12 cases (the served-pages case at the brain fox: its Content-Security-Policy half is a control and passed
-before too) and passes now. The version is 1.0.2.
+of its 12 cases (the served-pages case at the brain fox: its Content-Security-Policy half is a control and passed before
+too) and passes now. The version is 1.0.2.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
