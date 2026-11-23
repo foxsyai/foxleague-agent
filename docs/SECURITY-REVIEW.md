@@ -3284,10 +3284,11 @@ Stays open:
 
 ## After the release, v1.0.1 (2026-11-23)
 
-Seen on mainnet the morning after the release: agent 4 had used 6 training sessions (5 free and 1 paid), held 9 paid
-slots and ran an XP booster. Every further session was refused. FoxLeague's gate was read again in its own code
-(read only, `backend/src/routes/training.rs` and `shop.rs`). `test/launch-v1/TRAIN-1.test.ts` failed on 3f846d1 in 8 of
-its 11 cases (the other 3 are controls that pass before and after) and passes now. The version is 1.0.1.
+Seen on mainnet on the morning of the release (23 Nov 2026, 06:27 UTC, in the service's journal): agent 4 had used 6
+training sessions (5 free and 1 paid), held 9 paid slots and ran an XP booster. Every further session was refused.
+FoxLeague's gate was read again in its own code (read only, `backend/src/routes/training.rs` and `shop.rs`).
+`test/launch-v1/TRAIN-1.test.ts` failed on 3f846d1 in 8 of its 11 cases (the other 3 are controls that pass before and
+after) and passes now. The version is 1.0.1.
 
 | Id | Severity | Finding | Fix |
 |---|---|---|---|
@@ -3297,7 +3298,7 @@ Stays open:
 - None in the code. The game manual (`src/strategist/manual.md` "Training Slots", up to 10 banked slots used a day on
   top of the 5 free ones) and `docs/ECONOMY-AND-RULES.md` already said the real rule; the site and the README name no
   limit by purchases.
-- Production was not read for this change and nothing was deployed.
+- Production was read only for the morning's refusals (the service's journal, read only) and nothing was deployed.
 
 ## Pre-release audit (2026-11-22)
 
