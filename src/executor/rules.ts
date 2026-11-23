@@ -888,6 +888,24 @@ export function trainingDayRefusal(t: TrainingQuota, paidPerDay: number): string
   return null
 }
 
+/**
+ * Why a purchase of `more` training slots goes over the counts, null when it fits: the level's paid sessions a day
+ * (owner, 2026-11-06) and FoxLeague's own paid sessions a game day (`premium_cap`, R91A-1), each counting the paid
+ * sessions used today and the slots still banked. A number it needs that could not be read refuses (rule 4). The buy
+ * rule and the scheduler's in-plan count (newDayHolds) both read it, so a purchase the executor refuses adds no slot
+ * to the plan's count (R91A-2).
+ */
+export function slotPurchaseRefusal(t: TrainingQuota, more: number, paidPerDay: number): string | null {
+  // No slot is bought while a number of FoxLeague's training gate is unread (TRAIN-1); the purchases of the last 24
+  // hours are no part of that gate.
+  if (!Number.isFinite(t.premium_cap) || !Number.isFinite(t.slots_banked) || !Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return "training quota unknown (the sessions used today, the free ones, FoxLeague's paid sessions a day or the paid slots banked could not be read)"
+  const paidToday = paidSessionsToday(t)
+  if (paidToday + t.slots_banked + more > paidPerDay) return `${paidPerDay} paid training sessions a day at this level: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, paidPerDay - paidToday - t.slots_banked)}`
+  // FoxLeague's own paid sessions a game day bound it too: a slot past them could not be used before the reset (R91A-1).
+  if (paidToday + t.slots_banked + more > t.premium_cap) return `FoxLeague runs at most ${t.premium_cap} paid training sessions a game day: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, t.premium_cap - paidToday - t.slots_banked)}`
+  return null
+}
+
 /** Why the game day has no match start left (FoxLeague's daily starts, casual and ranked together), or null (RESET-1). */
 export function matchDayRefusal(al: { today_count: number; daily_limit: number }): string | null {
   return al.today_count >= al.daily_limit ? `daily match limit reached (${al.today_count}/${al.daily_limit})` : null
@@ -1763,18 +1781,13 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
           break
         }
         case 'training_slot': {
-          // The level's count of paid sessions a day (owner, 2026-11-06): those used today and those still banked count.
-          // No slot is bought while a number of FoxLeague's training gate is unread (TRAIN-1); the purchases of the
-          // last 24 hours are no part of that gate.
+          // The level's count of paid sessions a day and FoxLeague's, those used today and those still banked counted
+          // (slotPurchaseRefusal, which the scheduler's in-plan count reads too: R91A-2).
           const t = s.auth?.shop?.training
           if (!t) return refuse('training quota unknown (shop status unavailable)')
-          if (!Number.isFinite(t.premium_cap) || !Number.isFinite(t.slots_banked) || !Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse("training quota unknown (the sessions used today, the free ones, FoxLeague's paid sessions a day or the paid slots banked could not be read)")
           const more = a.quantity ?? 1
-          const limit = ctx.settings.paidTrainingPerDay
-          const paidToday = paidSessionsToday(t)
-          if (paidToday + t.slots_banked + more > limit) return refuse(`${limit} paid training sessions a day at this level: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, limit - paidToday - t.slots_banked)}`)
-          // FoxLeague's own paid sessions a game day bound it too: a slot past them could not be used before the reset (R91A-1).
-          if (paidToday + t.slots_banked + more > t.premium_cap) return refuse(`FoxLeague runs at most ${t.premium_cap} paid training sessions a game day: ${paidToday} used today and ${t.slots_banked} banked leave room for ${Math.max(0, t.premium_cap - paidToday - t.slots_banked)}`)
+          const over = slotPurchaseRefusal(t, more, ctx.settings.paidTrainingPerDay)
+          if (over) return refuse(over)
           const unit = servedPriceRefusal(servedUnit('training_slot'), shopPrice(prices.training, bp), 'training slot')
           if (unit) return refuse(unit)
           amount = shopPrice(prices.training * more, bp)

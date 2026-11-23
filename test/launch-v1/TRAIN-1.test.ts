@@ -155,9 +155,11 @@ test('TRAIN-1 the scheduler\'s in-plan count: the same plan holds only the 11th 
   s.takenAt = '2026-11-23T09:40:00Z'
   const holds = newDayHolds(PLAN, s, { paidTrainingPerDay: 10 })
   assert.deepEqual(holds.map(h => (h ? 'held' : 'now')), [...Array(11).fill('now'), 'held'])
-  const low = withTraining({ ...PLAN_DAY, premium_cap: 8 })
+  // FoxLeague's cap below the level's count: 8 of 9 sessions on 10 banked slots (a purchase of 10 against FoxLeague's 8
+  // is refused since R91A-1 and adds no slot since R91A-2).
+  const low = withTraining({ ...PLAN_DAY, premium_cap: 8, slots_banked: 10 })
   low.takenAt = s.takenAt
-  assert.deepEqual(newDayHolds(PLAN.slice(0, 10), low, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), [...Array(9).fill('now'), 'held'])
+  assert.deepEqual(newDayHolds(PLAN.slice(1, 10), low, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), [...Array(8).fill('now'), 'held'])
 })
 
 // R91A-1 (agent review of PR #91, low): the slot purchase read premium_cap only to refuse when it was unread, not as a
@@ -176,4 +178,26 @@ test('R91A-1 control: with FoxLeague at 10 and the level at 10 the same purchase
   const s = withTraining({ used_today: 11, daily_free: 5, premium_cap: 10, slots_banked: 0 })
   assert.equal(why({ type: 'buy', product: 'training_slot', quantity: 4 }, s, level(10)), '')
   assert.match(why({ type: 'buy', product: 'training_slot', quantity: 5 }, s, level(10)), /10 paid training sessions a day at this level/)
+})
+
+// R91A-2 (agent review of PR #91, second pass, low): the scheduler's in-plan count (newDayHolds) added the slots of a
+// purchase whatever the purchase rule said. With FoxLeague's paid sessions a game day below what a plan buys, the
+// executor refuses the purchase and the trainings after it went to the executor before the reset (refused there),
+// where RESET-1 holds them for the new game day. Now the scheduler counts a purchase's slots only when the counts the
+// purchase rule reads let it through: both read slotPurchaseRefusal.
+test('R91A-2 the scheduler counts no slot of a purchase the counts refuse: the trainings after it wait for the reset', () => {
+  const s = withTraining({ ...PLAN_DAY, premium_cap: 8 })
+  s.takenAt = '2026-11-23T09:40:00Z'
+  assert.match(why({ type: 'buy', product: 'training_slot', quantity: 10 }, s, level(10)), /FoxLeague runs at most 8 paid training sessions/)
+  assert.deepEqual(newDayHolds(PLAN.slice(0, 4), s, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), ['now', 'held', 'held', 'held'])
+  // Over the level's count the same: a purchase of 11 at a level of 10.
+  const level10 = withTraining(PLAN_DAY)
+  level10.takenAt = s.takenAt
+  assert.deepEqual(newDayHolds([buySlots(11), train(1)], level10, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), ['now', 'held'])
+})
+
+test('R91A-2 control: a purchase the counts let through still adds its slots to the plan', () => {
+  const s = withTraining({ ...PLAN_DAY, premium_cap: 8 })
+  s.takenAt = '2026-11-23T09:40:00Z'
+  assert.deepEqual(newDayHolds([buySlots(8), train(1), train(2)], s, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), ['now', 'now', 'now'])
 })

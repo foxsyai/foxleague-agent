@@ -6,7 +6,7 @@
 
 import type { PlannedAction } from './actions.ts'
 import { gameDayStart } from './match-starts.ts'
-import { matchDayRefusal, trainingDayRefusal, type TrainingQuota } from './rules.ts'
+import { matchDayRefusal, slotPurchaseRefusal, trainingDayRefusal, type TrainingQuota } from './rules.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
 import type { AgentSettings } from '../store/settings.ts'
 
@@ -47,8 +47,9 @@ export function newDayHolds(actions: PlannedAction[], snap: AgentSnapshot | unde
   const al = snap.auth?.allowance ? { ...snap.auth.allowance } : null
   return actions.map(p => {
     const a = p.action
-    // A training slot bought earlier in the plan is a paid session today, as the executor counts it (applyEffect).
-    if (a.type === 'buy' && a.product === 'training_slot' && t) t.slots_banked += a.quantity ?? 1
+    // A training slot bought earlier in the plan is a paid session today, as the executor counts it (applyEffect),
+    // when the counts the purchase rule reads let the purchase through: a refused one adds no slot (R91A-2).
+    if (a.type === 'buy' && a.product === 'training_slot' && t && !slotPurchaseRefusal(t, a.quantity ?? 1, settings.paidTrainingPerDay)) t.slots_banked += a.quantity ?? 1
     if (a.type === 'train' && t) {
       const full = trainingDayRefusal(t, settings.paidTrainingPerDay)
       if (full) return { at, why: `${day} (this one's ${full.replace(/^daily training exhausted \((.*)\)$/, 'training sessions are used up: $1')})` }
