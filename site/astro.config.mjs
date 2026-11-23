@@ -25,8 +25,8 @@ export default defineConfig({
 		starlight({
 			title: 'FoxLeague Agent',
 			description: 'Your AI team manager for FoxLeague: an agent that trains, plays and levels up your team on MultiversX Supernova, within the limits you set.',
-			// The FoxLeague Agent fox (the fox head with the AI brain): transparent in the dark header, the round badge as
-			// the tab and home screen icon (BRAND-1).
+			// The FoxLeague Agent fox (the fox head with the AI brain): transparent in the dark header and as the tab icon
+			// (BRAND-2), the round badge as the home screen icon (BRAND-1).
 			logo: { src: './public/brand/logo.png', replacesTitle: false },
 			favicon: '/brand/favicon-32.png',
 			head: [
