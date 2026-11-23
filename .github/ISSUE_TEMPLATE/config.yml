@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and a chat with other coaches
+    url: https://t.me/foxsyai
+    about: The Foxsy AI community on Telegram.
+  - name: Report a security hole privately
+    url: https://github.com/foxsyai/foxleague-agent/security/advisories/new
+    about: Never in a public issue. Only the maintainers see a private report.

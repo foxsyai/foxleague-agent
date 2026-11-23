@@ -1,0 +1,45 @@
+name: Report a problem
+description: Something in the agent does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to tell us.
+
+        **This page is public. Never paste your recovery words, a private key, a PEM or keystore file, your `.env`, an API key or a password here.**
+        If one of them may have leaked, move the funds to a new wallet first.
+
+        Found a security hole? Report it privately instead: see [SECURITY.md](https://github.com/foxsyai/foxleague-agent/blob/main/SECURITY.md).
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the top of the dashboard, next to the round arrow.
+      placeholder: "1.0.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Where it runs
+      options:
+        - Windows (WSL2)
+        - macOS
+        - Linux
+        - A server
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what the agent did and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: lines
+    attributes:
+      label: Lines from Activity or the log (optional)
+      description: Copy the lines around the problem. Read them first and remove anything private.
+      render: text

@@ -3333,6 +3333,22 @@ Stays open:
   limit by purchases.
 - Production was read only for the morning's refusals (the service's journal, read only) and nothing was deployed.
 
+## Reports from the public: issue forms and a private security report (2026-11-23)
+
+The owner's ask on launch day: the launch posts send people to GitHub's issues, which are public, so what they type
+there must not put anyone's wallet at risk. A security hole needs a private way in. `test/launch-v1/ISSUE-1.test.ts`
+failed on main (none of the files existed) and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| ISSUE-1 | design (the owner, 2026-11-23) | A public repository with no issue forms and no security policy: a report would be a blank issue, where an owner in trouble may paste a log with recovery words or a key; a security hole would be told in public | `.github/ISSUE_TEMPLATE/`: "Report a problem" (version, where it runs and what happened required; lines from Activity optional) and "Suggest an idea", each opening with a warning in bold that the page is public and naming the recovery words, a private key, PEM and keystore files, the `.env`, an API key and a password; no field asks for a secret. Blank issues are off; the chooser also links the Foxsy AI community on Telegram and the private security report. `SECURITY.md`: report a security hole through GitHub's private report, never a public issue; what counts; fixes go into the newest release. The README ("Questions, problems and ideas"), the site's FAQ and the end of Troubleshooting say where each kind of message goes |
+
+Stays open:
+- GitHub's private report works only once **Private vulnerability reporting** is turned on (Settings, Security): the
+  owner's switch, off when this was written.
+- This pull request changes `.github/`, so the agent review fails it on purpose: the maintainer checks it by hand.
+- A **Report a problem** link in the dashboard, with the version filled in, is for the next release.
+
 ## Pre-release audit (2026-11-22)
 
 Before v1.0.0 five Claude Fable 5.2 reviewers at high effort, read-only and one area each (MONEY, LIFECYCLE, ATTACK,
