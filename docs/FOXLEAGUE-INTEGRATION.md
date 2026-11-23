@@ -427,7 +427,7 @@ Both tokens have 18 decimals. The web app flags "low EGLD" under 0.01 EGLD
 
 | Route | Auth | Returns | Source |
 |---|---|---|---|
-| `GET /api/shop/status?wallet_address=` | auth, must match | booster state, flat (`xp_booster_active` bool, `xp_booster_expires_at` RFC 3339 or null; a failed booster query on the server reads as inactive, `shop.rs:794-816`), shop prices, training quota (`daily_free`, `premium_cap`, `used_today`, `premium_used_today`, `slots_banked`), Common pack quota | `backend/src/routes/shop.rs:52-142`, `:730-910` |
+| `GET /api/shop/status?wallet_address=` | auth, must match | booster state, flat (`xp_booster_active` bool, `xp_booster_expires_at` RFC 3339 or null; a failed booster query on the server reads as inactive, `shop.rs:794-816`), shop prices, training quota (`daily_free`, `premium_cap`, `used_today`, `premium_used_today`, `slots_banked`; the training gate is at most `daily_free + premium_cap` sessions a game day and, past the free ones, a banked slot each, `training.rs:335`, `:469`, `:63-91`; `premium_used_today` counts slot purchases in the last 24 hours and is information only, TRAIN-1), Common pack quota | `backend/src/routes/shop.rs:52-142`, `:730-910` |
 | `GET /api/matches/daily-allowance?wallet_address=` | auth, must match | `{today_count, daily_limit, reset_hour_utc}` | `backend/src/routes/matches.rs:527-570` |
 | `GET /api/matches/active?wallet_address=` | auth, must match | the match you are in right now or `null`: `{match_id, is_home, home_team_name, away_team_name, status, tm_game_id, created_at, kind ("ranked"/"challenge"/"tournament"), tournament_id, tournament_title, opponent_badge}`; a ranked or casual match being played (`pending`, `simulating`) first, then one whose broadcast still airs (`finished`, since rc.85 for every such match: section 9.2) | `matches.rs:6340-6500` |
 | `GET /api/tournaments/my` | auth | `{active[], completed[]}` tournaments you play in or created | `backend/src/routes/tournaments.rs:6652-6907` |
@@ -2117,7 +2117,13 @@ since rc.85 (`16d9a455e`); the ones that touch the agent:
   once). The agent's game manual copy is synced to `c355e04b3`.
 - **Shop status** (`shop.rs:126-132`, `:866-873`): `premium_used_today` counts `training_slot` purchases verified in
   the trailing 24 hours, not sessions. Since the audit (INTEG-1) the level's count of paid sessions a day reads the
-  sessions past the free ones (`used_today - daily_free`, both from the 14:00 UTC reset).
+  sessions past the free ones (`used_today - daily_free`, both from the 14:00 UTC reset). It is information only:
+  FoxLeague's training gate ignores it (`shop.rs:130-152`, `:795-806`). The gate is at most `daily_free + premium_cap`
+  sessions a game day, counted from the reset (`training.rs:335` `max_slots`, `:469` `daily_cap_reached`, refused at
+  `used_today >= max_slots`) and past the free ones each session takes a banked slot, refused with none banked
+  (`try_consume_training_slot`, `training.rs:63-91`). Until v1.0.1 the agent also refused a paid session once
+  `premium_used_today` reached `premium_cap`; since TRAIN-1 (2026-11-23, read again on FoxLeague's `b36e172be`) it reads
+  the gate as FoxLeague runs it.
 - **Rival strength** (ATTACK-1, the agent's side): FoxLeague plays the synced stats at the lock and a rival may sync
   its training first, so the agent judges each rival card at the stronger of its synced and its live stats (the public
   roster carries both).
