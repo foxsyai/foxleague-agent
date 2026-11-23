@@ -401,7 +401,14 @@ export function renderDigest(s: AgentSnapshot, o: { tickMinutes?: number } = {})
     const a = s.auth
     if (a.allowance) out.push(`Matches started today: ${a.allowance.today_count}/${a.allowance.daily_limit}`)
     const t = a.shop?.training
-    if (t) out.push(`Training today: ${t.used_today} used (free ${t.daily_free}, paid sessions used today ${Number.isFinite(t.used_today) && Number.isFinite(t.daily_free) ? paidSessionsToday(t) : 'unknown'}, paid slots bought in 24 h ${t.premium_used_today}/${t.premium_cap}), banked paid slots ${t.slots_banked}`)
+    // FoxLeague's gate (TRAIN-1): at most daily_free + premium_cap sessions a game day, past the free ones a banked slot
+    // each. Its premium_used_today counts purchases in 24 hours for its shop card and limits nothing: not shown.
+    if (t) {
+      const n = (x: number) => (Number.isFinite(x) ? String(x) : 'unknown')
+      const max = Number.isFinite(t.daily_free) && Number.isFinite(t.premium_cap) ? String(t.daily_free + t.premium_cap) : 'unknown'
+      const paid = Number.isFinite(t.used_today) && Number.isFinite(t.daily_free) ? String(paidSessionsToday(t)) : 'unknown'
+      out.push(`Training today: ${n(t.used_today)} used, at most ${max} a game day (free ${n(t.daily_free)}, then each session uses one banked paid slot; paid sessions used today ${paid}), banked paid slots ${n(t.slots_banked)}`)
+    }
     out.push(boosterLine(a.shop, s.takenAt))
     // FoxLeague's own count of the wallet's Common packs; unread, no pack is bought (audit 2026-11-11, INTEG-6).
     const packs = a.shop?.common_pack_remaining_this_week

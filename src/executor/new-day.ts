@@ -51,12 +51,10 @@ export function newDayHolds(actions: PlannedAction[], snap: AgentSnapshot | unde
     if (a.type === 'buy' && a.product === 'training_slot' && t) t.slots_banked += a.quantity ?? 1
     if (a.type === 'train' && t) {
       const full = trainingDayRefusal(t, settings.paidTrainingPerDay)
-      if (full) return { at, why: `${day} (this one's ${full.startsWith('daily training exhausted') ? `training sessions are used up: ${t.used_today} used, ${t.slots_banked} paid slots banked` : full})` }
-      // The session it takes, as the executor counts one that ran (applyEffect): a paid one uses a banked slot.
-      if (t.used_today >= t.daily_free) {
-        t.premium_used_today++
-        t.slots_banked--
-      }
+      if (full) return { at, why: `${day} (this one's ${full.replace(/^daily training exhausted \((.*)\)$/, 'training sessions are used up: $1')})` }
+      // The session it takes, as the executor counts one that ran (applyEffect): a paid one uses a banked slot and is
+      // no purchase (TRAIN-1).
+      if (t.used_today >= t.daily_free) t.slots_banked--
       t.used_today++
     }
     if (a.type === 'play_match' && al) {

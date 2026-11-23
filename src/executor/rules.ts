@@ -853,7 +853,8 @@ export function elevenOvrToday(s: AgentSnapshot, lineup: number[] | undefined = 
 
 /**
  * The paid training sessions of this game day: the sessions past the free ones, both counted from the 14:00 UTC reset.
- * FoxLeague's premium_used_today counts training_slot purchases in the last 24 hours (shop.rs), not sessions (INTEG-1).
+ * FoxLeague's premium_used_today counts training_slot purchases in the last 24 hours (shop.rs), not sessions (INTEG-1),
+ * and its training gate ignores it (TRAIN-1).
  */
 export function paidSessionsToday(t: { used_today: number; daily_free: number }): number {
   return Math.max(0, t.used_today - t.daily_free)
@@ -864,15 +865,24 @@ export type TrainingQuota = { daily_free: number; premium_cap: number; used_toda
 
 /**
  * Why the game day has no training session left for the agent: the day's free sessions used up and no paid one it may
- * take (none banked, FoxLeague's paid cap, or the level's paid sessions a day), the refusal only the next game day
- * lifts; null when a session can run, and when a count could not be read (the train rule refuses that itself, and
- * unknown is no "used up"). The train rule and the scheduler's wait for the reset (RESET-1) both read it here.
+ * take (FoxLeague's daily_free + premium_cap sessions a game day reached, none banked or the level's paid sessions a
+ * day), the refusal only the next game day lifts; null when a session can run and when a count it needs could not be
+ * read (the train rule refuses that itself: unknown is no "used up"). The train rule and the scheduler's wait for the
+ * reset (RESET-1) both read it here.
+ *
+ * FoxLeague's gate (TRAIN-1): at most daily_free + premium_cap sessions a game day, counted from the reset
+ * (training.rs `max_slots`, `daily_cap_reached`) and past the free ones each session takes a banked slot, refused with
+ * none banked (`try_consume_training_slot`). premium_used_today, the purchases of the last 24 hours, is FoxLeague's
+ * shop card readout only: its gate ignores it (shop.rs `TrainingQuota`), so it decides nothing here.
  */
 export function trainingDayRefusal(t: TrainingQuota, paidPerDay: number): string | null {
   if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return null
   if (t.used_today < t.daily_free) return null
-  if (t.premium_used_today >= t.premium_cap || t.slots_banked <= 0) return `daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`
-  if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked)) return null
+  // Either known fact alone ends the day: the other may then be unread.
+  const max = Number.isFinite(t.premium_cap) ? t.daily_free + t.premium_cap : NaN
+  if (t.used_today >= max) return `daily training exhausted (${t.used_today} used, FoxLeague allows ${max} a game day)`
+  if (Number.isFinite(t.slots_banked) && t.slots_banked <= 0) return `daily training exhausted (${t.used_today} used, ${t.slots_banked} paid slots banked)`
+  if (!Number.isFinite(t.premium_cap) || !Number.isFinite(t.slots_banked)) return null
   const paidToday = paidSessionsToday(t)
   if (paidToday >= paidPerDay) return `${paidPerDay} paid training sessions a day at this level, ${paidToday} used today`
   return null
@@ -1295,14 +1305,14 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
       const t = s.auth?.shop?.training
       if (!t) return refuse('training quota unknown (shop status unavailable)')
       // Whether this session is paid, and how many paid ones the game day has had: the sessions past the free ones
-      // (FoxLeague's premium_used_today counts purchases in 24 hours, not sessions: grand audit 2026-11-06, INTEG-1).
-      // Numbers it cannot read are no count (EDGE-3, R55A-3).
+      // (FoxLeague's premium_used_today counts purchases in 24 hours, not sessions: grand audit 2026-11-06, INTEG-1; its
+      // training gate ignores it, TRAIN-1). Numbers it cannot read are no count (EDGE-3, R55A-3).
       if (!Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse('training quota unknown (the sessions used today or the free ones could not be read)')
       const paid = t.used_today >= t.daily_free
       // Used up for the game day (the scheduler holds such a session for the reset by the same reading, RESET-1).
       const dayDone = trainingDayRefusal(t, ctx.settings.paidTrainingPerDay)
       if (dayDone) return refuse(dayDone)
-      if (paid && (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked))) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
+      if (paid && (!Number.isFinite(t.premium_cap) || !Number.isFinite(t.slots_banked))) return refuse("training quota unknown (FoxLeague's paid sessions a day or the paid slots banked could not be read)")
       // The team unread: the card may be a starter (R54A-5).
       if (!s.team || s.team.lineup.includes(p.nonce)) {
         const waits = waitingOpenRefusal(s, ctx, 'training', s.team?.lineup, q => (q.nonce === p.nonce ? q.condition - appearanceCost(q, TRAINING_CONDITION_LOSS) : q.condition))
@@ -1754,9 +1764,11 @@ export function checkAction(a: Action, s: AgentSnapshot, ctx: RulesContext): Ver
         }
         case 'training_slot': {
           // The level's count of paid sessions a day (owner, 2026-11-06): those used today and those still banked count.
+          // No slot is bought while a number of FoxLeague's training gate is unread (TRAIN-1); the purchases of the
+          // last 24 hours are no part of that gate.
           const t = s.auth?.shop?.training
           if (!t) return refuse('training quota unknown (shop status unavailable)')
-          if (!Number.isFinite(t.premium_used_today) || !Number.isFinite(t.slots_banked) || !Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse('training quota unknown (the paid sessions used or banked could not be read)')
+          if (!Number.isFinite(t.premium_cap) || !Number.isFinite(t.slots_banked) || !Number.isFinite(t.used_today) || !Number.isFinite(t.daily_free)) return refuse("training quota unknown (the sessions used today, the free ones, FoxLeague's paid sessions a day or the paid slots banked could not be read)")
           const more = a.quantity ?? 1
           const limit = ctx.settings.paidTrainingPerDay
           const paidToday = paidSessionsToday(t)
