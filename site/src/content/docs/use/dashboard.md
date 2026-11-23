@@ -11,6 +11,9 @@ small **i**: hover it for a preview, tap or click it for the full explanation.
 ## The header
 
 - **Getting started** reopens the guide to your keys, funding and going live.
+- **Report a problem** opens GitHub's form to report a problem in a new tab, with the version you run filled in.
+  What you write there is public: never paste recovery words, keys, PEM or keystore files, the `.env` or a password.
+  A security hole goes to a private report instead ([SECURITY.md](https://github.com/foxsyai/foxleague-agent/blob/main/SECURITY.md)).
 - **Keys** holds the AI, Telegram and Binance keys for all agents ([Your keys](/start/keys/)).
 - **Go LIVE / Back to dry run** is one switch for all agents. Going live asks you to type `GO LIVE` and your
   password; back to dry run is one click.
