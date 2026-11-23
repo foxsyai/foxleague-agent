@@ -201,3 +201,15 @@ test('R91A-2 control: a purchase the counts let through still adds its slots to 
   s.takenAt = '2026-11-23T09:40:00Z'
   assert.deepEqual(newDayHolds([buySlots(8), train(1), train(2)], s, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), ['now', 'now', 'now'])
 })
+
+// R91A-3 (agent review of PR #91, third pass, low): newDayHolds took "a number could not be read" from
+// slotPurchaseRefusal for "over the counts" and held the trainings after a purchase for the reset. The scheduler's own
+// rule is that a count it cannot read holds nothing: the executor decides on a fresh read at the action's moment.
+test('R91A-3 a training count the scheduler cannot read holds nothing after a slot purchase', () => {
+  const s = withTraining({ ...PLAN_DAY })
+  delete (s.auth!.shop!.training as unknown as Record<string, unknown>).premium_cap
+  s.takenAt = '2026-11-23T09:40:00Z'
+  assert.deepEqual(newDayHolds([buySlots(3), train(1), train(2)], s, { paidTrainingPerDay: 10 }).map(h => (h ? 'held' : 'now')), ['now', 'now', 'now'])
+  // The executor still refuses that purchase on the same read (rule 4).
+  assert.match(why({ type: 'buy', product: 'training_slot', quantity: 3 }, s, level(10)), /training quota unknown/)
+})

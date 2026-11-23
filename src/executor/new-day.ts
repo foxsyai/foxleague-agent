@@ -48,8 +48,14 @@ export function newDayHolds(actions: PlannedAction[], snap: AgentSnapshot | unde
   return actions.map(p => {
     const a = p.action
     // A training slot bought earlier in the plan is a paid session today, as the executor counts it (applyEffect),
-    // when the counts the purchase rule reads let the purchase through: a refused one adds no slot (R91A-2).
-    if (a.type === 'buy' && a.product === 'training_slot' && t && !slotPurchaseRefusal(t, a.quantity ?? 1, settings.paidTrainingPerDay)) t.slots_banked += a.quantity ?? 1
+    // when the counts the purchase rule reads let the purchase through: one over them adds no slot (R91A-2). A count
+    // that could not be read holds nothing, here as everywhere in the scheduler: the executor decides on a fresh read
+    // (R91A-3).
+    if (a.type === 'buy' && a.product === 'training_slot' && t) {
+      const more = a.quantity ?? 1
+      const read = [t.premium_cap, t.slots_banked, t.used_today, t.daily_free].every(n => Number.isFinite(n))
+      if (!read || !slotPurchaseRefusal(t, more, settings.paidTrainingPerDay)) t.slots_banked += more
+    }
     if (a.type === 'train' && t) {
       const full = trainingDayRefusal(t, settings.paidTrainingPerDay)
       if (full) return { at, why: `${day} (this one's ${full.replace(/^daily training exhausted \((.*)\)$/, 'training sessions are used up: $1')})` }
