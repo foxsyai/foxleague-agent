@@ -1439,6 +1439,35 @@ Stays open:
 - This pull request changes `.github/`, so the review fails it on purpose: the maintainer checks it by hand.
 
 
+## The agent review falls back to Claude Opus 5.5 before the backup token (2026-11-23)
+
+The owner's choice: when the review on the main token reaches no model, Claude Opus 5.5 at extra-high effort reviews on
+the same token before the backup token is used. On the backup token the same order holds. Seen on 23 Nov 2026: the
+plan's weekly Fable limit stood at 97 percent while its limit for all models stood at 49 percent. Until now the only
+second run was the backup token with Fable again, so once both tokens' Fable was used up no review recorded a verdict
+and every pull request stayed red.
+
+What was read: Claude Code's documentation (code.claude.com/docs/en/model-config.md and errors.md). `--fallback-model`
+switches only when a model is overloaded or unavailable; authentication, billing and rate limit errors never trigger it,
+so it cannot do this. A usage limit blocks the requests of the run; in a run like this one (`-p`), a Fable request past
+the limit is billed to usage credits without asking when the plan has them turned on. Then no run reaches "no model" and
+Opus never runs. The documentation shows no result record for a run stopped by a limit: the check reads the one the
+backup token has used since October (an error, no cost, no model in its usage).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| REV-3 | design (the owner, 2026-11-23) | The review fell back only to the backup token with the same model: with Fable's weekly limit used up on both tokens no review recorded a verdict, although Claude Opus 5.5 could still be reached | `.github/workflows/claude-review.yml` runs up to four times in this order: the main token with Claude Fable 5.2 at high effort, the main token with Claude Opus 5.5 at extra-high effort, the backup token with Fable, the backup token with Opus. One check, after each run but the last, starts the next run only when the run before it left no verdict and its own record shows it reached no model (an error, no cost, no model in its usage); its record is then removed, so the next check reads only the next run's. A run that reached the model is never followed by another, so no comment is posted or billed twice. The Opus runs take the Fable runs' prompt, tools, turns and settings with only `--model` and `--effort` changed. The job summary and the status name the run that gave the verdict ("Claude review: PASS by Opus 5.5 xhigh on the main token"). `test/review-workflow.test.ts` REV-3 (5 tests, all failing on 3f846d1) runs the check and the verdict step from the workflow with bash and reads the order, the tokens, the models, the efforts and the conditions. `AGENTS.md` names the order |
+
+Stays open:
+- A limit reached in the middle of a review stops that run after it reached the model: it records no verdict and no
+  second run starts, as before (a second run could post its comments twice). Adding `merge-check` again then finds
+  Fable refused at once and the review goes on with Opus.
+- Whether usage credits are turned on for the plan is the owner's setting on claude.ai, not the workflow's: with them
+  on, Fable reviews past the weekly limit are billed and Opus is not reached.
+- This pull request changes `.github/`, so the review fails it on purpose: the maintainer checks it by hand and merges
+  it with the bypass. Its first real fallback is the first run of this order.
+- Production was not read for this change and nothing was deployed.
+
 ## The agent review before the repository goes public: the diff it reads and its working directory (2026-11-11)
 
 The final audit before the launch (Claude Fable 5.2 reviewers at extra-high effort, read-only) read the review workflow
