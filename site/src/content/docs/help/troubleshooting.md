@@ -52,3 +52,9 @@ install, a system unit without `User=`) still starts when it says `FOXAGENT_SUPE
 environment) and runs with no terminal. One whose own update already ran there as root starts too. On Windows they
 are typed inside Ubuntu: open it with `wsl -d Ubuntu --cd ~` in PowerShell. The uninstall on Windows is one line in
 PowerShell ([Install on Windows](/start/install-windows/#uninstalling)).
+
+## Still stuck?
+
+[Report a problem](https://github.com/foxsyai/foxleague-agent/issues/new/choose) on GitHub with your version (at the
+top of the dashboard) and what happened. Issues are public: never paste recovery words, keys, PEM or keystore files,
+the `.env` or a password. For a question, ask in the [Foxsy AI community on Telegram](https://t.me/foxsyai).

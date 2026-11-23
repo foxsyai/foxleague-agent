@@ -76,3 +76,11 @@ higher effort asks for your password.
 It can only choose among allowed actions, inside your limits; every action is checked right before it runs.
 Read its reasons in Last plan, tell it what you want in plain words ([Talk to your manager](/use/talk-to-your-manager/))
 or press Back to dry run, Pause or the Kill switch.
+
+### Where do I report a problem or share an idea?
+
+On GitHub: [choose a form](https://github.com/foxsyai/foxleague-agent/issues/new/choose) to report a problem or
+suggest an idea. Issues are public, so never paste recovery words, keys, PEM or keystore files, the `.env` or a
+password. Questions and a chat with other coaches: the [Foxsy AI community on Telegram](https://t.me/foxsyai).
+A security hole goes to a private report, never to a public issue: see
+[SECURITY.md](https://github.com/foxsyai/foxleague-agent/blob/main/SECURITY.md).

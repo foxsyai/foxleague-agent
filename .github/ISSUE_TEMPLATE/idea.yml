@@ -1,0 +1,22 @@
+name: Suggest an idea
+description: Something the agent could do better or do next.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for helping the agent get better.
+
+        **This page is public. Never paste your recovery words, a private key, a PEM or keystore file, your `.env`, an API key or a password here.**
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: What you would like the agent to do and how it would help your team.
+    validations:
+      required: true
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else (optional)
+      description: An example, a screenshot or how you do it today.

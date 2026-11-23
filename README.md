@@ -169,6 +169,13 @@ FoxLeague's Fair Play rules allow automation on your own wallets for the actions
 its abuse: bypassing an enforced rule, overloading the platform, using hidden information, coordinating teams or
 harvesting bonuses. Every agent must stay inside them. You are responsible for your agents.
 
+## Questions, problems and ideas
+
+- **A problem or an idea:** choose a form on [GitHub](https://github.com/foxsyai/foxleague-agent/issues/new/choose).
+  Issues are public: never paste recovery words, keys, PEM or keystore files, the `.env` or a password.
+- **A question or a chat with other coaches:** the [Foxsy AI community on Telegram](https://t.me/foxsyai).
+- **A security hole:** report it privately, never in a public issue ([SECURITY.md](SECURITY.md)).
+
 ## Contributing
 
 Pull requests are welcome. Read [AGENTS.md](AGENTS.md) first: it holds the rules that keep money safe, how to run
