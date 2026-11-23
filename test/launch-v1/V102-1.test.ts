@@ -36,8 +36,6 @@ const GRADIENTS: Record<string, string> = {
 }
 /** The round badge is the same drawing on a dark disc with the glow (brain-badge.svg minus brain.svg). */
 const BADGE_SYMBOL = '<symbol id="fl-brain-badge" viewBox="0 0 376 376"><circle cx="188" cy="188" r="188" fill="url(#flbrain-glow)"/><use href="#fl-brain"/></symbol>'
-/** The owner's favicon-32.png: the round badge at 32 px. */
-const FAVICON_SHA256 = '74d2c6e36609cb899db87032ad4b50a8c380438c7d69602924a9dfd86e6bd0c5'
 
 const REPORT_FORM = 'https://github.com/foxsyai/foxleague-agent/issues/new?template=problem.yml'
 const FOX_EMOJI = /\u{1F98A}|\\u\{1F98A\}|&#x1F98A;|&#129418;|\\ud83e\\udd8a/iu
@@ -90,7 +88,7 @@ test('V102-1 the header logo and the sign-in card show the transparent brain fox
   assert.match(login, /<div class="logo"><svg viewBox="0 0 376 376" aria-hidden="true" focusable="false"><use href="#fl-brain"\/><\/svg><\/div>\s*<h1>FoxLeague Agent<\/h1>/)
 })
 
-test('V102-1 the tab icon of both pages is the owner\'s round badge at 32 px', () => {
+test('V102-1 the tab icon of both pages is one 32 by 32 PNG', () => {
   for (const p of [DASHBOARD, LOGIN]) {
     const icons = [...read(p).matchAll(/<link rel="icon" type="image\/png" href="data:image\/png;base64,([A-Za-z0-9+/=]+)">/g)]
     assert.equal(icons.length, 1, `${p}: one tab icon`)
@@ -98,7 +96,7 @@ test('V102-1 the tab icon of both pages is the owner\'s round badge at 32 px', (
     assert.equal(png.subarray(0, 8).toString('hex'), '89504e470d0a1a0a', `${p}: a PNG`)
     assert.equal(png.subarray(12, 16).toString('ascii'), 'IHDR')
     assert.deepEqual([png.readUInt32BE(16), png.readUInt32BE(20)], [32, 32], `${p}: 32 by 32 pixels`)
-    assert.equal(sha256(png), FAVICON_SHA256, `${p}: the owner's favicon-32.png`)
+    // Which picture it is moved to V103-1: since v1.0.3 the transparent fox, the site's favicon-32.png.
   }
 })
 
