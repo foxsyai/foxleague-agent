@@ -22,7 +22,9 @@ from the installers' own texts, on example values. When an installer line they s
 (`test/install-videos.test.ts`) and they are drawn again: `site/scripts/videos/README.md` says how.
 
 `public/og.png` is the link preview (1200×630) and `src/assets/hero.png` the home image, both from the launch
-media canvas.
+media canvas, with the FoxLeague Agent fox (the fox head with the AI brain) in the badge at the centre spot. A new
+`og.png` raises the `?v=` of its address in `astro.config.mjs`: X and Telegram keep a card for days. `public/brand/`
+holds the header logo (`logo.png`, the transparent fox) and the tab and home screen icons (the round badge).
 
 ## Serving it
 

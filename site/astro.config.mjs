@@ -25,8 +25,9 @@ export default defineConfig({
 		starlight({
 			title: 'FoxLeague Agent',
 			description: 'Your AI team manager for FoxLeague: an agent that trains, plays and levels up your team on MultiversX Supernova, within the limits you set.',
-			// The orange fox head, in the header and as the tab icon, the same as foxleague.ai.
-			logo: { src: './public/brand/favicon-192.png', replacesTitle: false },
+			// The FoxLeague Agent fox (the fox head with the AI brain): transparent in the dark header, the round badge as
+			// the tab and home screen icon (BRAND-1).
+			logo: { src: './public/brand/logo.png', replacesTitle: false },
 			favicon: '/brand/favicon-32.png',
 			head: [
 				{ tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/brand/favicon-192.png' } },
@@ -34,7 +35,7 @@ export default defineConfig({
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
 				{ tag: 'link', attrs: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' } },
 				{ tag: 'link', attrs: { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Teko:wght@500;700&display=swap' } },
-				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://agent.foxleague.ai/og.png' } },
+				{ tag: 'meta', attrs: { property: 'og:image', content: 'https://agent.foxleague.ai/og.png?v=2' } },
 				{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
 				{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
 				{ tag: 'meta', attrs: { name: 'twitter:card', content: 'summary_large_image' } },
