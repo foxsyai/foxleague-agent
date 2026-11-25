@@ -146,3 +146,17 @@ test('BUSY2-1 FoxLeague staying busy reads [busy] and is not urgent; an error af
   assert.equal(urgentResult({ ...unclear, status: 'confirmed' }), false)
   assert.equal(urgentResult({ ...unclear, txHash: undefined, sent: undefined }), false)
 })
+
+// R100A-1 (low, the agent review of PR #100): every case above takes the pause without its wait, so nothing ran the real
+// loop. The real pause checks every second and ends within a step once the kill switch, a pause or a stop comes.
+test('BUSY1-8 the real pause ends within a second once halted, and runs its whole length otherwise', async () => {
+  const m = setup()
+  const pause = (m.exec as unknown as { busyPause: (ms: number, h: () => string | null) => Promise<void> }).busyPause.bind(m.exec)
+  let calls = 0
+  let t0 = Date.now()
+  await pause(5_000, () => (++calls > 1 ? 'the kill switch' : null))
+  assert.ok(Date.now() - t0 < 1_500, `ended after ${Date.now() - t0} ms`)
+  t0 = Date.now()
+  await pause(1_200, () => null)
+  assert.ok(Date.now() - t0 >= 1_150, 'not halted: the whole pause')
+})
