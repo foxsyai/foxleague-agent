@@ -153,18 +153,15 @@ test('SYNC3-1 sync effect: the working snapshot marks only cards known not to be
   assert.equal(s.players.find(p => p.nonce === 202)!.dirty, false)
 })
 
-test('SYNC3-2 the agents\' manual and the route record are FoxLeague\'s main of 21 Nov (237984579)', () => {
+test('SYNC3-2 the agents\' manual keeps FoxLeague\'s rules of 21 Nov (the commit it is synced to is pinned by the newest sync test, SYNC-4)', () => {
   const manual = readFileSync(MANUAL_FILE, 'utf8')
-  assert.match(manual.split('\n', 3).join('\n'), / main at 237984579 2026-11-21\./)
   assert.match(manual, /A player that is in an auction cannot be trained/)
   assert.match(manual, /An \*\*Injuries\*\* list under the goals names every injured player of both teams/)
   // The busy-card rule of #748 is still there and still off (SYNC-2).
   assert.match(manual, /From a date still to be announced a player plays one match at a time/)
   const record = JSON.parse(readFileSync(RECORD_FILE, 'utf8')) as { synced: string; pages: Record<string, string> }
-  assert.equal(record.synced, '237984579 2026-11-21')
   assert.equal(record.pages['legal/account-bans'], undefined, 'the bans page stays left out (SYNC-2)')
   const shapes = JSON.parse(readFileSync(API_RECORD_FILE, 'utf8')) as { synced: string; routes: Record<string, string | null> }
-  assert.equal(shapes.synced, '237984579 2026-11-21')
   assert.equal(Object.keys(shapes.routes).length, 54)
   // The two statistics routes as FoxLeague describes them since #801 (the injuries list added).
   assert.equal(shapes.routes['GET /api/matches/{id}/stats'], '560a5f8e8ce4774973fd21bc455be6cba6b50175b949bdf13cae1ba5142560d4')

@@ -1,12 +1,12 @@
 {
-  "synced": "237984579 2026-11-21",
-  "manual": "1307e371e02e30927097ab6d5634de220c309c165ed7b95453e7c2fa5af8a487",
+  "synced": "681bf9cfb 2026-11-23",
+  "manual": "493be89492b63845abcd8c028be519c7093528f8c6c08734229981584fa768ba",
   "pages": {
-    "getting-started/players": "3a88d8d738e717dda7d6d03372f035408c7e34e69194abf16761cf90f8d228ef",
+    "getting-started/players": "32d913b7a16b3e957bb299d508812a7e428fe2d74c5425a1015c38a0498e373d",
     "legal/fair-play": "3cd0d40206327ef9fe08e01a9eced0e7afcf695687976aae47d8b74ccfb767e7",
     "mechanics/aging": "d11eed90e8020b276d440bc7c1bc1e852b4089d4b563da23e8cb582b742c6249",
     "mechanics/champions-foxleague": "809fd0c98edbae9c5187a57836626dc6d646d46a3fdbbe5c2d33151ef61e1f23",
-    "mechanics/economy-map": "3fd763d33e40270a96f553422b67813c4f4b0b6aa7a92bfd1e4680e3305b8bb3",
+    "mechanics/economy-map": "de2388f3fb743244e230633e7ae97d5b8df78573799c2e29c187feb68f08f1f7",
     "mechanics/fusion": "89ba42b97939f99544e844dce0e20ccd0b5538ab0135d0878352e3709e333b05",
     "mechanics/marketplace": "6f7ca9131af9ea1843c02fe500ab4b7958fd65e917bcb30685ef32f0329e86c4",
     "mechanics/match-day-strategy": "1e7eb7185e8bcd0aa999d3bac6c4deff8d519bc70d74a1bbf4fdc94e5483e027",
@@ -16,7 +16,7 @@
     "mechanics/shop": "b4118b935373962a3434bdd84cc6b17a380c79b2a24615738b82fce8036717a5",
     "mechanics/sync": "f2559c45a7beeb479220631fcfbda3b6b0755570763b834112c52b876ac9748d",
     "mechanics/tactics": "75e9d4b4c786b0fcb9557bd5ba3b58981afc90b54bd0edec30e2bac58df3c745",
-    "mechanics/tournaments": "db50e7e02777ea2311fe7d593165e936a7eb920f5bcaa80efdbee2459bbec0f0",
+    "mechanics/tournaments": "47ee63f5b11db49d56542a1d7d2c511cc3a2e28e13124e4dc52653e89c97052b",
     "mechanics/training": "4ca5b915cb3b6afb674037515660ac30d5d8525b7c89cbcadb318a294c83ea60"
   },
   "config": [
