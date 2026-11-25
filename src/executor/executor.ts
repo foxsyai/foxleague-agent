@@ -1178,8 +1178,16 @@ export class Executor {
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: saved`)
       case 'play_match': {
-        // The kill switch, a pause or a stop of the service: a start FoxLeague answered busy is not pressed again (BUSY-1).
-        const halted = (): string | null => (store.killSwitch ? 'the kill switch' : store.agent(agent.index)?.paused ? 'a pause' : this.d.stopping?.() ? 'a stop of the service' : null)
+        // The kill switch, a pause, Back to dry run, the agent no longer there or a stop of the service: a start FoxLeague
+        // answered busy is not pressed again (BUSY-1, R100A-2).
+        const halted = (): string | null => {
+          const row = store.agent(agent.index)
+          if (store.killSwitch) return 'the kill switch'
+          if (!row) return 'the agent\'s removal'
+          if (row.paused) return 'a pause'
+          if (row.dryRun !== agent.dryRun) return 'the switch to dry run'
+          return this.d.stopping?.() ? 'a stop of the service' : null
+        }
         const start = async (): Promise<string> => {
           let matchId: number | undefined
           let readBack = ''

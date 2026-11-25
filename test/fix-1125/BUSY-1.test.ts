@@ -122,6 +122,9 @@ for (const [name, stop] of [
   ['the kill switch', (m: ReturnType<typeof setup>) => m.store.setKillSwitch(true)],
   ['a pause', (m: ReturnType<typeof setup>) => m.store.setPaused(0, true)],
   ['a stop of the service', (m: ReturnType<typeof setup>) => { (m.exec as unknown as { d: { stopping: () => boolean } }).d.stopping = () => true }],
+  // R100A-2 (low, the agent review of PR #100): Back to dry run during the wait and an agent no longer there.
+  ['Back to dry run', (m: ReturnType<typeof setup>) => m.store.setLiveMode(false)],
+  ['the agent deleted', (m: ReturnType<typeof setup>) => void m.store.deleteAgent(0, 'test')],
 ] as const) {
   test(`BUSY1-7 ${name} during the wait: not pressed again, the ticket bought stays`, async () => {
     const { r, m, wallet, pauses, pressed } = await play('ranked', ['ticket', 'busy'], { during: stop })
@@ -129,7 +132,8 @@ for (const [name, stop] of [
     assert.equal(pressed(), 2, 'the ticket\'s press and the busy start only')
     assert.deepEqual(pauses, [60_000])
     assert.equal(wallet.signed.length, 1)
-    assert.equal(m.store.openSpend(0, 'shop:', false).length, 1)
+    // Deleting an agent clears its stored rows (deleteAgent), its spend rows too.
+    if (name !== 'the agent deleted') assert.equal(m.store.openSpend(0, 'shop:', false).length, 1)
     assert.match(r.summary, /FoxLeague's match servers were busy and .* came during the wait: not pressed again; the ticket bought stays for the next start/)
   })
 }
