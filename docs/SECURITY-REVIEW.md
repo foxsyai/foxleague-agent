@@ -3383,6 +3383,30 @@ failed on 5bac179 and pass now. The version is 1.0.3.
 Stays open:
 - None in the code. Production was not read for this change; it reaches the server with the release.
 
+## A busy start pressed again, join gas 11.5M, manual of 23 Nov (2026-11-25)
+
+The owner's ask after two "Servers are busy" errors on Telegram on 25 Nov (agents 8 and 3, the ranked ticket bought
+before each, both used at the next plan's start, nothing paid twice) and FoxLeague's audit of 22 Nov read during the
+manual sync. `test/fix-1125/BUSY-1.test.ts`, `JG-2.test.ts` and `test/sync-1125/SYNC-4.test.ts` failed on 6a19d8f and
+pass now (BUSY1-6, the guard that any other refusal is never pressed again, passed before as well).
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| BUSY-1 | low (a delay, no money) | FoxLeague runs at most 3 match simulations at once for the whole game; a start that found every slot busy (after FoxLeague's own wait of up to 30 s) was given up at once, 39 times from 4 Oct to 25 Nov on the owner's 10 agents. The next plan started about an hour later | The start is pressed again after a minute, at most twice, only after FoxLeague's busy answer; the wait ends early and nothing is pressed again once the kill switch, a pause or a stop of the service came during it. Nothing is paid again: a ticket bought before the first press stays; the start's own read-back of a lost answer is unchanged |
+| BUSY-2 | design (the owner, 2026-11-25) | Still busy after a ticket was bought, the message said `[ERROR]` and was sent as urgent, as for a payment whose outcome is unclear, although the ticket's payment is confirmed and kept | The message says `[busy]`: "FoxLeague's match servers stayed busy (3 tries in about 2 minutes): no match started; the ticket bought stays for the next start". `urgentResult` (`executor.ts`, now the one rule the service reads) leaves it out; every other error after a payment is urgent as before. The activity row keeps the status `error`, so every count that reads it is unchanged |
+| JG-2 | low (gas, before a FoxLeague upgrade) | FoxLeague's audit of 22 Nov (#813, live on mainnet 25 Nov): the joins at 8,400,000 gas used up to 7,682,119 (9% to 16% margin) and each tournaments upgrade made joins heavier; 6,500,000 for a refund claim sat at 0.97x to 1.01x of one refund. The agent signed both with the old limits | `GAS.joinTournament` 11,500,000 and `GAS.claimRefund` 10,100,000, as FoxLeague's app. Unused gas is refunded; the extra EGLD needed at signing (about 0.003) is inside the 1 EGLD gas reserve |
+| SYNC-4 | info | The agents' manual was FoxLeague's of 21 Nov; three pages were reworded on 22 and 23 Nov | Synced to `681bf9cfb` (16 pages, three changed, wording only). The game settings keys and the 54 route shapes are the same |
+| R100A-2 | low (the agent review of PR #100) | The busy wait ended on the kill switch, a pause or a stop, not on Back to dry run nor on an agent no longer there: a start (on a ticket held or bought) could be pressed live up to 2 minutes after the owner switched to dry run. Nothing more is signed after a busy pause | The wait also ends and nothing is pressed again when the agent's row reads dry run or is gone (BUSY1-7, two more cases, failed before) |
+| R100A-1 | low (test coverage, the agent review of PR #100) | Every BUSY-1 case took the pause without its wait, so no test ran the real loop that ends the wait within a second of the kill switch, a pause or a stop | BUSY1-8 runs the real pause: halted after the first step it ends within 1.5 s, not halted it runs its whole length. It passes on the code and fails on a pause that ignores the stop (checked by hand) |
+
+Stays open:
+- On the dashboard a busy start still shows as an error row (its status is unchanged on purpose); only Telegram says `[busy]`.
+- A plan whose start stayed busy still plans the same start again; the next plan may find the servers busy too at a
+  crowded hour. FoxLeague's capacity is FoxLeague's.
+- A busy start can hold the agent's lock for about 4 minutes (3 presses of up to 35 s and 2 pauses of a minute), more
+  than the 90 s `ACTION_RUN_MS` the scheduler leaves an action before a deadline action. The agent review of PR #100
+  worked the worst cases through: the 5-minute `DEADLINE_MARGIN_MS` absorbs it, so a join still runs before its moment.
+
 ## Pre-release audit (2026-11-22)
 
 Before v1.0.0 five Claude Fable 5.2 reviewers at high effort, read-only and one area each (MONEY, LIFECYCLE, ATTACK,

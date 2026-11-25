@@ -255,8 +255,8 @@ processing part, MultiversX keeps the whole limit (`frontend/src/lib/gasLimits.t
 | `fusionMint` (from the fusion switch) | the `gas_limit` served by `POST /api/fusion/prepare` (50,000 + 1,500 a data byte + 1.5 x 21,400,000, about 33.5M), signed only between 24,300,000 and 48,600,000 | `gasLimits.ts` `fusionMintGasLimit`; `backend/src/fusion_mint.rs` `gas_limit` |
 | `payFusionMatchWaiver`, `payFusionCooldownWaiver` | 17,500,000 (15,000,000 before 2026-11-13) | `gasLimits.ts` `FUSION_WAIVER_GAS_LIMIT` |
 | `shopPay` (every shop product, the transfer-cooldown waiver, the paid badge) | 14,000,000 (12,864,100 from the upgrade of 2026-10-26 to 2026-11-13, 12,000,000 before) | `gasLimits.ts` `SHOP_PAY_GAS_LIMIT` |
-| `joinTournament` (every tournament and 1v1 seat) | 8,400,000 (7,000,000 before the League + Knockout upgrade of the contract, live on mainnet 2026-10-24; a mainnet join used at most 7,278,069 after the private fee upgrade of 2026-11-02 and 7,448,067 after the tiered prize upgrade of 2026-11-04) | `gasLimits.ts:32` |
-| `claimRefund` | 6,500,000 | `gasLimits.ts:34` |
+| `joinTournament` (every tournament and 1v1 seat) | 11,500,000 since FoxLeague's audit of 2026-11-22 (#813, live on mainnet 2026-11-25; section 31), 8,400,000 before (7,000,000 before the League + Knockout upgrade of the contract, live on mainnet 2026-10-24; a mainnet join used at most 7,278,069 after the private fee upgrade of 2026-11-02 and 7,448,067 after the tiered prize upgrade of 2026-11-04) | `gasLimits.ts:32` |
+| `claimRefund` | 10,100,000 since FoxLeague's audit of 2026-11-22 (#813; section 31), 6,500,000 before | `gasLimits.ts` `CLAIM_REFUND_GAS_LIMIT` |
 | `auctionList` / `auctionBid` / `auctionSettle` / `auctionCancel` | 17,200,000 / 15,800,000 / 15,000,000 / 13,900,000 (15,000,000 / 13,500,000 / 13,500,000 / 12,000,000 before 2026-11-13) | `gasLimits.ts` `AUCTION_GAS` |
 | `registerAndPay` (relayed) | `min(12,000,000, relayer_max_gas_limit)`: about 1.26x on the fusionMint contract, bound by the relay ceiling (12,500,000 served) | `gasLimits.ts` `registerAndPayGasLimit` |
 | `syncMyStats` | served by `/api/sync/prepare` as `gas_limit`: 18,000,000 + 3,000,000 per player since the fusionMint upgrade (15,000,000 base before), at most 600,000,000; the agent signs at most 20,000,000 + 3,000,000 per player | `backend/src/routes/sync.rs` `SYNC_BASE_GAS` |
@@ -915,7 +915,7 @@ Body `{wallet_address, match_type: "casual"|"ranked"}` (auth) (`backend/src/rout
 | 11 | All 18 on chain in your wallet, none listed | `{n} player(s) in your team are listed for sale and are held in marketplace escrow, so they cannot play. ...` (1393); `Your {lineup\|substitute bench\|...} contains {n} player(s) not yet confirmed on-chain. ...` (1441) |
 | 12 | No starter at condition 0 (the 30 floor does not apply here) | `{name} has 0 condition {EM} cannot play. Rest or use recovery item.` (1480-1490) |
 | 13 | None of the 18 in a transfer cooldown | `{name} was recently transferred {EM} cooldown {...} remaining` (1498-1525) |
-| 14 | Platform capacity (`match.sim_max_concurrent`, 3) | `Servers are busy with other matches right now {EM} please try again in a few seconds.` (1667-1729) |
+| 14 | Platform capacity (`match.sim_max_concurrent`, 3; a start waits up to 30 s for a free slot first) | `Servers are busy with other matches right now {EM} please try again in a few seconds.` (1667-1729). The agent presses again after a minute, at most twice (BUSY-1, section 31) |
 
 **Opponent** (`matches.rs:1531-1629`, `:7727-7840`): casual is always an AI team at your lineup's
 average OVR, its players within a few points of it, with a formation drawn at random from the supported ones
@@ -1175,7 +1175,7 @@ join.
    `is_participant` means done; `has_escrow && joinable` means an earlier payment is still in escrow,
    so `POST /join` **without** a hash; otherwise pay.
 2. **Pay** (`frontend/src/lib/tournamentTx.ts:49-167`; `frontend/src/lib/tournamentTxData.ts:29-40`):
-   receiver = tournaments contract, value 0, gas 8,400,000, version 2,
+   receiver = tournaments contract, value 0, gas 11,500,000 (8,400,000 before 2026-11-25), version 2,
    `data = ESDTTransfer@464f5853592d356435663365@<fee atomic hex>@6a6f696e546f75726e616d656e74@<tid, 16 hex>`.
    Example, tournament 1234 at 1,000 FOXSY:
    `ESDTTransfer@464f5853592d356435663365@3635c9adc5dea00000@6a6f696e546f75726e616d656e74@00000000000004d2`.
@@ -2323,3 +2323,17 @@ alerted at 20:50 UTC: nine pages and two route shapes changed. The game settings
 | #792 (the 1v1 scheduler retries a busy-window read and never reads a failure as nobody busy), #796 (alarms on FoxLeague's admin page close themselves), #795 (a banned account's sign-in says "This account is banned."), #798, #802 and #804 (the app's signing window, auctions and dashboard) | None: FoxLeague's own scheduling, admin and app; a banned wallet's sign-in fails, so every read that needs a session refuses | Nothing |
 
 The game manual copy is synced to `237984579` (16 pages; nine changed).
+
+## 31. FoxLeague of 2026-11-23 (origin/main, manual 681bf9cfb): wording, join gas 11.5M and a busy start pressed again
+
+Read on 2026-11-25 through git only (FoxLeague's repository next to this one), FoxLeague's live `/api/config` and the
+tournaments contract's transactions on mainnet. The running agent's daily manual check said on 24 and 25 Nov that three
+pages changed. The game settings keys and the 54 route shapes are the same as before.
+
+| FoxLeague change | Effect on the agent | What the agent does since this change |
+|---|---|---|
+| #807 and #808: a match's card on the tournament page shows **Lineup changes before kickoff** as one line, a badge with the swap icon and the number of changes per team, a tap lists them; an injured starter reads as still out from an earlier match. #813 (#666): the Shop says a payment kept for a re-check is signed but not confirmed yet | None: wording of FoxLeague's app (players, tournaments and economy-map pages) | The manual copy carries the new wording (SYNC-4) |
+| #813, FoxLeague's audit of 2026-11-22 (money-1 and money-2, medium): the 287 mainnet joins since 4 Nov signed 8,400,000 gas and used 7,236,305 to 7,682,119, a margin of 9% to 16%; each upgrade of the tournaments contract added about 180 gas per byte. Its app signs a join with 11,500,000 (1.50x of the heaviest) and a refund claim with 10,100,000 (6,500,000 sat at 0.97x to 1.01x of a one-refundee refund). Live on mainnet: the 21 player joins read from 14:31 to 20:52 UTC on 2026-11-25 all signed 11,500,000, the heaviest used 7,565,217 | The agent signed both with the old limits: the next contract upgrade could have pushed its heaviest joins out of gas (a revert keeps the fee) | `GAS.joinTournament` is 11,500,000 and `GAS.claimRefund` 10,100,000 (JG-2). Unused gas goes back to the wallet; the wallet needs about 0.003 EGLD more free at signing, well inside the 1 EGLD gas reserve |
+| None (FoxLeague's capacity, `match.sim_max_concurrent` 3, unchanged): "Servers are busy" answered a start of the owner's 10 agents 39 times from 4 Oct to 25 Nov, 7 of them after the ranked ticket was bought | The agent gave up at once; the next plan, about an hour later, started on the ticket kept | A start answered busy is pressed again after a minute, at most twice and never after the kill switch, a pause, Back to dry run, the agent's removal or a stop came during the wait; nothing is paid again (BUSY-1, R100A-2). Still busy after the third press: the message reads `[busy]` and is not an urgent one, since the ticket's payment is confirmed (BUSY-2) |
+
+The game manual copy is synced to `681bf9cfb` (16 pages; three changed).

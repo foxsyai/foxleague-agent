@@ -29,9 +29,11 @@ export const MAINNET = {
 export const GAS = {
   // FoxLeague's app for the fusionMint players contract (9,410,367 used: 1.49x).
   shopPay: 14_000_000n,
-  // FoxLeague's app since the League + Knockout upgrade of the tournaments contract (live on mainnet 2026-10-24).
-  joinTournament: 8_400_000n,
-  claimRefund: 6_500_000n,
+  // FoxLeague's app since its audit of 2026-11-22 (#813, live on mainnet 2026-11-25): 1.50x of the heaviest join
+  // (7,682,119 used); 8,400,000 had kept only 9% to 16% (JG-2).
+  joinTournament: 11_500_000n,
+  // FoxLeague's app since the same audit: 6,500,000 sat at 0.97x to 1.01x of a one-refundee refund (JG-2).
+  claimRefund: 10_100_000n,
   // Bound by the relay's ceiling (relayer_max_gas_limit, 12.5M served): FoxLeague's app signs the same 12M.
   registerAndPayMax: 12_000_000n,
   registerAndPayLegacy: 9_900_000n,

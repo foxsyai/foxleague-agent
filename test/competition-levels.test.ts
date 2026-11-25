@@ -186,7 +186,8 @@ test('CL8: a start refused after the ticket was bought says the ticket stays, an
   const m = setup({
     fox: {
       rankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 0 }),
-      playMatch: async () => { if (pressed++ === 0) throw required(); throw new ApiRefusal('Servers are busy with other matches right now. Please try again in a few seconds.') },
+      // A refusal FoxLeague's start may give after the ticket; its busy answer is pressed again since BUSY-1 (test/fix-1125).
+      playMatch: async () => { if (pressed++ === 0) throw required(); throw new ApiRefusal('The match server could not start your match. Please try again in a moment.') },
       buyRankedTicket: async () => ({ live: true, price_foxsy: 25, tickets: 1 }),
     },
   })

@@ -62,6 +62,32 @@ export interface ExecutionResult {
   txHash?: string
   /** A payment was signed and handed to the network or the relay: with an error, its outcome is unclear. */
   sent?: boolean
+  /** FoxLeague's match servers stayed busy (BUSY-2): no match started, nothing lost and nothing unclear. */
+  busy?: boolean
+}
+
+/**
+ * A result the owner hears at once on Telegram: a payment signed and handed on whose outcome is unclear (an error after
+ * it or not confirmed yet). FoxLeague's match servers staying busy after a ticket bought is not one (BUSY-2).
+ */
+export function urgentResult(r?: ExecutionResult): boolean {
+  return Boolean(r && !r.busy && (r.txHash || r.sent) && (r.status === 'error' || r.status === 'unconfirmed'))
+}
+
+/**
+ * FoxLeague runs at most 3 match simulations at once for the whole game (`match.sim_max_concurrent`): a start that finds
+ * every slot busy waits up to 30 s there, then is refused with this text (its API description, POST /api/matches/play).
+ * The start is pressed again after BUSY_PAUSE_MS, at most BUSY_RETRIES times (BUSY-1): a minute lets a running
+ * simulation end. Nothing is paid again: a ticket bought before the first press stays for the next one.
+ */
+export const BUSY_RETRIES = 2
+export const BUSY_PAUSE_MS = 60_000
+const serversBusy = (err: unknown): boolean => err instanceof ApiRefusal && /^Servers are busy\b/.test(err.message)
+const ordinal = (n: number): string => `${n}${n === 2 ? 'nd' : n === 3 ? 'rd' : 'th'}`
+
+/** FoxLeague's match servers stayed busy or a stop came while the start waited for them: no match started (BUSY-2). */
+class ServersBusy extends Error {
+  readonly busy = true
 }
 
 export interface ExecutorDeps {
@@ -231,7 +257,8 @@ export class Executor {
       // `sent`: the payment was signed and handed to the network, so with an error it may have landed (the bid limit reads it).
       // `untouched`: the 1v1 checks after a restart know that this error left no challenge and no seat.
       store.log({ agentIndex: agent.index, kind: a.type, status, summary, detail: { action: a, reason: planned.reason, ...logExtra, ...((detail as object) ?? {}), ...(sent ? { sent: true } : {}), ...(untouched ? { untouched: true } : {}) }, costUsd: costUsdValue || null, txHash })
-      const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(sent ? { sent: true } : {}) }
+      const busy = (detail as { busy?: boolean } | undefined)?.busy === true
+      const result: ExecutionResult = { action: a, reason: planned.reason, status, summary, costUsd: costUsdValue, ...(txHash ? { txHash } : {}), ...(sent ? { sent: true } : {}), ...(busy ? { busy: true } : {}) }
       // A piece that went through stays in the activity log; Telegram hears the last one of its group, and any failure.
       const quietPiece = planned.piece && planned.piece.index < planned.piece.of && (status === 'confirmed' || status === 'dry_run')
       if (!quietPiece) this.d.notify?.(agent.index, formatResult(agent.index, result), result)
@@ -391,7 +418,7 @@ export class Executor {
       const msg = err instanceof ApiRefusal ? `refused by FoxLeague: ${err.message}${slot}` : err instanceof Error ? err.message : String(err)
       // A payment signed and maybe sent: its row carries the hash the ledger rows are booked under.
       const maybeSent = booking?.sent || booking?.organizer?.sent ? txHashOf(err) : undefined
-      return finish('error', `${desc}: ${msg}`, 0, maybeSent, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : undefined)
+      return finish('error', `${desc}: ${msg}`, 0, maybeSent, (err as { startUnknown?: boolean } | null)?.startUnknown ? { startUnknown: true } : err instanceof ServersBusy ? { busy: true } : undefined)
     }
   }
 
@@ -946,6 +973,14 @@ export class Executor {
   }
 
   /**
+   * The pause before a start FoxLeague answered busy is pressed again (BUSY-1), in steps of a second so the kill switch, a
+   * pause or a stop of the service ends it early (a method, so a test can take it without the wait).
+   */
+  private async busyPause(ms: number, halted: () => string | null): Promise<void> {
+    for (let left = ms; left > 0 && !halted(); left -= 1000) await sleep(Math.min(1000, left))
+  }
+
+  /**
    * Signs and sends; from the signature on the payment counts as possibly sent. `keep` holds its hash as a pending payment
    * from the signature on, under the hash computed here: an answer lost on the way may still have landed, so the next plan
    * must find it and not pay again.
@@ -1143,16 +1178,42 @@ export class Executor {
         applyEffect(a, v, snap, built)
         return finish('confirmed', `${desc}: saved`)
       case 'play_match': {
+        // The kill switch, a pause, Back to dry run, the agent no longer there or a stop of the service: a start FoxLeague
+        // answered busy is not pressed again (BUSY-1, R100A-2).
+        const halted = (): string | null => {
+          const row = store.agent(agent.index)
+          if (store.killSwitch) return 'the kill switch'
+          if (!row) return 'the agent\'s removal'
+          if (row.paused) return 'a pause'
+          if (row.dryRun !== agent.dryRun) return 'the switch to dry run'
+          return this.d.stopping?.() ? 'a stop of the service' : null
+        }
         const start = async (): Promise<string> => {
-          let matchId: number
+          let matchId: number | undefined
           let readBack = ''
           let paid: boolean | undefined
-          const pressed = Date.now()
+          let pressed = Date.now()
+          let tries = 1
           try {
-            const r = await fox.playMatch(wallet, a.match_type)
-            matchId = r.match_id
-            paid = r.ranked_paid
+            // FoxLeague's match servers busy: pressed again after a pause, at most BUSY_RETRIES times (BUSY-1).
+            for (;;) {
+              try {
+                const r = await fox.playMatch(wallet, a.match_type)
+                matchId = r.match_id
+                paid = r.ranked_paid
+                break
+              } catch (err) {
+                if (!serversBusy(err)) throw err
+                if (tries > BUSY_RETRIES) throw new ServersBusy(`FoxLeague's match servers stayed busy (${tries} tries in about ${Math.round((BUSY_RETRIES * BUSY_PAUSE_MS) / 60_000)} minutes): no match started`)
+                await this.busyPause(BUSY_PAUSE_MS, halted)
+                const why = halted()
+                if (why) throw new ServersBusy(`FoxLeague's match servers were busy and ${why} came during the wait: not pressed again`)
+                tries++
+                pressed = Date.now()
+              }
+            }
           } catch (err) {
+            if (err instanceof ServersBusy) throw err
             // Only FoxLeague's own refusal says no match started. An answer lost on the way (a timeout after its wait
             // for a match slot, a 502) may come after the start: the active match read back says (audit C2).
             if (err instanceof ApiRefusal && !/^unexpected answer/.test(err.message)) throw err
@@ -1170,7 +1231,8 @@ export class Executor {
             readBack = ` (the answer was lost: ${err instanceof Error ? err.message : String(err)}; the active match read back shows it)`
           }
           applyEffect(a, v, snap, built)
-          return `${desc}: match #${matchId} started (${a.match_type})${readBack}${paid === false ? '; the AI filled it: free (the ticket stays for the next start)' : ''}`
+          const after = tries > 1 ? ` after FoxLeague's match servers were busy (${ordinal(tries)} try)` : ''
+          return `${desc}: match #${matchId} started (${a.match_type})${after}${readBack}${paid === false ? '; the AI filled it: free (the ticket stays for the next start)' : ''}`
         }
         if (a.test && snap.team) {
           // The casual test bench (owner, 2026-11-04): FoxLeague plays a casual game with the formation and eleven saved
@@ -1234,6 +1296,8 @@ export class Executor {
           return finish('confirmed', `${await start()}; ${costText}`, usd, hash)
         } catch (err) {
           // No answer and no read-back: the game may have started with the ticket, so it counts as a start (R51A-1).
+          // FoxLeague's match servers stayed busy (BUSY-2): the ticket's payment is confirmed and kept, nothing is unclear.
+          if (err instanceof ServersBusy) return finish('error', `${desc}: ${err.message}; the ticket bought stays for the next start; ${costText}`, usd, hash, { busy: true })
           if ((err as { startUnknown?: boolean }).startUnknown) return finish('error', `${desc}: ticket bought; the start got no answer and the active match could not be read (${err instanceof Error ? err.message : err}): it may have started, so it counts as a start; ${costText}`, usd, hash, { startUnknown: true })
           return finish('error', `${desc}: ticket bought but the start was refused (${err instanceof Error ? err.message : err}); the ticket stays for the next start; ${costText}`, usd, hash)
         }
@@ -1695,6 +1759,7 @@ export function applyEffect(a: Action, v: Verdict, s: AgentSnapshot, built: { eg
 }
 
 export function formatResult(agentIndex: number, r: ExecutionResult): string {
-  const icon = { dry_run: '[dry]', refused: '[refused]', confirmed: '[ok]', failed: '[FAILED]', unconfirmed: '[pending]', error: '[ERROR]' }[r.status]
+  // FoxLeague's match servers staying busy is said calmly: nothing was lost and nothing is unclear (BUSY-2).
+  const icon = r.busy ? '[busy]' : { dry_run: '[dry]', refused: '[refused]', confirmed: '[ok]', failed: '[FAILED]', unconfirmed: '[pending]', error: '[ERROR]' }[r.status]
   return `${agentName(agentIndex)} ${icon} ${r.summary}${r.txHash ? `\nhttps://explorer.multiversx.com/transactions/${r.txHash}` : ''}${r.reason ? `\nwhy: ${r.reason}` : ''}`
 }

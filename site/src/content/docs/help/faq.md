@@ -77,6 +77,13 @@ It can only choose among allowed actions, inside your limits; every action is ch
 Read its reasons in Last plan, tell it what you want in plain words ([Talk to your manager](/use/talk-to-your-manager/))
 or press Back to dry run, Pause or the Kill switch.
 
+### A message says FoxLeague's match servers were busy. Is something wrong?
+
+No. FoxLeague plays a few matches at a time for the whole game, so at busy moments (right after the daily reset or in
+the evening) a new match waits for a free slot. When none frees in time, the agent tries again after a minute, twice at
+most. If the servers stay busy, nothing is lost: a ranked ticket already bought stays for the next start and the next
+plan uses it. That message reads `[busy]`.
+
 ### Where do I report a problem or share an idea?
 
 On GitHub: [choose a form](https://github.com/foxsyai/foxleague-agent/issues/new/choose) to report a problem or

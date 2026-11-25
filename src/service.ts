@@ -24,7 +24,7 @@ import type { UserSecretKey } from '@multiversx/sdk-core'
 import { MAINNET } from './config.ts'
 import { atomicToFloat, formatAtomic } from './util/encoding.ts'
 import { TOP_UP_REARM, fundsUsd, lowOnFunds, playableUsd } from './snapshot/funds.ts'
-import { Executor, formatResult } from './executor/executor.ts'
+import { Executor, formatResult, urgentResult } from './executor/executor.ts'
 import { describeAction, parseAction, type PlannedAction } from './executor/actions.ts'
 import { budgetView } from './executor/budget.ts'
 import { actionDeadline, type Deadline } from './executor/deadlines.ts'
@@ -544,7 +544,7 @@ export class Service {
     this.strategist = cfg.anthropicApiKey ? new Strategist(cfg.anthropicApiKey, choice.model, choice.effort, this.cacheRule()) : null
     this.executor = new Executor({
       cfg, chain: this.chain, fox: this.fox, store: this.store,
-      notify: (i, text, result) => (this.loud.has(i) || ((result?.txHash || result?.sent) && (result.status === 'error' || result.status === 'unconfirmed')) ? this.notify(text) : this.report(text)),
+      notify: (i, text, result) => (this.loud.has(i) || urgentResult(result) ? this.notify(text) : this.report(text)),
       // A graceful stop: an action still being prepared signs nothing (one already sent finishes and is booked).
       stopping: () => this.stopping,
       // The owner's pause of the actions whose rules FoxLeague changed, while the copy is behind (P-W7).
