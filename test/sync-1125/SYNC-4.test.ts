@@ -1,7 +1,7 @@
 // SYNC-4: FoxLeague's manual of 23 Nov 2026 (main 681bf9cfb). The agents' manual check said on 24 and 25 Nov that three
 // pages changed since the agents' copy (getting-started/players, mechanics/tournaments, mechanics/economy-map). All three
 // change wording only: the tournament page's match card shows the lineup changes before kickoff as one line with a badge
-// per team (a tap lists them), and the Shop's rate limit row says a payment kept for a re-check is signed but not
+// per team (a tap lists them) and the Shop's rate limit row says a payment kept for a re-check is signed but not
 // confirmed yet. No rule, number, game setting key or route shape the agent uses changed.
 
 import { test } from 'node:test'
