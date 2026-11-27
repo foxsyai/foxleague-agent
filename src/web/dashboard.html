@@ -1492,7 +1492,7 @@ const TIPS = {
     <p>A shorter tick counts from the save: the next plan comes within one new tick.</p>`],
   jitter: ['Random window (± minutes)', `<p>Each cycle starts up to this many minutes earlier or later than the tick, at random, so the agent does not act like clockwork. The default is 10; 0 keeps the exact tick.</p>
     <p>It can never bring a cycle under 10 minutes: with a 30-minute tick it may be up to 20.</p>`],
-  hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
+  hours: ['Active hours (UTC)', `<p>The agent plans only from the first hour until the second, in UTC; every plan is told these hours. A plan still running at the end hour stops its remaining actions. Outside the window it rests. A /do request from Telegram still runs. Matches already scheduled by FoxLeague (tournaments, accepted 1v1s) are played as usual.</p>
     <p>The default, from 6 until 22, is 16 hours around the 14:00 UTC game-day reset. From 0 until 24 runs all day.</p>
     <p>Add your time zone's offset to read them locally: at UTC+2, 6 until 22 is 08:00 to 00:00.</p>
     <p>The window may cross midnight: from 22 until 6 means night hours.</p>`],

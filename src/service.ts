@@ -11,7 +11,7 @@ import type { MatchFormations, Tournament } from './foxleague/types.ts'
 import type { MarketSale } from './snapshot/market.ts'
 import { renderDigest } from './snapshot/digest.ts'
 import { Store, type AgentRow } from './store/db.ts'
-import { MIN_TICK_MINUTES, STRATEGY_PRESETS, validateSettingsPatch } from './store/settings.ts'
+import { MIN_TICK_MINUTES, STRATEGY_PRESETS, insideActiveHours, validateSettingsPatch } from './store/settings.ts'
 import { extensions, loadExtensions } from './extensions.ts'
 import { randomBytes, randomInt } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
@@ -1892,9 +1892,7 @@ export class Service {
   }
 
   private inActiveHours(agent: AgentRow, now = new Date()): boolean {
-    const [from, to] = agent.settings.activeHoursUtc
-    const h = now.getUTCHours()
-    return from <= to ? h >= from && h < to : h >= from || h < to
+    return insideActiveHours(agent.settings.activeHoursUtc, now)
   }
 
   /** One tick: snapshot, plan, run the actions spread over the window. */

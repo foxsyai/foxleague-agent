@@ -3383,6 +3383,23 @@ failed on 5bac179 and pass now. The version is 1.0.3.
 Stays open:
 - None in the code. Production was not read for this change; it reaches the server with the release.
 
+## The active hours told to every plan (2026-11-27)
+
+The owner's check of the 10 agents on 27 Nov (UTC). `test/fix-1127/HOURS-2.test.ts` failed on 9ce86e7 (HOURS2-1 to HOURS2-3),
+on 45bcad7, the first commit of PR #103 (R103A-1 to R103A-3) and on ad320e8 (R103A-4); it passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| HOURS-2 | low (missed actions, no money) | A routine plan runs only inside the owner's active hours, but no plan was told which they are: the instructions say only "You plan only inside the owner's active hours". On 25 Nov at 06:01 UTC agent 5 (Haiku 5.5) guessed they had ended at 22:00 and began again at the game day's reset (14:00 UTC), planned nothing from 06:00 to 14:00 UTC and carried the guess forward from each plan to the next: 14 empty plans over three mornings (25 to 27 Nov) while the other agents played (1 to 3 actions a morning each, mostly ranked matches) | Every plan's request has an `## Active hours` section: the owner's hours (across midnight said so), whether this plan runs inside them by the snapshot's own time (the owner's one-off request may run outside them and says so), that the actions of a plan stop when the hours end and that the game day's reset is FoxLeague's, not the start or the end of the hours. The cached instructions are unchanged. The service and the request share one check (`insideActiveHours` in `src/store/settings.ts`) |
+| R103A-1 | medium (the agent review of PR #103; no money) | An all-day window (0 to 24, allowed and documented as "runs all day") was told "they end at 24:00 UTC and an action that has not run by then waits for the next day's plans", a limit the service never applies to it; a plan late in the UTC day could carry it into the next plan | An all-day window is told as all day: plans run at any hour and their actions never stop on the hours; no end hour and no "next day" |
+| R103A-2 | low (the agent review of PR #103) | A routine plan outside the hours (made by hand with `cli plan`; also a tick let in just before the end hour) was told only "outside them", so the model would most likely plan nothing | It is told to plan as it would inside them; the service decides when the actions run |
+| R103A-3 | low (record, the agent review of PR #103) | The finding first took the id HOURS-1, which names the default hours of 2026-11-22; the new function stood between `DEFAULT_SETTINGS` and its doc comment | The id is HOURS-2 (test, comments, record); the function stands above the doc comment |
+| R103A-4 | low (the second agent review of PR #103; no money) | The owner's one-off request (`/do`) got the routine closing sentence ("they end at HH:00 UTC and an action that has not run by then waits for the next day's plans"), but the service never stops it on the hours: a `/do` in the last minute of the window was told nothing of it could still run; outside the hours the sentence said the opposite of "its actions run now" | The owner's request has a closing sentence of its own: its actions run now and the end of the hours does not stop them; routine plans run only inside the hours |
+
+Stays open:
+- A plan can still misread other values it is given; the next plan reads the previous one in full, so a misreading can
+  carry over until the snapshot contradicts it plainly.
+
 ## A busy start pressed again, join gas 11.5M, manual of 23 Nov (2026-11-25)
 
 The owner's ask after two "Servers are busy" errors on Telegram on 25 Nov (agents 8 and 3, the ranked ticket bought

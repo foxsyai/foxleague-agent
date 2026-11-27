@@ -10,7 +10,7 @@ import { parseAction, type PlannedAction } from '../executor/actions.ts'
 import type { BudgetView } from '../executor/budget.ts'
 import type { Config } from '../config.ts'
 import type { ActivityRow, Store } from '../store/db.ts'
-import { AI_EFFORTS, DEFAULT_AI, type AgentSettings } from '../store/settings.ts'
+import { AI_EFFORTS, DEFAULT_AI, insideActiveHours, type AgentSettings } from '../store/settings.ts'
 import { renderDigest, txt } from '../snapshot/digest.ts'
 import { agentName, whichAgents } from '../names.ts'
 import type { AgentSnapshot } from '../snapshot/snapshot.ts'
@@ -458,6 +458,35 @@ function buyingPower(p: PlanInput): string {
   return `Buying power: ${held} plus about ${n(swappable)} FOXSY from the ${+above.toFixed(2)} EGLD above the gas reserve${bound}; ${swapped}; one swap at most ${n(p.settings.maxSwapFoxsy)} FOXSY, and today's ${usd(today)} left in the daily cap spends about ${n(today / s.prices.foxsyUsd)} FOXSY. Judge what you can afford on both, never on the FOXSY alone.`
 }
 
+/**
+ * The owner's active hours (HOURS-2, 2026-11-27). A routine plan runs only inside them, but no plan was told which they
+ * are: agent 5 guessed they began at the game day's reset (14:00 UTC), planned nothing from 06:00 to 14:00 UTC and
+ * carried the guess from each plan to the next. Said in the request (the cached instructions stay byte-stable), with
+ * whether this plan runs inside them by the snapshot's own time; the owner's one-off request runs at once (outside them
+ * too) and the end of the hours never stops it (R103A-4). An
+ * all-day window has no end hour (R103A-1). A routine plan outside them (made by hand with `cli plan`; also a tick let in
+ * just before the end hour) is told to plan as usual, never to plan nothing (R103A-2).
+ */
+export function activeHoursNote(p: PlanInput): string {
+  const hours = p.settings.activeHoursUtc
+  const [from, to] = hours
+  if (from === 0 && to === 24) return "## Active hours\nThe owner's active hours for this agent: all day (00:00 to 24:00 UTC): plans run at any hour and their actions never stop on the hours. The game day's reset in the snapshot is FoxLeague's, not a limit of these hours."
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
+  const window = `${hh(from)} to ${hh(to)} UTC${from > to ? ' (across midnight)' : ''}`
+  const reset = "The game day's reset in the snapshot is FoxLeague's, not the start or the end of these hours."
+  const at = new Date(p.snapshot.takenAt)
+  const now = Number.isNaN(at.getTime()) ? null : at.toISOString().slice(11, 16)
+  const inside = now !== null && insideActiveHours(hours, at)
+  const time = now === null ? '' : ` It is ${now} UTC, ${inside ? 'inside' : 'outside'} them`
+  // The owner's one-off request runs at once and the end of the hours never stops it (R103A-4).
+  if (p.ownerRequest) {
+    const lead = now === null ? ' This plan' : inside ? `${time}; this plan` : `${time}, but this plan`
+    return `## Active hours\nThe owner's active hours for this agent: ${window}.${lead} answers the owner's one-off request: its actions run now and the end of the hours does not stop them. Routine plans run only inside these hours. ${reset}`
+  }
+  const state = now === null ? '' : inside ? `${time}: the actions of this plan run now.` : `${time}: plan as you would inside them; the service decides when the actions run.`
+  return `## Active hours\nThe owner's active hours for this agent: ${window}.${state} Plans and their actions run only inside these hours; they end at ${hh(to)} UTC and an action that has not run by then waits for the next day's plans. ${reset}`
+}
+
 export function renderPlanRequest(p: PlanInput): string {
   const b = p.budget
   // A shadow plan (kind "shadow": another model's proposal, never carried out) is no part of this agent's past. The
@@ -467,6 +496,7 @@ export function renderPlanRequest(p: PlanInput): string {
   const lines = [
     `## Owner's strategy direction\n${p.settings.strategy}`,
     p.ownerRequest ? `## One-off request from the owner (do this if the rules and caps allow, nothing else)\n${p.ownerRequest}` : '',
+    activeHoursNote(p),
     `## Budget (${p.dryRun ? 'dry-run ledger' : 'live ledger'}, game day ${b.gameDay})`,
     `Today: $${b.spentTodayUsd.toFixed(2)} spent of $${b.dailyCapUsd.toFixed(2)}, $${b.remainingTodayUsd.toFixed(2)} left. Month ${b.month}: $${b.remainingMonthUsd.toFixed(2)} of $${b.monthlyBudgetUsd.toFixed(2)} left. Setup budget left: $${b.remainingSetupUsd.toFixed(2)} of $${b.setupBudgetUsd.toFixed(2)}.`,
     `Per action: entry fee or stake at most ${p.settings.maxEntryFeeFoxsy} FOXSY, shop payment at most ${p.settings.maxShopPaymentFoxsy} FOXSY, bid at most ${p.settings.maxBidFoxsy} FOXSY, by rarity at most Common ${p.settings.maxBidCommonFoxsy}, Uncommon ${p.settings.maxBidUncommonFoxsy}, Rare ${p.settings.maxBidRareFoxsy}, Epic ${p.settings.maxBidEpicFoxsy}, Legendary ${p.settings.maxBidLegendaryFoxsy} (the owner's limits)${bidCeilings(p.snapshot)}, swap at most ${p.settings.maxSwapFoxsy} FOXSY. Round amounts for creating: Bronze ${p.settings.entryFeesBronze.length ? p.settings.entryFeesBronze.join('/') : 'off (this agent creates no Bronze tournaments)'}, Silver ${p.settings.entryFeesSilver.join('/')}, Gold ${p.settings.entryFeesGold.length ? p.settings.entryFeesGold.join('/') : 'off (this agent never creates or joins Gold tournaments or 1v1s)'}.`,
