@@ -1,42 +1,17 @@
 // TMP-1 (27 Nov 2026): the tests make throwaway folders (homes, releases, stubs, installs) in os.tmpdir() and most
 // never remove them, so every `npm test` left hundreds behind in the system temp folder. On the maintainer's laptop
-// repeated runs piled up about 313,000 of them in /tmp, and the clean of /tmp at boot held up the start for 11 min 43 s.
+// repeated runs piled up about 313,000 of them in /tmp; the clean of /tmp at boot held up the start for 11 min 43 s.
 // `npm test` now runs node --test through scripts/run-tests.ts: one temp folder per run (TMPDIR, TMP and TEMP point at
 // it), removed when the run passes, fails or is stopped with Ctrl-C.
 
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { setTimeout as sleep } from 'node:timers/promises'
-import { DEFAULT_TESTS, testArgs } from '../../scripts/run-tests.ts'
-
-const REPO = join(import.meta.dirname, '../..')
-const RUNNER = join(REPO, 'scripts/run-tests.ts')
-const FIXTURE = join(REPO, 'test/fix-1127/fixtures/makes-folders.ts')
-
-/** A parent folder the runner makes its run folder in, the fixture's probe file and the environment of the run. */
-function place(extra: Record<string, string> = {}) {
-  const parent = mkdtempSync(join(tmpdir(), 'tmp1-parent-'))
-  const probe = join(mkdtempSync(join(tmpdir(), 'tmp1-probe-')), 'tmpdir')
-  // The runner here is a run of its own, not a child of this one (NODE_TEST_CONTEXT would make it answer as a child).
-  const env: NodeJS.ProcessEnv = { ...process.env, TMPDIR: parent, TMP1_PROBE: probe, ...extra }
-  delete env.NODE_TEST_CONTEXT
-  const clean = () => {
-    spawnSync('chmod', ['-R', 'u+rwX', parent])
-    rmSync(parent, { recursive: true, force: true })
-    rmSync(dirname(probe), { recursive: true, force: true })
-  }
-  return { parent, probe, env, clean }
-}
-
-function run(extra: Record<string, string> = {}) {
-  const p = place(extra)
-  const r = spawnSync(process.execPath, ['--disable-warning=ExperimentalWarning', RUNNER, FIXTURE], { cwd: REPO, env: p.env, encoding: 'utf8', timeout: 60_000 })
-  return { ...p, status: r.status, output: `${r.stdout}${r.stderr}` }
-}
+import { DEFAULT_TESTS, testArgs } from '../../scripts/test-runner.ts'
+import { FIXTURE, REPO, RUNNER, place, run } from './fixtures/launch.ts'
 
 test('TMP1-1 npm test goes through scripts/run-tests.ts and the type check reads it', () => {
   const pkg = JSON.parse(readFileSync(join(REPO, 'package.json'), 'utf8')) as { scripts: Record<string, string> }
