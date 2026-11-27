@@ -459,14 +459,17 @@ function buyingPower(p: PlanInput): string {
 }
 
 /**
- * The owner's active hours (HOURS-1, 2026-11-28). A routine plan runs only inside them, but no plan was told which they
+ * The owner's active hours (HOURS-2, 2026-11-27). A routine plan runs only inside them, but no plan was told which they
  * are: agent 5 guessed they began at the game day's reset (14:00 UTC), planned nothing from 06:00 to 14:00 UTC and
  * carried the guess from each plan to the next. Said in the request (the cached instructions stay byte-stable), with
- * whether this plan runs inside them by the snapshot's own time; the owner's one-off request may run outside them.
+ * whether this plan runs inside them by the snapshot's own time; the owner's one-off request may run outside them. An
+ * all-day window has no end hour (R103A-1). A routine plan outside them (made by hand with `cli plan`; also a tick let in
+ * just before the end hour) is told to plan as usual, never to plan nothing (R103A-2).
  */
 export function activeHoursNote(p: PlanInput): string {
   const hours = p.settings.activeHoursUtc
   const [from, to] = hours
+  if (from === 0 && to === 24) return "## Active hours\nThe owner's active hours for this agent: all day (00:00 to 24:00 UTC): plans run at any hour and their actions never stop on the hours. The game day's reset in the snapshot is FoxLeague's, not a limit of these hours."
   const hh = (h: number) => `${String(h).padStart(2, '0')}:00`
   const at = new Date(p.snapshot.takenAt)
   const now = Number.isNaN(at.getTime()) ? null : at.toISOString().slice(11, 16)
@@ -476,7 +479,7 @@ export function activeHoursNote(p: PlanInput): string {
       ? ` It is ${now} UTC, inside them: the actions of this plan run now.`
       : p.ownerRequest
         ? ` It is ${now} UTC, outside them, but this plan answers the owner's one-off request: its actions run now.`
-        : ` It is ${now} UTC, outside them.`
+        : ` It is ${now} UTC, outside them: plan as you would inside them; the service decides when the actions run.`
   return `## Active hours\nThe owner's active hours for this agent: ${hh(from)} to ${hh(to)} UTC${from > to ? ' (across midnight)' : ''}.${state} Plans and their actions run only inside these hours; they end at ${hh(to)} UTC and an action that has not run by then waits for the next day's plans. The game day's reset in the snapshot is FoxLeague's, not the start or the end of these hours.`
 }
 

@@ -147,13 +147,8 @@ export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
 }
 
 /**
- * Every new agent: the steady level, active 16 hours around the 14:00 UTC game-day reset (06:00 to 22:00, HOURS-1), a
- * cycle every 2 hours give or take 10 minutes (8 plans a day; the daily-capped play fits in them), 30 s between
- * actions, every planned action carried out.
- */
-/**
  * Whether `at` falls inside active hours [from, to) in UTC; from > to is a window across midnight. The service starts
- * routine plans and runs their actions only inside it; every plan's request says it (HOURS-1).
+ * routine plans and runs their actions only inside it; every plan's request says it (HOURS-2).
  */
 export function insideActiveHours(hours: [number, number], at: Date): boolean {
   const [from, to] = hours
@@ -161,6 +156,11 @@ export function insideActiveHours(hours: [number, number], at: Date): boolean {
   return from <= to ? h >= from && h < to : h >= from || h < to
 }
 
+/**
+ * Every new agent: the steady level, active 16 hours around the 14:00 UTC game-day reset (06:00 to 22:00, HOURS-1), a
+ * cycle every 2 hours give or take 10 minutes (8 plans a day; the daily-capped play fits in them), 30 s between
+ * actions, every planned action carried out.
+ */
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
