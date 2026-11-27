@@ -7,8 +7,9 @@ rules and the owner's caps before anything is signed. Treat every change to that
 ## Run it
 - Node 22 from 22.18, or 24.2 and later (23.x, 24.0 and 24.1 load the service and end at once), TypeScript run
   directly (no build step), SQLite for state, 2 runtime dependencies (pinned).
-- `npm ci --ignore-scripts` then `npm run typecheck` and `npm test` (`node --test 'test/**/*.test.ts'`). Both must be
-  clean before you say a change is done; report the real result, including a failure.
+- `npm ci --ignore-scripts` then `npm run typecheck` and `npm test` (`scripts/run-tests.ts`: `node --test
+  'test/**/*.test.ts'` in a temp folder of its own, removed when the run ends; `npm test -- <files>` for some). Both
+  must be clean before you say a change is done; report the real result, including a failure.
 - `test/summary.test.ts` "quiet Telegram..." is flaky on `main` too (1 failure in 5 full runs on an untouched commit).
   Re-run it alone before you blame your change, and say so in the PR if it shows.
 - Node strips types, it does not compile them: no `enum`, no `namespace`, no constructor parameter properties
