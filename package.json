@@ -11,7 +11,7 @@
   "scripts": {
     "cli": "node --disable-warning=ExperimentalWarning src/cli.ts",
     "start": "node --disable-warning=ExperimentalWarning src/service.ts",
-    "test": "node --disable-warning=ExperimentalWarning --test 'test/**/*.test.ts'",
+    "test": "node --disable-warning=ExperimentalWarning scripts/run-tests.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
