@@ -1,20 +1,27 @@
 // What `npm test` runs (TMP-1): scripts/run-tests.ts starts it and the tests import it (R101A-1). See run-tests.ts for
 // why the suite runs in a temporary folder of its own.
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { constants, tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 export const DEFAULT_TESTS = 'test/**/*.test.ts'
 
-/** A test file, folder or glob, as against the value of an option. */
-const namesTests = (a: string): boolean => a.includes('*') || a.includes('/') || a.includes('\\') || /\.[cm]?[jt]s$/.test(a) || existsSync(a)
+// The options of node --test (and of node) that take a value. Written with a space before its value, such an option
+// keeps the next word whatever it looks like (R102A-1: a regular expression, a shard such as 1/3 or a folder's name);
+// any other option takes none.
+const TAKES_VALUE = new Set([
+  '--test-name-pattern', '--test-skip-pattern', '--test-reporter', '--test-reporter-destination', '--test-concurrency',
+  '--test-timeout', '--test-shard', '--test-isolation', '--experimental-test-isolation', '--test-global-setup',
+  '--test-coverage-include', '--test-coverage-exclude', '--test-coverage-branches', '--test-coverage-functions',
+  '--test-coverage-lines', '--import', '--require', '-r', '--env-file', '--env-file-if-exists', '--conditions', '-C',
+  '--disable-warning', '--experimental-loader', '--loader',
+])
 
 /**
  * The arguments of node --test for the arguments given to `npm test --`: the options first, each with its value, then
  * the files or every test (Node reads no option after the first file). An option written with a space before its value
- * keeps it unless the value names a test file, folder or glob (R101A-2); a value that looks like a path goes as
- * --name=value.
+ * keeps it (R101A-2) when it is one that takes a value.
  */
 export function testArgs(given: string[]): string[] {
   const options: string[] = []
@@ -27,7 +34,7 @@ export function testArgs(given: string[]): string[] {
     }
     options.push(a)
     const next = given[i + 1]
-    if (!a.includes('=') && next !== undefined && !next.startsWith('-') && !namesTests(next)) {
+    if (next !== undefined && TAKES_VALUE.has(a)) {
       options.push(next)
       i++
     }

@@ -3,8 +3,8 @@
 //    24.0 and 24.1) `npm test` then ran nothing and still exited 0. The launcher is now two files: run-tests.ts always
 //    runs and test-runner.ts holds what the tests import.
 // 2. An option written with a space before its value (`--test-name-pattern BUSY1`) was split from its value: with a
-//    file named after it the file became the pattern; with no file Node's own search replaced test/**/*.test.ts. A
-//    value now stays with its option unless it names a test file, folder or glob.
+//    file named after it the file became the pattern; with no file Node's own search replaced test/**/*.test.ts. An
+//    option that takes a value now keeps the next word (a list of them since R102A-1, below).
 // 3. A SIGTERM or SIGHUP sent to the launcher alone was swallowed, so the run went on to its end. It is passed on now:
 //    SIGINT and SIGTERM as they are, a hangup as SIGTERM (node --test leaves its test files running on SIGHUP).
 
@@ -81,3 +81,19 @@ for (const signal of ['SIGTERM', 'SIGHUP'] as const) {
     assert.ok(await gone(seen.pid), 'the test file ended too')
   })
 }
+
+// R102A-1 (low, the agent review of PR #102): R101A-2 told a value from a file by its shape, so a name pattern that is a
+// regular expression ('quiet.*Telegram'), a shard (1/3) or a word that is also a folder in the root (docs) was still
+// split from its option. The options that take a value are now a list: such an option keeps the next word, whatever
+// it looks like.
+test('R102A-1 an option that takes a value keeps it however it looks: a regular expression, a shard, a folder\'s name', (t) => {
+  const r = run({}, [FIXTURE, '--test-name-pattern', 'makes.*leaves'])
+  t.after(r.clean)
+  assert.equal(r.status, 0, r.output)
+  assert.ok(probed(r.probe), 'the fixture\'s test ran')
+  const base = ['--disable-warning=ExperimentalWarning', '--test']
+  assert.deepEqual(testArgs(['--test-name-pattern', 'quiet.*Telegram']), [...base, '--test-name-pattern', 'quiet.*Telegram', DEFAULT_TESTS])
+  assert.deepEqual(testArgs(['test/a.test.ts', '--test-shard', '1/3']), [...base, '--test-shard', '1/3', 'test/a.test.ts'])
+  assert.deepEqual(testArgs(['--test-name-pattern', 'docs']), [...base, '--test-name-pattern', 'docs', DEFAULT_TESTS])
+  assert.deepEqual(testArgs(['--test-skip-pattern', '\\bBUSY1\\b', 'test/a.test.ts']), [...base, '--test-skip-pattern', '\\bBUSY1\\b', 'test/a.test.ts'])
+})
