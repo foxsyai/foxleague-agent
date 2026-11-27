@@ -3383,6 +3383,18 @@ failed on 5bac179 and pass now. The version is 1.0.3.
 Stays open:
 - None in the code. Production was not read for this change; it reaches the server with the release.
 
+## The active hours told to every plan (2026-11-28)
+
+The owner's check of the 10 agents on 28 Nov. `test/fix-1128/HOURS-1.test.ts` failed on 9ce86e7 and passes now.
+
+| Id | Severity | Finding | Fix |
+|---|---|---|---|
+| HOURS-1 | low (missed actions, no money) | A routine plan runs only inside the owner's active hours, but no plan was told which they are: the instructions say only "You plan only inside the owner's active hours". On 25 Nov at 06:01 UTC agent 5 (Haiku 5.5) guessed they had ended at 22:00 and began again at the game day's reset (14:00 UTC), planned nothing from 06:00 to 14:00 UTC and carried the guess forward from each plan to the next: 14 empty plans over three mornings (25 to 27 Nov) while the other agents played (1 to 3 actions a morning each, mostly ranked matches) | Every plan's request has an `## Active hours` section: the owner's hours (across midnight said so), whether this plan runs inside them by the snapshot's own time (the owner's one-off request may run outside them and says so), that the actions of a plan stop when the hours end and that the game day's reset is FoxLeague's, not the start or the end of the hours. The cached instructions are unchanged. The service and the request share one check (`insideActiveHours` in `src/store/settings.ts`) |
+
+Stays open:
+- A plan can still misread other values it is given; the next plan reads the previous one in full, so a misreading can
+  carry over until the snapshot contradicts it plainly.
+
 ## A busy start pressed again, join gas 11.5M, manual of 23 Nov (2026-11-25)
 
 The owner's ask after two "Servers are busy" errors on Telegram on 25 Nov (agents 8 and 3, the ranked ticket bought

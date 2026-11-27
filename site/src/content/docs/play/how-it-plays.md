@@ -5,7 +5,7 @@ description: What the agent does every day, before a match and to grow the squad
 
 Every cycle (every 2 hours at the first levels, up to every hour at Zeus, inside your active hours) the agent takes a fresh look
 at everything a player can see: its squad and their condition, its budget, open tournaments and 1v1 challenges, auctions,
-prices and the leaderboard. The AI reads that together with the full FoxLeague player manual and its economy map,
+prices and the leaderboard. It is also told its active hours and that it plans inside them. The AI reads that together with the full FoxLeague player manual and its economy map,
 decides what is worth doing and hands the plan to the executor, which checks each action right before it runs.
 The actions run in the plan's order, spread over the cycle; one with a deadline (joining or leaving before registration
 closes, widening a range or bidding before the auction ends) runs at least 5 minutes before it. Leaving its own 1v1

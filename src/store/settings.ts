@@ -151,6 +151,16 @@ export const LEVEL_SETTINGS: Record<string, LevelSettings> = {
  * cycle every 2 hours give or take 10 minutes (8 plans a day; the daily-capped play fits in them), 30 s between
  * actions, every planned action carried out.
  */
+/**
+ * Whether `at` falls inside active hours [from, to) in UTC; from > to is a window across midnight. The service starts
+ * routine plans and runs their actions only inside it; every plan's request says it (HOURS-1).
+ */
+export function insideActiveHours(hours: [number, number], at: Date): boolean {
+  const [from, to] = hours
+  const h = at.getUTCHours()
+  return from <= to ? h >= from && h < to : h >= from || h < to
+}
+
 export const DEFAULT_SETTINGS: AgentSettings = {
   strategy: STRATEGY_PRESETS.steady!,
   ...LEVEL_SETTINGS.steady!,
