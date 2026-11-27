@@ -43,8 +43,8 @@ test('HOURS2-3 hours across midnight, to midnight and an owner\'s request outsid
   assert.match(request('2026-11-27T23:30:00.000Z', [22, 6]), /active hours for this agent: 22:00 to 06:00 UTC \(across midnight\)\. It is 23:30 UTC, inside them/)
   assert.match(request('2026-11-27T05:10:00.000Z', [22, 6]), /It is 05:10 UTC, inside them/)
   assert.match(request('2026-11-27T23:10:00.000Z', [6, 24]), /active hours for this agent: 06:00 to 24:00 UTC\. It is 23:10 UTC, inside them/)
-  // The owner's one-off request (Telegram /do) may run outside the hours, and its actions run then too.
-  assert.match(request('2026-11-27T12:00:00.000Z', [22, 6], 'sync the squad'), /It is 12:00 UTC, outside them, but this plan answers the owner's one-off request: its actions run now\./)
+  // The owner's one-off request (Telegram /do) may run outside the hours; its actions run then too.
+  assert.match(request('2026-11-27T12:00:00.000Z', [22, 6], 'sync the squad'), /It is 12:00 UTC, outside them, but this plan answers the owner's one-off request: its actions run now/)
 })
 
 // R103A-1 (medium, the agent review of PR #103): an all-day window [0, 24] was told "they end at 24:00 UTC and an
@@ -55,7 +55,7 @@ test('R103A-1 an all-day window is told as all day: no end hour, nothing waits f
   assert.doesNotMatch(text, /they end at|waits for the next day's plans|outside them/)
 })
 
-// R103A-2 (low, the agent review of PR #103): a plan made outside the hours by hand (`cli plan N`, `cli dry-run N`) or
+// R103A-2 (low, the agent review of PR #103): a plan made outside the hours by hand (`cli plan N`) or
 // a tick let in just before the end hour was told only "outside them", so the model would most likely plan nothing.
 test('R103A-2 a routine plan outside the hours is told to plan as usual: the service decides when its actions run', () => {
   assert.match(request('2026-11-27T22:00:00.000Z', [6, 22]), /It is 22:00 UTC, outside them: plan as you would inside them; the service decides when the actions run\./)
@@ -69,4 +69,16 @@ test('R103A-3 the record keeps HOURS-1 for the default hours and HOURS-2 for thi
   assert.equal(record.match(/^\| HOURS-1 \|/gm)?.length, 1)
   assert.equal(record.match(/^\| HOURS-2 \|/gm)?.length, 1)
   assert.match(readFileSync(join(root, 'src/store/settings.ts'), 'utf8'), /actions, every planned action carried out\.\n \*\/\nexport const DEFAULT_SETTINGS: AgentSettings = \{/)
+})
+
+// R103A-4 (low, the second agent review of PR #103): the owner's one-off request got the routine closing sentence
+// ("they end at HH:00 UTC and an action that has not run by then waits for the next day's plans"), but the service
+// never stops it on the hours: a /do in the last minute of the window was told nothing of it could still run.
+test('R103A-4 the owner\'s one-off request is told the end of the hours does not stop it, inside or outside them', () => {
+  const inside = request('2026-11-27T21:59:00.000Z', [6, 22], 'sync the squad')
+  assert.match(inside, /It is 21:59 UTC, inside them; this plan answers the owner's one-off request: its actions run now and the end of the hours does not stop them\. Routine plans run only inside these hours\. The game day's reset/)
+  assert.doesNotMatch(inside, /waits for the next day's plans/)
+  const outside = request('2026-11-27T12:00:00.000Z', [22, 6], 'sync the squad')
+  assert.match(outside, /It is 12:00 UTC, outside them, but this plan answers the owner's one-off request: its actions run now and the end of the hours does not stop them\./)
+  assert.doesNotMatch(outside, /waits for the next day's plans/)
 })
